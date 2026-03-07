@@ -33,14 +33,18 @@ echo.
 :: Installa/Aggiorna le librerie necessarie (la prima volta ci mette un po', poi e' istantaneo)
 python -m pip install -r requirements.txt
 
+:: Crea in automatico l'icona sul Desktop (Silenzioso) se non esiste gia'
+if not exist "%USERPROFILE%\Desktop\Sbobinatore AI.lnk" (
+    echo [*] Creazione del collegamento sul Desktop in corso...
+    call Crea_Icona_Desktop.bat >nul 2>&1
+)
+
 echo.
 echo [*] Tutto pronto. Sto avviando lo Sbobinatore!
 echo.
 
-:: Avvia l'interfaccia grafica vera e propria.
-:: Iniziamo con "start /b" per far chiudere questo terminale e lasciare l'app "sganciata"
-start /b python Sbobinatore.pyw
+:: Avvia l'interfaccia grafica sganciata dal terminale usando pythonw
+start "" pythonw Sbobinatore.pyw
 
-:: Piccola attesa e poi chiude questo script
-timeout /t 3 /nobreak >nul
+:: Chiude immediatamente questa finestra del terminale
 exit
