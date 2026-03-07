@@ -303,16 +303,30 @@ class SbobinatoreModernApp(ctk.CTk):
 
     def __init__(self):
         super().__init__()
-
-        self.title("Sbobinatore AI")
-        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.ico")
-        if os.path.exists(icon_path):
-            self.iconbitmap(icon_path)
-            self.after(200, lambda: self.iconbitmap(icon_path))
-
+        
+        self.title("Sbobinatore AI PRO")
         self.geometry("850x700")
+        self.configure(fg_color="#0F0F14")
+        
+        # --- Imposta l'icona dell'applicazione ---
+        try:
+            # Funziona sia in sviluppo locale che quando compilato con PyInstaller
+            if getattr(sys, 'frozen', False):
+                application_path = sys._MEIPASS
+            else:
+                application_path = os.path.dirname(os.path.abspath(__file__))
+            
+            icon_path = os.path.join(application_path, "app_icon.ico")
+            self.iconbitmap(icon_path)
+            self.after(200, lambda: self.iconbitmap(icon_path)) # Ensure icon is set on Windows taskbar
+            
+            # Imposta anche l'id applicazione per la taskbar di Windows
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("sbobinatore.ai.app")
+        except Exception as e:
+            pass # L'icona custom non è fondamentale, ignora in caso di errore su Mac
+        
         self.minsize(750, 600)
-        self.configure(fg_color="#11111B")
 
         self.file_path = None
         self.is_running = False
