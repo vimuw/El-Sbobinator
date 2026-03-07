@@ -31,6 +31,11 @@ Essendo Google Gemini il cervello del programma, ti serve una password unica (AP
 ### 💻 Se usi Windows:
 - Fai semplicemente **doppio clic** sul file `Sbobinatore_AI.exe`.
 
+> ⚠️ **Nota di Sicurezza (Falso Positivo Antivirus):** 
+> Poiché questa app è gratuita e open-source (non ha una firma digitale a pagamento da 300€/anno), **Windows Defender o altri antivirus potrebbero bloccarla al primo avvio**, segnalandola come minaccia (es. *Trojan* o *Malware*). Niente panico! È un [noto falso positivo](https://pyinstaller.org/en/stable/operating-mode.html#hiding-the-source-code) di tutti i programmi Python compilati con PyInstaller. Il codice di questa app è pubblico e verificabile.
+> - **Se appare la schermata blu di Windows SmartScreen:** Clicca su `"Ulteriori Informazioni"` -> e poi sul pulsante in basso `"Esegui Comunque"`.
+> - **Se l'antivirus lo elimina:** Vai nella Cronologia Protezione di Windows, clicca sulla minaccia rilevata e seleziona `"Consenti nel dispositivo"` / `"Ripristina"`.
+
 ### 🍎 Se usi Mac:
 - Estrai l'archivio ZIP e fai **doppio clic** sull'applicazione `Sbobinatore_AI.app` (puoi trascinarla nella cartella Applicazioni).
 - *Nota: Al primissimo avvio, se il Mac dovesse bloccarti dicendo "proveniente da uno sviluppatore non identificato", ti basta fare **clic col tasto destro** (o Control+Clic) sull'icona, e scegliere **Apri** dal menu.*
