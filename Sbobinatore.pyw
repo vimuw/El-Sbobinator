@@ -279,6 +279,12 @@ class SbobinatoreModernApp(ctk.CTk):
         
         # Configurazione finestra
         self.title("Sbobinatore AI")
+        
+        # Imposta l'icona personalizzata nella finestra e nella taskbar
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.ico")
+        if os.path.exists(icon_path):
+            self.iconbitmap(icon_path)
+        
         self.geometry("800x650")
         self.minsize(700, 550)
         
