@@ -41,4 +41,4 @@ Apri la cartella dello Sbobinatore che hai estratto e fai **doppio clic** sul fi
 2. Clicca "**Sfoglia / Carica**" e seleziona la registrazione audio (o anche direttamente il video MP4!) della tua lunga lezione.
 3. Clicca il pulsantone verde **AVVIA**.
 4. Niente panico se l'app sembra bloccarsi: nel terminale dentro al programma leggerai esattamente a che punto è! Se l'audio dura un'ora, farà **4 estrazioni** da 15 minuti l'una, e ci metterà all'incirca 3-5 minuti in base al traffico dei server Google.
-5. Quando ha finito, troverai il file `.html` (la Sbobina) pronto direttamente sul tuo **Desktop**. Doppio clic per aprirlo.
+5. Quando ha finito, troverai il file `.html` (la Sbobina) pronto direttamente sul tuo **Desktop**.
