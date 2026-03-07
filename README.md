@@ -28,7 +28,7 @@ Apri la cartella dello Sbobinatore che hai estratto e fai **doppio clic** sul fi
 
 ### 💻 Se usi Windows:
 - Fai doppio clic su **`Avvia_Sbobinatore_Windows.bat`**.
-- La primissima volta, si aprirà una finestra nera per qualche secondo per scaricare gli strumenti necessari; lasciala lavorare in pace. Poi, scomparirà e comparirà l'app! (Usa sempre questo file per lanciarla).
+- La primissima volta, si aprirà una finestra nera per qualche secondo per scaricare gli strumenti necessari; lasciala lavorare in pace. Poi, scomparirà e comparirà la schermata dell'app e l'icona dell'app nel Desktop (Usa sempre questo file per lanciarla)!.
 
 ### 🍎 Se usi Mac:
 - Fai doppio clic su **`Avvia_Sbobinatore_Mac.command`**.
@@ -37,8 +37,8 @@ Apri la cartella dello Sbobinatore che hai estratto e fai **doppio clic** sul fi
 ---
 
 ## 📖 Come lo uso una volta aperto?
-1. Aperta la schermata nera del programma, l'unica cosa da fare la prima volta in alto è incollare la fantomatica **Chiave API** copiata prima. Il programma se la salverà così non devi rimetterla mai più.
-2. Clicca "**Sfoglia / Carica**" e seleziona la registrazione audio (o anche direttamente il video MP4!) della tua lunga lezione.
+1. Aperta la schermata del programma, l'unica cosa da fare la prima volta in alto è incollare la fantomatica **Chiave API** copiata prima. Il programma se la salverà così non devi rimetterla mai più.
+2. Clicca "**Sfoglia / Carica**" e seleziona la registrazione audio della tua lunga lezione.
 3. Clicca il pulsantone verde **AVVIA**.
 4. Niente panico se l'app sembra bloccarsi: nel terminale dentro al programma leggerai esattamente a che punto è! Se l'audio dura un'ora, farà **4 estrazioni** da 15 minuti l'una, e ci metterà all'incirca 3-5 minuti in base al traffico dei server Google.
 5. Quando ha finito, troverai il file `.html` (la Sbobina) pronto direttamente sul tuo **Desktop**.
