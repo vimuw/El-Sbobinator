@@ -394,7 +394,8 @@ class SbobinatoreModernApp(ctk.CTk):
         save_config(api_key)
         self.is_running = True
         self.btn_avvia.configure(state="disabled", fg_color=self.BORDER, text="⏳  Elaborazione in corso...")
-        self.btn_sfoglia.configure(state="disabled")
+        for w in [self.drop_zone, self.drop_icon, self.lbl_file, self.lbl_file_hint]:
+            w.unbind("<Button-1>")
         self.entry_api.configure(state="disabled")
         print("\n" + "━"*50)
         print("  INIZIO PROCESSO DI ANALISI ED ESTRAZIONE AI")
@@ -409,7 +410,8 @@ class SbobinatoreModernApp(ctk.CTk):
 
     def _ripristina_ui(self):
         self.btn_avvia.configure(state="normal", fg_color=self.SUCCESS, text="▶  AVVIA GENERAZIONE SBOBINA")
-        self.btn_sfoglia.configure(state="normal")
+        for w in [self.drop_zone, self.drop_icon, self.lbl_file, self.lbl_file_hint]:
+            w.bind("<Button-1>", lambda e: self.scegli_file())
         self.entry_api.configure(state="normal")
 
 if __name__ == "__main__":
