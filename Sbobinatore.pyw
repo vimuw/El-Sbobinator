@@ -314,11 +314,14 @@ class SbobinatoreModernApp(ctk.CTk):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(4, weight=1)
 
-        # TITOLO
+        # TITOLO (centrato)
         self.title_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.title_frame.grid(row=0, column=0, padx=30, pady=(25, 5), sticky="ew")
-        ctk.CTkLabel(self.title_frame, text="🎓 Sbobinatore AI", font=("Segoe UI", 26, "bold"), text_color="#CDD6F4").pack(side="left")
-        ctk.CTkLabel(self.title_frame, text="Trasforma le lezioni in manuali di studio", font=("Segoe UI", 13), text_color=self.TEXT_DIM).pack(side="left", padx=(12, 0), pady=(6, 0))
+        self.title_frame.grid_columnconfigure(0, weight=1)
+        title_inner = ctk.CTkFrame(self.title_frame, fg_color="transparent")
+        title_inner.grid(row=0, column=0)
+        ctk.CTkLabel(title_inner, text="🎓 Sbobinatore AI", font=("Segoe UI", 26, "bold"), text_color="#CDD6F4").pack()
+        ctk.CTkLabel(title_inner, text="Trasforma le lezioni in manuali di studio", font=("Segoe UI", 13), text_color=self.TEXT_DIM).pack(pady=(2, 0))
 
         # API KEY CARD
         self.api_card = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=12, border_width=1, border_color=self.BORDER)
@@ -330,14 +333,23 @@ class SbobinatoreModernApp(ctk.CTk):
         config_data = load_config()
         self.entry_api.insert(0, config_data.get("api_key", ""))
 
-        # FILE UPLOAD CARD
-        self.file_card = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=12, border_width=1, border_color=self.BORDER)
-        self.file_card.grid(row=2, column=0, padx=30, pady=15, sticky="ew")
-        self.file_card.grid_columnconfigure(0, weight=1)
-        self.lbl_file = ctk.CTkLabel(self.file_card, text="📁  Nessun file selezionato", font=("Segoe UI", 14), text_color=self.TEXT_DIM)
-        self.lbl_file.grid(row=0, column=0, pady=(18, 8), padx=18, sticky="w")
-        self.btn_sfoglia = ctk.CTkButton(self.file_card, text="  Carica Audio / Video...  ", font=("Segoe UI", 13, "bold"), height=38, corner_radius=8, fg_color=self.ACCENT, hover_color=self.ACCENT_HOVER, command=self.scegli_file)
-        self.btn_sfoglia.grid(row=1, column=0, pady=(0, 18), padx=18, sticky="w")
+        # DROP ZONE (area cliccabile centrata per caricare file)
+        self.drop_zone = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=12, border_width=2, border_color=self.BORDER, cursor="hand2")
+        self.drop_zone.grid(row=2, column=0, padx=30, pady=15, sticky="ew")
+        self.drop_zone.grid_columnconfigure(0, weight=1)
+
+        self.drop_icon = ctk.CTkLabel(self.drop_zone, text="📂", font=("Segoe UI", 38), text_color=self.TEXT_DIM)
+        self.drop_icon.grid(row=0, column=0, pady=(22, 4))
+
+        self.lbl_file = ctk.CTkLabel(self.drop_zone, text="Clicca qui per caricare un file audio o video", font=("Segoe UI", 14, "bold"), text_color=self.TEXT_DIM)
+        self.lbl_file.grid(row=1, column=0, pady=(0, 2))
+
+        self.lbl_file_hint = ctk.CTkLabel(self.drop_zone, text="Formati supportati: MP3, M4A, WAV, MP4, AVI, MOV, MKV", font=("Segoe UI", 11), text_color="#45475A")
+        self.lbl_file_hint.grid(row=2, column=0, pady=(0, 22))
+
+        # Tutta la drop zone è cliccabile
+        for widget in [self.drop_zone, self.drop_icon, self.lbl_file, self.lbl_file_hint]:
+            widget.bind("<Button-1>", lambda e: self.scegli_file())
 
         # BOTTONE AVVIA
         self.btn_avvia = ctk.CTkButton(self, text="▶  AVVIA GENERAZIONE SBOBINA", height=52, font=("Segoe UI", 16, "bold"), corner_radius=10, fg_color=self.SUCCESS, hover_color=self.SUCCESS_HOVER, command=self.avvia_processo)
@@ -356,7 +368,7 @@ class SbobinatoreModernApp(ctk.CTk):
         sys.stderr = PrintRedirector(self.console)
         print("Sbobinatore AI pronto all'uso.\n")
 
-    def scegli_file(self):
+    def scegli_file(self, event=None):
         if self.is_running: return
         file_selezionato = filedialog.askopenfilename(
             title="Seleziona file multimediale",
@@ -364,7 +376,10 @@ class SbobinatoreModernApp(ctk.CTk):
         )
         if file_selezionato:
             self.file_path = file_selezionato
-            self.lbl_file.configure(text=f"📁  {os.path.basename(self.file_path)}", text_color=self.TEXT_BRIGHT)
+            self.drop_icon.configure(text="✅")
+            self.lbl_file.configure(text=os.path.basename(self.file_path), text_color=self.TEXT_BRIGHT)
+            self.lbl_file_hint.configure(text="Clicca di nuovo per cambiare file")
+            self.drop_zone.configure(border_color=self.SUCCESS)
             print(f"[+] File caricato: {os.path.basename(self.file_path)}")
 
     def avvia_processo(self):
