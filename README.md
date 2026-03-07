@@ -6,7 +6,7 @@ L'intelligenza artificiale (basata sul modello gemini 2.5 flash) ascolterà la t
 
 ---
 
-## 🚀 Come iniziare (Per chi non è un programmatore)
+## 🚀 Come iniziare
 
 ### 1) Come Scaricare il programma
 1. Clicca sul grande pulsante verde **`<> Code`** in alto a destra in questa pagina.
