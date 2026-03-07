@@ -13,12 +13,7 @@ L'intelligenza artificiale (basata sul modello gemini 2.5 flash) ascolterà la t
 2. Clicca su **`Download ZIP`**.
 3. Estrai la cartella appena scaricata e spostala dove preferisci (es. sul Desktop o nei Documenti).
 
-### 2) Prerequisito Unico: Python
-Se non hai mai programmato sul tuo computer, serve scaricare il "motore" che fa funzionare questo piccolo programma.
-- Vai sul sito ufficiale e scarica Python: [python.org/downloads](https://www.python.org/downloads/)
-- ⚠️ **MOLTO IMPORTANTE (Solo per Windows):** Appena apri il file di installazione di Python, prima di cliccare "Install Now", **IN BASSO troverai una casellina vuota che dice "Add Python to PATH". DEVI cliccarci sopra.** Poi procedi con l'installazione normale.
-
-### 3) Creare la tua Chiave API di Gemini (Gratis)
+### 2) Creare la tua Chiave API di Gemini (Gratis)
 Essendo Google Gemini il cervello del programma, ti serve una password unica (API Key) per usarlo.
 1. Vai su: [Google AI Studio](https://aistudio.google.com/app/apikey) e accedi col tuo account Google.
 2. Clicca sul bottone azzurro `"Create API Key"`.

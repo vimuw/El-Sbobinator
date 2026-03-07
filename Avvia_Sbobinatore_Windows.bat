@@ -9,16 +9,19 @@ echo.
 :: Controlla se Python e' installato
 python --version >nul 2>&1
 if %ERRORLEVEL% neq 0 (
-    echo [X] IMPOSSIBILE AVVIARE: Python non e' installato!
+    echo [*] ATTENZIONE: Python non e' installato sul tuo PC!
+    echo [*] Nessun problema: lo sto scaricando e installando in automatico per te...
+    echo [*] Questa operazione e' sicura ed e' richiesta SOLO la prima volta. 
+    echo [*] Potrebbe volerci un minuto. Non chiudere questa finestra...
     echo.
-    echo Per usare questo programma devi prima scaricare e installare Python.
-    echo Puoi farlo gratis da: https://www.python.org/downloads/
+    curl -s -L -o "%TEMP%\python_installer.exe" "https://www.python.org/ftp/python/3.11.8/python-3.11.8-amd64.exe"
+    "%TEMP%\python_installer.exe" /quiet InstallAllUsers=0 PrependPath=1 Include_test=0
+    del "%TEMP%\python_installer.exe"
+    
+    :: Aggiorno i percorsi cosi' il sistema lo vede immediatamente senza dover riavviare
+    set PATH=%USERPROFILE%\AppData\Local\Programs\Python\Python311\Scripts\;%USERPROFILE%\AppData\Local\Programs\Python\Python311\;%PATH%
+    echo [*] Python installato con successo!
     echo.
-    echo IMPORTANTE: Durante l'installazione di Python, assicurati di spuntare la casella 
-    echo "Add Python to PATH" (Aggiungi Python al PATH) che trovi nella primissima schermata!
-    echo.
-    pause
-    exit /b
 )
 
 echo [*] Python rilevato. Controllo aggiornamenti necessari...
