@@ -271,81 +271,89 @@ REGOLE ASSOLUTE:
 
 
 # ==========================================
+# FIX TASKBAR ICON
+# ==========================================
+try:
+    import ctypes
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("sbobinatore.ai.app")
+except Exception:
+    pass
+
+# ==========================================
 # INTERFACCIA GRAFICA CUSTOM-TKINTER
 # ==========================================
 class SbobinatoreModernApp(ctk.CTk):
+
+    ACCENT = "#6C5CE7"
+    ACCENT_HOVER = "#5A4BD1"
+    SUCCESS = "#00B894"
+    SUCCESS_HOVER = "#00A381"
+    CARD_BG = "#1E1E2E"
+    TERMINAL_BG = "#11111B"
+    TERMINAL_FG = "#89B4FA"
+    TEXT_DIM = "#6C7086"
+    TEXT_BRIGHT = "#CDD6F4"
+    BORDER = "#313244"
+
     def __init__(self):
         super().__init__()
-        
-        # Configurazione finestra
+
         self.title("Sbobinatore AI")
-        
-        # Imposta l'icona personalizzata nella finestra e nella taskbar
         icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.ico")
         if os.path.exists(icon_path):
             self.iconbitmap(icon_path)
-        
-        self.geometry("800x650")
-        self.minsize(700, 550)
-        
+            self.after(200, lambda: self.iconbitmap(icon_path))
+
+        self.geometry("850x700")
+        self.minsize(750, 600)
+        self.configure(fg_color="#11111B")
+
         self.file_path = None
         self.is_running = False
 
-        # Configurazione layout griglia
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(3, weight=1)
+        self.grid_rowconfigure(4, weight=1)
 
-        # ------------------------
-        # 1. HEADER (API KEY)
-        # ------------------------
-        self.header_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.header_frame.grid(row=0, column=0, padx=20, pady=(20, 0), sticky="ew")
-        self.header_frame.grid_columnconfigure(1, weight=1)
+        # TITOLO
+        self.title_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.title_frame.grid(row=0, column=0, padx=30, pady=(25, 5), sticky="ew")
+        ctk.CTkLabel(self.title_frame, text="🎓 Sbobinatore AI", font=("Segoe UI", 26, "bold"), text_color="#CDD6F4").pack(side="left")
+        ctk.CTkLabel(self.title_frame, text="Trasforma le lezioni in manuali di studio", font=("Segoe UI", 13), text_color=self.TEXT_DIM).pack(side="left", padx=(12, 0), pady=(6, 0))
 
-        ctk.CTkLabel(self.header_frame, text="⚙️ INSERISCI LA TUA API KEY GEMINI:", font=("Roboto", 13, "bold")).grid(row=0, column=0, sticky="w", padx=(0, 10))
-        
-        self.entry_api = ctk.CTkEntry(self.header_frame, placeholder_text="Incolla l'API Key qui (inizia spesso con AIzaSy...)", show="*")
-        self.entry_api.grid(row=0, column=1, sticky="ew")
-        
-        # Carica eventuale chiave precedente
+        # API KEY CARD
+        self.api_card = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=12, border_width=1, border_color=self.BORDER)
+        self.api_card.grid(row=1, column=0, padx=30, pady=(15, 0), sticky="ew")
+        self.api_card.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(self.api_card, text="🔑  API Key Gemini", font=("Segoe UI", 13, "bold"), text_color=self.TEXT_BRIGHT).grid(row=0, column=0, sticky="w", padx=(18, 12), pady=14)
+        self.entry_api = ctk.CTkEntry(self.api_card, placeholder_text="Incolla la tua API Key qui...", show="*", font=("Segoe UI", 13), height=38, corner_radius=8, fg_color=self.TERMINAL_BG, border_color=self.BORDER, text_color=self.TEXT_BRIGHT)
+        self.entry_api.grid(row=0, column=1, sticky="ew", padx=(0, 18), pady=14)
         config_data = load_config()
         self.entry_api.insert(0, config_data.get("api_key", ""))
 
-        # ------------------------
-        # 2. SELEZIONE FILE
-        # ------------------------
-        self.file_frame = ctk.CTkFrame(self, corner_radius=15)
-        self.file_frame.grid(row=1, column=0, padx=20, pady=20, sticky="ew")
-        self.file_frame.grid_columnconfigure(0, weight=1)
+        # FILE UPLOAD CARD
+        self.file_card = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=12, border_width=1, border_color=self.BORDER)
+        self.file_card.grid(row=2, column=0, padx=30, pady=15, sticky="ew")
+        self.file_card.grid_columnconfigure(0, weight=1)
+        self.lbl_file = ctk.CTkLabel(self.file_card, text="📁  Nessun file selezionato", font=("Segoe UI", 14), text_color=self.TEXT_DIM)
+        self.lbl_file.grid(row=0, column=0, pady=(18, 8), padx=18, sticky="w")
+        self.btn_sfoglia = ctk.CTkButton(self.file_card, text="  Carica Audio / Video...  ", font=("Segoe UI", 13, "bold"), height=38, corner_radius=8, fg_color=self.ACCENT, hover_color=self.ACCENT_HOVER, command=self.scegli_file)
+        self.btn_sfoglia.grid(row=1, column=0, pady=(0, 18), padx=18, sticky="w")
 
-        self.lbl_file = ctk.CTkLabel(self.file_frame, text="Nessun file selezionato.\nScegli la registrazione audio o il file video della lezione.", font=("Roboto", 14), text_color="gray")
-        self.lbl_file.grid(row=0, column=0, pady=(20, 10))
+        # BOTTONE AVVIA
+        self.btn_avvia = ctk.CTkButton(self, text="▶  AVVIA GENERAZIONE SBOBINA", height=52, font=("Segoe UI", 16, "bold"), corner_radius=10, fg_color=self.SUCCESS, hover_color=self.SUCCESS_HOVER, command=self.avvia_processo)
+        self.btn_avvia.grid(row=3, column=0, padx=30, pady=(0, 15), sticky="ew")
 
-        self.btn_sfoglia = ctk.CTkButton(self.file_frame, text="Carica Audio / Video...", font=("Roboto", 14, "bold"), fg_color="#3498db", hover_color="#2980b9", command=self.scegli_file)
-        self.btn_sfoglia.grid(row=1, column=0, pady=(0, 20))
-
-        # ------------------------
-        # 3. AVVIO
-        # ------------------------
-        self.btn_avvia = ctk.CTkButton(self, text="▶ AVVIA GENERAZIONE SBOBINA", height=50, font=("Roboto", 18, "bold"), fg_color="#2ecc71", hover_color="#27ae60", command=self.avvia_processo)
-        self.btn_avvia.grid(row=2, column=0, padx=20, pady=(0, 20), sticky="ew")
-
-        # ------------------------
-        # 4. CONSOLE E LOGS
-        # ------------------------
-        self.console_frame = ctk.CTkFrame(self)
-        self.console_frame.grid(row=3, column=0, padx=20, pady=(0, 20), sticky="nsew")
-        self.console_frame.grid_columnconfigure(0, weight=1)
-        self.console_frame.grid_rowconfigure(1, weight=1)
-
-        ctk.CTkLabel(self.console_frame, text="TERMINALE PROCESSI AI:", font=("Roboto", 12, "bold"), text_color="gray").grid(row=0, column=0, sticky="w", padx=10, pady=5)
-        
-        self.console = ctk.CTkTextbox(self.console_frame, font=("Consolas", 13), fg_color="#1e1e1e", text_color="#00ff00", wrap="word")
-        self.console.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
+        # TERMINALE OUTPUT
+        self.console_card = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=12, border_width=1, border_color=self.BORDER)
+        self.console_card.grid(row=4, column=0, padx=30, pady=(0, 25), sticky="nsew")
+        self.console_card.grid_columnconfigure(0, weight=1)
+        self.console_card.grid_rowconfigure(1, weight=1)
+        ctk.CTkLabel(self.console_card, text="⚡ Output", font=("Segoe UI", 12, "bold"), text_color=self.TEXT_DIM).grid(row=0, column=0, sticky="w", padx=16, pady=(12, 4))
+        self.console = ctk.CTkTextbox(self.console_card, font=("Cascadia Code", 12), fg_color=self.TERMINAL_BG, text_color=self.TERMINAL_FG, corner_radius=8, wrap="word", border_width=0)
+        self.console.grid(row=1, column=0, sticky="nsew", padx=12, pady=(0, 12))
 
         sys.stdout = PrintRedirector(self.console)
         sys.stderr = PrintRedirector(self.console)
-
         print("Sbobinatore AI pronto all'uso.\n")
 
     def scegli_file(self):
@@ -356,36 +364,28 @@ class SbobinatoreModernApp(ctk.CTk):
         )
         if file_selezionato:
             self.file_path = file_selezionato
-            self.lbl_file.configure(text=os.path.basename(self.file_path), text_color="white")
-            print(f"[*] FILE CARICATO CON SUCCESSO: {os.path.basename(self.file_path)}")
+            self.lbl_file.configure(text=f"📁  {os.path.basename(self.file_path)}", text_color=self.TEXT_BRIGHT)
+            print(f"[+] File caricato: {os.path.basename(self.file_path)}")
 
     def avvia_processo(self):
         api_key = self.entry_api.get().strip()
-        
         if not api_key:
             messagebox.showwarning("Errore API", "Devi inserire la tua chiave API Gemini prima di iniziare!")
             return
-            
         if not self.file_path:
             messagebox.showwarning("Errore File", "Devi prima selezionare un file audio o video dal computer!")
             return
-            
         if self.is_running:
             return
-            
-        # Salva la chiave API per le prossime volte
         save_config(api_key)
-
         self.is_running = True
-        self.btn_avvia.configure(state="disabled", fg_color="gray", text="⏳ ELABORAZIONE IN CORSO... (Guarda il terminale in basso)")
+        self.btn_avvia.configure(state="disabled", fg_color=self.BORDER, text="⏳  Elaborazione in corso...")
         self.btn_sfoglia.configure(state="disabled")
         self.entry_api.configure(state="disabled")
-
-        print("\n" + "="*50)
-        print("INIZIO PROCESSO DI ANALISI ED ESTRAZIONE AI")
-        print("Mettiti comodo. Puoi rimpicciolire l'app se vuoi, ma NON CHIUdERLA.")
-        print("="*50 + "\n")
-
+        print("\n" + "━"*50)
+        print("  INIZIO PROCESSO DI ANALISI ED ESTRAZIONE AI")
+        print("  Non chiudere l'app durante l'elaborazione.")
+        print("━"*50 + "\n")
         thread = threading.Thread(target=esegui_sbobinatura, args=(self.file_path, api_key, self), daemon=True)
         thread.start()
 
@@ -394,10 +394,11 @@ class SbobinatoreModernApp(ctk.CTk):
         self.after(0, self._ripristina_ui)
 
     def _ripristina_ui(self):
-        self.btn_avvia.configure(state="normal", fg_color="#2ecc71", text="▶ AVVIA GENERAZIONE SBOBINA")
+        self.btn_avvia.configure(state="normal", fg_color=self.SUCCESS, text="▶  AVVIA GENERAZIONE SBOBINA")
         self.btn_sfoglia.configure(state="normal")
         self.entry_api.configure(state="normal")
 
 if __name__ == "__main__":
     app = SbobinatoreModernApp()
     app.mainloop()
+
