@@ -31,15 +31,16 @@ echo [*] Python rilevato. Controllo aggiornamenti necessari...
 echo.
 
 :: Installa/Aggiorna le librerie necessarie (la prima volta ci mette un po', poi e' istantaneo)
-pip install -r requirements.txt | findstr /V "already satisfied"
+python -m pip install -r requirements.txt
 
 echo.
 echo [*] Tutto pronto. Sto avviando lo Sbobinatore!
 echo.
 
-:: Avvia l'interfaccia grafica vera e propria. Usa pythonw per non tenere aperto un brutto terminale nero.
-start "" pythonw Sbobinatore.pyw
+:: Avvia l'interfaccia grafica vera e propria.
+:: Iniziamo con "start /b" per far chiudere questo terminale e lasciare l'app "sganciata"
+start /b python Sbobinatore.pyw
 
 :: Piccola attesa e poi chiude questo script
-timeout /t 2 /nobreak >nul
+timeout /t 3 /nobreak >nul
 exit
