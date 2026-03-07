@@ -271,14 +271,14 @@ REGOLE ASSOLUTE:
 
 
 # ==========================================
-# INTERFACCIA GRAFICA CUSTOM-TKINTER (PREMIUM UI)
+# INTERFACCIA GRAFICA CUSTOM-TKINTER
 # ==========================================
 class SbobinatoreModernApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         
         # Configurazione finestra
-        self.title("Sbobinatore AI Premium")
+        self.title("Sbobinatore AI")
         self.geometry("800x650")
         self.minsize(700, 550)
         
@@ -340,9 +340,7 @@ class SbobinatoreModernApp(ctk.CTk):
         sys.stdout = PrintRedirector(self.console)
         sys.stderr = PrintRedirector(self.console)
 
-        print("Sbobinatore AI Inizializzato (Modalità Premium).")
-        print("Tutte le operazioni verranno loggate in dettaglio in questa finestra.")
-        print("Nessuna fastidiosa finestra del CMD in background.\n")
+        print("Sbobinatore AI pronto all'uso.\n")
 
     def scegli_file(self):
         if self.is_running: return
