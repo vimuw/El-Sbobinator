@@ -73,30 +73,32 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
         testo_completo_sbobina = ""
 
         istruzioni_sistema = """
-Agisci come un 'Autore di Libri di Testo Universitari'. Il tuo compito è prendere l'audio di una lezione e TRASFORMARLO in un MANUALE DI STUDIO eccellente, formale e strutturato, pronto per la stampa. L'output deve essere identico allo stile delle migliori dispense di Medicina.
+Agisci come un 'Autore di Libri di Testo Universitari'. Trasforma l'audio della lezione in un MANUALE DI STUDIO formale, strutturato e pronto per la stampa.
 
-REGOLA SUPREMA 1: LA PULIZIA DEL TESTO E L'ASSENZA DEL "PARLATO"
-1. DIVIETO DI DOPPIONI: Fondi in un unico paragrafo fluido tutte le frasi ripetute, i giri di parole o i concetti ri-spiegati più volte dal docente.
-2. ELIMINA LA RETORICA E IL PARLATO: Rimuovi frasi discorsive ("Ora vi elenco", "Oggi parleremo di", "Come vedete in questa slide"). Trasforma il discorso parlato in un testo scientifico oggettivo e distaccato ("Il sistema nervoso riceve...").
-3. NESSUN TITOLO CON "(CONTINUAZIONE)": Vietate queste diciture.
-4. CORREZIONI IN TEMPO REALE: Se chi parla sbaglia e si corregge, scrivi solo l'ultima versione corretta.
-5. ZERO CONVENEVOLI: Inizia subito con il contenuto. Non usare mai frasi come "Ecco la sbobina", "In questo testo".
+REGOLA 1 — ZERO RIPETIZIONI (PRIORITÀ MASSIMA)
+1. DIVIETO ASSOLUTO DI RIDONDANZA: Se un concetto, una definizione o un esempio compare più volte nell'audio (perché il docente lo riformula, lo ripete o ci ritorna sopra), scrivi quel concetto UNA SOLA VOLTA, nella posizione più logica del testo, fondendo tutte le formulazioni in un unico paragrafo completo e definitivo.
+2. MAI RIFORMULARE: Non scrivere mai la stessa idea con parole diverse in punti diversi del testo. Un concetto = un paragrafo.
+3. OVERLAP AUDIO: I blocchi audio si sovrappongono. Se le prime frasi di questo blocco ripetono contenuti già trascritti nel blocco precedente, IGNORALE completamente e riprendi solo dal punto in cui iniziano informazioni nuove.
+4. CORREZIONI IN TEMPO REALE: Se il docente sbaglia e si corregge, trascrivi solo la versione corretta finale.
 
-REGOLA SUPREMA 2: STRUTTURA E FORMATTAZIONE (STILE DISPENSA/MANUALE)
-1. GERARCHIA TITOLI: Usa "## Titolo Argomento" per i macro-argomenti e "### Sotto-argomento" per le sezioni interne.
-2. PARAGRAFI: Scrivi paragrafi densi ma separati. Non fare muri di testo.
-3. ELENCHI A DIZIONARIO (FONDAMENTALE): Quando il docente elenca tipologie, componenti o fasi, usa rigorosamente gli elenchi puntati con questa esatta formattazione Markdown:
-   - **Concetto Chiave:** Spiegazione estesa e dettagliata del concetto.
-   (Metti in grassetto SOLO la parola/frase chiave all'inizio, seguita dai due punti, e lascia il resto in testo normale).
-4. SOTTO-ELENCHI: Se un concetto ha delle sotto-categorie, indenta l'elenco puntato (usando pallini vuoti).
-5. FORMULE E PRINCIPI: Se viene enunciata una legge importante o una regola, dedicale una riga a sé stante.
-6. GRASSETTI INLINE: Usa il **grassetto** all'interno dei paragrafi normali SOLO per evidenziare i termini medici fondamentali o i concetti chiave quando vengono introdotti per la prima volta.
+REGOLA 2 — STILE SCIENTIFICO IMPERSONALE
+1. Elimina ogni traccia di linguaggio parlato: niente "come dicevamo", "ora vi elenco", "se ricordate bene", "vedete questa slide".
+2. Scrivi tutto in terza persona impersonale ("Il sistema nervoso riceve..." non "Oggi parleremo del sistema nervoso").
+3. ZERO CONVENEVOLI: Inizia immediatamente col contenuto. Non scrivere mai "Ecco la sbobina" o "In questo testo".
+4. Nessun titolo con "(continuazione)" o "(segue)".
 
-OBIETTIVO DI CONTENUTO: MASSIMO DETTAGLIO
-Attenzione: la pulizia del testo NON significa riassumere! Tutto ciò che è un concetto unico è 'oggetto d'esame'. Mantieni ogni singola spiegazione tecnica, clinica, teorica o esempio con la massima profondità. Non tagliare le informazioni.
+REGOLA 3 — STRUTTURA E FORMATTAZIONE
+1. GERARCHIA TITOLI: Usa ## per i macro-argomenti e ### per le sotto-sezioni.
+2. PARAGRAFI DENSI: Scrivi paragrafi corposi e fluidi, non frasi isolate. Unisci le frasi correlate.
+3. ELENCHI PUNTATI (formato obbligatorio): Quando il docente elenca tipologie, componenti o fasi:
+   - **Termine chiave:** Spiegazione completa in testo normale.
+   Solo il termine è in grassetto, seguìto dai due punti.
+4. MASSIMO 2 LIVELLI DI NESTING: Usa al massimo un sotto-elenco (○) sotto un elenco (●). MAI scendere a un terzo livello (■). Se servono più dettagli, integra nel testo della voce superiore.
+5. GRASSETTI INLINE: Usa il **grassetto** nei paragrafi solo per i termini tecnici fondamentali quando vengono introdotti per la prima volta.
+6. FORMULE: Dedica una riga a sé stante alle formule o leggi importanti.
 
-GESTIONE DELL'OVERLAP:
-Se riprendi un discorso dal blocco precedente e senti frasi ripetute a causa dell'overlap temporale dell'audio, IGNORALE e unisci il nuovo testo in modo fluido al vecchio.
+REGOLA 4 — MASSIMO DETTAGLIO SENZA GONFIARE
+Pulizia NON significa riassumere. Mantieni ogni spiegazione tecnica, esempio clinico e dettaglio d'esame. Ciò che devi eliminare sono le RIPETIZIONI e le riformulazioni, non le informazioni uniche.
 """
 
 
@@ -205,15 +207,18 @@ Se riprendi un discorso dal blocco precedente e senti frasi ripetute a causa del
         testo_finale_revisionato = ""
 
         prompt_revisione = """
-Sei un correttore di bozze accademico, un automa precisissimo. Ti sto passando una grossa porzione di una dispensa universitaria in formato Markdown.
-Il tuo UNICO scopo è trovare e fondere ripetizioni, frasi sdoppiate o concetti identici ripetuti a breve distanza, perfezionando la fluidità e innalzando il tono.
+Sei un revisore editoriale accademico. Ti passo una porzione di dispensa universitaria in Markdown.
 
-REGOLE ASSOLUTE:
-1. SILENZIO ASSOLUTO: Rispondi ESCLUSIVAMENTE con il testo revisionato. Niente convenevoli o frasi introduttive (es. "Ecco la dispensa").
-2. FUSIONE DOPPIONI: Se trovi concetti ripetuti o prolissi, FONDILI in un unico paragrafo fluido ed elegante.
-3. ELIMINA IL PARLATO RESIDUO: Se sono rimaste frasi tipiche del parlato sciolto ("come dicevamo prima"), rimuovile. Il testo deve sembrare un libro stampato.
-4. COPIA-INCOLLA DEL RESTO: Tutto ciò che NON è un doppione deve rimanere ESATTAMENTE IDENTICO al testo originale, senza riassumere o tagliare dettagli tecnici o clinici.
-5. MANTIENI LA FORMATTAZIONE ORIGINALE: Conserva rigorosamente i titoli (## e ###), i paragrafi e gli elenchi con l'esatto formato "- **Termine:** Spiegazione".
+IL TUO UNICO OBIETTIVO: eliminare ogni ripetizione e ridondanza.
+
+REGOLE INVIOLABILI:
+1. SILENZIO ASSOLUTO: Rispondi SOLO con il testo revisionato. Niente frasi introduttive.
+2. CACCIA AI DOPPIONI: Cerca concetti, definizioni o spiegazioni che compaiono due o più volte (anche con parole diverse). FONDILI in un unico paragrafo definitivo nella posizione più logica, eliminando tutte le altre occorrenze.
+3. FRASI RIDONDANTI: Se una frase non aggiunge informazioni nuove rispetto a quella precedente (es. "Questo processo è fondamentale..." seguito da "L'importanza di questo processo..."), tieni solo la versione migliore.
+4. ELIMINA PARLATO RESIDUO: Rimuovi ogni traccia di linguaggio colloquiale rimasto.
+5. NON RIASSUMERE MAI: Tutto ciò che NON è un doppione deve restare IDENTICO. Non accorciare spiegazioni tecniche, non eliminare dettagli unici, non semplificare.
+6. MANTIENI LA FORMATTAZIONE: Conserva titoli (## e ###), elenchi (- **Termine:** Spiegazione), e la struttura originale.
+7. MASSIMO 2 LIVELLI DI NESTING negli elenchi. Se trovi un terzo livello, integra il contenuto nel livello superiore.
 """
 
         for i, blocco in enumerate(macro_blocchi, 1):
