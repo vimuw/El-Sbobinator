@@ -2,8 +2,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Local config
+# Local config (API key saved in user home dir)
 config.json
+.sbobinatore_config.json
 
 # Audio/Video processing temp
 pezzo_temp_*.mp3
