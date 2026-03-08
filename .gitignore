@@ -7,10 +7,15 @@ config.json
 .sbobinatore_config.json
 
 # Audio/Video processing temp
-pezzo_temp_*.mp3
+sbobinatore_temp_*.mp3
 *_Sbobina.html
 Sbobina_Definitiva.html
 pdf_output.txt
+
+# PyInstaller build artifacts
+*.spec
+build/
+dist/
 
 # Media files
 *.mp3
