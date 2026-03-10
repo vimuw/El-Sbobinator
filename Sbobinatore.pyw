@@ -239,7 +239,7 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                 except Exception as e:
                     errore = str(e).lower()
                     if '429' in errore or 'resource_exhausted' in errore or 'quota' in errore:
-                        is_daily_limit = 'per day' in errore or 'quota_exceeded' in errore or 'daily' in errore
+                        is_daily_limit = 'per day' in errore or 'quota_exceeded' in errore or 'daily' in errore or ('429' in errore and 'minute' not in errore and 'rpm' not in errore)
                         if not is_daily_limit and tent < 3:
                             print(f"      [Rilevato limite temporaneo. Attesa di 65s per il reset quota al minuto...]")
                             time.sleep(65)
@@ -329,7 +329,7 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                 except Exception as e:
                     errore = str(e).lower()
                     if '429' in errore or 'resource_exhausted' in errore or 'quota' in errore:
-                        is_daily_limit = 'per day' in errore or 'quota_exceeded' in errore or 'daily' in errore
+                        is_daily_limit = 'per day' in errore or 'quota_exceeded' in errore or 'daily' in errore or ('429' in errore and 'minute' not in errore and 'rpm' not in errore)
                         if not is_daily_limit and tent < 3:
                             print(f"      [Rilevato limite temporaneo. Attesa di 65s per il reset quota al minuto...]")
                             time.sleep(65)
