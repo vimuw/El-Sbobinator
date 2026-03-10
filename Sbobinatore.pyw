@@ -149,7 +149,8 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
             comando_probe = [ffmpeg_exe, "-i", nome_file_video]
             
             # subprocess restituisce un errore intenzionale perché non forniamo un file di output a ffmpeg
-            risultato = subprocess.run(comando_probe, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            risultato = subprocess.run(comando_probe, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, creationflags=creation_flags)
             output = risultato.stderr
             match = re.search(r"Duration:\s*(\d+):(\d+):(\d+\.\d+)", output)
             if not match:
@@ -187,7 +188,9 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                 "-ss", str(inizio_sec), "-t", str(durata_cut),
                 "-q:a", "0", "-map", "a", nome_chunk
             ]
-            subprocess.run(comando_cut, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+            creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            subprocess.run(comando_cut, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=creation_flags)
             
             # 2. Upload
             print("   -> (2/3) Caricamento sicuro nei server di google...")
