@@ -16,7 +16,7 @@ echo Attendi pazientemente, non chiudere la finestra...
 echo =======================================================
 echo.
 
-pyinstaller --noconfirm --onefile --windowed --collect-all customtkinter --copy-metadata imageio --icon "assets/icon.ico" --add-data "assets;assets" --name "Sbobby" "Sbobinatore.pyw"
+pyinstaller --noconfirm --onefile --windowed --collect-all customtkinter --copy-metadata imageio --name "Sbobby" "Sbobinatore.pyw"
 
 echo.
 echo =======================================================

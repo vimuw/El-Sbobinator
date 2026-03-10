@@ -380,18 +380,9 @@ class SbobinatoreModernApp(ctk.CTk):
         self.configure(fg_color="#0F0F14")
         self.minsize(750, 620)
         
-        def resource_path(relative_path):
-            try:
-                base_path = sys._MEIPASS
-            except Exception:
-                base_path = os.path.dirname(os.path.abspath(__file__))
-            return os.path.join(base_path, relative_path)
-        
-        self.resource_path = resource_path
-
         # Imposta l'icona dell'app nativa (barra applicazioni e finestra)
         try:
-            icon_path = self.resource_path(os.path.join("assets", "icon.ico"))
+            icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.ico")
             if os.path.exists(icon_path):
                 self.iconbitmap(icon_path)
         except Exception:
@@ -414,17 +405,25 @@ class SbobinatoreModernApp(ctk.CTk):
         title_inner = ctk.CTkFrame(self.title_frame, fg_color="transparent")
         title_inner.grid(row=0, column=0)
         
-        # Caricamento della Mascot in alta risoluzione
-        try:
-            from PIL import Image
-            mascot_path = self.resource_path(os.path.join("assets", "icon.png"))
-            img = Image.open(mascot_path)
-            robot_img = ctk.CTkImage(light_image=img, dark_image=img, size=(42, 42))
-            ctk.CTkLabel(title_inner, text="", image=robot_img).pack(side="left", padx=(0, 10))
-        except Exception:
-            ctk.CTkLabel(title_inner, text="🤖", font=(FONT_UI, 32), text_color="#CDD6F4").pack(side="left", padx=(0, 10))
+        ctk.CTkLabel(title_inner, text="🎓 Sbobby ", font=(FONT_UI, 26, "bold"), text_color="#CDD6F4").pack(side="left")
 
-        ctk.CTkLabel(title_inner, text="🎓 Sbobby", font=(FONT_UI, 28, "bold"), text_color="#CDD6F4").pack(side="left")
+        # Gestione Emoji Colorata su Windows (Tkinter usa font monocromatici di default)
+        try:
+            import urllib.request
+            from PIL import Image
+            emoji_url = "https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/1f916.png"
+            emoji_path = os.path.join(USER_HOME, ".sbobby_robot.png")
+            if not os.path.exists(emoji_path):
+                req = urllib.request.Request(emoji_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=3) as resp:
+                    with open(emoji_path, 'wb') as f:
+                        f.write(resp.read())
+            img = Image.open(emoji_path)
+            robot_img = ctk.CTkImage(light_image=img, dark_image=img, size=(30, 30))
+            ctk.CTkLabel(title_inner, text="", image=robot_img).pack(side="left", padx=(4, 0))
+        except Exception:
+            # Fallback se non c'è internet al primo avvio
+            ctk.CTkLabel(title_inner, text="🤖", font=(FONT_UI, 26), text_color="#CDD6F4").pack(side="left", padx=(4, 0))
 
         # API KEY CARD
         self.api_card = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=12, border_width=1, border_color=self.BORDER)
