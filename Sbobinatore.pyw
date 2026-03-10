@@ -396,7 +396,25 @@ class SbobinatoreModernApp(ctk.CTk):
         self.title_frame.grid_columnconfigure(0, weight=1)
         title_inner = ctk.CTkFrame(self.title_frame, fg_color="transparent")
         title_inner.grid(row=0, column=0)
-        ctk.CTkLabel(title_inner, text="🎓 Sbobby 🤖", font=(FONT_UI, 26, "bold"), text_color="#CDD6F4").pack()
+        ctk.CTkLabel(title_inner, text="🎓 Sbobby ", font=(FONT_UI, 26, "bold"), text_color="#CDD6F4").pack(side="left")
+
+        # Gestione Emoji Colorata su Windows (Tkinter usa font monocromatici di default)
+        try:
+            import urllib.request
+            from PIL import Image
+            emoji_url = "https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/1f916.png"
+            emoji_path = os.path.join(USER_HOME, ".sbobby_robot.png")
+            if not os.path.exists(emoji_path):
+                req = urllib.request.Request(emoji_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=3) as resp:
+                    with open(emoji_path, 'wb') as f:
+                        f.write(resp.read())
+            img = Image.open(emoji_path)
+            robot_img = ctk.CTkImage(light_image=img, dark_image=img, size=(30, 30))
+            ctk.CTkLabel(title_inner, text="", image=robot_img).pack(side="left", padx=(4, 0))
+        except Exception:
+            # Fallback se non c'è internet al primo avvio
+            ctk.CTkLabel(title_inner, text="🤖", font=(FONT_UI, 26), text_color="#CDD6F4").pack(side="left", padx=(4, 0))
 
         # API KEY CARD
         self.api_card = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=12, border_width=1, border_color=self.BORDER)
