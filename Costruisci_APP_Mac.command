@@ -1,7 +1,7 @@
 #!/bin/bash
 clear
 echo "======================================================="
-echo "       COSTRUTTORE APP MAC SBOBINATORE AI"
+echo "       COSTRUTTORE APP MAC SBOBBY AI"
 echo "======================================================="
 
 # Spostati nella cartella d'origine
@@ -18,7 +18,7 @@ echo "Attendi pazientemente, non chiudere la finestra..."
 echo "======================================================="
 echo ""
 
-pyinstaller --noconfirm --windowed --collect-all customtkinter --copy-metadata imageio --name "Sbobby" "Sbobinatore.pyw"
+pyinstaller --noconfirm --windowed --collect-all customtkinter --collect-all tkinterdnd2 --copy-metadata imageio --name "Sbobby" "Sbobinatore.pyw"
 
 echo ""
 echo "======================================================="

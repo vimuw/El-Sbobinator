@@ -1,8 +1,8 @@
 @echo off
-title Costruttore Sbobinatore AI per Windows
+title Costruttore Sbobby AI per Windows
 color 0B
 echo =======================================================
-echo     COSTRUTTORE ESEGUIBILE WINDOWS SBOBINATORE AI
+echo     COSTRUTTORE ESEGUIBILE WINDOWS SBOBBY AI
 echo =======================================================
 echo.
 echo Installazione dei requisiti e PyInstaller in corso...
@@ -16,7 +16,7 @@ echo Attendi pazientemente, non chiudere la finestra...
 echo =======================================================
 echo.
 
-pyinstaller --noconfirm --onefile --windowed --collect-all customtkinter --copy-metadata imageio --name "Sbobby" "Sbobinatore.pyw"
+pyinstaller --noconfirm --onefile --windowed --collect-all customtkinter --collect-all tkinterdnd2 --copy-metadata imageio --name "Sbobby" "Sbobinatore.pyw"
 
 echo.
 echo =======================================================

@@ -359,7 +359,9 @@ if platform.system() == "Windows":
 # ==========================================
 # INTERFACCIA GRAFICA CUSTOM-TKINTER
 # ==========================================
-class SbobinatoreModernApp(ctk.CTk):
+from tkinterdnd2 import TkinterDnD, DND_FILES
+
+class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
 
     ACCENT = "#6C5CE7"
     ACCENT_HOVER = "#5A4BD1"
@@ -374,6 +376,7 @@ class SbobinatoreModernApp(ctk.CTk):
 
     def __init__(self):
         super().__init__()
+        self.TkdndVersion = TkinterDnD._require(self)
         
         self.title("Sbobby")
         self.geometry("850x720")
@@ -416,7 +419,7 @@ class SbobinatoreModernApp(ctk.CTk):
         self.drop_zone.grid(row=2, column=0, padx=30, pady=15, sticky="ew")
         self.drop_zone.grid_columnconfigure(0, weight=1)
 
-        self.drop_icon = ctk.CTkLabel(self.drop_zone, text="�", font=(FONT_UI, 44), text_color=self.TEXT_DIM)
+        self.drop_icon = ctk.CTkLabel(self.drop_zone, text="📥", font=(FONT_UI, 44), text_color=self.TEXT_DIM)
         self.drop_icon.grid(row=0, column=0, pady=(35, 8))
 
         self.lbl_file = ctk.CTkLabel(self.drop_zone, text="Carica Lezione Audio/Video", font=(FONT_UI, 18, "bold"), text_color=self.TEXT_BRIGHT)
@@ -425,9 +428,11 @@ class SbobinatoreModernApp(ctk.CTk):
         self.lbl_file_hint = ctk.CTkLabel(self.drop_zone, text="Supporta MP3, M4A, WAV, MP4, MKV", font=(FONT_UI, 12), text_color=self.TEXT_DIM)
         self.lbl_file_hint.grid(row=2, column=0, pady=(0, 35))
 
-        # Tutta la drop zone è cliccabile
+        # Tutta la drop zone è cliccabile e accetta il drag&drop
         for widget in [self.drop_zone, self.drop_icon, self.lbl_file, self.lbl_file_hint]:
             widget.bind("<Button-1>", lambda e: self.scegli_file())
+            widget.drop_target_register(DND_FILES)
+            widget.dnd_bind('<<Drop>>', self._on_file_drop)
 
         # BOTTONE AVVIA
         self.btn_avvia = ctk.CTkButton(self, text="▶  AVVIA GENERAZIONE SBOBINA", height=52, font=(FONT_UI, 16, "bold"), corner_radius=10, fg_color=self.SUCCESS, hover_color=self.SUCCESS_HOVER, command=self.avvia_processo)
@@ -471,6 +476,26 @@ class SbobinatoreModernApp(ctk.CTk):
         lk_kofi.pack(side="left")
         lk_kofi.bind("<Button-1>", lambda e: webbrowser.open("https://ko-fi.com/vimuw"))
 
+    def _on_file_drop(self, event):
+        if self.is_running: return
+        file_path = event.data
+        if file_path.startswith('{') and file_path.endswith('}'):
+            file_path = file_path[1:-1]
+            
+        estensioni_valide = [".mp3", ".m4a", ".mp4", ".wav", ".avi", ".mov", ".mkv"]
+        if any(file_path.lower().endswith(ext) for ext in estensioni_valide):
+            self._setta_file(file_path)
+        else:
+            messagebox.showwarning("Formato non valido", "Trascina un file multimediale valido (Audio/Video).")
+
+    def _setta_file(self, percorso_file):
+        self.file_path = percorso_file
+        self.drop_icon.configure(text="✅")
+        self.lbl_file.configure(text=os.path.basename(self.file_path), text_color=self.TEXT_BRIGHT)
+        self.lbl_file_hint.configure(text="Clicca di nuovo per cambiare file")
+        self.drop_zone.configure(border_color=self.SUCCESS)
+        print(f"[+] File caricato: {os.path.basename(self.file_path)}")
+
     def scegli_file(self, event=None):
         if self.is_running: return
         file_selezionato = filedialog.askopenfilename(
@@ -478,12 +503,7 @@ class SbobinatoreModernApp(ctk.CTk):
             filetypes=[("File MultiMedia", "*.mp3 *.m4a *.mp4 *.wav *.avi *.mov *.mkv"), ("Tutti i file", "*.*")]
         )
         if file_selezionato:
-            self.file_path = file_selezionato
-            self.drop_icon.configure(text="✅")
-            self.lbl_file.configure(text=os.path.basename(self.file_path), text_color=self.TEXT_BRIGHT)
-            self.lbl_file_hint.configure(text="Clicca di nuovo per cambiare file")
-            self.drop_zone.configure(border_color=self.SUCCESS)
-            print(f"[+] File caricato: {os.path.basename(self.file_path)}")
+            self._setta_file(file_selezionato)
 
     def avvia_processo(self):
         api_key = self.entry_api.get().strip()
@@ -549,6 +569,6 @@ class SbobinatoreModernApp(ctk.CTk):
         self.destroy()
 
 if __name__ == "__main__":
-    app = SbobinatoreModernApp()
+    app = SbobbyApp()
     app.mainloop()
 
