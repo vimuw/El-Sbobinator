@@ -420,7 +420,10 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.api_card.grid_columnconfigure(1, weight=1)
         ctk.CTkLabel(self.api_card, text="🔑 API Key Gemini", font=(FONT_UI, 14), text_color=self.TEXT_DIM).grid(row=0, column=0, sticky="w", padx=(18, 12), pady=14)
         self.entry_api = ctk.CTkEntry(self.api_card, placeholder_text="Incolla la tua API Key qui...", show="*", font=(FONT_UI, 13), height=38, corner_radius=8, fg_color=self.CARD_BG, border_color=self.BORDER, text_color=self.TEXT_BRIGHT)
-        self.entry_api.grid(row=0, column=1, sticky="ew", padx=(0, 18), pady=14)
+        self.entry_api.grid(row=0, column=1, sticky="ew", padx=(0, 8), pady=14)
+        
+        self.btn_show_api = ctk.CTkButton(self.api_card, text="👁", width=38, height=38, corner_radius=8, fg_color=self.CARD_BG, hover_color=self.BORDER, border_color=self.BORDER, border_width=1, text_color=self.TEXT_BRIGHT, command=self.toggle_api_visibility)
+        self.btn_show_api.grid(row=0, column=2, padx=(0, 18), pady=14)
         config_data = load_config()
         self.entry_api.insert(0, config_data.get("api_key", ""))
 
@@ -515,6 +518,14 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         if file_selezionato:
             self._setta_file(file_selezionato)
 
+    def toggle_api_visibility(self):
+        if self.entry_api.cget("show") == "*":
+            self.entry_api.configure(show="")
+            self.btn_show_api.configure(text="🙈")
+        else:
+            self.entry_api.configure(show="*")
+            self.btn_show_api.configure(text="👁")
+
     def avvia_processo(self):
         api_key = self.entry_api.get().strip()
         if not api_key:
@@ -528,7 +539,7 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         # Validazione rapida della API Key (Senza consumare token di generazione)
         try:
             test_client = genai.Client(api_key=api_key)
-            test_client.models.get(name='models/gemini-2.5-flash')
+            test_client.models.get(model='gemini-2.5-flash')
         except Exception as e:
             messagebox.showerror("API Key non valida", f"La chiave API non è valida o non hai accesso ai server Google.\nControlla di averla copiata correttamente, senza spazi extra.\n\nErrore: {e}")
             return
