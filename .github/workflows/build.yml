@@ -6,6 +6,9 @@ on:
       - 'v*' # Trigger build only when a new version tag (e.g. v1.0.0) is pushed
   workflow_dispatch: # Allow manual triggering from GitHub UI
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build on ${{ matrix.os }}
