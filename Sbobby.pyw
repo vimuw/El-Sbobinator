@@ -2261,12 +2261,30 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         try:
             ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
             creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-            res = subprocess.run([ffmpeg_exe, "-i", path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, creationflags=creation_flags)
-            out = res.stderr or ""
-            m = re.search(r"Duration:\\s*(\\d+):(\\d+):(\\d+\\.\\d+)", out)
+            # Evita text=True (encoding locale): se il path ha caratteri non-ASCII, puo' fallire.
+            res = subprocess.run(
+                [ffmpeg_exe, "-hide_banner", "-i", path],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                creationflags=creation_flags,
+            )
+            raw = (res.stderr or b"") + b"\n" + (res.stdout or b"")
+            try:
+                out = raw.decode("utf-8", errors="replace")
+            except Exception:
+                out = raw.decode(errors="replace")
+
+            # FFmpeg a volte mostra "Duration: N/A"
+            if "Duration: N/A" in out:
+                return None
+
+            # Accetta sia secondi con decimali che senza, e sia '.' che ',' come separatore.
+            m = re.search(r"Duration:\\s*(\\d+):(\\d+):(\\d+(?:[\\.,]\\d+)?)", out)
             if not m:
                 return None
-            h, mi, se = float(m.group(1)), float(m.group(2)), float(m.group(3))
+            h = float(m.group(1))
+            mi = float(m.group(2))
+            se = float(m.group(3).replace(",", "."))
             return (h * 3600.0) + (mi * 60.0) + se
         except Exception:
             return None
