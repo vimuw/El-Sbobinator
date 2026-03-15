@@ -30,7 +30,7 @@ echo Attendi pazientemente, non chiudere la finestra...
 echo =======================================================
 echo.
 
-python -m pyinstaller --noconfirm --onefile --windowed --collect-all customtkinter --collect-all tkinterdnd2 --collect-all imageio_ffmpeg --name "Sbobby" "Sbobby.pyw"
+python -m PyInstaller --noconfirm --onefile --windowed --collect-all customtkinter --collect-all tkinterdnd2 --collect-all imageio_ffmpeg --name "Sbobby" "Sbobby.pyw"
 
 echo.
 echo =======================================================
