@@ -481,17 +481,28 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                     except Exception:
                         pass
 
-                    # Auto-size: misura altezza richiesta e imposta la geometry di conseguenza.
-                    # (Tk/CTk non sono sempre perfetti con la geometry "auto", quindi lo facciamo noi.)
+                    # Auto-size: usa l'altezza "richiesta" dai widget, evitando spazio vuoto.
+                    # Facciamo 2 passate (subito e dopo un attimo) perche' su alcuni sistemi
+                    # la reqheight si stabilizza solo dopo che Tk ha disegnato tutto.
+                    def _apply_autosize():
+                        try:
+                            target_w = 440
+                            win.update_idletasks()
+                            req_h = int(win.winfo_reqheight())
+                            # clamp per evitare finestre troppo grandi su schermi piccoli
+                            max_h = int(max(260, win.winfo_screenheight() * 0.80))
+                            # piccolo margine per safety (evita tagli ai bottoni), ma non aggiunge "vuoto" evidente.
+                            target_h = min(req_h + 6, max_h)
+                            # Se per qualche motivo la reqheight e' zero/strana, non stringere troppo.
+                            if target_h < 240:
+                                target_h = 240
+                            win.geometry(f"{target_w}x{target_h}")
+                        except Exception:
+                            pass
+
+                    _apply_autosize()
                     try:
-                        target_w = 440
-                        win.update_idletasks()
-                        req_h = int(win.winfo_reqheight())
-                        # clamp per evitare finestre troppo grandi su schermi piccoli
-                        max_h = int(max(260, win.winfo_screenheight() * 0.80))
-                        # min un po' piu' alto + piccolo margine, per evitare che i bottoni finiscano "tagliati"
-                        target_h = max(300, min(req_h + 10, max_h))
-                        win.geometry(f"{target_w}x{target_h}")
+                        win.after(120, _apply_autosize)
                     except Exception:
                         pass
 
