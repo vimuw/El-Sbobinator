@@ -126,11 +126,3 @@ Per tutti i dettagli, consulta il file `LICENSE` incluso in questa repository.
 Se scarichi il codice sorgente completo e vuoi compilare tu stesso i file eseguibili nativi (`.exe` o `.app`), usa gli script di automazione inclusi:
 - **Windows:** Fai doppio clic su `Costruisci_EXE_Windows.bat`. Verrà creata la cartella `dist` contenente l'applicativo compilato con PyInstaller.
 - **Mac:** Dal terminale, avvia `Costruisci_APP_Mac.command` per generare l'app macOS nativa.
-
----
-
-## 🏷️ Pubblicare una nuova Release (per chi mantiene il progetto)
-Il workflow GitHub crea automaticamente gli eseguibili e li carica in **Releases**.
-
-- **Metodo consigliato (tag):** crea e pusha un tag versione `vX.Y.Z` (es. `v1.0.7`). Il workflow parte da solo.
-- **Metodo manuale (Run workflow):** lancia "Run workflow" e inserisci `release_tag` (es. `v1.0.7`). Se lasci `release_tag` vuoto, fa solo build e non pubblica la Release.
