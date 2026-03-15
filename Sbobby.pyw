@@ -1598,6 +1598,7 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.last_output_html = None
         self.last_output_dir = None
         self._run_started_monotonic = None
+        self._file_loaded_monotonic = None
         self._eta_ema_seconds = None
 
         # Intercetta la chiusura della finestra per pulire i file temporanei
@@ -1799,6 +1800,11 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
             print(f"[!] Errore controllo sessione: {e}")
 
         self.file_path = percorso_file
+        # Timestamp per misurare il tempo totale dalla selezione del file fino alla fine.
+        try:
+            self._file_loaded_monotonic = time.monotonic()
+        except Exception:
+            self._file_loaded_monotonic = None
         self.drop_icon.configure(text="✅")
         self.lbl_file.configure(text=os.path.basename(self.file_path), text_color=self.TEXT_BRIGHT)
         if self.resume_session:
@@ -1846,6 +1852,9 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.is_running = True
         self.cancel_event.clear()
         self._run_started_monotonic = time.monotonic()
+        if not self._file_loaded_monotonic:
+            # Fallback: se per qualche motivo non e' stato settato in _setta_file.
+            self._file_loaded_monotonic = self._run_started_monotonic
         self._eta_ema_seconds = None
         self.last_output_html = None
         self.last_output_dir = None
@@ -1872,7 +1881,20 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
 
     def processo_terminato(self):
         self.is_running = False
+        self.after(0, self._log_tempo_totale)
         self.after(0, self._ripristina_ui)
+
+    def _log_tempo_totale(self):
+        # Mostra il tempo totale impiegato dall'app dalla selezione del file alla fine.
+        try:
+            if not self._file_loaded_monotonic:
+                return
+            elapsed = max(0.0, time.monotonic() - float(self._file_loaded_monotonic))
+            print("\n" + "=" * 44)
+            print(f"Tempo totale (da file caricato): {self._format_duration(int(elapsed))}")
+            print("=" * 44 + "\n")
+        except Exception:
+            pass
 
     def _ripristina_ui(self):
         self.btn_avvia.configure(state="normal", fg_color=self.SUCCESS, text="▶  AVVIA GENERAZIONE SBOBINA")
