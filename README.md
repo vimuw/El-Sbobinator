@@ -52,7 +52,7 @@ Estrai l'archivio ZIP e fai **doppio clic** sull'applicazione `Sbobby.app` (puoi
 ## 💾 Autosalvataggio e Ripresa (Importante)
 Sbobby salva automaticamente i progressi mentre lavora, così se chiudi l'app, crasha il PC o finisci la quota giornaliera puoi riprendere senza perdere tutto.
 
-- **Dove salva?** In una cartella locale sul tuo PC, dentro la home utente (es. `C:\Users\TUO_UTENTE\.sbobby_sessions\...` su Windows).
+- **Dove salva?** In una cartella locale sul tuo PC, dentro la home utente (es. `C:\Users\TUO_UTENTE\.sbobby_sessions\...` su Windows o `~/.sbobby_sessions/...` su macOS).
 - **Cosa salva?** Testi parziali (sbobine per chunk), progressi e stati di avanzamento.
 - **Quando riprendi una sessione:** se selezioni lo stesso file audio, Sbobby può proporti di **riutilizzare** i risultati già pronti (rigenera l'HTML senza consumare richieste) oppure di **ricominciare da zero** (cancella la sessione e rifà tutto dall'inizio).
 
