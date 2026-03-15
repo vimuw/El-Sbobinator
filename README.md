@@ -75,7 +75,7 @@ Assolutamente sì, è sicuro al 100%. Il codice sorgente dell'applicazione è co
 **Cos'è un falso positivo e perché succede?**
 Un falso positivo avviene quando un antivirus scambia un file innocuo per un virus. Questo succede quasi sempre con i programmi scritti in Python e trasformati in eseguibili `.exe` tramite un tool chiamato *PyInstaller*. Gli antivirus diffidano "di default" dei programmi creati da sviluppatori indipendenti che non possiedono una firma digitale a pagamento (che costa centinaia di euro l'anno).
 
-Nota: alcuni antivirus possono segnalare eseguibili creati con PyInstaller come "sospetti" (falsi positivi), soprattutto se il file non e' firmato digitalmente. Se vuoi una verifica in piu', puoi caricare il file su VirusTotal e controllare che le segnalazioni (se presenti) siano poche e di tipo generico/euristico.
+Se vuoi una verifica in piu', puoi caricare il file su VirusTotal e controllare che le segnalazioni (se presenti) siano poche e di tipo generico/euristico.
 
 **Come risolvere su Windows:**
 - **Se appare la schermata blu di Windows SmartScreen:** Clicca su `"Ulteriori Informazioni"` e poi sul pulsante in basso `"Esegui Comunque"`.
