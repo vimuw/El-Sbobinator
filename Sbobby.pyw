@@ -2282,7 +2282,8 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
                 return None, "duration_NA"
 
             # Accetta sia secondi con decimali che senza, e sia '.' che ',' come separatore.
-            m = re.search(r"Duration:\\s*(\\d+):(\\d+):(\\d+(?:[\\.,]\\d+)?)", out)
+            # NB: qui usiamo davvero le escape regex (\s, \d). In passato erano state accidentalmente doppio-escapate.
+            m = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:[.,]\d+)?)", out)
             if not m:
                 # Ritorna un estratto utile per debug (ultime righe).
                 tail = "\n".join([ln for ln in (out or "").splitlines() if ln.strip()][-6:])
