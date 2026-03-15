@@ -2259,11 +2259,14 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
     def _probe_duration_seconds(self, path: str):
         # Usa ffmpeg -i per ottenere Duration (come nella pipeline), ma in modo rapido.
         try:
+            p = os.path.abspath(str(path or "").strip())
+            if not p or not os.path.exists(p):
+                return None, "file_non_trovato"
             ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
             creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
             # Evita text=True (encoding locale): se il path ha caratteri non-ASCII, puo' fallire.
             res = subprocess.run(
-                [ffmpeg_exe, "-hide_banner", "-i", path],
+                [ffmpeg_exe, "-hide_banner", "-i", p],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 creationflags=creation_flags,
@@ -2276,18 +2279,21 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
 
             # FFmpeg a volte mostra "Duration: N/A"
             if "Duration: N/A" in out:
-                return None
+                return None, "duration_NA"
 
             # Accetta sia secondi con decimali che senza, e sia '.' che ',' come separatore.
             m = re.search(r"Duration:\\s*(\\d+):(\\d+):(\\d+(?:[\\.,]\\d+)?)", out)
             if not m:
-                return None
+                # Ritorna un estratto utile per debug (ultime righe).
+                tail = "\n".join([ln for ln in (out or "").splitlines() if ln.strip()][-6:])
+                reason = tail.strip() or f"ffmpeg_returncode_{getattr(res, 'returncode', 'unknown')}"
+                return None, reason
             h = float(m.group(1))
             mi = float(m.group(2))
             se = float(m.group(3).replace(",", "."))
-            return (h * 3600.0) + (mi * 60.0) + se
+            return (h * 3600.0) + (mi * 60.0) + se, None
         except Exception:
-            return None
+            return None, "eccezione_ffmpeg"
 
     def _start_cost_estimate_async(self, paths):
         # Aggiorna la hint sotto al file con stima richieste (Chunk/Revisioni/Confini) prima di avviare.
@@ -2320,9 +2326,16 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
             tot_revs = 0
             tot_bounds = 0
             any_ok = False
+            debug_reasons = []
             for p in all_paths or []:
-                dur = self._probe_duration_seconds(p)
+                dur, why = self._probe_duration_seconds(p)
                 if dur is None:
+                    try:
+                        bn = os.path.basename(str(p or "")) or str(p or "")
+                    except Exception:
+                        bn = str(p or "")
+                    if why:
+                        debug_reasons.append(f"{bn}: {why}")
                     continue
                 any_ok = True
                 c, r, b = self._estimate_requests_from_duration(dur)
@@ -2336,7 +2349,7 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
                 prefix = f"Stima coda ({total_n} file): " if total_n > 1 else "Stima richieste: "
                 txt = f"{prefix}Chunk {tot_chunks} • Revisioni ~{tot_revs} • Confini ~{tot_bounds}"
             try:
-                q.put_nowait(txt)
+                q.put_nowait({"txt": txt, "debug": debug_reasons})
             except Exception:
                 # Se la queue e' piena o errore, ignora: la UI usera' quanto gia' disponibile.
                 pass
@@ -2347,14 +2360,36 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
                 if int(getattr(self, "_cost_estimate_seq", 0) or 0) != seq:
                     return  # richiesta vecchia (file cambiato)
                 try:
-                    txt = q.get_nowait()
+                    item = q.get_nowait()
                 except Exception:
                     # Non ancora pronto: riprova a breve se il worker e' vivo
                     if t.is_alive():
                         self.after(120, poll)
                     return
-                self._file_cost_hint = txt
+                txt = None
+                debug_reasons = None
+                try:
+                    if isinstance(item, dict):
+                        txt = item.get("txt")
+                        debug_reasons = item.get("debug")
+                    else:
+                        txt = str(item)
+                except Exception:
+                    txt = str(item)
+
+                self._file_cost_hint = str(txt or "").strip()
                 self._refresh_file_hint()
+                # Debug: se non disponibile, logga un motivo utile in console (main thread).
+                try:
+                    if (not self._file_cost_hint) or ("non disponibile" in self._file_cost_hint.lower()):
+                        if debug_reasons:
+                            sample = " | ".join(list(debug_reasons)[:2])
+                            more = ""
+                            if len(debug_reasons) > 2:
+                                more = f" (+{len(debug_reasons)-2} altri)"
+                            print(f"[stima] non disponibile: {sample}{more}")
+                except Exception:
+                    pass
             except Exception:
                 pass
 
