@@ -13,6 +13,7 @@ import re
 import hashlib
 import shutil
 import difflib
+import queue
 from datetime import datetime
 from google import genai
 from google.genai import types
@@ -2288,6 +2289,14 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
                 pass
             return
 
+        # Tkinter non e' thread-safe: il worker NON deve mai toccare widget. Usa una queue e polling via after().
+        try:
+            self._cost_estimate_seq = int(getattr(self, "_cost_estimate_seq", 0) or 0) + 1
+        except Exception:
+            self._cost_estimate_seq = 1
+        seq = int(self._cost_estimate_seq)
+        q = queue.Queue(maxsize=1)
+
         def worker(all_paths, total_n: int):
             tot_chunks = 0
             tot_revs = 0
@@ -2309,10 +2318,25 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
                 prefix = f"Stima coda ({total_n} file): " if total_n > 1 else "Stima richieste: "
                 txt = f"{prefix}Chunk {tot_chunks} • Revisioni ~{tot_revs} • Confini ~{tot_bounds}"
             try:
-                def apply():
-                    self._file_cost_hint = txt
-                    self._refresh_file_hint()
-                self.after(0, apply)
+                q.put_nowait(txt)
+            except Exception:
+                # Se la queue e' piena o errore, ignora: la UI usera' quanto gia' disponibile.
+                pass
+
+        def poll():
+            # Eseguito nel main thread via after(): aggiorna la UI se e quando arriva il testo.
+            try:
+                if int(getattr(self, "_cost_estimate_seq", 0) or 0) != seq:
+                    return  # richiesta vecchia (file cambiato)
+                try:
+                    txt = q.get_nowait()
+                except Exception:
+                    # Non ancora pronto: riprova a breve se il worker e' vivo
+                    if t.is_alive():
+                        self.after(120, poll)
+                    return
+                self._file_cost_hint = txt
+                self._refresh_file_hint()
             except Exception:
                 pass
 
@@ -2326,6 +2350,8 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         try:
             t = threading.Thread(target=worker, args=(list(paths), total_files), daemon=True)
             t.start()
+            # Avvia polling UI
+            self.after(120, poll)
         except Exception:
             pass
 
