@@ -1855,6 +1855,9 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self._run_started_monotonic = None
         self._file_loaded_monotonic = None
         self._eta_ema_seconds = None
+        # Hint sotto al file selezionato: separa testo base e stima richieste (per comporli senza sovrascriversi).
+        self._file_hint_base = ""
+        self._file_cost_hint = ""
 
         # ETA "step-based" (piu' stabile): medie dei tempi per chunk/macro/confine.
         self._work_totals = {"chunks": 0, "macro": 0, "boundary": 0}
@@ -1867,34 +1870,13 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(4, weight=1)
 
-        # HEADER (titolo + microcopy)
+        # HEADER (solo titolo centrato)
         self.header = ctk.CTkFrame(self, fg_color="transparent")
         self.header.grid(row=0, column=0, padx=30, pady=(22, 8), sticky="ew")
         self.header.grid_columnconfigure(0, weight=1)
-
-        header_left = ctk.CTkFrame(self.header, fg_color="transparent")
-        header_left.grid(row=0, column=0, sticky="w")
-        # Usa grid per allineare meglio la baseline tra titolo e sottotitolo.
-        header_left.grid_columnconfigure(2, weight=1)
-        self.lbl_title = ctk.CTkLabel(header_left, text="Sbobby", font=(FONT_UI, 26, "bold"), text_color=self.TEXT_BRIGHT)
-        self.lbl_title.grid(row=0, column=0, sticky="w")
-        self.lbl_subtitle = ctk.CTkLabel(
-            header_left,
-            text="Sbobine automatiche, pronte per Google Docs",
-            font=(FONT_UI, 12),
-            text_color=self.TEXT_DIM,
-        )
-        # Piccolo offset visivo per allineare meglio al titolo grande.
-        self.lbl_subtitle.grid(row=0, column=1, sticky="w", padx=(12, 0), pady=(6, 0))
-
-        header_right = ctk.CTkFrame(self.header, fg_color="transparent")
-        header_right.grid(row=0, column=1, sticky="e")
-        header_right.grid_rowconfigure(0, weight=0)
-        header_right.grid_rowconfigure(1, weight=0)
-        self.lbl_header_hint = ctk.CTkLabel(header_right, text="Output: Desktop • Autosave attivo", font=(FONT_UI, 11), text_color=self.TEXT_DIM)
-        self.lbl_header_hint.grid(row=0, column=0, sticky="e", pady=(6, 0))
-        self.lbl_header_cost = ctk.CTkLabel(header_right, text="", font=(FONT_UI, 11), text_color=self.TEXT_DIM)
-        self.lbl_header_cost.grid(row=1, column=0, sticky="e", pady=(2, 0))
+        self.lbl_title = ctk.CTkLabel(self.header, text="Sbobby", font=(FONT_UI, 26, "bold"), text_color=self.TEXT_BRIGHT)
+        # sticky vuoto = centrato nella colonna che si espande.
+        self.lbl_title.grid(row=0, column=0, pady=(6, 0))
 
         # API KEY CARD
         self.api_card = ctk.CTkFrame(self, fg_color=self.TERMINAL_BG, corner_radius=14, border_width=1, border_color=self.BORDER)
@@ -1920,7 +1902,9 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.lbl_file = ctk.CTkLabel(self.drop_zone, text="Carica Lezione Audio/Video", font=(FONT_UI, 18, "bold"), text_color=self.TEXT_BRIGHT)
         self.lbl_file.grid(row=1, column=0, pady=(0, 4))
 
-        self.lbl_file_hint = ctk.CTkLabel(self.drop_zone, text="Supporta MP3, M4A, WAV, MP4, MKV", font=(FONT_UI, 12), text_color=self.TEXT_DIM)
+        self._file_hint_base = "Supporta MP3, M4A, WAV, MP4, MKV"
+        self._file_cost_hint = ""
+        self.lbl_file_hint = ctk.CTkLabel(self.drop_zone, text=self._file_hint_base, font=(FONT_UI, 12), text_color=self.TEXT_DIM)
         self.lbl_file_hint.grid(row=2, column=0, pady=(0, 35))
 
         # Tutta la drop zone è cliccabile e accetta il drag&drop
@@ -1937,7 +1921,7 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.console_card = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=14, border_width=1, border_color=self.BORDER)
         self.console_card.grid(row=4, column=0, padx=30, pady=(0, 15), sticky="nsew")
         self.console_card.grid_columnconfigure(0, weight=1)
-        self.console_card.grid_rowconfigure(4, weight=1)
+        self.console_card.grid_rowconfigure(3, weight=1)
         ctk.CTkLabel(self.console_card, text="⚡ Log Eventi", font=(FONT_UI, 12, "bold"), text_color=self.TEXT_DIM).grid(row=0, column=0, sticky="w", padx=16, pady=(12, 4))
         self.progress_bar = ctk.CTkProgressBar(self.console_card, height=6, corner_radius=3, fg_color=self.TERMINAL_BG, progress_color=self.ACCENT)
         self.progress_bar.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 10))
@@ -1954,13 +1938,16 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.lbl_eta = ctk.CTkLabel(self.meta_bar, text="ETA: —", font=(FONT_UI, 11), text_color=self.TEXT_DIM)
         self.lbl_eta.grid(row=0, column=1, sticky="e")
 
-        # ACTION BAR (azioni rapide a destra)
-        self.actions_bar = ctk.CTkFrame(self.console_card, fg_color="transparent")
-        self.actions_bar.grid(row=3, column=0, sticky="ew", padx=16, pady=(0, 10))
-        self.actions_bar.grid_columnconfigure(0, weight=1)
+        self.console = ctk.CTkTextbox(self.console_card, font=(FONT_MONO, 12), fg_color=self.TERMINAL_BG, text_color=self.TERMINAL_FG, corner_radius=8, wrap="word", border_width=0)
+        self.console.grid(row=3, column=0, sticky="nsew", padx=12, pady=(0, 8))
+        self.console.configure(state="disabled")
+
+        # Bottoni azione: sotto la console, a sinistra, dentro lo stesso padding.
+        self.bottom_actions = ctk.CTkFrame(self.console_card, fg_color="transparent")
+        self.bottom_actions.grid(row=4, column=0, sticky="w", padx=12, pady=(0, 12))
 
         self.btn_open_folder = ctk.CTkButton(
-            self.actions_bar,
+            self.bottom_actions,
             text="Apri cartella",
             width=110,
             height=28,
@@ -1973,10 +1960,10 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
             command=self.apri_cartella_output,
             state="disabled",
         )
-        self.btn_open_folder.grid(row=0, column=1, padx=(0, 8), sticky="e")
+        self.btn_open_folder.pack(side="left", padx=(0, 8))
 
         self.btn_open_html = ctk.CTkButton(
-            self.actions_bar,
+            self.bottom_actions,
             text="Apri HTML",
             width=90,
             height=28,
@@ -1989,10 +1976,10 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
             command=self.apri_file_html,
             state="disabled",
         )
-        self.btn_open_html.grid(row=0, column=2, padx=(0, 8), sticky="e")
+        self.btn_open_html.pack(side="left", padx=(0, 8))
 
         self.btn_cancel = ctk.CTkButton(
-            self.actions_bar,
+            self.bottom_actions,
             text="Stop",
             width=70,
             height=28,
@@ -2003,11 +1990,7 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
             command=self.annulla_processo,
             state="disabled",
         )
-        self.btn_cancel.grid(row=0, column=3, sticky="e")
-
-        self.console = ctk.CTkTextbox(self.console_card, font=(FONT_MONO, 12), fg_color=self.TERMINAL_BG, text_color=self.TERMINAL_FG, corner_radius=8, wrap="word", border_width=0)
-        self.console.grid(row=4, column=0, sticky="nsew", padx=12, pady=(0, 12))
-        self.console.configure(state="disabled")
+        self.btn_cancel.pack(side="left")
 
         sys.stdout = PrintRedirector(self.console)
         sys.stderr = PrintRedirector(self.console)
@@ -2066,10 +2049,13 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
             self._file_loaded_monotonic = None
         self.drop_icon.configure(text="✅")
         self.lbl_file.configure(text=os.path.basename(self.file_path), text_color=self.TEXT_BRIGHT)
+        # Reset stima precedente (selezione nuovo file).
+        self._file_cost_hint = ""
         if self.resume_session:
-            self.lbl_file_hint.configure(text="Sessione trovata: riprendero' da dove eri rimasto")
+            self._file_hint_base = "Sessione trovata: riprendero' da dove eri rimasto"
         else:
-            self.lbl_file_hint.configure(text="Clicca di nuovo per cambiare file")
+            self._file_hint_base = "Clicca di nuovo per cambiare file"
+        self._refresh_file_hint()
         self.drop_zone.configure(border_color=self.SUCCESS)
         print(f"[+] File caricato: {os.path.basename(self.file_path)}")
 
@@ -2227,9 +2213,26 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
             if from_batch:
                 extra = 1 + len(self.queue_jobs or [])
                 hint = f"Coda: {extra} file • {hint}"
-            self.lbl_file_hint.configure(text=hint)
+            # Reset stima precedente e aggiorna hint.
+            self._file_cost_hint = ""
+            self._file_hint_base = hint
+            self._refresh_file_hint()
             self.drop_zone.configure(border_color=self.SUCCESS)
             print(f"[+] File caricato: {os.path.basename(self.file_path)}")
+
+    def _refresh_file_hint(self):
+        # Compone hint base + stima richieste (se presente) senza farli pestare.
+        try:
+            base = str(getattr(self, "_file_hint_base", "") or "").strip()
+            cost = str(getattr(self, "_file_cost_hint", "") or "").strip()
+            txt = base
+            if cost:
+                txt = f"{base}\n{cost}" if base else cost
+            if not txt:
+                txt = "Supporta MP3, M4A, WAV, MP4, MKV"
+            self.lbl_file_hint.configure(text=txt)
+        except Exception:
+            pass
 
     def _estimate_requests_from_duration(self, duration_seconds: float):
         # Stima: Chunk esatto da durata; revisioni/confini stimati da char/min.
@@ -2268,10 +2271,10 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
             return None
 
     def _start_cost_estimate_async(self, paths):
-        # Aggiorna header con stima richieste (Chunk/Revisioni/Confini) prima di avviare.
+        # Aggiorna la hint sotto al file con stima richieste (Chunk/Revisioni/Confini) prima di avviare.
         # Se e' una coda, somma le stime sui file selezionati (best-effort).
         try:
-            if not hasattr(self, "lbl_header_cost") or self.lbl_header_cost is None:
+            if not hasattr(self, "lbl_file_hint") or self.lbl_file_hint is None:
                 return
         except Exception:
             return
@@ -2279,7 +2282,8 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         total_files = len(paths or [])
         if total_files <= 0:
             try:
-                self.lbl_header_cost.configure(text="")
+                self._file_cost_hint = ""
+                self._refresh_file_hint()
             except Exception:
                 pass
             return
@@ -2299,20 +2303,23 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
                 tot_revs += int(r)
                 tot_bounds += int(b)
 
-            prefix = f"Coda: {total_n} • " if total_n > 1 else ""
             if not any_ok:
-                txt = f"Coda: {total_n} file" if total_n > 1 else ""
+                txt = f"Stima coda ({total_n} file): non disponibile" if total_n > 1 else "Stima richieste: non disponibile"
             else:
-                txt = f"{prefix}Stima richieste: Chunk {tot_chunks} • Revisioni ~{tot_revs} • Confini ~{tot_bounds}"
+                prefix = f"Stima coda ({total_n} file): " if total_n > 1 else "Stima richieste: "
+                txt = f"{prefix}Chunk {tot_chunks} • Revisioni ~{tot_revs} • Confini ~{tot_bounds}"
             try:
-                self.after(0, lambda: self.lbl_header_cost.configure(text=txt))
+                def apply():
+                    self._file_cost_hint = txt
+                    self._refresh_file_hint()
+                self.after(0, apply)
             except Exception:
                 pass
 
         try:
             # Mostra subito che stiamo calcolando.
-            prefix = f"Coda: {total_files} • " if total_files > 1 else ""
-            self.lbl_header_cost.configure(text=f"{prefix}Stima richieste: calcolo...")
+            self._file_cost_hint = (f"Stima coda ({total_files} file): calcolo..." if total_files > 1 else "Stima richieste: calcolo...")
+            self._refresh_file_hint()
         except Exception:
             pass
 
