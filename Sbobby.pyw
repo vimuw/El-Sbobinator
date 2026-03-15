@@ -390,13 +390,101 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
             esito = {"nuova_chiave": None}
 
             def mostra_popup():
+                # CTkInputDialog tende a essere "topmost" e non sempre minimizzabile.
+                # Usiamo un CTkToplevel standard: non topmost (non resta sopra al browser) e minimizzabile.
+                win = None
                 try:
-                    dialog = ctk.CTkInputDialog(
-                        text="Hai esaurito la Quota Gratuita limitata di Google per questo account.\n\nInserisci un'altra API Key appartenente a un account Google DIVERSO per riprendere il processo senza perdere progressi.\n\nLascia vuoto o clicca Annulla per interrompere definitivamente e salvare a metà.",
-                        title="🔌 Esaurimento Quota",
+                    if not ui_alive():
+                        return
+
+                    win = ctk.CTkToplevel(app_instance)
+                    try:
+                        win.title("🔌 Esaurimento Quota")
+                    except Exception:
+                        pass
+
+                    try:
+                        win.geometry("560x260")
+                    except Exception:
+                        pass
+                    try:
+                        win.resizable(False, False)
+                    except Exception:
+                        pass
+
+                    # Mantieni la finestra "legata" all'app (modal solo per l'app), ma NON topmost globale.
+                    try:
+                        win.transient(app_instance)
+                    except Exception:
+                        pass
+                    try:
+                        win.attributes("-topmost", False)
+                    except Exception:
+                        pass
+
+                    msg = (
+                        "Hai esaurito la quota gratuita di Google per questo account.\n\n"
+                        "Inserisci un'altra API Key (di un account Google DIVERSO) per riprendere senza perdere i progressi.\n\n"
+                        "Lascia vuoto o clicca Annulla per interrompere e salvare a meta'."
                     )
-                    esito["nuova_chiave"] = dialog.get_input()
-                finally:
+                    ctk.CTkLabel(win, text=msg, font=(FONT_UI, 12), text_color="#E8EDF6", justify="left", wraplength=520).pack(
+                        padx=18, pady=(16, 10), anchor="w"
+                    )
+
+                    entry = ctk.CTkEntry(win, placeholder_text="Incolla qui la nuova API Key...", show="*", font=(FONT_UI, 13), height=34)
+                    entry.pack(fill="x", padx=18, pady=(0, 12))
+
+                    btns = ctk.CTkFrame(win, fg_color="transparent")
+                    btns.pack(fill="x", padx=18, pady=(0, 16))
+
+                    def _close_and_set(value):
+                        try:
+                            esito["nuova_chiave"] = value
+                        except Exception:
+                            pass
+                        try:
+                            if win is not None and win.winfo_exists():
+                                try:
+                                    win.grab_release()
+                                except Exception:
+                                    pass
+                                win.destroy()
+                        finally:
+                            evento.set()
+
+                    def on_ok():
+                        v = None
+                        try:
+                            v = (entry.get() or "").strip() or None
+                        except Exception:
+                            v = None
+                        _close_and_set(v)
+
+                    def on_cancel():
+                        _close_and_set(None)
+
+                    b_cancel = ctk.CTkButton(btns, text="Annulla", width=110, height=30, corner_radius=10, fg_color="#2A3142", hover_color="#3A4357", command=on_cancel)
+                    b_cancel.pack(side="left")
+                    b_ok = ctk.CTkButton(btns, text="Continua", width=110, height=30, corner_radius=10, fg_color="#16A34A", hover_color="#15803D", command=on_ok)
+                    b_ok.pack(side="right")
+
+                    try:
+                        win.protocol("WM_DELETE_WINDOW", on_cancel)
+                    except Exception:
+                        pass
+
+                    # Modal solo per l'app: blocca click sulla UI finche' non rispondi, ma non forza topmost sul sistema.
+                    try:
+                        win.grab_set()
+                    except Exception:
+                        pass
+
+                    try:
+                        entry.focus_set()
+                    except Exception:
+                        pass
+                except Exception:
+                    # In caso di problemi, non bloccare il worker thread.
                     evento.set()
 
             if not safe_after(0, mostra_popup):
