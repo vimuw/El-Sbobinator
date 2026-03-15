@@ -404,9 +404,9 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                         pass
 
                     try:
-                        # Piu' "quadrato" (meno rettangolo) e piu' piacevole visivamente.
-                        # Altezza ridotta: evita spazio vuoto sotto.
-                        win.geometry("440x310")
+                        # Larghezza fissa, altezza dinamica: la calcoliamo dopo aver creato i widget
+                        # cosi' non rimane spazio vuoto e cresce se aggiungi testo.
+                        win.geometry("440x200")
                     except Exception:
                         pass
                     try:
@@ -481,6 +481,19 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                     except Exception:
                         pass
 
+                    # Auto-size: misura altezza richiesta e imposta la geometry di conseguenza.
+                    # (Tk/CTk non sono sempre perfetti con la geometry "auto", quindi lo facciamo noi.)
+                    try:
+                        target_w = 440
+                        win.update_idletasks()
+                        req_h = int(win.winfo_reqheight())
+                        # clamp per evitare finestre troppo grandi su schermi piccoli
+                        max_h = int(max(260, win.winfo_screenheight() * 0.80))
+                        target_h = max(240, min(req_h, max_h))
+                        win.geometry(f"{target_w}x{target_h}")
+                    except Exception:
+                        pass
+
                     # Modal solo per l'app: blocca click sulla UI finche' non rispondi, ma non forza topmost sul sistema.
                     try:
                         win.grab_set()
@@ -494,6 +507,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
 
                     # Centra grossolanamente rispetto alla finestra principale.
                     try:
+                        win.update_idletasks()
                         win.update_idletasks()
                         px = int(app_instance.winfo_rootx())
                         py = int(app_instance.winfo_rooty())
