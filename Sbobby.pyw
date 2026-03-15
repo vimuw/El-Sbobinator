@@ -1718,16 +1718,17 @@ from tkinterdnd2 import TkinterDnD, DND_FILES
 
 class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
 
-    ACCENT = "#6C5CE7"
-    ACCENT_HOVER = "#5A4BD1"
-    SUCCESS = "#00B894"
-    SUCCESS_HOVER = "#00A381"
-    CARD_BG = "#1E1E2E"
-    TERMINAL_BG = "#11111B"
-    TERMINAL_FG = "#89B4FA"
-    TEXT_DIM = "#6C7086"
-    TEXT_BRIGHT = "#CDD6F4"
-    BORDER = "#313244"
+    # Palette "premium": graphite + blu pulito (evita il viola acceso) con verde per azioni positive.
+    ACCENT = "#3B82F6"
+    ACCENT_HOVER = "#2563EB"
+    SUCCESS = "#16A34A"
+    SUCCESS_HOVER = "#15803D"
+    CARD_BG = "#141821"
+    TERMINAL_BG = "#0B0F14"
+    TERMINAL_FG = "#BFD7FF"
+    TEXT_DIM = "#9AA4B2"
+    TEXT_BRIGHT = "#E8EDF6"
+    BORDER = "#2A3142"
 
     def __init__(self):
         super().__init__()
@@ -1735,7 +1736,7 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         
         self.title("Sbobby")
         self.geometry("850x720")
-        self.configure(fg_color="#0F0F14")
+        self.configure(fg_color="#070A10")
         self.minsize(750, 620)
         
         self.minsize(750, 620)
@@ -1758,12 +1759,34 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(4, weight=1)
 
-        # SPACING TOP
-        ctk.CTkFrame(self, fg_color="transparent", height=15).grid(row=0, column=0)
+        # HEADER (titolo + microcopy)
+        self.header = ctk.CTkFrame(self, fg_color="transparent")
+        self.header.grid(row=0, column=0, padx=30, pady=(22, 8), sticky="ew")
+        self.header.grid_columnconfigure(0, weight=1)
+
+        header_left = ctk.CTkFrame(self.header, fg_color="transparent")
+        header_left.grid(row=0, column=0, sticky="w")
+        ctk.CTkLabel(header_left, text="Sbobby", font=(FONT_UI, 26, "bold"), text_color=self.TEXT_BRIGHT).pack(side="left")
+        ctk.CTkLabel(
+            header_left,
+            text="  Sbobine automatiche, pronte per Google Docs",
+            font=(FONT_UI, 12),
+            text_color=self.TEXT_DIM,
+        ).pack(side="left", padx=(6, 0))
+
+        header_right = ctk.CTkFrame(self.header, fg_color="transparent")
+        header_right.grid(row=0, column=1, sticky="e")
+        self.lbl_header_hint = ctk.CTkLabel(
+            header_right,
+            text="Output: Desktop • Autosave attivo",
+            font=(FONT_UI, 11),
+            text_color=self.TEXT_DIM,
+        )
+        self.lbl_header_hint.pack(side="right")
 
         # API KEY CARD
-        self.api_card = ctk.CTkFrame(self, fg_color=self.TERMINAL_BG, corner_radius=12, border_width=1, border_color=self.BORDER)
-        self.api_card.grid(row=1, column=0, padx=30, pady=(15, 0), sticky="ew")
+        self.api_card = ctk.CTkFrame(self, fg_color=self.TERMINAL_BG, corner_radius=14, border_width=1, border_color=self.BORDER)
+        self.api_card.grid(row=1, column=0, padx=30, pady=(10, 0), sticky="ew")
         self.api_card.grid_columnconfigure(1, weight=1)
         ctk.CTkLabel(self.api_card, text="🔑 API Key Gemini", font=(FONT_UI, 14), text_color=self.TEXT_DIM).grid(row=0, column=0, sticky="w", padx=(18, 12), pady=14)
         self.entry_api = ctk.CTkEntry(self.api_card, placeholder_text="Incolla la tua API Key qui...", show="*", font=(FONT_UI, 13), height=38, corner_radius=8, fg_color=self.CARD_BG, border_color=self.BORDER, text_color=self.TEXT_BRIGHT)
@@ -1775,7 +1798,7 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.entry_api.insert(0, config_data.get("api_key", ""))
 
         # DROP ZONE (area cliccabile centrata per caricare file)
-        self.drop_zone = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=16, border_width=2, border_color=self.BORDER, cursor="hand2")
+        self.drop_zone = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=18, border_width=2, border_color=self.BORDER, cursor="hand2")
         self.drop_zone.grid(row=2, column=0, padx=30, pady=15, sticky="ew")
         self.drop_zone.grid_columnconfigure(0, weight=1)
 
@@ -1795,11 +1818,11 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
             widget.dnd_bind('<<Drop>>', self._on_file_drop)
 
         # BOTTONE AVVIA
-        self.btn_avvia = ctk.CTkButton(self, text="▶  AVVIA GENERAZIONE SBOBINA", height=52, font=(FONT_UI, 16, "bold"), corner_radius=10, fg_color=self.SUCCESS, hover_color=self.SUCCESS_HOVER, command=self.avvia_processo)
+        self.btn_avvia = ctk.CTkButton(self, text="▶  AVVIA GENERAZIONE SBOBINA", height=52, font=(FONT_UI, 16, "bold"), corner_radius=12, fg_color=self.SUCCESS, hover_color=self.SUCCESS_HOVER, command=self.avvia_processo)
         self.btn_avvia.grid(row=3, column=0, padx=30, pady=(0, 15), sticky="ew")
 
         # TERMINALE OUTPUT
-        self.console_card = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=12, border_width=1, border_color=self.BORDER)
+        self.console_card = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=14, border_width=1, border_color=self.BORDER)
         self.console_card.grid(row=4, column=0, padx=30, pady=(0, 15), sticky="nsew")
         self.console_card.grid_columnconfigure(0, weight=1)
         self.console_card.grid_rowconfigure(3, weight=1)
