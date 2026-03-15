@@ -4,7 +4,12 @@ on:
   push:
     tags:
       - 'v*' # Trigger build only when a new version tag (e.g. v1.0.0) is pushed
-  workflow_dispatch: # Allow manual triggering from GitHub UI
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Optional: tag to publish a Release (e.g. v1.2.3). Leave empty for build-only.'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -14,6 +19,7 @@ jobs:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
@@ -32,6 +38,7 @@ jobs:
         with:
           python-version: '3.11' 
           cache: 'pip'
+          cache-dependency-path: requirements.lock
 
       - name: Install System Dependencies (Linux/Mac)
         if: runner.os == 'macOS'
@@ -42,7 +49,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.lock
-          pip install pyinstaller
 
       - name: Build Windows Executable
         if: runner.os == 'Windows'
@@ -74,7 +80,7 @@ jobs:
     name: Create GitHub Release
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
     steps:
       - name: Download all workflow run artifacts
         uses: actions/download-artifact@v4
@@ -89,9 +95,10 @@ jobs:
           mv output_files/Sbobby-MacOS.zip/Sbobby.zip release_assets/Sbobby-MacOS.zip || echo "Mac build not found"
 
       - name: Publish Release to GitHub
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ (startsWith(github.ref, 'refs/tags/') && github.ref_name) || inputs.release_tag }}
           files: release_assets/*
           generate_release_notes: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
