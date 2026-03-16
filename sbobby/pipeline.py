@@ -20,11 +20,13 @@ import threading
 import time
 
 import customtkinter as ctk
-import markdown
 from google import genai
 from google.genai import types
 
+from sbobby.dedup_utils import local_macro_cleanup
 from sbobby.ffmpeg_utils import cut_chunk_to_mp3, get_ffmpeg_exe, preconvert_to_mono16k_mp3, probe_duration_seconds
+from sbobby.html_export import build_html_document, normalize_inline_star_lists
+from sbobby.pipeline_settings import load_and_sanitize_settings
 from sbobby.shared import (
     DEFAULT_MODEL,
     FONT_UI,
@@ -439,26 +441,16 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
 
         print(f"[*] Autosalvataggio attivo. Sessione: {session_dir}")
 
-        # Settings (con fallback per sessioni vecchie)
-        session.setdefault("settings", {})
-        session["settings"].setdefault("model", DEFAULT_MODEL)
-        session["settings"].setdefault("chunk_minutes", 15)
-        session["settings"].setdefault("overlap_seconds", 30)
-        session["settings"].setdefault("macro_char_limit", 22000)
-        session["settings"].setdefault("preconvert_audio", True)
-        session["settings"].setdefault("audio", {"bitrate": "48k"})
-        # Ottimizzazioni conservative (disattivabili per debug via session.json)
-        session["settings"].setdefault("prefetch_next_chunk", True)
-        # Se troppo grande, l'inline audio fallisce spesso: usa upload direttamente.
-        session["settings"].setdefault("inline_audio_max_mb", 6)
-        save_session()
+        # Settings (con fallback per sessioni vecchie) + validazione (resiliente a valori strani).
+        settings, settings_changed = load_and_sanitize_settings(session)
+        if settings_changed:
+            save_session()
 
-        model_name = str(session.get("settings", {}).get("model") or DEFAULT_MODEL)
-        blocco_minuti = int(session.get("settings", {}).get("chunk_minutes", 15) or 15)
-        blocco_secondi = blocco_minuti * 60
-        sovrapposizione_secondi = int(session.get("settings", {}).get("overlap_seconds", 30) or 30)
-        # Evita step <= 0 (config errata): altrimenti range() crasha o va in loop.
-        passo_secondi = max(1, int(blocco_secondi) - int(sovrapposizione_secondi))
+        model_name = settings.model
+        blocco_minuti = settings.chunk_minutes
+        blocco_secondi = settings.chunk_seconds
+        sovrapposizione_secondi = settings.overlap_seconds
+        passo_secondi = settings.step_seconds
         memoria_precedente = ""
         testo_completo_sbobina = ""
 
@@ -526,7 +518,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
         # ------------------------------------------
         # PRE-CONVERSIONE UNICA (piu' veloce)
         # ------------------------------------------
-        preconv_enabled = bool(session.get("settings", {}).get("preconvert_audio", True))
+        preconv_enabled = bool(settings.preconvert_audio)
         preconv_path = os.path.join(session_dir, "sbobby_preconverted_mono16k.mp3")
 
         def _ensure_preconverted():
@@ -545,8 +537,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
 
             safe_phase("Fase 0/3: pre-conversione audio")
             print("[*] Pre-conversione unica dell'audio (mono, 16kHz) in corso...")
-            audio_cfg = session.get("settings", {}).get("audio", {}) or {}
-            bitrate = str(audio_cfg.get("bitrate") or "48k")
+            bitrate = str(settings.audio_bitrate or "48k")
 
             ok, err = preconvert_to_mono16k_mp3(
                 input_path=nome_file_video,
@@ -625,14 +616,9 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
         safe_set_work_totals(chunks_total=blocchi_totali)
         safe_update_work_done("chunks", blocco_corrente_idx, total=blocchi_totali)
 
-        audio_cfg = session.get("settings", {}).get("audio", {}) or {}
-        bitrate_default = str(audio_cfg.get("bitrate") or "48k")
-        prefetch_enabled = bool(session.get("settings", {}).get("prefetch_next_chunk", True))
-        try:
-            inline_max_mb = float(session.get("settings", {}).get("inline_audio_max_mb", 6) or 0)
-        except Exception:
-            inline_max_mb = 6.0
-        inline_max_bytes = None if inline_max_mb <= 0 else int(inline_max_mb * 1024 * 1024)
+        bitrate_default = str(settings.audio_bitrate or "48k")
+        prefetch_enabled = bool(settings.prefetch_next_chunk)
+        inline_max_bytes = settings.inline_max_bytes
 
         next_cut = None  # {"start": int, "end": int, "path": str, "thread": Thread, "result": dict}
 
@@ -983,7 +969,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
         print("    - Cosa fa: divide il testo in macro-sezioni e le rivede per togliere doppioni e migliorare la leggibilita'.")
         print("    - Nota: questa fase usa l'AI su ogni macro-blocco per mantenere coerenza e dettaglio.")
 
-        limite_caratteri = int(session.get("settings", {}).get("macro_char_limit", 22000) or 22000)
+        limite_caratteri = int(settings.macro_char_limit or 22000)
 
         macro_blocchi = None
         if os.path.exists(macro_path):
@@ -1035,58 +1021,6 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
         except Exception:
             pass
 
-        def _norm_for_dedup(txt: str) -> str:
-            t = (txt or "").replace("\u00A0", " ").strip().lower()
-            t = re.sub(r"\s+", " ", t)
-            # Normalizza un minimo la punteggiatura per ridurre falsi negativi.
-            t = re.sub(r"\s*([,.;:!?])\s*", r"\1", t)
-            return t
-
-        def _local_macro_cleanup(md: str):
-            # Rimuove SOLO duplicati certi (identici dopo normalizzazione) e near-duplicati adiacenti molto forti.
-            # Non riassume e non elimina contenuti "nuovi": e' conservativo per preservare dettaglio.
-            src = (md or "").strip()
-            if not src:
-                return "", 0, 0, 0, 0
-
-            paras = [p.strip() for p in re.split(r"\n\s*\n+", src) if p and p.strip()]
-            if not paras:
-                return src, 0, 0, 0, 0
-
-            kept = []
-            seen = set()
-            removed_exact = 0
-            removed_adj = 0
-            near_adj = 0
-            prev_norm = ""
-
-            for p in paras:
-                is_heading = bool(re.match(r"^\s*#{1,6}\s+", p))
-                # Evita di deduplicare "a vuoto" stringhe minuscole (rischio di falsi positivi).
-                min_len = 20 if is_heading else 60
-                norm = _norm_for_dedup(p)
-
-                if len(norm) >= min_len and norm in seen:
-                    removed_exact += 1
-                    continue
-
-                if prev_norm and len(norm) >= 100 and len(prev_norm) >= 100:
-                    r = difflib.SequenceMatcher(None, prev_norm, norm).ratio()
-                    if r >= 0.995:
-                        removed_adj += 1
-                        continue
-                    if r >= 0.975:
-                        near_adj += 1
-
-                kept.append(p)
-                if len(norm) >= min_len:
-                    seen.add(norm)
-                prev_norm = norm
-
-            cleaned = "\n\n".join(kept).strip()
-            total = len(paras)
-            return cleaned, removed_exact, removed_adj, near_adj, total
-
         for i, blocco in enumerate(macro_blocchi, 1):
             if cancelled():
                 print("   [*] Operazione annullata dall'utente.")
@@ -1113,7 +1047,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                     pass
 
             blocco_src = (blocco or "").strip()
-            blocco_local, removed_exact, removed_adj, near_adj, total_paras = _local_macro_cleanup(blocco_src)
+            blocco_local, removed_exact, removed_adj, near_adj, total_paras = local_macro_cleanup(blocco_src)
             blocco_for_ai = (blocco_local or blocco_src).strip()
             if removed_exact or removed_adj:
                 print(f"   -> Pre-clean locale Macro-blocco {i}/{macro_total}: duplicati rimossi={removed_exact+removed_adj} (sospetti={near_adj}).")
@@ -1554,103 +1488,6 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
         if not base_name:
             nome_file_html = os.path.join(cartella_origine, "Sbobina_Definitiva.html")
 
-        def _sanitize_html_basic(html: str) -> str:
-            # Sanitizzazione di base (difensiva) nel caso l'AI inserisca HTML pericoloso.
-            html = re.sub(r"(?is)<script\b.*?>.*?</script>", "", html)
-            html = re.sub(r"(?is)<(iframe|object|embed)\b.*?>.*?</\1>", "", html)
-            html = re.sub(r"(?i)\son\w+\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)", "", html)
-            html = re.sub(r"(?i)javascript:", "", html)
-            return html
-        
-        def _normalize_inline_star_lists(md: str) -> str:
-            # Normalizza elenchi che a volte l'AI produce in modo non-standard.
-            # Obiettivo: farli diventare liste Markdown reali, senza interpretare '*' come testo.
-            src = (md or "").replace("\u00A0", " ")
-
-            list_line_re = r"^\s*([*+-]|\d+\.)\s+"
-            # Bullet unicode che il modello usa spesso (e che Markdown non interpreta come liste).
-            bullet_top = ("\u25cf", "\u2022", "\u25aa", "\u2023")  # ● • ▪ ‣
-            bullet_sub = ("\u25e6", "\u25cb", "\u2219")  # ◦ ○ ∙
-
-            # 1) Trasforma elenchi in-line tipo "Esempi: * Voce1 ... * Voce2 ..."
-            out_lines = []
-            in_fence = False
-            for line in src.splitlines():
-                s = line.strip()
-                if s.startswith("```"):
-                    in_fence = not in_fence
-                    out_lines.append(line)
-                    continue
-                if in_fence:
-                    out_lines.append(line)
-                    continue
-
-                # Caso A: riga che INIZIA con bullet unicode -> lista Markdown.
-                if not re.match(list_line_re, line):
-                    m = re.match(r"^(\s*)([\u25cf\u2022\u25aa\u2023\u25e6\u25cb\u2219])\s+(.*)$", line)
-                    if m:
-                        bullet = m.group(2)
-                        rest = m.group(3).strip()
-                        if rest:
-                            prefix = "- " if bullet in bullet_top else "    - "
-                            out_lines.append(prefix + rest)
-                            continue
-
-                # Caso B: bullet unicode "in mezzo" a una riga -> spezza in lista.
-                # Esempio: "Testo introduttivo. ● **Voce:** ... ● **Voce2:** ..."
-                if not re.match(list_line_re, line) and re.search(r"[\u25cf\u2022\u25aa\u2023]\s+(\*\*|[A-ZÀ-ÖØ-Ý])", line):
-                    if re.search(r"\s[\u25cf\u2022\u25aa\u2023]\s+", line):
-                        parts = re.split(r"\s*[\u25cf\u2022\u25aa\u2023]\s+", line)
-                        if len(parts) > 1:
-                            first = (parts[0] or "").rstrip()
-                            if first:
-                                out_lines.append(first)
-                                out_lines.append("")
-                            for item in parts[1:]:
-                                item = (item or "").strip()
-                                if item:
-                                    out_lines.append("- " + item)
-                            continue
-
-                # Converti solo se:
-                # - c'e' un ":" seguito da "* " (tipico "Esempi: * ... * ...")
-                # - non e' gia' una lista/numero
-                if not re.match(r"^\s*([*+-]|\d+\.)\s+", line) and re.search(r":[ \t]*\*[ \t]+(\*\*|[A-ZÀ-ÖØ-Ý])", line):
-                    if line.count("* ") >= 1:
-                        line2 = re.sub(r":[ \t]*\*[ \t]+", ":\n\n- ", line, count=1)
-                        line2 = re.sub(r"[ \t]+\*[ \t]+", "\n- ", line2)
-                        out_lines.extend(line2.splitlines())
-                        continue
-
-                out_lines.append(line)
-
-            mid = "\n".join(out_lines)
-
-            # 2) Python-Markdown spesso richiede una riga vuota prima di una lista per riconoscerla.
-            # Se la lista parte subito dopo una riga di testo, aggiungiamo una blank line.
-            fixed = []
-            in_fence = False
-            for line in mid.splitlines():
-                s = line.strip()
-                if s.startswith("```"):
-                    in_fence = not in_fence
-                    fixed.append(line)
-                    continue
-                if in_fence:
-                    fixed.append(line)
-                    continue
-
-                is_list = bool(re.match(r"^\s{0,3}([*+-]|\d+\.)\s+", line))
-                if is_list and fixed:
-                    prev = fixed[-1]
-                    prev_is_list = bool(re.match(r"^\s{0,3}([*+-]|\d+\.)\s+", prev))
-                    if prev.strip() != "" and not prev_is_list:
-                        fixed.append("")
-
-                fixed.append(line)
-
-            return "\n".join(fixed)
-
         # Ricostruisci il testo finale dai file revisionati (include la revisione di confine).
         blocchi_finali = []
         try:
@@ -1686,49 +1523,8 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
             index_md = ""
 
         final_md = f"# {titolo}\n\n{index_md}{body_md}\n"
-        final_md = _normalize_inline_star_lists(final_md)
-
-        # Export HTML: serve per copia-incolla su Google Docs (file locale, stile leggibile).
-        html_body = markdown.markdown(final_md, extensions=["extra", "sane_lists"], output_format="html5")
-        html_body = _sanitize_html_basic(html_body)
-        html_doc = f"""<!DOCTYPE html>
-<html lang="it">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{titolo} - Sbobina</title>
-  <style>
-    :root {{
-      --text: #111;
-      --muted: #444;
-      --bg: #fff;
-      --rule: #e6e6e6;
-    }}
-    body {{
-      font-family: Georgia, "Times New Roman", serif;
-      line-height: 1.6;
-      color: var(--text);
-      background: var(--bg);
-      max-width: 980px;
-      margin: 0 auto;
-      padding: 48px 22px;
-    }}
-    h1 {{ font-size: 2.0rem; margin: 0 0 0.9rem; }}
-    h2 {{ font-size: 1.35rem; margin: 1.6rem 0 0.6rem; padding-top: 0.2rem; border-top: 1px solid var(--rule); }}
-    h3 {{ font-size: 1.15rem; margin: 1.1rem 0 0.45rem; }}
-    p, li {{ margin: 0.55rem 0; }}
-    ul, ol {{ padding-left: 1.25rem; }}
-    strong {{ font-weight: 700; }}
-    hr {{ border: 0; border-top: 1px solid var(--rule); margin: 1.2rem 0; }}
-    code {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 0.95em; }}
-    blockquote {{ margin: 0.9rem 0; padding: 0.1rem 0 0.1rem 1rem; border-left: 3px solid var(--rule); color: var(--muted); }}
-  </style>
-</head>
-<body>
-{html_body}
-</body>
-</html>
-"""
+        final_md = normalize_inline_star_lists(final_md)
+        html_doc = build_html_document(titolo, final_md)
         try:
             _atomic_write_text(nome_file_html, html_doc)
         except Exception as e:
