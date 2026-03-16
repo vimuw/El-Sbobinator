@@ -6,6 +6,7 @@ Used for local HTML output (copy/paste into Docs) with basic sanitization.
 
 from __future__ import annotations
 
+import html as _html
 import re
 
 import markdown
@@ -15,6 +16,8 @@ def sanitize_html_basic(html: str) -> str:
     # Sanitizzazione di base (difensiva) nel caso l'AI inserisca HTML pericoloso.
     html = re.sub(r"(?is)<script\b.*?>.*?</script>", "", html or "")
     html = re.sub(r"(?is)<(iframe|object|embed)\b.*?>.*?</\1>", "", html)
+    html = re.sub(r"(?is)<(style)\b.*?>.*?</\1>", "", html)
+    html = re.sub(r"(?is)<(meta|link|base)\b.*?>", "", html)
     html = re.sub(r"(?i)\son\w+\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)", "", html)
     html = re.sub(r"(?i)javascript:", "", html)
     return html
@@ -110,12 +113,27 @@ def build_html_document(title: str, markdown_text: str) -> str:
     html_body = markdown.markdown(markdown_text or "", extensions=["extra", "sane_lists"], output_format="html5")
     html_body = sanitize_html_basic(html_body)
     safe_title = (title or "Sbobina").strip()
+    safe_title_html = _html.escape(safe_title, quote=True)
+    # CSP: evita script e richieste di rete anche se l'AI inserisse tag HTML.
+    csp = (
+        "default-src 'none'; "
+        "base-uri 'none'; "
+        "form-action 'none'; "
+        "frame-ancestors 'none'; "
+        "connect-src 'none'; "
+        "img-src data:; "
+        "font-src data:; "
+        "media-src 'none'; "
+        "style-src 'unsafe-inline'"
+    )
     return f"""<!DOCTYPE html>
 <html lang="it">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{safe_title} - Sbobina</title>
+  <meta http-equiv="Content-Security-Policy" content="{csp}" />
+  <meta http-equiv="Referrer-Policy" content="no-referrer" />
+  <title>{safe_title_html} - Sbobina</title>
   <style>
     :root {{
       --text: #111;
@@ -148,4 +166,3 @@ def build_html_document(title: str, markdown_text: str) -> str:
 </body>
 </html>
 """
-

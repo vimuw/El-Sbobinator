@@ -196,6 +196,10 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
 
                     win = ctk.CTkToplevel(app_instance)
                     try:
+                        win.configure(fg_color=getattr(app_instance, "CARD_BG", "#1C2432"))
+                    except Exception:
+                        pass
+                    try:
                         win.title("🔌 Esaurimento Quota")
                     except Exception:
                         pass
@@ -236,7 +240,22 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                         wraplength=400,
                     ).pack(padx=18, pady=(18, 10), anchor="w")
 
-                    entry = ctk.CTkEntry(win, placeholder_text="Incolla qui la nuova API Key...", show="*", font=(FONT_UI, 13), height=34)
+                    entry = ctk.CTkEntry(
+                        win,
+                        placeholder_text="Incolla qui la nuova API Key...",
+                        show="*",
+                        font=(FONT_UI, 13),
+                        height=34,
+                    )
+                    try:
+                        entry.configure(
+                            fg_color=getattr(app_instance, "TERMINAL_BG", "#111824"),
+                            border_color=getattr(app_instance, "BORDER", "#2B3444"),
+                            text_color=getattr(app_instance, "TEXT_BRIGHT", "#E7ECF4"),
+                            placeholder_text_color=getattr(app_instance, "TEXT_DIM", "#A6B0C0"),
+                        )
+                    except Exception:
+                        pass
                     entry.pack(fill="x", padx=18, pady=(0, 12))
 
                     btns = ctk.CTkFrame(win, fg_color="transparent")
@@ -274,15 +293,25 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                         width=110,
                         height=30,
                         corner_radius=10,
-                        fg_color=getattr(app_instance, "TERMINAL_BG", "#111824"),
-                        hover_color=getattr(app_instance, "BORDER", "#2B3444"),
+                        fg_color=getattr(app_instance, "BTN_SECONDARY_BG", "#253043"),
+                        hover_color=getattr(app_instance, "BTN_SECONDARY_HOVER", "#2D3A52"),
                         border_width=1,
                         border_color=getattr(app_instance, "BORDER", "#2B3444"),
                         text_color=getattr(app_instance, "TEXT_BRIGHT", "#E7ECF4"),
                         command=on_cancel,
                     )
                     b_cancel.pack(side="left")
-                    b_ok = ctk.CTkButton(btns, text="Continua", width=110, height=30, corner_radius=10, fg_color="#16A34A", hover_color="#15803D", command=on_ok)
+                    b_ok = ctk.CTkButton(
+                        btns,
+                        text="Continua",
+                        width=110,
+                        height=30,
+                        corner_radius=10,
+                        fg_color=getattr(app_instance, "SUCCESS", "#16A34A"),
+                        hover_color=getattr(app_instance, "SUCCESS_HOVER", "#15803D"),
+                        text_color="white",
+                        command=on_ok,
+                    )
                     b_ok.pack(side="right")
 
                     try:

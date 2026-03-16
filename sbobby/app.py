@@ -90,6 +90,8 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
     TEXT_DIM = "#A6B0C0"
     TEXT_BRIGHT = "#E7ECF4"
     BORDER = "#2B3444"
+    BTN_SECONDARY_BG = "#253043"
+    BTN_SECONDARY_HOVER = "#2D3A52"
 
     def __init__(self):
         super().__init__()
@@ -99,6 +101,10 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.geometry("850x720")
         self.configure(fg_color=self.BG)
         self.minsize(750, 620)
+        try:
+            self.resizable(True, True)
+        except Exception:
+            pass
 
         self.file_path = None
         # Batch queue (max 3): ogni job contiene path + session_dir + resume_session.
@@ -127,11 +133,21 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         # Intercetta la chiusura della finestra per pulire i file temporanei
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(4, weight=1)
+        # Layout centrato: in fullscreen/maximize non "stirare" i card a tutta larghezza.
+        self._max_content_width = 1200
+        self._center_side_pad = 24
+        self._centered_width_last = None
+
+        self.content = ctk.CTkFrame(self, fg_color="transparent")
+        # `place` permette un comportamento tipo "max-width" (stile web): centrato + responsive.
+        self.content.place(relx=0.5, rely=0.0, anchor="n", relheight=1.0)
+        self.content.grid_columnconfigure(0, weight=1)
+        self.content.grid_rowconfigure(4, weight=1)
+        self.bind("<Configure>", self._on_root_resize_centered, add="+")
+        self.after(0, self._on_root_resize_centered)
 
         # HEADER (solo titolo centrato)
-        self.header = ctk.CTkFrame(self, fg_color="transparent")
+        self.header = ctk.CTkFrame(self.content, fg_color="transparent")
         self.header.grid(row=0, column=0, padx=30, pady=(22, 8), sticky="ew")
         self.header.grid_columnconfigure(0, weight=1)
         self.lbl_title = ctk.CTkLabel(self.header, text="Sbobby", font=(FONT_UI, 26, "bold"), text_color=self.TEXT_BRIGHT)
@@ -139,7 +155,7 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.lbl_title.grid(row=0, column=0, pady=(6, 0))
 
         # API KEY CARD
-        self.api_card = ctk.CTkFrame(self, fg_color=self.TERMINAL_BG, corner_radius=14, border_width=1, border_color=self.BORDER)
+        self.api_card = ctk.CTkFrame(self.content, fg_color=self.TERMINAL_BG, corner_radius=14, border_width=1, border_color=self.BORDER)
         self.api_card.grid(row=1, column=0, padx=30, pady=(10, 0), sticky="ew")
         self.api_card.grid_columnconfigure(1, weight=1)
         ctk.CTkLabel(self.api_card, text="🔑 API Key Gemini", font=(FONT_UI, 14), text_color=self.TEXT_DIM).grid(row=0, column=0, sticky="w", padx=(18, 12), pady=14)
@@ -158,7 +174,7 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.entry_api.bind("<FocusOut>", lambda e: self._persist_api_key_best_effort())
 
         # DROP ZONE (area cliccabile centrata per caricare file)
-        self.drop_zone = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=18, border_width=2, border_color=self.BORDER, cursor="hand2")
+        self.drop_zone = ctk.CTkFrame(self.content, fg_color=self.CARD_BG, corner_radius=18, border_width=2, border_color=self.BORDER, cursor="hand2")
         self.drop_zone.grid(row=2, column=0, padx=30, pady=15, sticky="ew")
         self.drop_zone.grid_columnconfigure(0, weight=1)
 
@@ -180,11 +196,11 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
             widget.dnd_bind('<<Drop>>', self._on_file_drop)
 
         # BOTTONE AVVIA
-        self.btn_avvia = ctk.CTkButton(self, text="▶  AVVIA GENERAZIONE SBOBINA", height=52, font=(FONT_UI, 16, "bold"), corner_radius=12, fg_color=self.SUCCESS, hover_color=self.SUCCESS_HOVER, command=self.avvia_processo)
+        self.btn_avvia = ctk.CTkButton(self.content, text="▶  AVVIA GENERAZIONE SBOBINA", height=52, font=(FONT_UI, 16, "bold"), corner_radius=12, fg_color=self.SUCCESS, hover_color=self.SUCCESS_HOVER, command=self.avvia_processo)
         self.btn_avvia.grid(row=3, column=0, padx=30, pady=(0, 15), sticky="ew")
 
         # TERMINALE OUTPUT
-        self.console_card = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=14, border_width=1, border_color=self.BORDER)
+        self.console_card = ctk.CTkFrame(self.content, fg_color=self.CARD_BG, corner_radius=14, border_width=1, border_color=self.BORDER)
         self.console_card.grid(row=4, column=0, padx=30, pady=(0, 15), sticky="nsew")
         self.console_card.grid_columnconfigure(0, weight=1)
         self.console_card.grid_rowconfigure(3, weight=1)
@@ -265,8 +281,8 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         print("Sbobby pronto all'uso. 🎓\n")
         
         # CREDITS FOOTER
-        self.footer_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.footer_frame.grid(row=5, column=0, pady=(0, 10), sticky="ew")
+        self.footer_frame = ctk.CTkFrame(self.content, fg_color="transparent")
+        self.footer_frame.grid(row=5, column=0, padx=30, pady=(0, 10), sticky="ew")
         
         # Testo e link affiancati manualmente simulando un testo
         import webbrowser
@@ -284,6 +300,27 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         lk_kofi = ctk.CTkLabel(lbl_center, text="☕ Offrimi un caffè su Ko-fi", font=(FONT_UI, 11, "underline"), text_color=self.SUCCESS, cursor="hand2")
         lk_kofi.pack(side="left")
         lk_kofi.bind("<Button-1>", lambda e: webbrowser.open("https://ko-fi.com/vimuw"))
+
+    def _on_root_resize_centered(self, event=None):
+        try:
+            root_w = int(self.winfo_width())
+            side_pad = int(getattr(self, "_center_side_pad", 24))
+            max_w = int(getattr(self, "_max_content_width", 1200))
+
+            target_w = max(0, root_w - (side_pad * 2))
+            if max_w > 0:
+                target_w = min(target_w, max_w)
+            if target_w <= 0:
+                return
+
+            if getattr(self, "_centered_width_last", None) == target_w:
+                return
+            self._centered_width_last = target_w
+
+            if hasattr(self, "content"):
+                self.content.place_configure(width=target_w, relx=0.5)
+        except Exception:
+            pass
 
     def _on_file_drop(self, event):
         if self.is_running: return
