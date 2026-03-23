@@ -86,7 +86,7 @@ Puoi installarlo ufficialmente e gratuitamente da qui: 👉 [Scarica WebView2 Ru
 ### Quali sono i limiti giornalieri dell'API?
 L'intelligenza artificiale di Google non è illimitata: le quote gratuite dipendono dal tuo account e possono cambiare. In generale, più l'audio è lungo, più richieste servono.
 **Se finisci i token (Errore: LIMITE GIORNALIERO RAGGIUNTO):**
-L'app si metterà in pausa e ti aprirà un popup. Puoi incollare una nuova chiave API (creata con un'altra tua email) e riprendere subito, oppure premere "Annulla", far chiudere l'app salvando i progressi, e aspettare il reset dei token (che avviene ogni giorno alle 9:00 di mattina circa in Italia).
+L'app si metterà in pausa e ti aprirà un popup. Puoi incollare una nuova chiave API e riprendere subito, oppure premere "Annulla", far chiudere l'app salvando i progressi, e aspettare il reset dei token (che avviene ogni giorno alle 9:00 di mattina circa in Italia).
 
 ---
 
