@@ -109,8 +109,37 @@ def normalize_inline_star_lists(md: str) -> str:
     return "\n".join(fixed)
 
 
+def normalize_heading_levels(md: str) -> str:
+    # Limita i titoli esportati a h1-h5, comprimendo eventuali livelli piu' profondi.
+    lines: list[str] = []
+    in_fence = False
+
+    for line in (md or "").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            lines.append(line)
+            continue
+
+        if in_fence:
+            lines.append(line)
+            continue
+
+        match = re.match(r"^(\s*)(#{1,})\s+(.*)$", line)
+        if not match:
+            lines.append(line)
+            continue
+
+        indent, hashes, content = match.groups()
+        level = min(len(hashes), 5)
+        lines.append(f"{indent}{'#' * level} {content.strip()}")
+
+    return "\n".join(lines)
+
+
 def build_html_document(title: str, markdown_text: str) -> str:
-    html_body = markdown.markdown(markdown_text or "", extensions=["extra", "sane_lists"], output_format="html5")
+    normalized_markdown = normalize_heading_levels(markdown_text or "")
+    html_body = markdown.markdown(normalized_markdown, extensions=["extra", "sane_lists"], output_format="html5")
     html_body = sanitize_html_basic(html_body)
     safe_title = (title or "Sbobina").strip()
     safe_title_html = _html.escape(safe_title, quote=True)
@@ -150,9 +179,12 @@ def build_html_document(title: str, markdown_text: str) -> str:
       margin: 0 auto;
       padding: 48px 22px;
     }}
-    h1 {{ font-size: 2.0rem; margin: 0 0 0.9rem; }}
-    h2 {{ font-size: 1.35rem; margin: 1.6rem 0 0.6rem; }}
-    h3 {{ font-size: 1.15rem; margin: 1.1rem 0 0.45rem; }}
+    h1, h2, h3, h4, h5 {{ line-height: 1.3; font-weight: 700; }}
+    h1 {{ font-size: 20px; margin: 0 0 0.9rem; }}
+    h2 {{ font-size: 16px; margin: 1.4rem 0 0.6rem; }}
+    h3 {{ font-size: 14px; margin: 1.15rem 0 0.45rem; }}
+    h4 {{ font-size: 12px; margin: 1rem 0 0.4rem; }}
+    h5 {{ font-size: 11px; margin: 0.95rem 0 0.35rem; }}
     p, li {{ margin: 0.55rem 0; }}
     ul, ol {{ padding-left: 1.25rem; }}
     strong {{ font-weight: 700; }}

@@ -4,10 +4,150 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>El Sbobinator</title>
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem('el-sbobinator.theme.v1');
+          var resolved = theme === 'light' || theme === 'dark'
+            ? theme
+            : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          document.documentElement.dataset.theme = resolved;
+          document.documentElement.style.colorScheme = resolved;
+        } catch (_) {
+          document.documentElement.dataset.theme = 'dark';
+          document.documentElement.style.colorScheme = 'dark';
+        }
+      })();
+    </script>
+    <style>
+      :root {
+        --boot-bg: #f3f4f6;
+        --boot-panel: rgba(255, 255, 255, 0.92);
+        --boot-surface: rgba(255, 255, 255, 0.72);
+        --boot-border: rgba(100, 116, 139, 0.16);
+        --boot-text: #0f172a;
+        --boot-muted: #64748b;
+        --boot-title-a: #0f172a;
+        --boot-title-b: #334155;
+      }
 
+      :root[data-theme="dark"] {
+        --boot-bg: #0f1115;
+        --boot-panel: rgba(20, 24, 31, 0.92);
+        --boot-surface: rgba(20, 24, 31, 0.7);
+        --boot-border: rgba(148, 163, 184, 0.16);
+        --boot-text: #f8fafc;
+        --boot-muted: #94a3b8;
+        --boot-title-a: #f8fafc;
+        --boot-title-b: #cbd5e1;
+      }
+
+      html, body, #root {
+        min-height: 100%;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top, rgba(255,255,255,0.04), transparent 30%),
+          var(--boot-bg);
+        color: var(--boot-text);
+        font-family: "Manrope", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+      }
+
+      .boot-shell {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .boot-header {
+        min-height: 84px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 24px;
+        border-bottom: 1px solid var(--boot-border);
+        background: rgba(16, 13, 11, 0.08);
+      }
+
+      .boot-brand {
+        font-size: 1.75rem;
+        font-weight: 600;
+        letter-spacing: -0.03em;
+        line-height: 1;
+        background: linear-gradient(90deg, var(--boot-title-a), var(--boot-title-b));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .boot-main {
+        width: min(1152px, calc(100vw - 40px));
+        margin: 0 auto;
+        padding: 32px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      .boot-card {
+        border: 1px solid var(--boot-border);
+        border-radius: 28px;
+        background: var(--boot-panel);
+        box-shadow: 0 24px 56px rgba(0, 0, 0, 0.16);
+      }
+
+      .boot-dropzone {
+        min-height: 260px;
+        border-style: dashed;
+        border-width: 2px;
+        border-color: color-mix(in srgb, var(--boot-border) 130%, transparent);
+        background: transparent;
+      }
+
+      .boot-queue {
+        padding: 24px;
+      }
+
+      .boot-queue-title {
+        width: 280px;
+        height: 22px;
+        border-radius: 999px;
+        background: var(--boot-surface);
+      }
+
+      .boot-queue-item {
+        margin-top: 22px;
+        height: 96px;
+        border-radius: 24px;
+        border: 1px solid var(--boot-border);
+        background: var(--boot-surface);
+      }
+
+      .boot-console {
+        height: 98px;
+        border-radius: 24px;
+        border: 1px solid var(--boot-border);
+        background: color-mix(in srgb, var(--boot-panel) 90%, transparent);
+      }
+    </style>
   </head>
-  <body style="margin:0;background:#18181b;">
-    <div id="root"></div>
+  <body>
+    <div id="root">
+      <div class="boot-shell" aria-hidden="true">
+        <header class="boot-header">
+          <div class="boot-brand">El Sbobinator</div>
+        </header>
+        <main class="boot-main">
+          <div class="boot-card boot-dropzone"></div>
+          <section class="boot-card boot-queue">
+            <div class="boot-queue-title"></div>
+            <div class="boot-queue-item"></div>
+          </section>
+          <div class="boot-console"></div>
+        </main>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

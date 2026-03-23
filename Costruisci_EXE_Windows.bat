@@ -7,6 +7,10 @@ echo =======================================================
 echo     COSTRUTTORE ESEGUIBILE WINDOWS EL SBOBINATOR
 echo =======================================================
 echo.
+echo Nota prerequisito runtime:
+echo   L'app finale richiede Microsoft Edge WebView2 Runtime sui PC Windows.
+echo   Se manca, l'interfaccia non parte finche non viene installato.
+echo.
 where node >nul 2>nul
 if errorlevel 1 (
     echo [ERRORE] Node.js non trovato! Installa Node.js da https://nodejs.org
@@ -39,5 +43,9 @@ echo Troverai il tuo programma pronto all'uso "El Sbobinator.exe"
 echo all'interno della cartella "dist".
 echo Ora puoi prendere quel piccolo file .exe e condividerlo
 echo con chiunque, non servira' avere Python installato!
+echo.
+echo Ricorda solo questo prerequisito per Windows:
+echo   Microsoft Edge WebView2 Runtime
+echo   Download: https://go.microsoft.com/fwlink/p/?LinkId=2124703
 echo.
 pause

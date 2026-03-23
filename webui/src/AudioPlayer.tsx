@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { RotateCcw, SkipBack, SkipForward, Volume2 } from 'lucide-react';
+import { Pause, Play, RotateCcw, SkipBack, SkipForward, Volume2 } from 'lucide-react';
 
 interface AudioPlayerProps {
   src: string;
 }
+
+const PLAYBACK_RATES = [1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 
 export function AudioPlayer({ src }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -104,15 +106,9 @@ export function AudioPlayer({ src }: AudioPlayerProps) {
     return `${min}:${sec < 10 ? '0' : ''}${sec}`;
   };
 
-  const toggleSpeed = () => {
-    const rates = [1, 1.25, 1.5, 1.75, 2, 2.5, 3];
-    const idx = rates.indexOf(playbackRate);
-    setPlaybackRate(rates[(idx + 1) % rates.length]);
-  };
-
   return (
     <div
-      className="flex w-full flex-col gap-2 px-0.5 py-2 sm:flex-row sm:items-center"
+      className="flex w-full items-center gap-2 px-0.5 py-1.5"
       style={{ background: 'transparent' }}
     >
       <audio
@@ -129,32 +125,24 @@ export function AudioPlayer({ src }: AudioPlayerProps) {
         onEnded={() => setIsPlaying(false)}
       />
 
-      <div className="flex items-center gap-1.5 shrink-0">
+      <div className="flex items-center gap-1 shrink-0">
         <button
           type="button"
           onClick={togglePlay}
-          className="premium-button-secondary h-8 w-8 rounded-[10px] p-0"
-          style={isPlaying ? { background: 'var(--accent-subtle)', borderColor: 'var(--border-strong)', color: 'var(--text-primary)' } : undefined}
+          className={`player-control ${isPlaying ? 'is-active' : ''}`}
           aria-label={isPlaying ? 'Metti in pausa' : 'Avvia riproduzione'}
         >
-          {isPlaying ? (
-            <span aria-hidden="true" className="text-[11px] font-semibold leading-none tracking-[-0.12em]">II</span>
-          ) : (
-            <span aria-hidden="true" className="translate-x-[1px] text-[13px] leading-none">▶</span>
-          )}
+          {isPlaying ? <Pause className="h-4 w-4" strokeWidth={2.2} /> : <Play className="ml-[1px] h-4 w-4 fill-current" strokeWidth={2.2} />}
         </button>
-        <button type="button" onClick={() => skip(-10)} className="icon-button h-8 w-8 rounded-[10px]" aria-label="Indietro di 10 secondi">
-          <SkipBack className="h-3.5 w-3.5" />
+        <button type="button" onClick={() => skip(-10)} className="player-control" aria-label="Indietro di 10 secondi">
+          <SkipBack className="h-4 w-4" />
         </button>
-        <button type="button" onClick={() => skip(10)} className="icon-button h-8 w-8 rounded-[10px]" aria-label="Avanti di 10 secondi">
-          <SkipForward className="h-3.5 w-3.5" />
+        <button type="button" onClick={() => skip(10)} className="player-control" aria-label="Avanti di 10 secondi">
+          <SkipForward className="h-4 w-4" />
         </button>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <div className="flex items-center justify-end gap-3 pr-0.5 text-[11px] font-semibold tabular-nums" style={{ color: 'var(--text-muted)' }}>
-          <span>{formatTime(currentTime)} / {formatTime(duration)}</span>
-        </div>
+      <div className="flex min-w-0 flex-1 items-center gap-3">
         <input
           type="range"
           min={0}
@@ -162,15 +150,28 @@ export function AudioPlayer({ src }: AudioPlayerProps) {
           step={0.1}
           value={currentTime}
           onChange={handleSeek}
-          className="custom-scrubber w-full"
+          className="custom-scrubber min-w-0 flex-1"
           style={{ '--progress': duration ? `${(currentTime / duration) * 100}%` : '0%' } as React.CSSProperties}
         />
+        <span className="shrink-0 pr-0.5 text-[11px] font-semibold tabular-nums" style={{ color: 'var(--text-muted)' }}>
+          {formatTime(currentTime)} / {formatTime(duration)}
+        </span>
       </div>
 
-      <div className="flex items-center gap-2 sm:ml-1">
-        <button type="button" onClick={toggleSpeed} className="premium-button-secondary h-8 min-w-[46px] rounded-[10px] px-2 py-1 text-[12px]">
-          {playbackRate}x
-        </button>
+      <div className="flex items-center gap-2">
+        <label className="player-speed-wrap" aria-label="Velocita di riproduzione">
+          <select
+            value={playbackRate}
+            onChange={e => setPlaybackRate(parseFloat(e.target.value))}
+            className="player-speed-select"
+          >
+            {PLAYBACK_RATES.map(rate => (
+              <option key={rate} value={rate}>
+                {rate}x
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="flex items-center gap-1.5">
           <Volume2 className="h-3.5 w-3.5" style={{ color: 'var(--text-muted)' }} />
           <input
@@ -184,8 +185,8 @@ export function AudioPlayer({ src }: AudioPlayerProps) {
             style={{ '--progress': `${volume * 100}%` } as React.CSSProperties}
           />
         </div>
-        <button type="button" onClick={() => skip(-duration)} className="icon-button h-8 w-8 rounded-[10px]" aria-label="Torna all'inizio">
-          <RotateCcw className="h-3.5 w-3.5" />
+        <button type="button" onClick={() => skip(-duration)} className="player-control" aria-label="Torna all'inizio">
+          <RotateCcw className="h-4 w-4" />
         </button>
       </div>
     </div>

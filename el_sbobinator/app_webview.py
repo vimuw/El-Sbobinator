@@ -15,6 +15,7 @@ import threading
 import time
 import warnings
 from collections import deque
+from html import escape
 
 # Suppress benign requests warning about chardet/charset_normalizer failing to import
 warnings.filterwarnings("ignore", message="Unable to find acceptable character detection dependency")
@@ -266,11 +267,6 @@ class ElSbobinatorApi:
     def set_window(self, window: webview.Window):
         self._window = window
         self._adapter.window = window
-
-    def show_window(self):
-        """Called by React once it's mounted, shows the window instantly."""
-        if self._window:
-            self._window.show()
 
     # ---- Settings ----
 
@@ -655,6 +651,142 @@ def get_dist_path() -> str:
     )
 
 
+def has_webview2_runtime() -> bool:
+    """Mirror pywebview's Windows runtime detection to avoid silent MSHTML fallback."""
+    if sys.platform != "win32":
+        return True
+
+    try:
+        import winreg
+    except Exception:
+        return False
+
+    runtime_keys = (
+        (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"),
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"),
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"),
+    )
+
+    for root, key_path in runtime_keys:
+        try:
+            with winreg.OpenKey(root, key_path) as key:
+                version, _ = winreg.QueryValueEx(key, "pv")
+                if str(version).strip():
+                    return True
+        except Exception:
+            continue
+
+    return False
+
+
+def build_missing_webview2_html() -> str:
+    download_url = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+    repo_url = "https://developer.microsoft.com/en-us/microsoft-edge/webview2/"
+    return f"""<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>El Sbobinator</title>
+    <style>
+      :root {{
+        color-scheme: dark;
+        --bg: #121417;
+        --panel: #1a1e24;
+        --line: #303845;
+        --text: #f3f5f8;
+        --muted: #a3afc2;
+        --accent: #66e1d6;
+      }}
+      * {{ box-sizing: border-box; }}
+      body {{
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background:
+          radial-gradient(circle at top, rgba(102,225,214,0.12), transparent 32%),
+          var(--bg);
+        font-family: "Segoe UI", Arial, sans-serif;
+        color: var(--text);
+      }}
+      .card {{
+        width: min(720px, 100%);
+        padding: 28px;
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015)), var(--panel);
+        box-shadow: 0 18px 60px rgba(0,0,0,0.24);
+      }}
+      h1 {{
+        margin: 0 0 12px;
+        font-size: 28px;
+        line-height: 1.15;
+      }}
+      p {{
+        margin: 0 0 14px;
+        font-size: 15px;
+        line-height: 1.6;
+        color: var(--muted);
+      }}
+      .actions {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin: 22px 0 14px;
+      }}
+      .button {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 11px 16px;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        color: var(--text);
+        text-decoration: none;
+        font-weight: 600;
+        background: rgba(255,255,255,0.03);
+      }}
+      .button.primary {{
+        border-color: rgba(102,225,214,0.35);
+        background: rgba(102,225,214,0.1);
+      }}
+      code {{
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.05);
+        color: var(--text);
+      }}
+      ul {{
+        margin: 16px 0 0;
+        padding-left: 18px;
+        color: var(--muted);
+      }}
+      li {{ margin: 8px 0; }}
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>Serve WebView2 per avviare l'interfaccia</h1>
+      <p>El Sbobinator sta partendo con il renderer Windows legacy <code>MSHTML</code>, che non supporta la WebUI moderna. Per questo la finestra rimane nera.</p>
+      <p>Installando <strong>Microsoft Edge WebView2 Runtime</strong> l'app tornera ad aprirsi normalmente.</p>
+      <div class="actions">
+        <a class="button primary" href="{escape(download_url)}" target="_blank" rel="noreferrer">Scarica WebView2 Runtime</a>
+        <a class="button" href="{escape(repo_url)}" target="_blank" rel="noreferrer">Dettagli tecnici</a>
+      </div>
+      <ul>
+        <li>Chiudi El Sbobinator.</li>
+        <li>Installa WebView2 Runtime.</li>
+        <li>Riapri l'app.</li>
+      </ul>
+    </main>
+  </body>
+</html>
+"""
+
+
 def main():
     api = ElSbobinatorApi()
 
@@ -663,6 +795,7 @@ def main():
     sys.stderr = _ConsoleTee(sys.__stderr__, api)
 
     dist_path = get_dist_path()
+    webview2_available = has_webview2_runtime()
 
     # Storage path for WebView2 profile cache (avoids re-init freeze)
     storage_dir = os.path.join(
@@ -685,19 +818,61 @@ def main():
     except Exception:
         center_x, center_y = 100, 50
 
-    window = webview.create_window(
-        "El Sbobinator",
-        dist_path,
-        js_api=api,
-        width=win_w,
-        height=win_h,
-        x=center_x,
-        y=center_y,
-        min_size=(750, 620),
-        background_color="#18181b",
-        hidden=True, # Start hidden to prevent click-freezing during WebView2 init
-    )
+    if webview2_available:
+        window = webview.create_window(
+            "El Sbobinator",
+            dist_path,
+            js_api=api,
+            width=win_w,
+            height=win_h,
+            x=center_x,
+            y=center_y,
+            min_size=(750, 620),
+            background_color="#18181b",
+            hidden=True,
+        )
+    else:
+        print("[!] Microsoft Edge WebView2 Runtime non trovato. Mostro schermata di recupero.")
+        window = webview.create_window(
+            "El Sbobinator",
+            html=build_missing_webview2_html(),
+            width=win_w,
+            height=win_h,
+            x=center_x,
+            y=center_y,
+            min_size=(750, 620),
+            background_color="#18181b",
+            hidden=False,
+        )
     api.set_window(window)
+
+    if webview2_available:
+        window_shown = threading.Event()
+
+        def _show_when_loaded(*_args):
+            if window_shown.is_set():
+                return
+            window_shown.set()
+            try:
+                if api._window is not None:
+                    api._window.show()
+            except Exception:
+                pass
+
+        window.events.loaded += _show_when_loaded
+
+        def _show_window_fallback():
+            time.sleep(4.0)
+            if window_shown.is_set():
+                return
+            window_shown.set()
+            try:
+                if api._window is not None:
+                    api._window.show()
+            except Exception:
+                pass
+
+        threading.Thread(target=_show_window_fallback, daemon=True).start()
     
     webview.start(
         private_mode=False,

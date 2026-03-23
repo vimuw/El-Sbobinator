@@ -1,144 +1,299 @@
-# El Sbobinator 🤖
+# El Sbobinator
 
-Un'applicazione gratuita e open-source che trasforma le registrazioni audio delle tue lezioni in vere e proprie **sbobine** dettagliate.
+Un'applicazione gratuita e open-source che trasforma le registrazioni audio delle tue lezioni in vere e proprie **sbobine** dettagliate, ordinate e pronte da studiare.
 
-L'intelligenza artificiale (basata sul modello Gemini 2.5 Flash) ascolterà la tua registrazione e scriverà una dispensa eliminando i difetti tipici del parlato (es. ripetizioni, retorica, esitazioni) e strutturando il discorso con paragrafi chiari, elenchi puntati a dizionario e definizioni in grassetto.
+L'intelligenza artificiale, basata su **Gemini 2.5 Flash**, ascolta la registrazione e riscrive il contenuto in forma più chiara, eliminando molti difetti tipici del parlato come ripetizioni, esitazioni e frasi spezzate.
+
+L'obiettivo non è ottenere una trascrizione "grezza", ma una **dispensa leggibile**, con paragrafi ben separati, titoli, sottotitoli, elenchi e definizioni in evidenza.
 
 ---
 
 ## 🚀 Come iniziare
 
-### 1) Come Scaricare il programma
-1. Clicca sulla sezione **Releases** sulla destra di questa pagina GitHub (oppure scarica dai link forniti).
-2. Scarica il programma per il tuo sistema operativo:
-   - **Per Windows:** Scarica il file `El-Sbobinator-Windows.exe`
-   - **Per Mac:** Scarica il file `El-Sbobinator-MacOS.zip`
-3. Salva il file dove preferisci (es. sul Desktop).
+### 1) Scaricare il programma
+1. Apri la sezione **Releases** di questa repository GitHub.
+2. Scarica il file adatto al tuo sistema operativo:
+   - **Windows:** `El Sbobinator.exe`
+   - **macOS:** archivio `.zip` con `El Sbobinator.app`
+3. Salva il file dove preferisci, ad esempio sul Desktop.
 
-### 2) Creare la tua Chiave API di Gemini (Gratis)
-Essendo Google Gemini il cervello del programma, ti serve una password unica (API Key) per usarlo. Creare la API key è gratis. L'uso delle API ha dei limiti (quota): vedi la sezione FAQ qui sotto.
-1. Vai su: [Google AI Studio](https://aistudio.google.com/app/apikey) e accedi col tuo account Google.
-2. Clicca sul bottone azzurro `"Create API Key"`.
-3. Seleziona `"Create API key in a new project"`.
-4. Compariranno un sacco di lettere e numeri segreti (iniziano solitamente con `AIzaSy...`). **Questa è la tua chiave. Copiala.**
+### 2) Creare la tua API Key di Gemini
+Per usare l'app serve una **API Key personale** di Google Gemini. La creazione è gratuita.
 
----
-
-## ▶️ Come Avviare l'App!
-
-È un programma "plug & play", non devi installare nulla sul PC.
-
-### 💻 Se usi Windows:
-Fai semplicemente **doppio clic** sul file `El-Sbobinator-Windows.exe` (se vuoi, puoi rinominarlo in `El Sbobinator.exe`).
-*(Nota: Se l'antivirus o Windows blocca l'applicazione al primo avvio, non preoccuparti! Consulta la sezione FAQ qui sotto per capire come fare e perché succede).*
-
-> ⏳ **Pazienza all'avvio (Non cliccare mille volte!)**: El Sbobinator pesa circa 65 MB perché contiene al suo interno tutto il "motore" necessario per funzionare senza farti installare Python. Ogni volta che lo apri, il tuo computer deve "scompattare" questo motore in background. Per questo motivo, **l'avvio richiederà sempre qualche secondo (il tempo esatto dipende dalla velocità e dalla potenza del tuo PC)**. Dagli quindi un attimo di tempo per caricarsi.
-
-### 🍎 Se usi Mac:
-Estrai l'archivio ZIP e fai **doppio clic** sull'applicazione `El Sbobinator.app` (puoi trascinarla nella cartella Applicazioni).
-*(Nota: Al primissimo avvio, se il Mac dovesse bloccarti dicendo "proveniente da uno sviluppatore non identificato", ti basta fare **clic col tasto destro** — o Control+Clic — sull'icona, e scegliere **Apri** dal menu).*
+1. Vai su [Google AI Studio](https://aistudio.google.com/app/apikey).
+2. Accedi con il tuo account Google.
+3. Clicca su **Create API Key**.
+4. Scegli **Create API key in a new project**.
+5. Copia la chiave generata. In genere inizia con `AIza...`.
 
 ---
 
-## 📖 Come lo uso una volta aperto?
-1. Aperta la schermata del programma, incolla in alto la **Chiave API** copiata prima. Il programma se la salverà, così non dovrai rimetterla mai più.
-   - **Windows:** la chiave viene salvata in locale **cifrata** (DPAPI) nel profilo utente (es. `%APPDATA%\\El Sbobinator\\config.json`).
-   - **macOS/Linux:** la chiave viene salvata nel **Portachiavi/Keyring di sistema** (il file di config non contiene segreti).
-2. Clicca "**Sfoglia / Carica**" e seleziona la registrazione audio della tua lezione.
-3. Clicca il pulsantone verde **AVVIA**.
-4. Niente panico se l'app sembra bloccarsi: nel terminale dentro al programma leggerai esattamente a che punto e'! Ad esempio, se l'audio dura un'ora, fara' **4 estrazioni** da 15 minuti l'una, e ci mettera' all'incirca 3-5 minuti in base al traffico dei server Google e alla tua connessione.
-5. Quando ha finito, troverai il file `.html` sul tuo **Desktop**, gia' formattato per il copia-incolla su Google Docs.
+## ✨ Funzioni principali
+
+El Sbobinator oggi include queste funzioni:
+
+- **Sbobinatura automatica di audio lunghi** con gestione a blocchi.
+- **Pulizia del parlato**: meno ripetizioni, meno riempitivi, testo più leggibile.
+- **Generazione di un file HTML finale** pronto da aprire, modificare o copiare su Google Docs.
+- **Coda di elaborazione** con più file, riordinamento e gestione degli elementi completati.
+- **Anteprima integrata** del risultato finale direttamente dentro l'app.
+- **Editor di testo integrato** per correggere e rifinire la sbobina prima dell'uso.
+- **Inserimento immagini nell'editor**, con layout stabile:
+  - in linea
+  - a sinistra con testo
+  - a destra con testo
+- **Player audio integrato** nella schermata anteprima, se il file originale è ancora disponibile.
+- **Ricollegamento dell'audio** se il file è stato spostato dopo l'elaborazione.
+- **Autosalvataggio** delle modifiche nell'anteprima.
+- **Ripresa delle sessioni interrotte**, anche in caso di crash o quota esaurita.
+- **Supporto a chiavi di fallback** per continuare se una API Key finisce la quota.
+- **Tema chiaro/scuro** selezionabile dall'utente.
+- **Validazione ambiente** per controllare rapidamente se tutto è configurato bene.
 
 ---
 
-## 💾 Autosalvataggio e Ripresa (Importante)
-El Sbobinator salva automaticamente i progressi mentre lavora, così se chiudi l'app, crasha il PC o finisci la quota giornaliera puoi riprendere senza perdere tutto.
+## ▶️ Come si usa davvero l'app
 
-- **Dove salva?** In una cartella locale sul tuo PC, dentro la home utente (es. `C:\Users\TUO_UTENTE\.el_sbobinator_sessions\...` su Windows o `~/.el_sbobinator_sessions/...` su macOS).
-- **Cosa salva?** Testi parziali (sbobine per chunk), progressi e stati di avanzamento.
-- **Quando riprendi una sessione:** se selezioni lo stesso file audio, El Sbobinator può proporti di **riutilizzare** i risultati già pronti (rigenera l'HTML senza consumare richieste) oppure di **ricominciare da zero** (cancella la sessione e rifà tutto dall'inizio).
+Questa è la guida pratica, passo per passo.
+
+### 1) Avvia l'app
+
+#### Su Windows
+Fai doppio clic su `El Sbobinator.exe`.
+
+Se al primo avvio Windows SmartScreen ti blocca il file, clicca:
+- **Ulteriori informazioni**
+- **Esegui comunque**
+
+#### Su macOS
+Estrai lo ZIP, poi apri `El Sbobinator.app`.
+
+Se macOS segnala che proviene da uno sviluppatore non identificato:
+- fai **clic destro** sull'app
+- scegli **Apri**
+- conferma di nuovo **Apri**
+
+### 2) Inserisci la tua API Key
+Apri le **Impostazioni** e incolla la tua chiave Gemini.
+
+L'app la salva in locale:
+- **Windows:** tramite protezione del sistema / profilo utente
+- **macOS / Linux:** tramite keyring o portachiavi di sistema
+
+Se vuoi, puoi aggiungere anche più chiavi di riserva, una per riga.
+
+### 3) Carica uno o più file audio
+Usa il pulsante di selezione file e scegli la registrazione della lezione.
+
+L'app:
+- riconosce i file già presenti in coda
+- evita i duplicati
+- mostra subito i file nella **Coda di elaborazione**
+
+### 4) Avvia la sbobinatura
+Clicca su **Avvia sbobinatura**.
+
+Durante il processo vedrai:
+- il file attualmente in lavorazione
+- lo stato della fase corrente
+- il progresso
+- la console con i messaggi principali
+
+### 5) Attendi il completamento
+Quando la sbobina è pronta, l'app genera un file HTML finale.
+
+Per impostazione predefinita, il file viene salvato sul **Desktop**:
+- su Windows, anche nel Desktop OneDrive se presente
+- su macOS/Linux, nel Desktop dell'utente o nella home come fallback
+
+### 6) Apri l'anteprima e rifinisci il testo
+Quando un file è completato puoi:
+- aprire l'**anteprima**
+- modificare direttamente il testo
+- aggiungere immagini
+- cambiare titoli e sottotitoli
+- copiare il contenuto
+- aprire il file HTML nel browser
+
+Le modifiche fatte nell'anteprima vengono salvate automaticamente.
+
+### 7) Copia su Google Docs
+Dalla schermata anteprima puoi usare **Copia testo**.
+
+L'app copia sia:
+- il testo semplice
+- l'HTML formattato
+
+Questo rende il copia-incolla su Google Docs molto più pulito rispetto a una semplice trascrizione grezza.
 
 ---
 
-## 🎯 Cosa aspettarsi dai risultati (Disclaimer sull'AI)
-È importante ricordare che l'intelligenza artificiale **non è perfetta**. La sbobina generata potrebbe contenere qualche piccolo errore di trascrizione, parole tecniche interpretate male o, talvolta, piccolissime porzioni di testo sdoppiate (specialmente nel punto di giunzione tra una parte di audio e l'altra).
+## 📝 Come funziona la schermata anteprima
 
-Stiamo parlando di una percentuale di imprecisione davvero minuscola rispetto al testo totale. Il vero vantaggio è che l'app **farà il 90% del lavoro sporco e noioso al posto tuo**. A te basterà dare una rapida rilettura per sistemare quelle due o tre imperfezioni, risparmiando comunque ore e ore di digitazione manuale!
+La schermata anteprima serve per rifinire il risultato finale prima di usarlo davvero.
 
-Ricorda sempre una regola d'oro dell'intelligenza artificiale: **la qualità del risultato dipende dalla qualità dell'audio di partenza**. Se l'audio è incomprensibile per un umano, lo sarà anche per l'AI!
+Puoi:
+- modificare direttamente il testo
+- usare titoli e sottotitoli (`H1`, `H2`, `H3`, `H4`, `H5`)
+- inserire immagini
+- scegliere il layout delle immagini:
+  - in linea
+  - sinistra con testo
+  - destra con testo
+- copiare il contenuto finale
+- esportare in Word
+- stampare o salvare in PDF
 
----
-
-## ❓ FAQ - Domande Frequenti
-
-### È sicuro? Il mio antivirus lo segnala come minaccia!
-Assolutamente sì, è sicuro al 100%. Il codice sorgente dell'applicazione è completamente pubblico e verificabile da chiunque su GitHub. Se il tuo antivirus o Windows Defender blocca l'app (segnalandola magari come *Trojan* o *Malware*), si tratta di un **falso positivo**.
-
-**Cos'è un falso positivo e perché succede?**
-Un falso positivo avviene quando un antivirus scambia un file innocuo per un virus. Questo succede quasi sempre con i programmi scritti in Python e trasformati in eseguibili `.exe` tramite un tool chiamato *PyInstaller*. Gli antivirus diffidano "di default" dei programmi creati da sviluppatori indipendenti che non possiedono una firma digitale a pagamento (che costa centinaia di euro l'anno).
-
-Se vuoi una verifica in piu', puoi caricare il file su VirusTotal e controllare che le segnalazioni (se presenti) siano poche e di tipo generico/euristico.
-
-**Come risolvere su Windows:**
-- **Se appare la schermata blu di Windows SmartScreen:** Clicca su `"Ulteriori Informazioni"` e poi sul pulsante in basso `"Esegui Comunque"`.
-- **Se l'antivirus lo elimina:** Vai nella Cronologia Protezione di Windows, clicca sulla minaccia rilevata e seleziona `"Consenti nel dispositivo"` o `"Ripristina"`.
-
-### Quali sono i limiti giornalieri dell'API (Importante!)
-L'intelligenza artificiale di Google non è illimitata: esistono limiti/quote di utilizzo (numero di richieste, e altri parametri) che dipendono dal tuo account/progetto e possono cambiare nel tempo.
-
-**Nota importante:** le quote gratuite possono cambiare nel tempo e possono dipendere dal tuo progetto/account. Se hai dubbi, controlla la tua quota su Google AI Studio.
-
-**Quanto consuma una sbobina?** L'app divide l'audio in blocchi da 15 minuti. Per ogni blocco effettua circa 1 richiesta di generazione, più alcune richieste extra per la revisione/merge (dipende dalla lunghezza totale). In generale, più l'audio è lungo, più richieste servono.
-
-**Ho finito i token (Errore: ⛔ LIMITE GIORNALIERO RAGGIUNTO!), cosa faccio?**
-L'app è intelligente e gestirà questo blocco per te:
-- **Opzione 1 (Inserire una nuova chiave a caldo):** L'applicazione metterà in pausa il processo (senza farti perdere la sbobina generata finora) e aprirà un popup a schermo. Ti basterà generare una nuova chiave API da un **account Google diverso** (es. una seconda email Gmail), incollarla nel popup e premere OK. El Sbobinator riprenderà automaticamente a sbobinare l'audio dal punto esatto in cui si era interrotto!
-- **Opzione 2 (Aspettare l'indomani):** Se non hai altre email o vuoi fermarti, premi "Annulla" nel popup. L'app salverà su file la porzione di lezione sbobinata fino a quel punto e si chiuderà. I limiti gratuiti si resettano ogni giorno a mezzanotte ora del Pacifico, che corrisponde circa alle **ore 9:00 di mattina in Italia**.
+Se il file audio originale è ancora nello stesso percorso, il player compare in basso nella preview.
+Se il file è stato spostato, puoi usare **Ricollega audio**.
 
 ---
 
-## ☕ Supporta il progetto!
-El Sbobinator 🤖 è e sarà sempre **100% gratuito e open-source**.
+## 💾 Autosalvataggio e ripresa
 
-Tuttavia, se questa app ti ha svoltato la sessione d'esami, ti ha fatto risparmiare decine (o centinaia) di ore di noiosissima sbobinatura manuale e vuoi supportare il mio lavoro, puoi offrirmi un caffè!
+El Sbobinator salva automaticamente i progressi mentre lavora.
 
-* [☕ Offrimi un caffè su Ko-fi](https://ko-fi.com/vimuw)
+Questo significa che:
+- se chiudi l'app
+- se il PC si spegne
+- se l'elaborazione si interrompe
+- se finisci la quota dell'API
 
-Grazie e in bocca al lupo per gli esami! 🎉
+... puoi spesso riprendere senza perdere tutto.
+
+### Dove salva i dati temporanei?
+In una cartella locale dentro la home utente, ad esempio:
+- **Windows:** `C:\Users\TUO_UTENTE\.el_sbobinator_sessions\...`
+- **macOS / Linux:** `~/.el_sbobinator_sessions/...`
+
+### Cosa salva?
+- blocchi parziali della sbobina
+- progressi
+- stato della sessione
+- HTML finale modificato nell'anteprima
 
 ---
 
-## ⚖️ Disclaimer Etico e Legale (Importante)
-El Sbobinator 🤖 è esclusivamente uno **strumento software locale** che facilita l'interazione tra l'utente e le API pubbliche di Google Gemini.
+## 🎯 Cosa aspettarsi dai risultati
 
-Scaricando e utilizzando questa applicazione, accetti e comprendi che:
-* **Diritto d'autore e Uso Personale:** Le lezioni universitarie sono proprietà intellettuale dei rispettivi docenti. L'uso di questo strumento è inteso **esclusivamente per scopi di studio personale**. La diffusione pubblica, la pubblicazione online o la vendita a terzi delle sbobine generate senza il consenso esplicito del docente è una violazione del diritto d'autore. L'autore di questo software declina ogni responsabilità per l'uso improprio o illecito dei testi generati.
-* **Privacy e Gestione dei Dati:** Inserendo la tua chiave API personale (BYOK), stabilisci una connessione diretta tra il tuo computer e i server di Google, accettando i [Termini di Servizio di Google](https://policies.google.com/terms). El Sbobinator 🤖 non ha server propri: non intercetta, non salva in cloud e non condivide con nessuno (nemmeno con il creatore dell'app) i tuoi file audio, le tue sbobine o la tua chiave API. Tutto avviene e rimane sul tuo dispositivo.
-* **Tassativo Divieto per Dati Clinici Sensibili (Privacy e GDPR):** El Sbobinator elabora i file audio inviandoli tramite API per la trascrizione. Per questo motivo, è assolutamente vietato dare in pasto all'app registrazioni effettuate in ambiente clinico, durante i tirocini in reparto o che contengono conversazioni con pazienti reali. L'elaborazione di dati sanitari sensibili o informazioni che possano identificare un paziente tramite API esterne è una grave violazione della privacy. Usa l'app **solo per trascrivere le lezioni frontali in aula**.
-* **Nessuna Garanzia:** Come specificato dalla Licenza MIT allegata al progetto, il software è fornito "così com'è", senza alcuna garanzia.
+L'intelligenza artificiale non è perfetta.
+
+La sbobina finale può contenere:
+- qualche parola tecnica interpretata male
+- qualche piccola ripetizione residua
+- qualche punto da sistemare a mano
+
+Detto questo, il vantaggio enorme è che l'app fa **quasi tutto il lavoro pesante** al posto tuo.
+
+In pratica:
+- non sostituisce del tutto una revisione umana
+- ma ti fa risparmiare moltissime ore di lavoro manuale
+
+Regola d'oro: **più l'audio è pulito, migliore sarà il risultato**.
+
+---
+
+## ❓ FAQ
+
+### È sicuro? L'antivirus lo segnala come minaccia
+Sì. Il codice sorgente è pubblico e verificabile.
+
+Se Windows Defender o un antivirus segnala l'eseguibile come sospetto, nella maggior parte dei casi si tratta di un **falso positivo**. Succede spesso con gli eseguibili creati con PyInstaller e distribuiti da sviluppatori indipendenti senza firma digitale commerciale.
+
+Se vuoi un controllo in più, puoi caricare il file su VirusTotal e verificare che eventuali segnalazioni siano poche e di tipo euristico/generico.
+
+### Su Windows vedo una finestra nera o l'app non carica la UI
+Molto probabilmente manca **Microsoft Edge WebView2 Runtime**.
+
+Puoi installarlo da qui:
+[Scarica WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703)
+
+Dopo l'installazione, chiudi e riapri l'app.
+
+### Devo installare Python o altri programmi?
+No, se usi i pacchetti già compilati per Windows o macOS.
+
+### Dove finisce il file finale?
+Per impostazione predefinita, sul **Desktop** dell'utente.
+
+### Posso modificare la sbobina dentro l'app?
+Sì. Apri l'anteprima e modifica direttamente il testo prima di copiarlo o esportarlo.
+
+### Posso inserire immagini?
+Sì. Nell'editor puoi inserire immagini e disporle:
+- in linea
+- a sinistra con testo
+- a destra con testo
+
+### Cosa succede se finisco la quota di Gemini?
+L'app può:
+- mettersi in pausa
+- chiederti una nuova chiave
+- riprendere dal punto in cui era rimasta
+
+Se premi **Annulla**, i progressi già salvati non vengono persi.
+
+### Quali sono i limiti giornalieri dell'API?
+Dipendono da Google e possono cambiare nel tempo.
+
+Se hai dubbi, controlla direttamente in Google AI Studio la tua situazione attuale.
+
+In generale:
+- più l'audio è lungo
+- più richieste servono
+- più alta è la probabilità di raggiungere la quota gratuita
+
+---
+
+## ☕ Supporta il progetto
+
+El Sbobinator è e resterà **100% gratuito e open-source**.
+
+Se però ti ha fatto risparmiare ore di sbobinatura manuale e vuoi supportare il progetto:
+
+- [Offrimi un caffè su Ko-fi](https://ko-fi.com/vimuw)
+
+Grazie davvero e in bocca al lupo per gli esami.
+
+---
+
+## ⚖️ Disclaimer etico e legale
+
+El Sbobinator è uno **strumento software locale** che facilita l'uso delle API pubbliche di Google Gemini.
+
+Usandolo, accetti e comprendi che:
+
+- **Uso personale e diritto d'autore:** le lezioni universitarie restano proprietà intellettuale dei rispettivi docenti. L'app va usata solo per studio personale. La diffusione pubblica o la vendita delle sbobine senza consenso resta responsabilità dell'utente.
+- **Privacy:** l'app non ha server propri. Audio, testo e chiavi API non vengono inviati a infrastrutture del progetto. Il collegamento avviene tra il tuo dispositivo e i servizi Google che scegli di usare tramite la tua chiave.
+- **Dati clinici sensibili:** non usare l'app con registrazioni che contengano dati sanitari, dati di pazienti o conversazioni cliniche reali.
+- **Nessuna garanzia:** il software è distribuito con licenza MIT, quindi viene fornito "così com'è".
 
 ---
 
 ## 📝 Licenza
-Questo progetto è open-source e distribuito sotto la **Licenza MIT**.
-Per tutti i dettagli, consulta il file `LICENSE` incluso in questa repository.
+
+Questo progetto è open-source e distribuito sotto **Licenza MIT**.
+
+Per i dettagli, vedi il file [LICENSE](/C:/Users/vimuw/Desktop/El%20Sbobinator/LICENSE).
 
 ---
 
-## 🛠️ Costruire l'App dai sorgenti
-Se scarichi il codice sorgente completo e vuoi compilare tu stesso i file eseguibili nativi (`.exe` o `.app`), usa gli script di automazione inclusi:
-- **Windows:** fai doppio clic su `Costruisci_EXE_Windows.bat`. La build predefinita ora usa la **WebUI** e crea `dist/El Sbobinator.exe`.
-- **Mac:** dal terminale, avvia `Costruisci_APP_Mac.command` per generare l'app macOS nativa con **WebUI**.
+## 🛠️ Costruire l'app dai sorgenti
+
+Se vuoi compilare da solo i pacchetti nativi:
+
+- **Windows:** usa [Costruisci_EXE_Windows.bat](/C:/Users/vimuw/Desktop/El%20Sbobinator/Costruisci_EXE_Windows.bat)
+- **Windows (wrapper WebUI):** è presente anche [Costruisci_EXE_WebUI.bat](/C:/Users/vimuw/Desktop/El%20Sbobinator/Costruisci_EXE_WebUI.bat)
+- **macOS:** usa [Costruisci_APP_Mac.command](/C:/Users/vimuw/Desktop/El%20Sbobinator/Costruisci_APP_Mac.command)
 
 ### Verifiche locali consigliate
-Per controllare il progetto prima di una release:
 
 ```bash
 python scripts/build_release.py deps --ui webui --dev
 python scripts/build_release.py check --skip-npm-install
 ```
 
-Per creare una build locale:
+### Build locale
 
 ```bash
 python scripts/build_release.py build --target windows --ui webui --install-deps --dev-deps
@@ -146,5 +301,6 @@ python scripts/build_release.py build --target macos --ui webui --install-deps -
 ```
 
 ### Nota sulla UI
-La **WebUI è l'unica UI supportata** per build, CI e sviluppo corrente. Il vecchio entrypoint desktop resta solo come alias compatibile verso la WebUI.
 
+La **WebUI** è oggi l'unica interfaccia supportata per sviluppo, build e release.
+I vecchi entrypoint desktop restano solo come alias compatibili verso la WebUI.

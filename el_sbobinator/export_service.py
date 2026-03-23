@@ -34,22 +34,7 @@ def build_final_markdown(title: str, blocks: list[str], fallback_body: str) -> s
         normalized_blocks = [str(fallback_body or "").strip()]
 
     body_md = "\n\n".join(normalized_blocks).strip()
-    headings: list[str] = []
-    seen: set[str] = set()
-    for line in body_md.splitlines():
-        match = re.match(r"^##\s+(.+?)\s*$", line.strip())
-        if not match:
-            continue
-        heading = re.sub(r"\s+#.*$", "", match.group(1)).strip()
-        if heading and heading not in seen:
-            headings.append(heading)
-            seen.add(heading)
-
-    index_md = ""
-    if headings:
-        index_md = "## Indice\n" + "\n".join([f"- {heading}" for heading in headings]) + "\n\n"
-
-    final_md = f"# {title}\n\n{index_md}{body_md}\n"
+    final_md = f"# {title}\n\n{body_md}\n"
     return normalize_inline_star_lists(final_md)
 
 

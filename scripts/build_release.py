@@ -16,6 +16,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+if os.name == "nt":
+    import winreg
+
 
 ROOT = Path(__file__).resolve().parent.parent
 WEBUI_DIR = ROOT / "webui"
@@ -42,6 +45,48 @@ def run(cmd: list[str], cwd: Path | None = None) -> None:
     subprocess.run(cmd, cwd=str(cwd or ROOT), check=True)
 
 
+def get_windows_webview2_runtime_version() -> str | None:
+    if os.name != "nt":
+        return None
+
+    registry_paths = (
+        (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"),
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"),
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"),
+    )
+
+    for root, path in registry_paths:
+        try:
+            with winreg.OpenKey(root, path) as key:
+                value, _ = winreg.QueryValueEx(key, "pv")
+                version = str(value).strip()
+                if version:
+                    return version
+        except OSError:
+            continue
+
+    return None
+
+
+def print_windows_webview2_notice(target: str, ui: str) -> None:
+    if target != "windows" or ui != "webui":
+        return
+
+    version = get_windows_webview2_runtime_version()
+    download_url = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+
+    print()
+    print("=== Controllo prerequisito WebView2 ===")
+    if version:
+        print(f"[OK] WebView2 Runtime rilevato: {version}")
+    else:
+        print("[ATTENZIONE] WebView2 Runtime non rilevato su questa macchina.")
+        print("             L'exe verra compilato comunque, ma per eseguire la WebUI serve WebView2.")
+        print(f"             Download ufficiale: {download_url}")
+    print("             Suggerimento: comunica questo prerequisito anche agli utenti finali Windows.")
+    print()
+
+
 def _requirements_file() -> Path:
     return BASE_REQUIREMENTS if BASE_REQUIREMENTS.exists() else FALLBACK_REQUIREMENTS
 
@@ -63,7 +108,7 @@ def install_packaging_dependencies(ui: str) -> None:
 def install_node_dependencies(skip_npm_install: bool) -> None:
     if skip_npm_install:
         return
-    run(["npm", "install"], cwd=WEBUI_DIR)
+    run(["npm", "install", "--no-audit", "--no-fund"], cwd=WEBUI_DIR)
 
 
 def run_python_checks() -> None:
@@ -140,6 +185,8 @@ def command_check(args: argparse.Namespace) -> None:
 
 
 def command_build(args: argparse.Namespace) -> None:
+    print_windows_webview2_notice(args.target, args.ui)
+
     if args.install_deps:
         install_python_dependencies(include_dev=bool(args.dev_deps))
         install_packaging_dependencies(args.ui)

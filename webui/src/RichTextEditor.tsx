@@ -1,15 +1,26 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { Bold, Clipboard, Copy, FileText, Heading1, Heading2, Heading3, Heading4, Heading5, Italic, List, ListOrdered, Printer, Quote, Redo, Scissors, Undo } from 'lucide-react';
+import { Bold, Clipboard, Copy, FileText, Heading1, Heading2, Heading3, Heading4, Heading5, ImagePlus, Italic, List, ListOrdered, Printer, Quote, Redo, Scissors, Undo } from 'lucide-react';
+import { FloatingImage } from './FloatingImage';
 
 interface RichTextEditorProps {
   initialContent: string;
   onChange: (html: string) => void;
 }
 
-const MenuBar = ({ editor }: { editor: any }) => {
+const readFileAsDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('Lettura immagine fallita.'));
+    reader.readAsDataURL(file);
+  });
+
+const MenuBar = ({ editor, onInsertImages }: { editor: any; onInsertImages: (files: FileList | File[]) => void }) => {
   const [, forceUpdate] = React.useState({});
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   React.useEffect(() => {
     if (!editor) return;
@@ -137,6 +148,9 @@ const MenuBar = ({ editor }: { editor: any }) => {
       <button type="button" onClick={() => editor.chain().focus().toggleBlockquote().run()} className={btnClass(editor.isActive('blockquote'))} title="Citazione">
         <Quote className="h-4 w-4" />
       </button>
+      <button type="button" onClick={() => imageInputRef.current?.click()} className="editor-button" title="Inserisci immagine">
+        <ImagePlus className="h-4 w-4" />
+      </button>
       <div className="editor-separator" />
       <button type="button" onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} className="editor-button" title="Annulla">
         <Undo className="h-4 w-4" />
@@ -153,37 +167,121 @@ const MenuBar = ({ editor }: { editor: any }) => {
           <Printer className="h-4 w-4" />
         </button>
       </div>
+
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={event => {
+          if (event.target.files?.length) {
+            onInsertImages(event.target.files);
+          }
+          event.currentTarget.value = '';
+        }}
+      />
     </div>
   );
 };
 
 export function RichTextEditor({ initialContent, onChange }: RichTextEditorProps) {
   const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number } | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const editorRef = useRef<any>(null);
+
+  const insertImageFiles = useCallback(async (inputFiles: FileList | File[]) => {
+    const activeEditor = editorRef.current;
+    if (!activeEditor) return;
+
+    const files = Array.from(inputFiles).filter(file => file.type.startsWith('image/'));
+    if (!files.length) return;
+
+    for (const file of files) {
+      const src = await readFileAsDataUrl(file);
+      activeEditor
+        .chain()
+        .focus()
+        .insertContent([
+          {
+            type: 'floatingImage',
+            attrs: {
+              src,
+              alt: file.name,
+              title: file.name,
+              width: 56,
+              layout: 'inline',
+            },
+          },
+          {
+            type: 'paragraph',
+          },
+        ])
+        .run();
+    }
+  }, []);
 
   React.useEffect(() => {
-    const handleClickDefault = () => setContextMenu(null);
-    document.addEventListener('click', handleClickDefault);
-    return () => document.removeEventListener('click', handleClickDefault);
+    const handlePointerDown = (event: PointerEvent) => {
+      if ((event.target as HTMLElement | null)?.closest('.context-menu')) {
+        return;
+      }
+      setContextMenu(null);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    return () => document.removeEventListener('pointerdown', handlePointerDown, true);
   }, []);
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    setContextMenu({ x: e.pageX, y: e.pageY });
+    const menuWidth = 220;
+    const menuHeight = 320;
+    const padding = 12;
+    const x = Math.min(e.clientX, window.innerWidth - menuWidth - padding);
+    const y = Math.min(e.clientY, window.innerHeight - menuHeight - padding);
+    setContextMenu({
+      x: Math.max(padding, x),
+      y: Math.max(padding, y),
+    });
   };
 
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [StarterKit, FloatingImage],
     content: initialContent,
+    onCreate: ({ editor }) => {
+      editorRef.current = editor;
+    },
     editorProps: {
       attributes: {
         class: 'prose prose-sm sm:prose-base max-w-none focus:outline-none min-h-[500px] p-6 tiptap-editor',
         spellcheck: 'false',
+      },
+      handlePaste: (_view, event) => {
+        const files = Array.from(event.clipboardData?.files || []).filter(file => file.type.startsWith('image/'));
+        if (!files.length) return false;
+        event.preventDefault();
+        void insertImageFiles(files);
+        return true;
+      },
+      handleDrop: (_view, event) => {
+        const files = Array.from(event.dataTransfer?.files || []).filter(file => file.type.startsWith('image/'));
+        if (!files.length) return false;
+        event.preventDefault();
+        void insertImageFiles(files);
+        return true;
       },
     },
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
     },
   });
+
+  useEffect(() => {
+    if (editor) {
+      editorRef.current = editor;
+    }
+  }, [editor]);
 
   useEffect(() => {
     if (editor && initialContent !== editor.getHTML() && !editor.isFocused) {
@@ -195,12 +293,12 @@ export function RichTextEditor({ initialContent, onChange }: RichTextEditorProps
 
   return (
     <div className="editor-shell flex flex-1 min-h-0 w-full flex-col relative" onContextMenu={handleContextMenu}>
-      <MenuBar editor={editor} />
+      <MenuBar editor={editor} onInsertImages={insertImageFiles} />
       <div className="flex-1 overflow-y-auto">
         <EditorContent editor={editor} />
       </div>
 
-      {contextMenu && (
+      {contextMenu && createPortal(
         <div
           className="context-menu fixed z-50 py-1 text-sm"
           style={{ left: contextMenu.x, top: contextMenu.y }}
@@ -232,6 +330,9 @@ export function RichTextEditor({ initialContent, onChange }: RichTextEditorProps
           <button className="context-menu-item" onClick={() => { editor?.chain().focus().toggleItalic().run(); }}>
             <Italic className="h-4 w-4" /> Corsivo
           </button>
+          <button className="context-menu-item" onClick={() => imageInputRef.current?.click()}>
+            <ImagePlus className="h-4 w-4" /> Inserisci immagine
+          </button>
           <button className="context-menu-item" onClick={() => { editor?.chain().focus().toggleHeading({ level: 1 }).run(); }}>
             <Heading1 className="h-4 w-4" /> Titolo 1
           </button>
@@ -239,7 +340,22 @@ export function RichTextEditor({ initialContent, onChange }: RichTextEditorProps
             <Heading2 className="h-4 w-4" /> Titolo 2
           </button>
         </div>
-      )}
+      , document.body)}
+
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={event => {
+          if (event.target.files?.length) {
+            void insertImageFiles(event.target.files);
+          }
+          event.currentTarget.value = '';
+          setContextMenu(null);
+        }}
+      />
     </div>
   );
 }

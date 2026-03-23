@@ -16,10 +16,11 @@ import {
   FolderOpen,
   Github,
   Key,
+  Moon,
   Play,
   Settings,
-  Sparkles,
   Square,
+  Sun,
   Trash2,
   UploadCloud,
   X,
@@ -31,8 +32,46 @@ import { initialProcessingState, processingReducer, type FileDescriptor, type Fi
 const LazyAudioPlayer = React.lazy(() => import('./AudioPlayer').then(module => ({ default: module.AudioPlayer })));
 const LazyRichTextEditor = React.lazy(() => import('./RichTextEditor').then(module => ({ default: module.RichTextEditor })));
 const QUEUE_STORAGE_KEY = 'el-sbobinator.queue.v1';
+const THEME_STORAGE_KEY = 'el-sbobinator.theme.v1';
 const SUPPORTED_FORMATS = ['MP3', 'M4A', 'WAV', 'MP4', 'MKV', 'WEBM', 'OGG', 'FLAC', 'AAC'];
 const GEMINI_KEY_PATTERN = /^AIza[0-9A-Za-z_-]{20,}$/;
+const EDITOR_IMAGE_ALLOWED_DATA_ATTRS = new Set(['data-editor-image', 'data-layout', 'data-align', 'data-width']);
+
+const normalizePreviewHtmlContent = (content: string) => {
+  const parsed = new DOMParser().parseFromString(`<body>${content || ''}</body>`, 'text/html');
+
+  parsed.body.querySelectorAll('*').forEach(element => {
+    const tag = element.tagName.toLowerCase();
+    const isEditorImageContainer = tag === 'div' && element.hasAttribute('data-editor-image');
+    const isEditorImageAsset = tag === 'img' && element.parentElement?.hasAttribute('data-editor-image');
+
+    element.removeAttribute('align');
+
+    if (!isEditorImageContainer && !isEditorImageAsset) {
+      element.removeAttribute('style');
+      element.removeAttribute('class');
+      Array.from(element.attributes)
+        .filter(attribute => attribute.name.startsWith('data-'))
+        .forEach(attribute => element.removeAttribute(attribute.name));
+      return;
+    }
+
+    if (isEditorImageContainer) {
+      Array.from(element.attributes)
+        .filter(attribute => attribute.name.startsWith('data-') && !EDITOR_IMAGE_ALLOWED_DATA_ATTRS.has(attribute.name))
+        .forEach(attribute => element.removeAttribute(attribute.name));
+      element.removeAttribute('class');
+      return;
+    }
+
+    element.removeAttribute('class');
+    Array.from(element.attributes)
+      .filter(attribute => attribute.name.startsWith('data-'))
+      .forEach(attribute => element.removeAttribute(attribute.name));
+  });
+
+  return parsed.body.innerHTML;
+};
 
 declare global {
   interface Window {
@@ -68,6 +107,7 @@ export default function App() {
     `[${new Date().toLocaleTimeString()}] ${APP_NAME} avviato.`,
   ]);
   const [showApiKeys, setShowApiKeys] = useState(false);
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>('dark');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const consoleEndRef = useRef<HTMLDivElement>(null);
@@ -81,6 +121,33 @@ export default function App() {
   useEffect(() => {
     filesRef.current = files;
   }, [files]);
+
+  useEffect(() => {
+    try {
+      const persistedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+      if (persistedTheme === 'light' || persistedTheme === 'dark') {
+        setThemeMode(persistedTheme);
+        return;
+      }
+    } catch (_) {}
+
+    try {
+      setThemeMode(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    } catch (_) {
+      setThemeMode('dark');
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      document.documentElement.dataset.theme = themeMode;
+      document.documentElement.style.colorScheme = themeMode;
+    } catch (_) {}
+
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+    } catch (_) {}
+  }, [themeMode]);
 
   useEffect(() => {
     if (hasRestoredQueueRef.current) return;
@@ -140,7 +207,6 @@ export default function App() {
       setApiReady(true);
       appendConsole('Connesso a Python.');
       try {
-        await window.pywebview.api?.show_window?.();
         const cfg = await window.pywebview.api?.load_settings?.();
         if (cfg?.api_key) setApiKey(cfg.api_key);
         if (cfg?.fallback_keys?.length) setFallbackKeys(cfg.fallback_keys.join('\n'));
@@ -537,10 +603,7 @@ export default function App() {
           // Extract only the body content to prevent internal <style> blocks from infecting the global React UI
           const bodyMatch = res.content.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
           const extractedContent = bodyMatch ? bodyMatch[1] : res.content.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-          const safeContent = extractedContent
-            .replace(/\sstyle=(['"])[\s\S]*?\1/gi, '')
-            .replace(/\sclass=(['"])[\s\S]*?\1/gi, '')
-            .replace(/\sdata-[\w-]+=(['"])[\s\S]*?\1/gi, '');
+          const safeContent = normalizePreviewHtmlContent(extractedContent);
           
           setPreviewContent(safeContent);
           setEditedContent(safeContent);
@@ -583,7 +646,7 @@ export default function App() {
     setAutosaveStatus('saving');
     const timeoutId = window.setTimeout(async () => {
       if (!window.pywebview?.api?.save_html_content) return;
-      const contentToSave = editedContent;
+      const contentToSave = normalizePreviewHtmlContent(editedContent);
       const res = await window.pywebview.api.save_html_content(previewPath, contentToSave);
       if (res.ok) {
         lastPersistedPreviewRef.current = contentToSave;
@@ -654,6 +717,14 @@ export default function App() {
               <span className={`inline-flex h-2.5 w-2.5 rounded-full ${appState === 'processing' ? 'animate-pulse' : ''}`} style={{ background: !apiReady ? 'var(--warning-bg)' : hasApiKey ? 'var(--success-bg)' : 'var(--text-faint)' }} />
               {!apiReady ? 'Bridge in avvio' : hasApiKey ? 'API pronta' : 'Configura API'}
             </span>
+            <button
+              onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
+              className="icon-button"
+              aria-label={themeMode === 'dark' ? 'Attiva tema chiaro' : 'Attiva tema scuro'}
+              title={themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro'}
+            >
+              {themeMode === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
             <button onClick={() => setIsSettingsOpen(true)} className="icon-button" aria-label="Apri impostazioni">
               <Settings className="w-5 h-5" />
             </button>
@@ -972,7 +1043,7 @@ export default function App() {
       <footer className="max-w-6xl mx-auto w-full px-5 sm:px-6 pb-8 pt-2 flex items-center justify-center gap-3 text-sm shrink-0" style={{ color: 'var(--text-muted)' }}>
         <a 
           href="#"
-          onClick={(e) => { e.preventDefault(); window.pywebview?.api?.open_file('https://github.com/vimuw'); }}
+          onClick={(e) => { e.preventDefault(); window.pywebview?.api?.open_file('https://github.com/vimuw/Sbobby'); }}
           className="font-medium transition-colors hover:opacity-100 opacity-70 inline-flex items-center gap-2"
         >
           <Github className="w-4 h-4" />
@@ -1172,8 +1243,8 @@ export default function App() {
                     <button
                       onClick={runEnvironmentValidation}
                       disabled={isValidatingEnvironment}
-                      className="px-3 py-2 text-xs font-medium rounded-lg transition-colors"
-                      style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border-default)' }}
+                      className="premium-button-secondary compact-button px-3 py-1.5 text-[11px] rounded-[13px]"
+                      style={{ background: 'rgba(255,255,255,0.02)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
                     >
                       {isValidatingEnvironment ? 'Verifica...' : 'Verifica ambiente'}
                     </button>
@@ -1205,21 +1276,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Loading Splash â€” uses CSS vars for theme */}
-      <div style={{
-        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999,
-        background: 'var(--splash-bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        transition: 'opacity 0.4s ease, visibility 0.4s ease',
-        opacity: apiReady ? 0 : 1, visibility: apiReady ? 'hidden' as const : 'visible' as const, pointerEvents: apiReady ? 'none' as const : 'auto' as const,
-      }}>
-        <div style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(135deg, #6366f1, #9333ea)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 32px rgba(99,102,241,0.25)', marginBottom: 24, animation: 'splash-glow 2s ease-in-out infinite' }}>
-          <Sparkles style={{ width: 28, height: 28, color: 'white' }} />
-        </div>
-        <h2 style={{ fontSize: 22, fontWeight: 600, ...titleGradient, marginBottom: 8 }}>{APP_NAME}</h2>
-        <p style={{ fontSize: 14, color: 'var(--splash-sub)', marginBottom: 32 }}>Caricamento in corso...</p>
-        <div style={{ width: 24, height: 24, border: '2px solid rgba(99,102,241,0.15)', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'splash-spin 0.8s linear infinite' }} />
-        <p style={{ fontSize: 12, color: 'var(--splash-hint)', marginTop: 24 }}>L'app sarà pronta tra pochi secondi</p>
-      </div>
       {/* Preview Modal */}
       <AnimatePresence>
         {previewContent !== null && (
@@ -1249,10 +1305,11 @@ export default function App() {
                   </span>
                   <button
                     onClick={async () => {
+                      const normalizedHtml = normalizePreviewHtmlContent(editedContent);
                       const temp = document.createElement("div");
-                      temp.innerHTML = editedContent;
+                      temp.innerHTML = normalizedHtml;
                       try {
-                        const htmlBlob = new Blob([editedContent], { type: 'text/html' });
+                        const htmlBlob = new Blob([normalizedHtml], { type: 'text/html' });
                         const textBlob = new Blob([temp.textContent || temp.innerText || ""], { type: 'text/plain' });
                         const data = [new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })];
                         await navigator.clipboard.write(data);
@@ -1306,10 +1363,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <style>{`
-        @keyframes splash-glow { 0%, 100% { box-shadow: 0 8px 32px rgba(99,102,241,0.25); } 50% { box-shadow: 0 8px 48px rgba(99,102,241,0.4); } }
-        @keyframes splash-spin { to { transform: rotate(360deg); } }
-      `}</style>
     </div>
   );
 }

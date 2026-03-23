@@ -42,7 +42,6 @@ export interface BridgeCallbacks {
 }
 
 export interface PywebviewApi {
-  show_window?: () => Promise<void>;
   load_settings?: () => Promise<{ api_key?: string; fallback_keys?: string[] }>;
   save_settings?: (apiKey: string, fallbackKeys: string[]) => Promise<{ ok: boolean; error?: string }>;
   ask_files?: () => Promise<FileDescriptor[]>;
