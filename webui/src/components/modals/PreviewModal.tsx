@@ -61,10 +61,20 @@ export function PreviewModal({
             className="modal-card w-full max-w-5xl max-h-[88vh] flex flex-col overflow-hidden"
           >
             <div className="px-4 py-4 sm:px-5 flex items-center justify-between gap-3 border-b shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
-              <h3 className="font-semibold text-lg flex items-center gap-2 truncate min-w-0" style={{ color: 'var(--text-primary)' }}>
-                <FileText className="w-5 h-5 shrink-0" style={{ color: 'var(--text-muted)' }} />
-                <span className="truncate">Anteprima: {previewTitle}</span>
-              </h3>
+              <div className="flex items-center gap-2 min-w-0">
+                <h3 className="font-semibold text-lg flex items-center gap-2 truncate min-w-0" style={{ color: 'var(--text-primary)' }}>
+                  <FileText className="w-5 h-5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+                  <span className="truncate">Anteprima: {previewTitle}</span>
+                </h3>
+                <button
+                  onClick={() => setIsTocOpen(v => !v)}
+                  className="icon-button h-8 w-8 rounded-[11px] shrink-0"
+                  style={isTocOpen ? { borderColor: 'var(--accent-ring)', color: 'var(--accent-text)' } : { color: 'var(--text-muted)' }}
+                  title={isTocOpen ? 'Nascondi indice' : 'Mostra indice capitoli'}
+                >
+                  <BookOpen className="w-4 h-4" />
+                </button>
+              </div>
               <div className="flex gap-2 shrink-0 flex-wrap justify-end">
                 <span
                   className="inline-flex h-11 items-center rounded-[14px] px-3 text-sm font-medium"
@@ -86,14 +96,6 @@ export function PreviewModal({
                     {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   </button>
                 </div>
-                <button
-                  onClick={() => setIsTocOpen(v => !v)}
-                  className="icon-button h-11 w-11 rounded-[14px]"
-                  style={isTocOpen ? { borderColor: 'var(--accent-ring)', color: 'var(--accent-text)' } : { color: 'var(--text-muted)' }}
-                  title={isTocOpen ? 'Nascondi indice' : 'Mostra indice capitoli'}
-                >
-                  <BookOpen className="w-5 h-5" />
-                </button>
                 <button onClick={onClose} className="icon-button h-11 w-11 rounded-[14px]" style={{ color: 'var(--text-muted)' }}>
                   <X className="w-5 h-5" />
                 </button>
