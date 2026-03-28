@@ -14,18 +14,18 @@ import time
 
 
 class LocalMediaServer:
-    _server = None
-    _file_path = ""
-    _port = 0
+    _servers: dict[str, tuple[socketserver.ThreadingTCPServer, int]] = {}
 
     @classmethod
     def stream_url_for_file(cls, file_path: str) -> str:
         if not os.path.exists(file_path):
             raise FileNotFoundError("File audio non trovato.")
 
-        cls._file_path = file_path
-        if cls._port > 0:
-            return f"http://127.0.0.1:{cls._port}/stream.media?t={time.time()}"
+        if file_path in cls._servers:
+            _, port = cls._servers[file_path]
+            return f"http://127.0.0.1:{port}/stream.media?t={time.time()}"
+
+        served_path = file_path
 
         class MediaHandler(http.server.BaseHTTPRequestHandler):
             def end_headers(self):
@@ -34,7 +34,7 @@ class LocalMediaServer:
 
             def do_GET(self):
                 try:
-                    path = cls._file_path
+                    path = served_path
                     if not os.path.exists(path):
                         self.send_error(404, "File not found")
                         return
@@ -77,7 +77,7 @@ class LocalMediaServer:
                 pass
 
         server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), MediaHandler)
-        cls._port = server.server_address[1]
-        cls._server = server
+        port = server.server_address[1]
+        cls._servers[file_path] = (server, port)
         threading.Thread(target=server.serve_forever, daemon=True).start()
-        return f"http://127.0.0.1:{cls._port}/stream.media?t={time.time()}"
+        return f"http://127.0.0.1:{port}/stream.media?t={time.time()}"

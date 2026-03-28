@@ -25,7 +25,8 @@ import webview
 _ALLOWED_URL_PREFIXES: tuple[str, ...] = (
     "https://github.com/",
     "https://ko-fi.com/",
-    "https://go.microsoft.com/",
+    "https://go.microsoft.com/fwlink/p/?LinkId=2124703",
+    "https://aistudio.google.com/",
 )
 
 # Lazy imports to avoid loading customtkinter/pipeline at startup
@@ -56,8 +57,35 @@ from el_sbobinator.shared import (
     load_config,
     save_config,
     cleanup_orphan_temp_chunks,
+    get_session_storage_info,
+    cleanup_orphan_sessions,
 )
 from el_sbobinator.validation_service import validate_environment
+
+# ---------------------------------------------------------------------------
+# DnD helper
+# ---------------------------------------------------------------------------
+
+def _drain_dnd_paths(names: set[str]) -> list[tuple[str, str]]:
+    """Return and consume (basename, fullpath) pairs matching *names* from
+    pywebview's internal DnD state.
+
+    ``webview.dom._dnd_state`` is an undocumented private implementation
+    detail. All access is intentionally confined here so that a future
+    pywebview refactor breaks only this one function and always produces a
+    safe empty-list fallback.
+    """
+    try:
+        from webview.dom import _dnd_state  # noqa: PLC2701
+        paths: list = list(_dnd_state.get("paths", []))
+        matched, remaining = [], []
+        for item in paths:
+            (matched if item[0] in names else remaining).append(item)
+        _dnd_state["paths"] = remaining
+        return matched
+    except Exception:
+        return []
+
 
 # ---------------------------------------------------------------------------
 # PipelineAdapter: oggetto passato a pipeline.py come "app_instance"
@@ -135,8 +163,9 @@ class PipelineAdapter:
     def __init__(self, window: webview.Window | None, cancel_event: threading.Event):
         self.window = window
         self.cancel_event = cancel_event
+        self._lock = threading.Lock()
         self.file_temporanei: list[str] = []
-        self.is_running = False
+        self._is_running = False
 
         # Output info (set by pipeline)
         self.last_output_html: str | None = None
@@ -149,7 +178,22 @@ class PipelineAdapter:
         self._run_started_monotonic: float | None = None
         self._eta_ema_seconds: float | None = None
         self._step_times: dict = {}
+
+        # Pending UI-answer callbacks (written by pipeline thread, read by UI thread)
+        self._regenerate_callback = None
+        self._new_key_callback = None
+
         self._dispatcher = _BridgeDispatcher(lambda: self.window)
+
+    @property
+    def is_running(self) -> bool:
+        with self._lock:
+            return self._is_running
+
+    @is_running.setter
+    def is_running(self, value: bool) -> None:
+        with self._lock:
+            self._is_running = value
 
     # --- Methods called by pipeline.py's safe_* wrappers ---
 
@@ -215,36 +259,34 @@ class PipelineAdapter:
 
     def register_step_time(self, kind: str, seconds: float, done: int = None, total: int = None):
         # Store for internal ETA calculations and push to frontend
-        self._step_times.setdefault(kind, []).append(seconds)
+        with self._lock:
+            self._step_times.setdefault(kind, []).append(seconds)
         payload: StepTimePayload = {"kind": kind, "seconds": seconds, "done": done, "total": total}
         self._emit_js("registerStepTime", payload, batched=True)
 
     def ask_regenerate(self, filename: str, callback, mode: str = "resume"):
-        self._regenerate_callback = callback
+        with self._lock:
+            self._regenerate_callback = callback
         self._emit_js("askRegenerate", {"filename": filename, "mode": mode}, batched=False)
 
     def ask_new_api_key(self, callback):
-        self._new_key_callback = callback
+        with self._lock:
+            self._new_key_callback = callback
         self._emit_js("askNewKey", {}, batched=False)
 
     def answer_regenerate(self, regenerate: bool):
-        cb = getattr(self, "_regenerate_callback", None)
+        with self._lock:
+            cb = self._regenerate_callback
+            self._regenerate_callback = None
         if cb:
             cb({"regenerate": regenerate})
-            self._regenerate_callback = None
 
     def answer_new_key(self, key: str):
-        cb = getattr(self, "_new_key_callback", None)
+        with self._lock:
+            cb = self._new_key_callback
+            self._new_key_callback = None
         if cb:
             cb({"key": key})
-            self._new_key_callback = None
-
-    # --- Tkinter-compat stubs (for popup centering in pipeline.py) ---
-
-    def winfo_rootx(self): return 100
-    def winfo_rooty(self): return 100
-    def winfo_width(self): return 850
-    def winfo_height(self): return 800
 
     # --- Internal helper ---
 
@@ -295,7 +337,41 @@ class ElSbobinatorApi:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    def get_session_storage_info(self) -> dict:
+        """Return total size and count of session folders in SESSION_ROOT."""
+        try:
+            info = get_session_storage_info()
+            return {"ok": True, "total_bytes": info["total_bytes"], "total_sessions": info["total_sessions"]}
+        except Exception as e:
+            return {"ok": False, "error": str(e), "total_bytes": 0, "total_sessions": 0}
+
+    def cleanup_old_sessions(self, max_age_days: int = 30) -> dict:
+        """Delete session folders older than max_age_days days."""
+        try:
+            result = cleanup_orphan_sessions(max(1, int(max_age_days)))
+            return {"ok": True, "removed": result["removed"], "freed_bytes": result["freed_bytes"], "errors": result["errors"]}
+        except Exception as e:
+            return {"ok": False, "error": str(e), "removed": 0, "freed_bytes": 0, "errors": 0}
+
     # ---- File Selection ----
+
+    @staticmethod
+    def _build_file_descriptor(path: str) -> BridgeFileItem:
+        try:
+            size = os.path.getsize(path)
+        except Exception:
+            size = 0
+        try:
+            dur_val, _reason = probe_media_duration(path)
+            duration = dur_val if dur_val else 0
+        except Exception:
+            duration = 0
+        return {
+            "path": path,
+            "name": os.path.basename(path),
+            "size": size,
+            "duration": duration,
+        }
 
     def ask_files(self) -> list[BridgeFileItem]:
         """Open native file dialog and return file info."""
@@ -319,24 +395,7 @@ class ElSbobinatorApi:
             )
         if not file_paths:
             return []
-        result: list[BridgeFileItem] = []
-        for path in file_paths:
-            try:
-                size = os.path.getsize(path)
-            except Exception:
-                size = 0
-            try:
-                dur_val, _reason = probe_media_duration(path)
-                duration = dur_val if dur_val else 0
-            except Exception:
-                duration = 0
-            result.append({
-                "path": path,
-                "name": os.path.basename(path),
-                "size": size,
-                "duration": duration,
-            })
-        return result
+        return [self._build_file_descriptor(path) for path in file_paths]
 
     def ask_media_file(self) -> BridgeFileItem | None:
         """Open a native file dialog for a single media file."""
@@ -359,22 +418,7 @@ class ElSbobinatorApi:
             )
         if not file_paths:
             return None
-        path = file_paths[0]
-        try:
-            size = os.path.getsize(path)
-        except Exception:
-            size = 0
-        try:
-            dur_val, _reason = probe_media_duration(path)
-            duration = dur_val if dur_val else 0
-        except Exception:
-            duration = 0
-        return {
-            "path": path,
-            "name": os.path.basename(path),
-            "size": size,
-            "duration": duration,
-        }
+        return self._build_file_descriptor(file_paths[0])
 
     def check_path_exists(self, path: str) -> dict:
         """Check whether a persisted source path still exists on disk."""
@@ -388,33 +432,21 @@ class ElSbobinatorApi:
 
     def collect_dropped_files(self, names: list) -> dict:
         """Called by JS after postMessageWithAdditionalObjects('FilesDropped') to retrieve OS paths."""
-        try:
-            from webview.dom import _dnd_state
-        except Exception:
-            return {"ok": False}
-
-        name_set = set(str(n) for n in (names or []))
+        name_set = {str(n) for n in (names or [])}
         descriptors = []
-        remaining = []
-        for item in list(_dnd_state.get('paths', [])):
-            basename, fullpath = item
-            if basename in name_set:
-                ext = os.path.splitext(fullpath)[1].lower()
-                if ext in self._ALLOWED_DROP_EXTS and os.path.isfile(fullpath):
-                    try:
-                        size = os.path.getsize(fullpath)
-                    except Exception:
-                        size = 0
-                    descriptors.append({
-                        "path": fullpath,
-                        "name": basename,
-                        "size": size,
-                        "duration": 0,
-                    })
-            else:
-                remaining.append(item)
-        _dnd_state['paths'] = remaining
-
+        for basename, fullpath in _drain_dnd_paths(name_set):
+            ext = os.path.splitext(fullpath)[1].lower()
+            if ext in self._ALLOWED_DROP_EXTS and os.path.isfile(fullpath):
+                try:
+                    size = os.path.getsize(fullpath)
+                except Exception:
+                    size = 0
+                descriptors.append({
+                    "path": fullpath,
+                    "name": basename,
+                    "size": size,
+                    "duration": 0,
+                })
         if descriptors:
             self._adapter.emit("filesDropped", descriptors, batched=False)
         return {"ok": True}
@@ -427,14 +459,6 @@ class ElSbobinatorApi:
             return {"ok": False, "error": "File o API key mancanti"}
         if self._adapter.is_running:
             return {"ok": False, "error": "Elaborazione già in corso"}
-
-        # Validate API key
-        try:
-            from google import genai
-            test_client = genai.Client(api_key=api_key)
-            test_client.models.get(model=DEFAULT_MODEL)
-        except Exception as e:
-            return {"ok": False, "error": f"API Key non valida: {e}"}
 
         # Save config
         try:
@@ -587,6 +611,10 @@ class ElSbobinatorApi:
 
     def read_html_content(self, path: str) -> dict:
         """Legge ed estrae il contenuto di un file HTML per l'anteprima."""
+        if not isinstance(path, str) or not path.lower().endswith(".html"):
+            return {"ok": False, "error": "Path non valido: deve essere un file .html."}
+        if not os.path.isfile(path):
+            return {"ok": False, "error": "File non trovato."}
         try:
             content = read_html_file_content(path)
             return {"ok": True, "content": content}
@@ -615,10 +643,17 @@ class ElSbobinatorApi:
                 save_filename=filename,
                 file_types=('Word Document (*.docx)', 'All files (*.*)')
             )
-            if not save_path or len(save_path) == 0:
+            # Gestisci sia lista che stringa (pywebview può restituire entrambi)
+            if not save_path:
                 return {"ok": False, "error": "Annullato dall'utente"}
+            if isinstance(save_path, list):
+                if len(save_path) == 0:
+                    return {"ok": False, "error": "Annullato dall'utente"}
+                selected_path = save_path[0]
+            else:
+                selected_path = save_path  # È già una stringa
 
-            path = export_doc_html(save_path[0], docx_html)
+            path = export_doc_html(os.path.normpath(selected_path), docx_html)
             return {"ok": True, "path": path}
         except Exception as e:
             return {"ok": False, "error": str(e)}
@@ -639,10 +674,13 @@ class ElSbobinatorApi:
         except Exception as e:
             # Fallback a legacy OS script
             if sys.platform == "darwin":
+                import shlex
                 import subprocess
-                safe_msg = (message or "").replace('\\', '\\\\').replace('"', '\\"')
-                safe_title = (title or "").replace('\\', '\\\\').replace('"', '\\"')
-                subprocess.Popen(['osascript', '-e', f'display notification "{safe_msg}" with title "{safe_title}"'])
+                script = (
+                    f"display notification {shlex.quote(str(message or ''))}"
+                    f" with title {shlex.quote(str(title or ''))}"
+                )
+                subprocess.Popen(['osascript', '-e', script])
                 return {"ok": True}
             return {"ok": False, "error": str(e)}
 
@@ -863,6 +901,28 @@ def main():
         "El Sbobinator", "webview_cache"
     )
     os.makedirs(storage_dir, exist_ok=True)
+
+    # Auto cache-bust: if dist/index.html was rebuilt, clear WebView2 HTTP cache
+    try:
+        import shutil
+        mtime_file = os.path.join(storage_dir, ".build_mtime")
+        current_mtime = str(os.path.getmtime(dist_path))
+        stored_mtime = ""
+        if os.path.exists(mtime_file):
+            with open(mtime_file, "r", encoding="utf-8") as _f:
+                stored_mtime = _f.read().strip()
+        if stored_mtime != current_mtime:
+            cache_subdir = os.path.join(storage_dir, "EBWebView")
+            if os.path.exists(cache_subdir):
+                try:
+                    shutil.rmtree(cache_subdir)
+                    print("[*] Cache WebView2 svuotata (nuova build rilevata).")
+                except Exception as _e:
+                    print(f"[!] Impossibile svuotare cache WebView2: {_e}")
+            with open(mtime_file, "w", encoding="utf-8") as _f:
+                _f.write(current_mtime)
+    except Exception:
+        pass
 
     # Center the window on screen
     win_w, win_h = 900, 820

@@ -10,4 +10,18 @@ extend-exclude = [
 ]
 
 [tool.ruff.lint]
-select = ["E9", "F63", "F7", "F82"]
+select = [
+    "E9",   # syntax errors
+    "F63",  # invalid literals / assert
+    "F7",   # statement errors (return outside function, etc.)
+    "F82",  # undefined names
+    "E711", # comparison to None via == / !=
+    "E712", # comparison to True/False via == / !=
+    "E721", # type comparison — prefer isinstance()
+    "E722", # bare except:
+    "F841", # local variable assigned but never used
+    "C90",  # McCabe cyclomatic complexity
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 20

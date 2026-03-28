@@ -7,11 +7,13 @@ che vengono usati sia dalla pipeline che dalla UI.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import os
 import platform
 import re
+import shutil
 import tempfile
 import time
 from datetime import datetime
@@ -42,6 +44,8 @@ __all__ = [
     "PROMPT_SISTEMA",
     "PROMPT_REVISIONE",
     "PROMPT_REVISIONE_CONFINE",
+    "get_session_storage_info",
+    "cleanup_orphan_sessions",
 ]
 
 _KEYRING_SERVICE = "El Sbobinator"
@@ -193,6 +197,16 @@ CONFIG_FILE = _get_config_file_path(USER_HOME)
 LEGACY_CONFIG_FILE = os.path.join(USER_HOME, ".el_sbobinator_config.json")
 
 
+@functools.lru_cache(maxsize=1)
+def _dpapi_make_blob_class(ctypes_mod, wintypes_mod):
+    class DATA_BLOB(ctypes_mod.Structure):
+        _fields_ = [
+            ("cbData", wintypes_mod.DWORD),
+            ("pbData", ctypes_mod.POINTER(ctypes_mod.c_byte)),
+        ]
+    return DATA_BLOB
+
+
 def _dpapi_protect_text_windows(text: str) -> str:
     """
     Best-effort encryption for secrets on Windows using DPAPI (CryptProtectData).
@@ -205,11 +219,7 @@ def _dpapi_protect_text_windows(text: str) -> str:
         import ctypes
         from ctypes import wintypes
 
-        class DATA_BLOB(ctypes.Structure):
-            _fields_ = [
-                ("cbData", wintypes.DWORD),
-                ("pbData", ctypes.POINTER(ctypes.c_byte)),
-            ]
+        DATA_BLOB = _dpapi_make_blob_class(ctypes, wintypes)
 
         def _bytes_to_blob(data: bytes) -> DATA_BLOB:
             buf = ctypes.create_string_buffer(data)
@@ -273,11 +283,7 @@ def _dpapi_unprotect_text_windows(b64: str) -> str:
         import ctypes
         from ctypes import wintypes
 
-        class DATA_BLOB(ctypes.Structure):
-            _fields_ = [
-                ("cbData", wintypes.DWORD),
-                ("pbData", ctypes.POINTER(ctypes.c_byte)),
-            ]
+        DATA_BLOB = _dpapi_make_blob_class(ctypes, wintypes)
 
         def _bytes_to_blob(data: bytes) -> DATA_BLOB:
             buf = ctypes.create_string_buffer(data)
@@ -404,6 +410,25 @@ def load_config() -> dict:
                                     data["api_key"] = dec
                 except Exception:
                     pass
+                # Decrypt fallback keys on Windows.
+                try:
+                    if platform.system() == "Windows":
+                        protected_fk = str(data.get("fallback_keys_protected") or "").strip()
+                        if protected_fk:
+                            dec_fk = _dpapi_unprotect_text_windows(protected_fk)
+                            if dec_fk:
+                                data["fallback_keys"] = json.loads(dec_fk)
+                except Exception:
+                    pass
+                # Get fallback keys from keyring on macOS/Linux.
+                try:
+                    if platform.system() != "Windows":
+                        import keyring  # type: ignore
+                        fk_json = keyring.get_password(_KEYRING_SERVICE, "gemini_fallback_keys")
+                        if fk_json:
+                            data["fallback_keys"] = json.loads(fk_json)
+                except Exception:
+                    pass
                 # Best-effort migration forward.
                 if path == LEGACY_CONFIG_FILE and data.get("api_key"):
                     try:
@@ -423,12 +448,34 @@ def save_config(api_key: str, fallback_keys: list | None = None) -> None:
     if fallback_keys is not None:
         data["fallback_keys"] = [str(k or "").strip() for k in fallback_keys if str(k or "").strip()]
     else:
-        # Preserve existing fallback keys from current config.
+        # Preserve existing fallback keys without the full DPAPI/keyring overhead
+        # of load_config(). On Windows, read raw JSON and carry whatever stored
+        # form is already on disk verbatim (no decrypt+re-encrypt cycle needed).
+        # On macOS/Linux, do a targeted keyring lookup for fallback keys only.
         try:
-            existing = load_config()
-            fk = existing.get("fallback_keys")
-            if isinstance(fk, list) and fk:
-                data["fallback_keys"] = fk
+            if platform.system() == "Windows":
+                _raw: dict | None = None
+                for _p in (CONFIG_FILE, LEGACY_CONFIG_FILE):
+                    if os.path.exists(_p):
+                        try:
+                            with open(_p, "r", encoding="utf-8") as _f:
+                                _raw = json.load(_f)
+                        except Exception:
+                            pass
+                        break
+                if isinstance(_raw, dict):
+                    if _raw.get("fallback_keys_protected"):
+                        data["fallback_keys_protected"] = _raw["fallback_keys_protected"]
+                    elif isinstance(_raw.get("fallback_keys"), list) and _raw["fallback_keys"]:
+                        data["fallback_keys"] = _raw["fallback_keys"]
+            else:
+                try:
+                    import keyring as _kr  # type: ignore
+                    _fk_json = _kr.get_password(_KEYRING_SERVICE, "gemini_fallback_keys")
+                    if _fk_json:
+                        data["fallback_keys"] = json.loads(_fk_json)
+                except Exception:
+                    pass
         except Exception:
             pass
     # Store encrypted secret on Windows if possible (avoid plaintext on disk).
@@ -438,8 +485,10 @@ def save_config(api_key: str, fallback_keys: list | None = None) -> None:
             if protected:
                 data["api_key"] = ""
                 data["api_key_protected"] = protected
-    except Exception:
-        pass
+            else:
+                debug_log("dpapi: CryptProtectData failed; API key stored as plaintext in config")
+    except Exception as _dpapi_exc:
+        debug_log(f"dpapi: exception during protect — API key stored as plaintext in config: {_dpapi_exc}")
 
     # Store secret in OS keyring on macOS/Linux if available.
     try:
@@ -458,6 +507,26 @@ def save_config(api_key: str, fallback_keys: list | None = None) -> None:
                 data["use_keyring"] = True
     except Exception:
         pass
+    # Encrypt fallback keys (same mechanisms as primary key).
+    fk = data.get("fallback_keys")
+    if fk:
+        try:
+            if platform.system() == "Windows":
+                protected_fk = _dpapi_protect_text_windows(json.dumps(fk))
+                if protected_fk:
+                    data["fallback_keys"] = []
+                    data["fallback_keys_protected"] = protected_fk
+                else:
+                    debug_log("dpapi: CryptProtectData failed for fallback keys; stored as plaintext in config")
+        except Exception as _dpapi_fk_exc:
+            debug_log(f"dpapi: exception during protect for fallback keys — stored as plaintext in config: {_dpapi_fk_exc}")
+        try:
+            if platform.system() != "Windows":
+                import keyring  # type: ignore
+                keyring.set_password(_KEYRING_SERVICE, "gemini_fallback_keys", json.dumps(fk))
+                data["fallback_keys"] = []
+        except Exception:
+            pass
     try:
         os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
     except Exception:
@@ -540,14 +609,152 @@ def _file_fingerprint(path: str) -> dict:
     }
 
 
+def _partial_file_hash(path: str, max_bytes: int = 65536) -> str:
+    """
+    Calcola SHA256 dei primi max_bytes del file.
+    Usato per identificare file identici indipendentemente dal path.
+    Leggere solo i primi 64KB è veloce anche per file multi-gigabyte.
+    """
+    try:
+        hasher = hashlib.sha256()
+        with open(path, "rb") as f:
+            chunk = f.read(max_bytes)
+            hasher.update(chunk)
+        return hasher.hexdigest()
+    except Exception:
+        return ""
+
+
+_session_id_cache: dict[tuple, str] = {}
+
+
 def _session_id_for_file(path: str) -> str:
-    fp = _file_fingerprint(path)
-    blob = json.dumps(fp, sort_keys=True).encode("utf-8", errors="ignore")
-    return hashlib.sha256(blob).hexdigest()
+    """
+    Genera ID sessione basato su: size + mtime + hash parziale contenuto.
+    Rileva file spostati/ rinominati ma con stesso contenuto.
+    """
+    abs_path = os.path.abspath(path)
+    st = os.stat(abs_path)
+    size = int(getattr(st, "st_size", 0))
+    mtime = float(getattr(st, "st_mtime", 0.0))
+
+    cache_key = (abs_path, size, mtime)
+    _cached = _session_id_cache.get(cache_key)
+    if _cached is not None:
+        return _cached
+
+    content_hash = _partial_file_hash(abs_path)
+    blob = json.dumps({
+        "size": size,
+        "mtime": mtime,
+        "content_hash": content_hash,
+    }, sort_keys=True).encode("utf-8", errors="ignore")
+    result = hashlib.sha256(blob).hexdigest()
+    _session_id_cache[cache_key] = result
+    return result
 
 
 def _session_dir_for_file(path: str) -> str:
     return os.path.join(SESSION_ROOT, _session_id_for_file(path))
+
+
+def _folder_size(path: str) -> int:
+    """Recursively compute folder size in bytes. Best-effort: skips unreadable files."""
+    total = 0
+    try:
+        for dirpath, _, filenames in os.walk(path):
+            for fname in filenames:
+                try:
+                    total += os.path.getsize(os.path.join(dirpath, fname))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return total
+
+
+def _folder_newest_mtime(path: str) -> float:
+    """
+    Return the newest mtime of any file inside the folder (recursive).
+    Falls back to the directory mtime itself if no files found.
+    Cross-platform: on Windows, directory mtime is NOT updated when files inside
+    change, so scanning file mtimes is necessary for correctness.
+    """
+    newest = 0.0
+    try:
+        for dirpath, _, filenames in os.walk(path):
+            for fname in filenames:
+                try:
+                    mtime = os.path.getmtime(os.path.join(dirpath, fname))
+                    if mtime > newest:
+                        newest = mtime
+                except Exception:
+                    pass
+        if newest == 0.0:
+            try:
+                newest = os.path.getmtime(path)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return newest
+
+
+def get_session_storage_info() -> dict:
+    """
+    Return total size in bytes and count of session folders in SESSION_ROOT.
+    Safe to call even when SESSION_ROOT does not yet exist.
+    """
+    total_bytes = 0
+    total_sessions = 0
+    try:
+        if not os.path.isdir(SESSION_ROOT):
+            return {"total_bytes": 0, "total_sessions": 0}
+        for name in os.listdir(SESSION_ROOT):
+            session_dir = os.path.join(SESSION_ROOT, name)
+            if not os.path.isdir(session_dir):
+                continue
+            total_sessions += 1
+            total_bytes += _folder_size(session_dir)
+    except Exception:
+        pass
+    return {"total_bytes": total_bytes, "total_sessions": total_sessions}
+
+
+def cleanup_orphan_sessions(max_age_days: int = 30) -> dict:
+    """
+    Delete session folders in SESSION_ROOT whose newest file mtime is older
+    than max_age_days days.  Returns a summary dict with keys:
+      removed     – number of folders successfully deleted
+      freed_bytes – total bytes freed
+      errors      – number of folders that could not be deleted
+    Best-effort: individual folder errors do not abort the whole sweep.
+    """
+    removed = 0
+    freed_bytes = 0
+    errors = 0
+    try:
+        if not os.path.isdir(SESSION_ROOT):
+            return {"removed": 0, "freed_bytes": 0, "errors": 0}
+        now = time.time()
+        cutoff = now - max(1, int(max_age_days)) * 86400
+        for name in os.listdir(SESSION_ROOT):
+            session_dir = os.path.join(SESSION_ROOT, name)
+            if not os.path.isdir(session_dir):
+                continue
+            try:
+                newest_mtime = _folder_newest_mtime(session_dir)
+                if newest_mtime >= cutoff:
+                    continue
+                size = _folder_size(session_dir)
+                shutil.rmtree(session_dir)
+                removed += 1
+                freed_bytes += size
+            except Exception:
+                errors += 1
+    except Exception:
+        pass
+    return {"removed": removed, "freed_bytes": freed_bytes, "errors": errors}
 
 
 # ==========================================

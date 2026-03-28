@@ -39,8 +39,8 @@ class PipelineSessionHelpersTests(unittest.TestCase):
 
             self.assertEqual(len(restored.existing_chunks), 1)
             self.assertEqual(restored.start_sec, 30)
-            self.assertIn("Chunk 1 body", restored.testo_completo_sbobina)
-            self.assertEqual(restored.memoria_precedente, "Chunk 1 body")
+            self.assertIn("Chunk 1 body", restored.full_transcript)
+            self.assertEqual(restored.prev_memory, "Chunk 1 body")
 
     def test_record_step_metric_accumulates_elapsed_time(self):
         session = {}

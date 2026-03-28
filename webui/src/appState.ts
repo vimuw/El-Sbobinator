@@ -69,6 +69,12 @@ export type StepTimePayload = {
   total?: number | null;
 };
 
+export type StepMetricEntry = {
+  avgSeconds: number;
+  done: number;
+  total: number;
+};
+
 export type ProcessingState = {
   files: FileItem[];
   appState: AppStatus;
@@ -82,6 +88,11 @@ export type ProcessingState = {
     chunks: number;
     macro: number;
     boundary: number;
+  };
+  stepMetrics: {
+    chunks: StepMetricEntry | null;
+    macro: StepMetricEntry | null;
+    boundary: StepMetricEntry | null;
   };
 };
 
@@ -109,6 +120,7 @@ export const initialProcessingState: ProcessingState = {
   currentPhase: '',
   workTotals: { chunks: 0, macro: 0, boundary: 0 },
   workDone: { chunks: 0, macro: 0, boundary: 0 },
+  stepMetrics: { chunks: null, macro: null, boundary: null },
 };
 
 export function processingReducer(state: ProcessingState, action: ProcessingAction): ProcessingState {
@@ -165,6 +177,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         currentPhase: '',
         workTotals: action.data?.cancelled ? { chunks: 0, macro: 0, boundary: 0 } : state.workTotals,
         workDone: action.data?.cancelled ? { chunks: 0, macro: 0, boundary: 0 } : state.workDone,
+        stepMetrics: action.data?.cancelled ? { chunks: null, macro: null, boundary: null } : state.stepMetrics,
         files: action.data?.cancelled
           ? state.files.map(file =>
               file.status === 'processing'
@@ -190,13 +203,27 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
           [action.data.kind]: Number(action.data.done ?? 0),
         },
       };
-    case 'bridge/register_step_time':
-      return state;
+    case 'bridge/register_step_time': {
+      const { kind, seconds, done, total } = action.data;
+      const prev = state.stepMetrics[kind];
+      const doneVal = done ?? (prev ? prev.done + 1 : 1);
+      const totalVal = total ?? (prev?.total ?? 0);
+      const prevAvg = prev?.avgSeconds ?? seconds;
+      const newAvg = prev ? 0.4 * seconds + 0.6 * prevAvg : seconds;
+      return {
+        ...state,
+        stepMetrics: {
+          ...state.stepMetrics,
+          [kind]: { avgSeconds: newAvg, done: doneVal, total: totalVal },
+        },
+      };
+    }
     case 'bridge/set_current_file':
       return {
         ...state,
         appState: 'processing',
         currentPhase: '',
+        stepMetrics: { chunks: null, macro: null, boundary: null },
         files: state.files.map(file =>
           file.id === action.data.id
             ? { ...file, status: 'processing', progress: 0, phase: 1, phaseText: undefined, errorText: undefined }

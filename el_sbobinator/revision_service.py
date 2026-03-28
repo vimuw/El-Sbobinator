@@ -10,11 +10,15 @@ import re
 import time
 from typing import Callable
 
-from google import genai
 from google.genai import types
 
 from el_sbobinator.dedup_utils import local_macro_cleanup
-from el_sbobinator.generation_service import extract_response_text, sleep_with_cancel, try_rotate_key
+from el_sbobinator.generation_service import (
+    QuotaDailyLimitError,
+    extract_response_text,
+    retry_with_quota,
+    sleep_with_cancel,
+)
 from el_sbobinator.logging_utils import get_logger
 from el_sbobinator.shared import PROMPT_REVISIONE_CONFINE, _atomic_write_text
 
@@ -51,7 +55,7 @@ def process_macro_revision_phase(
     safe_set_effective_api_key: Callable[[str | None], None],
     cancelled: Callable[[], bool],
     fallback_keys: list[str],
-    richiedi_chiave_riserva: Callable[[], str | None],
+    request_fallback_key: Callable[[], str | None],
     is_empty_model_response_error: Callable[[str], bool],
     prompt_revisione: str,
     logger=None,
@@ -76,7 +80,8 @@ def process_macro_revision_phase(
         rev_path = os.path.join(phase2_revised_dir, f"rev_{index:03}.md")
         if os.path.exists(rev_path):
             try:
-                existing = open(rev_path, "r", encoding="utf-8").read().strip()
+                with open(rev_path, "r", encoding="utf-8") as _fh:
+                    existing = _fh.read().strip()
             except Exception:
                 existing = ""
             if existing:
@@ -100,79 +105,54 @@ def process_macro_revision_phase(
         step_t0 = time.monotonic()
         print(f"   -> Revisione Macro-blocco {index} di {macro_total}...")
         success = False
-        attempts = 0
-        while attempts < 4:
-            try:
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=[block_for_ai, prompt_revisione],
-                    config=types.GenerateContentConfig(temperature=0.1),
-                )
-                current_text = extract_response_text(response)
-                if not current_text:
-                    raise RuntimeError("Risposta vuota dal modello in revisione.")
 
-                revised_text += f"\n\n{current_text}\n\n"
-                _atomic_write_text(rev_path, current_text + "\n")
-                print(f"   [autosave] Revisione salvata: {os.path.basename(rev_path)}")
+        def _call(current_client):
+            response = current_client.models.generate_content(
+                model=model_name,
+                contents=[block_for_ai, prompt_revisione],
+                config=types.GenerateContentConfig(temperature=0.1),
+            )
+            current_text = extract_response_text(response)
+            if not current_text:
+                raise RuntimeError("Risposta vuota dal modello in revisione.")
+            return current_text
 
-                revised_done += 1
-                session["stage"] = "phase2"
-                session.setdefault("phase2", {})
-                session["phase2"]["revised_done"] = int(revised_done)
-                session["last_error"] = None
-                save_session()
+        try:
+            client, current_text = retry_with_quota(
+                _call,
+                client=client,
+                fallback_keys=fallback_keys,
+                model_name=model_name,
+                cancelled=cancelled,
+                safe_phase=safe_phase,
+                safe_set_effective_api_key=safe_set_effective_api_key,
+                request_fallback_key=request_fallback_key,
+                retry_sleep_seconds=20.0,
+                logger=log,
+            )
+            if current_text is None:
+                return client, revised_text
+            revised_text += f"\n\n{current_text}\n\n"
+            _atomic_write_text(rev_path, current_text + "\n")
+            print(f"   [autosave] Revisione salvata: {os.path.basename(rev_path)}")
 
-                success = True
-                safe_progress(0.7 + 0.2 * (revised_done / max(1, macro_total)))
-                safe_register_step_time("macro", max(0.0, time.monotonic() - float(step_t0)), done=revised_done, total=macro_total)
-                break
-            except Exception as exc:
-                error = str(exc).lower()
-                if "429" in error or "resource_exhausted" in error or "quota" in error:
-                    is_daily_limit = "per day" in error or "quota_exceeded" in error or "daily" in error or ("429" in error and "minute" not in error and "rpm" not in error)
-                    if not is_daily_limit and attempts < 3:
-                        print("      [Rilevato limite temporaneo. Attesa di 65s per il reset quota al minuto...]")
-                        if not sleep_with_cancel(cancelled, 65):
-                            print("   [*] Operazione annullata dall'utente.")
-                            return client, revised_text
-                        attempts += 1
-                        continue
+            revised_done += 1
+            session["stage"] = "phase2"
+            session.setdefault("phase2", {})
+            session["phase2"]["revised_done"] = int(revised_done)
+            session["last_error"] = None
+            save_session()
 
-                    print("\n⛔ LIMITE GIORNALIERO RAGGIUNTO durante la revisione!")
-                    client, rotated, rotated_key = try_rotate_key(client, fallback_keys, model_name, logger=log)
-                    if rotated:
-                        safe_set_effective_api_key(rotated_key)
-                        print("   Ripresa automatica della revisione...")
-                        attempts = 0
-                        continue
-
-                    nuova_api = richiedi_chiave_riserva()
-                    if nuova_api and nuova_api.strip():
-                        try:
-                            test_client = genai.Client(api_key=nuova_api.strip())
-                            test_client.models.get(model=model_name)
-                            client = test_client
-                            safe_set_effective_api_key(nuova_api.strip())
-                            print("   ✅ Nuova API Key valida! Ripresa automatica della revisione...")
-                            attempts = 0
-                            continue
-                        except Exception as err:
-                            print(f"   [!] Chiave non valida fornita: {err}")
-
-                    print("   Interruzione: progressi salvati. Potrai riprendere più tardi.")
-                    session["last_error"] = "quota_daily_limit_phase2"
-                    save_session()
-                    return client, revised_text
-
-                if is_empty_model_response_error(str(exc)):
-                    print("      [Risposta vuota/filtrata dal modello in revisione. Riprovo in 20 secondi...]")
-                else:
-                    print("      [Server occupati o errore. Riprovo in 20 secondi...]")
-                if not sleep_with_cancel(cancelled, 20):
-                    print("   [*] Operazione annullata dall'utente.")
-                    return client, revised_text
-                attempts += 1
+            success = True
+            safe_progress(0.7 + 0.2 * (revised_done / max(1, macro_total)))
+            safe_register_step_time("macro", max(0.0, time.monotonic() - float(step_t0)), done=revised_done, total=macro_total)
+        except QuotaDailyLimitError:
+            print("   Interruzione: progressi salvati. Potrai riprendere più tardi.")
+            session["last_error"] = "quota_daily_limit_phase2"
+            save_session()
+            return client, revised_text
+        except Exception:
+            pass
 
         if not success:
             print(f"   [!] Errore prolungato nella revisione. Salvo il blocco {index} così com'è per evitare perdite di dati.")
@@ -211,7 +191,7 @@ def process_boundary_revision_phase(
     safe_set_effective_api_key: Callable[[str | None], None],
     cancelled: Callable[[], bool],
     fallback_keys: list[str],
-    richiedi_chiave_riserva: Callable[[], str | None],
+    request_fallback_key: Callable[[], str | None],
     logger=None,
 ) -> object:
     log = logger or get_logger("el_sbobinator.revision", stage="boundary")
@@ -355,80 +335,58 @@ def process_boundary_revision_phase(
         payload = "FINE BLOCCO N:\n" + tail + "\n\n<<<EL_SBOBINATOR_SPLIT>>>\n\nINIZIO BLOCCO N+1:\n" + head
         print(f"   -> Confine {pair_idx}/{pairs_total}: sovrapposizione sospetta (sim={similarity:.3f}). Fallback AI...")
 
-        attempts = 0
-        while attempts < 4:
-            try:
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=[payload, PROMPT_REVISIONE_CONFINE],
-                    config=types.GenerateContentConfig(temperature=0.1),
-                )
-                output = extract_response_text(response)
-                if "<<<EL_SBOBINATOR_SPLIT>>>" not in output:
-                    raise RuntimeError("Marker non trovato nell'output di revisione confine.")
+        def _call(current_client):
+            response = current_client.models.generate_content(
+                model=model_name,
+                contents=[payload, PROMPT_REVISIONE_CONFINE],
+                config=types.GenerateContentConfig(temperature=0.1),
+            )
+            output = extract_response_text(response)
+            if "<<<EL_SBOBINATOR_SPLIT>>>" not in output:
+                raise RuntimeError("Marker non trovato nell'output di revisione confine.")
 
-                new_left_tail, new_right_head = output.split("<<<EL_SBOBINATOR_SPLIT>>>", 1)
-                new_left_tail = new_left_tail.strip()
-                new_right_head = new_right_head.strip()
-                if not new_left_tail or not new_right_head:
-                    raise RuntimeError("Output confine vuoto.")
+            new_left_tail, new_right_head = output.split("<<<EL_SBOBINATOR_SPLIT>>>", 1)
+            new_left_tail = new_left_tail.strip()
+            new_right_head = new_right_head.strip()
+            if not new_left_tail or not new_right_head:
+                raise RuntimeError("Output confine vuoto.")
 
-                left_prefix = join_paragraphs(left_parts[:-tail_count])
-                right_suffix = join_paragraphs(right_parts[head_count:])
-                new_left = (left_prefix + "\n\n" + new_left_tail).strip() if left_prefix else new_left_tail
-                new_right = (new_right_head + "\n\n" + right_suffix).strip() if right_suffix else new_right_head
+            left_prefix = join_paragraphs(left_parts[:-tail_count])
+            right_suffix = join_paragraphs(right_parts[head_count:])
+            new_left = (left_prefix + "\n\n" + new_left_tail).strip() if left_prefix else new_left_tail
+            new_right = (new_right_head + "\n\n" + right_suffix).strip() if right_suffix else new_right_head
 
-                _atomic_write_text(os.path.join(phase2_revised_dir, f"rev_{pair_idx:03}.md"), new_left + "\n")
-                _atomic_write_text(os.path.join(phase2_revised_dir, f"rev_{pair_idx + 1:03}.md"), new_right + "\n")
-                _atomic_write_text(done_path, "")
-                session["boundary"]["next_pair"] = int(pair_idx + 1)
-                session["last_error"] = None
-                save_session()
-                safe_progress(0.9 + 0.08 * (pair_idx / max(1, pairs_total)))
-                safe_register_step_time("boundary", max(0.0, time.monotonic() - float(step_t0)), done=pair_idx, total=pairs_total)
-                break
-            except Exception as exc:
-                error = str(exc).lower()
-                if "429" in error or "resource_exhausted" in error or "quota" in error:
-                    is_daily_limit = "per day" in error or "quota_exceeded" in error or "daily" in error or ("429" in error and "minute" not in error and "rpm" not in error)
-                    if not is_daily_limit and attempts < 3:
-                        print("      [Limite temporaneo. Attesa di 65s...]")
-                        if not sleep_with_cancel(cancelled, 65):
-                            print("   [*] Operazione annullata dall'utente.")
-                            return client
-                        attempts += 1
-                        continue
+            _atomic_write_text(os.path.join(phase2_revised_dir, f"rev_{pair_idx:03}.md"), new_left + "\n")
+            _atomic_write_text(os.path.join(phase2_revised_dir, f"rev_{pair_idx + 1:03}.md"), new_right + "\n")
+            _atomic_write_text(done_path, "")
+            session["boundary"]["next_pair"] = int(pair_idx + 1)
+            session["last_error"] = None
+            save_session()
+            return True
 
-                    print("\n[!] LIMITE GIORNALIERO durante revisione confine!")
-                    client, rotated, rotated_key = try_rotate_key(client, fallback_keys, model_name, logger=log)
-                    if rotated:
-                        safe_set_effective_api_key(rotated_key)
-                        print("   Ripresa automatica...")
-                        attempts = 0
-                        continue
-
-                    nuova_api = richiedi_chiave_riserva()
-                    if nuova_api and nuova_api.strip():
-                        try:
-                            test_client = genai.Client(api_key=nuova_api.strip())
-                            test_client.models.get(model=model_name)
-                            client = test_client
-                            safe_set_effective_api_key(nuova_api.strip())
-                            print("   [*] Nuova API Key valida! Ripresa automatica...")
-                            attempts = 0
-                            continue
-                        except Exception as err:
-                            print(f"   [!] Chiave non valida fornita: {err}")
-
-                    print("[*] Interruzione: progressi salvati. Potrai riprendere più tardi.")
-                    session["last_error"] = "quota_daily_limit_boundary"
-                    save_session()
-                    return client
-
-                print("      [Errore confine. Riprovo in 20 secondi...]")
-                if not sleep_with_cancel(cancelled, 20):
-                    print("   [*] Operazione annullata dall'utente.")
-                    return client
-                attempts += 1
+        try:
+            client, result = retry_with_quota(
+                _call,
+                client=client,
+                fallback_keys=fallback_keys,
+                model_name=model_name,
+                cancelled=cancelled,
+                safe_phase=safe_phase,
+                safe_set_effective_api_key=safe_set_effective_api_key,
+                request_fallback_key=request_fallback_key,
+                retry_sleep_seconds=20.0,
+                logger=log,
+            )
+            if result is None:
+                return client
+            safe_progress(0.9 + 0.08 * (pair_idx / max(1, pairs_total)))
+            safe_register_step_time("boundary", max(0.0, time.monotonic() - float(step_t0)), done=pair_idx, total=pairs_total)
+        except QuotaDailyLimitError:
+            print("[*] Interruzione: progressi salvati. Potrai riprendere più tardi.")
+            session["last_error"] = "quota_daily_limit_boundary"
+            save_session()
+            return client
+        except Exception as exc:
+            print(f"      [Errore confine {pair_idx} dopo tutti i tentativi: {exc}]")
 
     return client

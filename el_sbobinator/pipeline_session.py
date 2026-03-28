@@ -75,8 +75,8 @@ class PipelineSessionContext:
 class Phase1RestoreState:
     existing_chunks: list[ChunkEntry]
     start_sec: int
-    testo_completo_sbobina: str
-    memoria_precedente: str
+    full_transcript: str
+    prev_memory: str
 
 
 def read_text_file(path: str) -> str:
@@ -217,24 +217,24 @@ def restore_phase1_progress(context: PipelineSessionContext, stage: str, step_se
             start_sec = max(start_sec, int(last_start + step_seconds))
         except Exception:
             pass
-        testo_completo_sbobina = load_phase1_text(context.phase1_chunks_dir)
+        full_transcript = load_phase1_text(context.phase1_chunks_dir)
         try:
             _, _, _, last_path = existing_chunks[-1]
-            memoria_precedente = read_text_file(last_path).strip()[-1000:]
+            prev_memory = read_text_file(last_path).strip()[-1000:]
         except Exception:
-            memoria_precedente = testo_completo_sbobina[-1000:]
+            prev_memory = full_transcript[-1000:]
     elif stage != "phase1":
-        testo_completo_sbobina = load_phase1_text(context.phase1_chunks_dir)
-        memoria_precedente = testo_completo_sbobina[-1000:]
+        full_transcript = load_phase1_text(context.phase1_chunks_dir)
+        prev_memory = full_transcript[-1000:]
     else:
-        testo_completo_sbobina = ""
-        memoria_precedente = str(session.get("phase1", {}).get("memoria_precedente", "") or "")
+        full_transcript = ""
+        prev_memory = str(session.get("phase1", {}).get("memoria_precedente", "") or "")
 
     return Phase1RestoreState(
         existing_chunks=existing_chunks,
         start_sec=start_sec,
-        testo_completo_sbobina=testo_completo_sbobina,
-        memoria_precedente=memoria_precedente,
+        full_transcript=full_transcript,
+        prev_memory=prev_memory,
     )
 
 

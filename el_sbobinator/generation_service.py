@@ -133,6 +133,103 @@ def request_new_api_key(runtime, cancelled: Callable[[], bool]):
     return result["new_key"]
 
 
+class QuotaDailyLimitError(Exception):
+    """Raised when daily API quota is exhausted and no fallback key is available."""
+
+
+class PermanentError(Exception):
+    """Raised for non-retryable failures (e.g. HTTP 400 / INVALID_ARGUMENT)."""
+
+
+def retry_with_quota(
+    callable_fn,
+    *,
+    client,
+    fallback_keys: list,
+    model_name: str,
+    cancelled,
+    safe_phase,
+    safe_set_effective_api_key,
+    request_fallback_key,
+    max_attempts: int = 4,
+    retry_sleep_seconds: float = 30.0,
+    rate_limit_sleep_seconds: float = 65.0,
+    on_key_rotated=None,
+    logger=None,
+):
+    """Execute callable_fn(client) with automatic quota/rate-limit retry and key rotation.
+
+    Returns (new_client, result) where result is the return value of callable_fn(client).
+    Raises QuotaDailyLimitError if daily quota is exhausted with no fallback.
+    Raises the original exception after max_attempts for non-quota errors.
+    callable_fn receives the current client as its sole argument.
+    on_key_rotated(new_client) is called after each successful key rotation.
+    """
+    log = logger or get_logger("el_sbobinator.generation")
+    attempts = 0
+    while attempts < max_attempts:
+        try:
+            result = callable_fn(client)
+            return client, result
+        except Exception as exc:
+            error = str(exc).lower()
+            if "429" in error or "resource_exhausted" in error or "quota" in error:
+                is_daily = (
+                    "per day" in error
+                    or "quota_exceeded" in error
+                    or "daily" in error
+                    or ("429" in error and "minute" not in error and "rpm" not in error)
+                )
+                if not is_daily and attempts < max_attempts - 1:
+                    print("      [Rilevato limite temporaneo. Attesa di 65s per il reset quota al minuto...]")
+                    safe_phase("⏳ Rate limit: attesa 65s...")
+                    if not sleep_with_cancel(cancelled, rate_limit_sleep_seconds):
+                        print("   [*] Operazione annullata dall'utente.")
+                        return client, None
+                    attempts += 1
+                    continue
+
+                print("\n⛔ LIMITE GIORNALIERO RAGGIUNTO!")
+                new_c, rotated, rotated_key = try_rotate_key(client, fallback_keys, model_name, logger=log)
+                if rotated:
+                    client = new_c
+                    safe_set_effective_api_key(rotated_key)
+                    if on_key_rotated is not None:
+                        on_key_rotated(client)
+                    attempts = 0
+                    continue
+
+                new_api_key = request_fallback_key()
+                if new_api_key and new_api_key.strip():
+                    try:
+                        test_c = genai.Client(api_key=new_api_key.strip())
+                        test_c.models.get(model=model_name)
+                        client = test_c
+                        safe_set_effective_api_key(new_api_key.strip())
+                        if on_key_rotated is not None:
+                            on_key_rotated(client)
+                        print("   ✅ Nuova API Key valida! Ripresa automatica...")
+                        attempts = 0
+                        continue
+                    except Exception as err:
+                        print(f"   [!] Chiave non valida fornita: {err}")
+
+                raise QuotaDailyLimitError(str(exc)) from exc
+
+            # Non-retryable: propagate immediately
+            if isinstance(exc, PermanentError):
+                raise
+
+            # Non-quota error: retry with sleep
+            attempts += 1
+            if attempts >= max_attempts:
+                raise
+            print(f"      [Errore: {exc}. Riprovo in {int(retry_sleep_seconds)}s...]")
+            if not sleep_with_cancel(cancelled, retry_sleep_seconds):
+                print("   [*] Operazione annullata dall'utente.")
+                return client, None
+
+
 def extract_response_text(response) -> str:
     raw = getattr(response, "text", None)
     if raw is None:

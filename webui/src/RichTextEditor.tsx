@@ -127,13 +127,36 @@ const readFileAsDataUrl = (file: File) =>
     reader.readAsDataURL(file);
   });
 
+const menuBarStateKey = (editor: any): string => [
+  editor.isActive('bold'),
+  editor.isActive('italic'),
+  editor.isActive('heading', { level: 1 }),
+  editor.isActive('heading', { level: 2 }),
+  editor.isActive('heading', { level: 3 }),
+  editor.isActive('heading', { level: 4 }),
+  editor.isActive('heading', { level: 5 }),
+  editor.isActive('bulletList'),
+  editor.isActive('orderedList'),
+  editor.isActive('blockquote'),
+  editor.can().undo(),
+  editor.can().redo(),
+  editor.getAttributes('textStyle').color ?? '',
+].join('|');
+
 const MenuBar = ({ editor, onInsertImages }: { editor: any; onInsertImages: (files: FileList | File[]) => void }) => {
   const [, forceUpdate] = React.useState({});
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const prevMenuKeyRef = useRef('');
 
   React.useEffect(() => {
     if (!editor) return;
-    const handleTransaction = () => forceUpdate({});
+    const handleTransaction = () => {
+      const key = menuBarStateKey(editor);
+      if (key !== prevMenuKeyRef.current) {
+        prevMenuKeyRef.current = key;
+        forceUpdate({});
+      }
+    };
     editor.on('transaction', handleTransaction);
     return () => { editor.off('transaction', handleTransaction); };
   }, [editor]);

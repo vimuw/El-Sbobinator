@@ -61,6 +61,8 @@ export interface PywebviewApi {
   export_docx?: (filename: string, docxHtml: string) => Promise<{ ok: boolean; error?: string }>;
   show_notification?: (title: string, message: string) => Promise<void>;
   validate_environment?: (apiKey?: string, checkApiKey?: boolean) => Promise<{ ok: boolean; result?: ValidationResult; error?: string }>;
+  get_session_storage_info?: () => Promise<{ ok: boolean; total_bytes?: number; total_sessions?: number; error?: string }>;
+  cleanup_old_sessions?: (maxAgeDays?: number) => Promise<{ ok: boolean; removed?: number; freed_bytes?: number; errors?: number; error?: string }>;
 }
 
 export function createBridge(options: {

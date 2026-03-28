@@ -7,18 +7,38 @@ from __future__ import annotations
 import os
 import sys
 
+from el_sbobinator.html_export import sanitize_html_basic
+
+
+_ALLOWED_OPEN_EXTENSIONS: frozenset[str] = frozenset({
+    ".html", ".htm", ".docx", ".doc", ".pdf", ".txt", ".md",
+})
+
 
 def open_path_with_default_app(path: str) -> None:
+    if not isinstance(path, str) or not path:
+        raise ValueError("Path non valido.")
+
+    real = os.path.realpath(os.path.abspath(path))
+
+    if not os.path.exists(real):
+        raise FileNotFoundError(f"Percorso non trovato: {path!r}")
+
+    if os.path.isfile(real):
+        ext = os.path.splitext(real)[1].lower()
+        if ext not in _ALLOWED_OPEN_EXTENSIONS:
+            raise ValueError(f"Tipo di file non consentito: {ext!r}")
+
     if sys.platform == "win32":
-        os.startfile(path)
+        os.startfile(real)
         return
 
     import subprocess
 
     if sys.platform == "darwin":
-        subprocess.Popen(["open", path])
+        subprocess.Popen(["open", real])
     else:
-        subprocess.Popen(["xdg-open", path])
+        subprocess.Popen(["xdg-open", real])
 
 
 def read_html_content(path: str) -> str:
@@ -35,7 +55,7 @@ def save_html_body_content(path: str, content: str) -> None:
     with open(path, "r", encoding="utf-8") as handle:
         original_html = handle.read()
 
-    body_inner = str(content or "")
+    body_inner = sanitize_html_basic(str(content or ""))
     html_lower = original_html.lower()
     body_open_end = html_lower.find("<body")
     body_close = -1
@@ -53,8 +73,10 @@ def save_html_body_content(path: str, content: str) -> None:
             f"<body>\n{body_inner}\n</body>\n</html>\n"
         )
 
-    with open(path, "w", encoding="utf-8") as handle:
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as handle:
         handle.write(updated_html)
+    os.replace(tmp_path, path)
 
 
 def export_doc_html(path: str, doc_html: str) -> str:

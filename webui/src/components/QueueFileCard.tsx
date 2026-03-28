@@ -1,0 +1,270 @@
+import { AnimatePresence, motion } from 'motion/react';
+import { AlertCircle, CheckCircle, ChevronDown, ChevronUp, Clock, ExternalLink, Eye, FileAudio, FolderOpen, Trash2 } from 'lucide-react';
+import type { AppStatus, FileItem } from '../appState';
+import { formatDuration, formatSize } from '../utils';
+
+interface QueueFileCardProps {
+  file: FileItem;
+  idx: number;
+  filesLength: number;
+  appState: AppStatus;
+  currentPhase?: string;
+  workDone: { chunks: number; macro: number; boundary: number };
+  workTotals: { chunks: number; macro: number; boundary: number };
+  etaLabel: string | null;
+  onRemove: (id: string) => void;
+  onMove: (id: string, direction: 'up' | 'down') => void;
+  onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string) => void;
+  onOpenFile: (path: string) => void;
+  onOpenDir: (path: string) => void;
+}
+
+function getProcessingDetails(phaseText?: string) {
+  const rawPhase = String(phaseText || '').trim();
+  if (!rawPhase) {
+    return { title: 'Preparazione in corso', chunk: '' };
+  }
+
+  const chunkMatch = rawPhase.match(/\(([^)]+)\)/);
+  const normalizedChunk = chunkMatch?.[1]
+    ? chunkMatch[1].replace(/chunk\s+(\d+)\/(\d+)/i, 'Chunk $1 di $2')
+    : '';
+
+  const phaseWithoutChunk = rawPhase.replace(/\s*\([^)]*\)\s*/g, '').trim();
+  const cleanedPhase = phaseWithoutChunk.replace(/^Fase\s*\d+\s*\/\s*\d+\s*:\s*/i, '').trim();
+  const capitalizedPhase = cleanedPhase ? `${cleanedPhase.charAt(0).toUpperCase()}${cleanedPhase.slice(1)}` : 'Elaborazione';
+
+  return {
+    title: `${capitalizedPhase} in corso`,
+    chunk: normalizedChunk,
+  };
+}
+
+export function QueueFileCard({
+  file, idx, filesLength, appState, currentPhase, workDone, workTotals, etaLabel,
+  onRemove, onMove, onPreview, onOpenFile, onOpenDir,
+}: QueueFileCardProps) {
+  const processingDetails = file.status === 'processing' ? getProcessingDetails(currentPhase) : null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, transition: { duration: 0.11, ease: 'easeIn' } }}
+      transition={{
+        opacity: { duration: 0.2, ease: 'easeOut' },
+        y: { type: 'spring', stiffness: 380, damping: 30, mass: 0.8 },
+      }}
+      className={`queue-card relative transition-colors ${file.status === 'processing' ? 'processing-card px-5 py-4' : 'p-5'}`}
+      style={{
+        border: `1px solid ${
+          file.status === 'processing'
+            ? 'var(--processing-ring)'
+            : file.status === 'done'
+              ? 'var(--success-ring)'
+              : file.status === 'error'
+                ? 'var(--error-ring)'
+                : 'var(--card-queued-border)'
+        }`,
+        background: file.status === 'processing'
+          ? 'linear-gradient(180deg, rgba(255,255,255,0.02), var(--processing-bg))'
+          : file.status === 'done'
+            ? 'linear-gradient(135deg, var(--success-subtle), rgba(255,255,255,0.02))'
+            : file.status === 'error'
+              ? 'linear-gradient(135deg, var(--error-subtle), rgba(255,255,255,0.02))'
+              : 'var(--card-queued-bg)',
+      }}
+    >
+      <div className="relative z-10 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 overflow-hidden flex-1">
+          <div
+            className={`${file.status === 'processing' ? 'w-11 h-11 rounded-[16px]' : 'w-12 h-12 rounded-[18px]'} flex items-center justify-center shrink-0`}
+            style={{
+              background: file.status === 'done'
+                ? 'var(--success-subtle)'
+                : file.status === 'processing'
+                  ? 'var(--processing-bg)'
+                  : file.status === 'error'
+                    ? 'var(--error-subtle)'
+                    : 'rgba(255,255,255,0.03)',
+              color: file.status === 'done'
+                ? 'var(--success-text)'
+                : file.status === 'processing'
+                  ? 'var(--processing-text)'
+                  : file.status === 'error'
+                    ? 'var(--error-text)'
+                    : 'var(--text-muted)',
+            }}
+          >
+            {file.status === 'done'
+              ? <CheckCircle className="w-5 h-5" />
+              : file.status === 'processing'
+                ? <Clock className="w-5 h-5 animate-pulse" />
+                : file.status === 'error'
+                  ? <AlertCircle className="w-5 h-5" />
+                  : <FileAudio className="w-5 h-5" />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <h4 className="text-base font-semibold truncate tracking-tight" style={{ color: 'var(--text-primary)' }}>{file.name}</h4>
+            <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+              <span>{formatSize(file.size)}</span>
+              {file.duration > 0 && (
+                <>
+                  <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
+                  <span>{formatDuration(file.duration)}</span>
+                </>
+              )}
+              {file.status === 'done' && (
+                <>
+                  <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
+                  <span style={{ color: 'var(--success-text)' }}>Completato</span>
+                </>
+              )}
+              {file.status === 'error' && (
+                <>
+                  <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
+                  <span style={{ color: 'var(--error-text)' }}>{file.errorText || 'Errore'}</span>
+                </>
+              )}
+            </div>
+            {file.status === 'processing' && processingDetails && (
+              <motion.div
+                layout="position"
+                className="mt-2 flex min-h-7 flex-wrap items-center gap-1.5"
+                transition={{ layout: { duration: 0.2, ease: [0.22, 1, 0.36, 1] } }}
+              >
+                <span className="helper-chip processing-chip processing-chip-compact">
+                  <span className="inline-flex h-2 w-2 rounded-full animate-pulse" style={{ background: 'var(--processing-dot)' }} />
+                  In elaborazione
+                </span>
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.span
+                    key={`processing-title-${processingDetails.title}`}
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.16, ease: 'easeOut' }}
+                    className="text-[0.96rem] font-semibold tracking-tight"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    {processingDetails.title}
+                  </motion.span>
+                </AnimatePresence>
+                <AnimatePresence mode="wait" initial={false}>
+                  {processingDetails.chunk && (
+                    <motion.span
+                      key={`processing-chunk-${processingDetails.chunk}`}
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.16, ease: 'easeOut' }}
+                      className="text-[11px] font-medium leading-none self-center"
+                      style={{ color: 'var(--processing-text)' }}
+                    >
+                      {processingDetails.chunk}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {file.status === 'done' && file.outputHtml && (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); onPreview(file.outputHtml!, file.name, file.path, file.id); }}
+                className="icon-button compact-icon-button"
+                style={{ color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.03)', borderColor: 'var(--border-default)' }}
+                title="Anteprima testo"
+              >
+                <Eye className="w-4 h-4" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onOpenFile(file.outputHtml!); }}
+                className="icon-button compact-icon-button"
+                style={{ color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.03)', borderColor: 'var(--border-default)' }}
+                title="Apri nel browser"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </button>
+              {file.outputDir && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onOpenDir(file.outputDir!); }}
+                  className="icon-button compact-icon-button"
+                  style={{ color: 'var(--text-muted)' }}
+                  title="Apri cartella"
+                >
+                  <FolderOpen className="w-4 h-4" />
+                </button>
+              )}
+            </>
+          )}
+          {appState !== 'processing' && (
+            <>
+              {file.status === 'queued' && (
+                <>
+                  <button
+                    onClick={() => onMove(file.id, 'up')}
+                    disabled={idx === 0}
+                    className="icon-button compact-icon-button disabled:opacity-30"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    <ChevronUp className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => onMove(file.id, 'down')}
+                    disabled={idx === filesLength - 1}
+                    className="icon-button compact-icon-button disabled:opacity-30"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+              <button
+                onClick={() => onRemove(file.id)}
+                className="icon-button compact-icon-button"
+                style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {file.status === 'processing' && (
+        <div className="relative z-10 mt-3">
+          <div
+            className="flex items-center justify-between gap-3 mb-1.5 text-[10px] font-medium uppercase tracking-[0.14em]"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            <span>{processingDetails?.title ?? 'Generazione sbobina'}</span>
+            <span style={{ color: 'var(--text-primary)' }}>{file.progress}%</span>
+          </div>
+          <div className="processing-progress h-2 w-full rounded-full overflow-hidden" style={{ background: 'var(--progress-bg)' }}>
+            <motion.div
+              className="processing-progress-fill h-full rounded-full"
+              style={{ background: 'linear-gradient(90deg, var(--accent-gradient-start), var(--accent-gradient-end))' }}
+              initial={{ width: 0 }}
+              animate={{ width: `${file.progress}%` }}
+              transition={{ ease: 'linear', duration: 0.3 }}
+            />
+          </div>
+          <div className="flex justify-between mt-1.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+            <span>
+              {processingDetails?.chunk
+                ? processingDetails.chunk
+                : workTotals.chunks > 0
+                  ? `Chunk ${workDone.chunks}/${workTotals.chunks}`
+                  : 'Avanzamento attivo'}
+            </span>
+            {etaLabel && <span style={{ color: 'var(--text-secondary)' }}>ETA {etaLabel}</span>}
+          </div>
+        </div>
+      )}
+    </motion.div>
+  );
+}
