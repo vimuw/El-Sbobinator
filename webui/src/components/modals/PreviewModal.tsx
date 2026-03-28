@@ -1,6 +1,6 @@
-import React, { Suspense, useState, useCallback, useRef } from 'react';
+import React, { Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { BookOpen, Check, Copy, FileText, X } from 'lucide-react';
+import { Check, Copy, FileText, X } from 'lucide-react';
 
 const LazyAudioPlayer = React.lazy(() => import('../../AudioPlayer').then(module => ({ default: module.AudioPlayer })));
 const LazyRichTextEditor = React.lazy(() => import('../../RichTextEditor').then(module => ({ default: module.RichTextEditor })));
@@ -30,18 +30,6 @@ export function PreviewModal({
   previewInitAudio, previewInitScrollTop,
   onAudioStateChange, onScrollTopChange,
 }: PreviewModalProps) {
-  const [headings, setHeadings] = useState<{ id: string; level: number; text: string }[]>([]);
-  const [isTocOpen, setIsTocOpen] = useState(false);
-  const scrollToHeadingRef = useRef<((index: number) => void) | null>(null);
-
-  const handleHeadingsChange = useCallback((
-    newHeadings: { id: string; level: number; text: string }[],
-    scrollTo: (index: number) => void
-  ) => {
-    setHeadings(newHeadings);
-    scrollToHeadingRef.current = scrollTo;
-  }, []);
-
   return (
     <AnimatePresence>
       {previewContent !== null && (
@@ -61,20 +49,10 @@ export function PreviewModal({
             className="modal-card w-full max-w-5xl max-h-[88vh] flex flex-col overflow-hidden"
           >
             <div className="px-4 py-4 sm:px-5 flex items-center justify-between gap-3 border-b shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
-              <div className="flex items-center gap-2 min-w-0">
-                <h3 className="font-semibold text-lg flex items-center gap-2 truncate min-w-0" style={{ color: 'var(--text-primary)' }}>
-                  <FileText className="w-5 h-5 shrink-0" style={{ color: 'var(--text-muted)' }} />
-                  <span className="truncate">Anteprima: {previewTitle}</span>
-                </h3>
-                <button
-                  onClick={() => setIsTocOpen(v => !v)}
-                  className="icon-button h-8 w-8 rounded-[11px] shrink-0"
-                  style={isTocOpen ? { borderColor: 'var(--accent-ring)', color: 'var(--accent-text)' } : { color: 'var(--text-muted)' }}
-                  title={isTocOpen ? 'Nascondi indice' : 'Mostra indice capitoli'}
-                >
-                  <BookOpen className="w-4 h-4" />
-                </button>
-              </div>
+              <h3 className="font-semibold text-lg flex items-center gap-2 truncate min-w-0" style={{ color: 'var(--text-primary)' }}>
+                <FileText className="w-5 h-5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+                <span className="truncate">Anteprima: {previewTitle}</span>
+              </h3>
               <div className="flex gap-2 shrink-0 flex-wrap justify-end">
                 <span
                   className="inline-flex h-11 items-center rounded-[14px] px-3 text-sm font-medium"
@@ -102,35 +80,15 @@ export function PreviewModal({
               </div>
             </div>
 
-            <div className="flex flex-1 min-h-0 overflow-hidden">
-              {isTocOpen && headings.length > 0 && (
-                <aside
-                  className="w-56 shrink-0 overflow-y-auto border-r p-2 hidden sm:block"
-                  style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}
-                >
-                  {headings.map((h, i) => (
-                    <button
-                      key={h.id}
-                      className="block w-full text-left text-xs py-1 rounded hover:bg-white/5 truncate"
-                      style={{ paddingLeft: `${(h.level - 1) * 12 + 8}px`, color: 'var(--text-muted)' }}
-                      onClick={() => scrollToHeadingRef.current?.(i)}
-                    >
-                      {h.text}
-                    </button>
-                  ))}
-                </aside>
-              )}
-              <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-                <Suspense fallback={<div className="p-6 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento editor...</div>}>
-                  <LazyRichTextEditor
-                    initialContent={previewContent || ''}
-                    onChange={onChange}
-                    initialScrollTop={previewInitScrollTop}
-                    onScrollTopChange={onScrollTopChange}
-                    onHeadingsChange={handleHeadingsChange}
-                  />
-                </Suspense>
-              </div>
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+              <Suspense fallback={<div className="p-6 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento editor...</div>}>
+                <LazyRichTextEditor
+                  initialContent={previewContent || ''}
+                  onChange={onChange}
+                  initialScrollTop={previewInitScrollTop}
+                  onScrollTopChange={onScrollTopChange}
+                />
+              </Suspense>
             </div>
 
             {(audioSrc || audioRelinkNeeded) && (
