@@ -637,22 +637,45 @@ class ElSbobinatorApi:
         """Legge ed estrae il contenuto di un file HTML per l'anteprima."""
         if not isinstance(path, str) or not path.lower().endswith(".html"):
             return {"ok": False, "error": "Path non valido: deve essere un file .html."}
-        if not os.path.isfile(path):
+        # Path traversal protection: resolve and check against allowed roots
+        real_path = os.path.realpath(os.path.abspath(path))
+        allowed_roots = [
+            os.path.realpath(os.path.expanduser("~")),  # User home (includes Desktop)
+            os.path.realpath(os.path.join(os.path.expanduser("~"), "Desktop")),
+            os.path.realpath(self._get_session_root()),  # Session storage
+        ]
+        if not any(real_path.startswith(root + os.sep) or real_path == root for root in allowed_roots):
+            return {"ok": False, "error": "Accesso negato: path fuori dai percorsi consentiti."}
+        if not os.path.isfile(real_path):
             return {"ok": False, "error": "File non trovato."}
         try:
-            content = read_html_file_content(path)
+            content = read_html_file_content(real_path)
             return {"ok": True, "content": content}
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    def _get_session_root(self) -> str:
+        """Return the session storage root directory."""
+        from el_sbobinator.shared import SESSION_ROOT
+        return SESSION_ROOT
 
     def save_html_content(self, path: str, content: str) -> dict:
         """Aggiorna solo il contenuto del <body>, preservando head, stile e CSP dell'export originale."""
         if not isinstance(path, str) or not path.lower().endswith(".html"):
             return {"ok": False, "error": "Path non valido: deve essere un file .html."}
-        if not os.path.isfile(path):
+        # Path traversal protection: resolve and check against allowed roots
+        real_path = os.path.realpath(os.path.abspath(path))
+        allowed_roots = [
+            os.path.realpath(os.path.expanduser("~")),  # User home (includes Desktop)
+            os.path.realpath(os.path.join(os.path.expanduser("~"), "Desktop")),
+            os.path.realpath(self._get_session_root()),  # Session storage
+        ]
+        if not any(real_path.startswith(root + os.sep) or real_path == root for root in allowed_roots):
+            return {"ok": False, "error": "Accesso negato: path fuori dai percorsi consentiti."}
+        if not os.path.isfile(real_path):
             return {"ok": False, "error": "File non trovato."}
         try:
-            save_html_body_content(path, content)
+            save_html_body_content(real_path, content)
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": str(e)}

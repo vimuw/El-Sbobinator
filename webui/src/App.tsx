@@ -263,10 +263,10 @@ export default function App() {
       let nextSize = file.size;
       let nextDuration = file.duration;
       if (!sourceExists) {
-        if (!api?.ask_media_file) { appendConsole(`Impossibile ricollegare l'audio per ${file.name}.`); return null; }
+        if (!api?.ask_media_file) { appendConsole(`Impossibile ricollegare l'audio per ${file.name}.`); continue; }
         appendConsole(`Audio non trovato per ${file.name}. Selezionalo di nuovo per continuare.`);
         const selectedFile = await api.ask_media_file();
-        if (!selectedFile?.path) { appendConsole(`Avvio annullato: audio non ricollegato per ${file.name}.`); return null; }
+        if (!selectedFile?.path) { appendConsole(`Avvio annullato: audio non ricollegato per ${file.name}.`); continue; }
         nextPath = selectedFile.path; nextName = selectedFile.name; nextSize = selectedFile.size; nextDuration = selectedFile.duration || 0;
         dispatch({ type: 'queue/update_source', id: file.id, path: nextPath, name: nextName, size: nextSize, duration: nextDuration });
         appendConsole(`Audio ricollegato: ${nextName}`);

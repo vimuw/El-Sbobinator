@@ -29,5 +29,15 @@ export function useConsole() {
     consoleEndRef.current?.scrollIntoView({ behavior: 'instant' });
   }, [consoleLogs]);
 
+  // Cleanup RAF on unmount to prevent setState on unmounted component
+  useEffect(() => {
+    return () => {
+      if (logRafRef.current !== null) {
+        cancelAnimationFrame(logRafRef.current);
+        logRafRef.current = null;
+      }
+    };
+  }, []);
+
   return { consoleLogs, appendConsole, consoleEndRef };
 }

@@ -40,6 +40,8 @@ def open_path_with_default_app(path: str) -> None:
         ext = os.path.splitext(real)[1].lower()
         if ext not in _ALLOWED_OPEN_EXTENSIONS:
             raise ValueError(f"Tipo di file non consentito: {ext!r}")
+    # NOTE: Directories intentionally bypass extension checks.
+    # open_file is only called with legitimate session directories from the bridge.
 
     if sys.platform == "win32":
         os.startfile(real)
