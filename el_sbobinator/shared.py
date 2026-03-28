@@ -373,7 +373,7 @@ def safe_output_basename(name: str) -> str:
     return s[:140] if len(s) > 140 else s
 
 
-def load_config() -> dict:
+def load_config() -> dict:  # noqa: C901
     # Prefer new location, but migrate from legacy (<= 2026-03) file if present.
     for path in (CONFIG_FILE, LEGACY_CONFIG_FILE):
         if not os.path.exists(path):
@@ -441,7 +441,7 @@ def load_config() -> dict:
     return {"api_key": ""}
 
 
-def save_config(api_key: str, fallback_keys: list | None = None) -> None:
+def save_config(api_key: str, fallback_keys: list | None = None) -> None:  # noqa: C901
     api_key_norm = str(api_key or "").strip()
     data: dict = {"api_key": api_key_norm}
     # Persist fallback keys (array of riserva) if provided.

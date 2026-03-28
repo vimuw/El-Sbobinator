@@ -25,13 +25,11 @@ def sanitize_html_basic(html: str) -> str:
 
 def normalize_inline_star_lists(md: str) -> str:
     # Normalizza elenchi che a volte l'AI produce in modo non-standard.
-    # Obiettivo: farli diventare liste Markdown reali, senza interpretare '*' come testo.
     src = (md or "").replace("\u00A0", " ")
 
     list_line_re = r"^\s*([*+-]|\d+\.)\s+"
     # Bullet unicode che il modello usa spesso (e che Markdown non interpreta come liste).
     bullet_top = ("\u25cf", "\u2022", "\u25aa", "\u2023")  # ● • ▪ ‣
-    bullet_sub = ("\u25e6", "\u25cb", "\u2219")  # ◦ ○ ∙
 
     # 1) Trasforma elenchi in-line tipo "Esempi: * Voce1 ... * Voce2 ..."
     out_lines = []

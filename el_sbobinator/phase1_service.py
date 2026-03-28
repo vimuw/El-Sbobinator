@@ -28,7 +28,7 @@ from el_sbobinator.logging_utils import get_logger
 from el_sbobinator.shared import _atomic_write_text, debug_log
 
 
-def process_phase1_transcription(
+def process_phase1_transcription(  # noqa: C901
     *,
     client,
     model_name: str,

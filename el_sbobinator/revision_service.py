@@ -175,7 +175,7 @@ def process_macro_revision_phase(
     return client, revised_text
 
 
-def process_boundary_revision_phase(
+def process_boundary_revision_phase(  # noqa: C901
     *,
     client,
     model_name: str,

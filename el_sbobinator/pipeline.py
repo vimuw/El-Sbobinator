@@ -55,7 +55,7 @@ from el_sbobinator.shared import (
 )
 
 
-def _esegui_sbobinatura_legacy(input_path, api_key_value, app_instance, session_dir_hint=None, resume_session=False):
+def _esegui_sbobinatura_legacy(input_path, api_key_value, app_instance, session_dir_hint=None, resume_session=False):  # noqa: C901
     runtime = PipelineRuntime(app_instance)
     runtime.reset_temp_files()
     cancel_event = runtime.cancel_event
