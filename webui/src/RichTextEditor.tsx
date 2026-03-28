@@ -432,13 +432,15 @@ const FontSizeSelect = ({ editor }: { editor: any }) => {
           }
         } catch (_) { /* fall through to rem fallback */ }
         const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
-        const rems: Record<number, number> = { 1: 1.5, 2: 1.25, 3: 1.1, 4: 1.0, 5: 0.9 };
+        const rems: Record<number, number> = { 1: 2.25, 2: 1.5, 3: 1.25, 4: 1.0, 5: 0.875 };
         return String(Math.round(rems[i] * rootPx));
       }
     }
 
-    // 3. For any other text (paragraph, list, etc.), use default 14
-    return '14';
+    // 3. For any other text (paragraph, list, etc.), read computed size from the editor root
+    const editorEl = editor.view.dom as HTMLElement;
+    const rootSize = parseFloat(window.getComputedStyle(editorEl).fontSize);
+    return String(Math.round(rootSize));
   };
 
   const currentSize = getCurrentSize();
@@ -596,6 +598,7 @@ const menuBarStateKey = (editor: any): string => [
   editor.isActive({ textAlign: 'justify' }),
   editor.can().undo(),
   editor.can().redo(),
+  editor.getAttributes('highlight').color ?? '',
   editor.getAttributes('textStyle').color ?? '',
   editor.getAttributes('textStyle').fontFamily ?? '',
   editor.getAttributes('textStyle').fontSize ?? '',

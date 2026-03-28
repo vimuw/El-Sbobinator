@@ -36,8 +36,10 @@ export function PreviewModal({
 
   const scrollToHeading = (heading: Heading) => {
     const { text, level, id } = heading;
+    const idx = headings.findIndex(h => h.id === id);
+    if (idx === -1) return;
     const occurrencesBefore = headings
-      .slice(0, headings.findIndex(h => h.id === id))
+      .slice(0, idx)
       .filter(h => h.level === level && h.text.trim() === text.trim())
       .length;
     const els = Array.from(document.querySelectorAll(`.tiptap-editor h${level}`))
