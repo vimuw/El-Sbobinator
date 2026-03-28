@@ -135,6 +135,7 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [clearAllConfirm, setClearAllConfirm] = useState(false);
   const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
+  const [showEmptyState, setShowEmptyState] = useState(() => files.length === 0);
 
   // --- Refs ---
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -147,6 +148,10 @@ export default function App() {
   useEffect(() => {
     filesRef.current = files;
   }, [files]);
+
+  useEffect(() => {
+    if (files.length > 0) setShowEmptyState(false);
+  }, [files.length]);
 
   useEffect(() => {
     appStateRef.current = appState;
@@ -562,7 +567,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <main className="max-w-6xl mx-auto px-5 sm:px-6 py-8 w-full flex-1 flex flex-col gap-6">
+      <main className="max-w-3xl mx-auto px-5 sm:px-6 py-8 w-full flex-1 flex flex-col gap-6">
 
         {/* Drop Zone */}
         <div
@@ -621,17 +626,7 @@ export default function App() {
             </div>
           </div>
 
-          <AnimatePresence mode="sync">
-            {files.length === 0 && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="p-10 rounded-[26px] text-center flex flex-col items-center border border-dashed"
-                style={{ borderColor: 'var(--border-default)', background: 'rgba(255,255,255,0.03)' }}>
-                <div className="w-14 h-14 rounded-[20px] flex items-center justify-center mb-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-default)' }}>
-                  <FileText className="w-5 h-5" style={{ color: 'var(--text-faint)' }} />
-                </div>
-                <p className="text-sm leading-6 max-w-md" style={{ color: 'var(--text-muted)' }}>Nessun file in coda. Aggiungi un file per iniziare.</p>
-              </motion.div>
-            )}
+          <AnimatePresence mode="popLayout" onExitComplete={() => { if (filesRef.current.length === 0) setShowEmptyState(true); }}>
             {files.map((file, idx) => (
               <QueueFileCard
                 key={file.id}
@@ -650,6 +645,22 @@ export default function App() {
                 onOpenDir={openFile}
               />
             ))}
+          </AnimatePresence>
+          <AnimatePresence>
+            {showEmptyState && (
+              <motion.div
+                key="empty-state"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1, transition: { duration: 0.15 } }}
+                exit={{ opacity: 0, transition: { duration: 0 } }}
+                className="p-10 rounded-[26px] text-center flex flex-col items-center border border-dashed"
+                style={{ borderColor: 'var(--border-default)', background: 'rgba(255,255,255,0.03)' }}>
+                <div className="w-14 h-14 rounded-[20px] flex items-center justify-center mb-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-default)' }}>
+                  <FileText className="w-5 h-5" style={{ color: 'var(--text-faint)' }} />
+                </div>
+                <p className="text-sm leading-6 max-w-md" style={{ color: 'var(--text-muted)' }}>Nessun file in coda. Aggiungi un file per iniziare.</p>
+              </motion.div>
+            )}
           </AnimatePresence>
         </div>
 
