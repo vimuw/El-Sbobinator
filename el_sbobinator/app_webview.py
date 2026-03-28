@@ -95,6 +95,7 @@ def _drain_dnd_paths(names: set[str]) -> list[tuple[str, str]]:
 
 class _BridgeDispatcher:
     BATCHABLE = {"updateProgress", "updatePhase", "setWorkTotals", "updateWorkDone", "registerStepTime"}
+    MAX_RETRIES = 3
 
     def __init__(self, window_getter, flush_interval: float = 0.12):
         self._window_getter = window_getter
@@ -102,6 +103,7 @@ class _BridgeDispatcher:
         self._lock = threading.Lock()
         self._queue: deque[tuple[str, object]] = deque()
         self._latest: dict[str, object] = {}
+        self._pending: deque[tuple[str, object, int]] = deque()  # (fn_name, data, retry_count)
         self._timer: threading.Timer | None = None
 
     def emit(self, fn_name: str, data, batched: bool | None = None):
@@ -118,15 +120,24 @@ class _BridgeDispatcher:
                     self._queue.extend(self._latest.items())
                     self._latest.clear()
                 self._queue.append((fn_name, data))
-            self._ensure_timer_locked()
+            self._ensure_timer()
 
     def flush(self):
         with self._lock:
             self._timer = None
-            events = list(self._queue)
+            events: list[tuple[str, object, int]] = []
+            # Drain pending retries first (they have priority)
+            while self._pending:
+                fn_name, data, retry_count = self._pending.popleft()
+                events.append((fn_name, data, retry_count))
+            # Add new queued events with retry_count=0
+            for fn_name, data in self._queue:
+                events.append((fn_name, data, 0))
             self._queue.clear()
+            # Merge latest batched values as new events with retry_count=0
             if self._latest:
-                events.extend(self._latest.items())
+                for fn_name, data in self._latest.items():
+                    events.append((fn_name, data, 0))
                 self._latest.clear()
 
         if not events:
@@ -134,10 +145,16 @@ class _BridgeDispatcher:
 
         window = self._window_getter()
         if window is None:
+            # Re-queue all events if window not ready
+            with self._lock:
+                for fn_name, data, retry_count in events:
+                    if retry_count < self.MAX_RETRIES:
+                        self._pending.append((fn_name, data, retry_count + 1))
+            self._ensure_timer()
             return
 
         js_calls: list[str] = []
-        for fn_name, payload in events:
+        for fn_name, payload, _retry_count in events:
             safe_data = json.dumps(payload, ensure_ascii=False)
             js_calls.append(
                 f"if(window.elSbobinatorBridge && window.elSbobinatorBridge.{fn_name}) "
@@ -147,14 +164,21 @@ class _BridgeDispatcher:
         try:
             window.evaluate_js("\n".join(js_calls))
         except Exception:
-            pass
+            # Re-queue unsent events for retry (respecting max retries)
+            with self._lock:
+                for fn_name, data, retry_count in events:
+                    if retry_count < self.MAX_RETRIES:
+                        self._pending.append((fn_name, data, retry_count + 1))
+            self._ensure_timer()
 
-    def _ensure_timer_locked(self):
-        if self._timer is not None:
-            return
-        self._timer = threading.Timer(self._flush_interval, self.flush)
-        self._timer.daemon = True
-        self._timer.start()
+    def _ensure_timer(self):
+        """Schedule next flush attempt."""
+        with self._lock:
+            if self._timer is not None:
+                return
+            self._timer = threading.Timer(self._flush_interval, self.flush)
+            self._timer.daemon = True
+            self._timer.start()
 
 
 class PipelineAdapter:

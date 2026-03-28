@@ -211,8 +211,9 @@ def _esegui_sbobinatura_legacy(input_path, api_key_value, app_instance, session_
                     
                     regenerate_mode = "completed" if stage == "done" else "resume"
                     if runtime.ask_regenerate(os.path.basename(input_path), on_answer, regenerate_mode):
-                        event.wait()
-                        return outcome["rigenera"]
+                        if event.wait(timeout=120):
+                            return outcome["rigenera"]
+                        return False  # timeout fallback: don't regenerate
 
                 ans = runtime.ask_confirmation(
                     "File gia' completato",
