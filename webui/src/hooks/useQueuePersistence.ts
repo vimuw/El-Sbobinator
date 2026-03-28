@@ -40,7 +40,7 @@ export function useQueuePersistence(
   }, [appendConsole]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const queueStructuralKey = files
-    .map(f => `${f.id}|${f.status}|${f.outputHtml ?? ''}|${f.outputDir ?? ''}`)
+    .map(f => `${f.id}|${f.status}|${f.outputHtml ?? ''}|${f.outputDir ?? ''}|${f.path ?? ''}`)
     .join(',');
 
   useEffect(() => {

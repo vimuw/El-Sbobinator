@@ -19,6 +19,18 @@ def open_path_with_default_app(path: str) -> None:
     if not isinstance(path, str) or not path:
         raise ValueError("Path non valido.")
 
+    # URLs bypass filesystem validation entirely
+    if path.startswith("http://") or path.startswith("https://"):
+        if sys.platform == "win32":
+            os.startfile(path)
+        elif sys.platform == "darwin":
+            import subprocess
+            subprocess.Popen(["open", path])
+        else:
+            import subprocess
+            subprocess.Popen(["xdg-open", path])
+        return
+
     real = os.path.realpath(os.path.abspath(path))
 
     if not os.path.exists(real):

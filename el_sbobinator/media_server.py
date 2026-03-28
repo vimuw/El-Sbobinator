@@ -15,69 +15,71 @@ import time
 
 class LocalMediaServer:
     _servers: dict[str, tuple[socketserver.ThreadingTCPServer, int]] = {}
+    _lock: threading.Lock = threading.Lock()
 
     @classmethod
     def stream_url_for_file(cls, file_path: str) -> str:
         if not os.path.exists(file_path):
             raise FileNotFoundError("File audio non trovato.")
 
-        if file_path in cls._servers:
-            _, port = cls._servers[file_path]
-            return f"http://127.0.0.1:{port}/stream.media?t={time.time()}"
+        with cls._lock:
+            if file_path in cls._servers:
+                _, port = cls._servers[file_path]
+                return f"http://127.0.0.1:{port}/stream.media?t={time.time()}"
 
-        served_path = file_path
+            served_path = file_path
 
-        class MediaHandler(http.server.BaseHTTPRequestHandler):
-            def end_headers(self):
-                self.send_header("Access-Control-Allow-Origin", "*")
-                super().end_headers()
+            class MediaHandler(http.server.BaseHTTPRequestHandler):
+                def end_headers(self):
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    super().end_headers()
 
-            def do_GET(self):
-                try:
-                    path = served_path
-                    if not os.path.exists(path):
-                        self.send_error(404, "File not found")
-                        return
+                def do_GET(self):
+                    try:
+                        path = served_path
+                        if not os.path.exists(path):
+                            self.send_error(404, "File not found")
+                            return
 
-                    size = os.path.getsize(path)
-                    start, end = 0, size - 1
-                    status_code = 200
-                    range_header = self.headers.get("Range")
-                    if range_header:
-                        match = re.search(r"bytes=(\d+)-(\d*)", range_header)
-                        if match:
-                            start = int(match.group(1))
-                            if match.group(2):
-                                end = int(match.group(2))
-                            status_code = 206
+                        size = os.path.getsize(path)
+                        start, end = 0, size - 1
+                        status_code = 200
+                        range_header = self.headers.get("Range")
+                        if range_header:
+                            match = re.search(r"bytes=(\d+)-(\d*)", range_header)
+                            if match:
+                                start = int(match.group(1))
+                                if match.group(2):
+                                    end = int(match.group(2))
+                                status_code = 206
 
-                    length = end - start + 1
-                    self.send_response(status_code)
-                    ctype, _ = mimetypes.guess_type(path)
-                    self.send_header("Content-Type", ctype or "audio/mpeg")
-                    self.send_header("Accept-Ranges", "bytes")
-                    self.send_header("Content-Length", str(length))
-                    if status_code == 206:
-                        self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
-                    self.end_headers()
+                        length = end - start + 1
+                        self.send_response(status_code)
+                        ctype, _ = mimetypes.guess_type(path)
+                        self.send_header("Content-Type", ctype or "audio/mpeg")
+                        self.send_header("Accept-Ranges", "bytes")
+                        self.send_header("Content-Length", str(length))
+                        if status_code == 206:
+                            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+                        self.end_headers()
 
-                    with open(path, "rb") as handle:
-                        handle.seek(start)
-                        remaining = length
-                        while remaining > 0:
-                            chunk = handle.read(min(remaining, 65536))
-                            if not chunk:
-                                break
-                            self.wfile.write(chunk)
-                            remaining -= len(chunk)
-                except Exception:
+                        with open(path, "rb") as handle:
+                            handle.seek(start)
+                            remaining = length
+                            while remaining > 0:
+                                chunk = handle.read(min(remaining, 65536))
+                                if not chunk:
+                                    break
+                                self.wfile.write(chunk)
+                                remaining -= len(chunk)
+                    except Exception:
+                        pass
+
+                def log_message(self, format, *args):
                     pass
 
-            def log_message(self, format, *args):
-                pass
-
-        server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), MediaHandler)
-        port = server.server_address[1]
-        cls._servers[file_path] = (server, port)
+            server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), MediaHandler)
+            port = server.server_address[1]
+            cls._servers[file_path] = (server, port)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         return f"http://127.0.0.1:{port}/stream.media?t={time.time()}"
