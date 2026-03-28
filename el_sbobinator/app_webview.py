@@ -97,8 +97,9 @@ def _drain_dnd_paths(names: set[str]) -> list[tuple[str, str]]:
 class _BridgeDispatcher:
     _BridgeEvent = Literal[
         "updateProgress", "updatePhase", "setWorkTotals", "updateWorkDone",
-        "registerStepTime", "setCurrentFile", "fileDone", "filesDropped",
-        "pipelineDone", "pipelineError", "pipelineCancelled",
+        "registerStepTime", "setCurrentFile", "fileDone", "fileFailed",
+        "filesDropped", "processDone", "appendConsole", "setOutputHtml",
+        "askRegenerate", "askNewKey",
     ]
     _ALL_EVENTS: frozenset[str] = frozenset(get_args(_BridgeEvent))
     BATCHABLE: frozenset[str] = frozenset({
