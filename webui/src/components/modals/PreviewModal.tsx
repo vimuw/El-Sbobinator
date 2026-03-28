@@ -1,6 +1,6 @@
 import React, { Suspense, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, Copy, FileText, Menu, X } from 'lucide-react';
+import { Check, Copy, FileText, X } from 'lucide-react';
 import type { Heading } from '../../RichTextEditor';
 
 const LazyAudioPlayer = React.lazy(() => import('../../AudioPlayer').then(module => ({ default: module.AudioPlayer })));
@@ -97,46 +97,6 @@ export function PreviewModal({
             </div>
 
             <div className="flex-1 min-h-0 overflow-hidden flex flex-row">
-              {/* Left TOC Sidebar */}
-              <div className="toc-left-sidebar" style={{ width: isTocOpen ? 260 : 44, opacity: 1 }}>
-                {!isTocOpen && (
-                  <button
-                    className="toc-left-btn"
-                    onClick={() => setIsTocOpen(true)}
-                    title="Apri indice"
-                  >
-                    <Menu className="w-4 h-4" />
-                  </button>
-                )}
-                {isTocOpen && (
-                  <>
-                    <div className="toc-left-header">
-                      <span>Indice</span>
-                      <button className="toc-left-close" onClick={() => setIsTocOpen(false)} title="Chiudi">
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <nav className="toc-left-nav">
-                      {headings.length === 0 ? (
-                        <p className="toc-empty">Nessun titolo</p>
-                      ) : (
-                        headings.map(h => (
-                          <button
-                            key={h.id}
-                            className={`toc-item toc-item-h${h.level}`}
-                            style={{ paddingLeft: `${(h.level - 1) * 12 + 14}px` }}
-                            onClick={() => scrollToHeading(h)}
-                            title={h.text}
-                          >
-                            {h.text}
-                          </button>
-                        ))
-                      )}
-                    </nav>
-                  </>
-                )}
-              </div>
-
               {/* Editor area + Player column */}
               <div className="flex-1 min-h-0 flex flex-col">
                 <div className="flex-1 min-h-0 flex flex-col">
@@ -147,6 +107,10 @@ export function PreviewModal({
                       initialScrollTop={previewInitScrollTop}
                       onScrollTopChange={onScrollTopChange}
                       onHeadingsChange={setHeadings}
+                      isTocOpen={isTocOpen}
+                      onTocToggle={() => setIsTocOpen(p => !p)}
+                      tocHeadings={headings}
+                      onScrollToHeading={scrollToHeading}
                     />
                   </Suspense>
                 </div>
@@ -179,6 +143,7 @@ export function PreviewModal({
                   </div>
                 )}
               </div>
+
             </div>
           </motion.div>
         </motion.div>

@@ -18,7 +18,7 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight,
   Bold, ChevronDown, Clipboard, Copy, ImagePlus, Italic,
-  Link2, Link2Off, List, ListOrdered, Quote, Redo,
+  Link2, Link2Off, List, ListOrdered, Menu, MoreVertical, Quote, Redo,
   Scissors, Search, Strikethrough, Subscript as SubIcon,
   Superscript as SupIcon, Table2, Underline as UnderlineIcon, Undo, X,
 } from 'lucide-react';
@@ -36,6 +36,10 @@ interface RichTextEditorProps {
   initialScrollTop?: number;
   onScrollTopChange?: (scrollTop: number) => void;
   onHeadingsChange?: (headings: Heading[]) => void;
+  isTocOpen?: boolean;
+  onTocToggle?: () => void;
+  tocHeadings?: Heading[];
+  onScrollToHeading?: (heading: Heading) => void;
 }
 
 const extractHeadings = (editor: any): Heading[] => {
@@ -94,6 +98,7 @@ const HEADING_OPTIONS = [
 interface SearchHighlightPluginState {
   searchTerm: string;
   currentIndex: number;
+  matchCase: boolean;
   decorations: DecorationSet;
 }
 
@@ -105,10 +110,10 @@ const SearchHighlight = Extension.create({
   addCommands() {
     return {
       setSearchTerm:
-        (term: string, currentIndex = -1) =>
+        (term: string, currentIndex = -1, matchCase = false) =>
         ({ view }: { view: any }) => {
           view.dispatch(
-            view.state.tr.setMeta(searchHighlightKey, { term, currentIndex }),
+            view.state.tr.setMeta(searchHighlightKey, { term, currentIndex, matchCase }),
           );
           return true;
         },
@@ -121,27 +126,29 @@ const SearchHighlight = Extension.create({
         key: searchHighlightKey,
         state: {
           init(): SearchHighlightPluginState {
-            return { searchTerm: '', currentIndex: -1, decorations: DecorationSet.empty };
+            return { searchTerm: '', currentIndex: -1, matchCase: false, decorations: DecorationSet.empty };
           },
           apply(tr, value, _old, newState): SearchHighlightPluginState {
             const meta = tr.getMeta(searchHighlightKey) as
-              | { term: string; currentIndex: number }
+              | { term: string; currentIndex: number; matchCase?: boolean }
               | undefined;
             const searchTerm = meta !== undefined ? meta.term : value.searchTerm;
             const currentIndex = meta !== undefined ? meta.currentIndex : value.currentIndex;
+            const matchCase = meta !== undefined ? (meta.matchCase ?? false) : value.matchCase;
 
             if (!searchTerm) {
-              return { searchTerm: '', currentIndex: -1, decorations: DecorationSet.empty };
+              return { searchTerm: '', currentIndex: -1, matchCase: false, decorations: DecorationSet.empty };
             }
 
             const decorations: Decoration[] = [];
-            const lower = searchTerm.toLowerCase();
+            const searchStr = matchCase ? searchTerm : searchTerm.toLowerCase();
             let matchIdx = 0;
 
             newState.doc.descendants((node: any, pos: number) => {
               if (!node.isText || !node.text) return;
+              const nodeText = matchCase ? node.text : node.text.toLowerCase();
               let idx = 0;
-              while ((idx = node.text.toLowerCase().indexOf(lower, idx)) !== -1) {
+              while ((idx = nodeText.indexOf(searchStr, idx)) !== -1) {
                 decorations.push(
                   Decoration.inline(pos + idx, pos + idx + searchTerm.length, {
                     class:
@@ -150,7 +157,7 @@ const SearchHighlight = Extension.create({
                         : 'search-highlight',
                   }),
                 );
-                idx += searchTerm.length;
+                idx += searchStr.length;
                 matchIdx++;
               }
             });
@@ -158,6 +165,7 @@ const SearchHighlight = Extension.create({
             return {
               searchTerm,
               currentIndex,
+              matchCase,
               decorations: DecorationSet.create(newState.doc, decorations),
             };
           },
@@ -723,20 +731,30 @@ const MenuBar = ({
   );
 };
 
-const FindReplacePanel = ({ editor, onClose, focusTrigger }: { editor: any; onClose: () => void; focusTrigger?: number }) => {
+const FindReplacePanel = ({
+  editor,
+  onClose,
+  initialMode,
+  focusTrigger,
+}: {
+  editor: any;
+  onClose: () => void;
+  initialMode: 'find' | 'replace';
+  focusTrigger?: number;
+}) => {
+  const [expanded, setExpanded] = useState(initialMode === 'replace');
   const [findText, setFindText] = useState('');
   const [replaceText, setReplaceText] = useState('');
   const [matchCount, setMatchCount] = useState(0);
   const [currentMatch, setCurrentMatch] = useState(0);
+  const [matchCase, setMatchCase] = useState(false);
   const matchesRef = useRef<{ from: number; to: number }[]>([]);
   const currentMatchRef = useRef(0);
   const findInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     findInputRef.current?.focus({ preventScroll: true });
-    return () => {
-      editor.commands.setSearchTerm('', -1);
-    };
+    return () => { editor.commands.setSearchTerm('', -1, false); };
   }, [editor]);
 
   useEffect(() => {
@@ -745,61 +763,68 @@ const FindReplacePanel = ({ editor, onClose, focusTrigger }: { editor: any; onCl
     }
   }, [focusTrigger]);
 
-  const buildMatches = useCallback((text: string) => {
+  useEffect(() => {
+    if (initialMode === 'replace') setExpanded(true);
+  }, [initialMode]);
+
+  const buildMatches = useCallback((text: string, caseFlag: boolean) => {
     if (!editor || !text) return [];
-    const { doc } = editor.state;
     const results: { from: number; to: number }[] = [];
-    const lower = text.toLowerCase();
-    doc.descendants((node: any, pos: number) => {
+    const searchStr = caseFlag ? text : text.toLowerCase();
+    editor.state.doc.descendants((node: any, pos: number) => {
       if (!node.isText || !node.text) return;
+      const nodeText = caseFlag ? node.text : node.text.toLowerCase();
       let idx = 0;
-      while ((idx = node.text.toLowerCase().indexOf(lower, idx)) !== -1) {
+      while ((idx = nodeText.indexOf(searchStr, idx)) !== -1) {
         results.push({ from: pos + idx, to: pos + idx + text.length });
-        idx += text.length;
+        idx += searchStr.length;
       }
     });
     return results;
   }, [editor]);
 
-  const updateSearch = useCallback((text: string, curIdx = -1) => {
-    const matches = buildMatches(text);
+  const updateSearch = useCallback((text: string, curIdx = -1, caseFlag = matchCase) => {
+    const matches = buildMatches(text, caseFlag);
     matchesRef.current = matches;
     setMatchCount(matches.length);
-    editor.commands.setSearchTerm(text, curIdx);
+    editor.commands.setSearchTerm(text, curIdx, caseFlag);
     return matches;
-  }, [editor, buildMatches]);
+  }, [editor, buildMatches, matchCase]);
 
-  const scrollToMatch = useCallback((matches: { from: number; to: number }[], idx: number) => {
+  const scrollToMatch = useCallback((matches: { from: number; to: number }[], idx: number, text = findText, caseFlag = matchCase) => {
     if (!matches.length || !editor) return;
     currentMatchRef.current = idx + 1;
     setCurrentMatch(idx + 1);
-    editor.commands.setSearchTerm(findText, idx);
+    editor.commands.setSearchTerm(text, idx, caseFlag);
     requestAnimationFrame(() => {
       const activeEl = editor.view.dom.querySelector('.search-highlight-active');
       if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
       findInputRef.current?.focus({ preventScroll: true });
     });
-  }, [editor, findText]);
+  }, [editor, findText, matchCase]);
 
   const handleNext = useCallback(() => {
-    const matches = matchesRef.current.length ? matchesRef.current : buildMatches(findText);
+    const matches = matchesRef.current.length ? matchesRef.current : buildMatches(findText, matchCase);
     if (!matches.length) return;
     const next = currentMatchRef.current >= matches.length ? 0 : currentMatchRef.current;
     scrollToMatch(matches, next);
-  }, [findText, buildMatches, scrollToMatch]);
+  }, [findText, matchCase, buildMatches, scrollToMatch]);
 
   const handlePrev = useCallback(() => {
-    const matches = matchesRef.current.length ? matchesRef.current : buildMatches(findText);
+    const matches = matchesRef.current.length ? matchesRef.current : buildMatches(findText, matchCase);
     if (!matches.length) return;
     const prev = currentMatchRef.current <= 1 ? matches.length - 1 : currentMatchRef.current - 2;
     scrollToMatch(matches, prev);
-  }, [findText, buildMatches, scrollToMatch]);
+  }, [findText, matchCase, buildMatches, scrollToMatch]);
 
   const handleReplace = () => {
     if (!editor || !findText || !matchesRef.current.length) return;
     const { from, to } = editor.state.selection;
     const selectedText = editor.state.doc.textBetween(from, to);
-    if (selectedText.toLowerCase() === findText.toLowerCase()) {
+    const isMatch = matchCase
+      ? selectedText === findText
+      : selectedText.toLowerCase() === findText.toLowerCase();
+    if (isMatch) {
       const tr = editor.state.tr;
       if (replaceText) {
         editor.view.dispatch(tr.replaceWith(from, to, editor.schema.text(replaceText)));
@@ -815,9 +840,8 @@ const FindReplacePanel = ({ editor, onClose, focusTrigger }: { editor: any; onCl
 
   const handleReplaceAll = () => {
     if (!editor || !findText) return;
-    const matches = buildMatches(findText);
+    const matches = buildMatches(findText, matchCase);
     if (!matches.length) return;
-    // Sort matches in reverse order (from end to start) to avoid position shifts
     const sortedMatches = [...matches].sort((a, b) => b.from - a.from);
     const tr = editor.state.tr;
     for (const m of sortedMatches) {
@@ -832,61 +856,117 @@ const FindReplacePanel = ({ editor, onClose, focusTrigger }: { editor: any; onCl
     currentMatchRef.current = 0;
     setMatchCount(0);
     setCurrentMatch(0);
-    editor.commands.setSearchTerm('', -1);
+    editor.commands.setSearchTerm('', -1, false);
     requestAnimationFrame(() => findInputRef.current?.focus({ preventScroll: true }));
   };
 
-  return (
-    <div className="find-replace-panel">
-      <div className="find-replace-row">
+  const handleMatchCaseChange = (checked: boolean) => {
+    setMatchCase(checked);
+    currentMatchRef.current = 0;
+    setCurrentMatch(0);
+    updateSearch(findText, -1, checked);
+  };
+
+  const findInputChange = (val: string) => {
+    setFindText(val);
+    currentMatchRef.current = 0;
+    setCurrentMatch(0);
+    updateSearch(val, -1);
+  };
+
+  if (!expanded) {
+    return (
+      <div className="find-bar-float">
         <input
           ref={findInputRef}
           type="text"
-          placeholder="Trova..."
+          placeholder="Trova nel documento..."
           value={findText}
-          onChange={e => {
-            setFindText(e.target.value);
-            currentMatchRef.current = 0;
-            setCurrentMatch(0);
-            updateSearch(e.target.value, -1);
-          }}
+          onChange={e => findInputChange(e.target.value)}
           onKeyDown={e => {
-            if (e.key === 'Enter') { e.preventDefault(); handleNext(); }
+            if (e.key === 'Enter') { e.preventDefault(); e.shiftKey ? handlePrev() : handleNext(); }
             if (e.key === 'Escape') onClose();
           }}
-          className="find-replace-input"
+          className="find-bar-input"
         />
-        <span className="find-replace-count">
-          {findText ? (matchCount > 0 ? `${currentMatch}/${matchCount}` : '0') : ''}
+        <span className="find-bar-count">
+          {findText ? (matchCount > 0 ? `${currentMatch} di ${matchCount}` : 'Nessun risultato') : ''}
         </span>
-        <button type="button" onClick={handlePrev} className="editor-button" title="Precedente (Shift+Enter)" disabled={matchCount === 0}>
-          <ChevronDown style={{ transform: 'rotate(180deg)', width: 14, height: 14 }} />
+        <button type="button" onClick={handlePrev} className="find-bar-btn" title="Precedente (Shift+Invio)" disabled={matchCount === 0}>
+          <ChevronDown style={{ transform: 'rotate(180deg)', width: 15, height: 15 }} />
         </button>
-        <button type="button" onClick={handleNext} className="editor-button" title="Successivo (Enter)" disabled={matchCount === 0}>
-          <ChevronDown style={{ width: 14, height: 14 }} />
+        <button type="button" onClick={handleNext} className="find-bar-btn" title="Successivo (Invio)" disabled={matchCount === 0}>
+          <ChevronDown style={{ width: 15, height: 15 }} />
         </button>
-        <button type="button" onClick={onClose} className="editor-button" title="Chiudi (Esc)">
-          <X className="h-4 w-4" />
+        <button type="button" onClick={() => setExpanded(true)} className="find-bar-btn" title="Trova e sostituisci">
+          <MoreVertical style={{ width: 15, height: 15 }} />
+        </button>
+        <button type="button" onClick={onClose} className="find-bar-btn" title="Chiudi (Esc)">
+          <X style={{ width: 15, height: 15 }} />
         </button>
       </div>
-      <div className="find-replace-row">
-        <input
-          type="text"
-          placeholder="Sostituisci con..."
-          value={replaceText}
-          onChange={e => setReplaceText(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Enter') { e.preventDefault(); handleReplace(); }
-            if (e.key === 'Escape') onClose();
-          }}
-          className="find-replace-input"
-        />
-        <button type="button" onClick={handleReplace} className="editor-button find-replace-action-btn" title="Sostituisci il match corrente" disabled={matchCount === 0}>
-          Sostituisci
+    );
+  }
+
+  return (
+    <div className="find-replace-dialog">
+      <div className="find-replace-dialog-header">
+        <span className="find-replace-dialog-title">Trova e sostituisci</span>
+        <button type="button" onClick={onClose} className="find-bar-btn" title="Chiudi (Esc)">
+          <X style={{ width: 16, height: 16 }} />
         </button>
-        <button type="button" onClick={handleReplaceAll} className="editor-button find-replace-action-btn" title="Sostituisci tutti i match" disabled={matchCount === 0}>
-          Tutto
-        </button>
+      </div>
+      <div className="find-replace-dialog-body">
+        <div className="find-replace-dialog-field">
+          <label className="find-replace-dialog-label">Trova</label>
+          <input
+            ref={findInputRef}
+            type="text"
+            value={findText}
+            onChange={e => findInputChange(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { e.preventDefault(); handleNext(); }
+              if (e.key === 'Escape') onClose();
+            }}
+            className="find-replace-dialog-input"
+          />
+          {findText && (
+            <span className="find-replace-dialog-count">
+              {matchCount > 0 ? `${currentMatch} di ${matchCount}` : 'Nessun risultato'}
+            </span>
+          )}
+        </div>
+        <div className="find-replace-dialog-field">
+          <input
+            type="text"
+            placeholder="Sostituisci con..."
+            value={replaceText}
+            onChange={e => setReplaceText(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { e.preventDefault(); handleReplace(); }
+              if (e.key === 'Escape') onClose();
+            }}
+            className="find-replace-dialog-input"
+          />
+        </div>
+        <label className="find-replace-dialog-check">
+          <input type="checkbox" checked={matchCase} onChange={e => handleMatchCaseChange(e.target.checked)} />
+          <span>Maiuscole/minuscole</span>
+        </label>
+        <div className="find-replace-dialog-actions">
+          <button type="button" onClick={handleReplace} disabled={matchCount === 0} className="find-replace-dialog-btn">
+            Sostituisci
+          </button>
+          <button type="button" onClick={handleReplaceAll} disabled={matchCount === 0} className="find-replace-dialog-btn">
+            Sostituisci tutto
+          </button>
+          <button type="button" onClick={handlePrev} disabled={matchCount === 0} className="find-replace-dialog-btn">
+            Precedente
+          </button>
+          <button type="button" onClick={handleNext} disabled={matchCount === 0} className="find-replace-dialog-btn find-replace-dialog-btn-primary">
+            Successivo
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -915,12 +995,12 @@ const WordCount = ({ editor }: { editor: any }) => {
   );
 };
 
-export function RichTextEditor({ initialContent, onChange, initialScrollTop, onScrollTopChange, onHeadingsChange }: RichTextEditorProps) {
+export function RichTextEditor({ initialContent, onChange, initialScrollTop, onScrollTopChange, onHeadingsChange, isTocOpen = false, onTocToggle, tocHeadings = [], onScrollToHeading }: RichTextEditorProps) {
   const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number } | null>(null);
-  const [showFindReplace, setShowFindReplace] = useState(false);
+  const [findMode, setFindMode] = useState<null | 'find' | 'replace'>(null);
   const [findFocusTrigger, setFindFocusTrigger] = useState(0);
-  const showFindReplaceRef = useRef(false);
-  useEffect(() => { showFindReplaceRef.current = showFindReplace; }, [showFindReplace]);
+  const findModeRef = useRef<null | 'find' | 'replace'>(null);
+  useEffect(() => { findModeRef.current = findMode; }, [findMode]);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<any>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -930,6 +1010,57 @@ export function RichTextEditor({ initialContent, onChange, initialScrollTop, onS
   const onHeadingsChangeRef = useRef(onHeadingsChange);
   useEffect(() => { onHeadingsChangeRef.current = onHeadingsChange; }, [onHeadingsChange]);
   const headingsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
+  const tocHeadingsRef = useRef(tocHeadings);
+  useEffect(() => { tocHeadingsRef.current = tocHeadings; }, [tocHeadings]);
+  const tocNavRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!activeHeadingId || !tocNavRef.current) return;
+    const nav = tocNavRef.current;
+    const activeBtn = nav.querySelector<HTMLElement>('.toc-item-active');
+    if (!activeBtn) return;
+    const navRect = nav.getBoundingClientRect();
+    const btnRect = activeBtn.getBoundingClientRect();
+    const btnAbsoluteTop = btnRect.top - navRect.top + nav.scrollTop;
+    nav.scrollTo({
+      top: btnAbsoluteTop - nav.clientHeight / 2 + activeBtn.clientHeight / 2,
+      behavior: 'smooth',
+    });
+  }, [activeHeadingId]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const handleScroll = () => {
+      const containerTop = container.getBoundingClientRect().top;
+      const headingEls = Array.from(
+        container.querySelectorAll<HTMLElement>(
+          '.tiptap-editor h1,.tiptap-editor h2,.tiptap-editor h3,.tiptap-editor h4,.tiptap-editor h5'
+        )
+      );
+      let activeEl: HTMLElement | null = null;
+      for (const el of headingEls) {
+        if (el.getBoundingClientRect().top - containerTop <= 64) {
+          activeEl = el;
+        } else {
+          break;
+        }
+      }
+      if (activeEl) {
+        const text = activeEl.textContent?.trim() ?? '';
+        const level = parseInt(activeEl.tagName[1]);
+        const match = tocHeadingsRef.current.find(
+          h => h.level === level && h.text.trim() === text
+        );
+        setActiveHeadingId(match?.id ?? null);
+      } else {
+        setActiveHeadingId(null);
+      }
+    };
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []); // attach once, reads tocHeadingsRef
 
   const insertImageFiles = useCallback(async (inputFiles: FileList | File[]) => {
     const activeEditor = editorRef.current;
@@ -956,15 +1087,23 @@ export function RichTextEditor({ initialContent, onChange, initialScrollTop, onS
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'h' || e.key === 'H' || e.key === 'f' || e.key === 'F')) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
         e.preventDefault();
-        if (showFindReplaceRef.current) {
+        if (findModeRef.current) {
           setFindFocusTrigger(prev => prev + 1);
         } else {
-          setShowFindReplace(true);
+          setFindMode('find');
         }
       }
-      if (e.key === 'Escape' && showFindReplaceRef.current) { e.stopPropagation(); setShowFindReplace(false); }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'h' || e.key === 'H')) {
+        e.preventDefault();
+        if (findModeRef.current === 'replace') {
+          setFindFocusTrigger(prev => prev + 1);
+        } else {
+          setFindMode('replace');
+        }
+      }
+      if (e.key === 'Escape' && findModeRef.current) { e.stopPropagation(); setFindMode(null); }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
@@ -1053,11 +1192,11 @@ export function RichTextEditor({ initialContent, onChange, initialScrollTop, onS
       <MenuBar
         editor={editor}
         onInsertImages={insertImageFiles}
-        showFindReplace={showFindReplace}
-        onToggleFindReplace={() => setShowFindReplace(p => !p)}
+        showFindReplace={findMode !== null}
+        onToggleFindReplace={() => setFindMode(p => p ? null : 'find')}
       />
-      {showFindReplace && editor && (
-        <FindReplacePanel editor={editor} onClose={() => setShowFindReplace(false)} focusTrigger={findFocusTrigger} />
+      {findMode && editor && (
+        <FindReplacePanel editor={editor} onClose={() => setFindMode(null)} initialMode={findMode} focusTrigger={findFocusTrigger} />
       )}
       <div
         ref={scrollContainerRef}
@@ -1068,8 +1207,51 @@ export function RichTextEditor({ initialContent, onChange, initialScrollTop, onS
           }
         }}
       >
-        <div className="editor-page">
-          <EditorContent editor={editor} />
+        <div className="editor-page-outer">
+          {/* Left TOC column — lives inside the gray area */}
+          <div className="editor-toc-col" style={{ width: isTocOpen ? 260 : 44 }}>
+            <div className="editor-toc-sticky">
+              {!isTocOpen ? (
+                <button className="editor-toc-btn" onClick={onTocToggle} title="Apri indice">
+                  <Menu className="w-4 h-4" />
+                </button>
+              ) : (
+                <>
+                  <div className="editor-toc-header">
+                    <span>Indice</span>
+                    <button className="toc-left-close" onClick={onTocToggle} title="Chiudi">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <nav className="editor-toc-nav" ref={tocNavRef}>
+                    {tocHeadings.length === 0 ? (
+                      <p className="toc-empty">Nessun titolo</p>
+                    ) : (
+                      tocHeadings.map(h => (
+                        <button
+                          key={h.id}
+                          className={`toc-item toc-item-h${h.level}${activeHeadingId === h.id ? ' toc-item-active' : ''}`}
+                          style={{ paddingLeft: `${(h.level - 1) * 12 + 14}px` }}
+                          onClick={() => onScrollToHeading?.(h)}
+                          title={h.text}
+                        >
+                          {h.text}
+                        </button>
+                      ))
+                    )}
+                  </nav>
+                </>
+              )}
+            </div>
+          </div>
+          {/* White paper — centering wrapper takes all remaining space */}
+          <div className="editor-page-center">
+            <div className="editor-page">
+              <EditorContent editor={editor} />
+            </div>
+          </div>
+          {/* Symmetric right spacer so the paper stays centered */}
+          <div className="editor-toc-spacer" style={{ width: isTocOpen ? 260 : 44 }} />
         </div>
       </div>
       {editor && <WordCount editor={editor} />}
