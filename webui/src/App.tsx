@@ -534,7 +534,8 @@ export default function App() {
       {/* Top Navigation */}
       <header className="sticky top-0 z-40 backdrop-blur-2xl" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'rgba(16, 13, 11, 0.08)' }}>
         <div className="max-w-3xl mx-auto px-5 sm:px-6 min-h-[84px] flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <img src="./icon.png" alt="El Sbobinator" className="app-logo" draggable={false} />
             <h1 className="brand-mark text-[1.45rem] sm:text-[1.75rem] font-semibold flex items-baseline tracking-tight leading-none overflow-visible py-1">
               <span style={titleGradient}>El&nbsp;</span>
               <span className="relative inline-block mx-[2px] overflow-visible">

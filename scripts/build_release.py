@@ -131,8 +131,10 @@ def pyinstaller_command(target: str, ui: str) -> list[str]:
     command = [sys.executable, "-m", "PyInstaller", "--noconfirm"]
     if target == "windows":
         command.extend(["--clean", "--onefile", "--windowed"])
+        command.extend(["--icon", str(ROOT / "assets" / "icon.ico")])
     else:
         command.extend(["--windowed"])
+        command.extend(["--icon", str(ROOT / "assets" / "icon.icns")])
 
     command.extend(
         [
