@@ -209,7 +209,7 @@ export function SettingsModal({
                       onClick={handleCleanupSessions}
                       disabled={isCleaningSession || isLoadingSessionInfo}
                       className="premium-button-secondary compact-button px-3 py-1.5 text-[11px] rounded-[13px] disabled:opacity-50"
-                      style={{ background: 'rgba(255,255,255,0.02)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
+                      style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
                     >
                       {isCleaningSession ? 'Pulizia…' : 'Pulisci (> 30 giorni)'}
                     </button>
@@ -233,7 +233,7 @@ export function SettingsModal({
                     onClick={runEnvironmentValidation}
                     disabled={isValidatingEnvironment}
                     className="premium-button-secondary compact-button px-3 py-1.5 text-[11px] rounded-[13px]"
-                    style={{ background: 'rgba(255,255,255,0.02)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
+                    style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
                   >
                     {isValidatingEnvironment ? 'Verifica...' : 'Verifica ambiente'}
                   </button>

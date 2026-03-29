@@ -500,7 +500,7 @@ export default function App() {
 
       {/* Top Navigation */}
       <header className="sticky top-0 z-40 backdrop-blur-2xl" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'rgba(16, 13, 11, 0.08)' }}>
-        <div className="max-w-6xl mx-auto px-5 sm:px-6 min-h-[84px] flex items-center justify-between gap-4">
+        <div className="max-w-3xl mx-auto px-5 sm:px-6 min-h-[84px] flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <h1 className="brand-mark text-[1.45rem] sm:text-[1.75rem] font-semibold flex items-baseline tracking-tight leading-none overflow-visible py-1">
               <span style={titleGradient}>El&nbsp;</span>
@@ -766,7 +766,8 @@ export default function App() {
       </main>
 
       {/* Footer Links */}
-      <footer className="max-w-6xl mx-auto w-full px-5 sm:px-6 pb-8 pt-2 flex items-center justify-center gap-3 text-sm shrink-0" style={{ color: 'var(--text-muted)' }}>
+      <footer className="w-full shrink-0 mt-auto" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+        <div className="max-w-3xl mx-auto px-5 sm:px-6 py-4 flex items-center justify-center gap-3 text-sm" style={{ color: 'var(--text-muted)' }}>
         <a
           href="#"
           onClick={(e) => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }}
@@ -784,6 +785,7 @@ export default function App() {
         >
           Supporta il progetto su Ko-fi ☕
         </a>
+        </div>
       </footer>
 
       {/* Modals */}

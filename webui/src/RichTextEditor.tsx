@@ -9,7 +9,6 @@ import Highlight from '@tiptap/extension-highlight';
 import TextAlign from '@tiptap/extension-text-align';
 import FontFamily from '@tiptap/extension-font-family';
 import Link from '@tiptap/extension-link';
-import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 import { Extension } from '@tiptap/core';
@@ -20,7 +19,7 @@ import {
   Bold, ChevronDown, Clipboard, Copy, ImagePlus, Italic,
   Link2, Link2Off, List, ListOrdered, Menu, MoreVertical, Quote, Redo,
   Scissors, Search, Strikethrough, Subscript as SubIcon,
-  Superscript as SupIcon, Table2, Underline as UnderlineIcon, Undo, X,
+  Superscript as SupIcon, Underline as UnderlineIcon, Undo, X,
 } from 'lucide-react';
 import { FloatingImage } from './FloatingImage';
 
@@ -644,6 +643,8 @@ const MenuBar = ({
         <Redo className="h-4 w-4" />
       </button>
       <div className="editor-separator" />
+      <HeadingSelect editor={editor} />
+      <div className="editor-separator" />
       <FontFamilySelect editor={editor} />
       <FontSizeSelect editor={editor} />
       <div className="editor-separator" />
@@ -659,18 +660,13 @@ const MenuBar = ({
       <button type="button" onClick={() => editor.chain().focus().toggleStrike().run()} className={btn(editor.isActive('strike'))} title="Barrato">
         <Strikethrough className="h-4 w-4" />
       </button>
-      <div className="editor-separator" />
       <ColorPickerButton editor={editor} />
       <HighlightPickerButton editor={editor} />
       <div className="editor-separator" />
-      <button type="button" onClick={() => editor.chain().focus().toggleSubscript().run()} className={btn(editor.isActive('subscript'))} title="Pedice">
-        <SubIcon className="h-4 w-4" />
+      <LinkButton editor={editor} />
+      <button type="button" onClick={() => imageInputRef.current?.click()} className="editor-button" title="Inserisci immagine">
+        <ImagePlus className="h-4 w-4" />
       </button>
-      <button type="button" onClick={() => editor.chain().focus().toggleSuperscript().run()} className={btn(editor.isActive('superscript'))} title="Apice">
-        <SupIcon className="h-4 w-4" />
-      </button>
-      <div className="editor-separator" />
-      <HeadingSelect editor={editor} />
       <div className="editor-separator" />
       <button type="button" onClick={() => editor.chain().focus().setTextAlign('left').run()} className={btn(editor.isActive({ textAlign: 'left' }))} title="Allinea sinistra">
         <AlignLeft className="h-4 w-4" />
@@ -691,21 +687,15 @@ const MenuBar = ({
       <button type="button" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btn(editor.isActive('orderedList'))} title="Elenco numerato">
         <ListOrdered className="h-4 w-4" />
       </button>
+      <div className="editor-separator" />
       <button type="button" onClick={() => editor.chain().focus().toggleBlockquote().run()} className={btn(editor.isActive('blockquote'))} title="Citazione">
         <Quote className="h-4 w-4" />
       </button>
-      <div className="editor-separator" />
-      <LinkButton editor={editor} />
-      <button
-        type="button"
-        onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
-        className="editor-button"
-        title="Inserisci tabella"
-      >
-        <Table2 className="h-4 w-4" />
+      <button type="button" onClick={() => editor.chain().focus().toggleSubscript().run()} className={btn(editor.isActive('subscript'))} title="Pedice">
+        <SubIcon className="h-4 w-4" />
       </button>
-      <button type="button" onClick={() => imageInputRef.current?.click()} className="editor-button" title="Inserisci immagine">
-        <ImagePlus className="h-4 w-4" />
+      <button type="button" onClick={() => editor.chain().focus().toggleSuperscript().run()} className={btn(editor.isActive('superscript'))} title="Apice">
+        <SupIcon className="h-4 w-4" />
       </button>
       <div className="editor-separator" />
       <button
@@ -1132,10 +1122,6 @@ export function RichTextEditor({ initialContent, onChange, initialScrollTop, onS
       Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Link.configure({ openOnClick: false }),
-      Table.configure({ resizable: false }),
-      TableRow,
-      TableHeader,
-      TableCell,
       Subscript,
       Superscript,
       SearchHighlight,
