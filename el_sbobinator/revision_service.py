@@ -58,7 +58,6 @@ def process_macro_revision_phase(
     cancelled: Callable[[], bool],
     fallback_keys: list[str],
     request_fallback_key: Callable[[], str | None],
-    is_empty_model_response_error: Callable[[str], bool],
     prompt_revisione: str,
     logger=None,
 ) -> tuple[object, str]:

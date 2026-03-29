@@ -328,7 +328,6 @@ def _esegui_sbobinatura_legacy(input_path, api_key_value, app_instance, session_
                 cancelled=runtime.cancelled,
                 fallback_keys=fallback_keys,
                 request_fallback_key=request_fallback_key,
-                is_empty_model_response_error=_is_empty_model_response_error,
                 prompt_revisione=PROMPT_REVISIONE,
                 logger=logger,
             )

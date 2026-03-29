@@ -25,19 +25,19 @@ _ALLOWED_TAGS: frozenset[str] = frozenset({
 })
 
 _ALLOWED_ATTRS: dict[str, set[str]] = {
-    "*": {"style", "class"},
+    "*": {"style", "class", "data-editor-image", "data-layout", "data-align", "data-width"},
     "a": {"href", "title", "target"},
     "img": {"src", "alt", "width", "height"},
     "th": {"colspan", "rowspan"},
     "td": {"colspan", "rowspan"},
 }
 
-_ALLOWED_URL_SCHEMES: frozenset[str] = frozenset({"http", "https", "mailto"})
+_ALLOWED_URL_SCHEMES: frozenset[str] = frozenset({"http", "https", "mailto", "data"})
 
 
 def sanitize_html_basic(html: str) -> str:
     # Sanitizzazione tramite allowlist (nh3/ammonia) — blocca tag/attributi non permessi
-    # e schemi URL pericolosi (javascript:, vbscript:, data:).
+    # e schemi URL pericolosi (javascript:, vbscript:). data: è permesso per src img inline.
     return nh3.clean(
         html or "",
         tags=_ALLOWED_TAGS,
