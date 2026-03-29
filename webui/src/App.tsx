@@ -539,13 +539,13 @@ export default function App() {
             </span>
             <button
               onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
-              className="icon-button"
+              className="icon-button icon-btn-theme"
               aria-label={themeMode === 'dark' ? 'Attiva tema chiaro' : 'Attiva tema scuro'}
               title={themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro'}
             >
               {themeMode === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
-            <button onClick={() => setIsSettingsOpen(true)} className="icon-button" aria-label="Apri impostazioni">
+            <button onClick={() => setIsSettingsOpen(true)} className="icon-button icon-btn-settings" aria-label="Apri impostazioni">
               <Settings className="w-5 h-5" />
             </button>
           </div>
@@ -695,7 +695,7 @@ export default function App() {
               Console
             </h2>
             <div className="flex items-center gap-2">
-              <button onClick={() => setIsConsoleExpanded(prev => !prev)} className="premium-button-secondary compact-button px-2.5 py-1.5 text-[11px] rounded-[13px]" style={{ background: 'rgba(255,255,255,0.02)', borderColor: 'var(--border-default)' }}>
+              <button onClick={() => setIsConsoleExpanded(prev => !prev)} className="premium-button-secondary compact-button px-2.5 py-1.5 text-[11px] rounded-[13px]" style={{ borderColor: 'var(--border-default)' }}>
                 {isConsoleExpanded ? 'Riduci' : 'Espandi'}
               </button>
             </div>
@@ -781,7 +781,6 @@ export default function App() {
           href="#"
           onClick={(e) => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }}
           className="text-sm font-medium transition-colors hover:opacity-100 opacity-70"
-          style={{ color: 'var(--text-muted)' }}
         >
           Supporta il progetto su Ko-fi ☕
         </a>

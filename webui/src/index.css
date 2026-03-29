@@ -29,10 +29,10 @@
   --accent-gradient-start: #94a3b8;
   --accent-gradient-end: #475569;
 
-  --success-bg: #0f766e;
-  --success-text: #0f766e;
-  --success-subtle: rgba(15, 118, 110, 0.12);
-  --success-ring: rgba(15, 118, 110, 0.22);
+  --success-bg: #16a34a;
+  --success-text: #15803d;
+  --success-subtle: rgba(22, 163, 74, 0.12);
+  --success-ring: rgba(22, 163, 74, 0.28);
   --error-bg: #b91c1c;
   --error-text: #b91c1c;
   --error-subtle: rgba(185, 28, 28, 0.1);
@@ -148,7 +148,50 @@
 
 :root:not([data-theme="dark"]) .premium-button-secondary,
 :root:not([data-theme="dark"]) .icon-button {
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+:root:not([data-theme="dark"]) .queue-card {
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.10), 0 6px 18px rgba(15, 23, 42, 0.07);
+}
+
+:root:not([data-theme="dark"]) .queue-card:hover {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.13), 0 10px 28px rgba(15, 23, 42, 0.09);
+}
+
+:root:not([data-theme="dark"]) .processing-card {
+  background:
+    linear-gradient(135deg, rgba(71, 85, 105, 0.09) 0%, rgba(100, 116, 139, 0.04) 55%, transparent 100%),
+    var(--card-queued-bg);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.10), 0 12px 32px rgba(15, 23, 42, 0.07);
+}
+
+:root:not([data-theme="dark"]) .processing-card::after {
+  border-color: rgba(71, 85, 105, 0.32);
+}
+
+:root:not([data-theme="dark"]) .dropzone-card {
+  background:
+    linear-gradient(140deg, rgba(255, 255, 255, 0.85), transparent 46%),
+    rgba(228, 234, 245, 0.70);
+}
+
+:root:not([data-theme="dark"]) footer a,
+:root:not([data-theme="dark"]) footer span {
+  color: var(--text-secondary);
+}
+
+:root:not([data-theme="dark"]) footer a {
+  opacity: 0.82;
+}
+
+:root:not([data-theme="dark"]) footer a:hover {
+  opacity: 1;
+}
+
+:root:not([data-theme="dark"]) footer span {
+  opacity: 0.5;
 }
 
 :root:not([data-theme="dark"]) .editor-toolbar {
@@ -423,6 +466,36 @@ button {
 .icon-button:hover {
   border-color: var(--border-strong);
   color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.icon-button:active {
+  transform: scale(0.91);
+  transition-duration: 80ms;
+}
+
+.icon-btn-theme svg {
+  transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.icon-btn-theme:hover svg {
+  transform: rotate(22deg) scale(1.12);
+}
+
+.icon-btn-theme:active svg {
+  transform: rotate(45deg) scale(0.9);
+}
+
+.icon-btn-settings svg {
+  transition: transform 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.icon-btn-settings:hover svg {
+  transform: rotate(55deg);
+}
+
+.icon-btn-settings:active svg {
+  transform: rotate(90deg) scale(0.9);
 }
 
 .icon-button {
