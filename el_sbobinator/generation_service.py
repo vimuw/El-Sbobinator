@@ -188,9 +188,11 @@ def retry_with_quota(
             if "429" in error or "resource_exhausted" in error or "quota" in error:
                 is_daily = (
                     "per day" in error
+                    or "per_day" in error
+                    or "perday" in error
                     or "quota_exceeded" in error
                     or "daily" in error
-                    or ("429" in error and "minute" not in error and "rpm" not in error)
+                    or "requests_per_day" in error
                 )
                 if not is_daily and attempts < max_attempts - 1:
                     print("      [Rilevato limite temporaneo. Attesa di 65s per il reset quota al minuto...]")
@@ -268,7 +270,11 @@ def extract_response_text(response) -> str:
 
 
 def build_chunk_prompt(previous_tail: str) -> str:
-    prompt = "Ascolta questo blocco di lezione e crea la sbobina seguendo rigorosamente le istruzioni di sistema."
+    prompt = (
+        "Trascrivi TUTTO il contenuto di questo blocco audio seguendo rigorosamente le istruzioni di sistema. "
+        "Non omettere nessun concetto, esempio, cifra o termine tecnico. "
+        "Non riassumere: la lunghezza dell'output deve essere proporzionale a quella dell'audio."
+    )
     if previous_tail:
         prompt += (
             "\n\nATTENZIONE: Stai continuando una stesura. Questo è l'ultimo paragrafo che hai generato nel blocco precedente:\n"
