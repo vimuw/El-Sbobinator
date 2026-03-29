@@ -800,7 +800,7 @@ export default function App() {
               )}
               {appState === 'canceling' && (
                 <motion.div key="canceling" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                  <button disabled className="premium-button w-full text-lg opacity-70" style={{ background: 'var(--btn-disabled-bg)', color: 'var(--btn-disabled-text)', cursor: 'wait' }}>
+                  <button disabled className="premium-button w-full text-lg" style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', boxShadow: 'none', cursor: 'wait' }}>
                     <Square className="w-5 h-5 fill-current" />
                     Annullamento in corso...
                   </button>

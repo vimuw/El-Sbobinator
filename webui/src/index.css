@@ -171,6 +171,17 @@
   border-color: rgba(71, 85, 105, 0.32);
 }
 
+:root:not([data-theme="dark"]) .canceling-card {
+  background:
+    linear-gradient(135deg, rgba(161, 98, 7, 0.07) 0%, rgba(161, 98, 7, 0.03) 55%, transparent 100%),
+    var(--card-queued-bg);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.10), 0 12px 32px rgba(15, 23, 42, 0.07);
+}
+
+:root:not([data-theme="dark"]) .canceling-card::after {
+  border-color: rgba(161, 98, 7, 0.28);
+}
+
 :root:not([data-theme="dark"]) .dropzone-card {
   background:
     linear-gradient(140deg, rgba(255, 255, 255, 0.85), transparent 46%),
@@ -671,8 +682,19 @@ button {
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.07);
 }
 
-.processing-card {
+.processing-card,
+.canceling-card {
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+}
+
+.canceling-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid rgba(161, 98, 7, 0.18);
+  pointer-events: none;
+  animation: processing-card-pulse 1.8s ease-in-out infinite;
 }
 
 .processing-card::after {
@@ -689,6 +711,12 @@ button {
   background: var(--processing-bg);
   border-color: var(--processing-ring);
   color: var(--processing-text);
+}
+
+.canceling-chip {
+  background: var(--warning-subtle);
+  border-color: var(--warning-ring);
+  color: var(--warning-text);
 }
 
 .processing-chip-compact {

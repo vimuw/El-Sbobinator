@@ -1,6 +1,6 @@
 import React from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { AlertCircle, CheckCircle, Clock, ExternalLink, Eye, FileAudio, FolderOpen, GripVertical, Trash2 } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, ExternalLink, Eye, FileAudio, FolderOpen, GripVertical, Trash2, XCircle } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
@@ -45,6 +45,7 @@ export function QueueFileCard({
   onRemove, onPreview, onOpenFile, onOpenDir,
 }: QueueFileCardProps) {
   const processingDetails = file.status === 'processing' ? getProcessingDetails(currentPhase) : null;
+  const isCanceling = appState === 'canceling' && file.status === 'processing';
   const isDraggable = file.status === 'queued' && appState === 'idle';
 
   const { attributes, listeners, setNodeRef, transform, transition: dndTransition, isDragging } = useSortable({
@@ -69,11 +70,11 @@ export function QueueFileCard({
           opacity: { duration: 0.2, ease: 'easeOut' },
           y: { type: 'spring', stiffness: 380, damping: 30, mass: 0.8 },
         }}
-        className={`queue-card relative transition-colors ${file.status === 'processing' ? 'processing-card px-5 py-4' : 'p-5'}`}
+        className={`queue-card relative transition-colors ${file.status === 'processing' ? (isCanceling ? 'canceling-card px-5 py-4' : 'processing-card px-5 py-4') : 'p-5'}`}
         style={{
           border: `1px solid ${
             file.status === 'processing'
-              ? 'var(--processing-ring)'
+              ? isCanceling ? 'var(--warning-ring)' : 'var(--processing-ring)'
               : file.status === 'done'
                 ? 'var(--success-ring)'
                 : file.status === 'error'
@@ -81,7 +82,9 @@ export function QueueFileCard({
                   : 'var(--card-queued-border)'
           }`,
           background: file.status === 'processing'
-            ? 'linear-gradient(180deg, rgba(255,255,255,0.02), var(--processing-bg))'
+            ? isCanceling
+              ? 'linear-gradient(180deg, rgba(255,255,255,0.02), var(--warning-subtle))'
+              : 'linear-gradient(180deg, rgba(255,255,255,0.02), var(--processing-bg))'
             : file.status === 'error'
               ? 'var(--error-subtle)'
               : 'rgba(255,255,255,0.03)',
@@ -103,14 +106,14 @@ export function QueueFileCard({
               className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl"
               style={{
                 background: file.status === 'processing'
-                  ? 'var(--processing-bg)'
+                  ? isCanceling ? 'var(--warning-subtle)' : 'var(--processing-bg)'
                   : file.status === 'error'
                     ? 'var(--error-subtle)'
                     : 'rgba(255,255,255,0.03)',
                 color: file.status === 'done'
                   ? 'var(--success-text)'
                   : file.status === 'processing'
-                    ? 'var(--processing-text)'
+                    ? isCanceling ? 'var(--warning-text)' : 'var(--processing-text)'
                     : file.status === 'error'
                       ? 'var(--error-text)'
                       : 'var(--text-muted)',
@@ -119,7 +122,9 @@ export function QueueFileCard({
               {file.status === 'done'
                 ? <CheckCircle className="w-5 h-5" />
                 : file.status === 'processing'
-                  ? <Clock className="w-5 h-5 animate-pulse" />
+                  ? isCanceling
+                    ? <XCircle className="w-5 h-5" />
+                    : <Clock className="w-5 h-5 animate-pulse" />
                   : file.status === 'error'
                     ? <AlertCircle className="w-5 h-5" />
                     : <FileAudio className="w-5 h-5" />}
@@ -153,9 +158,9 @@ export function QueueFileCard({
                   className="mt-2 flex min-h-7 flex-wrap items-center gap-1.5"
                   transition={{ layout: { duration: 0.2, ease: [0.22, 1, 0.36, 1] } }}
                 >
-                  <span className="helper-chip processing-chip processing-chip-compact">
-                    <span className="inline-flex h-2 w-2 rounded-full animate-pulse" style={{ background: 'var(--processing-dot)' }} />
-                    In elaborazione
+                  <span className={`helper-chip processing-chip-compact ${isCanceling ? 'canceling-chip' : 'processing-chip'}`}>
+                    <span className="inline-flex h-2 w-2 rounded-full animate-pulse" style={{ background: isCanceling ? 'var(--warning-text)' : 'var(--processing-dot)' }} />
+                    {isCanceling ? 'Annullamento in corso...' : 'In elaborazione'}
                   </span>
                   <AnimatePresence mode="wait" initial={false}>
                     <motion.span
@@ -239,13 +244,13 @@ export function QueueFileCard({
               className="flex items-center justify-between gap-3 mb-1.5 text-[10px] font-medium uppercase tracking-[0.14em]"
               style={{ color: 'var(--text-muted)' }}
             >
-              <span>{processingDetails?.title ?? 'Generazione sbobina'}</span>
+              <span>{isCanceling ? 'In attesa di interruzione' : (processingDetails?.title ?? 'Generazione sbobina')}</span>
               <span style={{ color: 'var(--text-primary)' }}>{file.progress}%</span>
             </div>
             <div className="processing-progress h-2 w-full rounded-full overflow-hidden" style={{ background: 'var(--progress-bg)' }}>
               <motion.div
                 className="processing-progress-fill h-full rounded-full"
-                style={{ background: 'linear-gradient(90deg, var(--accent-gradient-start), var(--accent-gradient-end))' }}
+                style={{ background: isCanceling ? 'linear-gradient(90deg, var(--warning-bg), var(--warning-text))' : 'linear-gradient(90deg, var(--accent-gradient-start), var(--accent-gradient-end))' }}
                 initial={{ width: 0 }}
                 animate={{ width: `${file.progress}%` }}
                 transition={{ ease: 'linear', duration: 0.3 }}
