@@ -48,6 +48,7 @@ function QueueFileCardInner({
   const processingDetails = file.status === 'processing' ? getProcessingDetails(currentPhase) : null;
   const isCanceling = appState === 'canceling' && file.status === 'processing';
   const isDraggable = file.status === 'queued' && appState === 'idle';
+  const processingTitle = isCanceling ? 'Revisione in arresto' : processingDetails?.title;
 
   const { attributes, listeners, setNodeRef, transform, transition: dndTransition, isDragging } = useSortable({
     id: file.id,
@@ -71,18 +72,18 @@ function QueueFileCardInner({
           opacity: { duration: 0.2, ease: 'easeOut' },
           y: { type: 'spring', stiffness: 380, damping: 30, mass: 0.8 },
         }}
-        className={`queue-card relative transition-colors ${file.status === 'processing' ? (isCanceling ? 'canceling-card px-5 py-4' : 'processing-card px-5 py-4') : 'p-5'}`}
+        className={`queue-card relative transition-colors ${file.status === 'processing' ? (isCanceling ? 'canceling-card px-5 py-4' : 'processing-card px-5 py-4') : file.status === 'queued' ? 'p-4' : 'p-5'}`}
         style={{
           border: `1px solid ${
             file.status === 'processing'
-              ? isCanceling ? 'var(--warning-ring)' : 'var(--processing-ring)'
+              ? isCanceling ? 'var(--error-ring)' : 'var(--processing-ring)'
               : file.status === 'error'
                 ? 'var(--error-ring)'
                 : 'var(--card-queued-border)'
           }`,
           background: file.status === 'processing'
             ? isCanceling
-              ? 'linear-gradient(180deg, rgba(255,255,255,0.02), var(--warning-subtle))'
+              ? 'linear-gradient(180deg, rgba(255,255,255,0.02), var(--error-subtle))'
               : 'linear-gradient(180deg, rgba(255,255,255,0.02), var(--processing-bg))'
             : file.status === 'error'
               ? 'var(--error-subtle)'
@@ -105,12 +106,12 @@ function QueueFileCardInner({
               className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl"
               style={{
                 background: file.status === 'processing'
-                  ? isCanceling ? 'var(--warning-subtle)' : 'var(--processing-bg)'
+                  ? isCanceling ? 'var(--error-subtle)' : 'var(--processing-bg)'
                   : file.status === 'error'
                     ? 'var(--error-subtle)'
                     : 'rgba(255,255,255,0.03)',
                 color: file.status === 'processing'
-                  ? isCanceling ? 'var(--warning-text)' : 'var(--processing-text)'
+                  ? isCanceling ? 'var(--error-text)' : 'var(--processing-text)'
                   : file.status === 'error'
                     ? 'var(--error-text)'
                     : 'var(--text-muted)',
@@ -148,12 +149,12 @@ function QueueFileCardInner({
                   transition={{ layout: { duration: 0.2, ease: [0.22, 1, 0.36, 1] } }}
                 >
                   <span className={`helper-chip processing-chip-compact ${isCanceling ? 'canceling-chip' : 'processing-chip'}`}>
-                    <span className="inline-flex h-2 w-2 rounded-full animate-pulse" style={{ background: isCanceling ? 'var(--warning-text)' : 'var(--processing-dot)' }} />
-                    {isCanceling ? 'Annullamento in corso...' : 'In elaborazione'}
+                    <span className="inline-flex h-2 w-2 rounded-full animate-pulse" style={{ background: isCanceling ? 'var(--error-text)' : 'var(--processing-dot)' }} />
+                    {isCanceling ? 'Annullamento in corso' : 'In elaborazione'}
                   </span>
                   <AnimatePresence mode="wait" initial={false}>
                     <motion.span
-                      key={`processing-title-${processingDetails.title}`}
+                      key={`processing-title-${processingTitle}`}
                       initial={{ opacity: 0, y: 4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -4 }}
@@ -161,7 +162,7 @@ function QueueFileCardInner({
                       className="text-[0.96rem] font-semibold tracking-tight"
                       style={{ color: 'var(--text-primary)' }}
                     >
-                      {processingDetails.title}
+                      {processingTitle}
                     </motion.span>
                   </AnimatePresence>
                   <AnimatePresence mode="wait" initial={false}>
@@ -173,7 +174,7 @@ function QueueFileCardInner({
                         exit={{ opacity: 0, y: -4 }}
                         transition={{ duration: 0.16, ease: 'easeOut' }}
                         className="text-[11px] font-medium leading-none self-center"
-                        style={{ color: 'var(--processing-text)' }}
+                        style={{ color: isCanceling ? 'var(--error-text)' : 'var(--processing-text)' }}
                       >
                         {processingDetails.chunk}
                       </motion.span>
@@ -185,7 +186,7 @@ function QueueFileCardInner({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {appState !== 'processing' && (
+            {appState === 'idle' && (
               <button
                 onClick={() => onRemove(file.id)}
                 className="icon-button compact-icon-button"
@@ -209,7 +210,7 @@ function QueueFileCardInner({
             <div className="processing-progress h-2 w-full rounded-full overflow-hidden" style={{ background: 'var(--progress-bg)' }}>
               <motion.div
                 className="processing-progress-fill h-full rounded-full"
-                style={{ background: isCanceling ? 'linear-gradient(90deg, var(--warning-bg), var(--warning-text))' : 'linear-gradient(90deg, var(--accent-gradient-start), var(--accent-gradient-end))' }}
+                style={{ background: isCanceling ? 'linear-gradient(90deg, var(--error-bg), var(--error-text))' : 'linear-gradient(90deg, var(--accent-gradient-start), var(--accent-gradient-end))' }}
                 initial={{ width: 0 }}
                 animate={{ width: `${activeProgress ?? file.progress}%` }}
                 transition={{ ease: 'linear', duration: 0.3 }}
@@ -237,16 +238,16 @@ export const QueueFileCard = React.memo(QueueFileCardInner);
 interface CompletedFileCardProps {
   file: FileItem;
   appState: AppStatus;
+  isNewest: boolean;
   onRemove: (id: string) => void;
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string) => void;
   onOpenFile: (path: string) => void;
   onOpenDir: (path: string) => void;
 }
 
-function CompletedFileCardInner({ file, appState, onRemove, onPreview, onOpenFile, onOpenDir }: CompletedFileCardProps) {
+function CompletedFileCardInner({ file, appState, isNewest, onRemove, onPreview, onOpenFile, onOpenDir }: CompletedFileCardProps) {
   return (
     <motion.div
-      layout
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, transition: { duration: 0.11, ease: 'easeIn' } }}
@@ -255,7 +256,11 @@ function CompletedFileCardInner({ file, appState, onRemove, onPreview, onOpenFil
         y: { type: 'spring', stiffness: 380, damping: 30, mass: 0.8 },
       }}
       className="queue-card relative p-5 transition-colors"
-      style={{ border: '1px solid var(--success-ring)', background: 'rgba(255,255,255,0.03)' }}
+      style={{
+        border: '1px solid var(--success-ring)',
+        background: isNewest ? 'rgba(22,163,74,0.04)' : 'rgba(255,255,255,0.03)',
+        boxShadow: isNewest ? '0 0 0 2px rgba(22,163,74,0.10)' : undefined,
+      }}
     >
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 overflow-hidden flex-1">
@@ -266,7 +271,14 @@ function CompletedFileCardInner({ file, appState, onRemove, onPreview, onOpenFil
             <CheckCircle className="w-5 h-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <h4 className="text-base font-semibold truncate tracking-tight" style={{ color: 'var(--text-primary)' }}>{file.name}</h4>
+            <div className="flex items-baseline gap-2 min-w-0">
+              <h4 className="text-base font-semibold truncate tracking-tight" style={{ color: 'var(--text-primary)' }}>{file.name}</h4>
+              {isNewest && (
+                <span className="shrink-0 whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'var(--success-subtle)', color: 'var(--success-text)', border: '1px solid var(--success-ring)' }}>
+                  Nuovo
+                </span>
+              )}
+            </div>
             <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
               <span>{formatSize(file.size)}</span>
               {file.duration > 0 && (
@@ -285,45 +297,47 @@ function CompletedFileCardInner({ file, appState, onRemove, onPreview, onOpenFil
 
         <div className="flex items-center gap-2 shrink-0">
           {file.outputHtml && (
-            <>
-              <button
-                onClick={(e) => { e.stopPropagation(); onPreview(file.outputHtml!, file.name, file.path, file.id); }}
-                className="icon-button compact-icon-button"
-                style={{ color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.03)', borderColor: 'var(--border-default)' }}
-                title="Anteprima testo"
-              >
-                <Eye className="w-4 h-4" />
-              </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onPreview(file.outputHtml!, file.name, file.path, file.id); }}
+              className="premium-button-secondary compact-button text-xs flex items-center gap-1.5"
+              style={{ color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              Apri editor
+            </button>
+          )}
+          <div className="flex items-center gap-1">
+            {file.outputHtml && (
               <button
                 onClick={(e) => { e.stopPropagation(); onOpenFile(file.outputHtml!); }}
                 className="icon-button compact-icon-button"
-                style={{ color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.03)', borderColor: 'var(--border-default)' }}
+                style={{ color: 'var(--text-muted)' }}
                 title="Apri nel browser"
               >
-                <ExternalLink className="w-4 h-4" />
+                <ExternalLink className="w-3.5 h-3.5" />
               </button>
-              {file.outputDir && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onOpenDir(file.outputDir!); }}
-                  className="icon-button compact-icon-button"
-                  style={{ color: 'var(--text-muted)' }}
-                  title="Apri cartella"
-                >
-                  <FolderOpen className="w-4 h-4" />
-                </button>
-              )}
-            </>
-          )}
-          {appState !== 'processing' && (
-            <button
-              onClick={() => onRemove(file.id)}
-              className="icon-button compact-icon-button"
-              style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}
-              title="Rimuovi"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
+            )}
+            {file.outputDir && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onOpenDir(file.outputDir!); }}
+                className="icon-button compact-icon-button"
+                style={{ color: 'var(--text-muted)' }}
+                title="Apri cartella"
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {appState === 'idle' && (
+              <button
+                onClick={() => onRemove(file.id)}
+                className="icon-button compact-icon-button"
+                style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}
+                title="Rimuovi"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </motion.div>

@@ -7,6 +7,7 @@ import {
   FileAudio,
   FileText,
   Github,
+  Key,
   Moon,
   Play,
   Search,
@@ -69,8 +70,10 @@ const initialPreviewState: PreviewState = {
   initScrollTop: undefined,
 };
 
+type UiMode = 'setup' | 'ready-empty' | 'ready-with-files' | 'processing' | 'canceling';
+
 export default function App() {
-  const [{ files, structuralVersion, appState, currentPhase, activeProgress, workTotals, workDone, stepMetrics }, dispatch] = useReducer(processingReducer, initialProcessingState);
+  const [{ files, structuralVersion, appState, currentPhase, activeProgress, currentFileIndex, currentBatchTotal, workTotals, workDone, stepMetrics }, dispatch] = useReducer(processingReducer, initialProcessingState);
 
   // --- Extracted hooks ---
   const { consoleLogs, appendConsole } = useConsole();
@@ -378,7 +381,11 @@ export default function App() {
   const hasApiKey = Boolean(apiKey.trim());
   const isApiKeyValid = GEMINI_KEY_PATTERN.test(apiKey.trim());
   const canStart = queuedCount > 0 && hasApiKey && isApiKeyValid;
-  const shouldShowActionPanel = appState !== 'idle' || queuedCount > 0;
+  const uiMode: UiMode =
+    appState === 'canceling' ? 'canceling' :
+    appState === 'processing' ? 'processing' :
+    (!hasApiKey || !isApiKeyValid) ? 'setup' :
+    queuedCount > 0 ? 'ready-with-files' : 'ready-empty';
   const lastConsoleMessage = consoleLogs.length > 0 ? consoleLogs[consoleLogs.length - 1] : 'Pronto per iniziare.';
 
   const computeEta = (): string | null => {
@@ -514,25 +521,57 @@ export default function App() {
 
       <main className="max-w-3xl mx-auto px-5 sm:px-6 py-8 w-full flex-1 flex flex-col gap-6">
 
-        {/* Drop Zone */}
-        <div
-          onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop} onClick={handleBrowseClick}
-          className={`relative overflow-hidden rounded-2xl border-2 border-dashed transition-all duration-300 cursor-pointer flex flex-col items-center justify-center py-12 px-6 text-center group ${appState === 'processing' ? 'opacity-50 pointer-events-none' : ''}`}
-          style={{
-            borderColor: isDragging ? 'var(--accent-bg)' : 'var(--border-strong)',
-            borderWidth: '2.5px',
-            background: isDragging ? 'var(--accent-subtle)' : 'rgba(255,255,255,0.01)',
-          }}
-        >
-          <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".mp3,.m4a,.wav,.mp4,.mkv,.webm,.ogg,.flac,.aac" multiple />
-          <div className="w-14 h-14 mb-4 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}>
-            <UploadCloud className="w-7 h-7" style={{ color: isDragging ? 'var(--accent-text)' : 'var(--text-muted)' }} />
+        {/* Onboarding / Drop Zone */}
+        {uiMode === 'setup' ? (
+          <div
+            className="relative overflow-hidden rounded-2xl px-8 py-12 text-center flex flex-col items-center gap-5"
+            style={{ background: 'rgba(255,255,255,0.02)', border: '1.5px solid var(--border-default)' }}
+          >
+            <div className="w-14 h-14 rounded-full flex items-center justify-center shadow-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}>
+              <Key className="w-7 h-7" style={{ color: 'var(--text-muted)' }} />
+            </div>
+            <div className="flex flex-col gap-1.5 max-w-sm">
+              <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Configura la tua API Key</h3>
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                El Sbobinator usa Google Gemini per trascrivere audio e video. Inserisci una chiave API gratuita per iniziare.
+              </p>
+            </div>
+            <div className="flex flex-col items-center gap-2.5">
+              <button onClick={() => setIsSettingsOpen(true)} className="premium-button px-8 py-3 text-base">
+                <Settings className="w-4 h-4" />
+                Apri impostazioni
+              </button>
+              <a
+                href="#"
+                onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.('https://aistudio.google.com/apikey'); }}
+                className="text-xs transition-opacity hover:opacity-100 opacity-70"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                Ottieni una API key gratis su aistudio.google.com →
+              </a>
+            </div>
+            <p className="text-xs" style={{ color: 'var(--text-faint)' }}>Dopo potrai trascinare file audio e video qui.</p>
           </div>
-          <h3 className="text-lg font-medium mb-2" style={{ color: 'var(--text-primary)' }}>Clicca per sfogliare i file</h3>
-          <p className="text-sm max-w-sm" style={{ color: 'var(--text-muted)' }}>
-            Supporta audio e video (.mp3, .m4a, .wav, .mp4, .mkv, .webm, .ogg, .flac, .aac).<br/>Coda illimitata - elaborazione sequenziale.
-          </p>
-        </div>
+        ) : uiMode !== 'processing' && uiMode !== 'canceling' ? (
+          <div
+            onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop} onClick={handleBrowseClick}
+            className={`relative overflow-hidden rounded-2xl border-2 border-dashed transition-all duration-300 cursor-pointer flex flex-col items-center justify-center py-12 px-6 text-center group ${appState === 'processing' ? 'opacity-50 pointer-events-none' : ''}`}
+            style={{
+              borderColor: isDragging ? 'var(--accent-bg)' : 'var(--border-strong)',
+              borderWidth: '2.5px',
+              background: isDragging ? 'var(--accent-subtle)' : 'rgba(255,255,255,0.01)',
+            }}
+          >
+            <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".mp3,.m4a,.wav,.mp4,.mkv,.webm,.ogg,.flac,.aac" multiple />
+            <div className="w-14 h-14 mb-4 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}>
+              <UploadCloud className="w-7 h-7" style={{ color: isDragging ? 'var(--accent-text)' : 'var(--text-muted)' }} />
+            </div>
+            <h3 className="text-lg font-medium mb-2" style={{ color: 'var(--text-primary)' }}>Clicca per sfogliare i file</h3>
+            <p className="text-sm max-w-sm" style={{ color: 'var(--text-muted)' }}>
+              Supporta audio e video (.mp3, .m4a, .wav, .mp4, .mkv, .webm, .ogg, .flac, .aac).<br/>Coda illimitata - elaborazione sequenziale.
+            </p>
+          </div>
+        ) : null}
 
         {/* Batch Queue */}
         <div className="premium-panel p-5 sm:p-6 space-y-4">
@@ -561,7 +600,7 @@ export default function App() {
             onDragEnd={handleDragEnd}
           >
             <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-              <AnimatePresence mode="popLayout" onExitComplete={() => { if (!filesRef.current.some(f => f.status !== 'done')) setShowEmptyState(true); }}>
+              <AnimatePresence onExitComplete={() => { if (!filesRef.current.some(f => f.status !== 'done')) setShowEmptyState(true); }}>
                 {pendingFiles.map((file) => {
                   const isActive = file.status === 'processing';
                   return (
@@ -600,6 +639,39 @@ export default function App() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Action Panel */}
+          {(appState !== 'idle' || queuedCount > 0) && (
+            <div className="pt-4 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+              <AnimatePresence mode="wait">
+                {appState === 'idle' && (
+                  <motion.div key="idle" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                    <button onClick={startProcessing} disabled={!canStart}
+                      className="premium-button w-full text-lg"
+                      style={canStart ? {} : { cursor: 'not-allowed' }}>
+                      <Play className="w-5 h-5 fill-current" />
+                      {!hasApiKey ? '⚠️ Inserisci API Key nelle impostazioni' : !isApiKeyValid ? '⚠️ API Key non valida' : `Avvia sbobinatura (${queuedCount} file)`}
+                    </button>
+                  </motion.div>
+                )}
+                {appState === 'processing' && (
+                  <motion.div key="processing" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex justify-end">
+                    <button onClick={stopProcessing} className="premium-button-secondary compact-button px-5 py-2" style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--bg-elevated)' }}>
+                      <Square className="w-3.5 h-3.5 fill-current" /> Stop
+                    </button>
+                  </motion.div>
+                )}
+                {appState === 'canceling' && (
+                  <motion.div key="canceling" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex justify-end">
+                    <span className="text-sm flex items-center gap-1.5" style={{ color: 'var(--error-text)', opacity: 0.75, cursor: 'wait' }}>
+                      <Square className="w-3 h-3 fill-current" />
+                      Annullamento in corso
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
         </div>
 
         {/* Sbobine completate */}
@@ -649,12 +721,13 @@ export default function App() {
                 </div>
               </div>
 
-              <AnimatePresence mode="popLayout">
+              <AnimatePresence>
                 {filteredDoneFiles.map(file => (
                   <CompletedFileCard
                     key={file.id}
                     file={file}
                     appState={appState}
+                    isNewest={file.id === doneFiles[0]?.id}
                     onRemove={removeFile}
                     onPreview={openPreview}
                     onOpenFile={openFile}
@@ -681,9 +754,9 @@ export default function App() {
         {/* Console */}
         <div className="console-shell console-shell-subtle">
           <div className="px-5 py-3 flex items-center justify-between" style={{ background: 'var(--console-header)', borderBottom: '1px solid var(--border-subtle)' }}>
-            <h2 className="text-xs font-semibold uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
-              <span className={`w-2.5 h-2.5 rounded-full ${appState === 'processing' ? 'animate-pulse' : ''}`} style={appState !== 'processing' ? { background: 'var(--text-faint)' } : { background: 'var(--processing-dot)' }} />
-              Console
+            <h2 className="text-xs font-medium uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--text-faint)' }}>
+              <span className={`w-2 h-2 rounded-full ${appState === 'processing' ? 'animate-pulse' : ''}`} style={appState !== 'processing' ? { background: 'var(--text-faint)' } : { background: 'var(--processing-dot)' }} />
+              Dettagli tecnici
             </h2>
             <div className="flex items-center gap-2">
               <button onClick={() => setIsConsoleExpanded(prev => !prev)} className="premium-button-secondary compact-button px-2.5 py-1.5 text-[11px] rounded-[13px]" style={{ borderColor: 'var(--border-default)' }}>
@@ -713,45 +786,6 @@ export default function App() {
           )}
         </div>
 
-        {/* Action Buttons */}
-        {shouldShowActionPanel && (
-          <div className="premium-panel p-4 sm:p-5 mt-1">
-            <AnimatePresence mode="wait">
-              {appState === 'idle' && (
-                <motion.div key="idle" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                  <button onClick={startProcessing} disabled={!canStart}
-                    className="premium-button w-full text-lg"
-                    style={canStart ? {} : { cursor: 'not-allowed' }}>
-                    <Play className="w-5 h-5 fill-current" />
-                    {!hasApiKey ? '⚠️ Inserisci API Key nelle impostazioni' : !isApiKeyValid ? '⚠️ API Key non valida' : `Avvia sbobinatura (${queuedCount} file)`}
-                  </button>
-                </motion.div>
-              )}
-              {appState === 'processing' && (
-                <motion.div key="processing" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="w-full flex gap-4">
-                  <div className="flex-1 py-4 rounded-[20px] flex items-center justify-center gap-3" style={{ background: 'var(--processing-bg)', border: '1px solid var(--processing-ring)' }}>
-                    <div className="relative flex h-3 w-3">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: 'var(--processing-text)' }} />
-                      <span className="relative inline-flex rounded-full h-3 w-3" style={{ background: 'var(--processing-dot)' }} />
-                    </div>
-                    <span className="font-medium" style={{ color: 'var(--processing-text)' }}>Elaborazione in corso...</span>
-                  </div>
-                  <button onClick={stopProcessing} className="premium-button-secondary px-8 py-4" style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--bg-elevated)' }}>
-                    <Square className="w-4 h-4 fill-current" /> Stop
-                  </button>
-                </motion.div>
-              )}
-              {appState === 'canceling' && (
-                <motion.div key="canceling" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                  <button disabled className="premium-button w-full text-lg" style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', boxShadow: 'none', cursor: 'wait' }}>
-                    <Square className="w-5 h-5 fill-current" />
-                    Annullamento in corso...
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
 
       </main>
 

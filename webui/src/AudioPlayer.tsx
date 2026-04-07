@@ -130,7 +130,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
 
   return (
     <div
-      className="flex w-full items-center gap-2 px-0.5 py-1.5"
+      className="flex w-full flex-wrap items-center gap-2 px-0.5 py-1.5"
       style={{ background: 'transparent' }}
     >
       <audio

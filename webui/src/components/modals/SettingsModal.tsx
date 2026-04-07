@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AlertCircle, Eye, EyeOff, HardDrive, Settings, X } from 'lucide-react';
 import type { ValidationResult } from '../../bridge';
-import { formatSize } from '../../utils';
+import { formatSize, GEMINI_KEY_PATTERN } from '../../utils';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -122,6 +122,7 @@ export function SettingsModal({
               </button>
             </div>
             <div className="app-scroll flex-1 overflow-y-auto overflow-x-hidden px-5 py-5 space-y-6">
+              {/* 1. API Key + inline validation */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Google Gemini API Key (Principale)</label>
@@ -142,6 +143,11 @@ export function SettingsModal({
                   className="app-input font-mono text-sm"
                   style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
                 />
+                {apiKey.trim() && (
+                  <p className="text-xs mt-1.5" style={{ color: GEMINI_KEY_PATTERN.test(apiKey.trim()) ? 'var(--success-text)' : 'var(--warning-text)' }}>
+                    {GEMINI_KEY_PATTERN.test(apiKey.trim()) ? '✓ Formato valido' : '⚠ Formato non valido — le chiavi iniziano con AIzaSy...'}
+                  </p>
+                )}
                 <p className="text-xs mt-2 flex items-start gap-1.5" style={{ color: 'var(--text-muted)' }}>
                   <AlertCircle className="w-4 h-4 shrink-0" /> Salvata in modo sicuro tramite DPAPI (Windows) o Keyring (Mac/Linux).
                 </p>
@@ -154,6 +160,8 @@ export function SettingsModal({
                   → Ottieni gratis su aistudio.google.com
                 </a>
               </div>
+
+              {/* 2. Fallback Keys */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>API Keys di Riserva (Fallback)</label>
@@ -176,15 +184,8 @@ export function SettingsModal({
                 />
                 <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>Usate automaticamente in caso di esaurimento quota (429).</p>
               </div>
-              <div className="pt-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <h3 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>Avanzate (Sola Lettura)</h3>
-                <ul className="space-y-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-                  <li className="flex justify-between"><span>Modello:</span> <span style={{ color: 'var(--text-secondary)' }}>gemini-2.5-flash</span></li>
-                  <li className="flex justify-between"><span>Chunk:</span> <span style={{ color: 'var(--text-secondary)' }}>15 minuti</span></li>
-                  <li className="flex justify-between"><span>Overlap:</span> <span style={{ color: 'var(--text-secondary)' }}>30 secondi</span></li>
-                  <li className="flex justify-between"><span>Pre-conversione:</span> <span style={{ color: 'var(--text-secondary)' }}>Mono 16kHz 48k</span></li>
-                </ul>
-              </div>
+
+              {/* 3. Storage */}
               <div className="pt-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <h3 className="text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
@@ -226,18 +227,26 @@ export function SettingsModal({
                   </p>
                 </div>
               </div>
+
+              {/* 4. Diagnostica — read-only config + verify environment */}
               <div className="pt-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                 <div className="flex items-center justify-between gap-3 mb-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Verifica Ambiente</h3>
+                  <h3 className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--text-faint)' }}>Diagnostica</h3>
                   <button
                     onClick={runEnvironmentValidation}
                     disabled={isValidatingEnvironment}
                     className="premium-button-secondary compact-button px-3 py-1.5 text-[11px] rounded-[13px]"
-                    style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
+                    style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)', borderColor: 'var(--border-subtle)' }}
                   >
                     {isValidatingEnvironment ? 'Verifica...' : 'Verifica ambiente'}
                   </button>
                 </div>
+                <ul className="space-y-1.5 mb-3">
+                  <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Modello:</span> <span className="font-mono">gemini-2.5-flash</span></li>
+                  <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Chunk:</span> <span className="font-mono">15 min</span></li>
+                  <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Overlap:</span> <span className="font-mono">30 s</span></li>
+                  <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Pre-conversione:</span> <span className="font-mono">Mono 16kHz 48k</span></li>
+                </ul>
                 {validationResult && (
                   <div className="space-y-2 text-sm">
                     <p style={{ color: validationResult.ok ? 'var(--success-text)' : 'var(--error-text)' }}>{validationResult.summary}</p>

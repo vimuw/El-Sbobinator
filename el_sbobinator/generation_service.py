@@ -7,6 +7,7 @@ module can focus more on orchestration.
 
 from __future__ import annotations
 
+import json
 import os
 import threading
 import time
@@ -30,6 +31,105 @@ _RETRY_SLEEP_SECONDS: float = 30.0  # Back-off pause between generic transient e
 # Gemini enforces a per-minute request quota that resets after ~60 s; sleeping
 # 65 s adds a small buffer to ensure the window has fully elapsed before retry.
 _RATE_LIMIT_SLEEP_SECONDS: float = 65.0
+
+
+def _error_text(exc: Exception) -> str:
+    """Flatten structured SDK errors into a searchable lowercase string."""
+    parts: list[str] = []
+    for attr in ("message", "status"):
+        value = getattr(exc, attr, None)
+        if value:
+            parts.append(str(value))
+    details = getattr(exc, "details", None)
+    if details:
+        try:
+            parts.append(json.dumps(details, ensure_ascii=False, sort_keys=True))
+        except TypeError:
+            parts.append(str(details))
+    response = getattr(exc, "response", None)
+    if response is not None:
+        for attr in ("text", "reason_phrase", "reason"):
+            value = getattr(response, attr, None)
+            if value:
+                parts.append(str(value))
+    parts.append(str(exc))
+    return " ".join(part for part in parts if part).lower()
+
+
+def _error_code(exc: Exception) -> int | None:
+    raw_candidates = [
+        getattr(exc, "code", None),
+        getattr(getattr(exc, "response", None), "status_code", None),
+        getattr(getattr(exc, "response", None), "status", None),
+    ]
+    for raw in raw_candidates:
+        try:
+            if raw is None or raw == "":
+                continue
+            return int(raw)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _is_minute_scoped_rate_limit(error_text: str) -> bool:
+    markers = (
+        "per minute",
+        "per-minute",
+        "per_minute",
+        "rate limit",
+        "too many requests",
+        "requests_per_minute",
+        "requests per minute",
+        "retry-after",
+        "retry after",
+        "rpm",
+    )
+    return any(marker in error_text for marker in markers)
+
+
+def _is_daily_or_key_exhausted(error_text: str, error_code: int | None) -> bool:
+    hard_limit_markers = (
+        "per day",
+        "per-day",
+        "per_day",
+        "perday",
+        "daily",
+        "quota_exceeded",
+        "requests_per_day",
+        "requests per day",
+        "insufficient_quota",
+        "insufficient quota",
+        "insufficient_balance",
+        "insufficient balance",
+        "billing",
+        "credit",
+        "balance",
+    )
+    if any(marker in error_text for marker in hard_limit_markers):
+        return True
+
+    token_markers = ("token", "tokens")
+    token_exhaustion_markers = (
+        "exhaust",
+        "exceeded",
+        "finished",
+        "ended",
+        "insufficient",
+        "unavailable",
+        "depleted",
+    )
+    if any(marker in error_text for marker in token_markers) and any(
+        marker in error_text for marker in token_exhaustion_markers
+    ):
+        return True
+
+    # Some Gemini quota failures are surfaced as plain HTTP 503 / UNAVAILABLE,
+    # but the structured payload still says RESOURCE_EXHAUSTED.
+    if error_code == 503 and "resource_exhausted" in error_text:
+        return True
+
+    return False
 
 
 def extract_client_api_key(client_obj) -> str | None:
@@ -147,7 +247,7 @@ def request_new_api_key(runtime, cancelled: Callable[[], bool]):
 
 
 class QuotaDailyLimitError(Exception):
-    """Raised when daily API quota is exhausted and no fallback key is available."""
+    """Raised when the active API key is exhausted and no fallback key is available."""
 
 
 class PermanentError(Exception):
@@ -184,17 +284,19 @@ def retry_with_quota(
             result = callable_fn(client)
             return client, result
         except Exception as exc:
-            error = str(exc).lower()
-            if "429" in error or "resource_exhausted" in error or "quota" in error:
-                is_daily = (
-                    "per day" in error
-                    or "per_day" in error
-                    or "perday" in error
-                    or "quota_exceeded" in error
-                    or "daily" in error
-                    or "requests_per_day" in error
-                )
-                if not is_daily and attempts < max_attempts - 1:
+            error = _error_text(exc)
+            error_code = _error_code(exc)
+            is_quota_related = (
+                error_code == 429
+                or "resource_exhausted" in error
+                or "quota" in error
+                or "rate limit" in error
+                or "too many requests" in error
+            )
+            if is_quota_related:
+                is_minute_rate_limit = _is_minute_scoped_rate_limit(error)
+                is_exhausted_key = _is_daily_or_key_exhausted(error, error_code)
+                if is_minute_rate_limit and not is_exhausted_key and attempts < max_attempts - 1:
                     print("      [Rilevato limite temporaneo. Attesa di 65s per il reset quota al minuto...]")
                     runtime.phase("⏳ Rate limit: attesa 65s...")
                     if not sleep_with_cancel(cancelled, rate_limit_sleep_seconds):
@@ -202,10 +304,10 @@ def retry_with_quota(
                         return client, None
                     attempts += 1
                     continue
-                elif not is_daily:
+                elif is_minute_rate_limit and not is_exhausted_key:
                     raise
 
-                print("\n[!!] LIMITE GIORNALIERO RAGGIUNTO!")
+                print("\n[!!] CHIAVE API ESAURITA O QUOTA GIORNALIERA RAGGIUNTA!")
                 new_c, rotated, rotated_key = try_rotate_key(client, fallback_keys, model_name, logger=log)
                 if rotated:
                     client = new_c

@@ -28,6 +28,8 @@
   --accent-ring: rgba(71, 85, 105, 0.2);
   --accent-gradient-start: #94a3b8;
   --accent-gradient-end: #475569;
+  --brand-warm: #a06830;
+  --brand-warm-subtle: rgba(160, 104, 48, 0.12);
 
   --success-bg: #16a34a;
   --success-text: #15803d;
@@ -50,6 +52,7 @@
   --btn-primary-bg: linear-gradient(135deg, #334155, #0f172a);
   --btn-primary-text: #f8fafc;
   --btn-primary-hover: linear-gradient(135deg, #475569, #1e293b);
+  --btn-primary-ring: rgba(51, 65, 85, 0.38);
   --btn-disabled-bg: rgba(148, 163, 184, 0.22);
   --btn-disabled-text: rgba(100, 116, 139, 0.72);
 
@@ -95,6 +98,8 @@
     --accent-ring: rgba(148, 163, 184, 0.24);
     --accent-gradient-start: #cbd5e1;
     --accent-gradient-end: #64748b;
+    --brand-warm: #c07840;
+    --brand-warm-subtle: rgba(192, 120, 64, 0.14);
 
     --success-bg: #5eead4;
     --success-text: #5eead4;
@@ -117,6 +122,7 @@
     --btn-primary-bg: linear-gradient(135deg, #cbd5e1, #94a3b8);
     --btn-primary-text: #0f172a;
     --btn-primary-hover: linear-gradient(135deg, #e2e8f0, #cbd5e1);
+    --btn-primary-ring: rgba(148, 163, 184, 0.38);
     --btn-disabled-bg: rgba(71, 85, 105, 0.4);
     --btn-disabled-text: rgba(203, 213, 225, 0.42);
 
@@ -173,13 +179,13 @@
 
 :root:not([data-theme="dark"]) .canceling-card {
   background:
-    linear-gradient(135deg, rgba(161, 98, 7, 0.07) 0%, rgba(161, 98, 7, 0.03) 55%, transparent 100%),
+    linear-gradient(135deg, rgba(185, 28, 28, 0.07) 0%, rgba(185, 28, 28, 0.03) 55%, transparent 100%),
     var(--card-queued-bg);
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.10), 0 12px 32px rgba(15, 23, 42, 0.07);
 }
 
 :root:not([data-theme="dark"]) .canceling-card::after {
-  border-color: rgba(161, 98, 7, 0.28);
+  border-color: rgba(185, 28, 28, 0.28);
 }
 
 :root:not([data-theme="dark"]) .dropzone-card {
@@ -444,6 +450,16 @@ button {
   background: var(--btn-primary-hover);
 }
 
+.premium-button:focus-visible {
+  outline: none;
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.14), 0 0 0 3px var(--btn-primary-ring);
+}
+
+.premium-button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.10), 0 0 0 3px var(--btn-primary-ring);
+}
+
 .premium-button:disabled {
   background: var(--btn-disabled-bg);
   color: var(--btn-disabled-text);
@@ -692,7 +708,7 @@ button {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  border: 1px solid rgba(161, 98, 7, 0.18);
+  border: 1px solid var(--error-ring);
   pointer-events: none;
   animation: processing-card-pulse 1.8s ease-in-out infinite;
 }
@@ -714,9 +730,9 @@ button {
 }
 
 .canceling-chip {
-  background: var(--warning-subtle);
-  border-color: var(--warning-ring);
-  color: var(--warning-text);
+  background: var(--error-subtle);
+  border-color: var(--error-ring);
+  color: var(--error-text);
 }
 
 .processing-chip-compact {
@@ -759,8 +775,8 @@ button {
 }
 
 .console-shell-subtle {
-  border-color: var(--border-subtle);
-  box-shadow: none;
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-soft);
   background: color-mix(in srgb, var(--console-bg) 82%, transparent);
 }
 

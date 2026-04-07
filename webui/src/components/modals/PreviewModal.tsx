@@ -1,6 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, Copy, FileText, X } from 'lucide-react';
+import { Check, Copy, ExternalLink, FileText, X } from 'lucide-react';
 import type { Heading } from '../../RichTextEditor';
 import { normalizePreviewHtmlContent } from '../../previewHtml';
 
@@ -38,13 +38,23 @@ export function PreviewModal({
   const autosaveGenRef = useRef(0);
   const htmlPathRef = useRef(htmlPath);
   useEffect(() => { htmlPathRef.current = htmlPath; }, [htmlPath]);
+  const hasAutoOpenedTocRef = useRef(false);
 
   useEffect(() => {
     lastPersistedRef.current = previewContent ?? '';
     isDirtyRef.current = false;
     setIsCopied(false);
     setAutosaveStatus('idle');
+    hasAutoOpenedTocRef.current = false;
+    setIsTocOpen(false);
   }, [previewContent]);
+
+  useEffect(() => {
+    if (headings.length >= 4 && !hasAutoOpenedTocRef.current) {
+      hasAutoOpenedTocRef.current = true;
+      setIsTocOpen(true);
+    }
+  }, [headings.length]);
 
   useEffect(() => {
     return () => {
@@ -183,6 +193,16 @@ export function PreviewModal({
                 >
                   {autosaveStatus === 'saving' ? 'Salvataggio...' : autosaveStatus === 'saved' ? 'Salvato' : autosaveStatus === 'error' ? 'Errore salvataggio' : 'Salvataggio automatico'}
                 </span>
+                {htmlPath && (
+                  <button
+                    onClick={() => window.pywebview?.api?.open_file?.(htmlPath)}
+                    className="icon-button h-9 w-9 rounded-[12px]"
+                    style={{ color: 'var(--text-muted)' }}
+                    title="Apri file HTML"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </button>
+                )}
                 <div className="relative">
                   <button
                     onClick={handleCopy}

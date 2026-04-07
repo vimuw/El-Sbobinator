@@ -92,6 +92,8 @@ export type ProcessingState = {
   appState: AppStatus;
   currentPhase: string;
   activeProgress: number;
+  currentFileIndex: number;
+  currentBatchTotal: number;
   workTotals: {
     chunks: number;
     macro: number;
@@ -134,6 +136,8 @@ export const initialProcessingState: ProcessingState = {
   appState: 'idle',
   currentPhase: '',
   activeProgress: 0,
+  currentFileIndex: 0,
+  currentBatchTotal: 0,
   workTotals: { chunks: 0, macro: 0, boundary: 0 },
   workDone: { chunks: 0, macro: 0, boundary: 0 },
   stepMetrics: { chunks: null, macro: null, boundary: null },
@@ -198,6 +202,8 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         appState: 'idle',
         currentPhase: '',
         activeProgress: action.data?.cancelled ? 0 : state.activeProgress,
+        currentFileIndex: 0,
+        currentBatchTotal: 0,
         workTotals: action.data?.cancelled ? { chunks: 0, macro: 0, boundary: 0 } : state.workTotals,
         workDone: action.data?.cancelled ? { chunks: 0, macro: 0, boundary: 0 } : state.workDone,
         stepMetrics: action.data?.cancelled ? { chunks: null, macro: null, boundary: null } : state.stepMetrics,
@@ -248,6 +254,8 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         appState: 'processing',
         currentPhase: '',
         activeProgress: 0,
+        currentFileIndex: action.data.index,
+        currentBatchTotal: action.data.total,
         stepMetrics: { chunks: null, macro: null, boundary: null },
         files: state.files.map(file =>
           file.id === action.data.id
