@@ -109,6 +109,22 @@ export default function App() {
     appStateRef.current = appState;
   }, [appState]);
 
+  // --- Flush editor session on app close ---
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const sessionKey = currentPreviewSessionKeyRef.current;
+      if (!sessionKey) return;
+      const session = currentEditorSessionRef.current;
+      const hasData = session.audioTime !== undefined
+        || session.playbackRate !== undefined
+        || session.volume !== undefined
+        || session.scrollTop !== undefined;
+      if (hasData) saveEditorSession(sessionKey, session);
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // --- Queue persistence ---
   useQueuePersistence(files, structuralVersion, dispatch, appendConsole);
 

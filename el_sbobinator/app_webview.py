@@ -981,23 +981,33 @@ def main():
     )
     os.makedirs(storage_dir, exist_ok=True)
 
-    # Auto cache-bust: if dist/index.html was rebuilt, clear WebView2 HTTP cache
+    # Auto cache-bust: clear WebView2 HTTP caches when a new build/version is detected.
+    # In onefile PyInstaller mode the extracted files get a new mtime on every launch
+    # (new _MEI temp folder), so we use the EXE's own mtime instead — stable until the
+    # user installs a new version.
+    # IMPORTANT: only delete Cache dirs, NOT the full EBWebView profile — doing so would
+    # destroy localStorage (queue, editor sessions) on every restart.
     try:
         import shutil
         mtime_file = os.path.join(storage_dir, ".build_mtime")
-        current_mtime = str(os.path.getmtime(dist_path))
+        if getattr(sys, 'frozen', False):
+            current_mtime = str(os.path.getmtime(sys.executable))
+        else:
+            current_mtime = str(os.path.getmtime(dist_path))
         stored_mtime = ""
         if os.path.exists(mtime_file):
             with open(mtime_file, "r", encoding="utf-8") as _f:
                 stored_mtime = _f.read().strip()
         if stored_mtime != current_mtime:
-            cache_subdir = os.path.join(storage_dir, "EBWebView")
-            if os.path.exists(cache_subdir):
-                try:
-                    shutil.rmtree(cache_subdir)
-                    print("[*] Cache WebView2 svuotata (nuova build rilevata).")
-                except Exception as _e:
-                    print(f"[!] Impossibile svuotare cache WebView2: {_e}")
+            default_profile = os.path.join(storage_dir, "EBWebView", "Default")
+            for cache_name in ("Cache", "Code Cache"):
+                cache_dir = os.path.join(default_profile, cache_name)
+                if os.path.exists(cache_dir):
+                    try:
+                        shutil.rmtree(cache_dir)
+                        print("[*] Cache WebView2 svuotata (nuova build rilevata).")
+                    except Exception as _e:
+                        print(f"[!] Impossibile svuotare cache WebView2: {_e}")
             with open(mtime_file, "w", encoding="utf-8") as _f:
                 _f.write(current_mtime)
     except Exception:
@@ -1047,6 +1057,22 @@ def main():
 
     def _on_closing():
         LocalMediaServer.shutdown_all()
+        # Flush any unsaved editor HTML before the window is destroyed.
+        # evaluate_js is synchronous here; save_html_content is a direct file write.
+        try:
+            window_ref = api._window
+            if window_ref is not None:
+                dirty = window_ref.evaluate_js(
+                    "typeof window.__elSbobinatorGetDirtyEditorContent === 'function'"
+                    " ? window.__elSbobinatorGetDirtyEditorContent() : null"
+                )
+                if dirty and isinstance(dirty, dict):
+                    _path = dirty.get("path", "")
+                    _content = dirty.get("content", "")
+                    if _path:
+                        api.save_html_content(_path, _content)
+        except Exception:
+            pass
 
     window.events.closing += _on_closing
 

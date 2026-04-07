@@ -57,6 +57,20 @@ export function PreviewModal({
     };
   }, []); // empty deps: runs cleanup only on unmount
 
+  useEffect(() => {
+    (window as unknown as Record<string, unknown>).__elSbobinatorGetDirtyEditorContent = () => {
+      if (!isDirtyRef.current) return null;
+      const path = htmlPathRef.current;
+      if (!path) return null;
+      const snap = getHtmlRef.current?.() ?? '';
+      if (snap === lastPersistedRef.current) return null;
+      return { path, content: snap };
+    };
+    return () => {
+      delete (window as unknown as Record<string, unknown>).__elSbobinatorGetDirtyEditorContent;
+    };
+  }, []); // empty deps: register once on mount, remove on unmount
+
   const flushAndClose = useCallback(async () => {
     if (isDirtyRef.current) {
       if (autosaveTimerRef.current) { window.clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }

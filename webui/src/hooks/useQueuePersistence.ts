@@ -28,11 +28,12 @@ export function useQueuePersistence(
         size: Number(file.size || 0),
         duration: Number(file.duration || 0),
         path: file.path ? String(file.path) : undefined,
-        status: file.status === 'done' ? 'done' : 'queued',
+        status: file.status === 'done' ? 'done' : file.status === 'error' ? 'error' : 'queued',
         progress: file.status === 'done' ? 100 : 0,
         phase: file.status === 'done' ? 3 : 0,
         outputHtml: file.outputHtml ? String(file.outputHtml) : undefined,
         outputDir: file.outputDir ? String(file.outputDir) : undefined,
+        errorText: file.errorText ? String(file.errorText) : undefined,
       }));
 
       dispatch({ type: 'queue/add', files: restoredFiles });
@@ -43,6 +44,7 @@ export function useQueuePersistence(
   }, [appendConsole]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (structuralVersion === 0) return; // skip initial mount – restore hasn’t run yet
     try {
       const currentFiles = filesRef.current;
       if (currentFiles.length === 0) {
@@ -58,6 +60,7 @@ export function useQueuePersistence(
         status: file.status,
         outputHtml: file.outputHtml,
         outputDir: file.outputDir,
+        errorText: file.errorText,
       }));
       window.localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(persisted));
     } catch (error) {
