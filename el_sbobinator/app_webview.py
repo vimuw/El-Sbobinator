@@ -863,102 +863,109 @@ def build_missing_webview2_html() -> str:
 <html lang="it">
   <head>
     <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=11" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>El Sbobinator</title>
     <style>
-      :root {{
-        color-scheme: dark;
-        --bg: #121417;
-        --panel: #1a1e24;
-        --line: #303845;
-        --text: #f3f5f8;
-        --muted: #a3afc2;
-        --accent: #66e1d6;
-      }}
-      * {{ box-sizing: border-box; }}
       body {{
         margin: 0;
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        padding: 24px;
-        background:
-          radial-gradient(circle at top, rgba(102,225,214,0.12), transparent 32%),
-          var(--bg);
+        padding: 40px 20px;
+        background: #f0f2f5;
         font-family: "Segoe UI", Arial, sans-serif;
-        color: var(--text);
+        color: #222;
       }}
       .card {{
-        width: min(720px, 100%);
-        padding: 28px;
-        border: 1px solid var(--line);
-        border-radius: 22px;
-        background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015)), var(--panel);
-        box-shadow: 0 18px 60px rgba(0,0,0,0.24);
+        max-width: 560px;
+        margin: 20px auto;
+        background: #ffffff;
+        border: 1px solid #dde1e7;
+        border-radius: 10px;
+        padding: 36px 40px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
       }}
       h1 {{
-        margin: 0 0 12px;
-        font-size: 28px;
-        line-height: 1.15;
+        margin: 0 0 14px;
+        font-size: 20px;
+        font-weight: 700;
+        color: #111;
+        line-height: 1.3;
       }}
       p {{
-        margin: 0 0 14px;
-        font-size: 15px;
-        line-height: 1.6;
-        color: var(--muted);
-      }}
-      .actions {{
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        margin: 22px 0 14px;
-      }}
-      .button {{
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 11px 16px;
-        border-radius: 14px;
-        border: 1px solid var(--line);
-        color: var(--text);
-        text-decoration: none;
-        font-weight: 600;
-        background: rgba(255,255,255,0.03);
-      }}
-      .button.primary {{
-        border-color: rgba(102,225,214,0.35);
-        background: rgba(102,225,214,0.1);
+        margin: 0 0 10px;
+        font-size: 14px;
+        line-height: 1.65;
+        color: #555;
       }}
       code {{
+        background: #eef0f3;
+        padding: 2px 7px;
+        border-radius: 5px;
+        font-family: Consolas, monospace;
+        font-size: 12.5px;
+        color: #333;
+      }}
+      strong {{ color: #222; }}
+      .actions {{
+        margin: 22px 0 18px;
+      }}
+      a.btn {{
         display: inline-block;
-        padding: 2px 6px;
-        border-radius: 8px;
-        background: rgba(255,255,255,0.05);
-        color: var(--text);
+        padding: 9px 18px;
+        border-radius: 6px;
+        font-size: 13.5px;
+        font-weight: 600;
+        text-decoration: none;
+        margin-right: 8px;
       }}
-      ul {{
-        margin: 16px 0 0;
-        padding-left: 18px;
-        color: var(--muted);
+      a.btn-primary {{
+        background: #0f62fe;
+        color: #ffffff;
+        border: 1px solid #0f62fe;
       }}
-      li {{ margin: 8px 0; }}
+      a.btn-secondary {{
+        background: #ffffff;
+        color: #0f62fe;
+        border: 1px solid #c6d0e3;
+      }}
+      hr {{
+        border: none;
+        border-top: 1px solid #eef0f3;
+        margin: 20px 0;
+      }}
+      ol {{
+        margin: 0;
+        padding-left: 22px;
+        color: #666;
+      }}
+      li {{
+        font-size: 13.5px;
+        line-height: 1.75;
+        margin: 2px 0;
+      }}
     </style>
   </head>
   <body>
-    <main class="card">
-      <h1>Serve WebView2 per avviare l'interfaccia</h1>
-      <p>El Sbobinator sta partendo con il renderer Windows legacy <code>MSHTML</code>, che non supporta la WebUI moderna. Per questo la finestra rimane nera.</p>
-      <p>Installando <strong>Microsoft Edge WebView2 Runtime</strong> l'app tornera ad aprirsi normalmente.</p>
+    <div class="card">
+      <h1>Serve WebView2 per avviare l&apos;interfaccia</h1>
+      <p>
+        El Sbobinator sta usando il renderer Windows legacy <code>MSHTML</code>,
+        che non supporta la WebUI moderna. Per questo la finestra rimane nera.
+      </p>
+      <p>
+        Installa <strong>Microsoft Edge WebView2 Runtime</strong>
+        per avviare l&apos;app normalmente.
+      </p>
       <div class="actions">
-        <a class="button primary" href="{escape(download_url)}" target="_blank" rel="noreferrer">Scarica WebView2 Runtime</a>
-        <a class="button" href="{escape(repo_url)}" target="_blank" rel="noreferrer">Dettagli tecnici</a>
+        <a class="btn btn-primary" href="{escape(download_url)}">Scarica WebView2 Runtime</a>
+        <a class="btn btn-secondary" href="{escape(repo_url)}">Dettagli tecnici</a>
       </div>
-      <ul>
+      <hr />
+      <ol>
         <li>Chiudi El Sbobinator.</li>
         <li>Installa WebView2 Runtime.</li>
-        <li>Riapri l'app.</li>
-      </ul>
-    </main>
+        <li>Riapri l&apos;app.</li>
+      </ol>
+    </div>
   </body>
 </html>
 """
