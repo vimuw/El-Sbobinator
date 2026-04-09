@@ -19,7 +19,9 @@ from typing import Literal, get_args
 from html import escape
 
 # Suppress benign requests warning about chardet/charset_normalizer failing to import
-warnings.filterwarnings("ignore", message="Unable to find acceptable character detection dependency")
+warnings.filterwarnings(
+    "ignore", message="Unable to find acceptable character detection dependency"
+)
 
 import webview
 
@@ -54,6 +56,7 @@ from el_sbobinator.file_ops import (
 )
 from el_sbobinator.logging_utils import configure_logging, get_logger
 from el_sbobinator.media_server import LocalMediaServer
+from el_sbobinator.model_registry import DEFAULT_FALLBACK_MODELS, MODEL_OPTIONS
 from el_sbobinator.shared import (
     DEFAULT_MODEL,
     cleanup_orphan_temp_chunks,
@@ -69,6 +72,7 @@ from el_sbobinator.shared import (
 # DnD helper
 # ---------------------------------------------------------------------------
 
+
 def _drain_dnd_paths(names: set[str]) -> list[tuple[str, str]]:
     """Return and consume (basename, fullpath) pairs matching *names* from
     pywebview's internal DnD state.
@@ -80,6 +84,7 @@ def _drain_dnd_paths(names: set[str]) -> list[tuple[str, str]]:
     """
     try:
         from webview.dom import _dnd_state  # noqa: PLC2701
+
         paths: list = list(_dnd_state.get("paths", []))
         matched, remaining = [], []
         for item in paths:
@@ -98,15 +103,30 @@ def _drain_dnd_paths(names: set[str]) -> list[tuple[str, str]]:
 
 class _BridgeDispatcher:
     _BridgeEvent = Literal[
-        "updateProgress", "updatePhase", "setWorkTotals", "updateWorkDone",
-        "registerStepTime", "setCurrentFile", "fileDone", "fileFailed",
-        "filesDropped", "processDone", "appendConsole",
-        "askRegenerate", "askNewKey",
+        "updateProgress",
+        "updatePhase",
+        "setWorkTotals",
+        "updateWorkDone",
+        "registerStepTime",
+        "setCurrentFile",
+        "fileDone",
+        "fileFailed",
+        "filesDropped",
+        "processDone",
+        "appendConsole",
+        "askRegenerate",
+        "askNewKey",
     ]
     _ALL_EVENTS: frozenset[str] = frozenset(get_args(_BridgeEvent))
-    BATCHABLE: frozenset[str] = frozenset({
-        "updateProgress", "updatePhase", "setWorkTotals", "updateWorkDone", "registerStepTime",
-    })
+    BATCHABLE: frozenset[str] = frozenset(
+        {
+            "updateProgress",
+            "updatePhase",
+            "setWorkTotals",
+            "updateWorkDone",
+            "registerStepTime",
+        }
+    )
     MAX_RETRIES = 3
 
     def __init__(self, window_getter, flush_interval: float = 0.12):
@@ -115,7 +135,9 @@ class _BridgeDispatcher:
         self._lock = threading.Lock()
         self._queue: deque[tuple[str, object]] = deque()
         self._latest: dict[str, object] = {}
-        self._pending: deque[tuple[str, object, int]] = deque()  # (fn_name, data, retry_count)
+        self._pending: deque[tuple[str, object, int]] = (
+            deque()
+        )  # (fn_name, data, retry_count)
         self._timer: threading.Timer | None = None
 
     def emit(self, fn_name: str, data, batched: bool | None = None):
@@ -245,12 +267,14 @@ class PipelineAdapter:
 
     def after(self, delay_ms: int, callback, *args):
         """Schedule a callback. We just run it in a timer thread."""
+
         def _run():
             time.sleep(delay_ms / 1000.0)
             try:
                 callback(*args)
             except Exception:
                 pass
+
         threading.Thread(target=_run, daemon=True).start()
 
     def aggiorna_progresso(self, value: float):
@@ -293,17 +317,26 @@ class PipelineAdapter:
         payload: WorkDonePayload = {"kind": kind, "done": done, "total": total}
         self._emit_js("updateWorkDone", payload, batched=True)
 
-    def register_step_time(self, kind: str, seconds: float, done: int = None, total: int = None):
+    def register_step_time(
+        self, kind: str, seconds: float, done: int = None, total: int = None
+    ):
         # Store for internal ETA calculations and push to frontend
         with self._lock:
             self._step_times.setdefault(kind, []).append(seconds)
-        payload: StepTimePayload = {"kind": kind, "seconds": seconds, "done": done, "total": total}
+        payload: StepTimePayload = {
+            "kind": kind,
+            "seconds": seconds,
+            "done": done,
+            "total": total,
+        }
         self._emit_js("registerStepTime", payload, batched=True)
 
     def ask_regenerate(self, filename: str, callback, mode: str = "resume"):
         with self._lock:
             self._regenerate_callback = callback
-        self._emit_js("askRegenerate", {"filename": filename, "mode": mode}, batched=False)
+        self._emit_js(
+            "askRegenerate", {"filename": filename, "mode": mode}, batched=False
+        )
 
     def ask_new_api_key(self, callback):
         with self._lock:
@@ -350,6 +383,7 @@ class PipelineAdapter:
 # ElSbobinatorApi: exposed to JS via pywebview js_api
 # ---------------------------------------------------------------------------
 
+
 class ElSbobinatorApi:
     """Methods callable from React via window.pywebview.api.*"""
 
@@ -375,14 +409,34 @@ class ElSbobinatorApi:
             return {
                 "api_key": cfg.get("api_key", ""),
                 "fallback_keys": cfg.get("fallback_keys", []),
+                "preferred_model": cfg.get("preferred_model", DEFAULT_MODEL),
+                "fallback_models": cfg.get("fallback_models", []),
+                "available_models": list(MODEL_OPTIONS),
             }
         except Exception:
-            return {"api_key": "", "fallback_keys": []}
+            return {
+                "api_key": "",
+                "fallback_keys": [],
+                "preferred_model": DEFAULT_MODEL,
+                "fallback_models": list(DEFAULT_FALLBACK_MODELS),
+                "available_models": list(MODEL_OPTIONS),
+            }
 
-    def save_settings(self, api_key: str, fallback_keys: list[str]) -> dict:
+    def save_settings(
+        self,
+        api_key: str,
+        fallback_keys: list[str],
+        preferred_model: str,
+        fallback_models: list[str],
+    ) -> dict:
         """Save config to disk."""
         try:
-            save_config(api_key, fallback_keys=fallback_keys)
+            save_config(
+                api_key,
+                fallback_keys=fallback_keys,
+                preferred_model=preferred_model,
+                fallback_models=fallback_models,
+            )
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": str(e)}
@@ -391,17 +445,34 @@ class ElSbobinatorApi:
         """Return total size and count of session folders in SESSION_ROOT."""
         try:
             info = get_session_storage_info()
-            return {"ok": True, "total_bytes": info["total_bytes"], "total_sessions": info["total_sessions"]}
+            return {
+                "ok": True,
+                "total_bytes": info["total_bytes"],
+                "total_sessions": info["total_sessions"],
+            }
         except Exception as e:
             return {"ok": False, "error": str(e), "total_bytes": 0, "total_sessions": 0}
 
-    def cleanup_old_sessions(self, max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS) -> dict:
+    def cleanup_old_sessions(
+        self, max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS
+    ) -> dict:
         """Delete session folders older than max_age_days days."""
         try:
             result = cleanup_orphan_sessions(max(1, int(max_age_days)))
-            return {"ok": True, "removed": result["removed"], "freed_bytes": result["freed_bytes"], "errors": result["errors"]}
+            return {
+                "ok": True,
+                "removed": result["removed"],
+                "freed_bytes": result["freed_bytes"],
+                "errors": result["errors"],
+            }
         except Exception as e:
-            return {"ok": False, "error": str(e), "removed": 0, "freed_bytes": 0, "errors": 0}
+            return {
+                "ok": False,
+                "error": str(e),
+                "removed": 0,
+                "freed_bytes": 0,
+                "errors": 0,
+            }
 
     # ---- File Selection ----
 
@@ -413,6 +484,7 @@ class ElSbobinatorApi:
             size = 0
         try:
             from el_sbobinator.audio_service import probe_media_duration
+
             dur_val, _reason = probe_media_duration(path)
             duration = dur_val if dur_val else 0
         except Exception:
@@ -433,9 +505,9 @@ class ElSbobinatorApi:
                 webview.OPEN_DIALOG,
                 allow_multiple=True,
                 file_types=(
-                    'Audio (*.mp3;*.m4a;*.wav;*.ogg;*.flac;*.aac)',
-                    'Video (*.mp4;*.mkv;*.webm)',
-                    'All files (*.*)',
+                    "Audio (*.mp3;*.m4a;*.wav;*.ogg;*.flac;*.aac)",
+                    "Video (*.mp4;*.mkv;*.webm)",
+                    "All files (*.*)",
                 ),
             )
         except Exception:
@@ -446,7 +518,9 @@ class ElSbobinatorApi:
             )
         if not file_paths:
             return []
-        selected_paths = list(file_paths) if isinstance(file_paths, (list, tuple)) else [file_paths]
+        selected_paths = (
+            list(file_paths) if isinstance(file_paths, (list, tuple)) else [file_paths]
+        )
         return [self._build_file_descriptor(path) for path in selected_paths]
 
     def ask_media_file(self) -> BridgeFileItem | None:
@@ -458,9 +532,9 @@ class ElSbobinatorApi:
                 webview.OPEN_DIALOG,
                 allow_multiple=False,
                 file_types=(
-                    'Audio (*.mp3;*.m4a;*.wav;*.ogg;*.flac;*.aac)',
-                    'Video (*.mp4;*.mkv;*.webm)',
-                    'All files (*.*)',
+                    "Audio (*.mp3;*.m4a;*.wav;*.ogg;*.flac;*.aac)",
+                    "Video (*.mp4;*.mkv;*.webm)",
+                    "All files (*.*)",
                 ),
             )
         except Exception:
@@ -470,7 +544,9 @@ class ElSbobinatorApi:
             )
         if not file_paths:
             return None
-        selected_path = file_paths[0] if isinstance(file_paths, (list, tuple)) else file_paths
+        selected_path = (
+            file_paths[0] if isinstance(file_paths, (list, tuple)) else file_paths
+        )
         return self._build_file_descriptor(selected_path)
 
     def check_path_exists(self, path: str) -> dict:
@@ -481,7 +557,17 @@ class ElSbobinatorApi:
             "exists": bool(normalized_path and os.path.exists(normalized_path)),
         }
 
-    _ALLOWED_DROP_EXTS = {'.mp3', '.m4a', '.wav', '.mp4', '.mkv', '.webm', '.ogg', '.flac', '.aac'}
+    _ALLOWED_DROP_EXTS = {
+        ".mp3",
+        ".m4a",
+        ".wav",
+        ".mp4",
+        ".mkv",
+        ".webm",
+        ".ogg",
+        ".flac",
+        ".aac",
+    }
 
     def collect_dropped_files(self, names: list) -> dict:
         """Called by JS after postMessageWithAdditionalObjects('FilesDropped') to retrieve OS paths."""
@@ -497,7 +583,9 @@ class ElSbobinatorApi:
 
     # ---- Processing ----
 
-    def start_processing(self, files: list[BridgeFileItem], api_key: str, resume_session: bool = True) -> dict:
+    def start_processing(
+        self, files: list[BridgeFileItem], api_key: str, resume_session: bool = True
+    ) -> dict:
         """Start the pipeline in a background thread."""
         if not files or not api_key:
             return {"ok": False, "error": "File o API key mancanti"}
@@ -556,9 +644,11 @@ class ElSbobinatorApi:
                         current_file_id = ""
                         continue
 
-                    self._push_console(f"\n{'='*50}")
-                    self._push_console(f"  File {idx+1}/{len(files)}: {os.path.basename(file_path)}")
-                    self._push_console(f"{'='*50}")
+                    self._push_console(f"\n{'=' * 50}")
+                    self._push_console(
+                        f"  File {idx + 1}/{len(files)}: {os.path.basename(file_path)}"
+                    )
+                    self._push_console(f"{'=' * 50}")
                     current_payload: SetCurrentFilePayload = {
                         "index": idx,
                         "id": file_info.get("id", ""),
@@ -566,15 +656,25 @@ class ElSbobinatorApi:
                     }
                     self._adapter.emit("setCurrentFile", current_payload, batched=False)
 
-                    esegui_sbobinatura(file_path, active_api_key, self._adapter, resume_session=resume_session)
+                    esegui_sbobinatura(
+                        file_path,
+                        active_api_key,
+                        self._adapter,
+                        resume_session=resume_session,
+                    )
                     if self._adapter.effective_api_key:
                         active_api_key = self._adapter.effective_api_key
 
-                    if self._cancel_event.is_set() or self._adapter.last_run_status == "cancelled":
+                    if (
+                        self._cancel_event.is_set()
+                        or self._adapter.last_run_status == "cancelled"
+                    ):
                         break
 
                     if self._adapter.last_run_status == "completed":
-                        if self._adapter.last_output_html and os.path.exists(self._adapter.last_output_html):
+                        if self._adapter.last_output_html and os.path.exists(
+                            self._adapter.last_output_html
+                        ):
                             payload: FileDonePayload = {
                                 "index": idx,
                                 "id": file_info.get("id", ""),
@@ -595,7 +695,8 @@ class ElSbobinatorApi:
                         payload = {
                             "index": idx,
                             "id": file_info.get("id", ""),
-                            "error": self._adapter.last_run_error or "Elaborazione non completata.",
+                            "error": self._adapter.last_run_error
+                            or "Elaborazione non completata.",
                         }
                         self._adapter.emit("fileFailed", payload, batched=False)
                         failed_count += 1
@@ -615,7 +716,10 @@ class ElSbobinatorApi:
             finally:
                 self._adapter.is_running = False
                 payload: ProcessDonePayload = {
-                    "cancelled": bool(self._cancel_event.is_set() or self._adapter.last_run_status == "cancelled"),
+                    "cancelled": bool(
+                        self._cancel_event.is_set()
+                        or self._adapter.last_run_status == "cancelled"
+                    ),
                     "completed": completed_count,
                     "failed": failed_count,
                     "total": len(files),
@@ -651,11 +755,25 @@ class ElSbobinatorApi:
             self._adapter.emit("processDone", payload, batched=False)
         return {"ok": True}
 
-    def validate_environment(self, api_key: str | None = None, check_api_key: bool = False) -> dict:
+    def validate_environment(
+        self,
+        api_key: str | None = None,
+        check_api_key: bool = False,
+        preferred_model: str | None = None,
+        fallback_models: list[str] | None = None,
+    ) -> dict:
         """Run an explicit environment validation without starting a full transcription."""
         try:
-            from el_sbobinator.validation_service import validate_environment as _validate_env
-            result: ValidationResult = _validate_env(api_key=api_key, validate_api_key=bool(check_api_key))
+            from el_sbobinator.validation_service import (
+                validate_environment as _validate_env,
+            )
+
+            result: ValidationResult = _validate_env(
+                api_key=api_key,
+                validate_api_key=bool(check_api_key),
+                preferred_model=preferred_model,
+                fallback_models=fallback_models,
+            )
             return {"ok": True, "result": result}
         except Exception as e:
             self._logger.exception("Validazione ambiente fallita.")
@@ -663,7 +781,9 @@ class ElSbobinatorApi:
 
     def open_file(self, path: str) -> dict:
         """Open a local file/folder with the system default handler."""
-        if isinstance(path, str) and (path.startswith("http://") or path.startswith("https://")):
+        if isinstance(path, str) and (
+            path.startswith("http://") or path.startswith("https://")
+        ):
             return {"ok": False, "error": "Usa open_url per aprire URL."}
         try:
             open_path_with_default_app(path)
@@ -673,7 +793,9 @@ class ElSbobinatorApi:
 
     def open_url(self, url: str) -> dict:
         """Open an external URL in the system browser (allowlist only)."""
-        if not isinstance(url, str) or not any(url.startswith(p) for p in _ALLOWED_URL_PREFIXES):
+        if not isinstance(url, str) or not any(
+            url.startswith(p) for p in _ALLOWED_URL_PREFIXES
+        ):
             return {"ok": False, "error": "URL non consentito."}
         try:
             open_path_with_default_app(url)
@@ -688,11 +810,17 @@ class ElSbobinatorApi:
         # Path traversal protection: resolve and check against allowed roots
         real_path = os.path.realpath(os.path.abspath(path))
         allowed_roots = [
-            os.path.realpath(get_desktop_dir()),         # Desktop / OneDrive Desktop
+            os.path.realpath(get_desktop_dir()),  # Desktop / OneDrive Desktop
             os.path.realpath(self._get_session_root()),  # Session storage
         ]
-        if not any(real_path.startswith(root + os.sep) or real_path == root for root in allowed_roots):
-            return {"ok": False, "error": "Accesso negato: path fuori dai percorsi consentiti."}
+        if not any(
+            real_path.startswith(root + os.sep) or real_path == root
+            for root in allowed_roots
+        ):
+            return {
+                "ok": False,
+                "error": "Accesso negato: path fuori dai percorsi consentiti.",
+            }
         if not os.path.isfile(real_path):
             return {"ok": False, "error": "File non trovato."}
         try:
@@ -707,20 +835,29 @@ class ElSbobinatorApi:
     def _get_session_root(self) -> str:
         """Return the session storage root directory."""
         from el_sbobinator.shared import SESSION_ROOT
+
         return SESSION_ROOT
 
-    def save_html_content(self, path: str, content: str, generation: int | None = None) -> dict:
+    def save_html_content(
+        self, path: str, content: str, generation: int | None = None
+    ) -> dict:
         """Aggiorna solo il contenuto del <body>, preservando head, stile e CSP dell'export originale."""
         if not isinstance(path, str) or not path.lower().endswith(".html"):
             return {"ok": False, "error": "Path non valido: deve essere un file .html."}
         # Path traversal protection: resolve and check against allowed roots
         real_path = os.path.realpath(os.path.abspath(path))
         allowed_roots = [
-            os.path.realpath(get_desktop_dir()),         # Desktop / OneDrive Desktop
+            os.path.realpath(get_desktop_dir()),  # Desktop / OneDrive Desktop
             os.path.realpath(self._get_session_root()),  # Session storage
         ]
-        if not any(real_path.startswith(root + os.sep) or real_path == root for root in allowed_roots):
-            return {"ok": False, "error": "Accesso negato: path fuori dai percorsi consentiti."}
+        if not any(
+            real_path.startswith(root + os.sep) or real_path == root
+            for root in allowed_roots
+        ):
+            return {
+                "ok": False,
+                "error": "Accesso negato: path fuori dai percorsi consentiti.",
+            }
         if not os.path.isfile(real_path):
             return {"ok": False, "error": "File non trovato."}
         try:
@@ -739,7 +876,7 @@ class ElSbobinatorApi:
             save_path = self._window.create_file_dialog(
                 webview.SAVE_DIALOG,
                 save_filename=filename,
-                file_types=('Word Document (*.docx)', 'All files (*.*)')
+                file_types=("Word Document (*.docx)", "All files (*.*)"),
             )
             # Gestisci sia lista che stringa (pywebview può restituire entrambi)
             if not save_path:
@@ -760,13 +897,11 @@ class ElSbobinatorApi:
         """Mostra una notifica toast nativa di sistema tramite plyer."""
         try:
             from plyer import notification
-            # On windows, notify requires an absolute path to a .ico file if we want an icon. 
+
+            # On windows, notify requires an absolute path to a .ico file if we want an icon.
             # We'll omit the app_icon for simplicity and cross-platform compatibility.
             notification.notify(
-                title=title,
-                message=message,
-                app_name="El Sbobinator",
-                timeout=5
+                title=title, message=message, app_name="El Sbobinator", timeout=5
             )
             return {"ok": True}
         except Exception as e:
@@ -774,11 +909,12 @@ class ElSbobinatorApi:
             if sys.platform == "darwin":
                 import shlex
                 import subprocess
+
                 script = (
                     f"display notification {shlex.quote(str(message or ''))}"
                     f" with title {shlex.quote(str(title or ''))}"
                 )
-                subprocess.Popen(['osascript', '-e', script])
+                subprocess.Popen(["osascript", "-e", script])
                 return {"ok": True}
             return {"ok": False, "error": str(e)}
 
@@ -833,9 +969,10 @@ class _ConsoleTee:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def get_dist_path() -> str:
     """Locate the webui dist folder (works both in dev and PyInstaller)."""
-    if getattr(sys, 'frozen', False):
+    if getattr(sys, "frozen", False):
         # PyInstaller bundle
         base = sys._MEIPASS  # type: ignore
     else:
@@ -864,9 +1001,18 @@ def has_webview2_runtime() -> bool:
         return False
 
     runtime_keys = (
-        (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"),
-        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"),
-        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"),
+        (
+            winreg.HKEY_CURRENT_USER,
+            r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+        ),
+        (
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+        ),
+        (
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+        ),
     )
 
     for root, key_path in runtime_keys:
@@ -1009,7 +1155,8 @@ def main():  # noqa: C901
     # Storage path for WebView2 profile cache (avoids re-init freeze)
     storage_dir = os.path.join(
         os.environ.get("LOCALAPPDATA", os.path.expanduser("~")),
-        "El Sbobinator", "webview_cache"
+        "El Sbobinator",
+        "webview_cache",
     )
     os.makedirs(storage_dir, exist_ok=True)
 
@@ -1021,8 +1168,9 @@ def main():  # noqa: C901
     # destroy localStorage (queue, editor sessions) on every restart.
     try:
         import shutil
+
         mtime_file = os.path.join(storage_dir, ".build_mtime")
-        if getattr(sys, 'frozen', False):
+        if getattr(sys, "frozen", False):
             current_mtime = str(os.path.getmtime(sys.executable))
         else:
             current_mtime = str(os.path.getmtime(dist_path))
@@ -1042,7 +1190,9 @@ def main():  # noqa: C901
                         _cleared = True
                     except Exception as _e:
                         _failed = True
-                        print(f"[!] Impossibile svuotare cache WebView2 ({cache_name}): {_e}")
+                        print(
+                            f"[!] Impossibile svuotare cache WebView2 ({cache_name}): {_e}"
+                        )
             if _cleared:
                 print("[*] Cache WebView2 svuotata (nuova build rilevata).")
             if not _failed:
@@ -1056,6 +1206,7 @@ def main():  # noqa: C901
     try:
         if sys.platform == "win32":
             import ctypes
+
             scr_w = ctypes.windll.user32.GetSystemMetrics(0)
             scr_h = ctypes.windll.user32.GetSystemMetrics(1)
         else:
@@ -1079,7 +1230,9 @@ def main():  # noqa: C901
             hidden=True,
         )
     else:
-        print("[!] Microsoft Edge WebView2 Runtime non trovato. Mostro schermata di recupero.")
+        print(
+            "[!] Microsoft Edge WebView2 Runtime non trovato. Mostro schermata di recupero."
+        )
         window = webview.create_window(
             "El Sbobinator",
             html=build_missing_webview2_html(),
@@ -1100,7 +1253,8 @@ def main():  # noqa: C901
 
     try:
         from webview.dom import _dnd_state
-        _dnd_state['num_listeners'] += 1
+
+        _dnd_state["num_listeners"] += 1
     except Exception:
         pass
 
@@ -1131,7 +1285,7 @@ def main():  # noqa: C901
                 pass
 
         threading.Thread(target=_show_window_fallback, daemon=True).start()
-    
+
     webview.start(
         private_mode=False,
         storage_path=storage_dir,

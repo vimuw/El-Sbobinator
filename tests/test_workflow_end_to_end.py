@@ -45,8 +45,22 @@ class WorkflowEndToEndTests(unittest.TestCase):
                 adapter.imposta_output_html(output_path)
                 adapter.set_run_result("completed")
 
-            files = [{"id": "file-1", "path": input_path, "name": "input.mp3", "size": 4, "duration": 1.0}]
-            with patch("google.genai.Client", _FakeClient), patch("el_sbobinator.pipeline.esegui_sbobinatura", side_effect=fake_pipeline):
+            files = [
+                {
+                    "id": "file-1",
+                    "path": input_path,
+                    "name": "input.mp3",
+                    "size": 4,
+                    "duration": 1.0,
+                }
+            ]
+            with (
+                patch("google.genai.Client", _FakeClient),
+                patch(
+                    "el_sbobinator.pipeline.esegui_sbobinatura",
+                    side_effect=fake_pipeline,
+                ),
+            ):
                 result = api.start_processing(files, "fake-key", resume_session=True)
                 self.assertTrue(result["ok"])
                 self.assertIsNotNone(api._processing_thread)
@@ -67,10 +81,21 @@ class WorkflowEndToEndTests(unittest.TestCase):
             with open(input_path, "wb") as handle:
                 handle.write(b"fake")
 
-            files = [{"id": "file-1", "path": input_path, "name": "input.mp3", "size": 4, "duration": 1.0}]
-            with patch("google.genai.Client", _FakeClient), patch(
-                "el_sbobinator.pipeline.esegui_sbobinatura",
-                side_effect=RuntimeError("boom"),
+            files = [
+                {
+                    "id": "file-1",
+                    "path": input_path,
+                    "name": "input.mp3",
+                    "size": 4,
+                    "duration": 1.0,
+                }
+            ]
+            with (
+                patch("google.genai.Client", _FakeClient),
+                patch(
+                    "el_sbobinator.pipeline.esegui_sbobinatura",
+                    side_effect=RuntimeError("boom"),
+                ),
             ):
                 result = api.start_processing(files, "fake-key", resume_session=True)
                 self.assertTrue(result["ok"])
@@ -80,8 +105,8 @@ class WorkflowEndToEndTests(unittest.TestCase):
 
             joined = "\n".join(window.calls)
             self.assertIn("fileFailed", joined)
-            self.assertIn("\"error\": \"boom\"", joined)
-            self.assertIn("\"failed\": 1", joined)
+            self.assertIn('"error": "boom"', joined)
+            self.assertIn('"failed": 1', joined)
 
 
 if __name__ == "__main__":

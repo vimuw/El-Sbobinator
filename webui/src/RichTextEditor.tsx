@@ -11,9 +11,10 @@ import FontFamily from '@tiptap/extension-font-family';
 import Link from '@tiptap/extension-link';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
-import { Extension } from '@tiptap/core';
+import { Extension, type Editor as TiptapEditor, type JSONContent } from '@tiptap/core';
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
-import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight,
   Bold, ChevronDown, Clipboard, Copy, ImagePlus, Italic,
@@ -22,6 +23,14 @@ import {
   Superscript as SupIcon, Underline as UnderlineIcon, Undo, X,
 } from 'lucide-react';
 import { FloatingImage } from './FloatingImage';
+
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    searchHighlight: {
+      setSearchTerm: (term: string, currentIndex?: number, matchCase?: boolean) => ReturnType;
+    };
+  }
+}
 
 export interface Heading {
   id: string;
@@ -42,12 +51,12 @@ interface RichTextEditorProps {
   onScrollToHeading?: (heading: Heading) => void;
 }
 
-const extractHeadings = (editor: any): Heading[] => {
-  const json = editor.getJSON();
+const extractHeadings = (editor: TiptapEditor): Heading[] => {
+  const json = editor.getJSON() as JSONContent;
   const result: Heading[] = [];
-  json.content?.forEach((node: any, idx: number) => {
+  json.content?.forEach((node: JSONContent, idx: number) => {
     if (node.type === 'heading') {
-      const text = node.content?.map((n: any) => n.text ?? '').join('') ?? '';
+      const text = node.content?.map((n: JSONContent) => n.text ?? '').join('') ?? '';
       if (text.trim()) result.push({ id: `h-${idx}`, level: node.attrs?.level ?? 2, text });
     }
   });
@@ -111,13 +120,13 @@ const SearchHighlight = Extension.create({
     return {
       setSearchTerm:
         (term: string, currentIndex = -1, matchCase = false) =>
-        ({ view }: { view: any }) => {
+        ({ view }: { view: EditorView }) => {
           view.dispatch(
             view.state.tr.setMeta(searchHighlightKey, { term, currentIndex, matchCase }),
           );
           return true;
         },
-    } as any;
+    };
   },
 
   addProseMirrorPlugins() {
@@ -148,7 +157,7 @@ const SearchHighlight = Extension.create({
             const searchStr = matchCase ? searchTerm : searchTerm.toLowerCase();
             let matchIdx = 0;
 
-            newState.doc.descendants((node: any, pos: number) => {
+            newState.doc.descendants((node: ProseMirrorNode, pos: number) => {
               if (!node.isText || !node.text) return;
               const nodeText = matchCase ? node.text : node.text.toLowerCase();
               let idx = 0;
@@ -200,7 +209,7 @@ const FontSize = Extension.create({
   },
 });
 
-const ColorPickerButton = ({ editor }: { editor: any }) => {
+const ColorPickerButton = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
   const buttonRef = React.useRef<HTMLButtonElement>(null);
@@ -303,7 +312,7 @@ const readFileAsDataUrl = (file: File) =>
     reader.readAsDataURL(file);
   });
 
-const HighlightPickerButton = ({ editor }: { editor: any }) => {
+const HighlightPickerButton = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
   const buttonRef = React.useRef<HTMLButtonElement>(null);
@@ -389,7 +398,7 @@ const HighlightPickerButton = ({ editor }: { editor: any }) => {
   );
 };
 
-const FontFamilySelect = ({ editor }: { editor: any }) => {
+const FontFamilySelect = ({ editor }: { editor: TiptapEditor }) => {
   const currentFamily = editor.getAttributes('textStyle').fontFamily ?? '';
   return (
     <div className="editor-select-wrap">
@@ -417,7 +426,7 @@ const FontFamilySelect = ({ editor }: { editor: any }) => {
 // Matches CSS: h1=1.5rem, h2=1.25rem, h3=1.1rem, h4=1rem, h5=0.9rem at 16px root
 const HEADING_PX: Record<number, number> = { 1: 24, 2: 20, 3: 18, 4: 16, 5: 14 };
 
-const FontSizeSelect = ({ editor }: { editor: any }) => {
+const FontSizeSelect = ({ editor }: { editor: TiptapEditor }) => {
   const getCurrentSize = () => {
     if (!editor) return '';
 
@@ -461,7 +470,7 @@ const FontSizeSelect = ({ editor }: { editor: any }) => {
   );
 };
 
-const HeadingSelect = ({ editor }: { editor: any }) => {
+const HeadingSelect = ({ editor }: { editor: TiptapEditor }) => {
   let current = 'paragraph';
   for (let i = 1; i <= 5; i++) {
     if (editor.isActive('heading', { level: i })) { current = `h${i}`; break; }
@@ -490,7 +499,7 @@ const HeadingSelect = ({ editor }: { editor: any }) => {
   );
 };
 
-const LinkButton = ({ editor }: { editor: any }) => {
+const LinkButton = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [url, setUrl] = React.useState('');
   const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
@@ -568,7 +577,7 @@ const LinkButton = ({ editor }: { editor: any }) => {
   );
 };
 
-const menuBarStateKey = (editor: any): string => [
+const menuBarStateKey = (editor: TiptapEditor): string => [
   editor.isActive('bold'),
   editor.isActive('italic'),
   editor.isActive('underline'),
@@ -602,7 +611,7 @@ const MenuBar = ({
   showFindReplace,
   onToggleFindReplace,
 }: {
-  editor: any;
+  editor: TiptapEditor | null;
   onInsertImages: (files: FileList | File[]) => void;
   showFindReplace: boolean;
   onToggleFindReplace: () => void;
@@ -723,7 +732,7 @@ const FindReplacePanel = ({
   initialMode,
   focusTrigger,
 }: {
-  editor: any;
+  editor: TiptapEditor;
   onClose: () => void;
   initialMode: 'find' | 'replace';
   focusTrigger?: number;
@@ -757,7 +766,7 @@ const FindReplacePanel = ({
     if (!editor || !text) return [];
     const results: { from: number; to: number }[] = [];
     const searchStr = caseFlag ? text : text.toLowerCase();
-    editor.state.doc.descendants((node: any, pos: number) => {
+    editor.state.doc.descendants((node: ProseMirrorNode, pos: number) => {
       if (!node.isText || !node.text) return;
       const nodeText = caseFlag ? node.text : node.text.toLowerCase();
       let idx = 0;
@@ -958,7 +967,7 @@ const FindReplacePanel = ({
   );
 };
 
-const WordCount = ({ editor }: { editor: any }) => {
+const WordCount = ({ editor }: { editor: TiptapEditor }) => {
   const [counts, setCounts] = React.useState({ words: 0, chars: 0 });
   React.useEffect(() => {
     if (!editor) return;
@@ -992,7 +1001,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
   const findModeRef = useRef<null | 'find' | 'replace'>(null);
   useEffect(() => { findModeRef.current = findMode; }, [findMode]);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
-  const editorRef = useRef<any>(null);
+  const editorRef = useRef<TiptapEditor | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const hasRestoredScrollRef = useRef(false);
   const onScrollTopChangeRef = useRef(onScrollTopChange);

@@ -14,7 +14,6 @@ from dataclasses import dataclass
 from el_sbobinator.audio_service import preconvert_media_to_mp3
 from el_sbobinator.pipeline_settings import PipelineSettings, load_and_sanitize_settings
 from el_sbobinator.session_store import (
-    clone_session_settings,
     ensure_session_dirs,
     load_session as load_saved_session,
     new_session,
@@ -22,7 +21,12 @@ from el_sbobinator.session_store import (
     resolve_session_paths,
     save_session as save_session_data,
 )
-from el_sbobinator.shared import PRECONVERTED_AUDIO_FINAL, PRECONVERTED_AUDIO_PARTIAL
+from el_sbobinator.shared import (
+    PRECONVERTED_AUDIO_FINAL,
+    PRECONVERTED_AUDIO_PARTIAL,
+    build_default_pipeline_settings,
+    load_config,
+)
 
 
 CHUNK_MD_RE = re.compile(r"^chunk_(\d{3})_(\d+)_(\d+)\.md$", re.IGNORECASE)
@@ -95,7 +99,9 @@ def list_phase1_chunks(phase1_chunks_dir: str) -> list[ChunkEntry]:
             idx = int(match.group(1))
             start_sec = int(match.group(2))
             end_sec = int(match.group(3))
-            items.append((idx, start_sec, end_sec, os.path.join(phase1_chunks_dir, name)))
+            items.append(
+                (idx, start_sec, end_sec, os.path.join(phase1_chunks_dir, name))
+            )
     except Exception:
         return []
     return sorted(items, key=lambda item: (item[0], item[1], item[2]))
@@ -175,9 +181,15 @@ def normalize_stage(session: dict) -> str:
     return stage
 
 
-def phase1_has_progress(session: dict, stage: str, existing_chunks: list[ChunkEntry]) -> bool:
-    phase1_state = session.get("phase1", {}) if isinstance(session.get("phase1"), dict) else {}
-    outputs_state = session.get("outputs", {}) if isinstance(session.get("outputs"), dict) else {}
+def phase1_has_progress(
+    session: dict, stage: str, existing_chunks: list[ChunkEntry]
+) -> bool:
+    phase1_state = (
+        session.get("phase1", {}) if isinstance(session.get("phase1"), dict) else {}
+    )
+    outputs_state = (
+        session.get("outputs", {}) if isinstance(session.get("outputs"), dict) else {}
+    )
     return (
         stage != "phase1"
         or bool(existing_chunks)
@@ -193,21 +205,26 @@ def reset_for_regeneration(context: PipelineSessionContext) -> None:
         reset_session_dirs(context.session_paths)
     except Exception:
         pass
-    context.session = new_session(
-        context.input_path,
-        settings=clone_session_settings(context.session),
+    fresh_settings = build_default_pipeline_settings(load_config())
+    context.session = new_session(context.input_path, settings=fresh_settings)
+    context.settings, context.settings_changed = load_and_sanitize_settings(
+        context.session
     )
     context.save()
 
 
-def persist_phase1_metadata(context: PipelineSessionContext, duration_seconds: float, step_seconds: int) -> None:
+def persist_phase1_metadata(
+    context: PipelineSessionContext, duration_seconds: float, step_seconds: int
+) -> None:
     context.session.setdefault("phase1", {})
     context.session["phase1"]["duration_seconds"] = float(duration_seconds)
     context.session["phase1"]["step_seconds"] = int(step_seconds)
     context.save()
 
 
-def restore_phase1_progress(context: PipelineSessionContext, stage: str, step_seconds: int) -> Phase1RestoreState:
+def restore_phase1_progress(
+    context: PipelineSessionContext, stage: str, step_seconds: int
+) -> Phase1RestoreState:
     session = context.session
     existing_chunks = list_phase1_chunks(context.phase1_chunks_dir)
     start_sec = int(session.get("phase1", {}).get("next_start_sec", 0) or 0)
@@ -332,7 +349,9 @@ def record_step_metric(
 
     if value > 0:
         entry["count"] = int(entry.get("count", 0) or 0) + 1
-        entry["elapsed_seconds"] = float(entry.get("elapsed_seconds", 0.0) or 0.0) + value
+        entry["elapsed_seconds"] = (
+            float(entry.get("elapsed_seconds", 0.0) or 0.0) + value
+        )
         entry["last_seconds"] = value
         entry["avg_seconds"] = entry["elapsed_seconds"] / max(1, entry["count"])
 

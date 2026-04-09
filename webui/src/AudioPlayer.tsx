@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pause, Play, RotateCcw, SkipBack, SkipForward, Volume2 } from 'lucide-react';
 
 interface AudioPlayerProps {
@@ -50,14 +50,19 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
     syncDuration();
     const timeoutId = window.setTimeout(syncDuration, 300);
     return () => window.clearTimeout(timeoutId);
-  }, [src]);
+  }, [initialTime, src]);
 
-  const togglePlay = () => {
-    if (!audioRef.current) return;
-    if (isPlaying) audioRef.current.pause();
-    else audioRef.current.play();
-    setIsPlaying(!isPlaying);
-  };
+  const togglePlay = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (audio.paused) {
+      void audio.play();
+      setIsPlaying(true);
+      return;
+    }
+    audio.pause();
+    setIsPlaying(false);
+  }, []);
 
   const togglePlayRef = useRef(togglePlay);
   useEffect(() => {

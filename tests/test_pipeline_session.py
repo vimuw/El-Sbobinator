@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from el_sbobinator.pipeline_session import (
@@ -8,6 +9,7 @@ from el_sbobinator.pipeline_session import (
     normalize_stage,
     phase1_has_progress,
     record_step_metric,
+    reset_for_regeneration,
     restore_phase1_progress,
 )
 from el_sbobinator.pipeline_settings import PipelineSettings
@@ -26,6 +28,8 @@ class _DummyPreconvContext:
         self.session_dir = session_dir
         self.settings = PipelineSettings(
             model="gemini-2.5-flash",
+            fallback_models=["gemini-2.5-flash-lite"],
+            effective_model="gemini-2.5-flash",
             chunk_minutes=15,
             overlap_seconds=30,
             macro_char_limit=22000,
@@ -41,12 +45,89 @@ class _DummyPreconvContext:
         return True
 
 
+class _DummyRegenContext:
+    def __init__(self, input_path: str, session_dir: str):
+        self.input_path = input_path
+        self.session_paths = SimpleNamespace(session_dir=session_dir)
+        self.session = {
+            "settings": {
+                "model": "gemini-2.5-flash",
+                "fallback_models": ["gemini-2.5-flash-lite"],
+                "effective_model": "gemini-2.5-flash",
+            }
+        }
+        self.settings = PipelineSettings(
+            model="gemini-2.5-flash",
+            fallback_models=["gemini-2.5-flash-lite"],
+            effective_model="gemini-2.5-flash",
+            chunk_minutes=15,
+            overlap_seconds=30,
+            macro_char_limit=22000,
+            preconvert_audio=True,
+            audio_bitrate="48k",
+            prefetch_next_chunk=True,
+            inline_audio_max_mb=6.0,
+        )
+        self.settings_changed = False
+        self.save_calls = 0
+
+    def save(self):
+        self.save_calls += 1
+        return True
+
+
 class PipelineSessionHelpersTests(unittest.TestCase):
+    def test_reset_for_regeneration_uses_current_config_not_old_session_settings(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "lesson.mp3")
+            with open(input_path, "wb") as handle:
+                handle.write(b"fake")
+
+            context = _DummyRegenContext(input_path, os.path.join(tmpdir, "session"))
+            fresh_settings = {
+                "model": "gemini-2.5-flash-lite",
+                "fallback_models": [],
+                "effective_model": "gemini-2.5-flash-lite",
+                "chunk_minutes": 15,
+                "overlap_seconds": 30,
+                "macro_char_limit": 22000,
+                "preconvert_audio": True,
+                "prefetch_next_chunk": True,
+                "inline_audio_max_mb": 6.0,
+                "audio": {"bitrate": "48k"},
+            }
+
+            with (
+                patch("el_sbobinator.pipeline_session.reset_session_dirs"),
+                patch(
+                    "el_sbobinator.pipeline_session.load_config",
+                    return_value={"preferred_model": "gemini-2.5-flash-lite"},
+                ),
+                patch(
+                    "el_sbobinator.pipeline_session.build_default_pipeline_settings",
+                    return_value=fresh_settings,
+                ),
+            ):
+                reset_for_regeneration(context)
+
+            self.assertEqual(
+                context.session["settings"]["model"], "gemini-2.5-flash-lite"
+            )
+            self.assertEqual(
+                context.session["settings"]["effective_model"], "gemini-2.5-flash-lite"
+            )
+            self.assertEqual(context.settings.model, "gemini-2.5-flash-lite")
+            self.assertEqual(context.settings.effective_model, "gemini-2.5-flash-lite")
+            self.assertEqual(context.save_calls, 1)
+
     def test_normalize_stage_falls_back_to_phase1(self):
         session = {"stage": "wat"}
         stage = normalize_stage(session)
         self.assertEqual(stage, "phase1")
         self.assertEqual(session["stage"], "phase1")
+
+    def test_preconverted_audio_partial_has_mp3_extension(self):
+        self.assertTrue(PRECONVERTED_AUDIO_PARTIAL.endswith(".mp3"))
 
     def test_phase1_progress_detects_saved_output(self):
         session = {"outputs": {"html": "ready.html"}}
@@ -92,7 +173,10 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                     handle.write(b"x" * 4096)
                 return True, None
 
-            with patch("el_sbobinator.pipeline_session.preconvert_media_to_mp3", side_effect=fake_preconvert):
+            with patch(
+                "el_sbobinator.pipeline_session.preconvert_media_to_mp3",
+                side_effect=fake_preconvert,
+            ):
                 enabled, result_path = ensure_preconverted_audio(
                     context,
                     input_path="lesson.mp3",
@@ -127,7 +211,10 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                     handle.write(b"y" * 4096)
                 return True, None
 
-            with patch("el_sbobinator.pipeline_session.preconvert_media_to_mp3", side_effect=fake_preconvert):
+            with patch(
+                "el_sbobinator.pipeline_session.preconvert_media_to_mp3",
+                side_effect=fake_preconvert,
+            ):
                 enabled, result_path = ensure_preconverted_audio(
                     context,
                     input_path="lesson.mp3",
@@ -139,7 +226,9 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                 )
 
             self.assertTrue(enabled)
-            self.assertEqual(result_path, os.path.join(tmpdir, PRECONVERTED_AUDIO_FINAL))
+            self.assertEqual(
+                result_path, os.path.join(tmpdir, PRECONVERTED_AUDIO_FINAL)
+            )
             self.assertFalse(os.path.exists(partial_path))
 
     def test_ensure_preconverted_audio_cleans_partial_on_cancel(self):
@@ -152,7 +241,10 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                     handle.write(b"z" * 4096)
                 return False, "cancelled"
 
-            with patch("el_sbobinator.pipeline_session.preconvert_media_to_mp3", side_effect=fake_preconvert):
+            with patch(
+                "el_sbobinator.pipeline_session.preconvert_media_to_mp3",
+                side_effect=fake_preconvert,
+            ):
                 enabled, result_path = ensure_preconverted_audio(
                     context,
                     input_path="lesson.mp3",
@@ -179,8 +271,14 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                     handle.write(b"k" * 4096)
                 return True, None
 
-            with patch("el_sbobinator.pipeline_session.preconvert_media_to_mp3", side_effect=fake_preconvert):
-                with patch("el_sbobinator.pipeline_session.os.replace", side_effect=PermissionError("locked")):
+            with patch(
+                "el_sbobinator.pipeline_session.preconvert_media_to_mp3",
+                side_effect=fake_preconvert,
+            ):
+                with patch(
+                    "el_sbobinator.pipeline_session.os.replace",
+                    side_effect=PermissionError("locked"),
+                ):
                     enabled, result_path = ensure_preconverted_audio(
                         context,
                         input_path="lesson.mp3",

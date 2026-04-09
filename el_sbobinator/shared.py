@@ -20,17 +20,23 @@ import threading
 import time
 from datetime import datetime
 
+from el_sbobinator.model_registry import (
+    DEFAULT_FALLBACK_MODELS,
+    DEFAULT_MODEL,
+    sanitize_fallback_models,
+    sanitize_model_name,
+)
 
-DEFAULT_MODEL = "gemini-2.5-flash"
 SESSION_CLEANUP_MAX_AGE_DAYS = 14
 PRECONVERTED_AUDIO_FINAL = "el_sbobinator_preconverted_mono16k.mp3"
-PRECONVERTED_AUDIO_PARTIAL = f"{PRECONVERTED_AUDIO_FINAL}.partial"
+PRECONVERTED_AUDIO_PARTIAL = "el_sbobinator_preconverted_mono16k.partial.mp3"
 
 __all__ = [
     "DEFAULT_MODEL",
     "SESSION_CLEANUP_MAX_AGE_DAYS",
     "PRECONVERTED_AUDIO_FINAL",
     "PRECONVERTED_AUDIO_PARTIAL",
+    "DEFAULT_FALLBACK_MODELS",
     "debug_log",
     "cleanup_orphan_temp_chunks",
     "USER_HOME",
@@ -55,6 +61,7 @@ __all__ = [
     "get_session_storage_info",
     "invalidate_session_storage_cache",
     "cleanup_orphan_sessions",
+    "build_default_pipeline_settings",
 ]
 
 _KEYRING_SERVICE = "El Sbobinator"
@@ -110,7 +117,13 @@ def debug_log(msg: str) -> None:
     # Log opzionale: non sporcare la UI in uso normale.
     # Abilita con: setx EL_SBOBINATOR_DEBUG 1 (Windows) / export EL_SBOBINATOR_DEBUG=1 (macOS/Linux)
     try:
-        if str(os.environ.get("EL_SBOBINATOR_DEBUG", "")).strip() not in ("1", "true", "TRUE", "yes", "YES"):
+        if str(os.environ.get("EL_SBOBINATOR_DEBUG", "")).strip() not in (
+            "1",
+            "true",
+            "TRUE",
+            "yes",
+            "YES",
+        ):
             return
     except Exception:
         return
@@ -133,7 +146,9 @@ def cleanup_orphan_temp_chunks(max_age_seconds: int = 12 * 3600) -> int:
             low = name.lower()
             if not low.startswith("el_sbobinator_temp_"):
                 continue
-            if not (low.endswith(".mp3") or low.endswith(".wav") or low.endswith(".m4a")):
+            if not (
+                low.endswith(".mp3") or low.endswith(".wav") or low.endswith(".m4a")
+            ):
                 continue
             path = os.path.join(tmpdir, name)
             try:
@@ -199,9 +214,13 @@ def _get_config_file_path(user_home: str) -> str:
     """
     system = platform.system()
     if system == "Darwin":
-        base = os.path.join(user_home, "Library", "Application Support", "El Sbobinator")
+        base = os.path.join(
+            user_home, "Library", "Application Support", "El Sbobinator"
+        )
     elif system == "Windows":
-        appdata = os.environ.get("APPDATA") or os.path.join(user_home, "AppData", "Roaming")
+        appdata = os.environ.get("APPDATA") or os.path.join(
+            user_home, "AppData", "Roaming"
+        )
         base = os.path.join(appdata, "El Sbobinator")
     else:
         xdg = os.environ.get("XDG_CONFIG_HOME") or os.path.join(user_home, ".config")
@@ -222,6 +241,7 @@ def _dpapi_make_blob_class(ctypes_mod, wintypes_mod):
             ("cbData", wintypes_mod.DWORD),
             ("pbData", ctypes_mod.POINTER(ctypes_mod.c_byte)),
         ]
+
     return DATA_BLOB
 
 
@@ -324,7 +344,9 @@ def _dpapi_unprotect_text_windows(b64: str) -> str:
         kernel32.LocalFree.argtypes = [ctypes.c_void_p]
         kernel32.LocalFree.restype = ctypes.c_void_p
 
-        raw = base64.b64decode((b64 or "").encode("ascii", errors="ignore"), validate=False)
+        raw = base64.b64decode(
+            (b64 or "").encode("ascii", errors="ignore"), validate=False
+        )
         if not raw:
             return ""
         in_blob = _bytes_to_blob(raw)
@@ -431,7 +453,9 @@ def load_config() -> dict:  # noqa: C901
                 # Decrypt fallback keys on Windows.
                 try:
                     if platform.system() == "Windows":
-                        protected_fk = str(data.get("fallback_keys_protected") or "").strip()
+                        protected_fk = str(
+                            data.get("fallback_keys_protected") or ""
+                        ).strip()
                         if protected_fk:
                             dec_fk = _dpapi_unprotect_text_windows(protected_fk)
                             if dec_fk:
@@ -442,7 +466,10 @@ def load_config() -> dict:  # noqa: C901
                 try:
                     if platform.system() != "Windows":
                         import keyring  # type: ignore
-                        fk_json = keyring.get_password(_KEYRING_SERVICE, "gemini_fallback_keys")
+
+                        fk_json = keyring.get_password(
+                            _KEYRING_SERVICE, "gemini_fallback_keys"
+                        )
                         if fk_json:
                             data["fallback_keys"] = json.loads(fk_json)
                 except Exception:
@@ -453,19 +480,67 @@ def load_config() -> dict:  # noqa: C901
                         save_config(str(data.get("api_key") or ""))
                     except Exception:
                         pass
+                preferred_model = sanitize_model_name(
+                    data.get("preferred_model"), DEFAULT_MODEL
+                )
+                fallback_models = sanitize_fallback_models(
+                    data.get("fallback_models"),
+                    preferred_model,
+                    DEFAULT_FALLBACK_MODELS,
+                )
+                data["preferred_model"] = preferred_model
+                data["fallback_models"] = fallback_models
                 return data
         except Exception:
             pass
-    return {"api_key": ""}
+    return {
+        "api_key": "",
+        "preferred_model": DEFAULT_MODEL,
+        "fallback_models": list(DEFAULT_FALLBACK_MODELS),
+    }
 
 
-def save_config(api_key: str, fallback_keys: list | None = None) -> None:  # noqa: C901
+def save_config(  # noqa: C901
+    api_key: str,
+    fallback_keys: list | None = None,
+    preferred_model: str | None = None,
+    fallback_models: list | None = None,
+) -> None:
     with _config_lock:
         api_key_norm = str(api_key or "").strip()
         data: dict = {"api_key": api_key_norm}
+        current_cfg: dict = {}
+        for _path in (CONFIG_FILE, LEGACY_CONFIG_FILE):
+            if not os.path.exists(_path):
+                continue
+            try:
+                with open(_path, "r", encoding="utf-8") as _fh:
+                    raw_cfg = json.load(_fh)
+                if isinstance(raw_cfg, dict):
+                    current_cfg = raw_cfg
+                    break
+            except Exception:
+                pass
+        preferred_model_norm = sanitize_model_name(
+            preferred_model
+            if preferred_model is not None
+            else current_cfg.get("preferred_model"),
+            DEFAULT_MODEL,
+        )
+        fallback_models_norm = sanitize_fallback_models(
+            fallback_models
+            if fallback_models is not None
+            else current_cfg.get("fallback_models"),
+            preferred_model_norm,
+            DEFAULT_FALLBACK_MODELS,
+        )
+        data["preferred_model"] = preferred_model_norm
+        data["fallback_models"] = fallback_models_norm
         # Persist fallback keys (array of riserva) if provided.
         if fallback_keys is not None:
-            data["fallback_keys"] = [str(k or "").strip() for k in fallback_keys if str(k or "").strip()]
+            data["fallback_keys"] = [
+                str(k or "").strip() for k in fallback_keys if str(k or "").strip()
+            ]
         else:
             # Preserve existing fallback keys without the full DPAPI/keyring overhead
             # of load_config(). On Windows, read raw JSON and carry whatever stored
@@ -484,13 +559,21 @@ def save_config(api_key: str, fallback_keys: list | None = None) -> None:  # noq
                             break
                     if isinstance(_raw, dict):
                         if _raw.get("fallback_keys_protected"):
-                            data["fallback_keys_protected"] = _raw["fallback_keys_protected"]
-                        elif isinstance(_raw.get("fallback_keys"), list) and _raw["fallback_keys"]:
+                            data["fallback_keys_protected"] = _raw[
+                                "fallback_keys_protected"
+                            ]
+                        elif (
+                            isinstance(_raw.get("fallback_keys"), list)
+                            and _raw["fallback_keys"]
+                        ):
                             data["fallback_keys"] = _raw["fallback_keys"]
                 else:
                     try:
                         import keyring as _kr  # type: ignore
-                        _fk_json = _kr.get_password(_KEYRING_SERVICE, "gemini_fallback_keys")
+
+                        _fk_json = _kr.get_password(
+                            _KEYRING_SERVICE, "gemini_fallback_keys"
+                        )
                         if _fk_json:
                             data["fallback_keys"] = json.loads(_fk_json)
                     except Exception:
@@ -505,9 +588,13 @@ def save_config(api_key: str, fallback_keys: list | None = None) -> None:  # noq
                     data["api_key"] = ""
                     data["api_key_protected"] = protected
                 else:
-                    debug_log("dpapi: CryptProtectData failed; API key stored as plaintext in config")
+                    debug_log(
+                        "dpapi: CryptProtectData failed; API key stored as plaintext in config"
+                    )
         except Exception as _dpapi_exc:
-            debug_log(f"dpapi: exception during protect — API key stored as plaintext in config: {_dpapi_exc}")
+            debug_log(
+                f"dpapi: exception during protect — API key stored as plaintext in config: {_dpapi_exc}"
+            )
 
         # Store secret in OS keyring on macOS/Linux if available.
         try:
@@ -518,7 +605,9 @@ def save_config(api_key: str, fallback_keys: list | None = None) -> None:  # noq
                         data["api_key"] = ""
                         data["use_keyring"] = True
                     else:
-                        print("[!] Avviso: Keyring non disponibile. La chiave API è salvata in chiaro in config.json.")
+                        print(
+                            "[!] Avviso: Keyring non disponibile. La chiave API è salvata in chiaro in config.json."
+                        )
                         data.setdefault("use_keyring", False)
                 else:
                     # If user clears the key, also clear from keyring (best-effort).
@@ -537,13 +626,20 @@ def save_config(api_key: str, fallback_keys: list | None = None) -> None:  # noq
                         data["fallback_keys"] = []
                         data["fallback_keys_protected"] = protected_fk
                     else:
-                        debug_log("dpapi: CryptProtectData failed for fallback keys; stored as plaintext in config")
+                        debug_log(
+                            "dpapi: CryptProtectData failed for fallback keys; stored as plaintext in config"
+                        )
             except Exception as _dpapi_fk_exc:
-                debug_log(f"dpapi: exception during protect for fallback keys — stored as plaintext in config: {_dpapi_fk_exc}")
+                debug_log(
+                    f"dpapi: exception during protect for fallback keys — stored as plaintext in config: {_dpapi_fk_exc}"
+                )
             try:
                 if platform.system() != "Windows":
                     import keyring  # type: ignore
-                    keyring.set_password(_KEYRING_SERVICE, "gemini_fallback_keys", json.dumps(fk))
+
+                    keyring.set_password(
+                        _KEYRING_SERVICE, "gemini_fallback_keys", json.dumps(fk)
+                    )
                     data["fallback_keys"] = []
             except Exception:
                 pass
@@ -572,7 +668,13 @@ def save_config(api_key: str, fallback_keys: list | None = None) -> None:  # noq
         # Back-compat (opt-in): write legacy file only if explicitly requested.
         # Avoid duplicating secrets (especially on Windows).
         try:
-            if str(os.environ.get("EL_SBOBINATOR_WRITE_LEGACY_CONFIG", "")).strip() in ("1", "true", "TRUE", "yes", "YES"):
+            if str(os.environ.get("EL_SBOBINATOR_WRITE_LEGACY_CONFIG", "")).strip() in (
+                "1",
+                "true",
+                "TRUE",
+                "yes",
+                "YES",
+            ):
                 with open(LEGACY_CONFIG_FILE + ".tmp", "w", encoding="utf-8") as f:
                     json.dump(data, f, ensure_ascii=False)
                 os.replace(LEGACY_CONFIG_FILE + ".tmp", LEGACY_CONFIG_FILE)
@@ -583,6 +685,28 @@ def save_config(api_key: str, fallback_keys: list | None = None) -> None:  # noq
                         pass
         except Exception:
             pass
+
+
+def build_default_pipeline_settings(config: dict | None = None) -> dict:
+    cfg = config if isinstance(config, dict) else load_config()
+    preferred_model = sanitize_model_name(cfg.get("preferred_model"), DEFAULT_MODEL)
+    fallback_models = sanitize_fallback_models(
+        cfg.get("fallback_models"),
+        preferred_model,
+        DEFAULT_FALLBACK_MODELS,
+    )
+    return {
+        "model": preferred_model,
+        "fallback_models": fallback_models,
+        "effective_model": preferred_model,
+        "chunk_minutes": 15,
+        "overlap_seconds": 30,
+        "macro_char_limit": 22000,
+        "preconvert_audio": True,
+        "prefetch_next_chunk": True,
+        "inline_audio_max_mb": 6.0,
+        "audio": {"bitrate": "48k"},
+    }
 
 
 # ==========================================
@@ -669,11 +793,14 @@ def _session_id_for_file(path: str) -> str:
         _session_id_cache.pop(next(iter(_session_id_cache)))
 
     content_hash = _partial_file_hash(abs_path)
-    blob = json.dumps({
-        "size": size,
-        "mtime": mtime,
-        "content_hash": content_hash,
-    }, sort_keys=True).encode("utf-8", errors="ignore")
+    blob = json.dumps(
+        {
+            "size": size,
+            "mtime": mtime,
+            "content_hash": content_hash,
+        },
+        sort_keys=True,
+    ).encode("utf-8", errors="ignore")
     result = hashlib.sha256(blob).hexdigest()
     _session_id_cache[cache_key] = result
     return result
@@ -758,7 +885,10 @@ def get_session_storage_info() -> dict:
     global _storage_info_cache, _storage_info_cache_time
     now = time.time()
     with _storage_info_lock:
-        if _storage_info_cache is not None and (now - _storage_info_cache_time) < _STORAGE_INFO_TTL:
+        if (
+            _storage_info_cache is not None
+            and (now - _storage_info_cache_time) < _STORAGE_INFO_TTL
+        ):
             return dict(_storage_info_cache)
     future = _storage_info_executor.submit(_compute_session_storage_info)
     try:

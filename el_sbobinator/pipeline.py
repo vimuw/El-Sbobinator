@@ -24,7 +24,12 @@ from el_sbobinator.generation_service import (
     extract_client_api_key,
     load_fallback_keys,
 )
-from el_sbobinator.logging_utils import attach_file_handler, detach_file_handler, get_logger
+from el_sbobinator.logging_utils import (
+    attach_file_handler,
+    detach_file_handler,
+    get_logger,
+)
+from el_sbobinator.model_registry import build_model_state
 from el_sbobinator.phase1_service import process_phase1_transcription
 from el_sbobinator.pipeline_hooks import PipelineRuntime
 from el_sbobinator.pipeline_session import (
@@ -59,7 +64,9 @@ from el_sbobinator.shared import (
 _REGENERATE_DIALOG_TIMEOUT_SECONDS: int = 120
 
 
-def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_dir_hint=None, resume_session=False):  # noqa: C901
+def _esegui_sbobinatura_impl(  # noqa: C901
+    input_path, api_key_value, app_instance, session_dir_hint=None, resume_session=False
+):
     runtime = PipelineRuntime(app_instance)
     runtime.reset_temp_files()
     cancel_event = runtime.cancel_event
@@ -83,7 +90,7 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
         client = genai.Client(api_key=api_key_value.strip())
         runtime.set_run_result("failed")
         runtime.set_effective_api_key(api_key_value.strip())
-        
+
         def request_fallback_key():
             return generation_service.request_new_api_key(runtime, runtime.cancelled)
 
@@ -102,7 +109,9 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
             session_dir=session_ctx.session_dir,
             input_file=os.path.basename(input_path),
         )
-        log_handler = attach_file_handler(os.path.join(session_ctx.session_dir, "run.log"))
+        log_handler = attach_file_handler(
+            os.path.join(session_ctx.session_dir, "run.log")
+        )
         phase1_chunks_dir = session_ctx.phase1_chunks_dir
         phase2_revised_dir = session_ctx.phase2_revised_dir
         boundary_dir = session_ctx.boundary_dir
@@ -111,6 +120,22 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
         def save_session():
             return session_ctx.save()
 
+        def on_model_switched(previous_model: str, new_model: str):
+            session.setdefault("settings", {})
+            session["settings"]["effective_model"] = new_model
+            save_session()
+            print(f"   [OK] Cambio modello automatico: {previous_model} -> {new_model}")
+
+        def log_model_selection(label: str):
+            fallback_chain = (
+                " -> ".join(settings.fallback_models)
+                if settings.fallback_models
+                else "nessuno"
+            )
+            print(
+                f"[*] {label}: primario={settings.model}, attivo={model_state.current}, fallback={fallback_chain}"
+            )
+
         print(f"[*] Autosalvataggio attivo. Sessione: {session_ctx.session_dir}")
         logger.info("Sessione inizializzata.", extra={"stage": "startup"})
 
@@ -118,23 +143,43 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
         settings = session_ctx.settings
 
         model_name = settings.model
+        # Always resume from the primary model. effective_model records which model
+        # was active when the previous run stopped (observability only) but is a
+        # transient runtime state, not a durable preference. The fallback mechanism
+        # will degrade again if the primary is still unavailable.
+        model_state = build_model_state(
+            settings.model,
+            settings.fallback_models,
+        )
         chunk_seconds = settings.chunk_seconds
         step_seconds = settings.step_seconds
         prev_memory = ""
         full_transcript = ""
 
         system_prompt = PROMPT_SISTEMA
- 
-        print(f"[*] Analisi del file originale in corso:\n{os.path.basename(input_path)}")
+        log_model_selection("Modelli sessione")
+
+        print(
+            f"[*] Analisi del file originale in corso:\n{os.path.basename(input_path)}"
+        )
         runtime.phase("Fase: analisi file")
         try:
             # Probe robusto della durata (gestisce path non-ASCII e "Duration: N/A").
             ffmpeg_exe = resolve_ffmpeg()
-            total_duration_sec, reason = probe_media_duration(input_path, ffmpeg_exe=ffmpeg_exe)
+            total_duration_sec, reason = probe_media_duration(
+                input_path, ffmpeg_exe=ffmpeg_exe
+            )
             if total_duration_sec is None:
-                raise ValueError(str(reason or "Impossibile leggere la durata dal file usando FFmpeg."))
+                raise ValueError(
+                    str(
+                        reason
+                        or "Impossibile leggere la durata dal file usando FFmpeg."
+                    )
+                )
         except Exception as e:
-            print(f"Errore caricamento audio. File corrotto o formato non supportato.\n{e}")
+            print(
+                f"Errore caricamento audio. File corrotto o formato non supportato.\n{e}"
+            )
             logger.exception("Analisi file fallita.", extra={"stage": "probe"})
             return
 
@@ -152,16 +197,20 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
         has_progress = phase1_has_progress(session, stage, existing_chunks)
 
         if has_progress and resume_session:
+
             def ask_should_regenerate():
                 if callable(getattr(app_instance, "ask_regenerate", None)):
                     event = threading.Event()
                     outcome = {"rigenera": False}
+
                     def on_answer(payload):
                         outcome["rigenera"] = payload.get("regenerate", False)
                         event.set()
-                    
+
                     regenerate_mode = "completed" if stage == "done" else "resume"
-                    if runtime.ask_regenerate(os.path.basename(input_path), on_answer, regenerate_mode):
+                    if runtime.ask_regenerate(
+                        os.path.basename(input_path), on_answer, regenerate_mode
+                    ):
                         deadline = time.monotonic() + _REGENERATE_DIALOG_TIMEOUT_SECONDS
                         while not event.is_set():
                             if runtime.cancelled():
@@ -190,15 +239,36 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
                 runtime.set_run_result("cancelled", "Prompt di ripresa chiuso.")
                 return
             if _is_regen:
-                print(f"[*] L'utente ha scelto di rigenerare il file {os.path.basename(input_path)}. Pulizia sessione precedente...")
+                print(
+                    f"[*] L'utente ha scelto di rigenerare il file {os.path.basename(input_path)}. Pulizia sessione precedente..."
+                )
                 reset_for_regeneration(session_ctx)
                 session = session_ctx.session
+                settings = session_ctx.settings
+                model_name = settings.model
+                chunk_seconds = settings.chunk_seconds
+                step_seconds = settings.step_seconds
+                model_state = build_model_state(
+                    settings.model,
+                    settings.fallback_models,
+                    settings.effective_model,
+                )
                 stage = "phase1"
-                logger.info("Sessione rigenerata su richiesta utente.", extra={"stage": "resume"})
+                log_model_selection("Modelli sessione dopo rigenerazione")
+                logger.info(
+                    "Sessione rigenerata su richiesta utente.",
+                    extra={"stage": "resume"},
+                )
             elif stage == "done":
-                existing_html = session.get("outputs", {}).get("html", "") if isinstance(session, dict) else ""
+                existing_html = (
+                    session.get("outputs", {}).get("html", "")
+                    if isinstance(session, dict)
+                    else ""
+                )
                 if existing_html and os.path.exists(str(existing_html)):
-                    print(f"[*] File gia' completato, l'utente ha scelto di usare la versione pronta.")
+                    print(
+                        f"[*] File gia' completato, l'utente ha scelto di usare la versione pronta."
+                    )
                     runtime.output_html(str(existing_html))
                     runtime.set_run_result("completed")
                     return
@@ -219,7 +289,9 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
             return
 
         # Ripristino (se presente) dai chunk gia' salvati
-        restored_phase1 = restore_phase1_progress(session_ctx, stage=stage, step_seconds=step_seconds)
+        restored_phase1 = restore_phase1_progress(
+            session_ctx, stage=stage, step_seconds=step_seconds
+        )
         existing_chunks = restored_phase1.existing_chunks
         start_sec = restored_phase1.start_sec
         full_transcript = restored_phase1.full_transcript
@@ -227,8 +299,12 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
 
         if stage == "phase1":
             print("[*] INIZIO FASE 1: Trascrizione a blocchi (circa 15 min per blocco)")
-            print("    - Cosa fa: taglia l'audio in blocchi e genera una sbobina dettagliata per ogni blocco.")
-            print("    - Perche': blocchi piu' piccoli aiutano a mantenere alto il dettaglio e ridurre errori.")
+            print(
+                "    - Cosa fa: taglia l'audio in blocchi e genera una sbobina dettagliata per ogni blocco."
+            )
+            print(
+                "    - Perche': blocchi piu' piccoli aiutano a mantenere alto il dettaglio e ridurre errori."
+            )
             runtime.phase("Fase 1/3: trascrizione (chunk)")
         else:
             print(f"[*] Ripresa sessione: stage='{stage}'. Salto Fase 1.")
@@ -249,6 +325,7 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
             client, full_transcript, prev_memory = process_phase1_transcription(
                 client=client,
                 model_name=model_name,
+                model_state=model_state,
                 input_path=input_path,
                 preconv_used_path=preconv_used_path,
                 ffmpeg_exe=ffmpeg_exe,
@@ -270,6 +347,7 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
                 request_fallback_key=request_fallback_key,
                 system_prompt=system_prompt,
                 runtime=runtime,
+                on_model_switched=on_model_switched,
                 logger=logger,
             )
             if full_transcript is None:
@@ -286,8 +364,12 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
         print("\n======================================")
         runtime.phase("Fase 2/3: revisione")
         print("[*] INIZIO FASE 2: Revisione e pulizia (macro-blocchi)")
-        print("    - Cosa fa: divide il testo in macro-sezioni e le rivede per togliere doppioni e migliorare la leggibilita'.")
-        print("    - Nota: questa fase usa l'AI su ogni macro-blocco per mantenere coerenza e dettaglio.")
+        print(
+            "    - Cosa fa: divide il testo in macro-sezioni e le rivede per togliere doppioni e migliorare la leggibilita'."
+        )
+        print(
+            "    - Nota: questa fase usa l'AI su ogni macro-blocco per mantenere coerenza e dettaglio."
+        )
 
         char_limit = int(settings.macro_char_limit or 22000)
 
@@ -303,14 +385,24 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
             macro_blocks = build_macro_blocks(full_transcript, char_limit)
 
             try:
-                _atomic_write_json(macro_path, {"limit_chars": char_limit, "blocks": macro_blocks})
+                _atomic_write_json(
+                    macro_path, {"limit_chars": char_limit, "blocks": macro_blocks}
+                )
             except Exception:
                 pass
-            
-        print(f"Il documento è stato diviso in {len(macro_blocks)} macro-sezioni per mantenere il livello di dettaglio. Revisione in corso...")
-        _update_session(session, {
-            "phase2": {**session.get("phase2", {}), "macro_total": int(len(macro_blocks))},
-        })
+
+        print(
+            f"Il documento è stato diviso in {len(macro_blocks)} macro-sezioni per mantenere il livello di dettaglio. Revisione in corso..."
+        )
+        _update_session(
+            session,
+            {
+                "phase2": {
+                    **session.get("phase2", {}),
+                    "macro_total": int(len(macro_blocks)),
+                },
+            },
+        )
         save_session()
 
         revised_text = ""
@@ -318,6 +410,7 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
             client, revised_text = process_macro_revision_phase(
                 client=client,
                 model_name=model_name,
+                model_state=model_state,
                 macro_blocks=macro_blocks,
                 phase2_revised_dir=phase2_revised_dir,
                 session=session,
@@ -327,15 +420,21 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
                 fallback_keys=fallback_keys,
                 request_fallback_key=request_fallback_key,
                 prompt_revisione=PROMPT_REVISIONE,
+                on_model_switched=on_model_switched,
                 logger=logger,
             )
-            if runtime.cancelled() or session.get("last_error") == "quota_daily_limit_phase2":
+            if (
+                runtime.cancelled()
+                or session.get("last_error") == "quota_daily_limit_phase2"
+            ):
                 return
 
         macro_total = len(macro_blocks)
 
         # ETA step-based: totali fase 2 + confini (macro_total-1). Imposta anche il done attuale da sessione.
-        runtime.set_work_totals(macro_total=macro_total, boundary_total=max(0, macro_total - 1))
+        runtime.set_work_totals(
+            macro_total=macro_total, boundary_total=max(0, macro_total - 1)
+        )
         try:
             runtime.update_work_done(
                 "macro",
@@ -350,21 +449,32 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
         # ------------------------------------------
         if str(session.get("stage", "phase2")).strip().lower() == "phase2":
             print("\n======================================")
-            print("[*] INIZIO FASE 3: Revisione dei confini (anti-doppioni tra macro-blocchi)")
-            print("    - 'Confine' = fine del macro-blocco N + inizio del macro-blocco N+1.")
-            print("    - Cosa fa: cerca sovrapposizioni tra i due pezzi e rimuove SOLO le ripetizioni.")
-            print("    - Come: prima controllo locale (0 richieste), poi AI solo se il caso e' ambiguo.")
+            print(
+                "[*] INIZIO FASE 3: Revisione dei confini (anti-doppioni tra macro-blocchi)"
+            )
+            print(
+                "    - 'Confine' = fine del macro-blocco N + inizio del macro-blocco N+1."
+            )
+            print(
+                "    - Cosa fa: cerca sovrapposizioni tra i due pezzi e rimuove SOLO le ripetizioni."
+            )
+            print(
+                "    - Come: prima controllo locale (0 richieste), poi AI solo se il caso e' ambiguo."
+            )
             runtime.phase("Fase 3/3: confini (anti-doppioni)")
             _next_pair = int(session.get("boundary", {}).get("next_pair", 1) or 1)
-            _update_session(session, {
-                "stage": "boundary",
-                "boundary": {
-                    **session.get("boundary", {}),
-                    "pairs_total": int(max(0, macro_total - 1)),
-                    "next_pair": _next_pair,
+            _update_session(
+                session,
+                {
+                    "stage": "boundary",
+                    "boundary": {
+                        **session.get("boundary", {}),
+                        "pairs_total": int(max(0, macro_total - 1)),
+                        "next_pair": _next_pair,
+                    },
+                    "last_error": None,
                 },
-                "last_error": None,
-            })
+            )
             save_session()
 
         current_stage = str(session.get("stage", "phase1")).strip().lower()
@@ -372,6 +482,7 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
             client = process_boundary_revision_phase(
                 client=client,
                 model_name=model_name,
+                model_state=model_state,
                 boundary_dir=boundary_dir,
                 phase2_revised_dir=phase2_revised_dir,
                 session=session,
@@ -380,15 +491,16 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
                 cancelled=runtime.cancelled,
                 fallback_keys=fallback_keys,
                 request_fallback_key=request_fallback_key,
+                on_model_switched=on_model_switched,
                 logger=logger,
             )
             if runtime.cancelled() or session.get("last_error") in (
-                "quota_daily_limit_boundary", "boundary_ai_failed"
+                "quota_daily_limit_boundary",
+                "boundary_ai_failed",
             ):
                 return
             _update_session(session, {"stage": "done", "last_error": None})
             save_session()
-
 
         # ==========================================
         # 3. SALVATAGGIO FINALE (MARKDOWN + HTML)
@@ -423,15 +535,20 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
             pass
 
         if not os.path.exists(html_path):
-            print("[!] Errore salvataggio HTML: file finale non trovato dopo la scrittura.")
+            print(
+                "[!] Errore salvataggio HTML: file finale non trovato dopo la scrittura."
+            )
             session["last_error"] = "html_export_missing"
             save_session()
             return
 
         try:
-            _update_session(session, {
-                "outputs": {**session.get("outputs", {}), "html": html_path},
-            })
+            _update_session(
+                session,
+                {
+                    "outputs": {**session.get("outputs", {}), "html": html_path},
+                },
+            )
             save_session()
         except Exception:
             pass
@@ -453,39 +570,53 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
                 os.remove(preconv_used_path)
         except Exception:
             pass
-        
+
         # Forza l'aggiornamento visivo del file sul Desktop in Windows
         if platform.system() == "Windows":
             try:
                 import ctypes
+
                 ctypes.windll.shell32.SHChangeNotify(0x08000000, 0x0000, None, None)
             except Exception:
                 pass
-    
+
     except Exception as e:
         runtime.set_run_result("failed", str(e))
         logger.exception("Errore imprevisto nella pipeline.", extra={"stage": "fatal"})
         print(f"\n[X] ERRORE IMPREVISTO DURANTE L'ESECUZIONE:\n{e}")
     finally:
-        runtime.set_effective_api_key(extract_client_api_key(locals().get("client")) or getattr(app_instance, "effective_api_key", None))
+        runtime.set_effective_api_key(
+            extract_client_api_key(locals().get("client"))
+            or getattr(app_instance, "effective_api_key", None)
+        )
         runtime.cleanup_temp_files()
-        if runtime.cancelled() or getattr(app_instance, "last_run_status", None) == "cancelled":
+        if (
+            runtime.cancelled()
+            or getattr(app_instance, "last_run_status", None) == "cancelled"
+        ):
             runtime.phase("Fase: annullato")
-            runtime.set_run_result("cancelled", getattr(app_instance, "last_run_error", None) or "cancelled")
+            runtime.set_run_result(
+                "cancelled",
+                getattr(app_instance, "last_run_error", None) or "cancelled",
+            )
         else:
             runtime.progress(1.0)
             if getattr(app_instance, "last_run_status", None) != "completed":
                 runtime.set_run_result(
                     "failed",
                     getattr(app_instance, "last_run_error", None)
-                    or (session.get("last_error") if isinstance(session, dict) else None)
+                    or (
+                        session.get("last_error") if isinstance(session, dict) else None
+                    )
                     or "processing_failed",
                 )
         detach_file_handler(log_handler)
         runtime.process_done()
 
 
-def esegui_sbobinatura(input_path, api_key_value, app_instance, session_dir_hint=None, resume_session=False):
+def esegui_sbobinatura(
+    input_path, api_key_value, app_instance, session_dir_hint=None, resume_session=False
+):
     # Wrapper stabile: mantiene la firma pubblica mentre l'implementazione evolve.
     return _esegui_sbobinatura_impl(
         input_path,

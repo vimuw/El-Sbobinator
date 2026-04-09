@@ -39,8 +39,25 @@ class _FakeSessionContext:
         self.phase2_revised_dir = os.path.join(root, "phase2")
         self.boundary_dir = os.path.join(root, "boundary")
         self.macro_path = os.path.join(root, "macro.md")
-        self.session = {"stage": "phase1", "phase1": {}, "phase2": {}, "boundary": {}, "outputs": {}}
-        self.settings = SimpleNamespace(model="gemini-test", chunk_seconds=60, step_seconds=60, preconvert_audio=False)
+        self.session = {
+            "stage": "phase1",
+            "phase1": {},
+            "phase2": {},
+            "boundary": {},
+            "outputs": {},
+        }
+        self.settings = SimpleNamespace(
+            model="gemini-test",
+            fallback_models=["gemini-2.5-flash-lite"],
+            effective_model="gemini-test",
+            chunk_seconds=60,
+            step_seconds=60,
+            preconvert_audio=False,
+            audio_bitrate="48k",
+            prefetch_next_chunk=True,
+            inline_max_bytes=None,
+            macro_char_limit=22000,
+        )
         os.makedirs(self.phase1_chunks_dir, exist_ok=True)
         os.makedirs(self.phase2_revised_dir, exist_ok=True)
         os.makedirs(self.boundary_dir, exist_ok=True)
@@ -80,6 +97,175 @@ class _PromptBlockingApp:
 
 
 class PipelineCancellationTests(unittest.TestCase):
+    def test_regenerate_rebinds_model_state_from_reset_session_settings(self):
+        app = _PromptBlockingApp()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "input.mp3")
+            with open(input_path, "wb") as handle:
+                handle.write(b"fake")
+
+            session_ctx = _FakeSessionContext(os.path.join(tmpdir, "session"))
+            session_ctx.session = {
+                "stage": "phase1",
+                "phase1": {},
+                "phase2": {},
+                "boundary": {},
+                "outputs": {},
+            }
+            session_ctx.settings = SimpleNamespace(
+                model="gemini-2.5-flash",
+                fallback_models=["gemini-2.5-flash-lite"],
+                effective_model="gemini-2.5-flash",
+                chunk_seconds=60,
+                step_seconds=60,
+                preconvert_audio=False,
+                audio_bitrate="48k",
+                prefetch_next_chunk=True,
+                inline_max_bytes=None,
+                macro_char_limit=22000,
+            )
+
+            seen = {}
+
+            def fake_phase1(**kwargs):
+                seen["current_model"] = kwargs["model_state"].current
+                return kwargs["client"], None, ""
+
+            def fake_reset(context):
+                context.session = {
+                    "stage": "phase1",
+                    "phase1": {},
+                    "phase2": {},
+                    "boundary": {},
+                    "outputs": {},
+                }
+                context.settings = SimpleNamespace(
+                    model="gemini-2.5-flash-lite",
+                    fallback_models=[],
+                    effective_model="gemini-2.5-flash-lite",
+                    chunk_seconds=60,
+                    step_seconds=60,
+                    preconvert_audio=False,
+                    audio_bitrate="48k",
+                    prefetch_next_chunk=True,
+                    inline_max_bytes=None,
+                    macro_char_limit=22000,
+                )
+
+            with (
+                patch("google.genai.Client", _FakeClient),
+                patch(
+                    "el_sbobinator.pipeline.initialize_session_context",
+                    return_value=session_ctx,
+                ),
+                patch("el_sbobinator.pipeline.attach_file_handler", return_value=None),
+                patch("el_sbobinator.pipeline.detach_file_handler"),
+                patch("el_sbobinator.pipeline.get_logger", return_value=_FakeLogger()),
+                patch("el_sbobinator.pipeline.load_fallback_keys", return_value=[]),
+                patch("el_sbobinator.pipeline.resolve_ffmpeg", return_value="ffmpeg"),
+                patch(
+                    "el_sbobinator.pipeline.probe_media_duration",
+                    return_value=(120.0, None),
+                ),
+                patch("el_sbobinator.pipeline.persist_phase1_metadata"),
+                patch("el_sbobinator.pipeline.normalize_stage", return_value="phase1"),
+                patch(
+                    "el_sbobinator.pipeline.list_phase1_chunks",
+                    return_value=[(0, 0, 60, "chunk_000_0_60.md")],
+                ),
+                patch("el_sbobinator.pipeline.phase1_has_progress", return_value=True),
+                patch(
+                    "el_sbobinator.pipeline.ensure_preconverted_audio",
+                    return_value=(False, None),
+                ),
+                patch(
+                    "el_sbobinator.pipeline.reset_for_regeneration",
+                    side_effect=fake_reset,
+                ),
+                patch(
+                    "el_sbobinator.pipeline.process_phase1_transcription",
+                    side_effect=fake_phase1,
+                ),
+            ):
+                thread = threading.Thread(
+                    target=esegui_sbobinatura,
+                    args=(input_path, "fake-key", app),
+                    kwargs={"resume_session": True},
+                    daemon=True,
+                )
+                thread.start()
+                self.assertTrue(app.prompt_shown.wait(timeout=1))
+                app._callback({"regenerate": True})
+                thread.join(timeout=2)
+
+        self.assertEqual(seen.get("current_model"), "gemini-2.5-flash-lite")
+
+    def test_resume_always_starts_from_primary_ignoring_stale_effective_model(self):
+        """On resume, model_state.current must be the primary model, even when the session
+        recorded a different effective_model from a previous fallback switch.
+        effective_model is kept for observability but must not drive the resume start."""
+        app = _PromptBlockingApp()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "input.mp3")
+            with open(input_path, "wb") as handle:
+                handle.write(b"fake")
+
+            session_ctx = _FakeSessionContext(os.path.join(tmpdir, "session"))
+            session_ctx.settings = SimpleNamespace(
+                model="gemini-2.5-flash",
+                fallback_models=["gemini-2.5-flash-lite"],
+                effective_model="gemini-2.5-flash-lite",
+                chunk_seconds=60,
+                step_seconds=60,
+                preconvert_audio=False,
+                audio_bitrate="48k",
+                prefetch_next_chunk=True,
+                inline_max_bytes=None,
+                macro_char_limit=22000,
+            )
+
+            seen = {}
+
+            def fake_phase1(**kwargs):
+                seen["current_model"] = kwargs["model_state"].current
+                seen["chain"] = kwargs["model_state"].chain
+                return kwargs["client"], None, ""
+
+            with (
+                patch("google.genai.Client", _FakeClient),
+                patch(
+                    "el_sbobinator.pipeline.initialize_session_context",
+                    return_value=session_ctx,
+                ),
+                patch("el_sbobinator.pipeline.attach_file_handler", return_value=None),
+                patch("el_sbobinator.pipeline.detach_file_handler"),
+                patch("el_sbobinator.pipeline.get_logger", return_value=_FakeLogger()),
+                patch("el_sbobinator.pipeline.load_fallback_keys", return_value=[]),
+                patch("el_sbobinator.pipeline.resolve_ffmpeg", return_value="ffmpeg"),
+                patch(
+                    "el_sbobinator.pipeline.probe_media_duration",
+                    return_value=(120.0, None),
+                ),
+                patch("el_sbobinator.pipeline.persist_phase1_metadata"),
+                patch("el_sbobinator.pipeline.normalize_stage", return_value="phase1"),
+                patch("el_sbobinator.pipeline.list_phase1_chunks", return_value=[]),
+                patch("el_sbobinator.pipeline.phase1_has_progress", return_value=False),
+                patch(
+                    "el_sbobinator.pipeline.ensure_preconverted_audio",
+                    return_value=(False, None),
+                ),
+                patch(
+                    "el_sbobinator.pipeline.process_phase1_transcription",
+                    side_effect=fake_phase1,
+                ),
+            ):
+                esegui_sbobinatura(input_path, "fake-key", app, resume_session=True)
+
+        self.assertEqual(seen.get("current_model"), "gemini-2.5-flash")
+        self.assertIn("gemini-2.5-flash-lite", seen.get("chain", ()))
+
     def test_cancel_during_regenerate_prompt_exits_prompt_wait_immediately(self):
         app = _PromptBlockingApp()
 
@@ -90,19 +276,33 @@ class PipelineCancellationTests(unittest.TestCase):
 
             session_ctx = _FakeSessionContext(os.path.join(tmpdir, "session"))
 
-            with patch("google.genai.Client", _FakeClient), \
-                 patch("el_sbobinator.pipeline.initialize_session_context", return_value=session_ctx), \
-                 patch("el_sbobinator.pipeline.attach_file_handler", return_value=None), \
-                 patch("el_sbobinator.pipeline.detach_file_handler"), \
-                 patch("el_sbobinator.pipeline.get_logger", return_value=_FakeLogger()), \
-                 patch("el_sbobinator.pipeline.load_fallback_keys", return_value=[]), \
-                 patch("el_sbobinator.pipeline.resolve_ffmpeg", return_value="ffmpeg"), \
-                 patch("el_sbobinator.pipeline.probe_media_duration", return_value=(120.0, None)), \
-                 patch("el_sbobinator.pipeline.persist_phase1_metadata"), \
-                 patch("el_sbobinator.pipeline.normalize_stage", return_value="phase1"), \
-                 patch("el_sbobinator.pipeline.list_phase1_chunks", return_value=[(0, 0, 60, "chunk_000_0_60.md")]), \
-                 patch("el_sbobinator.pipeline.phase1_has_progress", return_value=True), \
-                 patch("el_sbobinator.pipeline.ensure_preconverted_audio", return_value=(False, None)):
+            with (
+                patch("google.genai.Client", _FakeClient),
+                patch(
+                    "el_sbobinator.pipeline.initialize_session_context",
+                    return_value=session_ctx,
+                ),
+                patch("el_sbobinator.pipeline.attach_file_handler", return_value=None),
+                patch("el_sbobinator.pipeline.detach_file_handler"),
+                patch("el_sbobinator.pipeline.get_logger", return_value=_FakeLogger()),
+                patch("el_sbobinator.pipeline.load_fallback_keys", return_value=[]),
+                patch("el_sbobinator.pipeline.resolve_ffmpeg", return_value="ffmpeg"),
+                patch(
+                    "el_sbobinator.pipeline.probe_media_duration",
+                    return_value=(120.0, None),
+                ),
+                patch("el_sbobinator.pipeline.persist_phase1_metadata"),
+                patch("el_sbobinator.pipeline.normalize_stage", return_value="phase1"),
+                patch(
+                    "el_sbobinator.pipeline.list_phase1_chunks",
+                    return_value=[(0, 0, 60, "chunk_000_0_60.md")],
+                ),
+                patch("el_sbobinator.pipeline.phase1_has_progress", return_value=True),
+                patch(
+                    "el_sbobinator.pipeline.ensure_preconverted_audio",
+                    return_value=(False, None),
+                ),
+            ):
                 thread = threading.Thread(
                     target=esegui_sbobinatura,
                     args=(input_path, "fake-key", app),
@@ -118,7 +318,10 @@ class PipelineCancellationTests(unittest.TestCase):
                 thread.join(timeout=2)
                 elapsed = time.monotonic() - started
 
-            self.assertFalse(thread.is_alive(), "La pipeline e' rimasta bloccata in attesa del prompt di rigenerazione.")
+            self.assertFalse(
+                thread.is_alive(),
+                "La pipeline e' rimasta bloccata in attesa del prompt di rigenerazione.",
+            )
             self.assertLess(elapsed, 2.5)
             self.assertEqual(app.last_run_status, "cancelled")
 
@@ -132,19 +335,32 @@ class PipelineCancellationTests(unittest.TestCase):
 
             session_ctx = _FakeSessionContext(os.path.join(tmpdir, "session"))
 
-            with patch("google.genai.Client", _FakeClient), \
-                 patch("el_sbobinator.pipeline.initialize_session_context", return_value=session_ctx), \
-                 patch("el_sbobinator.pipeline.attach_file_handler", return_value=None), \
-                 patch("el_sbobinator.pipeline.detach_file_handler"), \
-                 patch("el_sbobinator.pipeline.get_logger", return_value=_FakeLogger()), \
-                 patch("el_sbobinator.pipeline.load_fallback_keys", return_value=[]), \
-                 patch("el_sbobinator.pipeline.resolve_ffmpeg", return_value="ffmpeg"), \
-                 patch("el_sbobinator.pipeline.probe_media_duration", return_value=(120.0, None)), \
-                 patch("el_sbobinator.pipeline.persist_phase1_metadata"), \
-                 patch("el_sbobinator.pipeline.normalize_stage", return_value="phase1"), \
-                 patch("el_sbobinator.pipeline.list_phase1_chunks", return_value=[(0, 0, 60, "chunk_000_0_60.md")]), \
-                 patch("el_sbobinator.pipeline.phase1_has_progress", return_value=True), \
-                 patch("el_sbobinator.pipeline.ensure_preconverted_audio") as mock_preconvert:
+            with (
+                patch("google.genai.Client", _FakeClient),
+                patch(
+                    "el_sbobinator.pipeline.initialize_session_context",
+                    return_value=session_ctx,
+                ),
+                patch("el_sbobinator.pipeline.attach_file_handler", return_value=None),
+                patch("el_sbobinator.pipeline.detach_file_handler"),
+                patch("el_sbobinator.pipeline.get_logger", return_value=_FakeLogger()),
+                patch("el_sbobinator.pipeline.load_fallback_keys", return_value=[]),
+                patch("el_sbobinator.pipeline.resolve_ffmpeg", return_value="ffmpeg"),
+                patch(
+                    "el_sbobinator.pipeline.probe_media_duration",
+                    return_value=(120.0, None),
+                ),
+                patch("el_sbobinator.pipeline.persist_phase1_metadata"),
+                patch("el_sbobinator.pipeline.normalize_stage", return_value="phase1"),
+                patch(
+                    "el_sbobinator.pipeline.list_phase1_chunks",
+                    return_value=[(0, 0, 60, "chunk_000_0_60.md")],
+                ),
+                patch("el_sbobinator.pipeline.phase1_has_progress", return_value=True),
+                patch(
+                    "el_sbobinator.pipeline.ensure_preconverted_audio"
+                ) as mock_preconvert,
+            ):
                 thread = threading.Thread(
                     target=esegui_sbobinatura,
                     args=(input_path, "fake-key", app),
@@ -158,7 +374,10 @@ class PipelineCancellationTests(unittest.TestCase):
 
                 thread.join(timeout=2)
 
-            self.assertFalse(thread.is_alive(), "La pipeline e' rimasta bloccata dopo la chiusura del prompt.")
+            self.assertFalse(
+                thread.is_alive(),
+                "La pipeline e' rimasta bloccata dopo la chiusura del prompt.",
+            )
             self.assertEqual(app.last_run_status, "cancelled")
             mock_preconvert.assert_not_called()
 

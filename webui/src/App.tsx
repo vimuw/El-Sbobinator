@@ -3,7 +3,10 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type D
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { motion, AnimatePresence } from 'motion/react';
 import {
+  Check,
   CheckCircle,
+  ChevronDown,
+  Copy,
   FileAudio,
   FileText,
   Github,
@@ -19,7 +22,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { GITHUB_RELEASES_URL, GITHUB_URL, KOFI_URL } from './branding';
-import { type BridgeCallbacks, type PywebviewApi } from './bridge';
+import { type ElSbobinatorBridge, type PywebviewApi } from './bridge';
 import { getDoneFiles, getPendingFiles, initialProcessingState, processingReducer, type AppStatus, type FileDescriptor, type FileItem } from './appState';
 import { GEMINI_KEY_PATTERN } from './utils';
 import { useConsole } from './hooks/useConsole';
@@ -43,7 +46,7 @@ const EMPTY_WORK = { chunks: 0, macro: 0, boundary: 0 };
 declare global {
   interface Window {
     pywebview: { api?: PywebviewApi };
-    elSbobinatorBridge: BridgeCallbacks;
+    elSbobinatorBridge: ElSbobinatorBridge;
   }
 }
 
@@ -58,6 +61,18 @@ type PreviewState = {
   initAudio: { time?: number; playbackRate?: number; volume?: number };
   initScrollTop?: number;
 };
+
+type WebViewHostWindow = Window & {
+  chrome?: {
+    webview?: {
+      postMessageWithAdditionalObjects?: (message: string, additionalObjects: FileList) => void;
+    };
+  };
+};
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 const initialPreviewState: PreviewState = {
   content: null,
@@ -78,13 +93,24 @@ type ConfirmActionState =
   | { type: 'clear-completed'; count: number };
 
 export default function App() {
-  const [{ files, structuralVersion, appState, currentPhase, activeProgress, currentFileIndex, currentBatchTotal, workTotals, workDone, stepMetrics }, dispatch] = useReducer(processingReducer, initialProcessingState);
+  const [{ files, structuralVersion, appState, currentPhase, activeProgress, workTotals, workDone, stepMetrics }, dispatch] = useReducer(processingReducer, initialProcessingState);
 
   // --- Extracted hooks ---
   const { consoleLogs, appendConsole } = useConsole();
   const { themeMode, setThemeMode } = useTheme();
   const { updateAvailable, dismissUpdate } = useUpdateChecker();
-  const { apiReady, apiKey, setApiKey, fallbackKeys, setFallbackKeys } = useApiReady(appendConsole);
+  const {
+    apiReady,
+    apiKey,
+    setApiKey,
+    fallbackKeys,
+    setFallbackKeys,
+    preferredModel,
+    setPreferredModel,
+    fallbackModels,
+    setFallbackModels,
+    availableModels,
+  } = useApiReady(appendConsole);
 
   // --- Modal state ---
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -98,6 +124,7 @@ export default function App() {
   // --- UI state ---
   const [isDragging, setIsDragging] = useState(false);
   const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
   const [showEmptyState, setShowEmptyState] = useState(() => files.length === 0);
   const [completedSearch, setCompletedSearch] = useState('');
 
@@ -107,6 +134,8 @@ export default function App() {
   const appStateRef = useRef<AppStatus>('idle');
   const currentEditorSessionRef = useRef<EditorSession>({});
   const currentPreviewSessionKeyRef = useRef<string | null>(null);
+  const consoleScrollRef = useRef<HTMLDivElement>(null);
+  const isMouseInConsoleRef = useRef(false);
 
   useEffect(() => {
     filesRef.current = files;
@@ -119,6 +148,12 @@ export default function App() {
   useEffect(() => {
     appStateRef.current = appState;
   }, [appState]);
+
+  useEffect(() => {
+    if (!isConsoleExpanded || isMouseInConsoleRef.current) return;
+    const el = consoleScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [consoleLogs, isConsoleExpanded]);
 
   // --- Flush editor session on app close ---
   useEffect(() => {
@@ -134,7 +169,7 @@ export default function App() {
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // --- Queue persistence ---
   useQueuePersistence(files, structuralVersion, dispatch, appendConsole);
@@ -175,7 +210,7 @@ export default function App() {
     e.preventDefault();
     setIsDragging(false);
     if (appStateRef.current !== 'idle' || !e.dataTransfer.files.length) return;
-    const w = window as any;
+    const w = window as WebViewHostWindow;
     if (w.chrome?.webview?.postMessageWithAdditionalObjects) {
       const names = Array.from(e.dataTransfer.files).map((f: File) => f.name);
       w.chrome.webview.postMessageWithAdditionalObjects('FilesDropped', e.dataTransfer.files);
@@ -277,19 +312,19 @@ export default function App() {
           dispatch({ type: 'app/set_status', status: 'idle' });
           appendConsole(`❌ ${result?.error || "Impossibile avviare l'elaborazione."}`);
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         dispatch({ type: 'app/set_status', status: 'idle' });
-        appendConsole(`❌ Errore avvio: ${e?.message || e}`);
+        appendConsole(`❌ Errore avvio: ${getErrorMessage(e)}`);
       }
     }
   };
 
-  const confirmStopProcessing = async () => {
+  const confirmStopProcessing = useCallback(async () => {
     setConfirmAction(null);
     dispatch({ type: 'app/set_status', status: 'canceling' });
     appendConsole('[!] Annullamento in corso, attendere prego...');
     if (window.pywebview?.api) await window.pywebview.api.stop_processing?.();
-  };
+  }, [appendConsole]);
 
   const confirmClearCompleted = useCallback(() => {
     setConfirmAction(null);
@@ -309,7 +344,7 @@ export default function App() {
       return;
     }
     confirmClearCompleted();
-  }, [confirmAction, confirmClearCompleted]);
+  }, [confirmAction, confirmClearCompleted, confirmStopProcessing]);
 
   const handleRegenerateAnswer = async (ans: boolean | null) => {
     setRegeneratePrompt(null);
@@ -338,7 +373,7 @@ export default function App() {
       setPreview(prev => ({ ...prev, sourcePath: selectedFile.path }));
       await loadPreviewAudio(selectedFile.path);
       appendConsole(`Audio ricollegato: ${selectedFile.name}`);
-    } catch (error: any) { appendConsole(`❌ Impossibile ricollegare l'audio: ${error?.message || error}`); }
+    } catch (error: unknown) { appendConsole(`❌ Impossibile ricollegare l'audio: ${getErrorMessage(error)}`); }
   }, [appendConsole, loadPreviewAudio, preview.fileId]);
 
   const openPreview = useCallback(async (htmlPath: string, filename: string, sourcePath?: string, fileId?: string) => {
@@ -367,7 +402,7 @@ export default function App() {
           });
           await loadPreviewAudio(sourcePath);
         } else { appendConsole(`❌ Errore anteprima: ${res.error}`); }
-      } catch (e: any) { appendConsole(`❌ Errore JS anteprima: ${e.message || e}`); }
+      } catch (e: unknown) { appendConsole(`❌ Errore JS anteprima: ${getErrorMessage(e)}`); }
     } else { appendConsole('❌ Funzione anteprima non disponibile in questa versione.'); }
   }, [appendConsole, loadPreviewAudio]);
 
@@ -403,7 +438,7 @@ export default function App() {
 
 
   // --- Computed values ---
-  const { queuedCount, doneCount, errorCount, processingCount } = useMemo(() => {
+  const { queuedCount, errorCount, processingCount } = useMemo(() => {
     let queuedCount = 0, doneCount = 0, errorCount = 0, processingCount = 0;
     for (const f of files) {
       if (f.status === 'queued') queuedCount++;
@@ -491,7 +526,7 @@ export default function App() {
       {/* Top Navigation */}
       <header className="sticky top-0 z-40 backdrop-blur-2xl" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'rgba(16, 13, 11, 0.08)' }}>
         <div className="max-w-3xl mx-auto px-5 sm:px-6 min-h-[84px] flex items-center justify-between gap-4">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <img src="./icon.png" alt="El Sbobinator" className="app-logo" draggable={false} />
             <h1 className="brand-mark text-[1.45rem] sm:text-[1.75rem] font-semibold flex items-baseline tracking-tight leading-none overflow-visible py-1">
               <span style={titleGradient}>El&nbsp;</span>
@@ -820,14 +855,39 @@ export default function App() {
               <span className={`w-2 h-2 rounded-full ${appState === 'processing' ? 'animate-pulse' : ''}`} style={appState !== 'processing' ? { background: 'var(--console-heading)' } : { background: 'var(--processing-dot)' }} />
               Console
             </h2>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setIsConsoleExpanded(prev => !prev)} className="premium-button-secondary compact-button px-2.5 py-1.5 text-[11px] rounded-[13px]" style={{ borderColor: 'var(--border-default)' }}>
-                {isConsoleExpanded ? 'Riduci' : 'Espandi'}
+            <div className="flex items-center gap-1">
+              {isConsoleExpanded && (
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(consoleLogs.join('\n'));
+                    setIsCopied(true);
+                    setTimeout(() => setIsCopied(false), 2000);
+                  }}
+                  className="p-1.5 rounded-md hover:bg-[var(--border-subtle)] transition-colors"
+                  title={isCopied ? 'Copiato!' : 'Copia tutto'}
+                  style={{ color: isCopied ? 'var(--success-text)' : 'var(--console-heading)', transition: 'color 0.2s' }}
+                >
+                  {isCopied ? <Check size={13} /> : <Copy size={13} />}
+                </button>
+              )}
+              <button
+                onClick={() => setIsConsoleExpanded(prev => !prev)}
+                className="p-1.5 rounded-md hover:bg-[var(--border-subtle)] transition-colors"
+                title={isConsoleExpanded ? 'Riduci' : 'Espandi'}
+                style={{ color: 'var(--console-heading)' }}
+              >
+                <ChevronDown size={15} style={{ transform: isConsoleExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
               </button>
             </div>
           </div>
           {isConsoleExpanded ? (
-            <div className="console-scroll p-4 overflow-y-auto font-mono text-xs space-y-1 h-52 select-text" style={{ color: 'var(--console-text)', background: 'var(--console-bg)' }}>
+            <div
+              ref={consoleScrollRef}
+              className="console-scroll p-4 overflow-y-auto font-mono text-xs space-y-1 h-52 select-text"
+              style={{ color: 'var(--console-text)', background: 'var(--console-bg)' }}
+              onMouseEnter={() => { isMouseInConsoleRef.current = true; }}
+              onMouseLeave={() => { isMouseInConsoleRef.current = false; }}
+            >
               {consoleLogs.map((log, i) => {
                 const color = log.includes('Errore') || log.includes('❌') || log.includes('[!]') || log.includes('Annullamento') ? 'var(--error-text)'
                   : log.includes('COMPLETATA') || log.includes('✅') ? 'var(--success-text)'
@@ -898,6 +958,11 @@ export default function App() {
         setApiKey={setApiKey}
         fallbackKeys={fallbackKeys}
         setFallbackKeys={setFallbackKeys}
+        preferredModel={preferredModel}
+        setPreferredModel={setPreferredModel}
+        fallbackModels={fallbackModels}
+        setFallbackModels={setFallbackModels}
+        availableModels={availableModels}
         appendConsole={appendConsole}
       />
       <React.Suspense fallback={null}>

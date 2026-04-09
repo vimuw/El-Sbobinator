@@ -1,6 +1,6 @@
 import { type Dispatch, useEffect, useRef } from 'react';
 import type React from 'react';
-import { createBridge } from '../bridge';
+import { createBridge, type ElSbobinatorBridge } from '../bridge';
 import type { AppStatus, FileDescriptor, FileItem, ProcessingAction } from '../appState';
 
 export function useBridgeCallbacks(options: {
@@ -69,7 +69,7 @@ export function useBridgeCallbacks(options: {
       },
     });
     return () => {
-      window.elSbobinatorBridge = null as any;
+      window.elSbobinatorBridge = null as ElSbobinatorBridge;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 }

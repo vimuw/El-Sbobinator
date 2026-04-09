@@ -33,7 +33,9 @@ def configure_logging(stream: IO[str] | None = None) -> logging.Logger:
         return logger
 
     handler = logging.StreamHandler(stream or sys.stdout)
-    handler.setFormatter(StructuredFormatter("%(asctime)s %(levelname)s %(message)s", "%H:%M:%S"))
+    handler.setFormatter(
+        StructuredFormatter("%(asctime)s %(levelname)s %(message)s", "%H:%M:%S")
+    )
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
     logger.propagate = False
@@ -55,7 +57,9 @@ def attach_file_handler(log_path: str) -> logging.Handler | None:
     try:
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
         handler = logging.FileHandler(log_path, encoding="utf-8")
-        handler.setFormatter(StructuredFormatter("%(asctime)s %(levelname)s %(message)s"))
+        handler.setFormatter(
+            StructuredFormatter("%(asctime)s %(levelname)s %(message)s")
+        )
         configure_logging().addHandler(handler)
         return handler
     except Exception:

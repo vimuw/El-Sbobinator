@@ -15,11 +15,13 @@ from google.genai import types
 from el_sbobinator.dedup_utils import local_macro_cleanup
 from el_sbobinator.generation_service import (
     QuotaDailyLimitError,
+    current_model_name,
     extract_response_text,
     retry_with_quota,
     sleep_with_cancel,
 )
 from el_sbobinator.logging_utils import get_logger
+from el_sbobinator.model_registry import ModelState
 from el_sbobinator.pipeline_session import record_step_metric
 from el_sbobinator.session_store import _update_session
 from el_sbobinator.shared import PROMPT_REVISIONE_CONFINE, _atomic_write_text
@@ -56,10 +58,11 @@ def build_macro_blocks(text: str, macro_char_limit: int) -> list[str]:
     return blocks
 
 
-def process_macro_revision_phase(
+def process_macro_revision_phase(  # noqa: C901
     *,
     client,
     model_name: str,
+    model_state: ModelState | None = None,
     macro_blocks: list[str],
     phase2_revised_dir: str,
     session: dict,
@@ -69,16 +72,24 @@ def process_macro_revision_phase(
     fallback_keys: list[str],
     request_fallback_key: Callable[[], str | None],
     prompt_revisione: str,
+    on_model_switched=None,
     logger=None,
 ) -> tuple[object, str]:
     log = logger or get_logger("el_sbobinator.revision", stage="phase2")
     revised_text = ""
     macro_total = len(macro_blocks)
     revised_done = 0
+    pending_retry: list[tuple[int, str, str]] = []  # (index, raw_path, rev_path)
 
-    runtime.set_work_totals(macro_total=macro_total, boundary_total=max(0, macro_total - 1))
+    runtime.set_work_totals(
+        macro_total=macro_total, boundary_total=max(0, macro_total - 1)
+    )
     try:
-        runtime.update_work_done("macro", int(session.get("phase2", {}).get("revised_done", 0) or 0), total=macro_total)
+        runtime.update_work_done(
+            "macro",
+            int(session.get("phase2", {}).get("revised_done", 0) or 0),
+            total=macro_total,
+        )
     except Exception:
         pass
 
@@ -89,6 +100,8 @@ def process_macro_revision_phase(
 
         runtime.phase(f"Fase 2/3: revisione ({index}/{macro_total})")
         rev_path = os.path.join(phase2_revised_dir, f"rev_{index:03}.md")
+        raw_path = os.path.join(phase2_revised_dir, f"rev_{index:03}.raw.md")
+
         if os.path.exists(rev_path):
             try:
                 with open(rev_path, "r", encoding="utf-8") as _fh:
@@ -99,20 +112,34 @@ def process_macro_revision_phase(
                 revised_text += f"\n\n{existing}\n\n"
                 revised_done += 1
                 runtime.update_work_done("macro", revised_done, total=macro_total)
-                _update_session(session, {
-                    "stage": "phase2",
-                    "phase2": {**session.get("phase2", {}), "revised_done": int(revised_done)},
-                    "last_error": None,
-                })
+                _update_session(
+                    session,
+                    {
+                        "stage": "phase2",
+                        "phase2": {
+                            **session.get("phase2", {}),
+                            "revised_done": int(revised_done),
+                        },
+                        "last_error": None,
+                    },
+                )
                 save_session()
                 runtime.progress(0.7 + 0.2 * (revised_done / max(1, macro_total)))
                 continue
 
+        if os.path.exists(raw_path):
+            pending_retry.append((index, raw_path, rev_path))
+            continue
+
         block_src = (block or "").strip()
-        block_local, removed_exact, removed_adj, near_adj, _ = local_macro_cleanup(block_src)
+        block_local, removed_exact, removed_adj, near_adj, _ = local_macro_cleanup(
+            block_src
+        )
         block_for_ai = (block_local or block_src).strip()
         if removed_exact or removed_adj:
-            print(f"   -> Pre-clean locale Macro-blocco {index}/{macro_total}: duplicati rimossi={removed_exact + removed_adj} (sospetti={near_adj}).")
+            print(
+                f"   -> Pre-clean locale Macro-blocco {index}/{macro_total}: duplicati rimossi={removed_exact + removed_adj} (sospetti={near_adj})."
+            )
 
         step_t0 = time.monotonic()
         print(f"   -> Revisione Macro-blocco {index} di {macro_total}...")
@@ -120,7 +147,7 @@ def process_macro_revision_phase(
 
         def _call(current_client):
             response = current_client.models.generate_content(
-                model=model_name,
+                model=current_model_name(model_state, model_name),
                 contents=[block_for_ai, prompt_revisione],
                 config=types.GenerateContentConfig(temperature=0.1),
             )
@@ -135,11 +162,14 @@ def process_macro_revision_phase(
                 client=client,
                 fallback_keys=fallback_keys,
                 model_name=model_name,
+                model_state=model_state,
                 cancelled=cancelled,
                 runtime=runtime,
                 request_fallback_key=request_fallback_key,
                 retry_sleep_seconds=20.0,
+                on_model_switched=on_model_switched,
                 logger=log,
+                resume_phase_text=f"Fase 2/3: revisione ({index}/{macro_total})",
             )
             if current_text is None:
                 return client, revised_text
@@ -148,18 +178,28 @@ def process_macro_revision_phase(
             print(f"   [autosave] Revisione salvata: {os.path.basename(rev_path)}")
 
             revised_done += 1
-            _update_session(session, {
-                "stage": "phase2",
-                "phase2": {**session.get("phase2", {}), "revised_done": int(revised_done)},
-                "last_error": None,
-            })
+            _update_session(
+                session,
+                {
+                    "stage": "phase2",
+                    "phase2": {
+                        **session.get("phase2", {}),
+                        "revised_done": int(revised_done),
+                    },
+                    "last_error": None,
+                },
+            )
             save_session()
 
             success = True
             runtime.progress(0.7 + 0.2 * (revised_done / max(1, macro_total)))
             _macro_secs = max(0.0, time.monotonic() - float(step_t0))
-            runtime.register_step_time("macro", _macro_secs, done=revised_done, total=macro_total)
-            record_step_metric(session, "macro", _macro_secs, done=revised_done, total=macro_total)
+            runtime.register_step_time(
+                "macro", _macro_secs, done=revised_done, total=macro_total
+            )
+            record_step_metric(
+                session, "macro", _macro_secs, done=revised_done, total=macro_total
+            )
         except QuotaDailyLimitError:
             print("   Interruzione: progressi salvati. Potrai riprendere più tardi.")
             session["last_error"] = "quota_daily_limit_phase2"
@@ -167,35 +207,210 @@ def process_macro_revision_phase(
             return client, revised_text
         except Exception as exc:
             log.warning(
-                "Errore revisione blocco %d/%d: %s", index, macro_total, exc,
+                "Errore revisione blocco %d/%d: %s",
+                index,
+                macro_total,
+                exc,
                 extra={"stage": "phase2"},
             )
 
         if not success:
-            print(f"   [!] Errore prolungato nella revisione. Salvo il blocco {index} così com'è per evitare perdite di dati.")
-            fallback_text = block_src
-            revised_text += f"\n\n{fallback_text}\n\n"
-            _atomic_write_text(rev_path, fallback_text + "\n")
-            revised_done += 1
-            _update_session(session, {
-                "stage": "phase2",
-                "phase2": {**session.get("phase2", {}), "revised_done": int(revised_done)},
-                "last_error": None,
-            })
-            save_session()
+            print(
+                f"   [!] Revisione blocco {index} fallita. Salvo provvisoriamente come raw (sarà riprovato)."
+            )
+            _atomic_write_text(raw_path, block_src + "\n")
+            pending_retry.append((index, raw_path, rev_path))
             _macro_secs = max(0.0, time.monotonic() - float(step_t0))
-            runtime.register_step_time("macro", _macro_secs, done=revised_done, total=macro_total)
-            record_step_metric(session, "macro", _macro_secs, done=revised_done, total=macro_total)
+            runtime.register_step_time(
+                "macro", _macro_secs, done=revised_done, total=macro_total
+            )
+            record_step_metric(
+                session, "macro", _macro_secs, done=revised_done, total=macro_total
+            )
 
         runtime.progress(0.7 + 0.2 * (revised_done / max(1, macro_total)))
         if not sleep_with_cancel(cancelled, 5):
             print("   [*] Operazione annullata dall'utente.")
             return client, revised_text
 
+    # ---- RETRY PASS: second attempt on provisionally-failed blocks ----
+    if pending_retry:
+        print(
+            f"\n[*] Retry pass: {len(pending_retry)} blocco/i senza revisione. Riprovo..."
+        )
+        _update_session(
+            session, {"revision_pending_blocks": [idx for idx, _, _ in pending_retry]}
+        )
+        save_session()
+
+        failed_blocks: list[int] = []
+
+        for index, raw_path, rev_path in pending_retry:
+            if cancelled():
+                print("   [*] Operazione annullata dall'utente (retry pass).")
+                return client, revised_text
+
+            try:
+                with open(raw_path, "r", encoding="utf-8") as _fh:
+                    block_src = _fh.read().rstrip("\n")
+            except Exception:
+                block_src = ""
+
+            if not block_src:
+                _atomic_write_text(rev_path, "")
+                try:
+                    os.remove(raw_path)
+                except Exception:
+                    pass
+                revised_done += 1
+                failed_blocks.append(index)
+                continue
+
+            block_local, removed_exact, removed_adj, _, _ = local_macro_cleanup(
+                block_src
+            )
+            block_for_ai_retry = (block_local or block_src).strip()
+
+            runtime.phase(f"Fase 2/3: retry revisione (blocco {index}/{macro_total})")
+            print(f"   -> Retry revisione blocco {index}/{macro_total}...")
+            step_t0 = time.monotonic()
+            retry_success = False
+
+            def _call_retry(current_client, _block=block_for_ai_retry):
+                response = current_client.models.generate_content(
+                    model=current_model_name(model_state, model_name),
+                    contents=[_block, prompt_revisione],
+                    config=types.GenerateContentConfig(temperature=0.1),
+                )
+                current_text = extract_response_text(response)
+                if not current_text:
+                    raise RuntimeError("Risposta vuota dal modello in revisione.")
+                return current_text
+
+            try:
+                client, current_text = retry_with_quota(
+                    _call_retry,
+                    client=client,
+                    fallback_keys=fallback_keys,
+                    model_name=model_name,
+                    model_state=model_state,
+                    cancelled=cancelled,
+                    runtime=runtime,
+                    request_fallback_key=request_fallback_key,
+                    retry_sleep_seconds=20.0,
+                    on_model_switched=on_model_switched,
+                    logger=log,
+                    resume_phase_text=f"Fase 2/3: retry revisione (blocco {index}/{macro_total})",
+                )
+                if current_text is None:
+                    return client, revised_text
+                _atomic_write_text(rev_path, current_text + "\n")
+                try:
+                    os.remove(raw_path)
+                except Exception:
+                    pass
+                print(f"   [OK] Retry blocco {index}: revisione completata.")
+                retry_success = True
+                revised_done += 1
+                _update_session(
+                    session,
+                    {
+                        "stage": "phase2",
+                        "phase2": {
+                            **session.get("phase2", {}),
+                            "revised_done": int(revised_done),
+                        },
+                        "last_error": None,
+                    },
+                )
+                save_session()
+                _macro_secs = max(0.0, time.monotonic() - float(step_t0))
+                runtime.register_step_time(
+                    "macro", _macro_secs, done=revised_done, total=macro_total
+                )
+                record_step_metric(
+                    session, "macro", _macro_secs, done=revised_done, total=macro_total
+                )
+            except QuotaDailyLimitError:
+                print(
+                    "   Interruzione: quota giornaliera raggiunta durante retry pass."
+                )
+                session["last_error"] = "quota_daily_limit_phase2"
+                save_session()
+                return client, revised_text
+            except Exception as exc:
+                log.warning(
+                    "Retry revisione blocco %d/%d fallita: %s",
+                    index,
+                    macro_total,
+                    exc,
+                    extra={"stage": "phase2"},
+                )
+
+            if not retry_success:
+                print(
+                    f"   [!!] Blocco {index}: revisione definitivamente fallita. Incluso non revisionato."
+                )
+                try:
+                    os.rename(raw_path, rev_path)
+                except Exception:
+                    _atomic_write_text(rev_path, block_src + "\n")
+                    try:
+                        os.remove(raw_path)
+                    except Exception:
+                        pass
+                revised_done += 1
+                failed_blocks.append(index)
+                _update_session(
+                    session,
+                    {
+                        "stage": "phase2",
+                        "phase2": {
+                            **session.get("phase2", {}),
+                            "revised_done": int(revised_done),
+                        },
+                    },
+                )
+                save_session()
+                _macro_secs = max(0.0, time.monotonic() - float(step_t0))
+                runtime.register_step_time(
+                    "macro", _macro_secs, done=revised_done, total=macro_total
+                )
+                record_step_metric(
+                    session, "macro", _macro_secs, done=revised_done, total=macro_total
+                )
+
+            runtime.progress(0.7 + 0.2 * (revised_done / max(1, macro_total)))
+
+        session_update: dict = {"revision_pending_blocks": []}
+        if failed_blocks:
+            session_update["revision_failed_blocks"] = failed_blocks
+        _update_session(session, session_update)
+        save_session()
+        if failed_blocks:
+            print(
+                f"\n[!!] ATTENZIONE: i seguenti blocchi sono stati inclusi non revisionati: {failed_blocks}"
+            )
+
+    # Rebuild revised_text from all final .md files (authoritative source of truth)
+    revised_text = ""
+    for idx in range(1, macro_total + 1):
+        rpath = os.path.join(phase2_revised_dir, f"rev_{idx:03}.md")
+        if os.path.exists(rpath):
+            try:
+                with open(rpath, "r", encoding="utf-8") as _fh:
+                    content = _fh.read().strip()
+                if content:
+                    revised_text += f"\n\n{content}\n\n"
+            except Exception:
+                pass
+
     return client, revised_text
 
 
-def _paragraphs_within_budget(parts: list[str], budget: int, *, from_end: bool) -> list[str]:
+def _paragraphs_within_budget(
+    parts: list[str], budget: int, *, from_end: bool
+) -> list[str]:
     """Return paragraphs from parts that fit within a character budget.
 
     If from_end=True, collects from the end of the list (tail window).
@@ -217,6 +432,7 @@ def process_boundary_revision_phase(  # noqa: C901
     *,
     client,
     model_name: str,
+    model_state: ModelState | None = None,
     boundary_dir: str,
     phase2_revised_dir: str,
     session: dict,
@@ -225,6 +441,7 @@ def process_boundary_revision_phase(  # noqa: C901
     cancelled: Callable[[], bool],
     fallback_keys: list[str],
     request_fallback_key: Callable[[], str | None],
+    on_model_switched=None,
     logger=None,
 ) -> object:
     log = logger or get_logger("el_sbobinator.revision", stage="boundary")
@@ -233,7 +450,11 @@ def process_boundary_revision_phase(  # noqa: C901
         return client
 
     try:
-        done_files = [name for name in os.listdir(boundary_dir) if name.lower().startswith("boundary_") and name.lower().endswith(".done")]
+        done_files = [
+            name
+            for name in os.listdir(boundary_dir)
+            if name.lower().startswith("boundary_") and name.lower().endswith(".done")
+        ]
     except Exception:
         done_files = []
 
@@ -254,10 +475,14 @@ def process_boundary_revision_phase(  # noqa: C901
     runtime.update_work_done("boundary", max(0, int(next_pair) - 1), total=pairs_total)
 
     def split_paragraphs(text: str) -> list[str]:
-        return [paragraph for paragraph in (text or "").split("\n\n") if paragraph.strip()]
+        return [
+            paragraph for paragraph in (text or "").split("\n\n") if paragraph.strip()
+        ]
 
     def join_paragraphs(parts: list[str]) -> str:
-        return "\n\n".join([part.strip() for part in parts if part and part.strip()]).strip()
+        return "\n\n".join(
+            [part.strip() for part in parts if part and part.strip()]
+        ).strip()
 
     def is_heading(paragraph: str) -> bool:
         first = (paragraph or "").lstrip()
@@ -316,14 +541,26 @@ def process_boundary_revision_phase(  # noqa: C901
         if os.path.exists(done_path):
             session["boundary"]["next_pair"] = int(pair_idx + 1)
             save_session()
-            runtime.register_step_time("boundary", 0.0, done=pair_idx, total=pairs_total)
-            record_step_metric(session, "boundary", 0.0, done=pair_idx, total=pairs_total)
+            runtime.register_step_time(
+                "boundary", 0.0, done=pair_idx, total=pairs_total
+            )
+            record_step_metric(
+                session, "boundary", 0.0, done=pair_idx, total=pairs_total
+            )
             continue
 
         try:
-            with open(os.path.join(phase2_revised_dir, f"rev_{pair_idx:03}.md"), "r", encoding="utf-8") as handle_a:
+            with open(
+                os.path.join(phase2_revised_dir, f"rev_{pair_idx:03}.md"),
+                "r",
+                encoding="utf-8",
+            ) as handle_a:
                 left_text = handle_a.read().strip()
-            with open(os.path.join(phase2_revised_dir, f"rev_{pair_idx + 1:03}.md"), "r", encoding="utf-8") as handle_b:
+            with open(
+                os.path.join(phase2_revised_dir, f"rev_{pair_idx + 1:03}.md"),
+                "r",
+                encoding="utf-8",
+            ) as handle_b:
                 right_text = handle_b.read().strip()
         except Exception:
             left_text = ""
@@ -336,67 +573,114 @@ def process_boundary_revision_phase(  # noqa: C901
             session["boundary"]["next_pair"] = int(pair_idx + 1)
             save_session()
             _bsecs = max(0.0, time.monotonic() - float(step_t0))
-            runtime.register_step_time("boundary", _bsecs, done=pair_idx, total=pairs_total)
-            record_step_metric(session, "boundary", _bsecs, done=pair_idx, total=pairs_total)
+            runtime.register_step_time(
+                "boundary", _bsecs, done=pair_idx, total=pairs_total
+            )
+            record_step_metric(
+                session, "boundary", _bsecs, done=pair_idx, total=pairs_total
+            )
             continue
 
-        tail_list = _paragraphs_within_budget(left_parts, BOUNDARY_CHAR_BUDGET, from_end=True)
-        head_list = _paragraphs_within_budget(right_parts, BOUNDARY_CHAR_BUDGET, from_end=False)
+        tail_list = _paragraphs_within_budget(
+            left_parts, BOUNDARY_CHAR_BUDGET, from_end=True
+        )
+        head_list = _paragraphs_within_budget(
+            right_parts, BOUNDARY_CHAR_BUDGET, from_end=False
+        )
         tail_count = len(tail_list)
         head_count = len(head_list)
 
         overlap = 0
         max_try = min(len(tail_list), len(head_list))
         for length in range(max_try, 0, -1):
-            if all(strict_duplicate(tail_list[-length + offset], head_list[offset]) for offset in range(length)):
+            if all(
+                strict_duplicate(tail_list[-length + offset], head_list[offset])
+                for offset in range(length)
+            ):
                 overlap = length
                 break
 
         if overlap > 0:
-            print(f"   -> Confine {pair_idx}/{pairs_total}: duplicati certi trovati (locale). Rimuovo {overlap} paragrafo/i duplicati dal blocco N+1.")
+            print(
+                f"   -> Confine {pair_idx}/{pairs_total}: duplicati certi trovati (locale). Rimuovo {overlap} paragrafo/i duplicati dal blocco N+1."
+            )
             new_right = join_paragraphs(right_parts[overlap:])
-            _atomic_write_text(os.path.join(phase2_revised_dir, f"rev_{pair_idx + 1:03}.md"), (new_right + "\n") if new_right else "")
+            _atomic_write_text(
+                os.path.join(phase2_revised_dir, f"rev_{pair_idx + 1:03}.md"),
+                (new_right + "\n") if new_right else "",
+            )
             _atomic_write_text(done_path, "")
-            _update_session(session, {
-                "boundary": {**session.get("boundary", {}), "next_pair": int(pair_idx + 1)},
-                "last_error": None,
-            })
+            _update_session(
+                session,
+                {
+                    "boundary": {
+                        **session.get("boundary", {}),
+                        "next_pair": int(pair_idx + 1),
+                    },
+                    "last_error": None,
+                },
+            )
             save_session()
             runtime.progress(0.9 + 0.08 * (pair_idx / max(1, pairs_total)))
             _bsecs = max(0.0, time.monotonic() - float(step_t0))
-            runtime.register_step_time("boundary", _bsecs, done=pair_idx, total=pairs_total)
-            record_step_metric(session, "boundary", _bsecs, done=pair_idx, total=pairs_total)
+            runtime.register_step_time(
+                "boundary", _bsecs, done=pair_idx, total=pairs_total
+            )
+            record_step_metric(
+                session, "boundary", _bsecs, done=pair_idx, total=pairs_total
+            )
             continue
 
         similarity = max_similarity(tail_list, head_list)
         if similarity < 0.975:
-            print(f"   -> Confine {pair_idx}/{pairs_total}: nessuna sovrapposizione evidente (locale). Skip AI.")
+            print(
+                f"   -> Confine {pair_idx}/{pairs_total}: nessuna sovrapposizione evidente (locale). Skip AI."
+            )
             _atomic_write_text(done_path, "")
-            _update_session(session, {
-                "boundary": {**session.get("boundary", {}), "next_pair": int(pair_idx + 1)},
-                "last_error": None,
-            })
+            _update_session(
+                session,
+                {
+                    "boundary": {
+                        **session.get("boundary", {}),
+                        "next_pair": int(pair_idx + 1),
+                    },
+                    "last_error": None,
+                },
+            )
             save_session()
             runtime.progress(0.9 + 0.08 * (pair_idx / max(1, pairs_total)))
             _bsecs = max(0.0, time.monotonic() - float(step_t0))
-            runtime.register_step_time("boundary", _bsecs, done=pair_idx, total=pairs_total)
-            record_step_metric(session, "boundary", _bsecs, done=pair_idx, total=pairs_total)
+            runtime.register_step_time(
+                "boundary", _bsecs, done=pair_idx, total=pairs_total
+            )
+            record_step_metric(
+                session, "boundary", _bsecs, done=pair_idx, total=pairs_total
+            )
             continue
 
         tail = join_paragraphs(tail_list)
         head = join_paragraphs(head_list)
-        payload = "FINE BLOCCO N:\n" + tail + "\n\n<<<EL_SBOBINATOR_SPLIT>>>\n\nINIZIO BLOCCO N+1:\n" + head
-        print(f"   -> Confine {pair_idx}/{pairs_total}: sovrapposizione sospetta (sim={similarity:.3f}). Fallback AI...")
+        payload = (
+            "FINE BLOCCO N:\n"
+            + tail
+            + "\n\n<<<EL_SBOBINATOR_SPLIT>>>\n\nINIZIO BLOCCO N+1:\n"
+            + head
+        )
+        print(
+            f"   -> Confine {pair_idx}/{pairs_total}: sovrapposizione sospetta (sim={similarity:.3f}). Fallback AI..."
+        )
 
         def _call(current_client):
             response = current_client.models.generate_content(
-                model=model_name,
+                model=current_model_name(model_state, model_name),
                 contents=[payload, PROMPT_REVISIONE_CONFINE],
                 config=types.GenerateContentConfig(temperature=0.1),
             )
             output = extract_response_text(response)
             if "<<<EL_SBOBINATOR_SPLIT>>>" not in output:
-                raise RuntimeError("Marker non trovato nell'output di revisione confine.")
+                raise RuntimeError(
+                    "Marker non trovato nell'output di revisione confine."
+                )
 
             new_left_tail, new_right_head = output.split("<<<EL_SBOBINATOR_SPLIT>>>", 1)
             new_left_tail = new_left_tail.strip()
@@ -406,16 +690,36 @@ def process_boundary_revision_phase(  # noqa: C901
 
             left_prefix = join_paragraphs(left_parts[:-tail_count])
             right_suffix = join_paragraphs(right_parts[head_count:])
-            new_left = (left_prefix + "\n\n" + new_left_tail).strip() if left_prefix else new_left_tail
-            new_right = (new_right_head + "\n\n" + right_suffix).strip() if right_suffix else new_right_head
+            new_left = (
+                (left_prefix + "\n\n" + new_left_tail).strip()
+                if left_prefix
+                else new_left_tail
+            )
+            new_right = (
+                (new_right_head + "\n\n" + right_suffix).strip()
+                if right_suffix
+                else new_right_head
+            )
 
-            _atomic_write_text(os.path.join(phase2_revised_dir, f"rev_{pair_idx:03}.md"), new_left + "\n")
-            _atomic_write_text(os.path.join(phase2_revised_dir, f"rev_{pair_idx + 1:03}.md"), new_right + "\n")
+            _atomic_write_text(
+                os.path.join(phase2_revised_dir, f"rev_{pair_idx:03}.md"),
+                new_left + "\n",
+            )
+            _atomic_write_text(
+                os.path.join(phase2_revised_dir, f"rev_{pair_idx + 1:03}.md"),
+                new_right + "\n",
+            )
             _atomic_write_text(done_path, "")
-            _update_session(session, {
-                "boundary": {**session.get("boundary", {}), "next_pair": int(pair_idx + 1)},
-                "last_error": None,
-            })
+            _update_session(
+                session,
+                {
+                    "boundary": {
+                        **session.get("boundary", {}),
+                        "next_pair": int(pair_idx + 1),
+                    },
+                    "last_error": None,
+                },
+            )
             save_session()
             return True
 
@@ -425,18 +729,25 @@ def process_boundary_revision_phase(  # noqa: C901
                 client=client,
                 fallback_keys=fallback_keys,
                 model_name=model_name,
+                model_state=model_state,
                 cancelled=cancelled,
                 runtime=runtime,
                 request_fallback_key=request_fallback_key,
                 retry_sleep_seconds=20.0,
+                on_model_switched=on_model_switched,
                 logger=log,
+                resume_phase_text=f"Fase 3/3: confine ({pair_idx}/{pairs_total})",
             )
             if result is None:
                 return client
             runtime.progress(0.9 + 0.08 * (pair_idx / max(1, pairs_total)))
             _bsecs = max(0.0, time.monotonic() - float(step_t0))
-            runtime.register_step_time("boundary", _bsecs, done=pair_idx, total=pairs_total)
-            record_step_metric(session, "boundary", _bsecs, done=pair_idx, total=pairs_total)
+            runtime.register_step_time(
+                "boundary", _bsecs, done=pair_idx, total=pairs_total
+            )
+            record_step_metric(
+                session, "boundary", _bsecs, done=pair_idx, total=pairs_total
+            )
         except QuotaDailyLimitError:
             print("[*] Interruzione: progressi salvati. Potrai riprendere più tardi.")
             session["last_error"] = "quota_daily_limit_boundary"
@@ -446,13 +757,21 @@ def process_boundary_revision_phase(  # noqa: C901
             print(f"      [Errore confine {pair_idx} dopo tutti i tentativi: {exc}]")
             log.error(
                 "Boundary revision failed for pair %d/%d: %s",
-                pair_idx, pairs_total, exc,
+                pair_idx,
+                pairs_total,
+                exc,
                 extra={"stage": "boundary"},
             )
-            _update_session(session, {
-                "boundary": {**session.get("boundary", {}), "next_pair": int(pair_idx)},
-                "last_error": "boundary_ai_failed",
-            })
+            _update_session(
+                session,
+                {
+                    "boundary": {
+                        **session.get("boundary", {}),
+                        "next_pair": int(pair_idx),
+                    },
+                    "last_error": "boundary_ai_failed",
+                },
+            )
             save_session()
             return client
 

@@ -14,10 +14,10 @@ import tempfile
 from dataclasses import dataclass
 
 from el_sbobinator.shared import (
-    DEFAULT_MODEL,
     SESSION_ROOT,
     SESSION_SCHEMA_VERSION,
     _atomic_write_json,
+    build_default_pipeline_settings,
     _file_fingerprint,
     _load_json,
     _now_iso,
@@ -36,16 +36,24 @@ class SessionPaths:
     macro_path: str
 
 
-def resolve_session_paths(input_path: str, session_dir_hint: str | None = None) -> SessionPaths:
+def resolve_session_paths(
+    input_path: str, session_dir_hint: str | None = None
+) -> SessionPaths:
     try:
         _safe_mkdir(SESSION_ROOT)
     except Exception:
         pass
 
     try:
-        session_dir = os.path.abspath(session_dir_hint) if session_dir_hint else _session_dir_for_file(input_path)
+        session_dir = (
+            os.path.abspath(session_dir_hint)
+            if session_dir_hint
+            else _session_dir_for_file(input_path)
+        )
     except Exception:
-        session_dir = os.path.join(tempfile.gettempdir(), "el_sbobinator_session_fallback")
+        session_dir = os.path.join(
+            tempfile.gettempdir(), "el_sbobinator_session_fallback"
+        )
 
     return SessionPaths(
         session_dir=session_dir,
@@ -105,15 +113,7 @@ def new_session(input_path: str, settings: dict | None = None) -> dict:
         "updated_at": _now_iso(),
         "stage": "phase1",
         "input": fp,
-        "settings": settings
-        or {
-            "model": DEFAULT_MODEL,
-            "chunk_minutes": 15,
-            "overlap_seconds": 30,
-            "macro_char_limit": 22000,
-            "preconvert_audio": True,
-            "audio": {"bitrate": "48k"},
-        },
+        "settings": settings or build_default_pipeline_settings(),
         "phase1": {"next_start_sec": 0, "chunks_done": 0, "memoria_precedente": ""},
         "phase2": {"macro_total": 0, "revised_done": 0},
         "boundary": {"pairs_total": 0, "next_pair": 1},

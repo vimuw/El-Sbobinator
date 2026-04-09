@@ -35,15 +35,21 @@ class AppWebviewTests(unittest.TestCase):
 
     def test_save_html_content_preserves_head(self):
         import tempfile as _tempfile
+
         api = ElSbobinatorApi()
-        with _tempfile.NamedTemporaryFile("w+", suffix=".html", delete=False, encoding="utf-8") as tmp:
+        with _tempfile.NamedTemporaryFile(
+            "w+", suffix=".html", delete=False, encoding="utf-8"
+        ) as tmp:
             tmp.write(
                 "<!DOCTYPE html><html><head><meta charset='utf-8'><style>body{color:red}</style></head>"
                 "<body><p>Old</p></body></html>"
             )
             path = tmp.name
 
-        with patch("el_sbobinator.app_webview.get_desktop_dir", return_value=_tempfile.gettempdir()):
+        with patch(
+            "el_sbobinator.app_webview.get_desktop_dir",
+            return_value=_tempfile.gettempdir(),
+        ):
             result = api.save_html_content(path, "<p>New</p>")
         self.assertTrue(result["ok"])
 
@@ -91,7 +97,9 @@ class AppWebviewTests(unittest.TestCase):
 
         self.assertIsNotNone(result)
         self.assertEqual(result["path"], window.dialog_result)
-        self.assertEqual(result["name"], __import__("os").path.basename(window.dialog_result))
+        self.assertEqual(
+            result["name"], __import__("os").path.basename(window.dialog_result)
+        )
 
     def test_ask_files_accepts_string_dialog_result(self):
         api = ElSbobinatorApi()
@@ -104,7 +112,9 @@ class AppWebviewTests(unittest.TestCase):
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["path"], window.dialog_result)
-        self.assertEqual(result[0]["name"], __import__("os").path.basename(window.dialog_result))
+        self.assertEqual(
+            result[0]["name"], __import__("os").path.basename(window.dialog_result)
+        )
 
     @patch("el_sbobinator.validation_service.validate_environment")
     def test_validate_environment_returns_backend_result(self, mock_validate):
@@ -112,14 +122,21 @@ class AppWebviewTests(unittest.TestCase):
         mock_validate.return_value = {
             "ok": True,
             "summary": "Ambiente pronto.",
-            "checks": [{"id": "ffmpeg", "label": "FFmpeg", "status": "ok", "message": "ok"}],
+            "checks": [
+                {"id": "ffmpeg", "label": "FFmpeg", "status": "ok", "message": "ok"}
+            ],
         }
 
         result = api.validate_environment(api_key="fake", check_api_key=True)
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["result"]["summary"], "Ambiente pronto.")
-        mock_validate.assert_called_once_with(api_key="fake", validate_api_key=True)
+        mock_validate.assert_called_once_with(
+            api_key="fake",
+            validate_api_key=True,
+            preferred_model=None,
+            fallback_models=None,
+        )
 
     @patch("el_sbobinator.app_webview.cleanup_orphan_sessions")
     def test_cleanup_old_sessions_uses_14_day_default(self, mock_cleanup):
@@ -177,7 +194,9 @@ class AppWebviewTests(unittest.TestCase):
         self.assertEqual(received["regenerate"], {"regenerate": None})
 
     @patch("el_sbobinator.pipeline.esegui_sbobinatura")
-    def test_process_done_marks_cancelled_when_run_status_is_cancelled(self, mock_pipeline_run):
+    def test_process_done_marks_cancelled_when_run_status_is_cancelled(
+        self, mock_pipeline_run
+    ):
         api = ElSbobinatorApi()
         emitted = []
 
@@ -197,13 +216,15 @@ class AppWebviewTests(unittest.TestCase):
 
         try:
             result = api.start_processing(
-                [{
-                    "id": "file-1",
-                    "path": file_path,
-                    "name": "lesson.mp3",
-                    "size": 4,
-                    "duration": 1,
-                }],
+                [
+                    {
+                        "id": "file-1",
+                        "path": file_path,
+                        "name": "lesson.mp3",
+                        "size": 4,
+                        "duration": 1,
+                    }
+                ],
                 api_key="fake-key",
                 resume_session=True,
             )
@@ -211,14 +232,19 @@ class AppWebviewTests(unittest.TestCase):
             self.assertTrue(result["ok"])
             self.assertIsNotNone(api._processing_thread)
             api._processing_thread.join(timeout=2)
-            self.assertFalse(api._processing_thread.is_alive(), "Il thread di processing non si e' fermato.")
+            self.assertFalse(
+                api._processing_thread.is_alive(),
+                "Il thread di processing non si e' fermato.",
+            )
         finally:
             try:
                 __import__("os").unlink(file_path)
             except OSError:
                 pass
 
-        process_done_events = [data for fn_name, data, _batched in emitted if fn_name == "processDone"]
+        process_done_events = [
+            data for fn_name, data, _batched in emitted if fn_name == "processDone"
+        ]
         self.assertEqual(len(process_done_events), 1)
         self.assertTrue(process_done_events[0]["cancelled"])
         self.assertEqual(process_done_events[0]["completed"], 0)

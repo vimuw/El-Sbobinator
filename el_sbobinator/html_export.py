@@ -17,19 +17,52 @@ except ImportError:  # pragma: no cover
     _nh3 = None  # type: ignore[assignment]
 
 
-_ALLOWED_TAGS: frozenset[str] = frozenset({
-    "p", "br", "hr",
-    "h1", "h2", "h3", "h4", "h5", "h6",
-    "strong", "em", "u", "s", "mark", "code", "pre",
-    "sub", "sup",
-    "ul", "ol", "li",
-    "blockquote",
-    "table", "thead", "tbody", "tr", "th", "td",
-    "a", "span", "div", "img",
-})
+_ALLOWED_TAGS: frozenset[str] = frozenset(
+    {
+        "p",
+        "br",
+        "hr",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "strong",
+        "em",
+        "u",
+        "s",
+        "mark",
+        "code",
+        "pre",
+        "sub",
+        "sup",
+        "ul",
+        "ol",
+        "li",
+        "blockquote",
+        "table",
+        "thead",
+        "tbody",
+        "tr",
+        "th",
+        "td",
+        "a",
+        "span",
+        "div",
+        "img",
+    }
+)
 
 _ALLOWED_ATTRS: dict[str, set[str]] = {
-    "*": {"style", "class", "data-editor-image", "data-layout", "data-align", "data-width"},
+    "*": {
+        "style",
+        "class",
+        "data-editor-image",
+        "data-layout",
+        "data-align",
+        "data-width",
+    },
     "a": {"href", "title", "target"},
     "img": {"src", "alt", "width", "height"},
     "th": {"colspan", "rowspan"},
@@ -57,7 +90,7 @@ def sanitize_html_basic(html: str) -> str:
 
 def normalize_inline_star_lists(md: str) -> str:
     # Normalizza elenchi che a volte l'AI produce in modo non-standard.
-    src = (md or "").replace("\u00A0", " ")
+    src = (md or "").replace("\u00a0", " ")
 
     list_line_re = r"^\s*([*+-]|\d+\.)\s+"
     # Bullet unicode che il modello usa spesso (e che Markdown non interpreta come liste).
@@ -78,7 +111,9 @@ def normalize_inline_star_lists(md: str) -> str:
 
         # Caso A: riga che INIZIA con bullet unicode -> lista Markdown.
         if not re.match(list_line_re, line):
-            m = re.match(r"^(\s*)([\u25cf\u2022\u25aa\u2023\u25e6\u25cb\u2219])\s+(.*)$", line)
+            m = re.match(
+                r"^(\s*)([\u25cf\u2022\u25aa\u2023\u25e6\u25cb\u2219])\s+(.*)$", line
+            )
             if m:
                 bullet = m.group(2)
                 rest = m.group(3).strip()
@@ -88,7 +123,9 @@ def normalize_inline_star_lists(md: str) -> str:
                     continue
 
         # Caso B: bullet unicode "in mezzo" a una riga -> spezza in lista.
-        if not re.match(list_line_re, line) and re.search(r"[\u25cf\u2022\u25aa\u2023]\s+(\*\*|[A-ZÀ-ÖØ-Ý])", line):
+        if not re.match(list_line_re, line) and re.search(
+            r"[\u25cf\u2022\u25aa\u2023]\s+(\*\*|[A-ZÀ-ÖØ-Ý])", line
+        ):
             if re.search(r"\s[\u25cf\u2022\u25aa\u2023]\s+", line):
                 parts = re.split(r"\s*[\u25cf\u2022\u25aa\u2023]\s+", line)
                 if len(parts) > 1:
@@ -103,7 +140,9 @@ def normalize_inline_star_lists(md: str) -> str:
 
         # Converti solo se:
         # - c'e' un ":" seguito da "* " (tipico "Esempi: * ... * ...")
-        if not re.match(r"^\s*([*+-]|\d+\.)\s+", line) and re.search(r":[ \t]*\*[ \t]+(\*\*|[A-ZÀ-ÖØ-Ý])", line):
+        if not re.match(r"^\s*([*+-]|\d+\.)\s+", line) and re.search(
+            r":[ \t]*\*[ \t]+(\*\*|[A-ZÀ-ÖØ-Ý])", line
+        ):
             if line.count("* ") >= 1:
                 line2 = re.sub(r":[ \t]*\*[ \t]+", ":\n\n- ", line, count=1)
                 line2 = re.sub(r"[ \t]+\*[ \t]+", "\n- ", line2)
@@ -169,7 +208,9 @@ def normalize_heading_levels(md: str) -> str:
 
 def build_html_document(title: str, markdown_text: str) -> str:
     normalized_markdown = normalize_heading_levels(markdown_text or "")
-    html_body = markdown.markdown(normalized_markdown, extensions=["extra", "sane_lists"], output_format="html5")
+    html_body = markdown.markdown(
+        normalized_markdown, extensions=["extra", "sane_lists"], output_format="html5"
+    )
     html_body = sanitize_html_basic(html_body)
     safe_title = (title or "Sbobina").strip()
     safe_title_html = _html.escape(safe_title, quote=True)

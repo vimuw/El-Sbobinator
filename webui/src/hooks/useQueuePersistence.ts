@@ -76,5 +76,5 @@ export function useQueuePersistence(
     } catch (error) {
       console.error('Queue persist failed:', error);
     }
-  }, [structuralVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [structuralVersion]);
 }

@@ -25,6 +25,14 @@ export interface ValidationResult {
   checks: ValidationCheck[];
 }
 
+export interface ModelOption {
+  id: string;
+  label: string;
+  summary: string;
+}
+
+export type ElSbobinatorBridge = BridgeCallbacks | null;
+
 export interface BridgeCallbacks {
   appendConsole: (msg: string) => void;
   updateProgress: (value: number) => void;
@@ -42,8 +50,19 @@ export interface BridgeCallbacks {
 }
 
 export interface PywebviewApi {
-  load_settings?: () => Promise<{ api_key?: string; fallback_keys?: string[] }>;
-  save_settings?: (apiKey: string, fallbackKeys: string[]) => Promise<{ ok: boolean; error?: string }>;
+  load_settings?: () => Promise<{
+    api_key?: string;
+    fallback_keys?: string[];
+    preferred_model?: string;
+    fallback_models?: string[];
+    available_models?: ModelOption[];
+  }>;
+  save_settings?: (
+    apiKey: string,
+    fallbackKeys: string[],
+    preferredModel: string,
+    fallbackModels: string[],
+  ) => Promise<{ ok: boolean; error?: string }>;
   ask_files?: () => Promise<FileDescriptor[]>;
   ask_media_file?: () => Promise<FileDescriptor | null>;
   check_path_exists?: (path: string) => Promise<{ ok: boolean; exists: boolean }>;
@@ -59,7 +78,12 @@ export interface PywebviewApi {
   stream_media_file?: (path: string) => Promise<{ ok: boolean; url?: string; error?: string }>;
   export_docx?: (filename: string, docxHtml: string) => Promise<{ ok: boolean; error?: string }>;
   show_notification?: (title: string, message: string) => Promise<void>;
-  validate_environment?: (apiKey?: string, checkApiKey?: boolean) => Promise<{ ok: boolean; result?: ValidationResult; error?: string }>;
+  validate_environment?: (
+    apiKey?: string,
+    checkApiKey?: boolean,
+    preferredModel?: string,
+    fallbackModels?: string[],
+  ) => Promise<{ ok: boolean; result?: ValidationResult; error?: string }>;
   get_session_storage_info?: () => Promise<{ ok: boolean; total_bytes?: number; total_sessions?: number; error?: string }>;
   cleanup_old_sessions?: (maxAgeDays?: number) => Promise<{ ok: boolean; removed?: number; freed_bytes?: number; errors?: number; error?: string }>;
 }

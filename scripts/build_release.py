@@ -22,16 +22,23 @@ if os.name == "nt":
 
 ROOT = Path(__file__).resolve().parent.parent
 WEBUI_DIR = ROOT / "webui"
+PACKAGING_DIR = ROOT / "packaging"
+LAUNCHERS_DIR = ROOT / "launchers"
+TOOLS_DIR = ROOT / "tools"
+REQUIREMENTS_DIR = ROOT / "requirements"
+WEBVIEW_ENTRYPOINT = LAUNCHERS_DIR / "El_Sbobinator_WebUI.pyw"
+PROFILE_IMPORTS_SCRIPT = TOOLS_DIR / "profile_imports.py"
 APP_NAME = "El Sbobinator"
-BASE_REQUIREMENTS = ROOT / "requirements.lock"
-FALLBACK_REQUIREMENTS = ROOT / "requirements.txt"
-DEV_REQUIREMENTS = ROOT / "requirements-dev.txt"
+REQUIRED_NODE_MAJOR = 24
+BASE_REQUIREMENTS = REQUIREMENTS_DIR / "requirements.lock"
+FALLBACK_REQUIREMENTS = REQUIREMENTS_DIR / "requirements.txt"
+DEV_REQUIREMENTS = REQUIREMENTS_DIR / "requirements-dev.txt"
 PYTHON_CHECK_TARGETS = [
     "el_sbobinator",
     "tests",
     "scripts",
-    "El_Sbobinator_WebUI.pyw",
-    "profile_imports.py",
+    str(WEBVIEW_ENTRYPOINT.relative_to(ROOT)),
+    str(PROFILE_IMPORTS_SCRIPT.relative_to(ROOT)),
 ]
 
 if str(ROOT) not in sys.path:
@@ -44,14 +51,47 @@ def run(cmd: list[str], cwd: Path | None = None) -> None:
     subprocess.run(cmd, cwd=str(cwd or ROOT), check=True)
 
 
+def ensure_supported_node_version() -> None:
+    result = subprocess.run(
+        ["node", "--version"],
+        cwd=str(ROOT),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    version = result.stdout.strip() or result.stderr.strip()
+    normalized = version[1:] if version.startswith("v") else version
+    major_text = normalized.split(".", 1)[0]
+    try:
+        major = int(major_text)
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Versione Node.js non riconosciuta: {version!r}. Richiesta: {REQUIRED_NODE_MAJOR}.x"
+        ) from exc
+
+    if major != REQUIRED_NODE_MAJOR:
+        raise RuntimeError(
+            f"Node.js {REQUIRED_NODE_MAJOR}.x richiesto per la WebUI; rilevato {version}."
+        )
+
+
 def get_windows_webview2_runtime_version() -> str | None:
     if os.name != "nt":
         return None
 
     registry_paths = (
-        (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"),
-        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"),
-        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"),
+        (
+            winreg.HKEY_CURRENT_USER,
+            r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+        ),
+        (
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+        ),
+        (
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+        ),
     )
 
     for root, path in registry_paths:
@@ -80,9 +120,13 @@ def print_windows_webview2_notice(target: str, ui: str) -> None:
         print(f"[OK] WebView2 Runtime rilevato: {version}")
     else:
         print("[ATTENZIONE] WebView2 Runtime non rilevato su questa macchina.")
-        print("             L'exe verra compilato comunque, ma per eseguire la WebUI serve WebView2.")
+        print(
+            "             L'exe verra compilato comunque, ma per eseguire la WebUI serve WebView2."
+        )
         print(f"             Download ufficiale: {download_url}")
-    print("             Suggerimento: comunica questo prerequisito anche agli utenti finali Windows.")
+    print(
+        "             Suggerimento: comunica questo prerequisito anche agli utenti finali Windows."
+    )
     print()
 
 
@@ -105,20 +149,27 @@ def install_packaging_dependencies(ui: str) -> None:
 
 
 def install_node_dependencies(skip_npm_install: bool) -> None:
+    ensure_supported_node_version()
     if skip_npm_install:
         return
     run(["npm", "install", "--no-audit", "--no-fund"], cwd=WEBUI_DIR)
 
 
 def run_python_checks() -> None:
-    existing_targets = [str(ROOT / target) for target in PYTHON_CHECK_TARGETS if (ROOT / target).exists()]
+    existing_targets = [
+        str(ROOT / target)
+        for target in PYTHON_CHECK_TARGETS
+        if (ROOT / target).exists()
+    ]
     run([sys.executable, "-m", "ruff", "check", *existing_targets])
+    run([sys.executable, "-m", "ruff", "format", "--check", *existing_targets])
     run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-q"])
 
 
 def run_webui_checks(skip_npm_install: bool) -> None:
     install_node_dependencies(skip_npm_install=skip_npm_install)
     run(["npm", "run", "lint"], cwd=WEBUI_DIR)
+    run(["npm", "run", "typecheck"], cwd=WEBUI_DIR)
     run(["npm", "test"], cwd=WEBUI_DIR)
 
 
@@ -152,7 +203,7 @@ def pyinstaller_command(target: str, ui: str) -> list[str]:
             "clr",
             "--name",
             APP_NAME,
-            "El_Sbobinator_WebUI.pyw",
+            str(WEBVIEW_ENTRYPOINT),
         ]
     )
     return command
@@ -210,7 +261,9 @@ def command_build(args: argparse.Namespace) -> None:
 def command_validate(args: argparse.Namespace) -> None:
     from el_sbobinator.validation_service import validate_environment
 
-    result = validate_environment(api_key=args.api_key, validate_api_key=bool(args.check_api_key))
+    result = validate_environment(
+        api_key=args.api_key, validate_api_key=bool(args.check_api_key)
+    )
     print(result["summary"])
     for check in result["checks"]:
         status = check["status"].upper()
@@ -257,12 +310,16 @@ def build_parser() -> argparse.ArgumentParser:
     build_parser.add_argument("--skip-postbuild-smoke", action="store_true")
     build_parser.set_defaults(func=command_build)
 
-    validate_parser = subparsers.add_parser("validate", help="Validate local environment and optional API access")
+    validate_parser = subparsers.add_parser(
+        "validate", help="Validate local environment and optional API access"
+    )
     validate_parser.add_argument("--api-key", default="")
     validate_parser.add_argument("--check-api-key", action="store_true")
     validate_parser.set_defaults(func=command_validate)
 
-    smoke_parser = subparsers.add_parser("smoke", help="Run smoke tests and optional post-build artifact checks")
+    smoke_parser = subparsers.add_parser(
+        "smoke", help="Run smoke tests and optional post-build artifact checks"
+    )
     smoke_parser.add_argument("--target", choices=["windows", "macos"])
     smoke_parser.set_defaults(func=command_smoke)
 

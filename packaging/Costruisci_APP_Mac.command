@@ -1,17 +1,24 @@
 #!/bin/bash
+set -euo pipefail
 clear
 echo "======================================================="
 echo "       COSTRUTTORE APP MAC EL SBOBINATOR"
 echo "======================================================="
 
 # Spostati nella cartella d'origine
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 echo "Creazione/attivazione ambiente virtuale (.venv)..."
 if [ ! -f ".venv/bin/python" ]; then
   python3 -m venv .venv
 fi
-source ".venv/bin/activate"
+VENV_PYTHON="$(pwd)/.venv/bin/python"
+if [ ! -x "$VENV_PYTHON" ]; then
+  echo "[ERRORE] Python del virtualenv non trovato: $VENV_PYTHON"
+  read -p "Premi Invio per chiudere questa finestra..."
+  exit 1
+fi
+echo "[OK] Virtualenv pronto: $VENV_PYTHON"
 
 echo ""
 echo "======================================================="
@@ -20,7 +27,7 @@ echo "Attendi pazientemente, non chiudere la finestra..."
 echo "======================================================="
 echo ""
 
-python scripts/build_release.py build --target macos --ui webui --install-deps --dev-deps
+"$VENV_PYTHON" scripts/build_release.py build --target macos --ui webui --install-deps --dev-deps
 
 echo ""
 echo "======================================================="

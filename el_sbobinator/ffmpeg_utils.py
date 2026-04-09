@@ -83,10 +83,17 @@ def _run_cancellable(cmd, *, stop_event=None) -> Tuple[int, str, str, bool]:
             out, err = proc.communicate(timeout=2)
         except Exception:
             out, err = "", ""
-    return int(getattr(proc, "returncode", 1) or 0), str(out or ""), str(err or ""), bool(cancelled)
+    return (
+        int(getattr(proc, "returncode", 1) or 0),
+        str(out or ""),
+        str(err or ""),
+        bool(cancelled),
+    )
 
 
-def probe_duration_seconds(path: str, ffmpeg_exe: Optional[str] = None) -> Tuple[Optional[float], Optional[str]]:
+def probe_duration_seconds(
+    path: str, ffmpeg_exe: Optional[str] = None
+) -> Tuple[Optional[float], Optional[str]]:
     """
     Returns (seconds, reason).
     - seconds: float if parsed, else None
@@ -117,7 +124,10 @@ def probe_duration_seconds(path: str, ffmpeg_exe: Optional[str] = None) -> Tuple
         m = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:[.,]\d+)?)", out)
         if not m:
             tail = "\n".join([ln for ln in (out or "").splitlines() if ln.strip()][-6:])
-            reason = tail.strip() or f"ffmpeg_returncode_{getattr(res, 'returncode', 'unknown')}"
+            reason = (
+                tail.strip()
+                or f"ffmpeg_returncode_{getattr(res, 'returncode', 'unknown')}"
+            )
             return None, reason
         h = float(m.group(1))
         mi = float(m.group(2))

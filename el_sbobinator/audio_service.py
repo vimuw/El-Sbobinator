@@ -21,7 +21,9 @@ def resolve_ffmpeg() -> str:
     return get_ffmpeg_exe()
 
 
-def probe_media_duration(path: str, ffmpeg_exe: str | None = None) -> Tuple[float | None, str | None]:
+def probe_media_duration(
+    path: str, ffmpeg_exe: str | None = None
+) -> Tuple[float | None, str | None]:
     return probe_duration_seconds(path, ffmpeg_exe=ffmpeg_exe)
 
 

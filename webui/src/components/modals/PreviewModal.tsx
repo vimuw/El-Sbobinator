@@ -38,32 +38,23 @@ export function PreviewModal({
   const autosaveGenRef = useRef(0);
   const htmlPathRef = useRef(htmlPath);
   useEffect(() => { htmlPathRef.current = htmlPath; }, [htmlPath]);
-  const hasAutoOpenedTocRef = useRef(false);
-
   useEffect(() => {
     lastPersistedRef.current = previewContent ?? '';
     isDirtyRef.current = false;
     setIsCopied(false);
     setAutosaveStatus('idle');
-    hasAutoOpenedTocRef.current = false;
     setIsTocOpen(false);
   }, [previewContent]);
 
   useEffect(() => {
-    if (headings.length >= 4 && !hasAutoOpenedTocRef.current) {
-      hasAutoOpenedTocRef.current = true;
-      setIsTocOpen(true);
-    }
-  }, [headings.length]);
-
-  useEffect(() => {
+    const autosaveGenRefAtCleanup = autosaveGenRef;
     return () => {
       if (!isDirtyRef.current) return;
       if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
       const path = htmlPathRef.current;
       const snap = getHtmlRef.current?.() ?? '';
       if (path && snap && snap !== lastPersistedRef.current) {
-        void window.pywebview?.api?.save_html_content(path, snap, ++autosaveGenRef.current);
+        void window.pywebview?.api?.save_html_content(path, snap, ++autosaveGenRefAtCleanup.current);
       }
     };
   }, []); // empty deps: runs cleanup only on unmount

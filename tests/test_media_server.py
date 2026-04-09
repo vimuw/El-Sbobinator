@@ -27,7 +27,10 @@ class EvictOldestTests(unittest.TestCase):
     def test_no_error_at_capacity(self):
         """_evict_oldest_if_needed must not raise TypeError when _servers is a plain dict."""
         for i in range(LocalMediaServer.MAX_ENTRIES):
-            LocalMediaServer._servers[f"/fake/path_{i}.mp3"] = (_fake_server(), 9000 + i)
+            LocalMediaServer._servers[f"/fake/path_{i}.mp3"] = (
+                _fake_server(),
+                9000 + i,
+            )
 
         try:
             LocalMediaServer._evict_oldest_if_needed()
@@ -49,18 +52,26 @@ class EvictOldestTests(unittest.TestCase):
     def test_noop_below_capacity(self):
         """No eviction occurs when below MAX_ENTRIES."""
         for i in range(LocalMediaServer.MAX_ENTRIES - 1):
-            LocalMediaServer._servers[f"/fake/path_{i}.mp3"] = (_fake_server(), 9000 + i)
+            LocalMediaServer._servers[f"/fake/path_{i}.mp3"] = (
+                _fake_server(),
+                9000 + i,
+            )
 
         LocalMediaServer._evict_oldest_if_needed()
 
-        self.assertEqual(len(LocalMediaServer._servers), LocalMediaServer.MAX_ENTRIES - 1)
+        self.assertEqual(
+            len(LocalMediaServer._servers), LocalMediaServer.MAX_ENTRIES - 1
+        )
 
     def test_evict_calls_shutdown(self):
         """Evicted server's shutdown and server_close are called."""
         oldest = _fake_server()
         LocalMediaServer._servers["/fake/oldest.mp3"] = (oldest, 9000)
         for i in range(1, LocalMediaServer.MAX_ENTRIES):
-            LocalMediaServer._servers[f"/fake/path_{i}.mp3"] = (_fake_server(), 9000 + i)
+            LocalMediaServer._servers[f"/fake/path_{i}.mp3"] = (
+                _fake_server(),
+                9000 + i,
+            )
 
         LocalMediaServer._evict_oldest_if_needed()
 

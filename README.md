@@ -2,7 +2,7 @@
 
 Un'applicazione gratuita e open-source che trasforma le registrazioni audio delle tue lezioni in vere e proprie **sbobine** dettagliate, ordinate e pronte da studiare.
 
-L'intelligenza artificiale (basata sul modello Gemini 2.5 Flash) ascolterà la tua registrazione e scriverà una dispensa eliminando i difetti tipici del parlato (es. ripetizioni, retorica, esitazioni) e strutturando il discorso con paragrafi chiari, elenchi puntati a dizionario e definizioni in grassetto. 
+L'intelligenza artificiale (basata sul modello Gemini 2.5 Flash) ascolterà la tua registrazione e scriverà una dispensa eliminando i difetti tipici del parlato (es. ripetizioni, retorica, esitazioni) e strutturando il discorso con paragrafi chiari, elenchi puntati a dizionario e definizioni in grassetto.
 
 L'obiettivo non è una trascrizione "grezza", ma una vera e propria dispensa leggibile!
 
@@ -143,13 +143,15 @@ Grazie e in bocca al lupo per gli esami! 🎉
 
 Hai trovato un bug o vuoi suggerire una nuova funzione? Apri una **[Issue](https://github.com/vimuw/El-Sbobinator/issues)** su GitHub — ogni segnalazione è benvenuta!
 
+For development/contributing, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ---
 
 ## ⚖️ Disclaimer Etico e Legale (Importante)
 El Sbobinator 🤠 è esclusivamente uno **strumento software locale** che facilita l'interazione tra l'utente e le API pubbliche di Google Gemini.
 
 Scaricando e utilizzando questa applicazione, accetti e comprendi che:
-* **Diritto d'autore e Uso Personale:** Le lezioni universitarie sono proprietà intellettuale dei rispettivi docenti. L'uso di questo strumento è inteso **esclusivamente per scopi di studio personale**. La diffusione pubblica, la pubblicazione online o la vendita a terzi delle sbobine generate senza il consenso esplicito del docente è una violazione del diritto d'autore. 
+* **Diritto d'autore e Uso Personale:** Le lezioni universitarie sono proprietà intellettuale dei rispettivi docenti. L'uso di questo strumento è inteso **esclusivamente per scopi di studio personale**. La diffusione pubblica, la pubblicazione online o la vendita a terzi delle sbobine generate senza il consenso esplicito del docente è una violazione del diritto d'autore.
 * **Privacy e Gestione dei Dati:** Inserendo la tua chiave API personale (BYOK), stabilisci una connessione diretta tra il tuo computer e i server di Google. El Sbobinator 🤠 non ha server propri: non intercetta né salva in cloud i tuoi file audio. Tutto avviene e rimane sul tuo dispositivo.
 * **Tassativo Divieto per Dati Clinici Sensibili (Privacy e GDPR):** È assolutamente vietato dare in pasto all'app registrazioni effettuate in ambiente clinico, durante i tirocini in reparto o che contengono conversazioni con pazienti reali. L'elaborazione di dati sanitari sensibili tramite API esterne è una grave violazione della privacy. Usa l'app **solo per trascrivere le lezioni frontali in aula**.
 * **Nessuna Garanzia:** Come specificato dalla Licenza MIT allegata al progetto, il software è fornito "così com'è", senza alcuna garanzia.
@@ -166,16 +168,33 @@ Per tutti i dettagli, consulta il file `LICENSE` incluso in questa repository.
 <summary>🛠️ Costruire l'App dai sorgenti</summary>
 
 Se scarichi il codice sorgente completo e vuoi compilare tu stesso i pacchetti nativi, usa gli script di automazione inclusi. La WebUI è l'unica interfaccia supportata per lo sviluppo e le release (i vecchi entrypoint desktop restano solo come alias di compatibilità).
-- **Windows:** usa `Costruisci_EXE_Windows.bat`.
-- **macOS:** dal terminale, avvia `Costruisci_APP_Mac.command`.
+- **Windows:** usa `packaging/Costruisci_EXE_Windows.bat`.
+- **macOS:** dal terminale, avvia `packaging/Costruisci_APP_Mac.command`.
 
-**Verifiche locali consigliate e Build CLI:**
+### Developer setup
+
+**Requisiti:** Python 3.11, Node.js 24 (versioni esatte richieste per allineamento con la CI).
+
 ```bash
-# Per controllare il progetto:
 python scripts/build_release.py deps --ui webui --dev
-python scripts/build_release.py check --skip-npm-install
+```
 
-# Per creare una build locale:
+**Gestione delle API key — nessuna variabile d'ambiente necessaria.**
+Le chiavi Gemini vengono inserite dall'utente direttamente nella schermata **Impostazioni** dell'app desktop. L'app le salva in modo sicuro localmente: tramite DPAPI su Windows, tramite il Portachiavi di sistema su macOS. Non esiste nessun file `.env` da configurare per sviluppare o compilare il progetto.
+
+### Local checks
+
+```bash
+# Verifica dipendenze e tooling
+python scripts/build_release.py deps --ui webui --dev
+
+# Lint + test (salta npm install se già fatto)
+python scripts/build_release.py check --skip-npm-install
+```
+
+**Build locale:**
+
+```bash
 python scripts/build_release.py build --target windows --ui webui --install-deps --dev-deps
 python scripts/build_release.py build --target macos --ui webui --install-deps --dev-deps
 ```

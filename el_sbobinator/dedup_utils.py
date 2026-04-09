@@ -12,7 +12,7 @@ from typing import Tuple
 
 
 def _norm_for_dedup(txt: str) -> str:
-    t = (txt or "").replace("\u00A0", " ").strip().lower()
+    t = (txt or "").replace("\u00a0", " ").strip().lower()
     t = re.sub(r"\s+", " ", t)
     # Normalizza un minimo la punteggiatura per ridurre falsi negativi.
     t = re.sub(r"\s*([,.;:!?])\s*", r"\1", t)
@@ -63,4 +63,3 @@ def local_macro_cleanup(md: str) -> Tuple[str, int, int, int, int]:
     cleaned = "\n\n".join(kept).strip()
     total = len(paras)
     return cleaned, removed_exact, removed_adj, near_adj, total
-

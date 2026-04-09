@@ -10,12 +10,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Tuple
 
+from el_sbobinator.model_registry import sanitize_fallback_models, sanitize_model_name
 from el_sbobinator.shared import DEFAULT_MODEL
 
 
 @dataclass(frozen=True)
 class PipelineSettings:
     model: str
+    fallback_models: list[str]
+    effective_model: str
     chunk_minutes: int
     overlap_seconds: int
     macro_char_limit: int
@@ -72,7 +75,9 @@ def _as_float(v: Any, default: float) -> float:
         return float(default)
 
 
-def load_and_sanitize_settings(session: Dict[str, Any]) -> Tuple[PipelineSettings, bool]:
+def load_and_sanitize_settings(
+    session: Dict[str, Any],
+) -> Tuple[PipelineSettings, bool]:
     """
     Returns (settings, changed).
     - Ensures session['settings'] exists.
@@ -86,7 +91,15 @@ def load_and_sanitize_settings(session: Dict[str, Any]) -> Tuple[PipelineSetting
     s = session["settings"]
 
     # Defaults
-    model = str(s.get("model") or DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    model = sanitize_model_name(s.get("model"), DEFAULT_MODEL)
+    fallback_models = sanitize_fallback_models(
+        s.get("fallback_models"),
+        model,
+        (),
+    )
+    effective_model = sanitize_model_name(s.get("effective_model"), model)
+    if effective_model != model and effective_model not in fallback_models:
+        effective_model = model
     chunk_minutes = _as_int(s.get("chunk_minutes", 15), 15)
     overlap_seconds = _as_int(s.get("overlap_seconds", 30), 30)
     macro_char_limit = _as_int(s.get("macro_char_limit", 22000), 22000)
@@ -131,6 +144,8 @@ def load_and_sanitize_settings(session: Dict[str, Any]) -> Tuple[PipelineSetting
             changed = True
 
     _set_if_diff("model", model)
+    _set_if_diff("fallback_models", list(fallback_models))
+    _set_if_diff("effective_model", effective_model)
     _set_if_diff("chunk_minutes", int(chunk_minutes))
     _set_if_diff("overlap_seconds", int(overlap_seconds))
     _set_if_diff("macro_char_limit", int(macro_char_limit))
@@ -144,6 +159,8 @@ def load_and_sanitize_settings(session: Dict[str, Any]) -> Tuple[PipelineSetting
 
     settings = PipelineSettings(
         model=model,
+        fallback_models=list(fallback_models),
+        effective_model=effective_model,
         chunk_minutes=int(chunk_minutes),
         overlap_seconds=int(overlap_seconds),
         macro_char_limit=int(macro_char_limit),
@@ -153,4 +170,3 @@ def load_and_sanitize_settings(session: Dict[str, Any]) -> Tuple[PipelineSetting
         inline_audio_max_mb=float(inline_audio_max_mb),
     )
     return settings, changed
-

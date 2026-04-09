@@ -62,7 +62,9 @@ class PipelineRuntime:
     def process_done(self) -> None:
         self._safe_call("processo_terminato")
 
-    def set_work_totals(self, chunks_total=None, macro_total=None, boundary_total=None) -> None:
+    def set_work_totals(
+        self, chunks_total=None, macro_total=None, boundary_total=None
+    ) -> None:
         self._safe_call(
             "set_work_totals",
             chunks_total=chunks_total,
@@ -73,7 +75,13 @@ class PipelineRuntime:
     def update_work_done(self, kind: str, done: int, total: int | None = None) -> None:
         self._safe_call("update_work_done", kind, done, total=total)
 
-    def register_step_time(self, kind: str, seconds: float, done: int | None = None, total: int | None = None) -> None:
+    def register_step_time(
+        self,
+        kind: str,
+        seconds: float,
+        done: int | None = None,
+        total: int | None = None,
+    ) -> None:
         self._safe_call("register_step_time", kind, seconds, done=done, total=total)
 
     def set_run_result(self, status: str, error: str | None = None) -> None:
@@ -96,7 +104,9 @@ class PipelineRuntime:
         except Exception:
             pass
 
-    def ask_regenerate(self, filename: str, callback: Callable, mode: str = "resume") -> bool:
+    def ask_regenerate(
+        self, filename: str, callback: Callable, mode: str = "resume"
+    ) -> bool:
         method = getattr(self.target, "ask_regenerate", None)
         if not method:
             return False

@@ -56,7 +56,9 @@ class FakeModels:
 
 class FakeFiles:
     def upload(self, *args, **kwargs):
-        raise RuntimeError("Upload non previsto nello smoke test (dovrebbe usare inline audio).")
+        raise RuntimeError(
+            "Upload non previsto nello smoke test (dovrebbe usare inline audio)."
+        )
 
 
 class FakeClient:
@@ -129,7 +131,11 @@ def main() -> int:
                         "inline_audio_max_mb": 6,
                         "audio": {"bitrate": "48k"},
                     },
-                    "phase1": {"next_start_sec": 0, "chunks_done": 0, "memoria_precedente": ""},
+                    "phase1": {
+                        "next_start_sec": 0,
+                        "chunks_done": 0,
+                        "memoria_precedente": "",
+                    },
                     "phase2": {},
                     "boundary": {},
                     "outputs": {},

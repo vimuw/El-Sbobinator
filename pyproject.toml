@@ -25,3 +25,7 @@ select = [
 
 [tool.ruff.lint.mccabe]
 max-complexity = 20
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

@@ -2,7 +2,10 @@ import os
 import tempfile
 import unittest
 
-from el_sbobinator.export_service import export_final_html_document, resolve_output_html_path
+from el_sbobinator.export_service import (
+    export_final_html_document,
+    resolve_output_html_path,
+)
 
 
 class ExportServiceTests(unittest.TestCase):
@@ -20,7 +23,9 @@ class ExportServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             revised_dir = os.path.join(tmpdir, "revised")
             os.makedirs(revised_dir, exist_ok=True)
-            with open(os.path.join(revised_dir, "rev_001.md"), "w", encoding="utf-8") as handle:
+            with open(
+                os.path.join(revised_dir, "rev_001.md"), "w", encoding="utf-8"
+            ) as handle:
                 handle.write("## Titolo\n\nCorpo di test")
 
             def read_text(path: str) -> str:

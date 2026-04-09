@@ -4,7 +4,7 @@ import { AlertCircle, CheckCircle, Clock, ExternalLink, Eye, FileAudio, FolderOp
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
-import { formatDuration, formatRelativeTime, formatSize } from '../utils';
+import { errorLabel, formatDuration, formatRelativeTime, formatSize } from '../utils';
 
 interface QueueFileCardProps {
   file: FileItem;
@@ -43,7 +43,7 @@ function getProcessingDetails(phaseText?: string) {
 
 function QueueFileCardInner({
   file, appState, currentPhase, workDone, workTotals, etaLabel, activeProgress,
-  onRemove, onPreview, onOpenFile, onOpenDir,
+  onRemove,
 }: QueueFileCardProps) {
   const processingDetails = file.status === 'processing' ? getProcessingDetails(currentPhase) : null;
   const isCanceling = appState === 'canceling' && file.status === 'processing';
@@ -138,7 +138,7 @@ function QueueFileCardInner({
                 {file.status === 'error' && (
                   <>
                     <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
-                    <span style={{ color: 'var(--error-text)' }}>{file.errorText || 'Errore'}</span>
+                    <span title={file.errorText} style={{ color: 'var(--error-text)' }}>{errorLabel(file.errorText)}</span>
                   </>
                 )}
               </div>

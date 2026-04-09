@@ -23,9 +23,17 @@ def _html_write_lock(path: str) -> threading.Lock:
         return _html_write_locks[path]
 
 
-_ALLOWED_OPEN_EXTENSIONS: frozenset[str] = frozenset({
-    ".html", ".htm", ".docx", ".doc", ".pdf", ".txt", ".md",
-})
+_ALLOWED_OPEN_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        ".html",
+        ".htm",
+        ".docx",
+        ".doc",
+        ".pdf",
+        ".txt",
+        ".md",
+    }
+)
 
 
 def open_path_with_default_app(path: str) -> None:
@@ -38,9 +46,11 @@ def open_path_with_default_app(path: str) -> None:
             os.startfile(path)
         elif sys.platform == "darwin":
             import subprocess
+
             subprocess.Popen(["open", path])
         else:
             import subprocess
+
             subprocess.Popen(["xdg-open", path])
         return
 
@@ -117,7 +127,7 @@ def save_html_body_content(
     else:
         updated_html = (
             "<!DOCTYPE html>\n"
-            "<html>\n<head>\n<meta charset=\"utf-8\">\n</head>\n"
+            '<html>\n<head>\n<meta charset="utf-8">\n</head>\n'
             f"<body>\n{body_inner}\n</body>\n</html>\n"
         )
 
@@ -142,6 +152,7 @@ def export_doc_html(path: str, doc_html: str) -> str:
             target_path += ".docx"
 
     from html2docx import html2docx
+
     safe_html = sanitize_html_basic(str(doc_html or ""))
     buf = html2docx(safe_html, title="Sbobina")
     with open(target_path, "wb") as handle:

@@ -14,7 +14,9 @@ _SHELL_HTML = (
 
 
 def _write(path, content, generation=None):
-    return save_html_body_content(path, content, shell=_SHELL_HTML, generation=generation)
+    return save_html_body_content(
+        path, content, shell=_SHELL_HTML, generation=generation
+    )
 
 
 def _read(path):
@@ -109,7 +111,9 @@ class GenerationOrderingTests(unittest.TestCase):
             barrier.wait()
             _write(self.path, content)
 
-        threads = [threading.Thread(target=save, args=(f"<p>v{i}</p>",)) for i in range(2)]
+        threads = [
+            threading.Thread(target=save, args=(f"<p>v{i}</p>",)) for i in range(2)
+        ]
         for t in threads:
             t.start()
         for t in threads:

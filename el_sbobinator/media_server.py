@@ -100,7 +100,9 @@ class LocalMediaServer:
                         self.send_header("Accept-Ranges", "bytes")
                         self.send_header("Content-Length", str(length))
                         if status_code == 206:
-                            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+                            self.send_header(
+                                "Content-Range", f"bytes {start}-{end}/{size}"
+                            )
                         self.end_headers()
 
                         with open(path, "rb") as handle:

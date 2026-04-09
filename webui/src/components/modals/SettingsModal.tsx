@@ -1,10 +1,125 @@
-import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AlertCircle, Eye, EyeOff, HardDrive, Settings, X } from 'lucide-react';
-import type { ValidationResult } from '../../bridge';
+import { Activity, AlertCircle, ArrowDown, ArrowUp, ChevronDown, Cpu, Eye, EyeOff, HardDrive, Settings, SlidersHorizontal, X } from 'lucide-react';
+import type { ModelOption, ValidationResult } from '../../bridge';
 import { formatSize, GEMINI_KEY_PATTERN } from '../../utils';
 
 const SESSION_CLEANUP_DAYS = 14;
+
+interface CustomSelectOption {
+  value: string;
+  label: string;
+}
+
+interface CustomSelectProps {
+  value: string;
+  onChange: (value: string) => void;
+  options: CustomSelectOption[];
+  placeholder?: string;
+}
+
+function CustomSelect({ value, onChange, options, placeholder }: CustomSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  const toggleDropdown = () => {
+    if (open) {
+      setOpen(false);
+    } else {
+      if (buttonRef.current) {
+        const rect = buttonRef.current.getBoundingClientRect();
+        setDropdownStyle({ position: 'fixed', top: rect.bottom + 4, left: rect.left, width: rect.width, zIndex: 9999 });
+      }
+      setOpen(true);
+    }
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const handleMouseDown = (e: MouseEvent) => {
+      if (buttonRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, [open]);
+
+  const selectedLabel = options.find(o => o.value === value)?.label;
+  const displayLabel = selectedLabel ?? placeholder ?? '';
+
+  const dropdown = open ? createPortal(
+    <div
+      onMouseDown={e => e.stopPropagation()}
+      style={{
+        ...dropdownStyle,
+        background: 'var(--bg-elevated)',
+        border: '1px solid var(--border-default)',
+        boxShadow: 'var(--shadow-strong)',
+        borderRadius: '14px',
+        overflow: 'auto',
+        maxHeight: '220px',
+      }}
+    >
+      {placeholder && (
+        <button
+          type="button"
+          onClick={() => { onChange(''); setOpen(false); }}
+          className="w-full text-left px-4 py-1.5 text-xs"
+          style={{ color: 'var(--text-muted)' }}
+        >
+          {placeholder}
+        </button>
+      )}
+      {options.map(opt => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => { onChange(opt.value); setOpen(false); }}
+          className="w-full text-left px-4 py-1.5 text-xs transition-colors"
+          style={{
+            color: opt.value === value ? 'var(--text-primary)' : 'var(--text-secondary)',
+            background: opt.value === value ? 'var(--accent-subtle)' : undefined,
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent-subtle)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = opt.value === value ? 'var(--accent-subtle)' : ''; }}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>,
+    document.body,
+  ) : null;
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={toggleDropdown}
+        className="app-input text-xs flex items-center justify-between gap-2 cursor-pointer"
+        style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-default)',
+          color: selectedLabel ? 'var(--text-primary)' : 'var(--text-muted)',
+          textAlign: 'left',
+          padding: '0.35rem 0.75rem',
+        }}
+      >
+        <span className="truncate flex-1">{displayLabel}</span>
+        <ChevronDown
+          className="w-4 h-4 shrink-0 transition-transform"
+          style={{
+            color: 'var(--text-muted)',
+            transform: open ? 'rotate(180deg)' : undefined,
+          }}
+        />
+      </button>
+      {dropdown}
+    </>
+  );
+}
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -13,11 +128,31 @@ interface SettingsModalProps {
   setApiKey: (key: string) => void;
   fallbackKeys: string[];
   setFallbackKeys: (keys: string[]) => void;
+  preferredModel: string;
+  setPreferredModel: (model: string) => void;
+  fallbackModels: string[];
+  setFallbackModels: (models: string[]) => void;
+  availableModels: ModelOption[];
   appendConsole: (msg: string) => void;
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export function SettingsModal({
-  isOpen, onClose, apiKey, setApiKey, fallbackKeys, setFallbackKeys, appendConsole,
+  isOpen,
+  onClose,
+  apiKey,
+  setApiKey,
+  fallbackKeys,
+  setFallbackKeys,
+  preferredModel,
+  setPreferredModel,
+  fallbackModels,
+  setFallbackModels,
+  availableModels,
+  appendConsole,
 }: SettingsModalProps) {
   const [showApiKeys, setShowApiKeys] = useState(false);
   const [sessionInfo, setSessionInfo] = useState<{ total_bytes: number; total_sessions: number } | null>(null);
@@ -26,9 +161,10 @@ export function SettingsModal({
   const [cleanupResult, setCleanupResult] = useState<{ removed: number; freed_bytes: number } | null>(null);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [isValidatingEnvironment, setIsValidatingEnvironment] = useState(false);
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) { setIsAdvancedOpen(false); return; }
     setCleanupResult(null);
     if (!window.pywebview?.api?.get_session_storage_info) return;
     setIsLoadingSessionInfo(true);
@@ -54,8 +190,8 @@ export function SettingsModal({
       } else {
         appendConsole(`❌ Pulizia sessioni fallita: ${res?.error || 'errore sconosciuto'}`);
       }
-    } catch (e: any) {
-      appendConsole(`❌ Pulizia sessioni fallita: ${e?.message || e}`);
+    } catch (e: unknown) {
+      appendConsole(`❌ Pulizia sessioni fallita: ${getErrorMessage(e)}`);
     }
     setIsCleaningSession(false);
   };
@@ -64,7 +200,12 @@ export function SettingsModal({
     if (!window.pywebview?.api?.validate_environment) return;
     setIsValidatingEnvironment(true);
     try {
-      const response = await window.pywebview.api.validate_environment(apiKey.trim(), Boolean(apiKey.trim()));
+      const response = await window.pywebview.api.validate_environment(
+        apiKey.trim(),
+        Boolean(apiKey.trim()),
+        preferredModel,
+        fallbackModels,
+      );
       if (!response?.ok || !response.result) {
         appendConsole(`❌ Validazione ambiente fallita: ${response?.error || 'errore sconosciuto'}`);
         setValidationResult(null);
@@ -72,8 +213,8 @@ export function SettingsModal({
       }
       setValidationResult(response.result);
       appendConsole(response.result.summary);
-    } catch (error: any) {
-      appendConsole(`❌ Validazione ambiente fallita: ${error?.message || error}`);
+    } catch (error: unknown) {
+      appendConsole(`❌ Validazione ambiente fallita: ${getErrorMessage(error)}`);
       setValidationResult(null);
     } finally {
       setIsValidatingEnvironment(false);
@@ -83,13 +224,41 @@ export function SettingsModal({
   const saveSettings = async () => {
     if (window.pywebview?.api) {
       const keys = fallbackKeys.map(k => k.trim()).filter(Boolean);
-      const result = await window.pywebview.api.save_settings(apiKey.trim(), keys);
+      const result = await window.pywebview.api.save_settings(apiKey.trim(), keys, preferredModel, fallbackModels);
       if (!result?.ok) {
         appendConsole(`❌ Errore salvataggio impostazioni: ${result?.error || 'errore sconosciuto'}`);
         return;
       }
     }
     onClose();
+  };
+
+  const availableFallbackOptions = availableModels.filter(model => model.id !== preferredModel);
+  const selectedModelSummaries = [preferredModel, ...fallbackModels]
+    .map(modelId => availableModels.find(option => option.id === modelId))
+    .filter(Boolean) as ModelOption[];
+
+  const handlePrimaryModelChange = (nextPrimary: string) => {
+    setPreferredModel(nextPrimary);
+    setFallbackModels(fallbackModels.filter(modelId => modelId !== nextPrimary));
+  };
+
+  const handleAddFallbackModel = (nextFallback: string) => {
+    if (!nextFallback || nextFallback === preferredModel || fallbackModels.includes(nextFallback)) return;
+    setFallbackModels([...fallbackModels, nextFallback]);
+  };
+
+  const moveFallbackModel = (index: number, direction: -1 | 1) => {
+    const nextIndex = index + direction;
+    if (index < 0 || nextIndex < 0 || nextIndex >= fallbackModels.length) return;
+    const nextModels = [...fallbackModels];
+    const [moved] = nextModels.splice(index, 1);
+    nextModels.splice(nextIndex, 0, moved);
+    setFallbackModels(nextModels);
+  };
+
+  const removeFallbackModel = (modelId: string) => {
+    setFallbackModels(fallbackModels.filter(item => item !== modelId));
   };
 
   return (
@@ -130,8 +299,8 @@ export function SettingsModal({
                   <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Google Gemini API Key (Principale)</label>
                   <button
                     onClick={() => setShowApiKeys(!showApiKeys)}
-                    className="icon-button modal-icon-button"
-                    style={{ color: 'var(--text-muted)' }}
+                    className="opacity-50 hover:opacity-100 transition-opacity"
+                    style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1, padding: '2px' }}
                     title={showApiKeys ? 'Nascondi chiave' : 'Mostra chiave'}
                   >
                     {showApiKeys ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -169,8 +338,8 @@ export function SettingsModal({
                   <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>API Keys di Riserva (Fallback)</label>
                   <button
                     onClick={() => setShowApiKeys(!showApiKeys)}
-                    className="icon-button modal-icon-button"
-                    style={{ color: 'var(--text-muted)' }}
+                    className="opacity-50 hover:opacity-100 transition-opacity"
+                    style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1, padding: '2px' }}
                     title={showApiKeys ? 'Nascondi chiavi' : 'Mostra chiavi'}
                   >
                     {showApiKeys ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -187,89 +356,222 @@ export function SettingsModal({
                 <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>Usate automaticamente in caso di esaurimento quota (429).</p>
               </div>
 
-              {/* 3. Storage */}
+              {/* Avanzati */}
               <div className="pt-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <div className="flex items-center justify-between gap-3 mb-3">
+                <button
+                  type="button"
+                  onClick={() => setIsAdvancedOpen(v => !v)}
+                  className="w-full flex items-center justify-between"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                >
                   <h3 className="text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
-                    <HardDrive className="w-3.5 h-3.5" />
-                    Sessioni salvate
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                    Avanzati
                   </h3>
-                  {sessionInfo !== null && (
-                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {sessionInfo.total_sessions} {sessionInfo.total_sessions === 1 ? 'sessione' : 'sessioni'}
-                    </span>
-                  )}
-                </div>
-                <div className="rounded-xl px-4 py-3 space-y-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Spazio occupato</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                        {isLoadingSessionInfo ? 'Calcolo…' : sessionInfo !== null ? formatSize(sessionInfo.total_bytes) : '—'}
-                      </p>
-                    </div>
-                    <button
-                      onClick={handleCleanupSessions}
-                      disabled={isCleaningSession || isLoadingSessionInfo}
-                      className="modal-action-button is-compact disabled:opacity-50"
-                      style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+                  <ChevronDown
+                    className="w-4 h-4 shrink-0 transition-transform"
+                    style={{ color: 'var(--text-muted)', transform: isAdvancedOpen ? 'rotate(180deg)' : undefined }}
+                  />
+                </button>
+                <AnimatePresence initial={false}>
+                  {isAdvancedOpen && (
+                    <motion.div
+                      key="advanced-panel"
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2, ease: 'easeInOut' }}
+                      style={{ overflow: 'hidden' }}
                     >
-                      {isCleaningSession ? 'Pulizia…' : `Pulisci (> ${SESSION_CLEANUP_DAYS} giorni)`}
-                    </button>
-                  </div>
-                  {cleanupResult !== null && (
-                    <p className="text-xs" style={{ color: cleanupResult.removed > 0 ? 'var(--success-text)' : 'var(--text-muted)' }}>
-                      {cleanupResult.removed > 0
-                        ? `Rimoss${cleanupResult.removed === 1 ? 'a' : 'e'} ${cleanupResult.removed} ${cleanupResult.removed === 1 ? 'sessione' : 'sessioni'}, liberati ${formatSize(cleanupResult.freed_bytes)}.`
-                        : 'Nessuna sessione da pulire (tutte recenti o cartella vuota).'}
-                    </p>
-                  )}
-                  <p className="text-xs" style={{ color: 'var(--text-faint, var(--text-muted))' }}>
-                    Progressi intermedi per riprendere elaborazioni interrotte. La pulizia rimuove le sessioni non toccate da oltre {SESSION_CLEANUP_DAYS} giorni.
-                  </p>
-                </div>
-              </div>
-
-              {/* 4. Diagnostica — read-only config + verify environment */}
-              <div className="pt-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <div className="flex items-center justify-between gap-3 mb-3">
-                  <h3 className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--text-faint)' }}>Diagnostica</h3>
-                  <button
-                    onClick={runEnvironmentValidation}
-                    disabled={isValidatingEnvironment}
-                    className="modal-action-button is-compact"
-                    style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}
-                  >
-                    {isValidatingEnvironment ? 'Verifica...' : 'Verifica ambiente'}
-                  </button>
-                </div>
-                <ul className="space-y-1.5 mb-3">
-                  <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Modello:</span> <span className="font-mono">gemini-2.5-flash</span></li>
-                  <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Chunk:</span> <span className="font-mono">15 min</span></li>
-                  <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Overlap:</span> <span className="font-mono">30 s</span></li>
-                  <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Pre-conversione:</span> <span className="font-mono">Mono 16kHz 48k</span></li>
-                </ul>
-                {validationResult && (
-                  <div className="space-y-2 text-sm">
-                    <p style={{ color: validationResult.ok ? 'var(--success-text)' : 'var(--error-text)' }}>{validationResult.summary}</p>
-                    {validationResult.checks.map(check => (
-                      <div key={check.id} className="rounded-lg px-3 py-2 overflow-hidden" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
-                        <div className="flex items-center justify-between gap-3">
-                          <span style={{ color: 'var(--text-primary)' }}>{check.label}</span>
-                          <span style={{ color: check.status === 'ok' ? 'var(--success-text)' : check.status === 'warning' ? 'var(--warning-text)' : 'var(--error-text)' }}>
-                            {check.status.toUpperCase()}
-                          </span>
+                      <div className="space-y-6 pt-4">
+                        {/* Modello Gemini */}
+                        <div>
+                          <div className="flex items-center justify-between gap-3 mb-3">
+                            <h3 className="text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                              <Cpu className="w-3.5 h-3.5" />
+                              Modello Gemini
+                            </h3>
+                          </div>
+                          <div className="rounded-xl px-4 py-3 space-y-5" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                            <div className="space-y-4">
+                              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '10px' }}>Modello primario</label>
+                              <CustomSelect
+                                value={preferredModel}
+                                onChange={handlePrimaryModelChange}
+                                options={availableModels.map(m => ({ value: m.id, label: m.label }))}
+                              />
+                            </div>
+                            <div className="space-y-4">
+                              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '10px' }}>Fallback modelli (solo su 503)</label>
+                              <CustomSelect
+                                value=""
+                                onChange={val => { if (val) handleAddFallbackModel(val); }}
+                                options={availableFallbackOptions
+                                  .filter(model => !fallbackModels.includes(model.id))
+                                  .map(m => ({ value: m.id, label: m.label }))}
+                                placeholder="Aggiungi un fallback..."
+                              />
+                              {fallbackModels.length > 0 ? (
+                                <div className="space-y-2">
+                                  {fallbackModels.map((modelId, index) => {
+                                    const model = availableModels.find(option => option.id === modelId);
+                                    if (!model) return null;
+                                    return (
+                                      <div
+                                        key={modelId}
+                                        className="rounded-lg px-3 py-2 flex items-start justify-between gap-3"
+                                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
+                                      >
+                                        <div className="min-w-0">
+                                          <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{model.label}</p>
+                                          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{model.summary}</p>
+                                        </div>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          <button
+                                            onClick={() => moveFallbackModel(index, -1)}
+                                            disabled={index === 0}
+                                            className="icon-button modal-icon-button disabled:opacity-40"
+                                            style={{ color: 'var(--text-muted)' }}
+                                            title="Sposta su"
+                                          >
+                                            <ArrowUp className="w-4 h-4" />
+                                          </button>
+                                          <button
+                                            onClick={() => moveFallbackModel(index, 1)}
+                                            disabled={index === fallbackModels.length - 1}
+                                            className="icon-button modal-icon-button disabled:opacity-40"
+                                            style={{ color: 'var(--text-muted)' }}
+                                            title="Sposta giu"
+                                          >
+                                            <ArrowDown className="w-4 h-4" />
+                                          </button>
+                                          <button
+                                            onClick={() => removeFallbackModel(modelId)}
+                                            className="icon-button modal-icon-button"
+                                            style={{ color: 'var(--text-muted)' }}
+                                            title="Rimuovi fallback"
+                                          >
+                                            <X className="w-4 h-4" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                  Nessun fallback aggiuntivo configurato oltre al primario.
+                                </p>
+                              )}
+                            </div>
+                            <p className="text-xs" style={{ color: 'var(--text-faint, var(--text-muted))' }}>
+                              L'app cambia modello solo se il modello corrente risponde 503/UNAVAILABLE. Se passa a un fallback, resta su quello fino alla fine del job.
+                            </p>
+                          </div>
                         </div>
-                        <p className="mt-1" style={{ color: 'var(--text-secondary)' }}>{check.message}</p>
-                        {check.details && (
-                          <p className="mt-1 text-xs font-mono break-all whitespace-pre-wrap" style={{ color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>
-                            {check.details}
-                          </p>
-                        )}
+
+                        {/* Sessioni salvate */}
+                        <div className="pt-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                          <div className="flex items-center justify-between gap-3 mb-3">
+                            <h3 className="text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                              <HardDrive className="w-3.5 h-3.5" />
+                              Sessioni salvate
+                            </h3>
+                            {sessionInfo !== null && (
+                              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                {sessionInfo.total_sessions} {sessionInfo.total_sessions === 1 ? 'sessione' : 'sessioni'}
+                              </span>
+                            )}
+                          </div>
+                          <div className="rounded-xl px-4 py-3 space-y-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Spazio occupato</p>
+                                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                                  {isLoadingSessionInfo ? 'Calcolo…' : sessionInfo !== null ? formatSize(sessionInfo.total_bytes) : '—'}
+                                </p>
+                              </div>
+                              <button
+                                onClick={handleCleanupSessions}
+                                disabled={isCleaningSession || isLoadingSessionInfo}
+                                className="modal-action-button is-compact disabled:opacity-50"
+                                style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+                              >
+                                {isCleaningSession ? 'Pulizia…' : `Pulisci (> ${SESSION_CLEANUP_DAYS} giorni)`}
+                              </button>
+                            </div>
+                            {cleanupResult !== null && (
+                              <p className="text-xs" style={{ color: cleanupResult.removed > 0 ? 'var(--success-text)' : 'var(--text-muted)' }}>
+                                {cleanupResult.removed > 0
+                                  ? `Rimoss${cleanupResult.removed === 1 ? 'a' : 'e'} ${cleanupResult.removed} ${cleanupResult.removed === 1 ? 'sessione' : 'sessioni'}, liberati ${formatSize(cleanupResult.freed_bytes)}.`
+                                  : 'Nessuna sessione da pulire (tutte recenti o cartella vuota).'}
+                              </p>
+                            )}
+                            <p className="text-xs" style={{ color: 'var(--text-faint, var(--text-muted))' }}>
+                              Progressi intermedi per riprendere elaborazioni interrotte. La pulizia rimuove le sessioni non toccate da oltre {SESSION_CLEANUP_DAYS} giorni.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Diagnostica */}
+                        <div className="pt-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                          <div className="flex items-center justify-between gap-3 mb-3">
+                            <h3 className="text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                              <Activity className="w-3.5 h-3.5" />
+                              Diagnostica
+                            </h3>
+                            <button
+                              onClick={runEnvironmentValidation}
+                              disabled={isValidatingEnvironment}
+                              className="modal-action-button is-compact"
+                              style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}
+                            >
+                              {isValidatingEnvironment ? 'Verifica...' : 'Verifica ambiente'}
+                            </button>
+                          </div>
+                          <ul className="space-y-1.5 mb-3">
+                            <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Modello primario:</span> <span className="font-mono">{preferredModel}</span></li>
+                            <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Fallback:</span> <span className="font-mono">{fallbackModels.join(' -> ') || 'nessuno'}</span></li>
+                            <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Chunk:</span> <span className="font-mono">15 min</span></li>
+                            <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Overlap:</span> <span className="font-mono">30 s</span></li>
+                            <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Pre-conversione:</span> <span className="font-mono">Mono 16kHz 48k</span></li>
+                          </ul>
+                          {selectedModelSummaries.length > 0 && (
+                            <div className="space-y-2 mb-3">
+                              {selectedModelSummaries.map(model => (
+                                <div key={model.id} className="rounded-lg px-3 py-2" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                                  <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{model.label}</p>
+                                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{model.summary}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {validationResult && (
+                            <div className="space-y-2 text-sm">
+                              <p style={{ color: validationResult.ok ? 'var(--success-text)' : 'var(--error-text)' }}>{validationResult.summary}</p>
+                              {validationResult.checks.map(check => (
+                                <div key={check.id} className="rounded-lg px-3 py-2 overflow-hidden" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span style={{ color: 'var(--text-primary)' }}>{check.label}</span>
+                                    <span style={{ color: check.status === 'ok' ? 'var(--success-text)' : check.status === 'warning' ? 'var(--warning-text)' : 'var(--error-text)' }}>
+                                      {check.status.toUpperCase()}
+                                    </span>
+                                  </div>
+                                  <p className="mt-1" style={{ color: 'var(--text-secondary)' }}>{check.message}</p>
+                                  {check.details && (
+                                    <p className="mt-1 text-xs font-mono break-all whitespace-pre-wrap" style={{ color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>
+                                      {check.details}
+                                    </p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
             <div className="px-5 py-4 shrink-0" style={{ background: 'var(--bg-elevated)', borderTop: '1px solid var(--border-subtle)' }}>

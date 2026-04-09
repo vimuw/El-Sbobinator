@@ -27,7 +27,10 @@ class BuildReleaseTests(unittest.TestCase):
             artifact = dist / f"{build_release.APP_NAME}.exe"
             artifact.write_bytes(b"ok")
 
-            with patch.object(build_release, "ROOT", root), patch.object(build_release, "run") as mock_run:
+            with (
+                patch.object(build_release, "ROOT", root),
+                patch.object(build_release, "run") as mock_run,
+            ):
                 build_release.run_postbuild_smoke("windows")
 
             mock_run.assert_called_once()

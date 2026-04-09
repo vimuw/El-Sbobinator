@@ -6,4 +6,3 @@ per rendere il codice piu' modulare e manutenibile.
 """
 
 __all__ = []
-

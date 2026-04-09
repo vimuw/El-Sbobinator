@@ -2,7 +2,7 @@
 setlocal
 title Costruttore El Sbobinator per Windows
 color 0B
-cd /d "%~dp0"
+cd /d "%~dp0\.."
 echo =======================================================
 echo     COSTRUTTORE ESEGUIBILE WINDOWS EL SBOBINATOR
 echo =======================================================
@@ -39,7 +39,7 @@ if "%PYTHON_CMD%"=="" (
 echo [OK] Python trovato: %PYTHON_CMD%
 
 echo Creazione/attivazione ambiente virtuale (.venv)...
-if not exist ".venv\\Scripts\\python.exe" (
+if not exist ".venv\Scripts\python.exe" (
     echo   - Creo .venv con %PYTHON_CMD%...
     %PYTHON_CMD% -m venv .venv
     if errorlevel 1 (
@@ -49,7 +49,13 @@ if not exist ".venv\\Scripts\\python.exe" (
         exit /b 1
     )
 )
-call ".venv\\Scripts\\activate.bat"
+set "VENV_PYTHON=%CD%\.venv\Scripts\python.exe"
+if not exist "%VENV_PYTHON%" (
+    echo [ERRORE] Python del virtualenv non trovato: "%VENV_PYTHON%"
+    pause
+    exit /b 1
+)
+echo [OK] Virtualenv pronto: "%VENV_PYTHON%"
 
 echo.
 echo =======================================================
@@ -58,13 +64,21 @@ echo Attendi pazientemente, non chiudere la finestra...
 echo =======================================================
 echo.
 
-python scripts\build_release.py build --target windows --ui webui --install-deps --dev-deps
+"%VENV_PYTHON%" scripts\build_release.py build --target windows --ui webui --install-deps --dev-deps
+if errorlevel 1 (
+    echo.
+    echo =======================================================
+    echo COMPILAZIONE NON RIUSCITA.
+    echo =======================================================
+    pause
+    exit /b 1
+)
 
 echo.
 echo =======================================================
 echo COMPILAZIONE COMPLETATA CON SUCCESSO!
 echo =======================================================
-echo Troverai il tuo programma pronto all'uso "El Sbobinator.exe" 
+echo Troverai il tuo programma pronto all'uso "El Sbobinator.exe"
 echo all'interno della cartella "dist".
 echo.
 echo Ricorda solo questo prerequisito per Windows:
