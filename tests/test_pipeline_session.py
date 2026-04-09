@@ -177,15 +177,18 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                 "el_sbobinator.pipeline_session.preconvert_media_to_mp3",
                 side_effect=fake_preconvert,
             ):
-                enabled, result_path = ensure_preconverted_audio(
-                    context,
-                    input_path="lesson.mp3",
-                    stage="phase1",
-                    ffmpeg_exe="ffmpeg",
-                    cancel_event=None,
-                    cancelled=lambda: False,
-                    phase_callback=phases.append,
-                )
+                with patch(
+                    "el_sbobinator.pipeline_session.invalidate_session_storage_cache"
+                ) as mock_invalidate:
+                    enabled, result_path = ensure_preconverted_audio(
+                        context,
+                        input_path="lesson.mp3",
+                        stage="phase1",
+                        ffmpeg_exe="ffmpeg",
+                        cancel_event=None,
+                        cancelled=lambda: False,
+                        phase_callback=phases.append,
+                    )
 
             self.assertTrue(enabled)
             self.assertEqual(result_path, final_path)
@@ -196,6 +199,128 @@ class PipelineSessionHelpersTests(unittest.TestCase):
             self.assertEqual(context.session["phase1"]["preconverted_path"], final_path)
             self.assertTrue(context.session["phase1"]["preconverted_done"])
             self.assertEqual(phases, ["Fase 0/3: pre-conversione audio"])
+            mock_invalidate.assert_called_once()
+
+    def test_ensure_preconverted_audio_cache_reflects_promoted_bytes_immediately(self):
+        from el_sbobinator import shared as _shared
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir = os.path.join(tmpdir, "session")
+            os.makedirs(session_dir, exist_ok=True)
+            context = _DummyPreconvContext(session_dir)
+            partial_path = os.path.join(session_dir, PRECONVERTED_AUDIO_PARTIAL)
+            final_path = os.path.join(session_dir, PRECONVERTED_AUDIO_FINAL)
+
+            with open(partial_path, "wb") as handle:
+                handle.write(b"p" * 4096)
+
+            def fake_preconvert(**kwargs):
+                with open(kwargs["output_path"], "wb") as handle:
+                    handle.write(b"f" * 8192)
+                return True, None
+
+            with patch("el_sbobinator.shared.SESSION_ROOT", tmpdir):
+                _shared.invalidate_session_storage_cache()
+                info_before = _shared.get_session_storage_info()
+                self.assertEqual(
+                    info_before["total_bytes"],
+                    0,
+                    "partial file must not count toward storage",
+                )
+
+                with patch(
+                    "el_sbobinator.pipeline_session.preconvert_media_to_mp3",
+                    side_effect=fake_preconvert,
+                ):
+                    enabled, result_path = ensure_preconverted_audio(
+                        context,
+                        input_path="lesson.mp3",
+                        stage="phase1",
+                        ffmpeg_exe="ffmpeg",
+                        cancel_event=None,
+                        cancelled=lambda: False,
+                        phase_callback=lambda _: None,
+                    )
+
+                self.assertTrue(enabled)
+                self.assertEqual(result_path, final_path)
+                self.assertTrue(os.path.exists(final_path))
+                self.assertFalse(os.path.exists(partial_path))
+
+                info_after = _shared.get_session_storage_info()
+                self.assertEqual(
+                    info_after["total_bytes"],
+                    8192,
+                    "promoted final MP3 must be visible immediately without manual cache invalidation",
+                )
+
+    def test_ensure_preconverted_audio_cache_not_invalidated_on_cancel(self):
+        from el_sbobinator import shared as _shared
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir = os.path.join(tmpdir, "session")
+            os.makedirs(session_dir, exist_ok=True)
+            context = _DummyPreconvContext(session_dir)
+
+            def fake_preconvert(**kwargs):
+                with open(kwargs["output_path"], "wb") as handle:
+                    handle.write(b"z" * 4096)
+                return False, "cancelled"
+
+            with patch("el_sbobinator.shared.SESSION_ROOT", tmpdir):
+                _shared.invalidate_session_storage_cache()
+                _shared.get_session_storage_info()
+
+                with patch(
+                    "el_sbobinator.pipeline_session.preconvert_media_to_mp3",
+                    side_effect=fake_preconvert,
+                ):
+                    with patch(
+                        "el_sbobinator.pipeline_session.invalidate_session_storage_cache"
+                    ) as mock_invalidate:
+                        ensure_preconverted_audio(
+                            context,
+                            input_path="lesson.mp3",
+                            stage="phase1",
+                            ffmpeg_exe="ffmpeg",
+                            cancel_event=None,
+                            cancelled=lambda: True,
+                            phase_callback=lambda _: None,
+                        )
+
+                mock_invalidate.assert_not_called()
+
+    def test_ensure_preconverted_audio_cache_not_invalidated_on_failed_promotion(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            context = _DummyPreconvContext(tmpdir)
+
+            def fake_preconvert(**kwargs):
+                with open(kwargs["output_path"], "wb") as handle:
+                    handle.write(b"k" * 4096)
+                return True, None
+
+            with patch(
+                "el_sbobinator.pipeline_session.preconvert_media_to_mp3",
+                side_effect=fake_preconvert,
+            ):
+                with patch(
+                    "el_sbobinator.pipeline_session.os.replace",
+                    side_effect=PermissionError("locked"),
+                ):
+                    with patch(
+                        "el_sbobinator.pipeline_session.invalidate_session_storage_cache"
+                    ) as mock_invalidate:
+                        ensure_preconverted_audio(
+                            context,
+                            input_path="lesson.mp3",
+                            stage="phase1",
+                            ffmpeg_exe="ffmpeg",
+                            cancel_event=None,
+                            cancelled=lambda: False,
+                            phase_callback=lambda _: None,
+                        )
+
+            mock_invalidate.assert_not_called()
 
     def test_ensure_preconverted_audio_removes_stale_partial_before_retry(self):
         with tempfile.TemporaryDirectory() as tmpdir:

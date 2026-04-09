@@ -163,6 +163,8 @@ def preconvert_to_mono16k_mp3(
         str(bitrate or "48k"),
         "-map",
         "a:0",
+        "-f",
+        "mp3",
         output_path,
     ]
     rc, _out, err, was_cancelled = _run_cancellable(cmd, stop_event=stop_event)

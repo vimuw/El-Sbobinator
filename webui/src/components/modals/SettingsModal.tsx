@@ -140,6 +140,10 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function defaultChunkMinutesForModel(modelId: string): number {
+  return modelId === 'gemini-2.5-flash-lite' ? 10 : 15;
+}
+
 export function SettingsModal({
   isOpen,
   onClose,
@@ -237,6 +241,7 @@ export function SettingsModal({
   const selectedModelSummaries = [preferredModel, ...fallbackModels]
     .map(modelId => availableModels.find(option => option.id === modelId))
     .filter(Boolean) as ModelOption[];
+  const defaultChunkMinutes = defaultChunkMinutesForModel(preferredModel);
 
   const handlePrimaryModelChange = (nextPrimary: string) => {
     setPreferredModel(nextPrimary);
@@ -532,7 +537,7 @@ export function SettingsModal({
                           <ul className="space-y-1.5 mb-3">
                             <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Modello primario:</span> <span className="font-mono">{preferredModel}</span></li>
                             <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Fallback:</span> <span className="font-mono">{fallbackModels.join(' -> ') || 'nessuno'}</span></li>
-                            <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Chunk:</span> <span className="font-mono">15 min</span></li>
+                            <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Chunk:</span> <span className="font-mono">{defaultChunkMinutes} min</span></li>
                             <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Overlap:</span> <span className="font-mono">30 s</span></li>
                             <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Pre-conversione:</span> <span className="font-mono">Mono 16kHz 48k</span></li>
                           </ul>

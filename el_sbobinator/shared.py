@@ -687,6 +687,13 @@ def save_config(  # noqa: C901
             pass
 
 
+def default_chunk_minutes_for_model(model_name: str) -> int:
+    model = sanitize_model_name(model_name, DEFAULT_MODEL)
+    if model == "gemini-2.5-flash-lite":
+        return 10
+    return 15
+
+
 def build_default_pipeline_settings(config: dict | None = None) -> dict:
     cfg = config if isinstance(config, dict) else load_config()
     preferred_model = sanitize_model_name(cfg.get("preferred_model"), DEFAULT_MODEL)
@@ -699,7 +706,7 @@ def build_default_pipeline_settings(config: dict | None = None) -> dict:
         "model": preferred_model,
         "fallback_models": fallback_models,
         "effective_model": preferred_model,
-        "chunk_minutes": 15,
+        "chunk_minutes": default_chunk_minutes_for_model(preferred_model),
         "overlap_seconds": 30,
         "macro_char_limit": 22000,
         "preconvert_audio": True,

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Tuple
 
 from el_sbobinator.model_registry import sanitize_fallback_models, sanitize_model_name
-from el_sbobinator.shared import DEFAULT_MODEL
+from el_sbobinator.shared import DEFAULT_MODEL, default_chunk_minutes_for_model
 
 
 @dataclass(frozen=True)
@@ -100,7 +100,10 @@ def load_and_sanitize_settings(
     effective_model = sanitize_model_name(s.get("effective_model"), model)
     if effective_model != model and effective_model not in fallback_models:
         effective_model = model
-    chunk_minutes = _as_int(s.get("chunk_minutes", 15), 15)
+    default_chunk_minutes = default_chunk_minutes_for_model(model)
+    chunk_minutes = _as_int(
+        s.get("chunk_minutes", default_chunk_minutes), default_chunk_minutes
+    )
     overlap_seconds = _as_int(s.get("overlap_seconds", 30), 30)
     macro_char_limit = _as_int(s.get("macro_char_limit", 22000), 22000)
     preconvert_audio = _as_bool(s.get("preconvert_audio", True), True)
@@ -116,7 +119,7 @@ def load_and_sanitize_settings(
 
     # Clamp / sanitize
     if chunk_minutes < 1:
-        chunk_minutes = 15
+        chunk_minutes = default_chunk_minutes
     if chunk_minutes > 180:
         chunk_minutes = 180
 

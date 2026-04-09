@@ -4,6 +4,7 @@ import time
 import unittest
 from unittest.mock import patch
 
+from el_sbobinator.pipeline_settings import load_and_sanitize_settings
 from el_sbobinator import shared
 
 
@@ -59,6 +60,62 @@ class SharedCleanupTests(unittest.TestCase):
                 info = shared.get_session_storage_info()
                 self.assertEqual(info["total_sessions"], 1)
                 self.assertEqual(info["total_bytes"], 4096)
+
+
+class SharedPipelineDefaultsTests(unittest.TestCase):
+    def test_build_default_pipeline_settings_uses_10_minutes_for_flash_lite(self):
+        settings = shared.build_default_pipeline_settings(
+            {"preferred_model": "gemini-2.5-flash-lite", "fallback_models": []}
+        )
+        self.assertEqual(settings["model"], "gemini-2.5-flash-lite")
+        self.assertEqual(settings["chunk_minutes"], 10)
+
+    def test_build_default_pipeline_settings_keeps_15_minutes_for_other_models(self):
+        settings = shared.build_default_pipeline_settings(
+            {"preferred_model": "gemini-2.5-flash", "fallback_models": []}
+        )
+        self.assertEqual(settings["model"], "gemini-2.5-flash")
+        self.assertEqual(settings["chunk_minutes"], 15)
+
+    def test_load_and_sanitize_settings_defaults_flash_lite_to_10_when_missing(self):
+        session = {
+            "settings": {
+                "model": "gemini-2.5-flash-lite",
+                "fallback_models": [],
+                "effective_model": "gemini-2.5-flash-lite",
+                "audio": {"bitrate": "48k"},
+            }
+        }
+
+        settings, changed = load_and_sanitize_settings(session)
+
+        self.assertTrue(changed)
+        self.assertEqual(settings.chunk_minutes, 10)
+        self.assertEqual(session["settings"]["chunk_minutes"], 10)
+
+    def test_load_and_sanitize_settings_preserves_explicit_flash_lite_chunk_minutes(
+        self,
+    ):
+        session = {
+            "settings": {
+                "model": "gemini-2.5-flash-lite",
+                "fallback_models": [],
+                "effective_model": "gemini-2.5-flash-lite",
+                "chunk_minutes": 15,
+                "overlap_seconds": 30,
+                "macro_char_limit": 22000,
+                "preconvert_audio": True,
+                "prefetch_next_chunk": True,
+                "inline_audio_max_mb": 6.0,
+                "audio": {"bitrate": "48k"},
+            }
+        }
+
+        settings, changed = load_and_sanitize_settings(session)
+
+        self.assertFalse(changed)
+        self.assertEqual(settings.chunk_minutes, 15)
+        self.assertEqual(session["settings"]["chunk_minutes"], 15)
 
 
 if __name__ == "__main__":

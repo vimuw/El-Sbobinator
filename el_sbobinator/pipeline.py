@@ -56,6 +56,7 @@ from el_sbobinator.shared import (
     _atomic_write_json,
     _load_json,
     get_desktop_dir,
+    invalidate_session_storage_cache,
     safe_output_basename,
 )
 
@@ -298,7 +299,9 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         prev_memory = restored_phase1.prev_memory
 
         if stage == "phase1":
-            print("[*] INIZIO FASE 1: Trascrizione a blocchi (circa 15 min per blocco)")
+            print(
+                f"[*] INIZIO FASE 1: Trascrizione a blocchi (circa {int(settings.chunk_minutes)} min per blocco)"
+            )
             print(
                 "    - Cosa fa: taglia l'audio in blocchi e genera una sbobina dettagliata per ogni blocco."
             )
@@ -568,6 +571,7 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         try:
             if preconv_used_path and os.path.exists(preconv_used_path):
                 os.remove(preconv_used_path)
+                invalidate_session_storage_cache()
         except Exception:
             pass
 

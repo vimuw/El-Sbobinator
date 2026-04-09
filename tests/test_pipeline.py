@@ -1,3 +1,4 @@
+import contextlib
 import os
 import tempfile
 import threading
@@ -50,6 +51,7 @@ class _FakeSessionContext:
             model="gemini-test",
             fallback_models=["gemini-2.5-flash-lite"],
             effective_model="gemini-test",
+            chunk_minutes=15,
             chunk_seconds=60,
             step_seconds=60,
             preconvert_audio=False,
@@ -117,6 +119,7 @@ class PipelineCancellationTests(unittest.TestCase):
                 model="gemini-2.5-flash",
                 fallback_models=["gemini-2.5-flash-lite"],
                 effective_model="gemini-2.5-flash",
+                chunk_minutes=15,
                 chunk_seconds=60,
                 step_seconds=60,
                 preconvert_audio=False,
@@ -144,6 +147,7 @@ class PipelineCancellationTests(unittest.TestCase):
                     model="gemini-2.5-flash-lite",
                     fallback_models=[],
                     effective_model="gemini-2.5-flash-lite",
+                    chunk_minutes=10,
                     chunk_seconds=60,
                     step_seconds=60,
                     preconvert_audio=False,
@@ -217,6 +221,7 @@ class PipelineCancellationTests(unittest.TestCase):
                 model="gemini-2.5-flash",
                 fallback_models=["gemini-2.5-flash-lite"],
                 effective_model="gemini-2.5-flash-lite",
+                chunk_minutes=15,
                 chunk_seconds=60,
                 step_seconds=60,
                 preconvert_audio=False,
@@ -380,6 +385,172 @@ class PipelineCancellationTests(unittest.TestCase):
             )
             self.assertEqual(app.last_run_status, "cancelled")
             mock_preconvert.assert_not_called()
+
+
+class PipelineCleanupCacheTests(unittest.TestCase):
+    def _make_session_ctx(self, session_dir):
+        ctx = _FakeSessionContext(session_dir)
+        ctx.settings = SimpleNamespace(
+            model="gemini-test",
+            fallback_models=[],
+            effective_model="gemini-test",
+            chunk_minutes=15,
+            chunk_seconds=60,
+            step_seconds=60,
+            preconvert_audio=True,
+            audio_bitrate="48k",
+            prefetch_next_chunk=False,
+            inline_max_bytes=None,
+            macro_char_limit=22000,
+        )
+        return ctx
+
+    def _make_pipeline_patches(self, session_ctx, preconv_path, html_path, tmpdir):
+        """Base patches that drive the pipeline through to the final cleanup block."""
+
+        def fake_export(**kwargs):
+            with open(html_path, "w") as fh:
+                fh.write("<html></html>")
+            return "Test Title", html_path
+
+        return [
+            patch("google.genai.Client", _FakeClient),
+            patch(
+                "el_sbobinator.pipeline.initialize_session_context",
+                return_value=session_ctx,
+            ),
+            patch("el_sbobinator.pipeline.attach_file_handler", return_value=None),
+            patch("el_sbobinator.pipeline.detach_file_handler"),
+            patch("el_sbobinator.pipeline.get_logger", return_value=_FakeLogger()),
+            patch("el_sbobinator.pipeline.load_fallback_keys", return_value=[]),
+            patch("el_sbobinator.pipeline.resolve_ffmpeg", return_value="ffmpeg"),
+            patch(
+                "el_sbobinator.pipeline.probe_media_duration",
+                return_value=(120.0, None),
+            ),
+            patch("el_sbobinator.pipeline.persist_phase1_metadata"),
+            patch("el_sbobinator.pipeline.normalize_stage", return_value="phase1"),
+            patch("el_sbobinator.pipeline.list_phase1_chunks", return_value=[]),
+            patch("el_sbobinator.pipeline.phase1_has_progress", return_value=False),
+            patch(
+                "el_sbobinator.pipeline.ensure_preconverted_audio",
+                return_value=(True, preconv_path),
+            ),
+            patch(
+                "el_sbobinator.pipeline.restore_phase1_progress",
+                return_value=SimpleNamespace(
+                    existing_chunks=[], start_sec=0, full_transcript="", prev_memory=""
+                ),
+            ),
+            patch(
+                "el_sbobinator.pipeline.process_phase1_transcription",
+                return_value=(_FakeClient(), "transcript", ""),
+            ),
+            patch("el_sbobinator.pipeline.build_macro_blocks", return_value=["block"]),
+            patch("el_sbobinator.pipeline._atomic_write_json"),
+            patch(
+                "el_sbobinator.pipeline.process_macro_revision_phase",
+                return_value=(_FakeClient(), "revised"),
+            ),
+            patch(
+                "el_sbobinator.pipeline.process_boundary_revision_phase",
+                return_value=_FakeClient(),
+            ),
+            patch(
+                "el_sbobinator.pipeline.export_final_html_document",
+                side_effect=fake_export,
+            ),
+            patch("el_sbobinator.pipeline.get_desktop_dir", return_value=tmpdir),
+        ]
+
+    def test_cleanup_path_invalidates_cache_and_bytes_drop_immediately(self):
+        from el_sbobinator import shared as _shared
+        from el_sbobinator.shared import PRECONVERTED_AUDIO_FINAL
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir = os.path.join(tmpdir, "session")
+            session_ctx = self._make_session_ctx(session_dir)
+
+            preconv_path = os.path.join(session_dir, PRECONVERTED_AUDIO_FINAL)
+            with open(preconv_path, "wb") as fh:
+                fh.write(b"x" * 8192)
+            preconv_size = os.path.getsize(preconv_path)
+
+            html_path = os.path.join(tmpdir, "output.html")
+            input_path = os.path.join(tmpdir, "input.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake")
+
+            with patch("el_sbobinator.shared.SESSION_ROOT", tmpdir):
+                _shared.invalidate_session_storage_cache()
+                info_before = _shared.get_session_storage_info()
+                self.assertGreaterEqual(
+                    info_before["total_bytes"],
+                    preconv_size,
+                    "preconv file must be visible before pipeline runs",
+                )
+
+                base_patches = self._make_pipeline_patches(
+                    session_ctx, preconv_path, html_path, tmpdir
+                )
+                spy = patch(
+                    "el_sbobinator.pipeline.invalidate_session_storage_cache",
+                    wraps=_shared.invalidate_session_storage_cache,
+                )
+
+                app = _PromptBlockingApp()
+                with contextlib.ExitStack() as stack:
+                    for p in base_patches:
+                        stack.enter_context(p)
+                    mock_invalidate = stack.enter_context(spy)
+                    esegui_sbobinatura(input_path, "fake-key", app)
+
+                mock_invalidate.assert_called_once()
+                self.assertFalse(
+                    os.path.exists(preconv_path),
+                    "preconv file must be deleted by pipeline cleanup",
+                )
+                info_after = _shared.get_session_storage_info()
+                self.assertEqual(
+                    info_after["total_bytes"],
+                    0,
+                    "storage must reflect deletion immediately without manual invalidation",
+                )
+
+    def test_cleanup_failed_removal_does_not_invalidate_cache(self):
+        from el_sbobinator.shared import PRECONVERTED_AUDIO_FINAL
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir = os.path.join(tmpdir, "session")
+            session_ctx = self._make_session_ctx(session_dir)
+
+            preconv_path = os.path.join(session_dir, PRECONVERTED_AUDIO_FINAL)
+            with open(preconv_path, "wb") as fh:
+                fh.write(b"x" * 8192)
+
+            html_path = os.path.join(tmpdir, "output.html")
+            input_path = os.path.join(tmpdir, "input.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake")
+
+            base_patches = self._make_pipeline_patches(
+                session_ctx, preconv_path, html_path, tmpdir
+            )
+            spy = patch("el_sbobinator.pipeline.invalidate_session_storage_cache")
+            # Patch os.remove globally: safe here because all services are mocked and
+            # pipeline.py currently has only one os.remove call (the cleanup block).
+            # If pipeline.py gains additional removal calls, switch to a path-selective side_effect.
+            remove_fail = patch("os.remove", side_effect=PermissionError("locked"))
+
+            app = _PromptBlockingApp()
+            with contextlib.ExitStack() as stack:
+                for p in base_patches:
+                    stack.enter_context(p)
+                mock_invalidate = stack.enter_context(spy)
+                stack.enter_context(remove_fail)
+                esegui_sbobinatura(input_path, "fake-key", app)
+
+            mock_invalidate.assert_not_called()
 
 
 if __name__ == "__main__":

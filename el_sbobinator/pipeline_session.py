@@ -25,6 +25,7 @@ from el_sbobinator.shared import (
     PRECONVERTED_AUDIO_FINAL,
     PRECONVERTED_AUDIO_PARTIAL,
     build_default_pipeline_settings,
+    invalidate_session_storage_cache,
     load_config,
 )
 
@@ -314,6 +315,7 @@ def ensure_preconverted_audio(
             context.session["phase1"]["preconverted_path"] = preconv_path
             context.session["phase1"]["preconverted_done"] = True
             context.save()
+            invalidate_session_storage_cache()
             return preconv_enabled, preconv_path
     except Exception:
         _cleanup_partial()
