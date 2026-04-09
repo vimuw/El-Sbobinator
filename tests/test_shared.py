@@ -118,5 +118,37 @@ class SharedPipelineDefaultsTests(unittest.TestCase):
         self.assertEqual(session["settings"]["chunk_minutes"], 15)
 
 
+class DefaultChunkMinutesTests(unittest.TestCase):
+    def test_known_models_match_model_options(self):
+        from el_sbobinator.model_registry import MODEL_OPTIONS
+
+        for opt in MODEL_OPTIONS:
+            expected = int(opt["default_chunk_minutes"])
+            got = shared.default_chunk_minutes_for_model(opt["id"])
+            self.assertEqual(
+                got,
+                expected,
+                msg=f"model {opt['id']!r}: expected {expected}, got {got}",
+            )
+
+    def test_unknown_model_falls_back_to_15(self):
+        result = shared.default_chunk_minutes_for_model("gemini-unknown-model")
+        self.assertEqual(result, 15)
+
+    def test_derives_from_model_options_not_hardcoded(self):
+        from el_sbobinator.model_registry import MODEL_OPTIONS
+        from unittest.mock import patch
+
+        patched = tuple(
+            {**opt, "default_chunk_minutes": 42}
+            if opt["id"] == "gemini-2.5-flash-lite"
+            else opt
+            for opt in MODEL_OPTIONS
+        )
+        with patch("el_sbobinator.shared.MODEL_OPTIONS", patched):
+            result = shared.default_chunk_minutes_for_model("gemini-2.5-flash-lite")
+        self.assertEqual(result, 42)
+
+
 if __name__ == "__main__":
     unittest.main()

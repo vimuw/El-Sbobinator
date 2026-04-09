@@ -5,6 +5,7 @@ from unittest.mock import patch
 from el_sbobinator.generation_service import (
     DegenerateOutputError,
     QuotaDailyLimitError,
+    _is_model_unavailable,
     detect_degenerate_output,
     retry_with_quota,
 )
@@ -770,6 +771,185 @@ class RetryWithQuotaTests(unittest.TestCase):
         self.assertEqual(getattr(ctx.exception, "code", None), 429)
         self.assertNotIn("503", str(ctx.exception))
         self.assertEqual(model_state.current, "gemini-2.5-flash")
+
+    def test_degenerate_output_switch_resets_attempts_for_fallback(self):
+        """Bug B1: attempts not reset after DegenerateOutputError model-switch.
+        Primary drains one attempt via a generic error, then raises DegenerateOutputError
+        → model switch.  Without the fix, fallback only gets one try (attempts=1 < 2);
+        with the fix, fallback gets a fresh budget and can retry once before succeeding."""
+        model_state = build_model_state(
+            "gemini-2.5-flash",
+            ["gemini-2.5-flash-lite"],
+            "gemini-2.5-flash",
+        )
+        primary_calls = [0]
+        fallback_calls = [0]
+
+        def fn(_client):
+            if model_state.current == "gemini-2.5-flash":
+                primary_calls[0] += 1
+                if primary_calls[0] == 1:
+                    raise RuntimeError("generic transient error")
+                raise DegenerateOutputError("frase ripetuta")
+            fallback_calls[0] += 1
+            if fallback_calls[0] == 1:
+                raise RuntimeError("transient error on fallback")
+            return "ok"
+
+        _, result = retry_with_quota(
+            fn,
+            client=object(),
+            fallback_keys=[],
+            model_name="gemini-2.5-flash",
+            model_state=model_state,
+            cancelled=lambda: False,
+            runtime=_FakeRuntime(),
+            request_fallback_key=lambda: None,
+            max_attempts=2,
+            retry_sleep_seconds=0.0,
+            model_unavailable_retry_delays=(0.0,),
+            rate_limit_sleep_seconds=0.0,
+        )
+
+        self.assertEqual(result, "ok")
+        self.assertEqual(
+            fallback_calls[0],
+            2,
+            "fallback must get full retry budget after degenerate-output switch",
+        )
+
+    def test_model_not_found_switch_resets_attempts_for_fallback(self):
+        """Bug B2: attempts not reset after model-not-found (404) switch.
+        Primary drains one attempt via a generic error, then raises 404 → model switch.
+        Fallback must get a fresh budget and be able to retry before succeeding."""
+        model_state = build_model_state(
+            "gemini-2.5-flash",
+            ["gemini-2.5-flash-lite"],
+            "gemini-2.5-flash",
+        )
+        primary_calls = [0]
+        fallback_calls = [0]
+
+        def fn(_client):
+            if model_state.current == "gemini-2.5-flash":
+                primary_calls[0] += 1
+                if primary_calls[0] == 1:
+                    raise RuntimeError("generic transient error")
+                err = RuntimeError(
+                    "404 NOT_FOUND model unsupported for generateContent"
+                )
+                err.code = 404
+                raise err
+            fallback_calls[0] += 1
+            if fallback_calls[0] == 1:
+                raise RuntimeError("transient error on fallback")
+            return "ok"
+
+        _, result = retry_with_quota(
+            fn,
+            client=object(),
+            fallback_keys=[],
+            model_name="gemini-2.5-flash",
+            model_state=model_state,
+            cancelled=lambda: False,
+            runtime=_FakeRuntime(),
+            request_fallback_key=lambda: None,
+            max_attempts=2,
+            retry_sleep_seconds=0.0,
+            model_unavailable_retry_delays=(0.0,),
+            rate_limit_sleep_seconds=0.0,
+        )
+
+        self.assertEqual(result, "ok")
+        self.assertEqual(
+            fallback_calls[0], 2, "fallback must get full retry budget after 404 switch"
+        )
+
+    def test_503_model_switch_resets_attempts_for_fallback(self):
+        """Bug B3: attempts not reset after 503-exhausted-retries model-switch.
+        Primary drains one attempt via a generic error, then 503s through all retries
+        → model switch.  Fallback must get a fresh budget and be able to retry."""
+        model_state = build_model_state(
+            "gemini-2.5-flash",
+            ["gemini-2.5-flash-lite"],
+            "gemini-2.5-flash",
+        )
+        primary_calls = [0]
+        fallback_calls = [0]
+
+        def fn(_client):
+            if model_state.current == "gemini-2.5-flash":
+                primary_calls[0] += 1
+                if primary_calls[0] == 1:
+                    raise RuntimeError("generic transient error")
+                err = RuntimeError("503 Service Unavailable")
+                err.code = 503
+                raise err
+            fallback_calls[0] += 1
+            if fallback_calls[0] == 1:
+                raise RuntimeError("transient error on fallback")
+            return "ok"
+
+        _, result = retry_with_quota(
+            fn,
+            client=object(),
+            fallback_keys=[],
+            model_name="gemini-2.5-flash",
+            model_state=model_state,
+            cancelled=lambda: False,
+            runtime=_FakeRuntime(),
+            request_fallback_key=lambda: None,
+            max_attempts=2,
+            retry_sleep_seconds=0.0,
+            model_unavailable_retry_delays=(0.0,),
+            rate_limit_sleep_seconds=0.0,
+        )
+
+        self.assertEqual(result, "ok")
+        self.assertEqual(
+            fallback_calls[0], 2, "fallback must get full retry budget after 503 switch"
+        )
+
+
+class IsModelUnavailableTests(unittest.TestCase):
+    def _yes(self, text):
+        self.assertTrue(
+            _is_model_unavailable(text, 503),
+            f"expected True for: {text!r}",
+        )
+
+    def _no(self, text, code=503):
+        self.assertFalse(
+            _is_model_unavailable(text, code),
+            f"expected False for: {text!r} (code={code})",
+        )
+
+    def test_service_unavailable_matches(self):
+        self._yes("503 service unavailable")
+
+    def test_temporarily_unavailable_matches(self):
+        self._yes("the model is temporarily unavailable, please retry")
+
+    def test_backend_error_matches(self):
+        self._yes("backend error encountered")
+
+    def test_model_is_overloaded_matches(self):
+        self._yes("model is overloaded")
+
+    def test_overloaded_matches(self):
+        self._yes("overloaded")
+
+    def test_token_unavailable_does_not_match(self):
+        """Regression: bare 'unavailable' was removed; 'token unavailable' must not trigger model switch."""
+        self._no("token unavailable")
+
+    def test_feature_unavailable_does_not_match(self):
+        """Regression: bare 'unavailable' was removed; 'feature unavailable' must not trigger model switch."""
+        self._no("feature unavailable")
+
+    def test_non_503_code_never_matches(self):
+        self._no("service unavailable", code=500)
+        self._no("overloaded", code=429)
 
 
 if __name__ == "__main__":

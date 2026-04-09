@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Activity, AlertCircle, ArrowDown, ArrowUp, ChevronDown, Cpu, Eye, EyeOff, HardDrive, Settings, SlidersHorizontal, X } from 'lucide-react';
 import type { ModelOption, ValidationResult } from '../../bridge';
@@ -24,17 +24,25 @@ function CustomSelect({ value, onChange, options, placeholder }: CustomSelectPro
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  const toggleDropdown = () => {
-    if (open) {
-      setOpen(false);
-    } else {
-      if (buttonRef.current) {
-        const rect = buttonRef.current.getBoundingClientRect();
-        setDropdownStyle({ position: 'fixed', top: rect.bottom + 4, left: rect.left, width: rect.width, zIndex: 9999 });
-      }
-      setOpen(true);
+  const updatePosition = useCallback(() => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownStyle({ position: 'fixed', top: rect.bottom + 4, left: rect.left, width: rect.width, zIndex: 9999 });
     }
-  };
+  }, []);
+
+  const toggleDropdown = () => setOpen(prev => !prev);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    updatePosition();
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [open, updatePosition]);
 
   useEffect(() => {
     if (!open) return;
@@ -140,10 +148,6 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function defaultChunkMinutesForModel(modelId: string): number {
-  return modelId === 'gemini-2.5-flash-lite' ? 10 : 15;
-}
-
 export function SettingsModal({
   isOpen,
   onClose,
@@ -167,6 +171,8 @@ export function SettingsModal({
   const [isValidatingEnvironment, setIsValidatingEnvironment] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const isSavingRef = useRef(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!isOpen) { setIsAdvancedOpen(false); return; }
@@ -228,36 +234,45 @@ export function SettingsModal({
   };
 
   const saveSettings = async () => {
-    if (!window.pywebview?.api?.save_settings) {
-      const msg = '❌ Bridge Python non disponibile — impostazioni non salvate.';
-      setSaveError(msg);
-      appendConsole(msg);
-      return;
-    }
-    const keys = fallbackKeys.map(k => k.trim()).filter(Boolean);
-    let result;
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
+    setIsSaving(true);
+    setSaveError(null);
     try {
-      result = await window.pywebview.api.save_settings(apiKey.trim(), keys, preferredModel, fallbackModels);
-    } catch (e: unknown) {
-      const msg = `❌ Errore salvataggio impostazioni: ${getErrorMessage(e)}`;
-      setSaveError(msg);
-      appendConsole(msg);
-      return;
+      if (!window.pywebview?.api?.save_settings) {
+        const err = 'Bridge Python non disponibile — impostazioni non salvate.';
+        setSaveError(err);
+        appendConsole(`❌ ${err}`);
+        return;
+      }
+      const keys = fallbackKeys.map(k => k.trim()).filter(Boolean);
+      let result;
+      try {
+        result = await window.pywebview.api.save_settings(apiKey.trim(), keys, preferredModel, fallbackModels);
+      } catch (e: unknown) {
+        const err = `Errore salvataggio impostazioni: ${getErrorMessage(e)}`;
+        setSaveError(err);
+        appendConsole(`❌ ${err}`);
+        return;
+      }
+      if (!result?.ok) {
+        const err = `Errore salvataggio impostazioni: ${result?.error || 'errore sconosciuto'}`;
+        setSaveError(err);
+        appendConsole(`❌ ${err}`);
+        return;
+      }
+      onClose();
+    } finally {
+      isSavingRef.current = false;
+      setIsSaving(false);
     }
-    if (!result?.ok) {
-      const msg = `❌ Errore salvataggio impostazioni: ${result?.error || 'errore sconosciuto'}`;
-      setSaveError(msg);
-      appendConsole(msg);
-      return;
-    }
-    onClose();
   };
 
   const availableFallbackOptions = availableModels.filter(model => model.id !== preferredModel);
   const selectedModelSummaries = [preferredModel, ...fallbackModels]
     .map(modelId => availableModels.find(option => option.id === modelId))
     .filter(Boolean) as ModelOption[];
-  const defaultChunkMinutes = defaultChunkMinutesForModel(preferredModel);
+  const defaultChunkMinutes = availableModels.find(m => m.id === preferredModel)?.default_chunk_minutes ?? 15;
 
   const handlePrimaryModelChange = (nextPrimary: string) => {
     setPreferredModel(nextPrimary);
@@ -601,6 +616,7 @@ export function SettingsModal({
               )}
               <button
                 onClick={saveSettings}
+                disabled={isSaving}
                 className="modal-action-button is-primary w-full"
               >
                 Salva e Chiudi

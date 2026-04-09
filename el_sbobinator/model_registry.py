@@ -20,21 +20,24 @@ SUPPORTED_MODELS: tuple[str, ...] = (
 DEFAULT_MODEL = SUPPORTED_MODELS[0]
 DEFAULT_FALLBACK_MODELS: tuple[str, ...] = ("gemini-2.5-flash", "gemini-2.5-flash-lite")
 
-MODEL_OPTIONS: tuple[dict[str, str], ...] = (
+MODEL_OPTIONS: tuple[dict[str, str | int], ...] = (
     {
         "id": "gemini-3-flash-preview",
         "label": "Gemini 3 Flash (Preview)",
         "summary": "Primario consigliato: ultima generazione, stessi limiti di 2.5 Flash e qualita superiore.",
+        "default_chunk_minutes": 15,
     },
     {
         "id": "gemini-2.5-flash",
         "label": "Gemini 2.5 Flash",
         "summary": "Fallback stabile: generazione precedente, ottima qualita e ampiamente testato.",
+        "default_chunk_minutes": 15,
     },
     {
         "id": "gemini-2.5-flash-lite",
         "label": "Gemini 2.5 Flash-Lite",
         "summary": "Fallback leggero: piu veloce, RPM doppio (10 RPM), buon compromesso velocita/qualita.",
+        "default_chunk_minutes": 10,
     },
 )
 

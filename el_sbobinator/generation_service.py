@@ -150,7 +150,6 @@ def _is_model_unavailable(error_text: str, error_code: int | None) -> bool:
         return False
     markers = (
         "service unavailable",
-        "unavailable",
         "backend error",
         "model is overloaded",
         "overloaded",
@@ -493,6 +492,7 @@ def retry_with_quota(  # noqa: C901
                     cause=exc,
                     exc_type=DegenerateOutputError,
                 )
+                attempts = 0
                 continue
 
             if model_state is not None and _is_model_not_found(error, error_code):
@@ -505,6 +505,7 @@ def retry_with_quota(  # noqa: C901
                     error_message="Modello Gemini non supportato o non trovato.",
                     cause=exc,
                 )
+                attempts = 0
                 continue
 
             if (
@@ -562,6 +563,7 @@ def retry_with_quota(  # noqa: C901
                             current_model = current_model_name(model_state, model_name)
                             break
                 if _switched:
+                    attempts = 0
                     continue
 
             if is_quota_related:

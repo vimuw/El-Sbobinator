@@ -515,7 +515,7 @@ class PipelineCleanupCacheTests(unittest.TestCase):
                 info_after = _shared.get_session_storage_info()
                 self.assertEqual(
                     info_after["total_bytes"],
-                    0,
+                    info_before["total_bytes"] - preconv_size,
                     "storage must reflect deletion immediately without manual invalidation",
                 )
 
@@ -539,10 +539,14 @@ class PipelineCleanupCacheTests(unittest.TestCase):
                 session_ctx, preconv_path, html_path, tmpdir
             )
             spy = patch("el_sbobinator.pipeline.invalidate_session_storage_cache")
-            # Patch os.remove globally: safe here because all services are mocked and
-            # pipeline.py currently has only one os.remove call (the cleanup block).
-            # If pipeline.py gains additional removal calls, switch to a path-selective side_effect.
-            remove_fail = patch("os.remove", side_effect=PermissionError("locked"))
+            _real_remove = os.remove
+
+            def _selective_remove(p):
+                if os.path.basename(str(p)) == PRECONVERTED_AUDIO_FINAL:
+                    raise PermissionError("locked")
+                return _real_remove(p)
+
+            remove_fail = patch("os.remove", side_effect=_selective_remove)
 
             app = _PromptBlockingApp()
             with contextlib.ExitStack() as stack:

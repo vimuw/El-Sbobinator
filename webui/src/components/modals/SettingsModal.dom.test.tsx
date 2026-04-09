@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsModal } from './SettingsModal';
@@ -11,7 +10,7 @@ function setPywebview(api: Record<string, unknown> | undefined) {
   });
 }
 
-const defaultProps = {
+const makeProps = () => ({
   isOpen: true,
   onClose: vi.fn(),
   apiKey: 'AIzaSyTest123456',
@@ -24,15 +23,33 @@ const defaultProps = {
   setFallbackModels: vi.fn(),
   availableModels: [],
   appendConsole: vi.fn(),
-};
+});
 
 beforeEach(() => {
   setPywebview(undefined);
-  vi.clearAllMocks();
 });
 
 afterEach(() => {
   setPywebview(undefined);
+});
+
+describe('SettingsModal — diagnostica chunk display', () => {
+  it('shows default_chunk_minutes from availableModels registry for the primary model', async () => {
+    const models = [
+      { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash (Preview)', summary: '', default_chunk_minutes: 15 },
+      { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', summary: '', default_chunk_minutes: 10 },
+    ];
+    const { rerender } = render(
+      <SettingsModal {...makeProps()} availableModels={models} preferredModel="gemini-3-flash-preview" />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+    });
+    expect(screen.getByText('15 min')).toBeDefined();
+
+    rerender(<SettingsModal {...makeProps()} availableModels={models} preferredModel="gemini-2.5-flash-lite" />);
+    expect(screen.getByText('10 min')).toBeDefined();
+  });
 });
 
 describe('SettingsModal — save behavior', () => {
@@ -40,7 +57,7 @@ describe('SettingsModal — save behavior', () => {
     const onClose = vi.fn();
     const appendConsole = vi.fn();
 
-    render(<SettingsModal {...defaultProps} onClose={onClose} appendConsole={appendConsole} />);
+    render(<SettingsModal {...makeProps()} onClose={onClose} appendConsole={appendConsole} />);
 
     await act(async () => {
       fireEvent.click(screen.getByText('Salva e Chiudi'));
@@ -48,8 +65,9 @@ describe('SettingsModal — save behavior', () => {
 
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.queryByText(/non disponibile/i)).not.toBeNull();
+    expect(appendConsole).toHaveBeenCalledTimes(1);
     expect(appendConsole).toHaveBeenCalledWith(
-      expect.stringContaining('non disponibile'),
+      expect.stringMatching(/❌.*non disponibile|non disponibile.*❌/s),
     );
   });
 
@@ -58,7 +76,7 @@ describe('SettingsModal — save behavior', () => {
     setPywebview({ save_settings: mockSave });
     const onClose = vi.fn();
 
-    render(<SettingsModal {...defaultProps} onClose={onClose} />);
+    render(<SettingsModal {...makeProps()} onClose={onClose} />);
 
     await act(async () => {
       fireEvent.click(screen.getByText('Salva e Chiudi'));
@@ -73,7 +91,7 @@ describe('SettingsModal — save behavior', () => {
     setPywebview({ save_settings: mockSave });
     const onClose = vi.fn();
 
-    render(<SettingsModal {...defaultProps} onClose={onClose} />);
+    render(<SettingsModal {...makeProps()} onClose={onClose} />);
 
     await act(async () => {
       fireEvent.click(screen.getByText('Salva e Chiudi'));
@@ -81,5 +99,24 @@ describe('SettingsModal — save behavior', () => {
 
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/non disponibile/i)).toBeNull();
+  });
+
+  it('double-click: save_settings called only once, onClose called only once', async () => {
+    let resolveFirst!: (val: { ok: boolean }) => void;
+    const firstPromise = new Promise<{ ok: boolean }>(res => { resolveFirst = res; });
+    const mockSave = vi.fn().mockReturnValueOnce(firstPromise);
+    setPywebview({ save_settings: mockSave });
+    const onClose = vi.fn();
+
+    render(<SettingsModal {...makeProps()} onClose={onClose} />);
+
+    const button = screen.getByText('Salva e Chiudi');
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    await act(async () => { resolveFirst({ ok: true }); });
+
+    expect(mockSave).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

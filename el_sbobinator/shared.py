@@ -23,6 +23,7 @@ from datetime import datetime
 from el_sbobinator.model_registry import (
     DEFAULT_FALLBACK_MODELS,
     DEFAULT_MODEL,
+    MODEL_OPTIONS,
     sanitize_fallback_models,
     sanitize_model_name,
 )
@@ -477,7 +478,11 @@ def load_config() -> dict:  # noqa: C901
                 # Best-effort migration forward.
                 if path == LEGACY_CONFIG_FILE and data.get("api_key"):
                     try:
-                        save_config(str(data.get("api_key") or ""))
+                        save_config(
+                            str(data.get("api_key") or ""),
+                            preferred_model=data.get("preferred_model"),
+                            fallback_models=data.get("fallback_models"),
+                        )
                     except Exception:
                         pass
                 preferred_model = sanitize_model_name(
@@ -689,8 +694,9 @@ def save_config(  # noqa: C901
 
 def default_chunk_minutes_for_model(model_name: str) -> int:
     model = sanitize_model_name(model_name, DEFAULT_MODEL)
-    if model == "gemini-2.5-flash-lite":
-        return 10
+    for opt in MODEL_OPTIONS:
+        if opt["id"] == model:
+            return int(opt.get("default_chunk_minutes", 15))
     return 15
 
 

@@ -11,6 +11,8 @@ export function useApiReady(appendConsole: (msg: string) => void) {
   const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
   const initDoneRef = useRef(false);
   const inFlightRef = useRef(false);
+  const retriesRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const appendConsoleRef = useRef(appendConsole);
 
   useEffect(() => {
@@ -26,7 +28,6 @@ export function useApiReady(appendConsole: (msg: string) => void) {
       inFlightRef.current = true;
       try {
         const cfg = await window.pywebview.api.load_settings();
-        if (!window.pywebview?.api) return;
         initDoneRef.current = true;
         setBridgeDelayed(false);
         setApiReady(true);
@@ -38,23 +39,41 @@ export function useApiReady(appendConsole: (msg: string) => void) {
         if (cfg?.available_models?.length) setAvailableModels(cfg.available_models);
       } catch (e) {
         console.error('Load settings failed:', e);
+        if (!initDoneRef.current && retriesRef.current < 3) {
+          retriesRef.current += 1;
+          if (retryTimerRef.current !== null) clearTimeout(retryTimerRef.current);
+          retryTimerRef.current = setTimeout(tryBootstrap, 2000);
+        } else if (!initDoneRef.current) {
+          setBridgeDelayed(true);
+        }
       } finally {
         inFlightRef.current = false;
       }
     };
 
-    window.addEventListener('pywebviewready', tryBootstrap);
+    const onBridgeReady = () => {
+      if (!initDoneRef.current) {
+        if (retryTimerRef.current !== null) clearTimeout(retryTimerRef.current);
+        retriesRef.current = 0;
+      }
+      tryBootstrap();
+    };
+    window.addEventListener('pywebviewready', onBridgeReady);
     tryBootstrap();
 
     const delayedWarning = setTimeout(() => {
       if (initDoneRef.current) return;
+      if (retryTimerRef.current !== null) clearTimeout(retryTimerRef.current);
+      retriesRef.current = 3;
       setBridgeDelayed(true);
+      if (inFlightRef.current) return;
       tryBootstrap();
     }, 5000);
 
     return () => {
-      window.removeEventListener('pywebviewready', tryBootstrap);
+      window.removeEventListener('pywebviewready', onBridgeReady);
       clearTimeout(delayedWarning);
+      if (retryTimerRef.current !== null) clearTimeout(retryTimerRef.current);
     };
   }, []);
 

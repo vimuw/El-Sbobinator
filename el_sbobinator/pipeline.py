@@ -299,7 +299,7 @@ def _esegui_sbobinatura_impl(  # noqa: C901
 
         if stage == "phase1":
             print(
-                f"[*] INIZIO FASE 1: Trascrizione a blocchi (circa {int(settings.chunk_minutes)} min per blocco)"
+                f"[*] INIZIO FASE 1: Trascrizione a blocchi (circa {settings.chunk_minutes} min per blocco)"
             )
             print(
                 "    - Cosa fa: taglia l'audio in blocchi e genera una sbobina dettagliata per ogni blocco."

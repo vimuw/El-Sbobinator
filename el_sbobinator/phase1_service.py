@@ -457,12 +457,12 @@ def process_phase1_transcription(  # noqa: C901
                         chain_exhaustion_recovery_used = True
                         if model_state is not None:
                             old_model = model_state.current
-                            model_state.current = model_name
+                            model_state.current = model_state.chain[0]
                             if (
                                 on_model_switched is not None
-                                and old_model != model_name
+                                and old_model != model_state.current
                             ):
-                                on_model_switched(old_model, model_name)
+                                on_model_switched(old_model, model_state.current)
                         print(
                             f"   [Recovery automatica] chunk={chunk_idx}: catena modelli esaurita ({de}) - un ulteriore pass dal modello primario ({model_name})..."
                         )

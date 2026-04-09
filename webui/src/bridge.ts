@@ -29,6 +29,7 @@ export interface ModelOption {
   id: string;
   label: string;
   summary: string;
+  default_chunk_minutes: number;
 }
 
 export type ElSbobinatorBridge = BridgeCallbacks | null;

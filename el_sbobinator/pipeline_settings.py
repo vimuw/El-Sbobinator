@@ -29,12 +29,12 @@ class PipelineSettings:
 
     @property
     def chunk_seconds(self) -> int:
-        return int(self.chunk_minutes) * 60
+        return self.chunk_minutes * 60
 
     @property
     def step_seconds(self) -> int:
         # Must be >= 1 to keep range() sane.
-        return max(1, int(self.chunk_seconds) - int(self.overlap_seconds))
+        return max(1, self.chunk_seconds - self.overlap_seconds)
 
     @property
     def inline_max_bytes(self) -> int | None:
