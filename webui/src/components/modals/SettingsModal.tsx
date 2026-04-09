@@ -166,9 +166,11 @@ export function SettingsModal({
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [isValidatingEnvironment, setIsValidatingEnvironment] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) { setIsAdvancedOpen(false); return; }
+    setSaveError(null);
     setCleanupResult(null);
     if (!window.pywebview?.api?.get_session_storage_info) return;
     setIsLoadingSessionInfo(true);
@@ -226,13 +228,27 @@ export function SettingsModal({
   };
 
   const saveSettings = async () => {
-    if (window.pywebview?.api) {
-      const keys = fallbackKeys.map(k => k.trim()).filter(Boolean);
-      const result = await window.pywebview.api.save_settings(apiKey.trim(), keys, preferredModel, fallbackModels);
-      if (!result?.ok) {
-        appendConsole(`❌ Errore salvataggio impostazioni: ${result?.error || 'errore sconosciuto'}`);
-        return;
-      }
+    if (!window.pywebview?.api?.save_settings) {
+      const msg = '❌ Bridge Python non disponibile — impostazioni non salvate.';
+      setSaveError(msg);
+      appendConsole(msg);
+      return;
+    }
+    const keys = fallbackKeys.map(k => k.trim()).filter(Boolean);
+    let result;
+    try {
+      result = await window.pywebview.api.save_settings(apiKey.trim(), keys, preferredModel, fallbackModels);
+    } catch (e: unknown) {
+      const msg = `❌ Errore salvataggio impostazioni: ${getErrorMessage(e)}`;
+      setSaveError(msg);
+      appendConsole(msg);
+      return;
+    }
+    if (!result?.ok) {
+      const msg = `❌ Errore salvataggio impostazioni: ${result?.error || 'errore sconosciuto'}`;
+      setSaveError(msg);
+      appendConsole(msg);
+      return;
     }
     onClose();
   };
@@ -580,6 +596,9 @@ export function SettingsModal({
               </div>
             </div>
             <div className="px-5 py-4 shrink-0" style={{ background: 'var(--bg-elevated)', borderTop: '1px solid var(--border-subtle)' }}>
+              {saveError && (
+                <p className="text-xs mb-3" style={{ color: 'var(--error-text)' }}>{saveError}</p>
+              )}
               <button
                 onClick={saveSettings}
                 className="modal-action-button is-primary w-full"

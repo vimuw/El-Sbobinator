@@ -101,6 +101,7 @@ export default function App() {
   const { updateAvailable, dismissUpdate } = useUpdateChecker();
   const {
     apiReady,
+    bridgeDelayed,
     apiKey,
     setApiKey,
     fallbackKeys,
@@ -556,12 +557,12 @@ export default function App() {
               </span>
             )}
             <span className="premium-badge" style={{
-              color: !apiReady ? 'var(--warning-text)' : hasApiKey ? 'var(--success-text)' : 'var(--text-secondary)',
-              borderColor: !apiReady ? 'var(--warning-ring)' : hasApiKey ? 'var(--success-ring)' : 'var(--border-default)',
-              background: !apiReady ? 'var(--warning-subtle)' : hasApiKey ? 'var(--success-subtle)' : 'rgba(255,255,255,0.02)',
+              color: !apiReady ? (bridgeDelayed ? 'var(--error-text)' : 'var(--warning-text)') : hasApiKey ? 'var(--success-text)' : 'var(--text-secondary)',
+              borderColor: !apiReady ? (bridgeDelayed ? 'var(--error-ring)' : 'var(--warning-ring)') : hasApiKey ? 'var(--success-ring)' : 'var(--border-default)',
+              background: !apiReady ? (bridgeDelayed ? 'var(--error-subtle)' : 'var(--warning-subtle)') : hasApiKey ? 'var(--success-subtle)' : 'rgba(255,255,255,0.02)',
             }}>
-              <span className={`inline-flex h-2.5 w-2.5 rounded-full ${appState === 'processing' ? 'animate-pulse' : ''}`} style={{ background: !apiReady ? 'var(--warning-bg)' : hasApiKey ? 'var(--success-bg)' : 'var(--text-faint)' }} />
-              {!apiReady ? 'Bridge in avvio' : hasApiKey ? 'API pronta' : 'Configura API'}
+              <span className={`inline-flex h-2.5 w-2.5 rounded-full ${appState === 'processing' ? 'animate-pulse' : ''}`} style={{ background: !apiReady ? (bridgeDelayed ? 'var(--error-bg)' : 'var(--warning-bg)') : hasApiKey ? 'var(--success-bg)' : 'var(--text-faint)' }} />
+              {!apiReady ? (bridgeDelayed ? 'Bridge in ritardo' : 'Bridge in avvio') : hasApiKey ? 'API pronta' : 'Configura API'}
             </span>
             <button
               onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
