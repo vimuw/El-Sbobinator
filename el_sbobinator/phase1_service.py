@@ -316,12 +316,17 @@ def process_phase1_transcription(  # noqa: C901
                                 )
                                 if audio_input is None:
                                     return None  # cancelled during upload wait
+                            _active_model = current_model_name(model_state, model_name)
+                            _is_fallback = (
+                                model_state is not None
+                                and _active_model != model_state.chain[0]
+                            )
                             response = current_client.models.generate_content(
-                                model=current_model_name(model_state, model_name),
+                                model=_active_model,
                                 contents=[chunk_prompt, audio_input],
                                 config=types.GenerateContentConfig(
                                     system_instruction=system_prompt,
-                                    temperature=0.35,
+                                    temperature=0.55 if _is_fallback else 0.35,
                                 ),
                             )
                             generated_text = extract_response_text(response)

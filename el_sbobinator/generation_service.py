@@ -671,7 +671,8 @@ def build_chunk_prompt(previous_tail: str) -> str:
     prompt = (
         "Trascrivi TUTTO il contenuto di questo blocco audio seguendo rigorosamente le istruzioni di sistema. "
         "Non omettere nessun concetto, esempio, cifra o termine tecnico. "
-        "Non riassumere: la lunghezza dell'output deve essere proporzionale a quella dell'audio."
+        "Non riassumere: la lunghezza dell'output deve essere proporzionale a quella dell'audio. "
+        "Ogni paragrafo generato deve essere unico: non ripetere mai lo stesso paragrafo o frase."
     )
     if previous_tail:
         prompt += (

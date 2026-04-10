@@ -127,7 +127,7 @@ class ValidationServiceTests(unittest.TestCase):
     @patch("el_sbobinator.validation_service.get_desktop_dir", return_value=".")
     @patch("el_sbobinator.validation_service.resolve_ffmpeg", return_value="ffmpeg.exe")
     @patch("google.genai.Client", _PrimaryFailClient)
-    def test_validate_environment_reports_primary_failure_as_api_key_error(
+    def test_validate_environment_reports_primary_model_failure_distinctly_from_key_error(
         self, *_mocks
     ):
         result = validate_environment(
@@ -145,9 +145,10 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertEqual(api_check["label"], "API Key Gemini")
         self.assertEqual(
             api_check["message"],
-            "API key non valida o modello primario non accessibile.",
+            "Modello primario non accessibile.",
         )
         self.assertNotIn("fallback", api_check["message"].lower())
+        self.assertIn("gemini-2.5-flash", api_check["details"])
 
     @patch("el_sbobinator.validation_service.get_desktop_dir", return_value=".")
     @patch("el_sbobinator.validation_service.resolve_ffmpeg", return_value="ffmpeg.exe")

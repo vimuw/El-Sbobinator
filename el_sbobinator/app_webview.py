@@ -826,7 +826,6 @@ class ElSbobinatorApi:
                 "error": "Accesso negato: path fuori dai percorsi consentiti.",
             }
         requested_real_path = real_path
-        self._resolved_path_cache[requested_real_path] = real_path
         if not os.path.isfile(real_path):
             _basename = os.path.basename(real_path)
             fallback = self._find_html_in_session_dirs(_basename)
@@ -943,7 +942,7 @@ class ElSbobinatorApi:
                         safe_output_basename=safe_output_basename,
                     )
                     if not os.path.isfile(html_path):
-                        break
+                        continue
                     # export derives its filename from input_path; if input_path
                     # was renamed after session creation the basename will differ
                     # from html_basename. Rename to the canonical basename so

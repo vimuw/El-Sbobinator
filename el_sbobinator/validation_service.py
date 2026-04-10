@@ -173,13 +173,11 @@ def validate_environment(
                                 "label": check_label,
                                 "status": "error",
                                 "message": (
-                                    "API key non valida o modello primario non accessibile."
+                                    "Modello primario non accessibile."
                                     if idx == 0
                                     else f"Modello fallback {idx} non accessibile con questa chiave."
                                 ),
-                                "details": str(exc)
-                                if idx == 0
-                                else f"{model_name}: {exc}",
+                                "details": f"{model_name}: {exc}",
                             }
                         )
 

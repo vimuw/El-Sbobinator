@@ -118,7 +118,7 @@ export function PreviewModal({
         if (res.ok) { lastPersistedRef.current = snap; isDirtyRef.current = false; setAutosaveStatus('saved'); }
         else setAutosaveStatus('error');
       } catch { setAutosaveStatus('error'); }
-    }, 300);
+    }, 700);
   }, [htmlPath, previewContent]);
 
   useEffect(() => {
