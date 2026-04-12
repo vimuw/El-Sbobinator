@@ -2,6 +2,7 @@ import { type Dispatch, useEffect, useRef } from 'react';
 import type React from 'react';
 import { createBridge, type ElSbobinatorBridge } from '../bridge';
 import type { AppStatus, FileDescriptor, FileItem, ProcessingAction } from '../appState';
+import { shortModelName } from '../utils';
 
 export function useBridgeCallbacks(options: {
   dispatch: Dispatch<ProcessingAction>;
@@ -56,15 +57,19 @@ export function useBridgeCallbacks(options: {
       onAskNewKey: () => {
         setAskNewKeyPromptRef.current(true);
       },
-      onBatchDone: data => {
-        if (!data?.cancelled && data?.total && data.completed === data.total && !data.failed && window.pywebview?.api?.show_notification && !document.hasFocus()) {
-          window.pywebview.api.show_notification('Elaborazione completata', 'Tutti i file in coda sono stati sbobinati con successo.');
-        }
-      },
+      onBatchDone: () => {},
       onFileDone: data => {
+        if (localStorage.getItem('notifications_enabled') === 'false') return;
         const currentFile = filesRef.current?.find(file => file.id === data.id);
         if (currentFile && window.pywebview?.api?.show_notification && !document.hasFocus()) {
-          window.pywebview.api.show_notification('File Completato!', `✅ ${currentFile.name} pronto.`);
+          const model = data.effective_model || currentFile.effectiveModel;
+          const modelPart = model ? ` con ${shortModelName(model)}` : '';
+          const elapsed = currentFile.startedAt ? Math.round((Date.now() - currentFile.startedAt) / 60000) : null;
+          const elapsedPart = elapsed !== null && elapsed > 0 ? ` · ${elapsed} min` : '';
+          window.pywebview.api.show_notification(
+            `✅ Sbobina pronta — ${currentFile.name}`,
+            `Completata${modelPart}${elapsedPart}. Clicca per aprire.`,
+          );
         }
       },
     });

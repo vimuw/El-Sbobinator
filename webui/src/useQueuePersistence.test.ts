@@ -62,4 +62,15 @@ describe('useQueuePersistence — serialization contract', () => {
     expect(restored.status).toBe('error');
     expect(restored.errorText).toBe('timeout');
   });
+
+  it('effectiveModel is preserved through a JSON round-trip', () => {
+    const file = makeFile({ status: 'done', progress: 100, phase: 3, effectiveModel: 'gemini-2.0-flash' });
+    const restored = roundTrip(file);
+    expect(restored.effectiveModel).toBe('gemini-2.0-flash');
+  });
+
+  it('effectiveModel missing on legacy entries is restored as undefined', () => {
+    const restored = roundTrip(makeFile({ status: 'done', progress: 100, phase: 3 }));
+    expect(restored.effectiveModel).toBeUndefined();
+  });
 });

@@ -1,7 +1,7 @@
 import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Activity, AlertCircle, AlertTriangle, ArrowDown, ArrowUp, ChevronDown, Cpu, Eye, EyeOff, HardDrive, Settings, SlidersHorizontal, X } from 'lucide-react';
+import { Activity, AlertCircle, AlertTriangle, ArrowDown, ArrowUp, Bell, ChevronDown, Cpu, Eye, EyeOff, HardDrive, Settings, SlidersHorizontal, X } from 'lucide-react';
 import type { ModelOption, ValidationResult } from '../../bridge';
 import { formatSize, GEMINI_KEY_PATTERN } from '../../utils';
 
@@ -162,6 +162,7 @@ export function SettingsModal({
   availableModels,
   appendConsole,
 }: SettingsModalProps) {
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('notifications_enabled') !== 'false');
   const [showApiKeys, setShowApiKeys] = useState(false);
   const [sessionInfo, setSessionInfo] = useState<{ total_bytes: number; total_sessions: number } | null>(null);
   const [isLoadingSessionInfo, setIsLoadingSessionInfo] = useState(false);
@@ -177,6 +178,7 @@ export function SettingsModal({
 
   useEffect(() => {
     if (!isOpen) { setIsAdvancedOpen(false); setIsSaving(false); isSavingRef.current = false; return; }
+    setNotificationsEnabled(localStorage.getItem('notifications_enabled') !== 'false');
     setSaveError(null);
     setCleanupResult(null);
     if (!window.pywebview?.api?.get_session_storage_info) return;
@@ -396,6 +398,55 @@ export function SettingsModal({
                   style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
                 />
                 <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>Usate automaticamente in caso di esaurimento quota (429).</p>
+              </div>
+
+              {/* 3. Notifiche */}
+              <div className="flex items-center justify-between gap-4" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
+                <div>
+                  <p className="text-sm font-medium flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+                    <Bell className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
+                    Notifiche di sistema
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Avviso Windows al completamento di ogni sbobina</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={notificationsEnabled}
+                  onClick={() => {
+                    const next = !notificationsEnabled;
+                    setNotificationsEnabled(next);
+                    localStorage.setItem('notifications_enabled', String(next));
+                  }}
+                  style={{
+                    position: 'relative',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    width: '40px',
+                    height: '24px',
+                    borderRadius: '12px',
+                    background: notificationsEnabled ? 'var(--success-text)' : 'var(--border-default)',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'background 0.2s',
+                    flexShrink: 0,
+                    padding: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: '4px',
+                      width: '16px',
+                      height: '16px',
+                      borderRadius: '50%',
+                      background: 'white',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                      transition: 'transform 0.2s',
+                      transform: notificationsEnabled ? 'translateX(20px)' : 'translateX(4px)',
+                    }}
+                  />
+                </button>
               </div>
 
               {/* Avanzati */}

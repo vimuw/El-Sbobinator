@@ -94,6 +94,9 @@ class PipelineRuntime:
         except Exception:
             pass
 
+    def update_model(self, model: str) -> None:
+        self._safe_call("update_model", model)
+
     def set_effective_api_key(self, api_key: str | None) -> None:
         key = str(api_key or "").strip() or None
         try:

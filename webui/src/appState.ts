@@ -13,6 +13,8 @@ export type FileItem = {
   outputHtml?: string;
   outputDir?: string;
   completedAt?: number;
+  startedAt?: number;
+  effectiveModel?: string;
 };
 
 export function getPendingFiles(files: FileItem[]): FileItem[] {
@@ -53,6 +55,7 @@ export type FileDonePayload = {
   id: string;
   output_html: string;
   output_dir: string;
+  effective_model?: string;
 };
 
 export type FileFailedPayload = {
@@ -91,6 +94,7 @@ export type ProcessingState = {
   structuralVersion: number;
   appState: AppStatus;
   currentPhase: string;
+  currentModel: string;
   activeProgress: number;
   currentFileIndex: number;
   currentBatchTotal: number;
@@ -122,6 +126,7 @@ export type ProcessingAction =
   | { type: 'app/set_status'; status: AppStatus }
   | { type: 'bridge/update_progress'; value: number }
   | { type: 'bridge/update_phase'; text: string }
+  | { type: 'bridge/update_model'; model: string }
   | { type: 'bridge/process_done'; data: ProcessDonePayload }
   | { type: 'bridge/set_work_totals'; data: WorkTotalsPayload }
   | { type: 'bridge/update_work_done'; data: WorkDonePayload }
@@ -135,6 +140,7 @@ export const initialProcessingState: ProcessingState = {
   structuralVersion: 0,
   appState: 'idle',
   currentPhase: '',
+  currentModel: '',
   activeProgress: 0,
   currentFileIndex: 0,
   currentBatchTotal: 0,
@@ -195,12 +201,15 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
       return { ...state, activeProgress: Math.round(action.value * 100) };
     case 'bridge/update_phase':
       return { ...state, currentPhase: action.text };
+    case 'bridge/update_model':
+      return { ...state, currentModel: action.model };
     case 'bridge/process_done':
       return {
         ...state,
         structuralVersion: action.data?.cancelled ? state.structuralVersion + 1 : state.structuralVersion,
         appState: 'idle',
         currentPhase: '',
+        currentModel: '',
         activeProgress: action.data?.cancelled ? 0 : state.activeProgress,
         currentFileIndex: 0,
         currentBatchTotal: 0,
@@ -253,13 +262,14 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         structuralVersion: state.structuralVersion + 1,
         appState: 'processing',
         currentPhase: '',
+        currentModel: '',
         activeProgress: 0,
         currentFileIndex: action.data.index,
         currentBatchTotal: action.data.total,
         stepMetrics: { chunks: null, macro: null, boundary: null },
         files: state.files.map(file =>
           file.id === action.data.id
-            ? { ...file, status: 'processing', progress: 0, phase: 1, phaseText: undefined, errorText: undefined }
+            ? { ...file, status: 'processing', progress: 0, phase: 1, phaseText: undefined, errorText: undefined, startedAt: Date.now() }
             : file,
         ),
       };
@@ -280,6 +290,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
                 phaseText: undefined,
                 errorText: undefined,
                 completedAt: Date.now(),
+                effectiveModel: action.data.effective_model || undefined,
               }
             : file,
         ),

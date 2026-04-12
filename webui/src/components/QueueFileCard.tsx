@@ -4,12 +4,13 @@ import { AlertCircle, CheckCircle, Clock, ExternalLink, Eye, FileAudio, FolderOp
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
-import { errorLabel, formatDuration, formatRelativeTime, formatSize } from '../utils';
+import { errorLabel, formatDuration, formatRelativeTime, formatSize, shortModelName } from '../utils';
 
 interface QueueFileCardProps {
   file: FileItem;
   appState: AppStatus;
   currentPhase?: string;
+  currentModel?: string;
   workDone: { chunks: number; macro: number; boundary: number };
   workTotals: { chunks: number; macro: number; boundary: number };
   etaLabel: string | null;
@@ -42,7 +43,7 @@ function getProcessingDetails(phaseText?: string) {
 }
 
 function QueueFileCardInner({
-  file, appState, currentPhase, workDone, workTotals, etaLabel, activeProgress,
+  file, appState, currentPhase, currentModel, workDone, workTotals, etaLabel, activeProgress,
   onRemove,
 }: QueueFileCardProps) {
   const processingDetails = file.status === 'processing' ? getProcessingDetails(currentPhase) : null;
@@ -150,21 +151,14 @@ function QueueFileCardInner({
                     <span className="inline-flex h-2 w-2 rounded-full animate-pulse" style={{ background: isCanceling ? 'var(--error-text)' : 'var(--processing-dot)' }} />
                     {isCanceling ? 'Annullamento in corso' : 'In elaborazione'}
                   </span>
-                  <AnimatePresence mode="wait" initial={false}>
-                    {processingDetails.chunk && (
-                      <motion.span
-                        key={`processing-chunk-${processingDetails.chunk}`}
-                        initial={{ opacity: 0, y: 4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -4 }}
-                        transition={{ duration: 0.16, ease: 'easeOut' }}
-                        className="text-[11px] font-medium leading-none self-center"
-                        style={{ color: isCanceling ? 'var(--error-text)' : 'var(--processing-text)' }}
-                      >
-                        {processingDetails.chunk}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
+                  {!isCanceling && currentModel && (
+                    <span
+                      className="helper-chip processing-chip-compact"
+                      title={currentModel}
+                    >
+                      {shortModelName(currentModel)}
+                    </span>
+                  )}
                 </motion.div>
               )}
             </div>
@@ -256,7 +250,7 @@ function CompletedFileCardInner({ file, appState, isNewest, onRemove, onPreview,
             <CheckCircle className="w-5 h-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="flex items-baseline gap-2 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
               <h4 className="text-base font-semibold truncate tracking-tight" style={{ color: 'var(--text-primary)' }}>{file.name}</h4>
               {isNewest && (
                 <span className="shrink-0 whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'var(--success-subtle)', color: 'var(--success-text)', border: '1px solid var(--success-ring)' }}>
@@ -270,6 +264,14 @@ function CompletedFileCardInner({ file, appState, isNewest, onRemove, onPreview,
                 <>
                   <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
                   <span>{formatDuration(file.duration)}</span>
+                </>
+              )}
+              {file.effectiveModel && (
+                <>
+                  <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
+                  <span title={file.effectiveModel}>
+                    {shortModelName(file.effectiveModel)}
+                  </span>
                 </>
               )}
               <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />

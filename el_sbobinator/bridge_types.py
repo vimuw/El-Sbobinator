@@ -36,6 +36,7 @@ class FileDonePayload(TypedDict):
     id: str
     output_html: str
     output_dir: str
+    effective_model: str
 
 
 class FileFailedPayload(TypedDict):

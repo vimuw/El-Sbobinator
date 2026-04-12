@@ -105,6 +105,7 @@ class _BridgeDispatcher:
     _BridgeEvent = Literal[
         "updateProgress",
         "updatePhase",
+        "updateModel",
         "setWorkTotals",
         "updateWorkDone",
         "registerStepTime",
@@ -122,6 +123,7 @@ class _BridgeDispatcher:
         {
             "updateProgress",
             "updatePhase",
+            "updateModel",
             "setWorkTotals",
             "updateWorkDone",
             "registerStepTime",
@@ -229,6 +231,7 @@ class PipelineAdapter:
         # Output info (set by pipeline)
         self.last_output_html: str | None = None
         self.last_output_dir: str | None = None
+        self.last_effective_model: str | None = None
         self.last_run_status: str = "idle"
         self.last_run_error: str | None = None
         self.effective_api_key: str | None = None
@@ -280,6 +283,10 @@ class PipelineAdapter:
     def aggiorna_progresso(self, value: float):
         self._emit_js("updateProgress", value, batched=True)
 
+    def update_model(self, model: str):
+        self.last_effective_model = str(model or "").strip() or None
+        self._emit_js("updateModel", self.last_effective_model or "", batched=True)
+
     def aggiorna_fase(self, text: str):
         self._emit_js("updatePhase", text, batched=True)
 
@@ -297,6 +304,7 @@ class PipelineAdapter:
     def reset_run_state(self, api_key: str | None = None):
         self.last_output_html = None
         self.last_output_dir = None
+        self.last_effective_model = None
         self.last_run_status = "failed"
         self.last_run_error = None
         self.effective_api_key = str(api_key or "").strip() or None
@@ -684,6 +692,8 @@ class ElSbobinatorApi:
                                 "id": file_info.get("id", ""),
                                 "output_html": self._adapter.last_output_html,
                                 "output_dir": self._adapter.last_output_dir,
+                                "effective_model": self._adapter.last_effective_model
+                                or "",
                             }
                             self._adapter.emit("fileDone", payload, batched=False)
                             completed_count += 1

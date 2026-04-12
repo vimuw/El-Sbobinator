@@ -94,7 +94,7 @@ type ConfirmActionState =
   | { type: 'clear-completed'; count: number };
 
 export default function App() {
-  const [{ files, structuralVersion, appState, currentPhase, activeProgress, workTotals, workDone, stepMetrics }, dispatch] = useReducer(processingReducer, initialProcessingState);
+  const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone, stepMetrics }, dispatch] = useReducer(processingReducer, initialProcessingState);
 
   // --- Extracted hooks ---
   const { consoleLogs, appendConsole } = useConsole();
@@ -750,6 +750,7 @@ export default function App() {
                       file={file}
                       appState={appState}
                       currentPhase={isActive ? currentPhase : undefined}
+                      currentModel={isActive ? currentModel : undefined}
                       workDone={isActive ? workDone : EMPTY_WORK}
                       workTotals={isActive ? workTotals : EMPTY_WORK}
                       etaLabel={isActive ? etaLabel : null}

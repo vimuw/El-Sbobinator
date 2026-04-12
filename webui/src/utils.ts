@@ -44,6 +44,11 @@ export const formatRelativeTime = (timestampMs: number): string => {
   return new Date(timestampMs).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
+export function shortModelName(model: string): string {
+  if (!model) return '';
+  return model.replace(/^models\//, '').replace(/^gemini-/, '').trim() || model;
+}
+
 export const formatDuration = (seconds: number, fallback = ''): string => {
   if (!seconds) return fallback;
   const h = Math.floor(seconds / 3600);

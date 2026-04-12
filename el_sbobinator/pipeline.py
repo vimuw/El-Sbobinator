@@ -126,6 +126,7 @@ def _esegui_sbobinatura_impl(  # noqa: C901
             session.setdefault("settings", {})
             session["settings"]["effective_model"] = new_model
             save_session()
+            runtime.update_model(new_model)
             print(f"   [OK] Cambio modello automatico: {previous_model} -> {new_model}")
 
         def log_model_selection(label: str):
@@ -153,6 +154,7 @@ def _esegui_sbobinatura_impl(  # noqa: C901
             settings.model,
             settings.fallback_models,
         )
+        runtime.update_model(model_state.current)
         chunk_seconds = settings.chunk_seconds
         step_seconds = settings.step_seconds
         prev_memory = ""

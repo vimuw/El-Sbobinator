@@ -15,6 +15,7 @@ export function serializeQueueFile(file: FileItem): Record<string, unknown> {
     outputDir: file.outputDir,
     errorText: file.errorText,
     completedAt: file.completedAt,
+    effectiveModel: file.effectiveModel,
   };
 }
 
@@ -32,6 +33,7 @@ export function deserializeQueueFile(file: Partial<FileItem>, index: number): Fi
     outputDir: file.outputDir ? String(file.outputDir) : undefined,
     errorText: file.errorText ? String(file.errorText) : undefined,
     completedAt: file.completedAt ? Number(file.completedAt) : undefined,
+    effectiveModel: file.effectiveModel ? String(file.effectiveModel) : undefined,
   };
 }
 

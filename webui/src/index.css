@@ -254,6 +254,11 @@
   border-top-color: rgba(100, 116, 139, 0.28);
 }
 
+:root:not([data-theme="dark"]) .color-reset:hover,
+:root:not([data-theme="dark"]) .color-custom:hover {
+  background: rgba(0, 0, 0, 0.07);
+}
+
 :root:not([data-theme="dark"]) .toc-left-sidebar {
   background: #eaecf4;
   border-right-color: rgba(100, 116, 139, 0.22);
@@ -1594,6 +1599,119 @@ button {
   height: 18px;
   background: var(--border-subtle);
   margin: 0 0.15rem;
+}
+
+/* --- Color / Highlight Picker --- */
+
+.color-picker-btn {
+  width: auto;
+  padding: 0 6px;
+  gap: 4px;
+}
+
+.color-picker-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.color-indicator {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.color-picker-panel {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  box-shadow: var(--shadow-strong);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 160px;
+  backdrop-filter: blur(18px);
+}
+
+.color-row {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.color-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 120ms ease, border-color 120ms ease;
+}
+
+.color-swatch:hover {
+  transform: scale(1.15);
+  border-color: var(--border-default);
+}
+
+.color-swatch.is-selected {
+  border-color: var(--text-primary);
+  transform: scale(1.1);
+}
+
+.color-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+
+.color-reset {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.color-reset:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.color-custom {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+  position: relative;
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.color-custom:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.color-custom-preview {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid var(--border-default);
+  flex-shrink: 0;
 }
 
 .context-menu {

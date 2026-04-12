@@ -19,7 +19,7 @@ import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight,
   Bold, ChevronDown, Clipboard, Copy, ImagePlus, Italic,
   Link2, Link2Off, List, ListOrdered, Menu, MoreVertical, Quote, Redo,
-  Scissors, Search, Strikethrough, Subscript as SubIcon,
+  RemoveFormatting, Scissors, Search, Strikethrough, Subscript as SubIcon,
   Superscript as SupIcon, Underline as UnderlineIcon, Undo, X,
 } from 'lucide-react';
 import { FloatingImage } from './FloatingImage';
@@ -1320,6 +1320,10 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
           <button className="context-menu-item" onClick={() => { editor?.chain().focus().toggleUnderline().run(); setContextMenu(null); }}>
             <UnderlineIcon className="h-4 w-4" /> Sottolineato
           </button>
+          <button className="context-menu-item" onClick={() => { if (editor && !editor.state.selection.empty) { editor.chain().focus().unsetAllMarks().clearNodes().run(); } setContextMenu(null); }}>
+            <RemoveFormatting className="h-4 w-4" /> Rimuovi formattazione
+          </button>
+          <div className="editor-separator mx-3 my-1 w-auto" />
           <button className="context-menu-item" onClick={() => { imageInputRef.current?.click(); }}>
             <ImagePlus className="h-4 w-4" /> Inserisci immagine
           </button>

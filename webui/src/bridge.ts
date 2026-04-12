@@ -38,6 +38,7 @@ export interface BridgeCallbacks {
   appendConsole: (msg: string) => void;
   updateProgress: (value: number) => void;
   updatePhase: (text: string) => void;
+  updateModel: (model: string) => void;
   processDone: (data: ProcessDonePayload) => void;
   setWorkTotals: (data: WorkTotalsPayload) => void;
   updateWorkDone: (data: WorkDonePayload) => void;
@@ -104,6 +105,7 @@ export function createBridge(options: {
     appendConsole,
     updateProgress: value => dispatch({ type: 'bridge/update_progress', value }),
     updatePhase: text => dispatch({ type: 'bridge/update_phase', text }),
+    updateModel: model => dispatch({ type: 'bridge/update_model', model }),
     processDone: data => {
       dispatch({ type: 'bridge/process_done', data });
       onBatchDone(data);
