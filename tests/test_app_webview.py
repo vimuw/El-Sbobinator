@@ -901,6 +901,41 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
                     "pwned", fh.read(), "file outside allowed roots must not be written"
                 )
 
+    def test_delete_session_removes_folder_when_inside_session_root(self):
+        import os
+
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as session_root:
+            session_dir = os.path.join(session_root, "abc123")
+            os.makedirs(session_dir)
+            sentinel = os.path.join(session_dir, "session.json")
+            with open(sentinel, "w", encoding="utf-8") as fh:
+                fh.write("{}")
+
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                result = api.delete_session(session_dir)
+
+        self.assertTrue(result["ok"], result.get("error"))
+        self.assertFalse(os.path.exists(session_dir))
+
+    def test_delete_session_rejects_path_outside_session_root(self):
+        import os
+
+        api = ElSbobinatorApi()
+        with (
+            tempfile.TemporaryDirectory() as session_root,
+            tempfile.TemporaryDirectory() as outside_dir,
+        ):
+            victim = os.path.join(outside_dir, "important")
+            os.makedirs(victim)
+
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                result = api.delete_session(victim)
+
+            self.assertFalse(result["ok"])
+            self.assertIn("Percorso non valido", result["error"])
+            self.assertTrue(os.path.exists(victim))
+
 
 if __name__ == "__main__":
     unittest.main()

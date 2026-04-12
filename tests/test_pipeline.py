@@ -462,7 +462,6 @@ class PipelineCleanupCacheTests(unittest.TestCase):
                 "el_sbobinator.pipeline.export_final_html_document",
                 side_effect=fake_export,
             ),
-            patch("el_sbobinator.pipeline.get_desktop_dir", return_value=tmpdir),
         ]
 
     def test_cleanup_path_invalidates_cache_and_bytes_drop_immediately(self):

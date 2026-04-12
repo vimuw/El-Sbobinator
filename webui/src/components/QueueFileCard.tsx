@@ -1,6 +1,6 @@
 import React from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { AlertCircle, CheckCircle, Clock, ExternalLink, Eye, FileAudio, FolderOpen, GripVertical, Trash2, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, ExternalLink, FileAudio, FolderOpen, GripVertical, PenLine, Trash2, XCircle } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
@@ -18,7 +18,12 @@ interface QueueFileCardProps {
   onRemove: (id: string) => void;
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string) => void;
   onOpenFile: (path: string) => void;
-  onOpenDir: (path: string) => void;
+}
+
+function abbreviatePath(path: string): string {
+  const parts = path.replace(/\\/g, '/').split('/').filter(Boolean);
+  if (parts.length <= 2) return path;
+  return `…/${parts.slice(-2).join('/')}`;
 }
 
 function getProcessingDetails(phaseText?: string) {
@@ -45,6 +50,8 @@ function getProcessingDetails(phaseText?: string) {
 function QueueFileCardInner({
   file, appState, currentPhase, currentModel, workDone, workTotals, etaLabel, activeProgress,
   onRemove,
+  onPreview,
+  onOpenFile,
 }: QueueFileCardProps) {
   const processingDetails = file.status === 'processing' ? getProcessingDetails(currentPhase) : null;
   const isCanceling = appState === 'canceling' && file.status === 'processing';
@@ -92,14 +99,22 @@ function QueueFileCardInner({
         <div className="relative z-10 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 overflow-hidden flex-1">
             {isDraggable && (
-              <button
-                {...listeners}
-                className="drag-handle-btn shrink-0"
-                tabIndex={-1}
-                aria-label="Trascina per riordinare"
-              >
-                <GripVertical className="w-4 h-4" />
-              </button>
+              <div className="group/drag flex items-center shrink-0 gap-1">
+                <button
+                  {...listeners}
+                  className="drag-handle-btn"
+                  tabIndex={-1}
+                  aria-label="Trascina per riordinare"
+                >
+                  <GripVertical className="w-4 h-4" />
+                </button>
+                <span
+                  className="text-[10px] select-none opacity-0 group-hover/drag:opacity-50 transition-opacity duration-150 whitespace-nowrap"
+                  style={{ color: 'var(--text-faint)' }}
+                >
+                  trascina
+                </span>
+              </div>
             )}
             <div
               className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl"
@@ -221,10 +236,10 @@ interface CompletedFileCardProps {
   onRemove: (id: string) => void;
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string) => void;
   onOpenFile: (path: string) => void;
-  onOpenDir: (path: string) => void;
 }
 
-function CompletedFileCardInner({ file, appState, isNewest, onRemove, onPreview, onOpenFile, onOpenDir }: CompletedFileCardProps) {
+function CompletedFileCardInner({ file, appState, isNewest, onRemove, onPreview, onOpenFile }: CompletedFileCardProps) {
+  const isClickable = Boolean(file.outputHtml);
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -234,7 +249,8 @@ function CompletedFileCardInner({ file, appState, isNewest, onRemove, onPreview,
         opacity: { duration: 0.2, ease: 'easeOut' },
         y: { type: 'spring', stiffness: 380, damping: 30, mass: 0.8 },
       }}
-      className="queue-card relative p-5 transition-colors"
+      onClick={isClickable ? () => onPreview(file.outputHtml!, file.name, file.path, file.id) : undefined}
+      className={`queue-card relative p-5 transition-colors group/card ${isClickable ? 'cursor-pointer' : ''}`}
       style={{
         border: '1px solid var(--success-ring)',
         background: isNewest ? 'rgba(22,163,74,0.04)' : 'rgba(255,255,255,0.03)',
@@ -279,53 +295,50 @@ function CompletedFileCardInner({ file, appState, isNewest, onRemove, onPreview,
                 {file.completedAt ? formatRelativeTime(file.completedAt) : 'Completato'}
               </span>
             </div>
+            {file.outputHtml && (
+              <div className="mt-1 flex items-center gap-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                <FolderOpen className="w-3 h-3 shrink-0" />
+                <span className="truncate" title={file.outputHtml}>{abbreviatePath(file.outputHtml)}</span>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           {file.outputHtml && (
             <button
               onClick={(e) => { e.stopPropagation(); onPreview(file.outputHtml!, file.name, file.path, file.id); }}
-              className="icon-button compact-icon-button"
-              style={{ color: 'var(--text-muted)' }}
+              className="icon-button"
+              style={{ color: 'var(--success-text)', borderColor: 'var(--success-ring)', background: 'var(--success-subtle)', paddingInline: '10px', gap: '5px', height: '34px', borderRadius: '10px', width: 'auto' }}
               title="Apri editor"
               aria-label="Apri editor"
             >
-              <Eye className="w-3.5 h-3.5" />
+              <PenLine className="w-3.5 h-3.5 shrink-0" />
+              <span className="text-xs font-medium">Modifica</span>
             </button>
           )}
-          <div className="flex items-center gap-1">
-            {file.outputHtml && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onOpenFile(file.outputHtml!); }}
-                className="icon-button compact-icon-button"
-                style={{ color: 'var(--text-muted)' }}
-                title="Apri nel browser"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </button>
-            )}
-            {file.outputDir && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onOpenDir(file.outputDir!); }}
-                className="icon-button compact-icon-button"
-                style={{ color: 'var(--text-muted)' }}
-                title="Apri cartella"
-              >
-                <FolderOpen className="w-3.5 h-3.5" />
-              </button>
-            )}
-            {appState === 'idle' && (
-              <button
-                onClick={() => onRemove(file.id)}
-                className="icon-button compact-icon-button"
-                style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}
-                title="Rimuovi"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
+          {file.outputHtml && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onOpenFile(file.outputHtml!); }}
+              className="icon-button compact-icon-button"
+              style={{ color: 'var(--text-muted)' }}
+              title="Apri nel browser"
+              aria-label="Apri nel browser"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {appState === 'idle' && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRemove(file.id); }}
+              className="icon-button compact-icon-button"
+              style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}
+              title="Rimuovi"
+              aria-label="Rimuovi"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
     </motion.div>

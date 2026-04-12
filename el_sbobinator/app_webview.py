@@ -465,6 +465,94 @@ class ElSbobinatorApi:
         except Exception as e:
             return {"ok": False, "error": str(e), "total_bytes": 0, "total_sessions": 0}
 
+    def get_completed_sessions(self, limit: int = 20) -> dict:
+        """Return the most recent completed sessions for the archive UI."""
+        import json as _json
+
+        session_root = self._get_session_root()
+        if not os.path.isdir(session_root):
+            return {"ok": True, "sessions": []}
+        try:
+            candidates: list[tuple[str, dict, str]] = []
+            for entry in os.scandir(session_root):
+                if not entry.is_dir():
+                    continue
+                session_path = os.path.join(entry.path, "session.json")
+                if not os.path.isfile(session_path):
+                    continue
+                try:
+                    with open(session_path, "r", encoding="utf-8") as fh:
+                        data = _json.load(fh)
+                    if data.get("stage") != "done":
+                        continue
+                    html_path = data.get("outputs", {}).get("html", "")
+                    if not html_path:
+                        continue
+                    candidates.append((data.get("updated_at", ""), data, entry.path))
+                except Exception:
+                    continue
+            candidates.sort(key=lambda c: c[0], reverse=True)
+            sessions = []
+            for _ts, data, session_dir in candidates[: max(0, int(limit))]:
+                html_path = data.get("outputs", {}).get("html", "")
+                # Migration: if the stored path (e.g. old Desktop copy) is gone,
+                # look for the same filename inside the session dir and fix session.json.
+                if html_path and not os.path.isfile(str(html_path)):
+                    session_copy = os.path.join(
+                        session_dir, os.path.basename(str(html_path))
+                    )
+                    if not os.path.isfile(session_copy):
+                        continue  # HTML truly missing, no fallback candidate; skip
+                    html_path = session_copy
+                    try:
+                        from el_sbobinator.shared import (  # noqa: PLC0415
+                            _atomic_write_json,
+                        )
+
+                        data["outputs"]["html"] = html_path
+                        _atomic_write_json(
+                            os.path.join(session_dir, "session.json"), data
+                        )
+                    except Exception:
+                        pass
+                input_path = data.get("input", {}).get("path", "")
+                name = (
+                    os.path.basename(input_path)
+                    if input_path
+                    else os.path.basename(str(html_path))
+                )
+                effective_model = data.get("settings", {}).get("effective_model", "")
+                sessions.append(
+                    {
+                        "name": name,
+                        "completed_at_iso": data.get("updated_at", ""),
+                        "html_path": str(html_path),
+                        "effective_model": effective_model,
+                        "input_path": str(input_path),
+                        "session_dir": str(session_dir),
+                    }
+                )
+            return {"ok": True, "sessions": sessions}
+        except Exception as e:
+            return {"ok": False, "error": str(e), "sessions": []}
+
+    def delete_session(self, session_dir: str) -> dict:
+        """Permanently delete a single session folder from disk."""
+        import shutil
+
+        try:
+            session_root = self._get_session_root()
+            abs_dir = os.path.abspath(session_dir)
+            abs_root = os.path.abspath(session_root)
+            if not abs_dir.startswith(abs_root + os.sep):
+                return {"ok": False, "error": "Percorso non valido"}
+            if not os.path.isdir(abs_dir):
+                return {"ok": False, "error": "Cartella non trovata"}
+            shutil.rmtree(abs_dir)
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     def cleanup_old_sessions(
         self, max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS
     ) -> dict:
@@ -485,6 +573,24 @@ class ElSbobinatorApi:
                 "freed_bytes": 0,
                 "errors": 0,
             }
+
+    def open_session_folder(self) -> dict:
+        """Open the session storage folder in the system file manager."""
+        import subprocess
+        import sys
+
+        try:
+            session_root = self._get_session_root()
+            os.makedirs(session_root, exist_ok=True)
+            if sys.platform == "win32":
+                os.startfile(session_root)  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", session_root])
+            else:
+                subprocess.Popen(["xdg-open", session_root])
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
     # ---- File Selection ----
 
@@ -854,6 +960,8 @@ class ElSbobinatorApi:
                 self._resolved_path_cache[requested_real_path] = real_path
             else:
                 return {"ok": False, "error": "File non trovato."}
+        else:
+            self._resolved_path_cache[requested_real_path] = real_path
         try:
             content = read_html_file_content(real_path)
             shell = extract_html_shell(content)

@@ -32,6 +32,15 @@ export interface ModelOption {
   default_chunk_minutes: number;
 }
 
+export interface ArchiveSession {
+  name: string;
+  completed_at_iso: string;
+  html_path: string;
+  effective_model: string;
+  input_path: string;
+  session_dir: string;
+}
+
 export type ElSbobinatorBridge = BridgeCallbacks | null;
 
 export interface BridgeCallbacks {
@@ -88,6 +97,9 @@ export interface PywebviewApi {
   ) => Promise<{ ok: boolean; result?: ValidationResult; error?: string }>;
   get_session_storage_info?: () => Promise<{ ok: boolean; total_bytes?: number; total_sessions?: number; error?: string }>;
   cleanup_old_sessions?: (maxAgeDays?: number) => Promise<{ ok: boolean; removed?: number; freed_bytes?: number; errors?: number; error?: string }>;
+  get_completed_sessions?: (limit?: number) => Promise<{ ok: boolean; sessions?: ArchiveSession[]; error?: string }>;
+  delete_session?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;
+  open_session_folder?: () => Promise<{ ok: boolean; error?: string }>;
 }
 
 export function createBridge(options: {

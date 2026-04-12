@@ -7,10 +7,16 @@ import {
   Check,
   CheckCircle,
   ChevronDown,
+  ChevronUp,
   Copy,
+  Eye,
+  EyeOff,
+  ExternalLink,
   FileAudio,
   FileText,
+  FolderOpen,
   Github,
+  History,
   Key,
   Moon,
   Play,
@@ -18,14 +24,15 @@ import {
   Settings,
   Square,
   Sun,
+  Trash2,
   UploadCloud,
   X,
   Zap,
 } from 'lucide-react';
 import { GITHUB_RELEASES_URL, GITHUB_URL, KOFI_URL } from './branding';
-import { type ElSbobinatorBridge, type PywebviewApi } from './bridge';
+import { type ArchiveSession, type ElSbobinatorBridge, type PywebviewApi } from './bridge';
 import { getDoneFiles, getPendingFiles, initialProcessingState, processingReducer, type AppStatus, type FileDescriptor, type FileItem } from './appState';
-import { GEMINI_KEY_PATTERN } from './utils';
+import { formatRelativeTime, GEMINI_KEY_PATTERN, shortModelName } from './utils';
 import { useConsole } from './hooks/useConsole';
 import { useTheme } from './hooks/useTheme';
 import { useUpdateChecker } from './hooks/useUpdateChecker';
@@ -91,7 +98,8 @@ type UiMode = 'setup' | 'ready-empty' | 'ready-with-files' | 'processing' | 'can
 type ConfirmActionState =
   | { type: 'stop-processing' }
   | { type: 'remove-file'; fileId: string; fileName: string }
-  | { type: 'clear-completed'; count: number };
+  | { type: 'clear-completed'; count: number }
+  | { type: 'delete-archive-session'; sessionDir: string; name: string };
 
 export default function App() {
   const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone, stepMetrics }, dispatch] = useReducer(processingReducer, initialProcessingState);
@@ -129,8 +137,17 @@ export default function App() {
   const [isCopied, setIsCopied] = useState(false);
   const [showEmptyState, setShowEmptyState] = useState(() => files.length === 0);
   const [completedSearch, setCompletedSearch] = useState('');
+  const [setupKeyInput, setSetupKeyInput] = useState('');
+  const [setupKeyShowRaw, setSetupKeyShowRaw] = useState(false);
+  const [setupKeySaving, setSetupKeySaving] = useState(false);
+  const [setupKeyError, setSetupKeyError] = useState<string | null>(null);
+  const [archiveSessions, setArchiveSessions] = useState<ArchiveSession[]>([]);
+  const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const [isPeakHour, setIsPeakHour] = useState(() => { const h = new Date().getHours(); return h >= 15 && h < 20; });
-  const [isPeakDismissed, setIsPeakDismissed] = useState(false);
+  const [isPeakDismissed, setIsPeakDismissed] = useState(() => {
+    const ts = localStorage.getItem('peakBannerDismissedUntil');
+    return ts ? Date.now() < Number(ts) : false;
+  });
 
   // --- Refs ---
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -177,6 +194,14 @@ export default function App() {
 
   // --- Queue persistence ---
   useQueuePersistence(files, structuralVersion, dispatch, appendConsole);
+
+  // --- Archive fetch ---
+  useEffect(() => {
+    if (!apiReady) return;
+    window.pywebview?.api?.get_completed_sessions?.().then(result => {
+      if (result?.ok && result.sessions) setArchiveSessions(result.sessions);
+    }).catch(() => {});
+  }, [apiReady]);
 
   // --- File deduplication ---
   const getFileFingerprint = useCallback((file: Pick<FileItem, 'path' | 'name' | 'size' | 'duration'>) => {
@@ -334,6 +359,9 @@ export default function App() {
     setConfirmAction(null);
     dispatch({ type: 'queue/clear_completed' });
     setCompletedSearch('');
+    window.pywebview?.api?.get_completed_sessions?.().then(result => {
+      if (result?.ok && result.sessions) setArchiveSessions(result.sessions);
+    }).catch(() => {});
   }, []);
 
   const handleConfirmAction = useCallback(() => {
@@ -347,8 +375,22 @@ export default function App() {
       setConfirmAction(null);
       return;
     }
+    if (confirmAction.type === 'delete-archive-session') {
+      const { sessionDir } = confirmAction;
+      setConfirmAction(null);
+      window.pywebview?.api?.delete_session?.(sessionDir).then(res => {
+        if (res?.ok) {
+          setArchiveSessions(prev => prev.filter(s => s.session_dir !== sessionDir));
+        } else {
+          appendConsole(`❌ Errore eliminazione sessione: ${res?.error ?? 'errore sconosciuto'}`);
+        }
+      }).catch((e: unknown) => {
+        appendConsole(`❌ Errore eliminazione sessione: ${getErrorMessage(e)}`);
+      });
+      return;
+    }
     confirmClearCompleted();
-  }, [confirmAction, confirmClearCompleted, confirmStopProcessing]);
+  }, [confirmAction, confirmClearCompleted, confirmStopProcessing, appendConsole]);
 
   const handleRegenerateAnswer = async (ans: boolean | null) => {
     setRegeneratePrompt(null);
@@ -437,8 +479,10 @@ export default function App() {
   }, []);
 
   const openFile = useCallback(async (path: string) => {
-    if (window.pywebview?.api) await window.pywebview.api.open_file(path);
-  }, []);
+    if (!window.pywebview?.api) return;
+    const res = await window.pywebview.api.open_file(path);
+    if (res && !res.ok) appendConsole(`❌ Impossibile aprire il file: ${res.error ?? path}`);
+  }, [appendConsole]);
 
 
   // --- Computed values ---
@@ -475,6 +519,37 @@ export default function App() {
   };
   const etaLabel = computeEta();
 
+  const handleSetupSave = useCallback(async () => {
+    setSetupKeySaving(true);
+    setSetupKeyError(null);
+    try {
+      if (!window.pywebview?.api?.save_settings) {
+        const err = 'Bridge Python non disponibile — impostazioni non salvate.';
+        setSetupKeyError(err);
+        appendConsole(`❌ ${err}`);
+        return;
+      }
+      let result;
+      try {
+        result = await window.pywebview.api.save_settings(setupKeyInput.trim(), fallbackKeys, preferredModel, fallbackModels);
+      } catch (e: unknown) {
+        const err = `Errore salvataggio: ${getErrorMessage(e)}`;
+        setSetupKeyError(err);
+        appendConsole(`❌ ${err}`);
+        return;
+      }
+      if (!result?.ok) {
+        const err = `Errore salvataggio: ${result?.error || 'errore sconosciuto'}`;
+        setSetupKeyError(err);
+        appendConsole(`❌ ${err}`);
+        return;
+      }
+      setApiKey(setupKeyInput.trim());
+    } finally {
+      setSetupKeySaving(false);
+    }
+  }, [setupKeyInput, fallbackKeys, preferredModel, fallbackModels, appendConsole]);
+
   useEffect(() => {
     if (appState === 'processing') {
       document.title = etaLabel ? `[ETA ${etaLabel}] El Sbobinator` : '⏳ El Sbobinator';
@@ -493,7 +568,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (isPeakHour) setIsPeakDismissed(false);
+    if (isPeakHour) {
+      const ts = localStorage.getItem('peakBannerDismissedUntil');
+      setIsPeakDismissed(ts ? Date.now() < Number(ts) : false);
+    }
   }, [isPeakHour]);
 
   const titleGradient = { background: 'linear-gradient(90deg, var(--gradient-title-from), var(--gradient-title-to))', WebkitBackgroundClip: 'text' as const, WebkitTextFillColor: 'transparent' };
@@ -525,6 +603,14 @@ export default function App() {
         cancelLabel: 'Tieni elemento',
       };
     }
+    if (confirmAction.type === 'delete-archive-session') {
+      return {
+        title: 'Eliminare questa sbobina?',
+        description: `"${confirmAction.name}" e tutti i suoi dati di sessione verranno eliminati definitivamente dal disco. L'operazione è irreversibile.`,
+        confirmLabel: 'Elimina definitivamente',
+        cancelLabel: 'Annulla',
+      };
+    }
     return {
       title: 'Pulire le sbobine completate?',
       description: confirmAction.count === 1
@@ -534,6 +620,11 @@ export default function App() {
       cancelLabel: 'Mantieni lista',
     };
   }, [confirmAction]);
+
+  const archiveFiltered = useMemo(() => {
+    const doneHtmlPaths = new Set(doneFiles.map(f => f.outputHtml).filter(Boolean));
+    return archiveSessions.filter(s => !doneHtmlPaths.has(s.html_path));
+  }, [archiveSessions, doneFiles]);
 
   const sortableIds = useMemo(() => pendingFiles.map(f => f.id), [pendingFiles]);
 
@@ -610,7 +701,7 @@ export default function App() {
                   <span>Fascia oraria di punta (15:00–20:00): tutti i modelli Gemini Flash possono subire <strong>rallentamenti o errori 503</strong> per traffico elevato sui server Google. Gemini 3 Flash è il più colpito; Gemini 2.5 Flash è generalmente più stabile, ma non immune da problemi.</span>
                 </div>
                 <button
-                  onClick={() => setIsPeakDismissed(true)}
+                  onClick={() => { localStorage.setItem('peakBannerDismissedUntil', String(Date.now() + 3_600_000)); setIsPeakDismissed(true); }}
                   className="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--warning-text)', padding: '2px', lineHeight: 1 }}
                   aria-label="Chiudi avviso fascia oraria"
@@ -665,33 +756,97 @@ export default function App() {
         {/* Onboarding / Drop Zone */}
         {uiMode === 'setup' ? (
           <div
-            className="relative overflow-hidden rounded-2xl px-8 py-12 text-center flex flex-col items-center gap-5"
+            className="relative overflow-hidden rounded-2xl px-8 py-10 flex flex-col items-center gap-5"
             style={{ background: 'rgba(255,255,255,0.02)', border: '1.5px solid var(--border-default)' }}
           >
-            <div className="w-14 h-14 rounded-full flex items-center justify-center shadow-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}>
-              <Key className="w-7 h-7" style={{ color: 'var(--text-muted)' }} />
-            </div>
-            <div className="flex flex-col gap-1.5 max-w-sm">
-              <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Configura la tua API Key</h3>
-              <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+            <div className="flex flex-col items-center gap-2 text-center">
+              <div className="w-14 h-14 rounded-full flex items-center justify-center shadow-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}>
+                <Key className="w-7 h-7" style={{ color: 'var(--text-muted)' }} />
+              </div>
+              <h3 className="text-lg font-semibold mt-1" style={{ color: 'var(--text-primary)' }}>Configura la tua API Key</h3>
+              <p className="text-sm leading-relaxed max-w-sm" style={{ color: 'var(--text-muted)' }}>
                 El Sbobinator usa Google Gemini per trascrivere audio e video. Inserisci una chiave API gratuita per iniziare.
               </p>
             </div>
-            <div className="flex flex-col items-center gap-2.5">
-              <button onClick={() => setIsSettingsOpen(true)} className="premium-button px-8 py-3 text-base">
-                <Settings className="w-4 h-4" />
-                Apri impostazioni
-              </button>
-              <a
-                href="#"
-                onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.('https://aistudio.google.com/apikey'); }}
-                className="text-xs transition-opacity hover:opacity-100 opacity-70"
-                style={{ color: 'var(--text-secondary)' }}
+
+            {/* Inline key entry */}
+            <div className="w-full max-w-md flex flex-col gap-2">
+              <div className="relative">
+                <input
+                  type={setupKeyShowRaw ? 'text' : 'password'}
+                  value={setupKeyInput}
+                  onChange={e => setSetupKeyInput(e.target.value)}
+                  onKeyDown={async e => {
+                    if (e.key !== 'Enter') return;
+                    if (!GEMINI_KEY_PATTERN.test(setupKeyInput.trim())) return;
+                    if (setupKeySaving) return;
+                    await handleSetupSave();
+                  }}
+                  placeholder="Incolla qui la tua API Key (AIzaSy...)"
+                  className="app-input font-mono text-sm pr-10"
+                  style={{
+                    background: 'var(--bg-input)',
+                    border: `1px solid ${
+                      setupKeyInput.trim() && GEMINI_KEY_PATTERN.test(setupKeyInput.trim())
+                        ? 'var(--success-ring)'
+                        : setupKeyInput.trim()
+                          ? 'var(--warning-ring)'
+                          : 'var(--border-default)'
+                    }`,
+                    color: 'var(--text-primary)',
+                  }}
+                />
+                <button
+                  onClick={() => setSetupKeyShowRaw(v => !v)}
+                  tabIndex={-1}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100 transition-opacity"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px', lineHeight: 1 }}
+                  aria-label={setupKeyShowRaw ? 'Nascondi chiave' : 'Mostra chiave'}
+                >
+                  {setupKeyShowRaw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {setupKeyInput.trim() && (
+                <p className="text-xs" style={{ color: GEMINI_KEY_PATTERN.test(setupKeyInput.trim()) ? 'var(--success-text)' : 'var(--warning-text)' }}>
+                  {GEMINI_KEY_PATTERN.test(setupKeyInput.trim()) ? '✓ Formato valido — premi Salva per continuare' : '⚠ Formato non valido — le chiavi iniziano con AIzaSy...'}
+                </p>
+              )}
+              <button
+                disabled={!GEMINI_KEY_PATTERN.test(setupKeyInput.trim()) || setupKeySaving}
+                onClick={handleSetupSave}
+                className="premium-button w-full"
+                style={!GEMINI_KEY_PATTERN.test(setupKeyInput.trim()) ? { cursor: 'not-allowed', opacity: 0.5 } : {}}
               >
-                Ottieni una API key gratis su aistudio.google.com →
-              </a>
+                <Key className="w-4 h-4" />
+                {setupKeySaving ? 'Salvataggio…' : 'Salva e inizia'}
+              </button>
+              {setupKeyError && (
+                <p className="text-xs" style={{ color: 'var(--error-text)' }}>❌ {setupKeyError}</p>
+              )}
             </div>
-            <p className="text-xs" style={{ color: 'var(--text-faint)' }}>Dopo potrai trascinare file audio e video qui.</p>
+
+            {/* 3-step mini guide */}
+            <div className="w-full max-w-md rounded-xl px-5 py-4 flex flex-col gap-2.5" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-subtle)' }}>
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-faint)' }}>Come ottenere la chiave in 1 minuto</p>
+              <ol className="flex flex-col gap-1.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                <li className="flex items-start gap-2">
+                  <span className="shrink-0 w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center" style={{ background: 'var(--accent-subtle)', color: 'var(--accent-text, var(--text-secondary))' }}>1</span>
+                  <span>Vai su <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.('https://aistudio.google.com/apikey'); }} className="underline hover:opacity-100 opacity-80" style={{ color: 'var(--accent-text, var(--text-secondary))' }}>aistudio.google.com/apikey</a></span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="shrink-0 w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center" style={{ background: 'var(--accent-subtle)', color: 'var(--accent-text, var(--text-secondary))' }}>2</span>
+                  <span>Clicca <strong>"Create API key"</strong> e copia la chiave</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="shrink-0 w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center" style={{ background: 'var(--accent-subtle)', color: 'var(--accent-text, var(--text-secondary))' }}>3</span>
+                  <span>Incollala nel campo qui sopra e premi <strong>Salva e inizia</strong></span>
+                </li>
+              </ol>
+            </div>
+
+            <button onClick={() => setIsSettingsOpen(true)} className="text-xs opacity-60 hover:opacity-100 transition-opacity flex items-center gap-1" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+              <Settings className="w-3.5 h-3.5" /> Apri impostazioni avanzate
+            </button>
           </div>
         ) : uiMode !== 'processing' && uiMode !== 'canceling' ? (
           <div
@@ -758,7 +913,6 @@ export default function App() {
                       onRemove={requestRemoveFile}
                       onPreview={openPreview}
                       onOpenFile={openFile}
-                      onOpenDir={openFile}
                     />
                   );
                 })}
@@ -794,6 +948,11 @@ export default function App() {
                       <Play className="w-5 h-5 fill-current" />
                       {!hasApiKey ? '⚠️ Inserisci API Key nelle impostazioni' : !isApiKeyValid ? '⚠️ API Key non valida' : `Avvia sbobinatura (${queuedCount} file)`}
                     </button>
+                    {canStart && preferredModel && (
+                      <p className="text-center text-xs mt-2" style={{ color: 'var(--text-faint)' }}>
+                        Modello: <span style={{ color: 'var(--text-muted)' }}>{shortModelName(preferredModel)}</span>
+                      </p>
+                    )}
                   </motion.div>
                 )}
                 {appState === 'processing' && (
@@ -873,7 +1032,6 @@ export default function App() {
                     onRemove={requestRemoveFile}
                     onPreview={openPreview}
                     onOpenFile={openFile}
-                    onOpenDir={openFile}
                   />
                 ))}
                 {completedSearch.trim() && filteredDoneFiles.length === 0 && (
@@ -887,6 +1045,98 @@ export default function App() {
                   >
                     Nessun risultato per "{completedSearch}"
                   </motion.p>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Archivio storico */}
+        <AnimatePresence>
+          {archiveFiltered.length > 0 && (
+            <motion.div
+              key="archive-section"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8, transition: { duration: 0.15 } }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="premium-panel overflow-hidden"
+            >
+              <button
+                onClick={() => setIsArchiveOpen(v => !v)}
+                className="w-full flex items-center justify-between gap-3 px-5 sm:px-6 py-4 transition-colors"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', borderBottom: isArchiveOpen ? '1px solid var(--border-subtle)' : 'none' }}
+              >
+                <div className="flex items-center gap-2">
+                  <History className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+                  <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Archivio sbobine passate</span>
+                  <span className="status-pill shrink-0 whitespace-nowrap" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-default)' }}>{archiveFiltered.length}</span>
+                </div>
+                {isArchiveOpen ? <ChevronUp className="w-4 h-4" style={{ color: 'var(--text-faint)' }} /> : <ChevronDown className="w-4 h-4" style={{ color: 'var(--text-faint)' }} />}
+              </button>
+              <AnimatePresence>
+                {isArchiveOpen && (
+                  <motion.div
+                    key="archive-list"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2, ease: 'easeInOut' }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-5 sm:px-6 py-4 flex flex-col gap-2">
+                      {archiveFiltered.map((session) => {
+                        const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
+                        return (
+                          <div
+                            key={session.session_dir}
+                            onClick={() => openPreview(session.html_path, session.name, session.input_path)}
+                            className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 cursor-pointer transition-colors"
+                            style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-subtle)' }}
+                          >
+                            <div className="flex items-center gap-3 overflow-hidden flex-1">
+                              <History className="w-4 h-4 shrink-0" style={{ color: 'var(--text-faint)' }} />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{session.name}</p>
+                                <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+                                  {ts > 0 && <span>{formatRelativeTime(ts)}</span>}
+                                  {session.effective_model && (
+                                    <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span>{shortModelName(session.effective_model)}</span></>
+                                  )}
+                                </div>
+                                <div className="mt-0.5 flex items-center gap-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                                  <FolderOpen className="w-3 h-3 shrink-0" />
+                                  <span className="truncate" title={session.html_path}>
+                                    {session.html_path.replace(/\\/g, '/').split('/').slice(-2).join('/')}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                onClick={e => { e.stopPropagation(); openFile(session.html_path); }}
+                                className="icon-button compact-icon-button"
+                                style={{ color: 'var(--text-muted)' }}
+                                title="Apri nel browser"
+                                aria-label="Apri nel browser"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={e => { e.stopPropagation(); setConfirmAction({ type: 'delete-archive-session', sessionDir: session.session_dir, name: session.name }); }}
+                                className="icon-button compact-icon-button"
+                                style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}
+                                title="Elimina sessione"
+                                aria-label="Elimina sessione"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
                 )}
               </AnimatePresence>
             </motion.div>

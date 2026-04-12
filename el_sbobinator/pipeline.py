@@ -10,8 +10,6 @@ This module contains the heavy workflow:
 from __future__ import annotations
 
 import os
-import platform
-import shutil
 import threading
 import time
 from google import genai
@@ -53,10 +51,8 @@ from el_sbobinator.session_store import _update_session
 from el_sbobinator.shared import (
     PROMPT_REVISIONE,
     PROMPT_SISTEMA,
-    USER_HOME,
     _atomic_write_json,
     _load_json,
-    get_desktop_dir,
     invalidate_session_storage_cache,
     safe_output_basename,
 )
@@ -511,14 +507,6 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         # 3. SALVATAGGIO FINALE (MARKDOWN + HTML)
         # ==========================================
         runtime.phase("Fase: esportazione HTML")
-        desktop_folder = get_desktop_dir()
-        try:
-            os.makedirs(desktop_folder, exist_ok=True)
-        except Exception:
-            desktop_folder = USER_HOME
-
-        # HTML scritto nella cartella di sessione (persistente, non viene
-        # eliminata accidentalmente come un file sul Desktop).
         session_html_dir = session_ctx.session_dir
 
         try:
@@ -556,17 +544,8 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         except Exception:
             pass
 
-        # Copia best-effort sul Desktop per comodita' dell'utente.
         try:
-            desktop_copy = os.path.join(desktop_folder, os.path.basename(html_path))
-            if os.path.abspath(html_path) != os.path.abspath(desktop_copy):
-                shutil.copy2(html_path, desktop_copy)
-                print(f"[*] Copia Desktop: {desktop_copy}")
-        except Exception as e:
-            print(f"[*] Copia Desktop non riuscita (non fatale): {e}")
-
-        try:
-            runtime.output_html(html_path, output_dir=desktop_folder)
+            runtime.output_html(html_path)
         except Exception:
             pass
 
@@ -588,15 +567,6 @@ def _esegui_sbobinatura_impl(  # noqa: C901
                 invalidate_session_storage_cache()
         except Exception:
             pass
-
-        # Forza l'aggiornamento visivo del file sul Desktop in Windows
-        if platform.system() == "Windows":
-            try:
-                import ctypes
-
-                ctypes.windll.shell32.SHChangeNotify(0x08000000, 0x0000, None, None)
-            except Exception:
-                pass
 
     except Exception as e:
         runtime.set_run_result("failed", str(e))

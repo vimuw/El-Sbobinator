@@ -1,7 +1,7 @@
 import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Activity, AlertCircle, AlertTriangle, ArrowDown, ArrowUp, Bell, ChevronDown, Cpu, Eye, EyeOff, HardDrive, Settings, SlidersHorizontal, X } from 'lucide-react';
+import { Activity, AlertCircle, AlertTriangle, ArrowDown, ArrowUp, Bell, ChevronDown, Cpu, Eye, EyeOff, FolderOpen, HardDrive, Settings, SlidersHorizontal, X } from 'lucide-react';
 import type { ModelOption, ValidationResult } from '../../bridge';
 import { formatSize, GEMINI_KEY_PATTERN } from '../../utils';
 
@@ -191,6 +191,10 @@ export function SettingsModal({
       .finally(() => { if (!aborted) setIsLoadingSessionInfo(false); });
     return () => { aborted = true; };
   }, [isOpen]);
+
+  const handleOpenSessionFolder = () => {
+    window.pywebview?.api?.open_session_folder?.();
+  };
 
   const handleCleanupSessions = async () => {
     if (!window.pywebview?.api?.cleanup_old_sessions) return;
@@ -576,11 +580,21 @@ export function SettingsModal({
                               <HardDrive className="w-3.5 h-3.5" />
                               Sessioni salvate
                             </h3>
-                            {sessionInfo !== null && (
-                              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                                {sessionInfo.total_sessions} {sessionInfo.total_sessions === 1 ? 'sessione' : 'sessioni'}
-                              </span>
-                            )}
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={handleOpenSessionFolder}
+                                title="Apri cartella sessioni"
+                                className="icon-button modal-icon-button"
+                                style={{ width: 26, height: 26, borderRadius: 8 }}
+                              >
+                                <FolderOpen className="w-3.5 h-3.5" />
+                              </button>
+                              {sessionInfo !== null && (
+                                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                  {sessionInfo.total_sessions} {sessionInfo.total_sessions === 1 ? 'sessione' : 'sessioni'}
+                                </span>
+                              )}
+                            </div>
                           </div>
                           <div className="rounded-xl px-4 py-3 space-y-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
                             <div className="flex items-center justify-between gap-3">

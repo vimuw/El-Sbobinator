@@ -1188,6 +1188,15 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
         void insertImageFiles(files);
         return true;
       },
+      transformPastedHTML(html: string): string {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        doc.body.querySelectorAll('[style]').forEach(el => {
+          const s = (el as HTMLElement).style;
+          s.removeProperty('color');
+          s.removeProperty('background-color');
+        });
+        return doc.body.innerHTML;
+      },
     },
   });
 
