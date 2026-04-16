@@ -284,6 +284,7 @@ export function SettingsModal({
     .map(modelId => availableModels.find(option => option.id === modelId))
     .filter(Boolean) as ModelOption[];
   const defaultChunkMinutes = availableModels.find(m => m.id === preferredModel)?.default_chunk_minutes ?? 15;
+  const defaultTemperature = availableModels.find(m => m.id === preferredModel)?.phase1_temperature ?? 0.35;
 
   const handlePrimaryModelChange = (nextPrimary: string) => {
     setPreferredModel(nextPrimary);
@@ -405,7 +406,8 @@ export function SettingsModal({
               </div>
 
               {/* 3. Notifiche */}
-              <div className="flex items-center justify-between gap-4" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
+              <div className="space-y-4" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
+              <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-sm font-medium flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
                     <Bell className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
@@ -451,6 +453,8 @@ export function SettingsModal({
                     }}
                   />
                 </button>
+              </div>
+
               </div>
 
               {/* Avanzati */}
@@ -499,7 +503,7 @@ export function SettingsModal({
                               />
                             </div>
                             <div className="space-y-4">
-                              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '10px' }}>Fallback modelli (solo su 503)</label>
+                              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '10px' }}>Fallback modelli</label>
                               <CustomSelect
                                 value=""
                                 onChange={val => { if (val) handleAddFallbackModel(val); }}
@@ -646,6 +650,7 @@ export function SettingsModal({
                             <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Modello primario:</span> <span className="font-mono">{preferredModel}</span></li>
                             <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Fallback:</span> <span className="font-mono">{fallbackModels.join(' -> ') || 'nessuno'}</span></li>
                             <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Chunk:</span> <span className="font-mono">{defaultChunkMinutes} min</span></li>
+                            <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Temperatura (phase 1):</span> <span className="font-mono">{defaultTemperature}</span></li>
                             <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Overlap:</span> <span className="font-mono">30 s</span></li>
                             <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Pre-conversione:</span> <span className="font-mono">Mono 16kHz 48k</span></li>
                           </ul>

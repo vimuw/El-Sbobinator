@@ -1,7 +1,7 @@
 import { type Dispatch, useEffect, useRef } from 'react';
 import type React from 'react';
 import { createBridge, type ElSbobinatorBridge } from '../bridge';
-import type { AppStatus, FileDescriptor, FileItem, ProcessingAction } from '../appState';
+import type { AppStatus, FileDescriptor, FileItem, ProcessDonePayload, ProcessingAction } from '../appState';
 import { shortModelName } from '../utils';
 
 export function useBridgeCallbacks(options: {
@@ -12,6 +12,11 @@ export function useBridgeCallbacks(options: {
   enqueueUniqueFiles: (files: FileItem[]) => void;
   setRegeneratePrompt: (data: { filename: string; mode?: 'completed' | 'resume' } | null) => void;
   setAskNewKeyPrompt: (open: boolean) => void;
+  autoContinueRef: React.RefObject<boolean>;
+  startProcessingRef: React.RefObject<(isContinuation?: boolean) => Promise<boolean>>;
+  onFileContinued: () => void;
+  onBatchReset: () => void;
+  onBatchFullyDone: (data: ProcessDonePayload) => void;
 }) {
   const {
     dispatch,
@@ -21,6 +26,8 @@ export function useBridgeCallbacks(options: {
     enqueueUniqueFiles,
     setRegeneratePrompt,
     setAskNewKeyPrompt,
+    autoContinueRef,
+    startProcessingRef,
   } = options;
 
   const dispatchRef = useRef(dispatch);
@@ -28,12 +35,18 @@ export function useBridgeCallbacks(options: {
   const enqueueUniqueFilesRef = useRef(enqueueUniqueFiles);
   const setRegeneratePromptRef = useRef(setRegeneratePrompt);
   const setAskNewKeyPromptRef = useRef(setAskNewKeyPrompt);
+  const onFileContinuedRef = useRef(options.onFileContinued);
+  const onBatchResetRef = useRef(options.onBatchReset);
+  const onBatchFullyDoneRef = useRef(options.onBatchFullyDone);
 
   dispatchRef.current = dispatch;
   appendConsoleRef.current = appendConsole;
   enqueueUniqueFilesRef.current = enqueueUniqueFiles;
   setRegeneratePromptRef.current = setRegeneratePrompt;
   setAskNewKeyPromptRef.current = setAskNewKeyPrompt;
+  onFileContinuedRef.current = options.onFileContinued;
+  onBatchResetRef.current = options.onBatchReset;
+  onBatchFullyDoneRef.current = options.onBatchFullyDone;
 
   useEffect(() => {
     window.elSbobinatorBridge = createBridge({
@@ -57,7 +70,24 @@ export function useBridgeCallbacks(options: {
       onAskNewKey: () => {
         setAskNewKeyPromptRef.current(true);
       },
-      onBatchDone: () => {},
+      onBatchDone: data => {
+        if (!data.cancelled && autoContinueRef.current) {
+          const hasQueued = filesRef.current?.some(f => f.status === 'queued');
+          if (hasQueued) {
+            setTimeout(() => {
+              void startProcessingRef.current(true).then(started => {
+                if (started) {
+                  onFileContinuedRef.current();
+                  return;
+                }
+                onBatchResetRef.current();
+              });
+            }, 50);
+            return;
+          }
+        }
+        onBatchFullyDoneRef.current(data);
+      },
       onFileDone: data => {
         if (localStorage.getItem('notifications_enabled') === 'false') return;
         const currentFile = filesRef.current?.find(file => file.id === data.id);

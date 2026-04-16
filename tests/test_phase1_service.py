@@ -4,7 +4,11 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from el_sbobinator.generation_service import DegenerateOutputError, QuotaDailyLimitError
+from el_sbobinator.generation_service import (
+    AllModelsUnavailableError,
+    DegenerateOutputError,
+    QuotaDailyLimitError,
+)
 from el_sbobinator.model_registry import build_model_state
 from el_sbobinator.phase1_service import process_phase1_transcription
 
@@ -466,6 +470,61 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
             2,
             "inline audio part must be rebuilt on each attempt",
         )
+
+    def test_all_models_unavailable_triggers_recovery_then_succeeds(self):
+        """Compound failure: AllModelsUnavailableError (all 503) triggers the same
+        chain-exhaustion recovery as DegenerateOutputError.  Second attempt succeeds:
+        one chunk saved, last_error absent."""
+        session = {"stage": "phase1", "phase1": {}}
+        switched = []
+        model_state = build_model_state(
+            "gemini-2.5-flash", ["gemini-2.5-flash-lite"], "gemini-2.5-flash-lite"
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            chunks_dir = os.path.join(tmpdir, "chunks")
+            os.makedirs(chunks_dir)
+
+            (_, transcript, _), calls = self._run(
+                session,
+                chunks_dir,
+                retry_side_effect=[
+                    AllModelsUnavailableError("tutti i modelli 503"),
+                    "testo valido trascritto",
+                ],
+                model_state=model_state,
+                switched=switched,
+            )
+
+            self.assertIsNotNone(transcript)
+            self.assertIsNone(session.get("last_error"))
+            self.assertEqual(len(os.listdir(chunks_dir)), 1)
+            self.assertEqual(calls, 2)
+            self.assertEqual(model_state.current, "gemini-2.5-flash")
+            self.assertIn(("gemini-2.5-flash-lite", "gemini-2.5-flash"), switched)
+
+    def test_all_models_unavailable_twice_sets_specific_error(self):
+        """AllModelsUnavailableError on both the initial attempt and the recovery pass:
+        transcript is None, last_error='phase1_all_models_unavailable'."""
+        session = {"stage": "phase1", "phase1": {}}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            chunks_dir = os.path.join(tmpdir, "chunks")
+            os.makedirs(chunks_dir)
+
+            (_, transcript, _), calls = self._run(
+                session,
+                chunks_dir,
+                retry_side_effect=[
+                    AllModelsUnavailableError("tutti i modelli 503 - prima volta"),
+                    AllModelsUnavailableError("tutti i modelli 503 - seconda volta"),
+                ],
+            )
+
+            self.assertIsNone(transcript)
+            self.assertEqual(session.get("last_error"), "phase1_all_models_unavailable")
+            self.assertEqual(os.listdir(chunks_dir), [])
+            self.assertEqual(calls, 2)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getDoneFiles, getPendingFiles, initialProcessingState, processingReducer, type FileItem } from './appState';
+import { getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type FileItem } from './appState';
 
 
 function makeFile(overrides: Partial<FileItem> = {}): FileItem {
@@ -45,6 +45,14 @@ describe('getPendingFiles / getDoneFiles selectors', () => {
     const legacy = makeFile({ id: 'leg', status: 'done', progress: 100, phase: 3 }); // no completedAt
     const result = getDoneFiles([legacy, done1]);
     expect(result.map(f => f.id)).toEqual(['d1', 'leg']); // 1000 > 0
+  });
+
+  it('isSuccessfulProcessDone only returns true for all-success completions', () => {
+    expect(isSuccessfulProcessDone({ completed: 1, failed: 0, total: 1 })).toBe(true);
+    expect(isSuccessfulProcessDone({ completed: 0, failed: 1, total: 1 })).toBe(false);
+    expect(isSuccessfulProcessDone({ completed: 1, failed: 1, total: 2 })).toBe(false);
+    expect(isSuccessfulProcessDone({ cancelled: true, completed: 1, failed: 0, total: 1 })).toBe(false);
+    expect(isSuccessfulProcessDone(undefined)).toBe(false);
   });
 });
 

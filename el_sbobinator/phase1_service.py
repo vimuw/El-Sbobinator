@@ -18,6 +18,7 @@ from google.genai import types
 from el_sbobinator import generation_service
 from el_sbobinator.audio_service import cut_audio_chunk_to_mp3
 from el_sbobinator.generation_service import (
+    AllModelsUnavailableError,
     DegenerateOutputError,
     PermanentError,
     QuotaDailyLimitError,
@@ -317,16 +318,14 @@ def process_phase1_transcription(  # noqa: C901
                                 if audio_input is None:
                                     return None  # cancelled during upload wait
                             _active_model = current_model_name(model_state, model_name)
-                            _is_fallback = (
-                                model_state is not None
-                                and _active_model != model_state.chain[0]
-                            )
                             response = current_client.models.generate_content(
                                 model=_active_model,
                                 contents=[chunk_prompt, audio_input],
                                 config=types.GenerateContentConfig(
                                     system_instruction=system_prompt,
-                                    temperature=0.55 if _is_fallback else 0.35,
+                                    temperature=generation_service._phase1_temperature(
+                                        _active_model
+                                    ),
                                 ),
                             )
                             generated_text = extract_response_text(response)
@@ -480,6 +479,25 @@ def process_phase1_transcription(  # noqa: C901
                         f'   [!] Output degenerato nel blocco {chunk_idx}: anche il pass di recovery ha fallito reason="{de}"{_excerpt_log}'
                     )
                     session["last_error"] = "phase1_degenerate_output"
+                    save_session()
+                    return client, None, prev_memory
+
+                except AllModelsUnavailableError as ue:
+                    if not chain_exhaustion_recovery_used:
+                        chain_exhaustion_recovery_used = True
+                        if model_state is not None:
+                            old_model = model_state.current
+                            model_state.current = model_state.chain[0]
+                            if (
+                                on_model_switched is not None
+                                and old_model != model_state.current
+                            ):
+                                on_model_switched(old_model, model_state.current)
+                        print(
+                            f"   [Recovery automatica] chunk={chunk_idx}: tutti i modelli indisponibili ({ue}) - un ulteriore pass dal modello primario ({model_state.current if model_state is not None else model_name})..."
+                        )
+                        continue
+                    session["last_error"] = "phase1_all_models_unavailable"
                     save_session()
                     return client, None, prev_memory
 

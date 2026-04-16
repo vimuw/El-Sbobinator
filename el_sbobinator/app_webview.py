@@ -231,6 +231,7 @@ class PipelineAdapter:
         # Output info (set by pipeline)
         self.last_output_html: str | None = None
         self.last_output_dir: str | None = None
+        self.last_primary_model: str | None = None
         self.last_effective_model: str | None = None
         self.last_run_status: str = "idle"
         self.last_run_error: str | None = None
@@ -284,8 +285,11 @@ class PipelineAdapter:
         self._emit_js("updateProgress", value, batched=True)
 
     def update_model(self, model: str):
-        self.last_effective_model = str(model or "").strip() or None
-        self._emit_js("updateModel", self.last_effective_model or "", batched=True)
+        m = str(model or "").strip() or None
+        if self.last_primary_model is None:
+            self.last_primary_model = m
+        self.last_effective_model = m
+        self._emit_js("updateModel", m or "", batched=True)
 
     def aggiorna_fase(self, text: str):
         self._emit_js("updatePhase", text, batched=True)
@@ -304,6 +308,7 @@ class PipelineAdapter:
     def reset_run_state(self, api_key: str | None = None):
         self.last_output_html = None
         self.last_output_dir = None
+        self.last_primary_model = None
         self.last_effective_model = None
         self.last_run_status = "failed"
         self.last_run_error = None
@@ -702,7 +707,12 @@ class ElSbobinatorApi:
     # ---- Processing ----
 
     def start_processing(
-        self, files: list[BridgeFileItem], api_key: str, resume_session: bool = True
+        self,
+        files: list[BridgeFileItem],
+        api_key: str,
+        resume_session: bool = True,
+        preferred_model: str | None = None,
+        fallback_models: list[str] | None = None,
     ) -> dict:
         """Start the pipeline in a background thread."""
         if not files or not api_key:
@@ -710,9 +720,15 @@ class ElSbobinatorApi:
         if self._adapter.is_running:
             return {"ok": False, "error": "Elaborazione già in corso"}
 
-        # Save config
+        # Save config (including model so the pipeline always uses what's selected in the UI)
         try:
-            save_config(api_key)
+            save_config(
+                api_key,
+                preferred_model=preferred_model or None,
+                fallback_models=fallback_models
+                if isinstance(fallback_models, list)
+                else None,
+            )
         except Exception:
             pass
 
@@ -773,12 +789,17 @@ class ElSbobinatorApi:
                         "total": len(files),
                     }
                     self._adapter.emit("setCurrentFile", current_payload, batched=False)
+                    file_resume_session = (
+                        bool(file_info.get("resume_session"))
+                        if "resume_session" in file_info
+                        else resume_session
+                    )
 
                     esegui_sbobinatura(
                         file_path,
                         active_api_key,
                         self._adapter,
-                        resume_session=resume_session,
+                        resume_session=file_resume_session,
                     )
                     if self._adapter.effective_api_key:
                         active_api_key = self._adapter.effective_api_key
@@ -798,6 +819,7 @@ class ElSbobinatorApi:
                                 "id": file_info.get("id", ""),
                                 "output_html": self._adapter.last_output_html,
                                 "output_dir": self._adapter.last_output_dir,
+                                "primary_model": self._adapter.last_primary_model or "",
                                 "effective_model": self._adapter.last_effective_model
                                 or "",
                             }

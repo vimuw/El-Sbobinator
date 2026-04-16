@@ -33,6 +33,36 @@ class AppWebviewTests(unittest.TestCase):
         self.assertIn("updatePhase", joined)
         self.assertIn("fileDone", joined)
 
+    def test_update_model_first_call_sets_primary_model(self):
+        adapter = PipelineAdapter(None, cancel_event=__import__("threading").Event())
+        adapter.update_model("gemini-2.5-flash")
+        self.assertEqual(adapter.last_primary_model, "gemini-2.5-flash")
+        self.assertEqual(adapter.last_effective_model, "gemini-2.5-flash")
+
+    def test_update_model_subsequent_call_does_not_change_primary_model(self):
+        adapter = PipelineAdapter(None, cancel_event=__import__("threading").Event())
+        adapter.update_model("gemini-2.5-flash")
+        adapter.update_model("gemini-2.5-flash-lite")
+        self.assertEqual(adapter.last_primary_model, "gemini-2.5-flash")
+        self.assertEqual(adapter.last_effective_model, "gemini-2.5-flash-lite")
+
+    def test_reset_run_state_clears_primary_model(self):
+        adapter = PipelineAdapter(None, cancel_event=__import__("threading").Event())
+        adapter.update_model("gemini-2.5-flash")
+        adapter.update_model("gemini-2.5-flash-lite")
+        adapter.reset_run_state()
+        self.assertIsNone(adapter.last_primary_model)
+        self.assertIsNone(adapter.last_effective_model)
+
+    def test_primary_model_reset_allows_new_run_to_capture_new_primary(self):
+        adapter = PipelineAdapter(None, cancel_event=__import__("threading").Event())
+        adapter.update_model("gemini-2.5-flash")
+        adapter.update_model("gemini-2.5-flash-lite")
+        adapter.reset_run_state()
+        adapter.update_model("gemini-3-flash-preview")
+        self.assertEqual(adapter.last_primary_model, "gemini-3-flash-preview")
+        self.assertEqual(adapter.last_effective_model, "gemini-3-flash-preview")
+
     def test_save_html_content_preserves_head(self):
         import tempfile as _tempfile
 
@@ -250,6 +280,53 @@ class AppWebviewTests(unittest.TestCase):
         self.assertEqual(process_done_events[0]["completed"], 0)
         self.assertEqual(process_done_events[0]["failed"], 0)
         self.assertEqual(process_done_events[0]["total"], 1)
+
+    @patch("el_sbobinator.pipeline.esegui_sbobinatura")
+    def test_start_processing_honors_file_level_resume_override(
+        self, mock_pipeline_run
+    ):
+        api = ElSbobinatorApi()
+        observed_resume_values = []
+
+        def fake_pipeline_run(_path, _api_key, adapter, resume_session=True):
+            observed_resume_values.append(resume_session)
+            adapter.set_run_result("completed", "")
+            adapter.last_output_html = _path + ".html"
+            adapter.last_output_dir = __import__("os").path.dirname(_path)
+
+        mock_pipeline_run.side_effect = fake_pipeline_run
+
+        with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            tmp.write(b"fake")
+            file_path = tmp.name
+
+        try:
+            result = api.start_processing(
+                [
+                    {
+                        "id": "file-1",
+                        "path": file_path,
+                        "name": "lesson.mp3",
+                        "size": 4,
+                        "duration": 1,
+                        "resume_session": False,
+                    }
+                ],
+                api_key="fake-key",
+                resume_session=True,
+            )
+
+            self.assertTrue(result["ok"])
+            self.assertIsNotNone(api._processing_thread)
+            api._processing_thread.join(timeout=2)
+            self.assertFalse(api._processing_thread.is_alive())
+        finally:
+            try:
+                __import__("os").unlink(file_path)
+            except OSError:
+                pass
+
+        self.assertEqual(observed_resume_values, [False])
 
     def test_read_html_content_falls_back_to_session_dir(self):
         import os

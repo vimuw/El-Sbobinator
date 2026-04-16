@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import patch
 
 from el_sbobinator.generation_service import (
+    AllModelsUnavailableError,
     DegenerateOutputError,
     QuotaDailyLimitError,
     _is_model_unavailable,
@@ -911,6 +912,134 @@ class RetryWithQuotaTests(unittest.TestCase):
         )
 
 
+class QuotaModelFallbackTests(unittest.TestCase):
+    """When all API keys are exhausted, retry_with_quota should cascade to the
+    next model in the chain instead of immediately raising QuotaDailyLimitError."""
+
+    def test_all_keys_exhausted_switches_to_fallback_model(self):
+        """After all keys drained, cascade to fallback model and succeed."""
+        model_state = build_model_state("gemini-2.5-flash", ["gemini-2.5-flash-lite"])
+        switched = []
+
+        def fn(_client):
+            if model_state.current == "gemini-2.5-flash":
+                raise RuntimeError("429 quota exceeded daily limit per day")
+            return "ok"
+
+        _, result = self._run(
+            fn,
+            model_state=model_state,
+            on_model_switched=switched,
+        )
+        self.assertEqual(result, "ok")
+        self.assertEqual(model_state.current, "gemini-2.5-flash-lite")
+
+    def test_all_keys_exhausted_no_fallback_raises_quota_error(self):
+        """No fallback model in chain → QuotaDailyLimitError (regression guard)."""
+        model_state = build_model_state("gemini-2.5-flash", [])
+
+        def fn(_client):
+            raise RuntimeError("429 quota exceeded daily limit per day")
+
+        with self.assertRaises(QuotaDailyLimitError):
+            self._run(fn, model_state=model_state)
+
+    def test_all_keys_exhausted_no_model_state_raises_quota_error(self):
+        """model_state=None → QuotaDailyLimitError (no chain to cascade through)."""
+
+        def fn(_client):
+            raise RuntimeError("429 quota exceeded daily limit per day")
+
+        with self.assertRaises(QuotaDailyLimitError):
+            self._run(fn, model_state=None)
+
+    def _run(
+        self, fn, model_state=None, fallback_keys=None, max_attempts=2, **_ignored
+    ):
+        return retry_with_quota(
+            fn,
+            client=object(),
+            fallback_keys=fallback_keys if fallback_keys is not None else [],
+            model_name="gemini-2.5-flash",
+            model_state=model_state,
+            cancelled=lambda: False,
+            runtime=_FakeRuntime(),
+            request_fallback_key=lambda: None,
+            max_attempts=max_attempts,
+            retry_sleep_seconds=0.0,
+            rate_limit_sleep_seconds=0.0,
+        )
+
+
+class AllModelsUnavailableErrorTests(unittest.TestCase):
+    """503 chain-exhaustion path raises AllModelsUnavailableError."""
+
+    def _make_503(self):
+        err = RuntimeError("503 Service Unavailable")
+        err.code = 503
+        return err
+
+    def test_all_models_503_raises_all_models_unavailable_error(self):
+        """When every model in the chain exhausts its 503 retries, retry_with_quota
+        must raise AllModelsUnavailableError (not plain RuntimeError)."""
+        model_state = build_model_state(
+            "gemini-2.5-flash",
+            ["gemini-2.5-flash-lite"],
+            "gemini-2.5-flash",
+        )
+
+        def fn(_client):
+            raise self._make_503()
+
+        with self.assertRaises(AllModelsUnavailableError):
+            retry_with_quota(
+                fn,
+                client=object(),
+                fallback_keys=[],
+                model_name="gemini-2.5-flash",
+                model_state=model_state,
+                cancelled=lambda: False,
+                runtime=_FakeRuntime(),
+                request_fallback_key=lambda: None,
+                max_attempts=2,
+                retry_sleep_seconds=0.0,
+                model_unavailable_retry_delays=(0.0,),
+                rate_limit_sleep_seconds=0.0,
+            )
+
+    def test_first_model_503_switches_to_fallback_success(self):
+        """Primary exhausts 503 retries → switches to fallback → fallback succeeds.
+        Must NOT raise AllModelsUnavailableError."""
+        model_state = build_model_state(
+            "gemini-2.5-flash",
+            ["gemini-2.5-flash-lite"],
+            "gemini-2.5-flash",
+        )
+
+        def fn(_client):
+            if model_state.current == "gemini-2.5-flash":
+                raise self._make_503()
+            return "ok"
+
+        _, result = retry_with_quota(
+            fn,
+            client=object(),
+            fallback_keys=[],
+            model_name="gemini-2.5-flash",
+            model_state=model_state,
+            cancelled=lambda: False,
+            runtime=_FakeRuntime(),
+            request_fallback_key=lambda: None,
+            max_attempts=2,
+            retry_sleep_seconds=0.0,
+            model_unavailable_retry_delays=(0.0,),
+            rate_limit_sleep_seconds=0.0,
+        )
+
+        self.assertEqual(result, "ok")
+        self.assertEqual(model_state.current, "gemini-2.5-flash-lite")
+
+
 class IsModelUnavailableTests(unittest.TestCase):
     def _yes(self, text):
         self.assertTrue(
@@ -950,6 +1079,37 @@ class IsModelUnavailableTests(unittest.TestCase):
     def test_non_503_code_never_matches(self):
         self._no("service unavailable", code=500)
         self._no("overloaded", code=429)
+
+
+class Phase1TemperatureTests(unittest.TestCase):
+    def setUp(self):
+        from el_sbobinator.generation_service import _phase1_temperature
+
+        self._t = _phase1_temperature
+
+    def test_lite_models_temperature(self):
+        self.assertEqual(self._t("gemini-2.5-flash-lite"), 0.25)
+        self.assertEqual(self._t("gemini-3.1-flash-lite-preview"), 0.35)
+
+    def test_non_lite_models_return_035(self):
+        self.assertEqual(self._t("gemini-2.5-flash"), 0.35)
+        self.assertEqual(self._t("gemini-3-flash-preview"), 0.35)
+
+    def test_unknown_model_falls_back_to_035(self):
+        self.assertEqual(self._t("gemini-unknown-model"), 0.35)
+
+    def test_derives_from_model_options(self):
+        from el_sbobinator.model_registry import MODEL_OPTIONS
+        from unittest.mock import patch
+
+        patched = tuple(
+            {**opt, "phase1_temperature": 0.99}
+            if opt["id"] == "gemini-2.5-flash"
+            else opt
+            for opt in MODEL_OPTIONS
+        )
+        with patch("el_sbobinator.generation_service.MODEL_OPTIONS", patched):
+            self.assertEqual(self._t("gemini-2.5-flash"), 0.99)
 
 
 if __name__ == "__main__":

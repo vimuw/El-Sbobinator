@@ -700,6 +700,14 @@ def default_chunk_minutes_for_model(model_name: str) -> int:
     return 15
 
 
+def default_macro_char_limit_for_model(model_name: str) -> int:
+    model = sanitize_model_name(model_name, DEFAULT_MODEL)
+    for opt in MODEL_OPTIONS:
+        if opt["id"] == model:
+            return int(opt.get("default_macro_char_limit", 22000))
+    return 22000
+
+
 def build_default_pipeline_settings(config: dict | None = None) -> dict:
     cfg = config if isinstance(config, dict) else load_config()
     preferred_model = sanitize_model_name(cfg.get("preferred_model"), DEFAULT_MODEL)
@@ -714,7 +722,7 @@ def build_default_pipeline_settings(config: dict | None = None) -> dict:
         "effective_model": preferred_model,
         "chunk_minutes": default_chunk_minutes_for_model(preferred_model),
         "overlap_seconds": 30,
-        "macro_char_limit": 22000,
+        "macro_char_limit": default_macro_char_limit_for_model(preferred_model),
         "preconvert_audio": True,
         "prefetch_next_chunk": True,
         "inline_audio_max_mb": 6.0,

@@ -13,6 +13,7 @@ from typing import Any
 
 SUPPORTED_MODELS: tuple[str, ...] = (
     "gemini-3-flash-preview",
+    "gemini-3.1-flash-lite-preview",
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
 )
@@ -20,27 +21,41 @@ SUPPORTED_MODELS: tuple[str, ...] = (
 DEFAULT_MODEL = "gemini-2.5-flash"
 DEFAULT_FALLBACK_MODELS: tuple[str, ...] = (
     "gemini-2.5-flash-lite",
-    "gemini-3-flash-preview",
+    "gemini-3.1-flash-lite-preview",
 )
 
 MODEL_OPTIONS: tuple[dict[str, str | int], ...] = (
     {
         "id": "gemini-3-flash-preview",
         "label": "Gemini 3 Flash (Preview)",
-        "summary": "Qualita superiore ma traffico elevato tra le 15:00 e le 20:00: possibili errori 503 e rallentamenti significativi.",
+        "summary": "Modello di prossima generazione in anteprima: prestazioni frontier con ragionamento veloce. Possibili 503 nelle ore di punta.",
         "default_chunk_minutes": 15,
+        "default_macro_char_limit": 22000,
+        "phase1_temperature": 0.35,
+    },
+    {
+        "id": "gemini-3.1-flash-lite-preview",
+        "label": "Gemini 3.1 Flash Lite (Preview)",
+        "summary": "Fallback di ultima istanza con quota giornaliera altissima (500 RPD): ideale quando tutti gli altri modelli hanno esaurito la quota. Architettura Gemini 3, ottimizzata per velocita.",
+        "default_chunk_minutes": 5,
+        "default_macro_char_limit": 7500,
+        "phase1_temperature": 0.35,
     },
     {
         "id": "gemini-2.5-flash",
         "label": "Gemini 2.5 Flash",
         "summary": "Primario consigliato: ottimo equilibrio qualita/velocita, stabile e ampiamente testato.",
         "default_chunk_minutes": 15,
+        "default_macro_char_limit": 22000,
+        "phase1_temperature": 0.35,
     },
     {
         "id": "gemini-2.5-flash-lite",
         "label": "Gemini 2.5 Flash-Lite",
-        "summary": "Fallback leggero: piu veloce, RPM doppio (10 RPM), buon compromesso velocita/qualita.",
+        "summary": "Fallback leggero: piu veloce, RPM doppio (10 RPM), buon compromesso velocita/qualita. Puo risultare instabile e tendere a degenerare l'output su contenuti complessi.",
         "default_chunk_minutes": 10,
+        "default_macro_char_limit": 15000,
+        "phase1_temperature": 0.25,
     },
 )
 

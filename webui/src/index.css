@@ -515,6 +515,20 @@ button {
   transition-duration: 80ms;
 }
 
+.icon-button.icon-button--active,
+:root:not([data-theme="dark"]) .icon-button.icon-button--active {
+  background: color-mix(in srgb, var(--processing-text) 12%, transparent);
+  border-color: color-mix(in srgb, var(--processing-text) 35%, transparent);
+  color: var(--processing-text);
+  box-shadow: none;
+}
+
+.icon-button.icon-button--active:hover,
+:root:not([data-theme="dark"]) .icon-button.icon-button--active:hover {
+  background: color-mix(in srgb, var(--processing-text) 18%, transparent);
+  border-color: color-mix(in srgb, var(--processing-text) 50%, transparent);
+}
+
 .icon-btn-theme svg {
   transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -537,6 +551,42 @@ button {
 
 .icon-btn-settings:active svg {
   transform: rotate(90deg) scale(0.9);
+}
+
+@keyframes console-flash {
+  0%   { opacity: 0.15; transform: scale(0.82); }
+  55%  { opacity: 1;    transform: scale(1.12); }
+  100% { opacity: 1;    transform: scale(1); }
+}
+
+.icon-btn-console svg {
+  transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.icon-btn-console:hover svg {
+  transform: rotate(10deg) scale(1.1);
+}
+
+.icon-btn-console:active svg {
+  transform: rotate(6deg) scale(0.90);
+}
+
+.icon-btn-console.icon-button--active,
+:root:not([data-theme="dark"]) .icon-btn-console.icon-button--active {
+  background: color-mix(in srgb, var(--processing-text) 12%, transparent);
+  border-color: color-mix(in srgb, var(--processing-text) 35%, transparent);
+  color: var(--processing-text);
+  box-shadow: none;
+}
+
+.icon-btn-console.icon-button--active:hover,
+:root:not([data-theme="dark"]) .icon-btn-console.icon-button--active:hover {
+  background: color-mix(in srgb, var(--processing-text) 18%, transparent);
+  border-color: color-mix(in srgb, var(--processing-text) 50%, transparent);
+}
+
+.icon-btn-console.icon-button--active svg {
+  animation: console-flash 340ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
 .icon-button {
@@ -1051,6 +1101,7 @@ button {
 
 .editor-page {
   background: #ffffff;
+  width: 100%;
   max-width: 794px;
   padding: 0;
   box-shadow:

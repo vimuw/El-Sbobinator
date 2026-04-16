@@ -7,23 +7,26 @@ import {
   Check,
   CheckCircle,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   Copy,
   Eye,
   EyeOff,
   ExternalLink,
   FileAudio,
-  FileText,
   FolderOpen,
   Github,
   History,
   Key,
+  ListOrdered,
   Moon,
   Play,
   Search,
   Settings,
   Square,
   Sun,
+  Terminal,
   Trash2,
   UploadCloud,
   X,
@@ -31,7 +34,7 @@ import {
 } from 'lucide-react';
 import { GITHUB_RELEASES_URL, GITHUB_URL, KOFI_URL } from './branding';
 import { type ArchiveSession, type ElSbobinatorBridge, type PywebviewApi } from './bridge';
-import { getDoneFiles, getPendingFiles, initialProcessingState, processingReducer, type AppStatus, type FileDescriptor, type FileItem } from './appState';
+import { getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type AppStatus, type FileDescriptor, type FileItem, type ProcessDonePayload } from './appState';
 import { formatRelativeTime, GEMINI_KEY_PATTERN, shortModelName } from './utils';
 import { useConsole } from './hooks/useConsole';
 import { useTheme } from './hooks/useTheme';
@@ -41,15 +44,16 @@ import { useApiReady } from './hooks/useApiReady';
 import { useBridgeCallbacks } from './hooks/useBridgeCallbacks';
 import { useBodyScrollLock } from './hooks/useBodyScrollLock';
 import { CompletedFileCard, QueueFileCard } from './components/QueueFileCard';
+import { ProcessingStatusBanner } from './components/ProcessingStatusBanner';
 import { RegenerateModal } from './components/modals/RegenerateModal';
 import { NewKeyModal } from './components/modals/NewKeyModal';
 import { SettingsModal } from './components/modals/SettingsModal';
 import { ConfirmActionModal } from './components/modals/ConfirmActionModal';
+import { DuplicateFileModal, type AlreadyProcessedMatch, type DuplicatePrompt } from './components/modals/DuplicateFileModal';
+import { buildArchiveLookup, filterArchiveSessionsByInputPath, getArchiveMatchesForFile } from './duplicateDetection';
 import { loadEditorSession, saveEditorSession, type EditorSession } from './editorSessions';
 import { normalizePreviewHtmlContent } from './previewHtml';
 const PreviewModal = React.lazy(() => import('./components/modals/PreviewModal').then(m => ({ default: m.PreviewModal })));
-
-const EMPTY_WORK = { chunks: 0, macro: 0, boundary: 0 };
 
 declare global {
   interface Window {
@@ -101,8 +105,16 @@ type ConfirmActionState =
   | { type: 'clear-completed'; count: number }
   | { type: 'delete-archive-session'; sessionDir: string; name: string };
 
+const ARCHIVE_PAGE_SIZE = 5;
+
+type PendingArchiveReplacement = {
+  fileName: string;
+  inputPath?: string;
+  sessions: ArchiveSession[];
+};
+
 export default function App() {
-  const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone, stepMetrics }, dispatch] = useReducer(processingReducer, initialProcessingState);
+  const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone }, dispatch] = useReducer(processingReducer, initialProcessingState);
 
   // --- Extracted hooks ---
   const { consoleLogs, appendConsole } = useConsole();
@@ -127,15 +139,16 @@ export default function App() {
   const [regeneratePrompt, setRegeneratePrompt] = useState<{ filename: string; mode?: 'completed' | 'resume' } | null>(null);
   const [askNewKeyPrompt, setAskNewKeyPrompt] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ConfirmActionState | null>(null);
+  const [duplicatePrompt, setDuplicatePrompt] = useState<DuplicatePrompt>(null);
 
   // --- Preview state ---
   const [preview, setPreview] = useState<PreviewState>(initialPreviewState);
 
   // --- UI state ---
   const [isDragging, setIsDragging] = useState(false);
+  const [showConsole, setShowConsole] = useState(() => localStorage.getItem('show_console') === 'true');
   const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
-  const [showEmptyState, setShowEmptyState] = useState(() => files.length === 0);
   const [completedSearch, setCompletedSearch] = useState('');
   const [setupKeyInput, setSetupKeyInput] = useState('');
   const [setupKeyShowRaw, setSetupKeyShowRaw] = useState(false);
@@ -143,11 +156,18 @@ export default function App() {
   const [setupKeyError, setSetupKeyError] = useState<string | null>(null);
   const [archiveSessions, setArchiveSessions] = useState<ArchiveSession[]>([]);
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
+  const [archiveSearch, setArchiveSearch] = useState('');
+  const [archiveSort, setArchiveSort] = useState<'newest' | 'oldest'>('newest');
+  const [archivePage, setArchivePage] = useState(0);
   const [isPeakHour, setIsPeakHour] = useState(() => { const h = new Date().getHours(); return h >= 15 && h < 20; });
   const [isPeakDismissed, setIsPeakDismissed] = useState(() => {
     const ts = localStorage.getItem('peakBannerDismissedUntil');
     return ts ? Date.now() < Number(ts) : false;
   });
+  const [autoContinue, setAutoContinue] = useState(() => localStorage.getItem('auto_continue') !== 'false');
+  const [batchTotal, setBatchTotal] = useState(0);
+  const [batchCompleted, setBatchCompleted] = useState(0);
+  const [completionFlash, setCompletionFlash] = useState(false);
 
   // --- Refs ---
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -157,18 +177,23 @@ export default function App() {
   const currentPreviewSessionKeyRef = useRef<string | null>(null);
   const consoleScrollRef = useRef<HTMLDivElement>(null);
   const isMouseInConsoleRef = useRef(false);
+  const archivePanelRef = useRef<HTMLDivElement>(null);
+  const autoContinueRef = useRef(autoContinue);
+  const startProcessingRef = useRef<(isContinuation?: boolean) => Promise<boolean>>(async () => false);
 
   useEffect(() => {
     filesRef.current = files;
   }, [files]);
 
   useEffect(() => {
-    if (files.some(f => f.status !== 'done')) setShowEmptyState(false);
-  }, [files]);
-
-  useEffect(() => {
     appStateRef.current = appState;
   }, [appState]);
+
+  autoContinueRef.current = autoContinue;
+
+  useEffect(() => {
+    localStorage.setItem('auto_continue', String(autoContinue));
+  }, [autoContinue]);
 
   useEffect(() => {
     if (!isConsoleExpanded || isMouseInConsoleRef.current) return;
@@ -192,16 +217,84 @@ export default function App() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
+  // --- Archive ref (kept in sync for stable callbacks) ---
+  const archiveSessionsRef = useRef<typeof archiveSessions>([]);
+  archiveSessionsRef.current = archiveSessions;
+  const pendingArchiveReplacementsRef = useRef<Map<string, PendingArchiveReplacement>>(new Map());
+  const archiveReplacementCleanupInFlightRef = useRef<Set<string>>(new Set());
+
+  const refreshArchiveSessions = useCallback(async () => {
+    try {
+      const result = await window.pywebview?.api?.get_completed_sessions?.();
+      if (result?.ok && result.sessions) setArchiveSessions(result.sessions);
+    } catch {}
+  }, []);
+
+  const finalizeArchiveReplacement = useCallback(async (fileId: string) => {
+    const pendingReplacement = pendingArchiveReplacementsRef.current.get(fileId);
+    if (!pendingReplacement || archiveReplacementCleanupInFlightRef.current.has(fileId)) return;
+
+    archiveReplacementCleanupInFlightRef.current.add(fileId);
+    const deletedSessionDirs: string[] = [];
+    const currentFile = filesRef.current.find(file => file.id === fileId);
+    const deletableSessions = filterArchiveSessionsByInputPath(
+      currentFile?.path ?? pendingReplacement.inputPath,
+      pendingReplacement.sessions,
+    );
+
+    try {
+      for (const session of deletableSessions) {
+        try {
+          const res = await window.pywebview?.api?.delete_session?.(session.session_dir);
+          if (res?.ok) {
+            deletedSessionDirs.push(session.session_dir);
+          } else {
+            appendConsole(`❌ Errore eliminazione sessione archiviata per ${pendingReplacement.fileName}: ${res?.error ?? 'errore sconosciuto'}`);
+          }
+        } catch (error) {
+          appendConsole(`❌ Errore eliminazione sessione archiviata per ${pendingReplacement.fileName}: ${getErrorMessage(error)}`);
+        }
+      }
+
+      if (deletedSessionDirs.length > 0) {
+        const deletedSessionDirSet = new Set(deletedSessionDirs);
+        setArchiveSessions(prev => prev.filter(session => !deletedSessionDirSet.has(session.session_dir)));
+      }
+
+      if (deletedSessionDirs.length !== deletableSessions.length) {
+        await refreshArchiveSessions();
+      }
+    } finally {
+      pendingArchiveReplacementsRef.current.delete(fileId);
+      archiveReplacementCleanupInFlightRef.current.delete(fileId);
+    }
+  }, [appendConsole, refreshArchiveSessions]);
+
   // --- Queue persistence ---
   useQueuePersistence(files, structuralVersion, dispatch, appendConsole);
 
   // --- Archive fetch ---
   useEffect(() => {
     if (!apiReady) return;
-    window.pywebview?.api?.get_completed_sessions?.().then(result => {
-      if (result?.ok && result.sessions) setArchiveSessions(result.sessions);
-    }).catch(() => {});
-  }, [apiReady]);
+    void refreshArchiveSessions();
+  }, [apiReady, refreshArchiveSessions]);
+
+  useEffect(() => {
+    const currentFileIds = new Set(files.map(file => file.id));
+
+    for (const fileId of pendingArchiveReplacementsRef.current.keys()) {
+      if (!currentFileIds.has(fileId)) {
+        pendingArchiveReplacementsRef.current.delete(fileId);
+        archiveReplacementCleanupInFlightRef.current.delete(fileId);
+      }
+    }
+
+    for (const file of files) {
+      if (file.status === 'done' && pendingArchiveReplacementsRef.current.has(file.id)) {
+        void finalizeArchiveReplacement(file.id);
+      }
+    }
+  }, [files, finalizeArchiveReplacement]);
 
   // --- File deduplication ---
   const getFileFingerprint = useCallback((file: Pick<FileItem, 'path' | 'name' | 'size' | 'duration'>) => {
@@ -212,24 +305,77 @@ export default function App() {
 
   const enqueueUniqueFiles = useCallback((incomingFiles: FileItem[]) => {
     if (incomingFiles.length === 0) return;
-    const seen = new Set(filesRef.current.map(file => getFileFingerprint(file)));
+
+    const currentFiles = filesRef.current;
+    const currentArchive = archiveSessionsRef.current;
+
+    // Build lookup maps for fast duplicate detection
+    const pendingFingerprints = new Set(
+      currentFiles.filter(f => f.status !== 'done').map(f => getFileFingerprint(f)),
+    );
+    const doneByFingerprint = new Map(
+      currentFiles.filter(f => f.status === 'done').map(f => [getFileFingerprint(f), f]),
+    );
+    const archiveLookup = buildArchiveLookup(currentArchive);
+
     const uniqueFiles: FileItem[] = [];
-    let skippedDuplicates = 0;
+    const inQueueNames: string[] = [];
+    const alreadyProcessedMatches: AlreadyProcessedMatch[] = [];
+    // Track fingerprints seen within this batch to handle multi-file drops
+    const seenInBatch = new Set<string>();
+
     for (const file of incomingFiles) {
-      const fingerprint = getFileFingerprint(file);
-      if (seen.has(fingerprint)) { skippedDuplicates += 1; continue; }
-      seen.add(fingerprint);
-      uniqueFiles.push(file);
+      const fp = getFileFingerprint(file);
+
+      if (pendingFingerprints.has(fp) || seenInBatch.has(fp)) {
+        inQueueNames.push(file.name);
+      } else if (doneByFingerprint.has(fp)) {
+        alreadyProcessedMatches.push({ source: 'done', existingFile: doneByFingerprint.get(fp)!, incoming: file });
+        seenInBatch.add(fp);
+      } else {
+        const archiveMatches = getArchiveMatchesForFile(file, archiveLookup);
+        if (archiveMatches.length > 0) {
+          alreadyProcessedMatches.push({ source: 'archive', sessions: archiveMatches, incoming: file });
+          seenInBatch.add(fp);
+        } else {
+          seenInBatch.add(fp);
+          uniqueFiles.push(file);
+        }
+      }
     }
+
     if (uniqueFiles.length > 0) dispatch({ type: 'queue/add', files: uniqueFiles });
-    if (skippedDuplicates > 0) appendConsole(`${skippedDuplicates} file ${skippedDuplicates === 1 ? 'gia presente in coda ignorato.' : 'gia presenti in coda ignorati.'}`);
-  }, [appendConsole, getFileFingerprint]);
+
+    // Show modal for the most actionable conflict type; prefer already-processed over in-queue
+    if (alreadyProcessedMatches.length > 0) {
+      setDuplicatePrompt({ kind: 'already-processed', matches: alreadyProcessedMatches, alsoInQueue: inQueueNames.length > 0 ? inQueueNames : undefined });
+    } else if (inQueueNames.length > 0) {
+      setDuplicatePrompt({ kind: 'in-queue', filenames: inQueueNames });
+    }
+  }, [dispatch, getFileFingerprint]);
+
+  const onFileContinued = useCallback(() => { setBatchCompleted(prev => prev + 1); }, []);
+  const onBatchReset = useCallback(() => {
+    setBatchTotal(0);
+    setBatchCompleted(0);
+  }, []);
+  const onBatchFullyDone = useCallback((data: ProcessDonePayload) => {
+    onBatchReset();
+    if (isSuccessfulProcessDone(data)) {
+      setCompletionFlash(true);
+      setTimeout(() => setCompletionFlash(false), 5000);
+    }
+  }, [onBatchReset]);
+
+  useEffect(() => {
+    if (appState === 'processing') setCompletionFlash(false);
+  }, [appState]);
 
   // --- Bridge callbacks ---
-  useBridgeCallbacks({ dispatch, appendConsole, filesRef, appStateRef, enqueueUniqueFiles, setRegeneratePrompt, setAskNewKeyPrompt });
+  useBridgeCallbacks({ dispatch, appendConsole, filesRef, appStateRef, enqueueUniqueFiles, setRegeneratePrompt, setAskNewKeyPrompt, autoContinueRef, startProcessingRef, onFileContinued, onBatchReset, onBatchFullyDone });
 
   // --- Body scroll lock ---
-  const isModalOpen = isSettingsOpen || regeneratePrompt !== null || preview.content !== null || askNewKeyPrompt || confirmAction !== null;
+  const isModalOpen = isSettingsOpen || regeneratePrompt !== null || preview.content !== null || askNewKeyPrompt || confirmAction !== null || duplicatePrompt !== null;
   useBodyScrollLock(isModalOpen);
 
   // --- Handlers ---
@@ -277,9 +423,9 @@ export default function App() {
   };
 
   const requestRemoveFile = useCallback((id: string) => {
-    if (appState !== 'idle') return;
     const targetFile = filesRef.current.find(file => file.id === id);
     if (!targetFile) return;
+    if (appState !== 'idle' && targetFile.status !== 'done') return;
     setConfirmAction({ type: 'remove-file', fileId: id, fileName: targetFile.name });
   }, [appState]);
 
@@ -299,54 +445,64 @@ export default function App() {
     const api = window.pywebview?.api;
     const queuedFiles = filesRef.current.filter(file => file.status === 'queued');
     if (queuedFiles.length === 0) return [] as FileDescriptor[];
-    const resolvedFiles: FileDescriptor[] = [];
-    const pathChecks = await Promise.all(
-      queuedFiles.map(async file => {
-        const p = String(file.path || '').trim();
-        const exists = p && api?.check_path_exists ? Boolean((await api.check_path_exists(p))?.exists) : Boolean(p);
-        return { file, exists };
-      })
-    );
-    for (const { file, exists: sourceExists } of pathChecks) {
-      let nextPath = String(file.path || '').trim();
-      let nextName = file.name;
-      let nextSize = file.size;
-      let nextDuration = file.duration;
-      if (!sourceExists) {
-        if (!api?.ask_media_file) { appendConsole(`Impossibile ricollegare l'audio per ${file.name}.`); continue; }
-        appendConsole(`Audio non trovato per ${file.name}. Selezionalo di nuovo per continuare.`);
-        const selectedFile = await api.ask_media_file();
-        if (!selectedFile?.path) { appendConsole(`Avvio annullato: audio non ricollegato per ${file.name}.`); continue; }
-        nextPath = selectedFile.path; nextName = selectedFile.name; nextSize = selectedFile.size; nextDuration = selectedFile.duration || 0;
-        dispatch({ type: 'queue/update_source', id: file.id, path: nextPath, name: nextName, size: nextSize, duration: nextDuration });
-        appendConsole(`Audio ricollegato: ${nextName}`);
-      }
-      resolvedFiles.push({ id: file.id, path: nextPath, name: nextName, size: nextSize, duration: nextDuration });
+    const file = queuedFiles[0];
+    const p = String(file.path || '').trim();
+    const exists = p && api?.check_path_exists ? Boolean((await api.check_path_exists(p))?.exists) : Boolean(p);
+    let nextPath = p;
+    let nextName = file.name;
+    let nextSize = file.size;
+    let nextDuration = file.duration;
+    if (!exists) {
+      if (!api?.ask_media_file) { appendConsole(`Impossibile ricollegare l'audio per ${file.name}.`); return []; }
+      appendConsole(`Audio non trovato per ${file.name}. Selezionalo di nuovo per continuare.`);
+      const selectedFile = await api.ask_media_file();
+      if (!selectedFile?.path) { appendConsole(`Avvio annullato: audio non ricollegato per ${file.name}.`); return []; }
+      nextPath = selectedFile.path; nextName = selectedFile.name; nextSize = selectedFile.size; nextDuration = selectedFile.duration || 0;
+      dispatch({ type: 'queue/update_source', id: file.id, path: nextPath, name: nextName, size: nextSize, duration: nextDuration });
+      appendConsole(`Audio ricollegato: ${nextName}`);
     }
-    return resolvedFiles;
-  }, [appendConsole]);
+    return [{
+      id: file.id,
+      path: nextPath,
+      name: nextName,
+      size: nextSize,
+      duration: nextDuration,
+      resume_session: file.resumeSession,
+    }] as FileDescriptor[];
+  }, [appendConsole, dispatch]);
 
-  const startProcessing = async () => {
-    if (queuedCount === 0 || !apiKey.trim()) return;
-    if (window.pywebview?.api) {
-      dispatch({ type: 'app/set_status', status: 'processing' });
-      try {
-        const fileDescriptors = await resolveQueuedFilesForProcessing();
-        if (!fileDescriptors || fileDescriptors.length === 0) {
-          dispatch({ type: 'app/set_status', status: 'idle' });
-          return;
-        }
-        const result = await window.pywebview.api.start_processing?.(fileDescriptors, apiKey.trim(), true);
-        if (!result?.ok) {
-          dispatch({ type: 'app/set_status', status: 'idle' });
-          appendConsole(`❌ ${result?.error || "Impossibile avviare l'elaborazione."}`);
-        }
-      } catch (e: unknown) {
-        dispatch({ type: 'app/set_status', status: 'idle' });
-        appendConsole(`❌ Errore avvio: ${getErrorMessage(e)}`);
+  const startProcessing = async (isContinuation: boolean = false) => {
+    const currentQueued = filesRef.current.filter(f => f.status === 'queued');
+    if (currentQueued.length === 0 || !apiKey.trim()) return false;
+    if (isContinuation && appStateRef.current === 'canceling') return false;
+    if (!window.pywebview?.api) return false;
+
+    if (!isContinuation) {
+      setBatchTotal(currentQueued.length);
+      setBatchCompleted(0);
+    }
+
+    try {
+      const fileDescriptors = await resolveQueuedFilesForProcessing();
+      if (!fileDescriptors || fileDescriptors.length === 0) {
+        return false;
       }
+
+      const result = await window.pywebview.api.start_processing?.(fileDescriptors, apiKey.trim(), true, preferredModel, fallbackModels);
+      if (!result?.ok) {
+        appendConsole(`❌ ${result?.error || "Impossibile avviare l'elaborazione."}`);
+        return false;
+      }
+
+      dispatch({ type: 'app/set_status', status: 'processing' });
+      return true;
+    } catch (e: unknown) {
+      appendConsole(`❌ Errore avvio: ${getErrorMessage(e)}`);
+      return false;
     }
   };
+
+  startProcessingRef.current = startProcessing;
 
   const confirmStopProcessing = useCallback(async () => {
     setConfirmAction(null);
@@ -359,10 +515,8 @@ export default function App() {
     setConfirmAction(null);
     dispatch({ type: 'queue/clear_completed' });
     setCompletedSearch('');
-    window.pywebview?.api?.get_completed_sessions?.().then(result => {
-      if (result?.ok && result.sessions) setArchiveSessions(result.sessions);
-    }).catch(() => {});
-  }, []);
+    void refreshArchiveSessions();
+  }, [refreshArchiveSessions]);
 
   const handleConfirmAction = useCallback(() => {
     if (!confirmAction) return;
@@ -371,8 +525,12 @@ export default function App() {
       return;
     }
     if (confirmAction.type === 'remove-file') {
+      const removedFile = filesRef.current.find(f => f.id === confirmAction.fileId);
       dispatch({ type: 'queue/remove', id: confirmAction.fileId });
       setConfirmAction(null);
+      if (removedFile?.status === 'done') {
+        void refreshArchiveSessions();
+      }
       return;
     }
     if (confirmAction.type === 'delete-archive-session') {
@@ -390,7 +548,36 @@ export default function App() {
       return;
     }
     confirmClearCompleted();
-  }, [confirmAction, confirmClearCompleted, confirmStopProcessing, appendConsole]);
+  }, [confirmAction, confirmClearCompleted, confirmStopProcessing, appendConsole, refreshArchiveSessions]);
+
+  const handleDuplicateAddAgain = useCallback(async (matches: AlreadyProcessedMatch[]) => {
+    setDuplicatePrompt(null);
+    for (const match of matches) {
+      const replacementId = crypto.randomUUID();
+      if (match.source === 'done') {
+        const archiveMatches = filterArchiveSessionsByInputPath(
+          match.incoming.path ?? match.existingFile.path,
+          archiveSessionsRef.current,
+        );
+        if (archiveMatches.length > 0) {
+          pendingArchiveReplacementsRef.current.set(replacementId, {
+            fileName: match.incoming.name,
+            inputPath: match.incoming.path,
+            sessions: archiveMatches,
+          });
+        }
+        dispatch({ type: 'queue/remove', id: match.existingFile.id });
+        dispatch({ type: 'queue/add', files: [{ ...match.incoming, id: replacementId, resumeSession: false }] });
+      } else {
+        pendingArchiveReplacementsRef.current.set(replacementId, {
+          fileName: match.incoming.name,
+          inputPath: match.incoming.path,
+          sessions: match.sessions,
+        });
+        dispatch({ type: 'queue/add', files: [{ ...match.incoming, id: replacementId, resumeSession: false }] });
+      }
+    }
+  }, [dispatch]);
 
   const handleRegenerateAnswer = async (ans: boolean | null) => {
     setRegeneratePrompt(null);
@@ -411,11 +598,13 @@ export default function App() {
   }, []);
 
   const relinkPreviewAudio = useCallback(async () => {
-    if (!window.pywebview?.api?.ask_media_file || !preview.fileId) return;
+    if (!window.pywebview?.api?.ask_media_file) return;
     try {
       const selectedFile = await window.pywebview.api.ask_media_file();
       if (!selectedFile?.path) return;
-      dispatch({ type: 'queue/update_source', id: preview.fileId, path: selectedFile.path, name: selectedFile.name, size: selectedFile.size, duration: selectedFile.duration });
+      if (preview.fileId) {
+        dispatch({ type: 'queue/update_source', id: preview.fileId, path: selectedFile.path, name: selectedFile.name, size: selectedFile.size, duration: selectedFile.duration });
+      }
       setPreview(prev => ({ ...prev, sourcePath: selectedFile.path }));
       await loadPreviewAudio(selectedFile.path);
       appendConsole(`Audio ricollegato: ${selectedFile.name}`);
@@ -486,15 +675,13 @@ export default function App() {
 
 
   // --- Computed values ---
-  const { queuedCount, errorCount, processingCount } = useMemo(() => {
-    let queuedCount = 0, doneCount = 0, errorCount = 0, processingCount = 0;
+  const { queuedCount, processingCount } = useMemo(() => {
+    let queuedCount = 0, processingCount = 0;
     for (const f of files) {
       if (f.status === 'queued') queuedCount++;
-      else if (f.status === 'done') doneCount++;
-      else if (f.status === 'error') errorCount++;
       else if (f.status === 'processing') processingCount++;
     }
-    return { queuedCount, doneCount, errorCount, processingCount };
+    return { queuedCount, processingCount };
   }, [files]);
   const hasApiKey = Boolean(apiKey.trim());
   const isApiKeyValid = GEMINI_KEY_PATTERN.test(apiKey.trim());
@@ -505,19 +692,6 @@ export default function App() {
     (!hasApiKey || !isApiKeyValid) ? 'setup' :
     queuedCount > 0 ? 'ready-with-files' : 'ready-empty';
   const lastConsoleMessage = consoleLogs.length > 0 ? consoleLogs[consoleLogs.length - 1] : 'Pronto per iniziare.';
-
-  const computeEta = (): string | null => {
-    const active = stepMetrics.chunks ?? stepMetrics.macro ?? stepMetrics.boundary;
-    if (!active || active.total <= 0 || active.avgSeconds <= 0) return null;
-    const remaining = active.total - active.done;
-    if (remaining <= 0) return null;
-    const secs = Math.round(active.avgSeconds * remaining);
-    if (secs < 60) return `~${secs}s`;
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return s > 0 ? `~${m}m ${s}s` : `~${m}m`;
-  };
-  const etaLabel = computeEta();
 
   const handleSetupSave = useCallback(async () => {
     setSetupKeySaving(true);
@@ -551,12 +725,8 @@ export default function App() {
   }, [setupKeyInput, fallbackKeys, preferredModel, fallbackModels, appendConsole]);
 
   useEffect(() => {
-    if (appState === 'processing') {
-      document.title = etaLabel ? `[ETA ${etaLabel}] El Sbobinator` : '⏳ El Sbobinator';
-    } else {
-      document.title = 'El Sbobinator';
-    }
-  }, [appState, etaLabel]);
+    document.title = appState === 'processing' ? '⏳ El Sbobinator' : 'El Sbobinator';
+  }, [appState]);
 
   useEffect(() => {
     const check = () => {
@@ -579,6 +749,8 @@ export default function App() {
 
   const pendingFiles = useMemo(() => getPendingFiles(files), [files]);
   const doneFiles = useMemo(() => getDoneFiles(files), [files]);
+  const showProcessingBanner = appState === 'processing' || appState === 'canceling' || completionFlash;
+  const bannerFile = files.find(f => f.status === 'processing') ?? (completionFlash ? doneFiles[0] : undefined);
   const filteredDoneFiles = useMemo(
     () => completedSearch.trim()
       ? doneFiles.filter(f => f.name.toLowerCase().includes(completedSearch.toLowerCase()))
@@ -614,10 +786,10 @@ export default function App() {
     return {
       title: 'Pulire le sbobine completate?',
       description: confirmAction.count === 1
-        ? 'La sbobina completata verrà rimossa dalla lista. Vuoi continuare?'
-        : `Le ${confirmAction.count} sbobine completate verranno rimosse dalla lista. Vuoi continuare?`,
+        ? "La sbobina completata verrà spostata nell'archivio e rimossa dalla lista. Vuoi continuare?"
+        : `Le ${confirmAction.count} sbobine completate verranno spostate nell'archivio e rimosse dalla lista. Vuoi continuare?`,
       confirmLabel: 'Conferma pulizia',
-      cancelLabel: 'Mantieni lista',
+      cancelLabel: 'Mantieni nella lista',
     };
   }, [confirmAction]);
 
@@ -625,6 +797,32 @@ export default function App() {
     const doneHtmlPaths = new Set(doneFiles.map(f => f.outputHtml).filter(Boolean));
     return archiveSessions.filter(s => !doneHtmlPaths.has(s.html_path));
   }, [archiveSessions, doneFiles]);
+
+  const archiveDisplayed = useMemo(() => {
+    const q = archiveSearch.trim().toLowerCase();
+    const filtered = q ? archiveFiltered.filter(s => s.name.toLowerCase().includes(q)) : archiveFiltered;
+    return [...filtered].sort((a, b) => {
+      const ta = a.completed_at_iso ? new Date(a.completed_at_iso).getTime() : 0;
+      const tb = b.completed_at_iso ? new Date(b.completed_at_iso).getTime() : 0;
+      return archiveSort === 'newest' ? tb - ta : ta - tb;
+    });
+  }, [archiveFiltered, archiveSearch, archiveSort]);
+
+  const archiveTotalPages = Math.ceil(archiveDisplayed.length / ARCHIVE_PAGE_SIZE);
+
+  const archivePageData = useMemo(
+    () => archiveDisplayed.slice(archivePage * ARCHIVE_PAGE_SIZE, (archivePage + 1) * ARCHIVE_PAGE_SIZE),
+    [archiveDisplayed, archivePage],
+  );
+
+  useEffect(() => {
+    setArchivePage(0);
+  }, [archiveSearch, archiveSort, archiveFiltered]);
+
+  useEffect(() => {
+    if (!isArchiveOpen) return;
+    setTimeout(() => archivePanelRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 50);
+  }, [archivePage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sortableIds = useMemo(() => pendingFiles.map(f => f.id), [pendingFiles]);
 
@@ -678,6 +876,18 @@ export default function App() {
               title={themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro'}
             >
               {themeMode === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
+            <button
+              onClick={() => {
+                const next = !showConsole;
+                setShowConsole(next);
+                localStorage.setItem('show_console', String(next));
+              }}
+              className={`icon-button icon-btn-console${showConsole ? ' icon-button--active' : ''}`}
+              title={showConsole ? 'Nascondi console' : 'Mostra console'}
+              aria-label={showConsole ? 'Nascondi console' : 'Mostra console'}
+            >
+              <Terminal className="w-5 h-5" />
             </button>
             <button onClick={() => setIsSettingsOpen(true)} className="icon-button icon-btn-settings" aria-label="Apri impostazioni">
               <Settings className="w-5 h-5" />
@@ -752,6 +962,25 @@ export default function App() {
       </AnimatePresence>
 
       <main className="max-w-3xl mx-auto px-5 sm:px-6 py-8 w-full flex-1 flex flex-col gap-6">
+
+        {/* Processing Status Banner */}
+        <AnimatePresence>
+          {showProcessingBanner && (
+            <ProcessingStatusBanner
+              key="processing-banner"
+              appState={appState}
+              currentPhase={completionFlash ? '__completed__' : currentPhase}
+              currentModel={currentModel}
+              activeProgress={completionFlash ? 100 : activeProgress}
+              workDone={workDone}
+              workTotals={workTotals}
+              currentFileIndex={batchCompleted}
+              currentBatchTotal={batchTotal}
+              currentFileName={bannerFile?.name}
+              startedAt={bannerFile?.startedAt}
+            />
+          )}
+        </AnimatePresence>
 
         {/* Onboarding / Drop Zone */}
         {uiMode === 'setup' ? (
@@ -870,23 +1099,61 @@ export default function App() {
         ) : null}
 
         {/* Batch Queue */}
-        <div className="premium-panel p-5 sm:p-6 space-y-4">
-          <div className="flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--border-subtle)' }}>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+        <AnimatePresence>
+        {(pendingFiles.length > 0 || appState !== 'idle') && (
+        <motion.div
+          key="batch-queue"
+          className="premium-panel p-5 sm:p-6 space-y-4"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0, transition: { duration: 0.2 } }}
+          exit={{ opacity: 0, y: -8, transition: { duration: 0.15 } }}
+        >
+          <div className="flex flex-col gap-2 border-b pb-5" style={{ borderColor: 'var(--border-subtle)' }}>
+            {/* Row 1: title + toggle */}
+            <div className="flex items-center justify-between gap-4">
               <h2 className="text-2xl font-semibold tracking-tight flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                 <FileAudio className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
                 Coda di elaborazione
               </h2>
-              {pendingFiles.length > 0 && (
-                <span className="status-pill self-start sm:self-auto shrink-0 whitespace-nowrap">
+              <div
+                className="flex items-center gap-2 shrink-0"
+                title={autoContinue ? "Elabora i file in sequenza. Clicca per fermarsi dopo ogni file." : "L'app si fermerà dopo ogni file. Clicca per continuare in automatico."}
+              >
+                <ListOrdered className="w-4 h-4" style={{ color: autoContinue ? 'var(--accent-text)' : 'var(--text-muted)' }} />
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={autoContinue}
+                  onClick={() => setAutoContinue(v => !v)}
+                  style={{
+                    position: 'relative', display: 'inline-flex', alignItems: 'center',
+                    width: '40px', height: '24px', borderRadius: '12px',
+                    background: autoContinue ? 'var(--success-text)' : 'var(--border-default)',
+                    border: 'none', cursor: 'pointer', transition: 'background 0.2s',
+                    flexShrink: 0, padding: 0,
+                  }}
+                >
+                  <span style={{
+                    position: 'absolute', top: '4px', width: '16px', height: '16px',
+                    borderRadius: '50%', background: 'white',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.3)', transition: 'transform 0.2s',
+                    transform: autoContinue ? 'translateX(20px)' : 'translateX(4px)',
+                  }} />
+                </button>
+              </div>
+            </div>
+            {/* Row 2: pills */}
+            {pendingFiles.length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="status-pill shrink-0 whitespace-nowrap">
                   {pendingFiles.length} {pendingFiles.length === 1 ? 'elemento' : 'elementi'}
                 </span>
-              )}
-            </div>
-            {errorCount > 0 && appState === 'idle' && (
-              <button onClick={() => dispatch({ type: 'queue/retry_failed' })} className="premium-button-secondary compact-button" style={{ color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)' }}>
-                Riprova falliti ({errorCount})
-              </button>
+                {preferredModel && (
+                  <span className="status-pill shrink-0 whitespace-nowrap">
+                    Modello: {shortModelName(preferredModel)}
+                  </span>
+                )}
+              </div>
             )}
           </div>
 
@@ -896,7 +1163,7 @@ export default function App() {
             onDragEnd={handleDragEnd}
           >
             <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-              <AnimatePresence onExitComplete={() => { if (!filesRef.current.some(f => f.status !== 'done')) setShowEmptyState(true); }}>
+              <AnimatePresence>
                 {pendingFiles.map((file) => {
                   const isActive = file.status === 'processing';
                   return (
@@ -905,12 +1172,8 @@ export default function App() {
                       file={file}
                       appState={appState}
                       currentPhase={isActive ? currentPhase : undefined}
-                      currentModel={isActive ? currentModel : undefined}
-                      workDone={isActive ? workDone : EMPTY_WORK}
-                      workTotals={isActive ? workTotals : EMPTY_WORK}
-                      etaLabel={isActive ? etaLabel : null}
-                      activeProgress={isActive ? activeProgress : undefined}
                       onRemove={requestRemoveFile}
+                      onRetry={(id) => dispatch({ type: 'queue/retry_one', id })}
                       onPreview={openPreview}
                       onOpenFile={openFile}
                     />
@@ -919,40 +1182,18 @@ export default function App() {
               </AnimatePresence>
             </SortableContext>
           </DndContext>
-          <AnimatePresence>
-            {showEmptyState && (
-              <motion.div
-                key="empty-state"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1, transition: { duration: 0.15 } }}
-                exit={{ opacity: 0, transition: { duration: 0 } }}
-                className="p-10 rounded-[26px] text-center flex flex-col items-center border border-dashed"
-                style={{ borderColor: 'var(--border-default)', background: 'rgba(255,255,255,0.03)' }}>
-                <div className="w-14 h-14 rounded-[20px] flex items-center justify-center mb-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-default)' }}>
-                  <FileText className="w-5 h-5" style={{ color: 'var(--text-faint)' }} />
-                </div>
-                <p className="text-sm leading-6 max-w-md" style={{ color: 'var(--text-muted)' }}>Nessun file in coda. Aggiungi un file per iniziare.</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
           {/* Action Panel */}
           {(appState !== 'idle' || queuedCount > 0) && (
             <div className="pt-4 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
               <AnimatePresence mode="wait">
                 {appState === 'idle' && (
                   <motion.div key="idle" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                    <button onClick={startProcessing} disabled={!canStart}
+                    <button onClick={() => startProcessing()} disabled={!canStart}
                       className="premium-button w-full text-lg"
                       style={canStart ? {} : { cursor: 'not-allowed' }}>
                       <Play className="w-5 h-5 fill-current" />
                       {!hasApiKey ? '⚠️ Inserisci API Key nelle impostazioni' : !isApiKeyValid ? '⚠️ API Key non valida' : `Avvia sbobinatura (${queuedCount} file)`}
                     </button>
-                    {canStart && preferredModel && (
-                      <p className="text-center text-xs mt-2" style={{ color: 'var(--text-faint)' }}>
-                        Modello: <span style={{ color: 'var(--text-muted)' }}>{shortModelName(preferredModel)}</span>
-                      </p>
-                    )}
                   </motion.div>
                 )}
                 {appState === 'processing' && (
@@ -973,7 +1214,9 @@ export default function App() {
               </AnimatePresence>
             </div>
           )}
-        </div>
+        </motion.div>
+        )}
+        </AnimatePresence>
 
         {/* Sbobine completate */}
         <AnimatePresence>
@@ -1010,7 +1253,7 @@ export default function App() {
                       />
                     </div>
                   )}
-                  {appState === 'idle' && (
+                  {(appState === 'idle' || appState === 'processing') && (
                     <button
                       onClick={() => setConfirmAction({ type: 'clear-completed', count: doneFiles.length })}
                       className="premium-button-secondary compact-button text-xs"
@@ -1027,7 +1270,6 @@ export default function App() {
                   <CompletedFileCard
                     key={file.id}
                     file={file}
-                    appState={appState}
                     isNewest={file.id === doneFiles[0]?.id}
                     onRemove={requestRemoveFile}
                     onPreview={openPreview}
@@ -1055,6 +1297,7 @@ export default function App() {
         <AnimatePresence>
           {archiveFiltered.length > 0 && (
             <motion.div
+              ref={archivePanelRef}
               key="archive-section"
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1063,16 +1306,25 @@ export default function App() {
               className="premium-panel overflow-hidden"
             >
               <button
-                onClick={() => setIsArchiveOpen(v => !v)}
+                onClick={() => {
+                  const opening = !isArchiveOpen;
+                  setIsArchiveOpen(opening);
+                  if (opening) {
+                    setTimeout(() => archivePanelRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 180);
+                  } else {
+                    setArchiveSearch('');
+                    setArchivePage(0);
+                  }
+                }}
                 className="w-full flex items-center justify-between gap-3 px-5 sm:px-6 py-4 transition-colors"
                 style={{ background: 'none', border: 'none', cursor: 'pointer', borderBottom: isArchiveOpen ? '1px solid var(--border-subtle)' : 'none' }}
               >
                 <div className="flex items-center gap-2">
-                  <History className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
-                  <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Archivio sbobine passate</span>
-                  <span className="status-pill shrink-0 whitespace-nowrap" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-default)' }}>{archiveFiltered.length}</span>
+                  <History className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
+                  <span className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Archivio Sbobine</span>
+                  <span className="status-pill shrink-0 whitespace-nowrap">{archiveFiltered.length}</span>
                 </div>
-                {isArchiveOpen ? <ChevronUp className="w-4 h-4" style={{ color: 'var(--text-faint)' }} /> : <ChevronDown className="w-4 h-4" style={{ color: 'var(--text-faint)' }} />}
+                {isArchiveOpen ? <ChevronUp className="w-4 h-4" style={{ color: 'var(--text-muted)' }} /> : <ChevronDown className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />}
               </button>
               <AnimatePresence>
                 {isArchiveOpen && (
@@ -1081,15 +1333,46 @@ export default function App() {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.2, ease: 'easeInOut' }}
+                    transition={{
+                      height: { duration: 0.25, ease: [0.4, 0, 0.2, 1] },
+                      opacity: { duration: 0.2, delay: 0.04, ease: 'easeOut' },
+                    }}
                     className="overflow-hidden"
                   >
-                    <div className="px-5 sm:px-6 py-4 flex flex-col gap-2">
-                      {archiveFiltered.map((session) => {
+                    {/* Toolbar: search + sort */}
+                    <div className="px-5 sm:px-6 pt-4 pb-2 flex items-center gap-2">
+                      <div className="relative flex-1 flex items-center">
+                        <Search className="absolute left-2.5 w-3.5 h-3.5 pointer-events-none" style={{ color: 'var(--text-faint)' }} />
+                        <input
+                          type="text"
+                          value={archiveSearch}
+                          onChange={e => setArchiveSearch(e.target.value)}
+                          placeholder="Cerca per nome..."
+                          className="premium-button-secondary compact-button text-xs pr-3 py-1.5 rounded-[13px] outline-none w-full"
+                          style={{ borderColor: 'var(--border-default)', background: 'rgba(255,255,255,0.03)', color: 'var(--text-primary)', paddingLeft: '2rem' }}
+                        />
+                      </div>
+                      <button
+                        onClick={() => setArchiveSort(s => s === 'newest' ? 'oldest' : 'newest')}
+                        className="premium-button-secondary compact-button text-xs px-2.5 py-1.5 rounded-[13px] flex items-center gap-1 shrink-0"
+                        style={{ color: 'var(--text-muted)', borderColor: 'var(--border-default)' }}
+                        title={archiveSort === 'newest' ? 'Ordinate: più recenti prima' : 'Ordinate: più vecchie prima'}
+                      >
+                        {archiveSort === 'newest' ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                        <span>{archiveSort === 'newest' ? 'Recente' : 'Vecchia'}</span>
+                      </button>
+                    </div>
+                    <div className="px-5 sm:px-6 pb-4 flex flex-col gap-2">
+                      <AnimatePresence mode="popLayout">
+                      {archivePageData.map((session) => {
                         const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
                         return (
-                          <div
+                          <motion.div
                             key={session.session_dir}
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -4, transition: { duration: 0.1 } }}
+                            transition={{ duration: 0.18, ease: 'easeOut' }}
                             onClick={() => openPreview(session.html_path, session.name, session.input_path)}
                             className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 cursor-pointer transition-colors"
                             style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-subtle)' }}
@@ -1104,9 +1387,14 @@ export default function App() {
                                     <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span>{shortModelName(session.effective_model)}</span></>
                                   )}
                                 </div>
-                                <div className="mt-0.5 flex items-center gap-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                                <div
+                                  className="mt-0.5 flex items-center gap-1 text-[11px] hover:underline"
+                                  style={{ color: 'var(--text-faint)', cursor: 'pointer' }}
+                                  onClick={(e) => { e.stopPropagation(); openFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path); }}
+                                  title={`Apri cartella: ${session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path}`}
+                                >
                                   <FolderOpen className="w-3 h-3 shrink-0" />
-                                  <span className="truncate" title={session.html_path}>
+                                  <span className="truncate">
                                     {session.html_path.replace(/\\/g, '/').split('/').slice(-2).join('/')}
                                   </span>
                                 </div>
@@ -1132,9 +1420,48 @@ export default function App() {
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
-                          </div>
+                          </motion.div>
                         );
                       })}
+                      {archiveSearch.trim() && archiveDisplayed.length === 0 && (
+                        <motion.p
+                          key="no-results"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.15 }}
+                          className="text-sm text-center py-4"
+                          style={{ color: 'var(--text-muted)' }}
+                        >
+                          Nessun risultato per &ldquo;{archiveSearch}&rdquo;
+                        </motion.p>
+                      )}
+                      </AnimatePresence>
+                      {archiveTotalPages > 1 && (
+                        <div className="flex items-center justify-center gap-3 pt-2">
+                          <button
+                            onClick={() => setArchivePage(p => Math.max(0, p - 1))}
+                            disabled={archivePage === 0}
+                            className="icon-button compact-icon-button"
+                            style={{ color: 'var(--text-muted)', opacity: archivePage === 0 ? 0.35 : 1 }}
+                            aria-label="Pagina precedente"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </button>
+                          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                            {archivePage + 1} / {archiveTotalPages}
+                          </span>
+                          <button
+                            onClick={() => setArchivePage(p => Math.min(archiveTotalPages - 1, p + 1))}
+                            disabled={archivePage >= archiveTotalPages - 1}
+                            className="icon-button compact-icon-button"
+                            style={{ color: 'var(--text-muted)', opacity: archivePage >= archiveTotalPages - 1 ? 0.35 : 1 }}
+                            aria-label="Pagina successiva"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </motion.div>
                 )}
@@ -1144,7 +1471,7 @@ export default function App() {
         </AnimatePresence>
 
         {/* Console */}
-        <div className="console-shell console-shell-subtle">
+        {showConsole && <div className="console-shell console-shell-subtle">
           <div className="px-5 py-3 flex items-center justify-between" style={{ background: 'var(--console-header)', borderBottom: '1px solid var(--border-subtle)' }}>
             <h2 className="text-xs font-semibold uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--console-heading)' }}>
               <span className={`w-2 h-2 rounded-full ${appState === 'processing' ? 'animate-pulse' : ''}`} style={appState !== 'processing' ? { background: 'var(--console-heading)' } : { background: 'var(--processing-dot)' }} />
@@ -1201,7 +1528,7 @@ export default function App() {
               {lastConsoleMessage}
             </div>
           )}
-        </div>
+        </div>}
 
 
       </main>
@@ -1235,6 +1562,11 @@ export default function App() {
         onDismiss={() => void handleRegenerateAnswer(null)}
       />
       <NewKeyModal isOpen={askNewKeyPrompt} onClose={() => setAskNewKeyPrompt(false)} />
+      <DuplicateFileModal
+        prompt={duplicatePrompt}
+        onDismiss={() => setDuplicatePrompt(null)}
+        onAddAgain={handleDuplicateAddAgain}
+      />
       {confirmModalCopy && (
         <ConfirmActionModal
           isOpen={confirmAction !== null}

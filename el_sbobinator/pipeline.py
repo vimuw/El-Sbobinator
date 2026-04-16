@@ -126,13 +126,17 @@ def _esegui_sbobinatura_impl(  # noqa: C901
             print(f"   [OK] Cambio modello automatico: {previous_model} -> {new_model}")
 
         def log_model_selection(label: str):
+            def _fmt(m: str) -> str:
+                t = generation_service._phase1_temperature(m)
+                return f"{m} (T={t})"
+
             fallback_chain = (
-                " -> ".join(settings.fallback_models)
+                " -> ".join(_fmt(m) for m in settings.fallback_models)
                 if settings.fallback_models
                 else "nessuno"
             )
             print(
-                f"[*] {label}: primario={settings.model}, attivo={model_state.current}, fallback={fallback_chain}"
+                f"[*] {label}: primario={_fmt(settings.model)}, attivo={_fmt(model_state.current)}, fallback={fallback_chain}"
             )
 
         print(f"[*] Autosalvataggio attivo. Sessione: {session_ctx.session_dir}")

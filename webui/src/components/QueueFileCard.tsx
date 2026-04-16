@@ -1,6 +1,6 @@
 import React from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { AlertCircle, CheckCircle, Clock, ExternalLink, FileAudio, FolderOpen, GripVertical, PenLine, Trash2, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, ExternalLink, FileAudio, FolderOpen, GripVertical, PenLine, RotateCcw, Trash2, XCircle } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
@@ -10,12 +10,8 @@ interface QueueFileCardProps {
   file: FileItem;
   appState: AppStatus;
   currentPhase?: string;
-  currentModel?: string;
-  workDone: { chunks: number; macro: number; boundary: number };
-  workTotals: { chunks: number; macro: number; boundary: number };
-  etaLabel: string | null;
-  activeProgress?: number;
   onRemove: (id: string) => void;
+  onRetry: (id: string) => void;
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string) => void;
   onOpenFile: (path: string) => void;
 }
@@ -26,34 +22,13 @@ function abbreviatePath(path: string): string {
   return `…/${parts.slice(-2).join('/')}`;
 }
 
-function getProcessingDetails(phaseText?: string) {
-  const rawPhase = String(phaseText || '').trim();
-  if (!rawPhase) {
-    return { title: 'Preparazione in corso', chunk: '' };
-  }
-
-  const chunkMatch = rawPhase.match(/\(([^)]+)\)/);
-  const normalizedChunk = chunkMatch?.[1]
-    ? chunkMatch[1].replace(/chunk\s+(\d+)\/(\d+)/i, 'Chunk $1 di $2')
-    : '';
-
-  const phaseWithoutChunk = rawPhase.replace(/\s*\([^)]*\)\s*/g, '').trim();
-  const cleanedPhase = phaseWithoutChunk.replace(/^Fase\s*\d+\s*\/\s*\d+\s*:\s*/i, '').trim();
-  const capitalizedPhase = cleanedPhase ? `${cleanedPhase.charAt(0).toUpperCase()}${cleanedPhase.slice(1)}` : 'Elaborazione';
-
-  return {
-    title: `${capitalizedPhase} in corso`,
-    chunk: normalizedChunk,
-  };
-}
-
 function QueueFileCardInner({
-  file, appState, currentPhase, currentModel, workDone, workTotals, etaLabel, activeProgress,
+  file, appState, currentPhase,
   onRemove,
+  onRetry,
   onPreview,
   onOpenFile,
 }: QueueFileCardProps) {
-  const processingDetails = file.status === 'processing' ? getProcessingDetails(currentPhase) : null;
   const isCanceling = appState === 'canceling' && file.status === 'processing';
   const isDraggable = file.status === 'queued' && appState === 'idle';
   const { attributes, listeners, setNodeRef, transform, transition: dndTransition, isDragging } = useSortable({
@@ -156,7 +131,7 @@ function QueueFileCardInner({
                   </>
                 )}
               </div>
-              {file.status === 'processing' && processingDetails && (
+              {file.status === 'processing' && (
                 <motion.div
                   layout="position"
                   className="mt-2 flex min-h-7 flex-wrap items-center gap-1.5"
@@ -166,20 +141,23 @@ function QueueFileCardInner({
                     <span className="inline-flex h-2 w-2 rounded-full animate-pulse" style={{ background: isCanceling ? 'var(--error-text)' : 'var(--processing-dot)' }} />
                     {isCanceling ? 'Annullamento in corso' : 'In elaborazione'}
                   </span>
-                  {!isCanceling && currentModel && (
-                    <span
-                      className="helper-chip processing-chip-compact"
-                      title={currentModel}
-                    >
-                      {shortModelName(currentModel)}
-                    </span>
-                  )}
                 </motion.div>
               )}
             </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {appState === 'idle' && file.status === 'error' && (
+              <button
+                onClick={() => onRetry(file.id)}
+                className="icon-button compact-icon-button"
+                style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}
+                title="Riprova"
+                aria-label="Riprova"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+            )}
             {appState === 'idle' && (
               <button
                 onClick={() => onRemove(file.id)}
@@ -192,36 +170,6 @@ function QueueFileCardInner({
           </div>
         </div>
 
-        {file.status === 'processing' && (
-          <div className="relative z-10 mt-3">
-            <div
-              className="flex items-center justify-between gap-3 mb-1.5 text-[10px] font-medium uppercase tracking-[0.14em]"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              <span>{isCanceling ? 'In attesa di interruzione' : (processingDetails?.title ?? 'Generazione sbobina')}</span>
-              <span style={{ color: 'var(--text-primary)' }}>{activeProgress ?? file.progress}%</span>
-            </div>
-            <div className="processing-progress h-2 w-full rounded-full overflow-hidden" style={{ background: 'var(--progress-bg)' }}>
-              <motion.div
-                className="processing-progress-fill h-full rounded-full"
-                style={{ background: isCanceling ? 'linear-gradient(90deg, var(--error-bg), var(--error-text))' : 'linear-gradient(90deg, var(--accent-gradient-start), var(--accent-gradient-end))' }}
-                initial={{ width: 0 }}
-                animate={{ width: `${activeProgress ?? file.progress}%` }}
-                transition={{ ease: 'linear', duration: 0.3 }}
-              />
-            </div>
-            <div className="flex justify-between mt-1.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-              <span>
-                {processingDetails?.chunk
-                  ? processingDetails.chunk
-                  : workTotals.chunks > 0
-                    ? `Chunk ${workDone.chunks}/${workTotals.chunks}`
-                    : 'Avanzamento attivo'}
-              </span>
-              {etaLabel && <span style={{ color: 'var(--text-secondary)' }}>ETA {etaLabel}</span>}
-            </div>
-          </div>
-        )}
       </motion.div>
     </div>
   );
@@ -231,14 +179,13 @@ export const QueueFileCard = React.memo(QueueFileCardInner);
 
 interface CompletedFileCardProps {
   file: FileItem;
-  appState: AppStatus;
   isNewest: boolean;
   onRemove: (id: string) => void;
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string) => void;
   onOpenFile: (path: string) => void;
 }
 
-function CompletedFileCardInner({ file, appState, isNewest, onRemove, onPreview, onOpenFile }: CompletedFileCardProps) {
+function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFile }: CompletedFileCardProps) {
   const isClickable = Boolean(file.outputHtml);
   return (
     <motion.div
@@ -282,12 +229,21 @@ function CompletedFileCardInner({ file, appState, isNewest, onRemove, onPreview,
                   <span>{formatDuration(file.duration)}</span>
                 </>
               )}
-              {file.effectiveModel && (
+              {(file.primaryModel || file.effectiveModel) && (
                 <>
                   <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
-                  <span title={file.effectiveModel}>
-                    {shortModelName(file.effectiveModel)}
+                  <span title={file.primaryModel || file.effectiveModel}>
+                    {shortModelName(file.primaryModel || file.effectiveModel!)}
                   </span>
+                  {file.primaryModel && file.effectiveModel && file.primaryModel !== file.effectiveModel && (
+                    <span
+                      className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
+                      style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}
+                      title={`Fallback usato: ${shortModelName(file.effectiveModel)}`}
+                    >
+                      fallback
+                    </span>
+                  )}
                 </>
               )}
               <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
@@ -296,9 +252,14 @@ function CompletedFileCardInner({ file, appState, isNewest, onRemove, onPreview,
               </span>
             </div>
             {file.outputHtml && (
-              <div className="mt-1 flex items-center gap-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+              <div
+                className="mt-1 flex items-center gap-1 text-[11px] hover:underline"
+                style={{ color: 'var(--text-faint)', cursor: 'pointer' }}
+                onClick={(e) => { e.stopPropagation(); onOpenFile(file.outputDir ?? file.outputHtml!); }}
+                title={`Apri cartella: ${file.outputDir ?? file.outputHtml}`}
+              >
                 <FolderOpen className="w-3 h-3 shrink-0" />
-                <span className="truncate" title={file.outputHtml}>{abbreviatePath(file.outputHtml)}</span>
+                <span className="truncate">{abbreviatePath(file.outputHtml)}</span>
               </div>
             )}
           </div>
@@ -328,8 +289,7 @@ function CompletedFileCardInner({ file, appState, isNewest, onRemove, onPreview,
               <ExternalLink className="w-3.5 h-3.5" />
             </button>
           )}
-          {appState === 'idle' && (
-            <button
+          <button
               onClick={(e) => { e.stopPropagation(); onRemove(file.id); }}
               className="icon-button compact-icon-button"
               style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}
@@ -338,7 +298,6 @@ function CompletedFileCardInner({ file, appState, isNewest, onRemove, onPreview,
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
-          )}
         </div>
       </div>
     </motion.div>

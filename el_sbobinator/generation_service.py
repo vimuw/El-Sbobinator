@@ -19,7 +19,7 @@ from google import genai
 from google.genai import types
 
 from el_sbobinator.logging_utils import get_logger
-from el_sbobinator.model_registry import ModelState, next_model_in_chain
+from el_sbobinator.model_registry import MODEL_OPTIONS, ModelState, next_model_in_chain
 from el_sbobinator.shared import load_config
 
 # ---------------------------------------------------------------------------
@@ -40,7 +40,8 @@ _RETRY_SLEEP_SECONDS: float = 30.0  # Back-off pause between generic transient e
 _MODEL_UNAVAILABLE_RETRY_DELAYS: tuple[float, ...] = (
     3.0,
     6.0,
-)  # Progressive back-off before switching model on 503/UNAVAILABLE (3 total attempts)
+    15.0,
+)  # Progressive back-off before switching model on 503/UNAVAILABLE (4 total attempts)
 # Gemini enforces a per-minute request quota that resets after ~60 s; sleeping
 # 65 s adds a small buffer to ensure the window has fully elapsed before retry.
 _RATE_LIMIT_SLEEP_SECONDS: float = 65.0
@@ -340,6 +341,10 @@ class DegenerateOutputError(RuntimeError):
         self.rejected_text: str = (rejected_text or "")[:500]
 
 
+class AllModelsUnavailableError(RuntimeError):
+    """Raised when all models in the fallback chain are 503-unavailable."""
+
+
 def _normalize_guardrail_text(text: str) -> str:
     normalized = str(text or "").replace("\u00a0", " ").strip().lower()
     normalized = re.sub(r"\s+", " ", normalized)
@@ -423,6 +428,13 @@ def _switch_to_next_model(
     raise exc_type(
         f"{error_message} Ho provato tutti i fallback configurati: {tried}."
     ) from cause
+
+
+def _phase1_temperature(model_name: str) -> float:
+    for opt in MODEL_OPTIONS:
+        if opt["id"] == model_name:
+            return float(opt.get("phase1_temperature", 0.35))
+    return 0.35
 
 
 def retry_with_quota(  # noqa: C901
@@ -545,6 +557,7 @@ def retry_with_quota(  # noqa: C901
                                     on_model_switched=on_model_switched,
                                     error_message="Modello Gemini indisponibile.",
                                     cause=retry_exc,
+                                    exc_type=AllModelsUnavailableError,
                                 )
                                 _switched = True
                                 break
@@ -623,6 +636,17 @@ def retry_with_quota(  # noqa: C901
                         continue
                     except Exception as err:
                         print(f"   [!] Chiave non valida fornita: {err}")
+
+                if model_state is not None:
+                    _switch_to_next_model(
+                        model_state,
+                        on_model_switched=on_model_switched,
+                        error_message="Quota giornaliera esaurita su tutte le chiavi disponibili.",
+                        cause=exc,
+                        exc_type=QuotaDailyLimitError,
+                    )
+                    attempts = 0
+                    continue
 
                 raise QuotaDailyLimitError(str(exc)) from exc
 

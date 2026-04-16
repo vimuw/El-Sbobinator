@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from el_sbobinator.pipeline_session import (
     ensure_preconverted_audio,
+    initialize_session_context,
     normalize_stage,
     phase1_has_progress,
     record_step_metric,
@@ -419,6 +420,194 @@ class PipelineSessionHelpersTests(unittest.TestCase):
             self.assertFalse(os.path.exists(partial_path))
             self.assertEqual(context.save_calls, 0)
             self.assertNotIn("phase1", context.session)
+
+
+class InitializeSessionContextTests(unittest.TestCase):
+    def test_resume_overrides_model_from_current_config(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            import json
+
+            input_path = os.path.join(tmpdir, "lesson.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake")
+
+            session_dir = os.path.join(tmpdir, "session")
+            os.makedirs(os.path.join(session_dir, "phase1_chunks"), exist_ok=True)
+            os.makedirs(os.path.join(session_dir, "phase2_revised"), exist_ok=True)
+            os.makedirs(os.path.join(session_dir, "phase2_boundary"), exist_ok=True)
+            session_data = {
+                "schema_version": 1,
+                "created_at": "2024-01-01 00:00:00",
+                "updated_at": "2024-01-01 00:00:00",
+                "stage": "phase1",
+                "input": {"path": input_path, "size": 4, "mtime": 0.0},
+                "settings": {
+                    "model": "gemini-2.5-flash",
+                    "fallback_models": [],
+                    "effective_model": "gemini-2.5-flash",
+                    "chunk_minutes": 15,
+                    "overlap_seconds": 30,
+                    "macro_char_limit": 22000,
+                    "preconvert_audio": True,
+                    "prefetch_next_chunk": True,
+                    "inline_audio_max_mb": 6.0,
+                    "audio": {"bitrate": "48k"},
+                },
+                "phase1": {
+                    "next_start_sec": 0,
+                    "chunks_done": 0,
+                    "memoria_precedente": "",
+                },
+                "phase2": {"macro_total": 0, "revised_done": 0},
+                "boundary": {"pairs_total": 0, "next_pair": 1},
+                "outputs": {},
+                "last_error": None,
+            }
+            session_path = os.path.join(session_dir, "session.json")
+            with open(session_path, "w", encoding="utf-8") as fh:
+                json.dump(session_data, fh)
+
+            with (
+                patch(
+                    "el_sbobinator.pipeline_session.load_config",
+                    return_value={
+                        "preferred_model": "gemini-2.5-flash-lite",
+                        "fallback_models": [],
+                    },
+                ),
+                patch(
+                    "el_sbobinator.session_store._session_dir_for_file",
+                    return_value=session_dir,
+                ),
+            ):
+                ctx = initialize_session_context(input_path, resume_session=True)
+
+            self.assertEqual(ctx.settings.model, "gemini-2.5-flash-lite")
+            self.assertEqual(
+                ctx.session["settings"]["effective_model"], "gemini-2.5-flash-lite"
+            )
+
+    def _make_session_file(self, tmpdir, model, chunk_minutes, chunks_done):
+        import json
+
+        input_path = os.path.join(tmpdir, "lesson.mp3")
+        with open(input_path, "wb") as fh:
+            fh.write(b"fake")
+
+        session_dir = os.path.join(tmpdir, "session")
+        os.makedirs(os.path.join(session_dir, "phase1_chunks"), exist_ok=True)
+        os.makedirs(os.path.join(session_dir, "phase2_revised"), exist_ok=True)
+        os.makedirs(os.path.join(session_dir, "phase2_boundary"), exist_ok=True)
+        session_data = {
+            "schema_version": 1,
+            "created_at": "2024-01-01 00:00:00",
+            "updated_at": "2024-01-01 00:00:00",
+            "stage": "phase1",
+            "input": {"path": input_path, "size": 4, "mtime": 0.0},
+            "settings": {
+                "model": model,
+                "fallback_models": [],
+                "effective_model": model,
+                "chunk_minutes": chunk_minutes,
+                "overlap_seconds": 30,
+                "macro_char_limit": 22000,
+                "preconvert_audio": True,
+                "prefetch_next_chunk": True,
+                "inline_audio_max_mb": 6.0,
+                "audio": {"bitrate": "48k"},
+            },
+            "phase1": {
+                "next_start_sec": chunks_done * (chunk_minutes * 60 - 30),
+                "chunks_done": chunks_done,
+                "memoria_precedente": "",
+            },
+            "phase2": {"macro_total": 0, "revised_done": 0},
+            "boundary": {"pairs_total": 0, "next_pair": 1},
+            "outputs": {},
+            "last_error": None,
+        }
+        session_path = os.path.join(session_dir, "session.json")
+        with open(session_path, "w", encoding="utf-8") as fh:
+            json.dump(session_data, fh)
+        return input_path, session_dir
+
+    def test_chunk_minutes_resets_to_new_model_default_when_no_chunks_done(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path, session_dir = self._make_session_file(
+                tmpdir, model="gemini-2.5-flash-lite", chunk_minutes=10, chunks_done=0
+            )
+            new_defaults = {
+                "model": "gemini-2.5-flash",
+                "fallback_models": [],
+                "effective_model": "gemini-2.5-flash",
+                "chunk_minutes": 15,
+                "overlap_seconds": 30,
+                "macro_char_limit": 22000,
+                "preconvert_audio": True,
+                "prefetch_next_chunk": True,
+                "inline_audio_max_mb": 6.0,
+                "audio": {"bitrate": "48k"},
+            }
+            with (
+                patch(
+                    "el_sbobinator.pipeline_session.load_config",
+                    return_value={
+                        "preferred_model": "gemini-2.5-flash",
+                        "fallback_models": [],
+                    },
+                ),
+                patch(
+                    "el_sbobinator.pipeline_session.build_default_pipeline_settings",
+                    return_value=new_defaults,
+                ),
+                patch(
+                    "el_sbobinator.session_store._session_dir_for_file",
+                    return_value=session_dir,
+                ),
+            ):
+                ctx = initialize_session_context(input_path, resume_session=True)
+
+            self.assertEqual(ctx.settings.model, "gemini-2.5-flash")
+            self.assertEqual(ctx.settings.chunk_minutes, 15)
+
+    def test_chunk_minutes_preserved_when_model_changes_but_chunks_already_done(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path, session_dir = self._make_session_file(
+                tmpdir, model="gemini-2.5-flash-lite", chunk_minutes=10, chunks_done=3
+            )
+            new_defaults = {
+                "model": "gemini-2.5-flash",
+                "fallback_models": [],
+                "effective_model": "gemini-2.5-flash",
+                "chunk_minutes": 15,
+                "overlap_seconds": 30,
+                "macro_char_limit": 22000,
+                "preconvert_audio": True,
+                "prefetch_next_chunk": True,
+                "inline_audio_max_mb": 6.0,
+                "audio": {"bitrate": "48k"},
+            }
+            with (
+                patch(
+                    "el_sbobinator.pipeline_session.load_config",
+                    return_value={
+                        "preferred_model": "gemini-2.5-flash",
+                        "fallback_models": [],
+                    },
+                ),
+                patch(
+                    "el_sbobinator.pipeline_session.build_default_pipeline_settings",
+                    return_value=new_defaults,
+                ),
+                patch(
+                    "el_sbobinator.session_store._session_dir_for_file",
+                    return_value=session_dir,
+                ),
+            ):
+                ctx = initialize_session_context(input_path, resume_session=True)
+
+            self.assertEqual(ctx.settings.model, "gemini-2.5-flash")
+            self.assertEqual(ctx.settings.chunk_minutes, 10)
 
 
 if __name__ == "__main__":

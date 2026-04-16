@@ -14,7 +14,9 @@ export type FileItem = {
   outputDir?: string;
   completedAt?: number;
   startedAt?: number;
+  primaryModel?: string;
   effectiveModel?: string;
+  resumeSession?: boolean;
 };
 
 export function getPendingFiles(files: FileItem[]): FileItem[] {
@@ -33,6 +35,7 @@ export type FileDescriptor = {
   name: string;
   size: number;
   duration?: number;
+  resume_session?: boolean;
 };
 
 export type AppStatus = 'idle' | 'processing' | 'canceling';
@@ -43,6 +46,11 @@ export type ProcessDonePayload = {
   failed?: number;
   total?: number;
 };
+
+export function isSuccessfulProcessDone(data?: ProcessDonePayload | null): boolean {
+  if (!data || data.cancelled) return false;
+  return Number(data.completed ?? 0) > 0 && Number(data.failed ?? 0) === 0;
+}
 
 export type SetCurrentFilePayload = {
   index: number;
@@ -55,6 +63,7 @@ export type FileDonePayload = {
   id: string;
   output_html: string;
   output_dir: string;
+  primary_model?: string;
   effective_model?: string;
 };
 
@@ -122,6 +131,7 @@ export type ProcessingAction =
   | { type: 'queue/update_source'; id: string; path?: string; name?: string; size?: number; duration?: number }
   | { type: 'queue/clear_completed' }
   | { type: 'queue/retry_failed' }
+  | { type: 'queue/retry_one'; id: string }
   | { type: 'queue/clear_all' }
   | { type: 'app/set_status'; status: AppStatus }
   | { type: 'bridge/update_progress'; value: number }
@@ -189,6 +199,16 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         structuralVersion: state.structuralVersion + 1,
         files: state.files.map(file =>
           file.status === 'error'
+            ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorText: undefined }
+            : file,
+        ),
+      };
+    case 'queue/retry_one':
+      return {
+        ...state,
+        structuralVersion: state.structuralVersion + 1,
+        files: state.files.map(file =>
+          file.id === action.id && file.status === 'error'
             ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorText: undefined }
             : file,
         ),
@@ -290,6 +310,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
                 phaseText: undefined,
                 errorText: undefined,
                 completedAt: Date.now(),
+                primaryModel: action.data.primary_model || undefined,
                 effectiveModel: action.data.effective_model || undefined,
               }
             : file,

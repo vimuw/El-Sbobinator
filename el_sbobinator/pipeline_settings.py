@@ -11,7 +11,11 @@ from dataclasses import dataclass
 from typing import Any, Dict, Tuple
 
 from el_sbobinator.model_registry import sanitize_fallback_models, sanitize_model_name
-from el_sbobinator.shared import DEFAULT_MODEL, default_chunk_minutes_for_model
+from el_sbobinator.shared import (
+    DEFAULT_MODEL,
+    default_chunk_minutes_for_model,
+    default_macro_char_limit_for_model,
+)
 
 
 @dataclass(frozen=True)
@@ -105,7 +109,24 @@ def load_and_sanitize_settings(
         s.get("chunk_minutes", default_chunk_minutes), default_chunk_minutes
     )
     overlap_seconds = _as_int(s.get("overlap_seconds", 30), 30)
-    macro_char_limit = _as_int(s.get("macro_char_limit", 22000), 22000)
+    default_macro_chars = default_macro_char_limit_for_model(model)
+    # Migrate sessions created before per-model defaults were introduced:
+    # if the stored value is exactly 22000 (the old global hardcoded default)
+    # and the model now has a lower default, silently upgrade to the new default.
+    # macro_char_limit has never been exposed in the UI, so any stored 22000
+    # for these models is always the old auto-default, never a user choice.
+    _OLD_GLOBAL_DEFAULT = 22000
+    _stored_macro = s.get("macro_char_limit")
+    if (
+        _stored_macro == _OLD_GLOBAL_DEFAULT
+        and default_macro_chars != _OLD_GLOBAL_DEFAULT
+    ):
+        macro_char_limit = default_macro_chars
+    else:
+        macro_char_limit = _as_int(
+            _stored_macro if _stored_macro is not None else default_macro_chars,
+            default_macro_chars,
+        )
     preconvert_audio = _as_bool(s.get("preconvert_audio", True), True)
     prefetch_next_chunk = _as_bool(s.get("prefetch_next_chunk", True), True)
     inline_audio_max_mb = _as_float(s.get("inline_audio_max_mb", 6), 6.0)
@@ -129,8 +150,8 @@ def load_and_sanitize_settings(
     if overlap_seconds > max_overlap:
         overlap_seconds = max_overlap
 
-    if macro_char_limit < 8000:
-        macro_char_limit = 8000
+    if macro_char_limit < 6000:
+        macro_char_limit = 6000
     if macro_char_limit > 90000:
         macro_char_limit = 90000
 

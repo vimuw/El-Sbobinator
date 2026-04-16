@@ -7,7 +7,7 @@ clearer and reduces silent drift when the React app evolves.
 
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 
 class BridgeFileItem(TypedDict, total=False):
@@ -16,6 +16,7 @@ class BridgeFileItem(TypedDict, total=False):
     name: str
     size: int
     duration: float
+    resume_session: bool
 
 
 class ProcessDonePayload(TypedDict, total=False):
@@ -37,6 +38,7 @@ class FileDonePayload(TypedDict):
     output_html: str
     output_dir: str
     effective_model: str
+    primary_model: NotRequired[str]
 
 
 class FileFailedPayload(TypedDict):
