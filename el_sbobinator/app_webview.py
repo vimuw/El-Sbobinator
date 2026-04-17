@@ -1600,7 +1600,6 @@ def main():  # noqa: C901
             y=center_y,
             min_size=(750, 620),
             background_color="#18181b",
-            hidden=True,
         )
     else:
         print(
@@ -1615,7 +1614,6 @@ def main():  # noqa: C901
             y=center_y,
             min_size=(750, 620),
             background_color="#18181b",
-            hidden=False,
         )
     api.set_window(window)
 
@@ -1630,34 +1628,6 @@ def main():  # noqa: C901
         _dnd_state["num_listeners"] += 1
     except Exception:
         pass
-
-    if webview2_available:
-        window_shown = threading.Event()
-
-        def _show_when_loaded(*_args):
-            if window_shown.is_set():
-                return
-            window_shown.set()
-            try:
-                if api._window is not None:
-                    api._window.show()
-            except Exception:
-                pass
-
-        window.events.loaded += _show_when_loaded
-
-        def _show_window_fallback():
-            time.sleep(4.0)
-            if window_shown.is_set():
-                return
-            window_shown.set()
-            try:
-                if api._window is not None:
-                    api._window.show()
-            except Exception:
-                pass
-
-        threading.Thread(target=_show_window_fallback, daemon=True).start()
 
     webview.start(
         private_mode=False,
