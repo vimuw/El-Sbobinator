@@ -18,8 +18,8 @@ L'obiettivo non è una trascrizione "grezza", ma una vera e propria dispensa leg
 ### 1) Come Scaricare il programma
 1. Clicca sulla sezione **Releases** sulla destra di questa pagina GitHub.
 2. Scarica il programma per il tuo sistema operativo:
-   - **Per Windows:** Scarica il file `El Sbobinator.exe`
-   - **Per Mac:** Scarica l'archivio `.zip` contenente `El Sbobinator.app`
+   - **Per Windows:** Scarica il file `El-Sbobinator-Setup-v*.exe` (installer)
+   - **Per Mac:** Scarica il file `El-Sbobinator-v*.dmg`
 3. Salva il file dove preferisci (es. sul Desktop).
 
 ### 2) Creare la tua Chiave API di Gemini (Gratis)
@@ -36,14 +36,15 @@ Essendo Google Gemini il cervello del programma, ti serve una password unica (AP
 È un programma "plug & play", non devi installare Python o altri programmi sul PC.
 
 ### 💻 Se usi Windows:
-Fai semplicemente **doppio clic** sul file `El Sbobinator.exe`.
+Esegui il file `El-Sbobinator-Setup-v*.exe` e segui il wizard di installazione. Al termine trovi l'app nel menu Start (o tramite il collegamento creato sul Desktop).
 *(Nota: Se l'antivirus o la schermata blu di Windows ti bloccano al primo avvio, o se vedi una schermata nera, consulta la sezione FAQ qui sotto per risolvere in un clic).*
 
-> ⏳ **Pazienza all'avvio (Non cliccare mille volte!)**: El Sbobinator 🤠 pesa circa 50 MB perché contiene al suo interno tutto il "motore" necessario per funzionare. Ogni volta che lo apri, il tuo computer deve "scompattare" questo motore in background. Per questo motivo, **l'avvio richiederà sempre qualche secondo (il tempo esatto dipende dalla velocità del tuo PC)**. Dagli un attimo di tempo per caricarsi!
-
 ### 🍎 Se usi Mac:
-Estrai l'archivio ZIP e fai **doppio clic** sull'applicazione `El Sbobinator.app` (puoi trascinarla nella cartella Applicazioni).
+Apri il file `.dmg`, trascina `El Sbobinator.app` nella cartella **Applicazioni** e avviala da lì.
 *(Nota: Al primissimo avvio, se il Mac dovesse bloccarti dicendo "proveniente da uno sviluppatore non identificato", ti basta fare **clic col tasto destro** — o Control+Clic — sull'icona, e scegliere **Apri** dal menu).*
+
+#### 🔄 Aggiornamenti automatici
+Quando esce una nuova versione, l'app mostra direttamente nell'interfaccia un pulsante **"Installa aggiornamento"**. Cliccandolo, l'app scarica e installa il nuovo pacchetto in autonomia — nessun bisogno di tornare su GitHub.
 
 ---
 
