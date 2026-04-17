@@ -94,7 +94,8 @@ jobs:
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             APP_VERSION="${GITHUB_REF_NAME#v}"
           elif [[ -n "${{ inputs.release_tag }}" ]]; then
-            APP_VERSION="${{ inputs.release_tag }#v}"
+            APP_VERSION="${{ inputs.release_tag }}"
+            APP_VERSION="${APP_VERSION#v}"
           else
             APP_VERSION="0.0.0"
           fi
