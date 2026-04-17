@@ -359,13 +359,13 @@ export function SettingsModal({
                   type={showApiKeys ? 'text' : 'password'}
                   value={apiKey}
                   onChange={e => setApiKey(e.target.value)}
-                  placeholder="AIzaSy..."
+                  placeholder="AIzaSy... oppure AQ..."
                   className="app-input font-mono text-sm"
                   style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
                 />
                 {apiKey.trim() && (
                   <p className="text-xs mt-1.5" style={{ color: GEMINI_KEY_PATTERN.test(apiKey.trim()) ? 'var(--success-text)' : 'var(--warning-text)' }}>
-                    {GEMINI_KEY_PATTERN.test(apiKey.trim()) ? '✓ Formato valido' : '⚠ Formato non valido — le chiavi iniziano con AIzaSy...'}
+                    {GEMINI_KEY_PATTERN.test(apiKey.trim()) ? '✓ Formato valido' : '⚠ Formato non valido — le chiavi iniziano con AIzaSy... o AQ.'}
                   </p>
                 )}
                 <p className="text-xs mt-2 flex items-start gap-1.5" style={{ color: 'var(--text-muted)' }}>

@@ -1,4 +1,4 @@
-export const GEMINI_KEY_PATTERN = /^AIza[0-9A-Za-z_-]{20,}$/;
+export const GEMINI_KEY_PATTERN = /^(AIza[0-9A-Za-z_-]{20,}|AQ\.[0-9A-Za-z_-]{20,})$/;
 
 const _ERROR_MAP: Record<string, string> = {
   phase1_degenerate_output: 'Trascrizione interrotta: testo non valido anche dopo il retry automatico.',

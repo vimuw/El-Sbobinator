@@ -27,7 +27,7 @@ Essendo Google Gemini il cervello del programma, ti serve una password unica (AP
 1. Vai su: [Google AI Studio](https://aistudio.google.com/app/apikey) e accedi col tuo account Google.
 2. Clicca sul bottone azzurro `"Create API Key"`.
 3. Seleziona `"Create API key in a new project"`.
-4. Compariranno un sacco di lettere e numeri segreti (iniziano solitamente con `AIzaSy...`). **Questa è la tua chiave. Copiala.**
+4. Compariranno un sacco di lettere e numeri segreti (iniziano solitamente con `AIzaSy...` oppure con `AQ.`). **Questa è la tua chiave. Copiala.**
 
 ---
 

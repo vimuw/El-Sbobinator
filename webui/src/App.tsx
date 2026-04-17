@@ -1011,7 +1011,7 @@ export default function App() {
                     if (setupKeySaving) return;
                     await handleSetupSave();
                   }}
-                  placeholder="Incolla qui la tua API Key (AIzaSy...)"
+                  placeholder="Incolla qui la tua API Key (AIzaSy... o AQ...)"
                   className="app-input font-mono text-sm pr-10"
                   style={{
                     background: 'var(--bg-input)',
@@ -1037,7 +1037,7 @@ export default function App() {
               </div>
               {setupKeyInput.trim() && (
                 <p className="text-xs" style={{ color: GEMINI_KEY_PATTERN.test(setupKeyInput.trim()) ? 'var(--success-text)' : 'var(--warning-text)' }}>
-                  {GEMINI_KEY_PATTERN.test(setupKeyInput.trim()) ? '✓ Formato valido — premi Salva per continuare' : '⚠ Formato non valido — le chiavi iniziano con AIzaSy...'}
+                  {GEMINI_KEY_PATTERN.test(setupKeyInput.trim()) ? '✓ Formato valido — premi Salva per continuare' : '⚠ Formato non valido — le chiavi iniziano con AIzaSy... o AQ.'}
                 </p>
               )}
               <button

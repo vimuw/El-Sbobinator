@@ -88,7 +88,7 @@ export function NewKeyModal({ isOpen, onClose }: NewKeyModalProps) {
                     ? 'Inserisci una chiave Gemini valida per continuare.'
                     : isReplacementKeyValid
                       ? 'Formato chiave valido.'
-                      : 'La chiave non sembra valida. Deve iniziare con AIza.'}
+                      : 'La chiave non sembra valida. Deve iniziare con AIzaSy o AQ.'}
                 </p>
               </div>
             </div>
