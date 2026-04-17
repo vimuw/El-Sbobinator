@@ -60,11 +60,9 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            artifact_name: El Sbobinator.exe
-            asset_name: El-Sbobinator-Windows.exe
+            asset_name: El-Sbobinator-Windows-Setup
           - os: macos-latest
-            artifact_name: El Sbobinator.app
-            asset_name: El-Sbobinator-MacOS.zip
+            asset_name: El-Sbobinator-MacOS-DMG
 
     steps:
       - name: Checkout Code
@@ -90,46 +88,56 @@ jobs:
         run: |
           python scripts/build_release.py deps --ui webui
 
-      - name: Sync package.json version from git tag
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Extract version and sync package.json
         shell: bash
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            APP_VERSION="${GITHUB_REF_NAME#v}"
+          elif [[ -n "${{ inputs.release_tag }}" ]]; then
+            APP_VERSION="${{ inputs.release_tag }#v}"
+          else
+            APP_VERSION="0.0.0"
+          fi
+          echo "APP_VERSION=${APP_VERSION}" >> $GITHUB_ENV
           node -e "
             const fs = require('fs');
             const pkg = JSON.parse(fs.readFileSync('./webui/package.json','utf8'));
-            pkg.version = '${TAG_VERSION}';
+            pkg.version = '${APP_VERSION}';
             fs.writeFileSync('./webui/package.json', JSON.stringify(pkg, null, 2) + '\n');
           "
-          echo "Set package.json version to ${TAG_VERSION}"
+          echo "Version set to ${APP_VERSION}"
 
-      - name: Build Windows Executable
+      - name: Install Inno Setup (Windows)
+        if: runner.os == 'Windows'
+        run: choco install innosetup -y
+
+      - name: Install create-dmg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install create-dmg
+
+      - name: Build Windows Installer
         if: runner.os == 'Windows'
         run: |
-          python scripts/build_release.py build --target windows --ui webui --skip-checks --skip-npm-install
-          python scripts/build_release.py smoke --target windows
+          python scripts/build_release.py build --target windows --ui webui --skip-checks --skip-npm-install --version ${{ env.APP_VERSION }}
 
-      - name: Build macOS App
+      - name: Build macOS DMG
         if: runner.os == 'macOS'
         run: |
-          python scripts/build_release.py build --target macos --ui webui --skip-checks --skip-npm-install
-          python scripts/build_release.py smoke --target macos
-          cd dist
-          zip -r "El-Sbobinator.zip" "El Sbobinator.app"
+          python scripts/build_release.py build --target macos --ui webui --skip-checks --skip-npm-install --version ${{ env.APP_VERSION }}
 
       - name: Upload Build Artifacts (Windows)
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: dist/${{ matrix.artifact_name }}
+          path: dist/El-Sbobinator-Setup-v*.exe
 
-      - name: Upload Build Artifacts (MacOS)
+      - name: Upload Build Artifacts (macOS)
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: dist/El-Sbobinator.zip
+          path: dist/El-Sbobinator-v*.dmg
 
   release:
     name: Create GitHub Release
@@ -145,9 +153,8 @@ jobs:
       - name: Prepare Release Assets
         run: |
           mkdir release_assets
-          # Move artifacts out of their individual folders for clean release upload
-          mv "output_files/El-Sbobinator-Windows.exe/El Sbobinator.exe" "release_assets/El-Sbobinator-Windows.exe" || echo "Win build not found"
-          mv "output_files/El-Sbobinator-MacOS.zip/El-Sbobinator.zip" "release_assets/El-Sbobinator-MacOS.zip" || echo "Mac build not found"
+          find output_files -name "El-Sbobinator-Setup-v*.exe" -exec mv {} release_assets/ \; || echo "Win build not found"
+          find output_files -name "El-Sbobinator-v*.dmg" -exec mv {} release_assets/ \; || echo "Mac build not found"
 
       - name: Publish Release to GitHub
         uses: softprops/action-gh-release@v2

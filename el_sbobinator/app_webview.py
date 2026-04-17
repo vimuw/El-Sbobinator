@@ -1216,6 +1216,88 @@ class ElSbobinatorApi:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    def download_and_install_update(self, version: str) -> dict:
+        """Download the correct installer for this OS, launch it, then quit the app."""
+        import plistlib
+        import subprocess
+        import tempfile
+        import urllib.request
+
+        if not isinstance(version, str) or not version:
+            return {"ok": False, "error": "Versione non valida."}
+
+        version_clean = version.lstrip("v")
+
+        if sys.platform == "win32":
+            filename = f"El-Sbobinator-Setup-v{version_clean}.exe"
+            suffix = ".exe"
+        elif sys.platform == "darwin":
+            filename = f"El-Sbobinator-v{version_clean}.dmg"
+            suffix = ".dmg"
+        else:
+            return {"ok": False, "error": f"Piattaforma non supportata: {sys.platform}"}
+
+        url = (
+            f"https://github.com/vimuw/El-Sbobinator/releases/download"
+            f"/{version}/{filename}"
+        )
+
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                tmp_path = tmp.name
+            urllib.request.urlretrieve(url, tmp_path)
+        except Exception as e:
+            return {"ok": False, "error": f"Download fallito: {e}"}
+
+        try:
+            if sys.platform == "win32":
+                os.startfile(tmp_path)  # type: ignore[attr-defined]
+            else:
+                try:
+                    result = subprocess.run(
+                        ["hdiutil", "attach", "-nobrowse", "-plist", tmp_path],
+                        capture_output=True,
+                        check=True,
+                    )
+                    plist = plistlib.loads(result.stdout)
+                    mount_point = None
+                    for entity in plist.get("system-entities", []):
+                        mp = entity.get("mount-point")
+                        if mp:
+                            mount_point = mp
+                            break
+                    if not mount_point:
+                        return {"ok": False, "error": "Impossibile montare il DMG."}
+                    try:
+                        app_src = os.path.join(mount_point, "El Sbobinator.app")
+                        app_dst = "/Applications/El Sbobinator.app"
+                        subprocess.run(["cp", "-R", app_src, app_dst], check=True)
+                        subprocess.run(
+                            ["xattr", "-dr", "com.apple.quarantine", app_dst],
+                            check=False,
+                        )
+                    finally:
+                        subprocess.run(["hdiutil", "detach", mount_point], check=False)
+                    subprocess.Popen(["open", "/Applications/El Sbobinator.app"])
+                finally:
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
+        except Exception as e:
+            return {"ok": False, "error": f"Installazione fallita: {e}"}
+
+        def _delayed_destroy() -> None:
+            time.sleep(0.8)
+            try:
+                if webview.windows:
+                    webview.windows[0].destroy()
+            except Exception:
+                sys.exit(0)
+
+        threading.Thread(target=_delayed_destroy, daemon=True).start()
+        return {"ok": True}
+
     # ---- Console push helper ----
 
     def _push_console(self, msg: str):

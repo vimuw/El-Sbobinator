@@ -20,6 +20,7 @@ import {
   History,
   Key,
   ListOrdered,
+  Loader2,
   Moon,
   Play,
   Search,
@@ -120,6 +121,8 @@ export default function App() {
   const { consoleLogs, appendConsole } = useConsole();
   const { themeMode, setThemeMode } = useTheme();
   const { updateAvailable, dismissUpdate } = useUpdateChecker();
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
   const {
     apiReady,
     bridgeDelayed,
@@ -179,6 +182,7 @@ export default function App() {
   const isMouseInConsoleRef = useRef(false);
   const archivePanelRef = useRef<HTMLDivElement>(null);
   const autoContinueRef = useRef(autoContinue);
+  const duplicatePromptRef = useRef<DuplicatePrompt>(null);
   const startProcessingRef = useRef<(isContinuation?: boolean) => Promise<boolean>>(async () => false);
 
   useEffect(() => {
@@ -190,6 +194,7 @@ export default function App() {
   }, [appState]);
 
   autoContinueRef.current = autoContinue;
+  duplicatePromptRef.current = duplicatePrompt;
 
   useEffect(() => {
     localStorage.setItem('auto_continue', String(autoContinue));
@@ -238,7 +243,7 @@ export default function App() {
     const deletedSessionDirs: string[] = [];
     const currentFile = filesRef.current.find(file => file.id === fileId);
     const deletableSessions = filterArchiveSessionsByInputPath(
-      currentFile?.path ?? pendingReplacement.inputPath,
+      pendingReplacement.inputPath || currentFile?.path,
       pendingReplacement.sessions,
     );
 
@@ -305,6 +310,7 @@ export default function App() {
 
   const enqueueUniqueFiles = useCallback((incomingFiles: FileItem[]) => {
     if (incomingFiles.length === 0) return;
+    if (duplicatePromptRef.current !== null) return;
 
     const currentFiles = filesRef.current;
     const currentArchive = archiveSessionsRef.current;
@@ -817,7 +823,7 @@ export default function App() {
 
   useEffect(() => {
     setArchivePage(0);
-  }, [archiveSearch, archiveSort, archiveFiltered]);
+  }, [archiveSearch, archiveSort]);
 
   useEffect(() => {
     if (!isArchiveOpen) return;
@@ -933,29 +939,57 @@ export default function App() {
             className="w-full"
             style={{ background: 'var(--accent-subtle)', borderBottom: '1px solid var(--accent-ring, var(--border-default))' }}
           >
-            <div className="max-w-6xl mx-auto px-5 sm:px-6 py-2.5 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2.5 text-sm font-medium" style={{ color: 'var(--accent-text, var(--text-primary))' }}>
-                <Zap className="w-4 h-4 shrink-0" />
-                <span>Nuova versione disponibile: <strong>{updateAvailable}</strong></span>
+            <div className="max-w-6xl mx-auto px-5 sm:px-6 py-2.5 flex flex-col gap-1">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2.5 text-sm font-medium" style={{ color: 'var(--accent-text, var(--text-primary))' }}>
+                  <Zap className="w-4 h-4 shrink-0" />
+                  <span>Nuova versione disponibile: <strong>{updateAvailable}</strong></span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    disabled={isUpdating}
+                    onClick={async () => {
+                      if (isUpdating) return;
+                      setIsUpdating(true);
+                      setUpdateError(null);
+                      try {
+                        const result = await window.pywebview?.api?.download_and_install_update?.(updateAvailable!);
+                        if (!result?.ok) {
+                          setUpdateError(result?.error ?? 'Download fallito');
+                          setIsUpdating(false);
+                          window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL);
+                        } else {
+                          setTimeout(() => setIsUpdating(false), 3000);
+                        }
+                      } catch (e) {
+                        setUpdateError(String(e));
+                        setIsUpdating(false);
+                        window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL);
+                      }
+                    }}
+                    className="premium-button-secondary compact-button text-xs px-3 py-1.5 flex items-center gap-1.5"
+                    style={{ color: 'var(--accent-text, var(--text-primary))', borderColor: 'var(--accent-ring, var(--border-default))' }}
+                  >
+                    {isUpdating
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Download in corso…</>
+                      : 'Installa aggiornamento'}
+                  </button>
+                  <button
+                    onClick={() => dismissUpdate(updateAvailable)}
+                    className="icon-button h-7 w-7 rounded-[10px]"
+                    style={{ color: 'var(--text-muted)' }}
+                    aria-label="Chiudi avviso aggiornamento"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <a
-                  href="#"
-                  onClick={(e) => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL); }}
-                  className="premium-button-secondary compact-button text-xs px-3 py-1.5"
-                  style={{ color: 'var(--accent-text, var(--text-primary))', borderColor: 'var(--accent-ring, var(--border-default))' }}
-                >
-                  Scarica
-                </a>
-                <button
-                  onClick={() => dismissUpdate(updateAvailable)}
-                  className="icon-button h-7 w-7 rounded-[10px]"
-                  style={{ color: 'var(--text-muted)' }}
-                  aria-label="Chiudi avviso aggiornamento"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              {updateError && (
+                <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-error, #ef4444)' }}>
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{updateError} — si è aperta la pagina GitHub per scaricare manualmente.</span>
+                </div>
+              )}
             </div>
           </motion.div>
         )}

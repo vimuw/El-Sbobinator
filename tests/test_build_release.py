@@ -22,10 +22,10 @@ class BuildReleaseTests(unittest.TestCase):
     def test_postbuild_smoke_runs_smoke_script_when_artifact_exists(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            dist = root / "dist"
-            dist.mkdir(parents=True, exist_ok=True)
-            artifact = dist / f"{build_release.APP_NAME}.exe"
-            artifact.write_bytes(b"ok")
+            artifact_dir = root / "dist" / build_release.APP_NAME
+            artifact_dir.mkdir(parents=True, exist_ok=True)
+            inner_exe = artifact_dir / f"{build_release.APP_NAME}.exe"
+            inner_exe.write_bytes(b"ok")
 
             with (
                 patch.object(build_release, "ROOT", root),

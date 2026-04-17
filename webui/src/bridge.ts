@@ -101,6 +101,7 @@ export interface PywebviewApi {
   get_completed_sessions?: (limit?: number) => Promise<{ ok: boolean; sessions?: ArchiveSession[]; error?: string }>;
   delete_session?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;
   open_session_folder?: () => Promise<{ ok: boolean; error?: string }>;
+  download_and_install_update?: (version: string) => Promise<{ ok: boolean; error?: string }>;
 }
 
 export function createBridge(options: {

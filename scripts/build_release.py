@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -181,7 +182,7 @@ def build_webui(skip_npm_install: bool) -> None:
 def pyinstaller_command(target: str, ui: str) -> list[str]:
     command = [sys.executable, "-m", "PyInstaller", "--noconfirm"]
     if target == "windows":
-        command.extend(["--clean", "--onefile", "--windowed"])
+        command.extend(["--clean", "--onedir", "--windowed"])
         command.extend(["--icon", str(ROOT / "assets" / "icon.ico")])
     else:
         command.extend(["--windowed"])
@@ -211,7 +212,7 @@ def pyinstaller_command(target: str, ui: str) -> list[str]:
 
 def artifact_path(target: str) -> Path:
     if target == "windows":
-        return ROOT / "dist" / f"{APP_NAME}.exe"
+        return ROOT / "dist" / APP_NAME  # onedir folder
     return ROOT / "dist" / f"{APP_NAME}.app"
 
 
@@ -219,9 +220,63 @@ def run_postbuild_smoke(target: str) -> None:
     expected = artifact_path(target)
     if not expected.exists():
         raise FileNotFoundError(f"Artifact mancante dopo la build: {expected}")
-    if expected.stat().st_size <= 0:
-        raise RuntimeError(f"Artifact vuoto o corrotto: {expected}")
+    if target == "windows":
+        inner_exe = expected / f"{APP_NAME}.exe"
+        if not inner_exe.exists() or inner_exe.stat().st_size <= 0:
+            raise RuntimeError(f"Executable interno mancante o vuoto: {inner_exe}")
+    else:
+        if not any(expected.iterdir()):
+            raise RuntimeError(f"Artifact vuoto o corrotto: {expected}")
     run([sys.executable, "scripts/smoke_test.py"], cwd=ROOT)
+
+
+def _find_iscc() -> str:
+    in_path = shutil.which("ISCC") or shutil.which("ISCC.exe")
+    if in_path:
+        return in_path
+    for candidate in [
+        r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+        r"C:\Program Files\Inno Setup 6\ISCC.exe",
+    ]:
+        if Path(candidate).exists():
+            return candidate
+    return "ISCC.exe"
+
+
+def run_inno_setup(version: str) -> None:
+    iss_script = PACKAGING_DIR / "windows" / "installer.iss"
+    run([_find_iscc(), f"/DAppVersion={version}", str(iss_script)], cwd=ROOT)
+    installer = ROOT / "dist" / f"El-Sbobinator-Setup-v{version}.exe"
+    if not installer.exists() or installer.stat().st_size <= 0:
+        raise FileNotFoundError(f"Installer mancante o vuoto: {installer}")
+
+
+def run_create_dmg(version: str) -> None:
+    app_path = ROOT / "dist" / f"{APP_NAME}.app"
+    dmg_path = ROOT / "dist" / f"El-Sbobinator-v{version}.dmg"
+    run(
+        [
+            "create-dmg",
+            "--volname",
+            APP_NAME,
+            "--window-pos",
+            "200",
+            "120",
+            "--window-size",
+            "600",
+            "400",
+            "--icon-size",
+            "100",
+            "--app-drop-link",
+            "450",
+            "185",
+            str(dmg_path),
+            str(app_path),
+        ],
+        cwd=ROOT,
+    )
+    if not dmg_path.exists() or dmg_path.stat().st_size <= 0:
+        raise FileNotFoundError(f"DMG mancante o vuoto: {dmg_path}")
 
 
 def command_deps(args: argparse.Namespace) -> None:
@@ -256,6 +311,11 @@ def command_build(args: argparse.Namespace) -> None:
     run(pyinstaller_command(args.target, args.ui), cwd=ROOT)
     if not args.skip_postbuild_smoke:
         run_postbuild_smoke(args.target)
+
+    if args.target == "windows":
+        run_inno_setup(args.version)
+    elif args.target == "macos":
+        run_create_dmg(args.version)
 
 
 def command_validate(args: argparse.Namespace) -> None:
@@ -308,6 +368,7 @@ def build_parser() -> argparse.ArgumentParser:
     build_parser.add_argument("--skip-npm-install", action="store_true")
     build_parser.add_argument("--skip-checks", action="store_true")
     build_parser.add_argument("--skip-postbuild-smoke", action="store_true")
+    build_parser.add_argument("--version", default="0.0.0")
     build_parser.set_defaults(func=command_build)
 
     validate_parser = subparsers.add_parser(
