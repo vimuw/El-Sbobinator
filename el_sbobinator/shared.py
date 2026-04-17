@@ -79,15 +79,22 @@ _storage_info_executor = concurrent.futures.ThreadPoolExecutor(
 
 
 def _keyring_get_api_key() -> str:
-    try:
-        if platform.system() == "Windows":
-            return ""
-        import keyring  # type: ignore
+    for attempt in range(2):
+        try:
+            if platform.system() == "Windows":
+                return ""
+            import keyring  # type: ignore
 
-        v = keyring.get_password(_KEYRING_SERVICE, _KEYRING_USER_API)
-        return str(v or "").strip()
-    except Exception:
-        return ""
+            v = keyring.get_password(_KEYRING_SERVICE, _KEYRING_USER_API)
+            result = str(v or "").strip()
+            if result:
+                return result
+            break  # keyring reachable but no key stored — no point retrying
+        except Exception:
+            pass
+        if attempt == 0:
+            time.sleep(0.5)
+    return ""
 
 
 def _keyring_set_api_key(api_key: str) -> bool:
@@ -314,7 +321,20 @@ def _dpapi_unprotect_text_windows(b64: str) -> str:
     """
     Best-effort decryption for secrets on Windows using DPAPI (CryptUnprotectData).
     Returns plaintext string on success, "" on failure.
+    Retries once after 500 ms to tolerate transient service unavailability.
     """
+    if platform.system() != "Windows":
+        return ""
+    for attempt in range(2):
+        result = _dpapi_unprotect_text_windows_once(b64)
+        if result:
+            return result
+        if attempt == 0:
+            time.sleep(0.5)
+    return ""
+
+
+def _dpapi_unprotect_text_windows_once(b64: str) -> str:
     if platform.system() != "Windows":
         return ""
     try:
@@ -438,6 +458,8 @@ def load_config() -> dict:  # noqa: C901
                                         save_config(plain)
                                     except Exception:
                                         pass
+                            elif data.get("use_keyring"):
+                                data["has_protected_key"] = True
                 except Exception:
                     pass
                 # Decrypt best-effort on Windows (do not expose protected value to callers).
@@ -449,6 +471,8 @@ def load_config() -> dict:  # noqa: C901
                                 dec = _dpapi_unprotect_text_windows(protected)
                                 if dec:
                                     data["api_key"] = dec
+                                else:
+                                    data["has_protected_key"] = True
                 except Exception:
                     pass
                 # Decrypt fallback keys on Windows.

@@ -59,6 +59,7 @@ from el_sbobinator.media_server import LocalMediaServer
 from el_sbobinator.model_registry import DEFAULT_FALLBACK_MODELS, MODEL_OPTIONS
 from el_sbobinator.shared import (
     DEFAULT_MODEL,
+    _atomic_write_json,
     cleanup_orphan_temp_chunks,
     cleanup_orphan_sessions,
     get_desktop_dir,
@@ -429,6 +430,7 @@ class ElSbobinatorApi:
                 "preferred_model": cfg.get("preferred_model", DEFAULT_MODEL),
                 "fallback_models": cfg.get("fallback_models", []),
                 "available_models": list(MODEL_OPTIONS),
+                "has_protected_key": bool(cfg.get("has_protected_key")),
             }
         except Exception:
             return {
@@ -437,6 +439,7 @@ class ElSbobinatorApi:
                 "preferred_model": DEFAULT_MODEL,
                 "fallback_models": list(DEFAULT_FALLBACK_MODELS),
                 "available_models": list(MODEL_OPTIONS),
+                "has_protected_key": False,
             }
 
     def save_settings(
@@ -554,6 +557,39 @@ class ElSbobinatorApi:
             if not os.path.isdir(abs_dir):
                 return {"ok": False, "error": "Cartella non trovata"}
             shutil.rmtree(abs_dir)
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def update_session_input_path(self, session_dir: str, new_path: str) -> dict:
+        """Persist a relinked audio path to session.json."""
+        import json as _json
+
+        try:
+            session_root = self._get_session_root()
+            abs_dir = os.path.abspath(session_dir)
+            abs_root = os.path.abspath(session_root)
+            if not abs_dir.startswith(abs_root + os.sep):
+                return {"ok": False, "error": "Percorso non valido"}
+            session_path = os.path.join(abs_dir, "session.json")
+            if not os.path.isfile(session_path):
+                return {"ok": False, "error": "session.json non trovato"}
+            with open(session_path, "r", encoding="utf-8") as fh:
+                data = _json.load(fh)
+            if not isinstance(data, dict):
+                return {"ok": False, "error": "session.json non valido"}
+            norm_path = str(new_path or "").strip()
+            if not norm_path:
+                return {"ok": False, "error": "Percorso vuoto"}
+            if not isinstance(data.get("input"), dict):
+                data["input"] = {}
+            data["input"]["path"] = norm_path
+            data["input"]["name"] = os.path.basename(norm_path)
+            try:
+                data["input"]["size"] = os.path.getsize(norm_path)
+            except Exception:
+                pass
+            _atomic_write_json(session_path, data)
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": str(e)}

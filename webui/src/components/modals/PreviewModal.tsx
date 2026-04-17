@@ -14,7 +14,7 @@ interface PreviewModalProps {
   onClose: () => void;
   audioSrc: string | null;
   audioRelinkNeeded: boolean;
-  onRelink: () => void;
+  onRelink: () => Promise<boolean | undefined>;
   previewInitAudio: { time?: number; playbackRate?: number; volume?: number };
   previewInitScrollTop: number | undefined;
   onAudioStateChange: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
@@ -30,6 +30,9 @@ export function PreviewModal({
   const [isTocOpen, setIsTocOpen] = useState(false);
   const [headings, setHeadings] = useState<Heading[]>([]);
   const [isCopied, setIsCopied] = useState(false);
+  const [relinkSuccess, setRelinkSuccess] = useState(false);
+  const [isRelinking, setIsRelinking] = useState(false);
+  const relinkTimerRef = useRef<number | null>(null);
   const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const getHtmlRef = useRef<(() => string) | null>(null);
   const isDirtyRef = useRef(false);
@@ -44,9 +47,14 @@ export function PreviewModal({
     isDirtyRef.current = false;
     saveErrorOnCloseRef.current = false;
     setIsCopied(false);
+    setRelinkSuccess(false);
     setAutosaveStatus('idle');
     setIsTocOpen(false);
   }, [previewContent]);
+
+  useEffect(() => {
+    return () => { if (relinkTimerRef.current) window.clearTimeout(relinkTimerRef.current); };
+  }, []);
 
   useEffect(() => {
     const autosaveGenRefAtCleanup = autosaveGenRef;
@@ -255,8 +263,26 @@ export function PreviewModal({
                             Il file originale e stato spostato. Selezionalo di nuovo per riattivare il player.
                           </p>
                         </div>
-                        <button onClick={onRelink} className="modal-action-button shrink-0">
-                          Ricollega audio
+                        <button
+                          onClick={async () => {
+                            if (isRelinking) return;
+                            setIsRelinking(true);
+                            try {
+                              const ok = await onRelink();
+                              if (ok) {
+                                if (relinkTimerRef.current) window.clearTimeout(relinkTimerRef.current);
+                                setRelinkSuccess(true);
+                                relinkTimerRef.current = window.setTimeout(() => setRelinkSuccess(false), 3000);
+                              }
+                            } finally {
+                              setIsRelinking(false);
+                            }
+                          }}
+                          disabled={isRelinking}
+                          className="modal-action-button shrink-0"
+                          style={relinkSuccess ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : {}}
+                        >
+                          {relinkSuccess ? <><Check className="w-3.5 h-3.5" /> Ricollegato</> : isRelinking ? 'Selezione...' : 'Ricollega audio'}
                         </button>
                       </div>
                     )}

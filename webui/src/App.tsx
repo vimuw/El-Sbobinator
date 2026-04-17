@@ -70,6 +70,7 @@ type PreviewState = {
   audioSrc: string | null;
   fileId: string | null;
   sourcePath: string;
+  sessionDir: string;
   audioRelinkNeeded: boolean;
   initAudio: { time?: number; playbackRate?: number; volume?: number };
   initScrollTop?: number;
@@ -94,6 +95,7 @@ const initialPreviewState: PreviewState = {
   audioSrc: null,
   fileId: null,
   sourcePath: '',
+  sessionDir: '',
   audioRelinkNeeded: false,
   initAudio: {},
   initScrollTop: undefined,
@@ -128,6 +130,7 @@ export default function App() {
     bridgeDelayed,
     apiKey,
     setApiKey,
+    hasProtectedKey,
     fallbackKeys,
     setFallbackKeys,
     preferredModel,
@@ -558,6 +561,7 @@ export default function App() {
 
   const handleDuplicateAddAgain = useCallback(async (matches: AlreadyProcessedMatch[]) => {
     setDuplicatePrompt(null);
+    const sessionDirsToHide = new Set<string>();
     for (const match of matches) {
       const replacementId = crypto.randomUUID();
       if (match.source === 'done') {
@@ -571,6 +575,7 @@ export default function App() {
             inputPath: match.incoming.path,
             sessions: archiveMatches,
           });
+          for (const s of archiveMatches) sessionDirsToHide.add(s.session_dir);
         }
         dispatch({ type: 'queue/remove', id: match.existingFile.id });
         dispatch({ type: 'queue/add', files: [{ ...match.incoming, id: replacementId, resumeSession: false }] });
@@ -580,8 +585,12 @@ export default function App() {
           inputPath: match.incoming.path,
           sessions: match.sessions,
         });
+        for (const s of match.sessions) sessionDirsToHide.add(s.session_dir);
         dispatch({ type: 'queue/add', files: [{ ...match.incoming, id: replacementId, resumeSession: false }] });
       }
+    }
+    if (sessionDirsToHide.size > 0) {
+      setArchiveSessions(prev => prev.filter(s => !sessionDirsToHide.has(s.session_dir)));
     }
   }, [dispatch]);
 
@@ -596,11 +605,12 @@ export default function App() {
     const normalizedSource = String(sourcePath || '').trim();
     if (!normalizedSource || !window.pywebview?.api?.stream_media_file) {
       setPreview(prev => ({ ...prev, audioSrc: null, audioRelinkNeeded: Boolean(normalizedSource) }));
-      return;
+      return false;
     }
     const streamRes = await window.pywebview.api.stream_media_file(normalizedSource);
-    if (streamRes.ok && streamRes.url) { setPreview(prev => ({ ...prev, audioSrc: streamRes.url, audioRelinkNeeded: false })); return; }
+    if (streamRes.ok && streamRes.url) { setPreview(prev => ({ ...prev, audioSrc: streamRes.url, audioRelinkNeeded: false })); return true; }
     setPreview(prev => ({ ...prev, audioSrc: null, audioRelinkNeeded: true }));
+    return false;
   }, []);
 
   const relinkPreviewAudio = useCallback(async () => {
@@ -611,13 +621,23 @@ export default function App() {
       if (preview.fileId) {
         dispatch({ type: 'queue/update_source', id: preview.fileId, path: selectedFile.path, name: selectedFile.name, size: selectedFile.size, duration: selectedFile.duration });
       }
-      setPreview(prev => ({ ...prev, sourcePath: selectedFile.path }));
-      await loadPreviewAudio(selectedFile.path);
+      if (preview.sessionDir && window.pywebview?.api?.update_session_input_path) {
+        const saveRes = await window.pywebview.api.update_session_input_path(preview.sessionDir, selectedFile.path);
+        if (saveRes?.ok) {
+          setArchiveSessions(prev => prev.map(s =>
+            s.session_dir === preview.sessionDir ? { ...s, input_path: selectedFile.path } : s
+          ));
+        }
+      }
+      setPreview(prev => ({ ...prev, sourcePath: selectedFile.path, audioRelinkNeeded: false }));
+      const didLoad = await loadPreviewAudio(selectedFile.path);
       appendConsole(`Audio ricollegato: ${selectedFile.name}`);
+      return didLoad;
     } catch (error: unknown) { appendConsole(`❌ Impossibile ricollegare l'audio: ${getErrorMessage(error)}`); }
-  }, [appendConsole, loadPreviewAudio, preview.fileId]);
+    return false;
+  }, [appendConsole, loadPreviewAudio, preview.fileId, preview.sessionDir]);
 
-  const openPreview = useCallback(async (htmlPath: string, filename: string, sourcePath?: string, fileId?: string) => {
+  const openPreview = useCallback(async (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string) => {
     if (window.pywebview?.api?.read_html_content) {
       appendConsole('Caricamento anteprima in corso...');
       try {
@@ -636,6 +656,7 @@ export default function App() {
             path: htmlPath,
             fileId: fileId ?? null,
             sourcePath: sourcePath || '',
+            sessionDir: sessionDir ?? '',
             audioSrc: null,
             audioRelinkNeeded: false,
             initAudio: { time: savedSession.audioTime, playbackRate: savedSession.playbackRate, volume: savedSession.volume },
@@ -800,9 +821,9 @@ export default function App() {
   }, [confirmAction]);
 
   const archiveFiltered = useMemo(() => {
-    const doneHtmlPaths = new Set(doneFiles.map(f => f.outputHtml).filter(Boolean));
-    return archiveSessions.filter(s => !doneHtmlPaths.has(s.html_path));
-  }, [archiveSessions, doneFiles]);
+    const activeHtmlPaths = new Set(files.map(f => f.outputHtml).filter(Boolean));
+    return archiveSessions.filter(s => !activeHtmlPaths.has(s.html_path));
+  }, [archiveSessions, files]);
 
   const archiveDisplayed = useMemo(() => {
     const q = archiveSearch.trim().toLowerCase();
@@ -1026,9 +1047,11 @@ export default function App() {
               <div className="w-14 h-14 rounded-full flex items-center justify-center shadow-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}>
                 <Key className="w-7 h-7" style={{ color: 'var(--text-muted)' }} />
               </div>
-              <h3 className="text-lg font-semibold mt-1" style={{ color: 'var(--text-primary)' }}>Configura la tua API Key</h3>
+              <h3 className="text-lg font-semibold mt-1" style={{ color: 'var(--text-primary)' }}>{hasProtectedKey ? 'Chiave API non accessibile' : 'Configura la tua API Key'}</h3>
               <p className="text-sm leading-relaxed max-w-sm" style={{ color: 'var(--text-muted)' }}>
-                El Sbobinator usa Google Gemini per trascrivere audio e video. Inserisci una chiave API gratuita per iniziare.
+                {hasProtectedKey
+                  ? 'La tua chiave era salvata ma non è accessibile (errore di sistema). Reinseriscila per continuare.'
+                  : 'El Sbobinator usa Google Gemini per trascrivere audio e video. Inserisci una chiave API gratuita per iniziare.'}
               </p>
             </div>
 
@@ -1407,7 +1430,7 @@ export default function App() {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -4, transition: { duration: 0.1 } }}
                             transition={{ duration: 0.18, ease: 'easeOut' }}
-                            onClick={() => openPreview(session.html_path, session.name, session.input_path)}
+                            onClick={() => openPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir)}
                             className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 cursor-pointer transition-colors"
                             style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-subtle)' }}
                           >
@@ -1584,7 +1607,7 @@ export default function App() {
           onClick={(e) => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }}
           className="text-sm font-medium transition-colors hover:opacity-100 opacity-70"
         >
-          Supporta il progetto su Ko-fi ☕
+          ☕ Supporta il progetto su Ko-fi
         </a>
         </div>
       </footer>

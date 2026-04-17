@@ -68,6 +68,7 @@ export interface PywebviewApi {
     preferred_model?: string;
     fallback_models?: string[];
     available_models?: ModelOption[];
+    has_protected_key?: boolean;
   }>;
   save_settings?: (
     apiKey: string,
@@ -100,6 +101,7 @@ export interface PywebviewApi {
   cleanup_old_sessions?: (maxAgeDays?: number) => Promise<{ ok: boolean; removed?: number; freed_bytes?: number; errors?: number; error?: string }>;
   get_completed_sessions?: (limit?: number) => Promise<{ ok: boolean; sessions?: ArchiveSession[]; error?: string }>;
   delete_session?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;
+  update_session_input_path?: (sessionDir: string, newPath: string) => Promise<{ ok: boolean; error?: string }>;
   open_session_folder?: () => Promise<{ ok: boolean; error?: string }>;
   download_and_install_update?: (version: string) => Promise<{ ok: boolean; error?: string }>;
 }

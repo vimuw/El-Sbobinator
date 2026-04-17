@@ -5,6 +5,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
   const [apiReady, setApiReady] = useState(false);
   const [bridgeDelayed, setBridgeDelayed] = useState(false);
   const [apiKey, setApiKey] = useState('');
+  const [hasProtectedKey, setHasProtectedKey] = useState(false);
   const [fallbackKeys, setFallbackKeys] = useState<string[]>([]);
   const [preferredModel, setPreferredModel] = useState('gemini-2.5-flash');
   const [fallbackModels, setFallbackModels] = useState<string[]>([]);
@@ -18,6 +19,10 @@ export function useApiReady(appendConsole: (msg: string) => void) {
   useEffect(() => {
     appendConsoleRef.current = appendConsole;
   }, [appendConsole]);
+
+  useEffect(() => {
+    if (apiKey) setHasProtectedKey(false);
+  }, [apiKey]);
 
   useEffect(() => {
     let alive = true;
@@ -36,6 +41,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
         setApiReady(true);
         appendConsoleRef.current('Connesso a Python.');
         if (cfg?.api_key) setApiKey(cfg.api_key);
+        if (cfg?.has_protected_key && !cfg.api_key) setHasProtectedKey(true);
         if (cfg?.fallback_keys?.length) setFallbackKeys(cfg.fallback_keys);
         if (cfg?.preferred_model) setPreferredModel(cfg.preferred_model);
         if (cfg?.fallback_models?.length) setFallbackModels(cfg.fallback_models);
@@ -87,6 +93,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
     bridgeDelayed,
     apiKey,
     setApiKey,
+    hasProtectedKey,
     fallbackKeys,
     setFallbackKeys,
     preferredModel,
