@@ -48,13 +48,12 @@ from el_sbobinator.revision_service import (
     process_macro_revision_phase,
 )
 from el_sbobinator.session_store import _update_session
+from el_sbobinator.config_service import safe_output_basename
+from el_sbobinator.prompts import PROMPT_REVISIONE, PROMPT_SISTEMA
 from el_sbobinator.shared import (
-    PROMPT_REVISIONE,
-    PROMPT_SISTEMA,
     _atomic_write_json,
     _load_json,
     invalidate_session_storage_cache,
-    safe_output_basename,
 )
 
 # Maximum seconds to wait for a user response in the "regenerate?" dialog before

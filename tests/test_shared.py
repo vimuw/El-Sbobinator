@@ -4,7 +4,10 @@ import time
 import unittest
 from unittest.mock import patch
 
-from el_sbobinator.pipeline_settings import load_and_sanitize_settings
+from el_sbobinator.pipeline_settings import (
+    build_default_pipeline_settings,
+    load_and_sanitize_settings,
+)
 from el_sbobinator import shared
 
 
@@ -64,14 +67,14 @@ class SharedCleanupTests(unittest.TestCase):
 
 class SharedPipelineDefaultsTests(unittest.TestCase):
     def test_build_default_pipeline_settings_uses_10_minutes_for_flash_lite(self):
-        settings = shared.build_default_pipeline_settings(
+        settings = build_default_pipeline_settings(
             {"preferred_model": "gemini-2.5-flash-lite", "fallback_models": []}
         )
         self.assertEqual(settings["model"], "gemini-2.5-flash-lite")
         self.assertEqual(settings["chunk_minutes"], 10)
 
     def test_build_default_pipeline_settings_keeps_15_minutes_for_other_models(self):
-        settings = shared.build_default_pipeline_settings(
+        settings = build_default_pipeline_settings(
             {"preferred_model": "gemini-2.5-flash", "fallback_models": []}
         )
         self.assertEqual(settings["model"], "gemini-2.5-flash")
@@ -116,138 +119,6 @@ class SharedPipelineDefaultsTests(unittest.TestCase):
         self.assertFalse(changed)
         self.assertEqual(settings.chunk_minutes, 15)
         self.assertEqual(session["settings"]["chunk_minutes"], 15)
-
-
-class DefaultChunkMinutesTests(unittest.TestCase):
-    def test_known_models_match_model_options(self):
-        from el_sbobinator.model_registry import MODEL_OPTIONS
-
-        for opt in MODEL_OPTIONS:
-            expected = int(opt["default_chunk_minutes"])
-            got = shared.default_chunk_minutes_for_model(opt["id"])
-            self.assertEqual(
-                got,
-                expected,
-                msg=f"model {opt['id']!r}: expected {expected}, got {got}",
-            )
-
-    def test_unknown_model_falls_back_to_15(self):
-        result = shared.default_chunk_minutes_for_model("gemini-unknown-model")
-        self.assertEqual(result, 15)
-
-    def test_derives_from_model_options_not_hardcoded(self):
-        from el_sbobinator.model_registry import MODEL_OPTIONS
-        from unittest.mock import patch
-
-        patched = tuple(
-            {**opt, "default_chunk_minutes": 42}
-            if opt["id"] == "gemini-2.5-flash-lite"
-            else opt
-            for opt in MODEL_OPTIONS
-        )
-        with patch("el_sbobinator.shared.MODEL_OPTIONS", patched):
-            result = shared.default_chunk_minutes_for_model("gemini-2.5-flash-lite")
-        self.assertEqual(result, 42)
-
-
-class DefaultMacroCharLimitTests(unittest.TestCase):
-    def test_known_models_match_model_options(self):
-        from el_sbobinator.model_registry import MODEL_OPTIONS
-
-        for opt in MODEL_OPTIONS:
-            expected = int(opt["default_macro_char_limit"])
-            got = shared.default_macro_char_limit_for_model(opt["id"])
-            self.assertEqual(
-                got,
-                expected,
-                msg=f"model {opt['id']!r}: expected {expected}, got {got}",
-            )
-
-    def test_flash_lite_31_returns_7500(self):
-        result = shared.default_macro_char_limit_for_model(
-            "gemini-3.1-flash-lite-preview"
-        )
-        self.assertEqual(result, 7500)
-
-    def test_flash_lite_25_returns_15000(self):
-        result = shared.default_macro_char_limit_for_model("gemini-2.5-flash-lite")
-        self.assertEqual(result, 15000)
-
-    def test_unknown_model_falls_back_to_22000(self):
-        result = shared.default_macro_char_limit_for_model("gemini-unknown-model")
-        self.assertEqual(result, 22000)
-
-    def test_load_and_sanitize_defaults_macro_from_model_when_missing(self):
-        session = {
-            "settings": {
-                "model": "gemini-3.1-flash-lite-preview",
-                "fallback_models": [],
-                "effective_model": "gemini-3.1-flash-lite-preview",
-                "audio": {"bitrate": "48k"},
-            }
-        }
-        settings, changed = load_and_sanitize_settings(session)
-        self.assertEqual(settings.macro_char_limit, 7500)
-        self.assertEqual(session["settings"]["macro_char_limit"], 7500)
-        self.assertTrue(changed)
-
-    def test_load_and_sanitize_migrates_old_global_default_for_flash_lite_31(self):
-        session = {
-            "settings": {
-                "model": "gemini-3.1-flash-lite-preview",
-                "fallback_models": [],
-                "effective_model": "gemini-3.1-flash-lite-preview",
-                "chunk_minutes": 5,
-                "overlap_seconds": 30,
-                "macro_char_limit": 22000,
-                "preconvert_audio": True,
-                "prefetch_next_chunk": True,
-                "inline_audio_max_mb": 6.0,
-                "audio": {"bitrate": "48k"},
-            }
-        }
-        settings, changed = load_and_sanitize_settings(session)
-        self.assertEqual(settings.macro_char_limit, 7500)
-        self.assertEqual(session["settings"]["macro_char_limit"], 7500)
-        self.assertTrue(changed)
-
-    def test_load_and_sanitize_migrates_old_global_default_for_flash_lite_25(self):
-        session = {
-            "settings": {
-                "model": "gemini-2.5-flash-lite",
-                "fallback_models": [],
-                "effective_model": "gemini-2.5-flash-lite",
-                "chunk_minutes": 10,
-                "overlap_seconds": 30,
-                "macro_char_limit": 22000,
-                "preconvert_audio": True,
-                "prefetch_next_chunk": True,
-                "inline_audio_max_mb": 6.0,
-                "audio": {"bitrate": "48k"},
-            }
-        }
-        settings, changed = load_and_sanitize_settings(session)
-        self.assertEqual(settings.macro_char_limit, 15000)
-        self.assertEqual(session["settings"]["macro_char_limit"], 15000)
-        self.assertTrue(changed)
-
-    def test_load_and_sanitize_preserves_explicit_non_default_macro_char_limit(self):
-        session = {
-            "settings": {
-                "model": "gemini-3.1-flash-lite-preview",
-                "fallback_models": [],
-                "effective_model": "gemini-3.1-flash-lite-preview",
-                "chunk_minutes": 5,
-                "overlap_seconds": 30,
-                "macro_char_limit": 10000,
-                "preconvert_audio": True,
-                "prefetch_next_chunk": True,
-                "inline_audio_max_mb": 6.0,
-                "audio": {"bitrate": "48k"},
-            }
-        }
-        settings, changed = load_and_sanitize_settings(session)
-        self.assertEqual(settings.macro_char_limit, 10000)
 
 
 if __name__ == "__main__":

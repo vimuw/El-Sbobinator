@@ -24,7 +24,8 @@ from el_sbobinator.logging_utils import get_logger
 from el_sbobinator.model_registry import ModelState
 from el_sbobinator.pipeline_session import record_step_metric
 from el_sbobinator.session_store import _update_session
-from el_sbobinator.shared import PROMPT_REVISIONE_CONFINE, _atomic_write_text
+from el_sbobinator.prompts import PROMPT_REVISIONE_CONFINE
+from el_sbobinator.shared import _atomic_write_text
 
 BOUNDARY_CHAR_BUDGET = 3000
 

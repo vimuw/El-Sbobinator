@@ -20,7 +20,8 @@ from el_sbobinator.model_registry import (
 )
 from el_sbobinator.audio_service import resolve_ffmpeg
 from el_sbobinator.bridge_types import ValidationCheck, ValidationResult
-from el_sbobinator.shared import CONFIG_FILE, DEFAULT_MODEL, USER_HOME, get_desktop_dir
+from el_sbobinator.config_service import CONFIG_FILE, USER_HOME, get_desktop_dir
+from el_sbobinator.shared import DEFAULT_MODEL
 
 
 def _check_writable_dir(path: str) -> tuple[bool, str]:

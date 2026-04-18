@@ -10,11 +10,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Tuple
 
-from el_sbobinator.model_registry import sanitize_fallback_models, sanitize_model_name
-from el_sbobinator.shared import (
+from el_sbobinator.config_service import load_config
+from el_sbobinator.model_registry import (
+    DEFAULT_FALLBACK_MODELS,
     DEFAULT_MODEL,
     default_chunk_minutes_for_model,
     default_macro_char_limit_for_model,
+    sanitize_fallback_models,
+    sanitize_model_name,
 )
 
 
@@ -194,3 +197,25 @@ def load_and_sanitize_settings(
         inline_audio_max_mb=float(inline_audio_max_mb),
     )
     return settings, changed
+
+
+def build_default_pipeline_settings(config: dict | None = None) -> dict:
+    cfg = config if isinstance(config, dict) else load_config()
+    preferred_model = sanitize_model_name(cfg.get("preferred_model"), DEFAULT_MODEL)
+    fallback_models = sanitize_fallback_models(
+        cfg.get("fallback_models"),
+        preferred_model,
+        DEFAULT_FALLBACK_MODELS,
+    )
+    return {
+        "model": preferred_model,
+        "fallback_models": fallback_models,
+        "effective_model": preferred_model,
+        "chunk_minutes": default_chunk_minutes_for_model(preferred_model),
+        "overlap_seconds": 30,
+        "macro_char_limit": default_macro_char_limit_for_model(preferred_model),
+        "preconvert_audio": True,
+        "prefetch_next_chunk": True,
+        "inline_audio_max_mb": 6.0,
+        "audio": {"bitrate": "48k"},
+    }

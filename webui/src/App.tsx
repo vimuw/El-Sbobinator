@@ -63,6 +63,9 @@ declare global {
   }
 }
 
+const CONFETTI_COLORS = ['#FF6B6B', '#FFD93D', '#6BCB77', '#4D96FF', '#FF922B', '#CC5DE8', '#FF8FAB'];
+type ConfettiParticle = { id: number; color: string; angle: number; distance: number; size: number; round: boolean };
+
 type PreviewState = {
   content: string | null;
   title: string;
@@ -104,7 +107,7 @@ const initialPreviewState: PreviewState = {
 type UiMode = 'setup' | 'ready-empty' | 'ready-with-files' | 'processing' | 'canceling';
 type ConfirmActionState =
   | { type: 'stop-processing' }
-  | { type: 'remove-file'; fileId: string; fileName: string }
+  | { type: 'remove-file'; fileId: string; fileName: string; isDone: boolean }
   | { type: 'clear-completed'; count: number }
   | { type: 'delete-archive-session'; sessionDir: string; name: string };
 
@@ -249,8 +252,19 @@ export default function App() {
       pendingReplacement.sessions,
     );
 
+    // Guard: session IDs are deterministic (content hash), so the old archive
+    // session dir and the new pipeline output dir are often the same path.
+    // Never delete the directory that contains the freshly-generated HTML.
+    const rawNewDir = currentFile?.outputDir
+      || (currentFile?.outputHtml ? String(currentFile.outputHtml).replace(/[^/\\]+$/, '').replace(/[/\\]+$/, '') : undefined);
+    const newOutputDirNorm = rawNewDir ? String(rawNewDir).replace(/[/\\]+$/, '').toLowerCase() : null;
+
     try {
       for (const session of deletableSessions) {
+        const sessionDirNorm = String(session.session_dir).replace(/[/\\]+$/, '').toLowerCase();
+        if (newOutputDirNorm && sessionDirNorm === newOutputDirNorm) {
+          continue;
+        }
         try {
           const res = await window.pywebview?.api?.delete_session?.(session.session_dir);
           if (res?.ok) {
@@ -423,7 +437,7 @@ export default function App() {
     const targetFile = filesRef.current.find(file => file.id === id);
     if (!targetFile) return;
     if (appState !== 'idle' && targetFile.status !== 'done') return;
-    setConfirmAction({ type: 'remove-file', fileId: id, fileName: targetFile.name });
+    setConfirmAction({ type: 'remove-file', fileId: id, fileName: targetFile.name, isDone: targetFile.status === 'done' });
   }, [appState]);
 
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -690,13 +704,12 @@ export default function App() {
 
 
   // --- Computed values ---
-  const { queuedCount, processingCount } = useMemo(() => {
-    let queuedCount = 0, processingCount = 0;
+  const { queuedCount } = useMemo(() => {
+    let queuedCount = 0;
     for (const f of files) {
       if (f.status === 'queued') queuedCount++;
-      else if (f.status === 'processing') processingCount++;
     }
-    return { queuedCount, processingCount };
+    return { queuedCount };
   }, [files]);
   const hasApiKey = Boolean(apiKey.trim());
   const isApiKeyValid = GEMINI_KEY_PATTERN.test(apiKey.trim());
@@ -759,8 +772,29 @@ export default function App() {
     }
   }, [isPeakHour]);
 
+  const [confettiParticles, setConfettiParticles] = useState<ConfettiParticle[]>([]);
+  const confettiIdRef = useRef(0);
+  const lastConfettiRef = useRef(0);
+
+  const fireConfetti = useCallback(() => {
+    const now = Date.now();
+    if (now - lastConfettiRef.current < 350) return;
+    lastConfettiRef.current = now;
+    const particles: ConfettiParticle[] = Array.from({ length: 14 }, () => ({
+      id: confettiIdRef.current++,
+      color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+      angle: Math.random() * 360,
+      distance: 28 + Math.random() * 34,
+      size: 3 + Math.floor(Math.random() * 4),
+      round: Math.random() > 0.45,
+    }));
+    setConfettiParticles(prev => [...prev, ...particles]);
+    setTimeout(() => {
+      setConfettiParticles(prev => prev.filter(p => !particles.some(pp => pp.id === p.id)));
+    }, 850);
+  }, []);
+
   const titleGradient = { background: 'linear-gradient(90deg, var(--gradient-title-from), var(--gradient-title-to))', WebkitBackgroundClip: 'text' as const, WebkitTextFillColor: 'transparent' };
-  const sGradient = { background: 'linear-gradient(90deg, var(--gradient-s-from), var(--gradient-s-to))', WebkitBackgroundClip: 'text' as const, WebkitTextFillColor: 'transparent' };
 
   const pendingFiles = useMemo(() => getPendingFiles(files), [files]);
   const doneFiles = useMemo(() => getDoneFiles(files), [files]);
@@ -785,7 +819,9 @@ export default function App() {
     if (confirmAction.type === 'remove-file') {
       return {
         title: 'Rimuovere questo elemento?',
-        description: `"${confirmAction.fileName}" verrà rimosso dalla lista. Vuoi continuare?`,
+        description: confirmAction.isDone
+          ? `"${confirmAction.fileName}" verrà spostata nell'archivio e rimossa dalla lista. Vuoi continuare?`
+          : `"${confirmAction.fileName}" verrà rimossa dalla lista. Vuoi continuare?`,
         confirmLabel: 'Conferma rimozione',
         cancelLabel: 'Tieni elemento',
       };
@@ -845,10 +881,38 @@ export default function App() {
     <div className="app-shell min-h-screen font-sans flex flex-col" style={{ background: 'var(--bg-base)', color: 'var(--text-secondary)' }}>
 
       {/* Top Navigation */}
-      <header className="sticky top-0 z-40 backdrop-blur-2xl" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'rgba(16, 13, 11, 0.08)' }}>
+      <header className="sticky top-0 z-40 backdrop-blur-2xl" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--header-bg)' }}>
         <div className="max-w-3xl mx-auto px-5 sm:px-6 min-h-[84px] flex items-center justify-between gap-4">
           <div className="flex items-center gap-1">
-            <img src="./icon.png" alt="El Sbobinator" className="app-logo" draggable={false} />
+            <div style={{ position: 'relative', display: 'inline-block' }} onMouseEnter={fireConfetti}>
+              <img src="./icon.png" alt="El Sbobinator" className="app-logo" draggable={false} />
+              {confettiParticles.map(p => {
+                const rad = (p.angle * Math.PI) / 180;
+                const tx = Math.cos(rad) * p.distance;
+                const ty = Math.sin(rad) * p.distance - 8;
+                return (
+                  <motion.span
+                    key={p.id}
+                    initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+                    animate={{ x: tx, y: ty, opacity: 0, scale: 0.4 }}
+                    transition={{ duration: 0.7, ease: 'easeOut' }}
+                    style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      marginLeft: -p.size / 2,
+                      marginTop: -p.size / 2,
+                      width: p.size,
+                      height: p.size,
+                      borderRadius: p.round ? '50%' : '2px',
+                      background: p.color,
+                      pointerEvents: 'none',
+                      zIndex: 50,
+                    }}
+                  />
+                );
+              })}
+            </div>
             <h1 className="brand-mark text-[1.45rem] sm:text-[1.75rem] font-semibold flex items-baseline tracking-tight leading-none overflow-visible py-1">
               <span style={titleGradient}>El&nbsp;</span>
               <span className="relative inline-block mx-[2px] overflow-visible">
@@ -864,18 +928,13 @@ export default function App() {
                   <path d="M 2 22 C 2 28, 30 28, 30 22 C 30 20, 25 18, 16 18 C 7 18, 2 20, 2 22 Z" fill="#F2C86F"/>
                   <path d="M 2 22 C 2 28, 30 28, 30 22" fill="none" stroke="#C38243" strokeWidth="1.5"/>
                 </svg>
-                <span className="relative z-0" style={sGradient}>S</span>
+                <span className="relative z-0" style={titleGradient}>S</span>
               </span>
               <span style={titleGradient}>bobinator</span>
             </h1>
           </div>
           <div className="flex items-center gap-3">
-            {processingCount > 0 && (
-              <span className="premium-badge" style={{ color: 'var(--processing-text)', borderColor: 'var(--processing-ring)', background: 'var(--processing-bg)' }}>
-                <span className="inline-flex h-2.5 w-2.5 rounded-full animate-pulse" style={{ background: 'var(--processing-text)' }} />
-                {processingCount} sbobinatur{processingCount !== 1 ? 'e' : 'a'} in corso
-              </span>
-            )}
+
             <span className="premium-badge" style={{
               color: !apiReady ? (bridgeDelayed ? 'var(--error-text)' : 'var(--warning-text)') : !hasApiKey ? 'var(--text-secondary)' : !isApiKeyValid ? 'var(--warning-text)' : 'var(--success-text)',
               borderColor: !apiReady ? (bridgeDelayed ? 'var(--error-ring)' : 'var(--warning-ring)') : !hasApiKey ? 'var(--border-default)' : !isApiKeyValid ? 'var(--warning-ring)' : 'var(--success-ring)',
@@ -1122,16 +1181,14 @@ export default function App() {
               <Settings className="w-3.5 h-3.5" /> Apri impostazioni avanzate
             </button>
           </div>
-        ) : uiMode !== 'processing' && uiMode !== 'canceling' ? (
+        ) : uiMode !== 'processing' && uiMode !== 'canceling' && !completionFlash ? (
           <div
             onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop} onClick={handleBrowseClick}
-            className={`relative overflow-hidden rounded-2xl border-2 border-dashed transition-all duration-300 cursor-pointer flex flex-col items-center justify-center py-12 px-6 text-center group ${appState === 'processing' ? 'opacity-50 pointer-events-none' : ''}`}
-            style={{
-              borderColor: isDragging ? 'var(--accent-bg)' : 'var(--border-strong)',
-              borderWidth: '2.5px',
-              background: isDragging ? 'var(--accent-subtle)' : 'rgba(255,255,255,0.01)',
-            }}
+            className={`dropzone-card relative cursor-pointer flex flex-col items-center justify-center py-12 px-6 text-center group${isDragging ? ' is-dragging' : ''}${appState === 'processing' ? ' opacity-50 pointer-events-none' : ''}`}
           >
+            <svg className="dz-border-svg" aria-hidden="true">
+              <rect className="dz-border-rect" x="0" y="0" width="100%" height="100%" rx="24" ry="24" />
+            </svg>
             <div className="w-14 h-14 mb-4 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}>
               <UploadCloud className="w-7 h-7" style={{ color: isDragging ? 'var(--accent-text)' : 'var(--text-muted)' }} />
             </div>
@@ -1233,7 +1290,7 @@ export default function App() {
                 {appState === 'idle' && (
                   <motion.div key="idle" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
                     <button onClick={() => startProcessing()} disabled={!canStart}
-                      className="premium-button w-full text-lg"
+                      className={`premium-button w-full text-lg${canStart ? ' premium-button--ready' : ''}`}
                       style={canStart ? {} : { cursor: 'not-allowed' }}>
                       <Play className="w-5 h-5 fill-current" />
                       {!hasApiKey ? '⚠️ Inserisci API Key nelle impostazioni' : !isApiKeyValid ? '⚠️ API Key non valida' : `Avvia sbobinatura (${queuedCount} file)`}
@@ -1418,8 +1475,8 @@ export default function App() {
                             exit={{ opacity: 0, y: -4, transition: { duration: 0.1 } }}
                             transition={{ duration: 0.18, ease: 'easeOut' }}
                             onClick={() => openPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir)}
-                            className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 cursor-pointer transition-colors"
-                            style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-subtle)' }}
+                            className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 cursor-pointer transition-colors bg-white/[0.02] hover:bg-white/[0.05]"
+                            style={{ border: '1px solid var(--border-subtle)' }}
                           >
                             <div className="flex items-center gap-3 overflow-hidden flex-1">
                               <History className="w-4 h-4 shrink-0" style={{ color: 'var(--text-faint)' }} />

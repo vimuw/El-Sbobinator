@@ -62,9 +62,7 @@
   --console-text: #334155;
 
   --gradient-title-from: #0f172a;
-  --gradient-title-to: #334155;
-  --gradient-s-from: #0f172a;
-  --gradient-s-to: #334155;
+  --gradient-title-to: #64748b;
 
   --progress-bg: rgba(148, 163, 184, 0.2);
   --scrubber-rest: rgba(148, 163, 184, 0.42);
@@ -73,6 +71,8 @@
 
   --shadow-soft: 0 2px 8px rgba(15, 23, 42, 0.07), 0 18px 44px rgba(15, 23, 42, 0.11);
   --shadow-strong: 0 4px 16px rgba(15, 23, 42, 0.09), 0 24px 70px rgba(15, 23, 42, 0.15);
+
+  --header-bg: rgba(255, 255, 255, 0.82);
 }
 
 :root[data-theme="dark"] {
@@ -132,10 +132,8 @@
     --console-heading: #f8fafc;
     --console-text: #d4d4d8;
 
-    --gradient-title-from: #f8fafc;
-    --gradient-title-to: #cbd5e1;
-    --gradient-s-from: #f8fafc;
-    --gradient-s-to: #cbd5e1;
+    --gradient-title-from: #e2e8f0;
+    --gradient-title-to: #94a3b8;
 
     --progress-bg: rgba(71, 85, 105, 0.46);
     --scrubber-rest: rgba(71, 85, 105, 0.62);
@@ -144,6 +142,8 @@
 
     --shadow-soft: 0 24px 56px rgba(0, 0, 0, 0.22);
     --shadow-strong: 0 32px 90px rgba(0, 0, 0, 0.3);
+
+    --header-bg: rgba(15, 17, 21, 0.88);
 }
 
 /* ── Light mode component overrides ─────────────── */
@@ -201,6 +201,10 @@
   background:
     linear-gradient(140deg, rgba(255, 255, 255, 0.85), transparent 46%),
     rgba(228, 234, 245, 0.70);
+}
+
+:root[data-theme="dark"] .dropzone-card:hover {
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.36);
 }
 
 :root:not([data-theme="dark"]) footer a,
@@ -318,8 +322,17 @@ body {
     linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0)),
     var(--bg-base);
   color: var(--text-primary);
+  transition: background-color 300ms ease, color 200ms ease;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+:root[data-theme="dark"] body {
+  background:
+    radial-gradient(circle at 14% 18%, rgba(148, 163, 184, 0.16), transparent 24%),
+    radial-gradient(circle at 82% 16%, rgba(148, 163, 184, 0.16), transparent 22%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0)),
+    var(--bg-base);
 }
 
 a {
@@ -377,17 +390,6 @@ button {
   font-family: var(--font-display);
   letter-spacing: -0.05em;
   font-weight: 700;
-}
-
-.premium-kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--accent-text);
 }
 
 .premium-panel,
@@ -479,6 +481,15 @@ button {
   color: var(--btn-disabled-text);
   box-shadow: none;
   cursor: not-allowed;
+}
+
+@keyframes cta-pulse {
+  0%, 100% { box-shadow: 0 16px 30px rgba(15, 23, 42, 0.14); }
+  50%       { box-shadow: 0 16px 30px rgba(15, 23, 42, 0.14), 0 0 0 6px var(--btn-primary-ring); }
+}
+
+.premium-button--ready {
+  animation: cta-pulse 2.4s ease-in-out infinite;
 }
 
 .premium-button-secondary,
@@ -828,28 +839,48 @@ button {
   position: relative;
   overflow: hidden;
   border-radius: 26px;
-  border: 1px solid var(--border-default);
+  border: none;
   background:
-    linear-gradient(140deg, rgba(255, 255, 255, 0.08), transparent 46%),
-    rgba(255, 250, 244, 0.38);
+    linear-gradient(140deg, rgba(255, 255, 255, 0.04), transparent 46%),
+    rgba(24, 28, 35, 0.72);
   transition:
     transform 220ms ease,
-    border-color 220ms ease,
-    box-shadow 220ms ease,
-    background 220ms ease;
+    background 300ms ease,
+    box-shadow 220ms ease;
 }
 
 .dropzone-card:hover {
   transform: translateY(-2px);
-  border-color: var(--border-strong);
   box-shadow: 0 24px 50px rgba(15, 23, 42, 0.1);
 }
 
 .dropzone-card.is-dragging {
-  border-color: var(--accent-bg);
   background:
     linear-gradient(140deg, rgba(255, 255, 255, 0.1), transparent 46%),
     var(--accent-subtle);
+}
+
+.dz-border-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.dz-border-rect {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 3;
+  stroke-dasharray: 8 12;
+  stroke-dashoffset: 0;
+  transition: stroke 300ms ease;
+}
+
+.dropzone-card.is-dragging .dz-border-rect {
+  stroke: var(--accent-bg);
+  animation: dz-march 0.7s linear infinite;
 }
 
 .queue-card {
@@ -2035,4 +2066,8 @@ input[type="password"]::-ms-reveal {
   to {
     transform: translateX(100%);
   }
+}
+
+@keyframes dz-march {
+  to { stroke-dashoffset: -20; }
 }

@@ -32,7 +32,8 @@ from el_sbobinator.logging_utils import get_logger
 from el_sbobinator.model_registry import ModelState
 from el_sbobinator.pipeline_session import record_step_metric
 from el_sbobinator.session_store import _update_session
-from el_sbobinator.shared import _atomic_write_text, debug_log
+from el_sbobinator.config_service import debug_log
+from el_sbobinator.shared import _atomic_write_text
 
 
 def process_phase1_transcription(  # noqa: C901

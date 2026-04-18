@@ -84,12 +84,6 @@ function QueueFileCardInner({
                 >
                   <GripVertical className="w-4 h-4" />
                 </button>
-                <span
-                  className="text-[10px] select-none opacity-0 group-hover/drag:opacity-50 transition-opacity duration-150 whitespace-nowrap"
-                  style={{ color: 'var(--text-faint)' }}
-                >
-                  trascina
-                </span>
               </div>
             )}
             <div
@@ -209,7 +203,7 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
         <div className="flex items-center gap-3 overflow-hidden flex-1">
           <div
             className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl"
-            style={{ background: 'rgba(255,255,255,0.03)', color: 'var(--success-text)' }}
+            style={{ background: 'var(--success-subtle)', color: 'var(--success-text)' }}
           >
             <CheckCircle className="w-5 h-5" />
           </div>

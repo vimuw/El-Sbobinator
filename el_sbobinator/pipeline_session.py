@@ -12,7 +12,12 @@ import re
 from dataclasses import dataclass
 
 from el_sbobinator.audio_service import preconvert_media_to_mp3
-from el_sbobinator.pipeline_settings import PipelineSettings, load_and_sanitize_settings
+from el_sbobinator.config_service import load_config
+from el_sbobinator.pipeline_settings import (
+    PipelineSettings,
+    build_default_pipeline_settings,
+    load_and_sanitize_settings,
+)
 from el_sbobinator.session_store import (
     ensure_session_dirs,
     load_session as load_saved_session,
@@ -24,9 +29,7 @@ from el_sbobinator.session_store import (
 from el_sbobinator.shared import (
     PRECONVERTED_AUDIO_FINAL,
     PRECONVERTED_AUDIO_PARTIAL,
-    build_default_pipeline_settings,
     invalidate_session_storage_cache,
-    load_config,
 )
 
 

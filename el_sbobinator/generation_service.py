@@ -20,7 +20,7 @@ from google.genai import types
 
 from el_sbobinator.logging_utils import get_logger
 from el_sbobinator.model_registry import MODEL_OPTIONS, ModelState, next_model_in_chain
-from el_sbobinator.shared import load_config
+from el_sbobinator.config_service import load_config
 
 # ---------------------------------------------------------------------------
 # Module-level constants
@@ -162,6 +162,16 @@ def _is_model_unavailable(error_text: str, error_code: int | None) -> bool:
         "temporarily unavailable",
     )
     return any(marker in error_text for marker in markers)
+
+
+def _is_quota_related(error_text: str, error_code: int | None) -> bool:
+    return (
+        error_code == 429
+        or "resource_exhausted" in error_text
+        or "quota" in error_text
+        or "rate limit" in error_text
+        or "too many requests" in error_text
+    )
 
 
 def _is_model_not_found(error_text: str, error_code: int | None) -> bool:
@@ -488,13 +498,7 @@ def retry_with_quota(  # noqa: C901
                 return client, None
             error = _error_text(exc)
             error_code = _error_code(exc)
-            is_quota_related = (
-                error_code == 429
-                or "resource_exhausted" in error
-                or "quota" in error
-                or "rate limit" in error
-                or "too many requests" in error
-            )
+            is_quota_related = _is_quota_related(error, error_code)
             current_model = current_model_name(model_state, model_name)
 
             if model_state is not None and isinstance(exc, DegenerateOutputError):
@@ -571,12 +575,8 @@ def retry_with_quota(  # noqa: C901
                             exc = retry_exc
                             error = retry_error
                             error_code = retry_code
-                            is_quota_related = (
-                                error_code == 429
-                                or "resource_exhausted" in error
-                                or "quota" in error
-                                or "rate limit" in error
-                                or "too many requests" in error
+                            is_quota_related = _is_quota_related(
+                                retry_error, retry_code
                             )
                             current_model = current_model_name(model_state, model_name)
                             break

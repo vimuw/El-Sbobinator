@@ -337,7 +337,7 @@ export function ProcessingStatusBanner({
 }: ProcessingStatusBannerProps) {
   const { icon, iconAnimation, title, description, kind } = getPhaseInfo(appState, currentPhase);
   const stepperState = getStepperState(currentPhase);
-  const progressLabel = kind !== 'cancel' ? getProgressLabel(currentPhase, workDone, workTotals) : null;
+  const progressLabel = getProgressLabel(currentPhase, workDone, workTotals);
   const isCanceling = appState === 'canceling';
 
   const [elapsedSecs, setElapsedSecs] = useState(0);
@@ -375,7 +375,7 @@ export function ProcessingStatusBanner({
         : 'linear-gradient(90deg, var(--accent-gradient-start), var(--accent-gradient-end))';
 
   const metaChips: Array<{ icon: React.ReactElement; label: string }> = [];
-  if (!isCanceling && currentModel && kind !== 'success') {
+  if (currentModel && kind !== 'success') {
     metaChips.push({ icon: <Bot className="w-3 h-3" />, label: shortModelName(currentModel) });
   }
   if (progressLabel) {
@@ -460,7 +460,7 @@ export function ProcessingStatusBanner({
         <div className="w-full max-w-2xl">
           <div className="h-3 w-full overflow-hidden rounded-full" style={{ background: 'var(--progress-bg)' }}>
             <motion.div
-              className="h-full rounded-full"
+              className="processing-progress-fill h-full rounded-full"
               style={{ background: progressFill }}
               initial={{ width: 0 }}
               animate={{ width: `${activeProgress}%` }}
@@ -475,30 +475,36 @@ export function ProcessingStatusBanner({
           </p>
         )}
 
-        {metaChips.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            {metaChips.map(({ icon, label }, index) => (
-              <span
-                key={`${label}-${index}`}
-                className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs"
-                style={{ background: 'var(--progress-bg)', color: 'var(--text-secondary)' }}
-              >
-                {icon}
-                {label}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {stepperState && !isCanceling && (
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
-            <StepBadge state={stepperState.preconversione} label="Pre-conversione" num={1} accentColor={accentColor} tooltip={STEP_TOOLTIPS.preconversione} />
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--border-default)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
-            <StepBadge state={stepperState.trascrizione} label="Trascrizione" num={2} accentColor={accentColor} tooltip={STEP_TOOLTIPS.trascrizione} />
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--border-default)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
-            <StepBadge state={stepperState.revisione} label="Revisione" num={3} accentColor={accentColor} tooltip={STEP_TOOLTIPS.revisione} />
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--border-default)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
-            <StepBadge state={stepperState.confini} label="Confini" num={4} accentColor={accentColor} tooltip={STEP_TOOLTIPS.confini} />
+        {(metaChips.length > 0 || stepperState) && (
+          <div
+            className="flex flex-col items-center gap-3"
+            style={isCanceling ? { opacity: 0.45, filter: 'grayscale(0.6)', transition: 'opacity 0.3s, filter 0.3s' } : undefined}
+          >
+            {metaChips.length > 0 && (
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {metaChips.map(({ icon, label }, index) => (
+                  <span
+                    key={`${label}-${index}`}
+                    className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs"
+                    style={{ background: 'var(--progress-bg)', color: 'var(--text-secondary)' }}
+                  >
+                    {icon}
+                    {label}
+                  </span>
+                ))}
+              </div>
+            )}
+            {stepperState && (
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+                <StepBadge state={stepperState.preconversione} label="Pre-conversione" num={1} accentColor={isCanceling ? 'var(--text-muted)' : accentColor} tooltip={STEP_TOOLTIPS.preconversione} />
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--border-default)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
+                <StepBadge state={stepperState.trascrizione} label="Trascrizione" num={2} accentColor={isCanceling ? 'var(--text-muted)' : accentColor} tooltip={STEP_TOOLTIPS.trascrizione} />
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--border-default)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
+                <StepBadge state={stepperState.revisione} label="Revisione" num={3} accentColor={isCanceling ? 'var(--text-muted)' : accentColor} tooltip={STEP_TOOLTIPS.revisione} />
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--border-default)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
+                <StepBadge state={stepperState.confini} label="Confini" num={4} accentColor={isCanceling ? 'var(--text-muted)' : accentColor} tooltip={STEP_TOOLTIPS.confini} />
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -122,6 +122,22 @@ def build_model_state(
     return ModelState(chain=chain, current=current)
 
 
+def default_chunk_minutes_for_model(model_name: str) -> int:
+    model = sanitize_model_name(model_name, DEFAULT_MODEL)
+    for opt in MODEL_OPTIONS:
+        if opt["id"] == model:
+            return int(opt.get("default_chunk_minutes", 15))
+    return 15
+
+
+def default_macro_char_limit_for_model(model_name: str) -> int:
+    model = sanitize_model_name(model_name, DEFAULT_MODEL)
+    for opt in MODEL_OPTIONS:
+        if opt["id"] == model:
+            return int(opt.get("default_macro_char_limit", 22000))
+    return 22000
+
+
 def next_model_in_chain(state: ModelState) -> str | None:
     try:
         current_idx = state.chain.index(state.current)
