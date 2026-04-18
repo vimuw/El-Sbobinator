@@ -1075,7 +1075,7 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
                 ) as mock_urlopen,
                 patch("tempfile.NamedTemporaryFile", return_value=_FakeTmpFile()),
                 patch.object(sys, "platform", "win32"),
-                patch("os.startfile"),
+                patch("os.startfile", create=True),
                 patch("os.unlink"),
                 patch("time.sleep"),
             ):
@@ -1124,7 +1124,7 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
             patch("urllib.request.urlopen", return_value=_FakeResp()),
             patch("tempfile.NamedTemporaryFile", return_value=_FakeTmpFile()),
             patch.object(sys, "platform", "win32"),
-            patch("os.startfile"),
+            patch("os.startfile", create=True),
             patch("os.unlink", side_effect=flaky_unlink),
             patch("time.sleep"),
         ):
