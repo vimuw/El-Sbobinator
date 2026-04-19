@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { AnimatePresence } from 'motion/react';
 import { Github } from 'lucide-react';
 import { GITHUB_URL, KOFI_URL } from './branding';
 import { type ArchiveSession, type ElSbobinatorBridge, type PywebviewApi } from './bridge';
