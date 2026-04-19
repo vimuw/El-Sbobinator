@@ -119,7 +119,6 @@ def download_and_install_update(version: str) -> dict:
                 webview.windows[0].destroy()
         except Exception:
             pass
-        sys.exit(0)
 
     threading.Thread(target=_delayed_destroy, daemon=True).start()
     return {"ok": True}
