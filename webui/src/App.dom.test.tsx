@@ -123,7 +123,7 @@ describe('App', () => {
 
   it('renders footer with GitHub link', async () => {
     await act(async () => { render(<App />); });
-    expect(screen.getByText('GitHub')).toBeTruthy();
+    expect(screen.getByText(/GitHub/)).toBeTruthy();
   });
 
   it('renders Ko-fi link in footer', async () => {
@@ -175,7 +175,7 @@ describe('App — ready-empty mode (valid API key, no files)', () => {
 
   it('footer links are visible', async () => {
     await act(async () => { render(<App />); });
-    expect(screen.getByText('GitHub')).toBeTruthy();
+    expect(screen.getByText(/GitHub/)).toBeTruthy();
     expect(screen.getByText(/caffè/)).toBeTruthy();
   });
 
