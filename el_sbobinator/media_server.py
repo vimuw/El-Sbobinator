@@ -11,11 +11,12 @@ import re
 import socketserver
 import threading
 import time
+from typing import ClassVar
 
 
 class LocalMediaServer:
-    _servers: dict[str, tuple[socketserver.ThreadingTCPServer, int]] = {}
-    _lock: threading.Lock = threading.Lock()
+    _servers: ClassVar[dict[str, tuple[socketserver.ThreadingTCPServer, int]]] = {}
+    _lock: ClassVar[threading.Lock] = threading.Lock()
     MAX_ENTRIES = 5  # LRU cap to prevent port exhaustion
 
     @classmethod

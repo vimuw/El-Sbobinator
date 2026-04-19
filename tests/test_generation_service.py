@@ -556,7 +556,7 @@ class RetryWithQuotaTests(unittest.TestCase):
         self.assertGreater(resume_idx, wait_idx)
 
     def test_503_third_attempt_succeeds_without_model_switch(self):
-        """503×2 (original + retry 1) → success on retry 2: no model switch, 3 total calls."""
+        """503x2 (original + retry 1) -> success on retry 2: no model switch, 3 total calls."""
         model_state = build_model_state(
             "gemini-2.5-flash", ["gemini-2.5-flash-lite"], "gemini-2.5-flash"
         )
@@ -597,7 +597,7 @@ class RetryWithQuotaTests(unittest.TestCase):
         )
 
     def test_503_all_retries_exhausted_then_switches_model(self):
-        """503×3 (original + retry 1 + retry 2) → switch to fallback, which succeeds."""
+        """503x3 (original + retry 1 + retry 2) -> switch to fallback, which succeeds."""
         model_state = build_model_state(
             "gemini-2.5-flash", ["gemini-2.5-flash-lite"], "gemini-2.5-flash"
         )
@@ -1099,8 +1099,9 @@ class Phase1TemperatureTests(unittest.TestCase):
         self.assertEqual(self._t("gemini-unknown-model"), 0.35)
 
     def test_derives_from_model_options(self):
-        from el_sbobinator.model_registry import MODEL_OPTIONS
         from unittest.mock import patch
+
+        from el_sbobinator.model_registry import MODEL_OPTIONS
 
         patched = tuple(
             {**opt, "phase1_temperature": 0.99}

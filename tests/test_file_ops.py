@@ -4,8 +4,7 @@ import threading
 import time
 import unittest
 
-from el_sbobinator.file_ops import save_html_body_content, _html_last_gen
-
+from el_sbobinator.file_ops import _html_last_gen, save_html_body_content
 
 _SHELL_HTML = (
     "<!DOCTYPE html><html><head></head><body>",
@@ -20,7 +19,7 @@ def _write(path, content, generation=None):
 
 
 def _read(path):
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return f.read()
 
 

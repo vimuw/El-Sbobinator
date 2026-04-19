@@ -9,7 +9,6 @@ import os
 import sys
 from typing import IO
 
-
 LOGGER_NAME = "el_sbobinator"
 _CONTEXT_KEYS = ("run_id", "session_dir", "stage", "input_file")
 

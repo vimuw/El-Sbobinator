@@ -10,7 +10,6 @@ from __future__ import annotations
 import os
 import threading
 import time
-
 from typing import Literal, cast
 
 import webview
@@ -21,7 +20,6 @@ from el_sbobinator.bridge_types import (
     WorkDonePayload,
     WorkTotalsPayload,
 )
-
 
 # ---------------------------------------------------------------------------
 # DnD helper
@@ -38,7 +36,7 @@ def _drain_dnd_paths(names: set[str]) -> list[tuple[str, str]]:
     safe empty-list fallback.
     """
     try:
-        from webview.dom import _dnd_state  # noqa: PLC2701
+        from webview.dom import _dnd_state
 
         paths: list = list(_dnd_state.get("paths", []))
         matched, remaining = [], []

@@ -8,7 +8,7 @@ without changing normal defaults.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Tuple
+from typing import Any
 
 from el_sbobinator.config_service import load_config
 from el_sbobinator.model_registry import (
@@ -57,7 +57,7 @@ class PipelineSettings:
 def _as_bool(v: Any, default: bool) -> bool:
     if isinstance(v, bool):
         return v
-    if isinstance(v, (int, float)):
+    if isinstance(v, int | float):
         return bool(v)
     if isinstance(v, str):
         s = v.strip().lower()
@@ -83,8 +83,8 @@ def _as_float(v: Any, default: float) -> float:
 
 
 def load_and_sanitize_settings(
-    session: Dict[str, Any],
-) -> Tuple[PipelineSettings, bool]:
+    session: dict[str, Any],
+) -> tuple[PipelineSettings, bool]:
     """
     Returns (settings, changed).
     - Ensures session['settings'] exists.

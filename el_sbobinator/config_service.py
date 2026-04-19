@@ -169,7 +169,7 @@ LEGACY_CONFIG_FILE = os.path.join(USER_HOME, ".el_sbobinator_config.json")
 @functools.lru_cache(maxsize=1)
 def _dpapi_make_blob_class(ctypes_mod, wintypes_mod):
     class DATA_BLOB(ctypes_mod.Structure):
-        _fields_ = [
+        _fields_ = [  # noqa: RUF012
             ("cbData", wintypes_mod.DWORD),
             ("pbData", ctypes_mod.POINTER(ctypes_mod.c_byte)),
         ]
@@ -375,7 +375,7 @@ def load_config() -> dict:  # noqa: C901
         if not os.path.exists(path):
             continue
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, dict):
                 # Prefer keyring secret on macOS/Linux (keeps disk config without secrets).
@@ -507,7 +507,7 @@ def save_config(  # noqa: C901
             if not os.path.exists(_path):
                 continue
             try:
-                with open(_path, "r", encoding="utf-8") as _fh:
+                with open(_path, encoding="utf-8") as _fh:
                     raw_cfg = json.load(_fh)
                 if isinstance(raw_cfg, dict):
                     current_cfg = raw_cfg
@@ -545,7 +545,7 @@ def save_config(  # noqa: C901
                     for _p in (CONFIG_FILE, LEGACY_CONFIG_FILE):
                         if os.path.exists(_p):
                             try:
-                                with open(_p, "r", encoding="utf-8") as _f:
+                                with open(_p, encoding="utf-8") as _f:
                                     _raw = json.load(_f)
                                 break
                             except Exception:

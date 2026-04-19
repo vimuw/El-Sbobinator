@@ -11,12 +11,13 @@ import os
 import tempfile
 import threading
 import time
-from typing import Callable
+from collections.abc import Callable
 
 from google.genai import types
 
 from el_sbobinator import generation_service
 from el_sbobinator.audio_service import cut_audio_chunk_to_mp3
+from el_sbobinator.config_service import debug_log
 from el_sbobinator.generation_service import (
     AllModelsUnavailableError,
     DegenerateOutputError,
@@ -32,7 +33,6 @@ from el_sbobinator.logging_utils import get_logger
 from el_sbobinator.model_registry import ModelState
 from el_sbobinator.pipeline_session import record_step_metric
 from el_sbobinator.session_store import _update_session
-from el_sbobinator.config_service import debug_log
 from el_sbobinator.shared import _atomic_write_text
 
 
@@ -255,7 +255,8 @@ def process_phase1_transcription(  # noqa: C901
                         return audio_file
                     print("   -> (2/3) Caricamento sicuro nei server di google...")
                     audio_file = generation_service.upload_audio_path(
-                        current_client, chunk_path
+                        current_client,
+                        chunk_path,  # noqa: B023
                     )
                     file_client = current_client
                     audio_file = generation_service.wait_for_file_ready(
@@ -279,7 +280,7 @@ def process_phase1_transcription(  # noqa: C901
 
                 def _on_key_rotated(_new_client):
                     nonlocal audio_file, file_client
-                    if audio_mode == "upload":
+                    if audio_mode == "upload":  # noqa: B023
                         if audio_file is not None and file_client is not None:
                             try:
                                 file_client.files.delete(name=audio_file.name)
@@ -310,8 +311,8 @@ def process_phase1_transcription(  # noqa: C901
                     nonlocal audio_mode, tried_upload_fallback
                     while True:
                         try:
-                            if audio_mode == "inline" and audio_inline is not None:
-                                audio_input = audio_inline
+                            if audio_mode == "inline" and audio_inline is not None:  # noqa: B023
+                                audio_input = audio_inline  # noqa: B023
                             else:
                                 audio_input = _ensure_uploaded_audio_input(
                                     current_client
@@ -321,7 +322,7 @@ def process_phase1_transcription(  # noqa: C901
                             _active_model = current_model_name(model_state, model_name)
                             response = current_client.models.generate_content(
                                 model=_active_model,
-                                contents=[chunk_prompt, audio_input],
+                                contents=[chunk_prompt, audio_input],  # noqa: B023
                                 config=types.GenerateContentConfig(
                                     system_instruction=system_prompt,
                                     temperature=generation_service._phase1_temperature(

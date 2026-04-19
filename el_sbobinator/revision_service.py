@@ -8,7 +8,7 @@ import difflib
 import os
 import re
 import time
-from typing import Callable
+from collections.abc import Callable
 
 from google.genai import types
 
@@ -23,8 +23,8 @@ from el_sbobinator.generation_service import (
 from el_sbobinator.logging_utils import get_logger
 from el_sbobinator.model_registry import ModelState
 from el_sbobinator.pipeline_session import record_step_metric
-from el_sbobinator.session_store import _update_session
 from el_sbobinator.prompts import PROMPT_REVISIONE_CONFINE
+from el_sbobinator.session_store import _update_session
 from el_sbobinator.shared import _atomic_write_text
 
 BOUNDARY_CHAR_BUDGET = 3000
@@ -105,7 +105,7 @@ def process_macro_revision_phase(  # noqa: C901
 
         if os.path.exists(rev_path):
             try:
-                with open(rev_path, "r", encoding="utf-8") as _fh:
+                with open(rev_path, encoding="utf-8") as _fh:
                     existing = _fh.read().strip()
             except Exception:
                 existing = ""
@@ -149,7 +149,7 @@ def process_macro_revision_phase(  # noqa: C901
         def _call(current_client):
             response = current_client.models.generate_content(
                 model=current_model_name(model_state, model_name),
-                contents=[block_for_ai, prompt_revisione],
+                contents=[block_for_ai, prompt_revisione],  # noqa: B023
                 config=types.GenerateContentConfig(temperature=0.1),
             )
             current_text = extract_response_text(response)
@@ -252,7 +252,7 @@ def process_macro_revision_phase(  # noqa: C901
                 return client, revised_text
 
             try:
-                with open(raw_path, "r", encoding="utf-8") as _fh:
+                with open(raw_path, encoding="utf-8") as _fh:
                     block_src = _fh.read().rstrip("\n")
             except Exception:
                 block_src = ""
@@ -410,7 +410,7 @@ def process_macro_revision_phase(  # noqa: C901
         rpath = os.path.join(phase2_revised_dir, f"rev_{idx:03}.md")
         if os.path.exists(rpath):
             try:
-                with open(rpath, "r", encoding="utf-8") as _fh:
+                with open(rpath, encoding="utf-8") as _fh:
                     content = _fh.read().strip()
                 if content:
                     revised_text += f"\n\n{content}\n\n"
@@ -538,7 +538,7 @@ def process_boundary_revision_phase(  # noqa: C901
             head_window = head_list[:length]
             weighted_sum = 0.0
             total_weight = 0.0
-            for tp, hp in zip(tail_window, head_window):
+            for tp, hp in zip(tail_window, head_window, strict=False):
                 if is_heading(tp) or is_heading(hp):
                     continue
                 t = normalize_paragraph(tp)
@@ -582,13 +582,11 @@ def process_boundary_revision_phase(  # noqa: C901
         try:
             with open(
                 os.path.join(phase2_revised_dir, f"rev_{pair_idx:03}.md"),
-                "r",
                 encoding="utf-8",
             ) as handle_a:
                 left_text = handle_a.read().strip()
             with open(
                 os.path.join(phase2_revised_dir, f"rev_{pair_idx + 1:03}.md"),
-                "r",
                 encoding="utf-8",
             ) as handle_b:
                 right_text = handle_b.read().strip()
@@ -711,7 +709,7 @@ def process_boundary_revision_phase(  # noqa: C901
         def _call(current_client):
             response = current_client.models.generate_content(
                 model=current_model_name(model_state, model_name),
-                contents=[payload, PROMPT_REVISIONE_CONFINE],
+                contents=[payload, PROMPT_REVISIONE_CONFINE],  # noqa: B023
                 config=types.GenerateContentConfig(temperature=0.1),
             )
             output = extract_response_text(response)
@@ -726,8 +724,8 @@ def process_boundary_revision_phase(  # noqa: C901
             if not new_left_tail or not new_right_head:
                 raise RuntimeError("Output confine vuoto.")
 
-            left_prefix = join_paragraphs(left_parts[:-tail_count])
-            right_suffix = join_paragraphs(right_parts[head_count:])
+            left_prefix = join_paragraphs(left_parts[:-tail_count])  # noqa: B023
+            right_suffix = join_paragraphs(right_parts[head_count:])  # noqa: B023
             new_left = (
                 (left_prefix + "\n\n" + new_left_tail).strip()
                 if left_prefix
@@ -739,27 +737,27 @@ def process_boundary_revision_phase(  # noqa: C901
                 else new_right_head
             )
 
-            left_tmp = os.path.join(boundary_dir, f"rev_{pair_idx:03}.tmp")
-            right_tmp = os.path.join(boundary_dir, f"rev_{pair_idx + 1:03}.tmp")
+            left_tmp = os.path.join(boundary_dir, f"rev_{pair_idx:03}.tmp")  # noqa: B023
+            right_tmp = os.path.join(boundary_dir, f"rev_{pair_idx + 1:03}.tmp")  # noqa: B023
             with open(left_tmp, "w", encoding="utf-8") as _fh:
                 _fh.write(new_left + "\n")
             with open(right_tmp, "w", encoding="utf-8") as _fh:
                 _fh.write(new_right + "\n")
             os.replace(
                 left_tmp,
-                os.path.join(phase2_revised_dir, f"rev_{pair_idx:03}.md"),
+                os.path.join(phase2_revised_dir, f"rev_{pair_idx:03}.md"),  # noqa: B023
             )
             os.replace(
                 right_tmp,
-                os.path.join(phase2_revised_dir, f"rev_{pair_idx + 1:03}.md"),
+                os.path.join(phase2_revised_dir, f"rev_{pair_idx + 1:03}.md"),  # noqa: B023
             )
-            _atomic_write_text(done_path, "")
+            _atomic_write_text(done_path, "")  # noqa: B023
             _update_session(
                 session,
                 {
                     "boundary": {
                         **session.get("boundary", {}),
-                        "next_pair": int(pair_idx + 1),
+                        "next_pair": int(pair_idx + 1),  # noqa: B023
                     },
                     "last_error": None,
                 },

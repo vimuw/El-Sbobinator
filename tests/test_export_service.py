@@ -29,7 +29,7 @@ class ExportServiceTests(unittest.TestCase):
                 handle.write("## Titolo\n\nCorpo di test")
 
             def read_text(path: str) -> str:
-                with open(path, "r", encoding="utf-8") as handle:
+                with open(path, encoding="utf-8") as handle:
                     return handle.read()
 
             _, html_path = export_final_html_document(

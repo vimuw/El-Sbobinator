@@ -21,10 +21,14 @@ from el_sbobinator.pipeline_settings import (
 from el_sbobinator.session_store import (
     SessionPaths,
     ensure_session_dirs,
-    load_session as load_saved_session,
     new_session,
     reset_session_dirs,
     resolve_session_paths,
+)
+from el_sbobinator.session_store import (
+    load_session as load_saved_session,
+)
+from el_sbobinator.session_store import (
     save_session as save_session_data,
 )
 from el_sbobinator.shared import (
@@ -32,7 +36,6 @@ from el_sbobinator.shared import (
     PRECONVERTED_AUDIO_PARTIAL,
     invalidate_session_storage_cache,
 )
-
 
 CHUNK_MD_RE = re.compile(r"^chunk_(\d{3})_(\d+)_(\d+)\.md$", re.IGNORECASE)
 ChunkEntry = tuple[int, int, int, str]
@@ -90,7 +93,7 @@ class Phase1RestoreState:
 
 
 def read_text_file(path: str) -> str:
-    with open(path, "r", encoding="utf-8") as handle:
+    with open(path, encoding="utf-8") as handle:
         return handle.read()
 
 

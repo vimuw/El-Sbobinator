@@ -152,7 +152,7 @@ class TestLoadConfigCache(unittest.TestCase):
         def _read() -> None:
             try:
                 cs.load_config()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 errors.append(exc)
 
         threads = [threading.Thread(target=_read) for _ in range(20)]
@@ -277,7 +277,7 @@ class TestSaveConfigWriteLock(unittest.TestCase):
                 ):
                     cs.save_config(key)
                 call_order.append(f"done-{tag}")
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 errors.append(exc)
 
         with (

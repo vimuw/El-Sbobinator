@@ -2,6 +2,7 @@ import os
 import tempfile
 import threading
 import unittest
+from typing import ClassVar
 from unittest.mock import patch
 
 from el_sbobinator.generation_service import (
@@ -203,7 +204,7 @@ class Phase1SessionErrorKeyTests(unittest.TestCase):
 
 
 class ChainExhaustionRecoveryTests(unittest.TestCase):
-    _COMMON_KWARGS = dict(
+    _COMMON_KWARGS: ClassVar[dict] = dict(
         input_path="fake.mp3",
         preconv_used_path=None,
         ffmpeg_exe="ffmpeg",

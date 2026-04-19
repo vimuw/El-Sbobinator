@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import difflib
 import re
-from typing import Tuple
 
 
 def _norm_for_dedup(txt: str) -> str:
@@ -19,7 +18,7 @@ def _norm_for_dedup(txt: str) -> str:
     return t
 
 
-def local_macro_cleanup(md: str) -> Tuple[str, int, int, int, int]:
+def local_macro_cleanup(md: str) -> tuple[str, int, int, int, int]:
     # Rimuove SOLO duplicati certi (identici dopo normalizzazione) e near-duplicati adiacenti molto forti.
     # Non riassume e non elimina contenuti "nuovi": e' conservativo per preservare dettaglio.
     src = (md or "").strip()

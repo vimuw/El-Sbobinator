@@ -91,7 +91,7 @@ def sanitize_fallback_models(
     primary_model: str,
     default_models: tuple[str, ...] | list[str] | None = None,
 ) -> list[str]:
-    if isinstance(raw_models, (list, tuple)):
+    if isinstance(raw_models, list | tuple):
         source = list(raw_models)
     else:
         source = list(default_models or [])

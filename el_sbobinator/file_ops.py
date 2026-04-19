@@ -10,7 +10,6 @@ import threading
 
 from el_sbobinator.html_export import sanitize_html_basic
 
-
 _html_write_locks: dict[str, threading.Lock] = {}
 _html_last_gen: dict[str, int] = {}
 _html_write_locks_meta = threading.Lock()
@@ -81,7 +80,7 @@ def open_path_with_default_app(path: str) -> None:
 def read_html_content(path: str) -> str:
     if not os.path.exists(path):
         raise FileNotFoundError("File non trovato.")
-    with open(path, "r", encoding="utf-8") as handle:
+    with open(path, encoding="utf-8") as handle:
         return handle.read()
 
 
@@ -114,7 +113,7 @@ def save_html_body_content(
     if shell is not None:
         open_tag, close_tag = shell
     else:
-        with open(path, "r", encoding="utf-8") as handle:
+        with open(path, encoding="utf-8") as handle:
             original_html = handle.read()
         extracted = extract_html_shell(original_html)
         if extracted is not None:

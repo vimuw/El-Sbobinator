@@ -16,6 +16,7 @@ import os
 import sys
 import threading
 import time
+from typing import ClassVar
 
 import webview
 
@@ -36,8 +37,10 @@ from el_sbobinator.file_ops import (
     export_doc_html,
     extract_html_shell,
     open_path_with_default_app,
-    read_html_content as read_html_file_content,
     save_html_body_content,
+)
+from el_sbobinator.file_ops import (
+    read_html_content as read_html_file_content,
 )
 from el_sbobinator.logging_utils import configure_logging, get_logger
 from el_sbobinator.media_server import LocalMediaServer
@@ -45,11 +48,11 @@ from el_sbobinator.model_registry import DEFAULT_FALLBACK_MODELS, MODEL_OPTIONS
 from el_sbobinator.pipeline_adapter import PipelineAdapter, _drain_dnd_paths
 from el_sbobinator.shared import (
     DEFAULT_MODEL,
-    _atomic_write_json,
-    cleanup_orphan_temp_chunks,
-    cleanup_orphan_sessions,
-    get_session_storage_info,
     SESSION_CLEANUP_MAX_AGE_DAYS,
+    _atomic_write_json,
+    cleanup_orphan_sessions,
+    cleanup_orphan_temp_chunks,
+    get_session_storage_info,
 )
 from el_sbobinator.updater import (
     download_and_install_update as _download_and_install_update,
@@ -174,7 +177,7 @@ class ElSbobinatorApi:
                 if not os.path.isfile(session_path):
                     continue
                 try:
-                    with open(session_path, "r", encoding="utf-8") as fh:
+                    with open(session_path, encoding="utf-8") as fh:
                         data = _json.load(fh)
                     if data.get("stage") != "done":
                         continue
@@ -198,7 +201,7 @@ class ElSbobinatorApi:
                         continue  # HTML truly missing, no fallback candidate; skip
                     html_path = session_copy
                     try:
-                        from el_sbobinator.shared import (  # noqa: PLC0415
+                        from el_sbobinator.shared import (
                             _atomic_write_json,
                         )
 
@@ -275,7 +278,7 @@ class ElSbobinatorApi:
             session_path = os.path.join(abs_dir, "session.json")
             if not os.path.isfile(session_path):
                 return {"ok": False, "error": "session.json non trovato"}
-            with open(session_path, "r", encoding="utf-8") as fh:
+            with open(session_path, encoding="utf-8") as fh:
                 data = _json.load(fh)
             if not isinstance(data, dict):
                 return {"ok": False, "error": "session.json non valido"}
@@ -388,7 +391,7 @@ class ElSbobinatorApi:
             return []
         selected_paths = (
             [str(p) for p in file_paths]
-            if isinstance(file_paths, (list, tuple))
+            if isinstance(file_paths, list | tuple)
             else [str(file_paths)]
         )
         return [self._build_file_descriptor(path) for path in selected_paths]
@@ -415,7 +418,7 @@ class ElSbobinatorApi:
         if not file_paths:
             return None
         selected_path = str(
-            file_paths[0] if isinstance(file_paths, (list, tuple)) else file_paths
+            file_paths[0] if isinstance(file_paths, list | tuple) else file_paths
         )
         return self._build_file_descriptor(selected_path)
 
@@ -427,7 +430,7 @@ class ElSbobinatorApi:
             "exists": bool(normalized_path and os.path.exists(normalized_path)),
         }
 
-    _ALLOWED_DROP_EXTS = {
+    _ALLOWED_DROP_EXTS: ClassVar[set[str]] = {
         ".mp3",
         ".m4a",
         ".wav",
@@ -443,7 +446,7 @@ class ElSbobinatorApi:
         """Called by JS after postMessageWithAdditionalObjects('FilesDropped') to retrieve OS paths."""
         name_set = {str(n) for n in (names or [])}
         descriptors = []
-        for basename, fullpath in _drain_dnd_paths(name_set):
+        for _basename, fullpath in _drain_dnd_paths(name_set):
             ext = os.path.splitext(fullpath)[1].lower()
             if ext in self._ALLOWED_DROP_EXTS and os.path.isfile(fullpath):
                 descriptors.append(self._build_file_descriptor(fullpath))
@@ -782,9 +785,9 @@ class ElSbobinatorApi:
         Usato quando l'HTML manca sia al path originale sia nelle session dirs
         (es. sessioni create prima che l'HTML venisse salvato nella session dir).
         """
+        from el_sbobinator.config_service import safe_output_basename
         from el_sbobinator.export_service import export_final_html_document
         from el_sbobinator.pipeline_session import read_text_file
-        from el_sbobinator.config_service import safe_output_basename
         from el_sbobinator.shared import _atomic_write_json
 
         session_root = self._get_session_root()
@@ -799,7 +802,7 @@ class ElSbobinatorApi:
                 if not os.path.isfile(session_path):
                     continue
                 try:
-                    with open(session_path, "r", encoding="utf-8") as fh:
+                    with open(session_path, encoding="utf-8") as fh:
                         session_data = json.load(fh)
                     existing_html = session_data.get("outputs", {}).get("html", "")
                     if not existing_html:
@@ -981,7 +984,7 @@ class ElSbobinatorApi:
 # Re-exports for backward compatibility
 # ---------------------------------------------------------------------------
 
-from el_sbobinator.webview_entry import main  # noqa: F401, E402
+from el_sbobinator.webview_entry import main
 
 if __name__ == "__main__":
     main()

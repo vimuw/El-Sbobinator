@@ -12,12 +12,15 @@ from __future__ import annotations
 import os
 import threading
 import time
+
 from google import genai
+
 from el_sbobinator import generation_service
 from el_sbobinator.audio_service import (
     probe_media_duration,
     resolve_ffmpeg,
 )
+from el_sbobinator.config_service import safe_output_basename
 from el_sbobinator.export_service import export_final_html_document
 from el_sbobinator.generation_service import (
     extract_client_api_key,
@@ -42,14 +45,13 @@ from el_sbobinator.pipeline_session import (
     reset_for_regeneration,
     restore_phase1_progress,
 )
+from el_sbobinator.prompts import PROMPT_REVISIONE, PROMPT_SISTEMA
 from el_sbobinator.revision_service import (
     build_macro_blocks,
     process_boundary_revision_phase,
     process_macro_revision_phase,
 )
 from el_sbobinator.session_store import _update_session
-from el_sbobinator.config_service import safe_output_basename
-from el_sbobinator.prompts import PROMPT_REVISIONE, PROMPT_SISTEMA
 from el_sbobinator.shared import (
     _atomic_write_json,
     _load_json,
@@ -406,7 +408,7 @@ def _esegui_sbobinatura_impl(  # noqa: C901
             {
                 "phase2": {
                     **session.get("phase2", {}),
-                    "macro_total": int(len(macro_blocks)),
+                    "macro_total": len(macro_blocks),
                 },
             },
         )

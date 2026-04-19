@@ -41,7 +41,7 @@ def download_and_install_update(version: str) -> dict:
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             tmp_path = tmp.name
-        with urllib.request.urlopen(url, timeout=120) as resp:  # noqa: S310
+        with urllib.request.urlopen(url, timeout=120) as resp:
             with open(tmp_path, "wb") as fh:
                 while True:
                     chunk = resp.read(65536)

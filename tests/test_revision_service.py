@@ -11,7 +11,6 @@ from el_sbobinator.revision_service import (
     process_macro_revision_phase,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers shared across test classes
 # ---------------------------------------------------------------------------

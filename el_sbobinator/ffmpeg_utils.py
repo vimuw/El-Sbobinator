@@ -14,7 +14,6 @@ import os
 import re
 import subprocess
 import time
-from typing import Optional, Tuple
 
 import imageio_ffmpeg
 
@@ -35,7 +34,7 @@ def _is_cancelled(stop_event) -> bool:
         return False
 
 
-def _run_cancellable(cmd, *, stop_event=None) -> Tuple[int, str, str, bool]:
+def _run_cancellable(cmd, *, stop_event=None) -> tuple[int, str, str, bool]:
     """
     Runs a subprocess, periodically checking stop_event.
     Returns (returncode, stdout, stderr, was_cancelled).
@@ -94,8 +93,8 @@ def _run_cancellable(cmd, *, stop_event=None) -> Tuple[int, str, str, bool]:
 
 
 def probe_duration_seconds(
-    path: str, ffmpeg_exe: Optional[str] = None
-) -> Tuple[Optional[float], Optional[str]]:
+    path: str, ffmpeg_exe: str | None = None
+) -> tuple[float | None, str | None]:
     """
     Returns (seconds, reason).
     - seconds: float if parsed, else None
@@ -109,8 +108,7 @@ def probe_duration_seconds(
         exe = ffmpeg_exe or get_ffmpeg_exe()
         res = subprocess.run(
             [exe, "-hide_banner", "-i", p],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             creationflags=_creation_flags(),
             timeout=15,
         )
@@ -144,9 +142,9 @@ def preconvert_to_mono16k_mp3(
     input_path: str,
     output_path: str,
     bitrate: str = "48k",
-    ffmpeg_exe: Optional[str] = None,
+    ffmpeg_exe: str | None = None,
     stop_event=None,
-) -> Tuple[bool, Optional[str]]:
+) -> tuple[bool, str | None]:
     exe = ffmpeg_exe or get_ffmpeg_exe()
     cmd = [
         exe,
@@ -197,11 +195,11 @@ def cut_chunk_to_mp3(
     output_path: str,
     start_sec: float,
     duration_sec: float,
-    ffmpeg_exe: Optional[str] = None,
+    ffmpeg_exe: str | None = None,
     stream_copy: bool = False,
     bitrate: str = "48k",
     stop_event=None,
-) -> Tuple[bool, Optional[str]]:
+) -> tuple[bool, str | None]:
     exe = ffmpeg_exe or get_ffmpeg_exe()
     if stream_copy:
         cmd = [

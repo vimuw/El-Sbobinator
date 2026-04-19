@@ -232,7 +232,7 @@ def build_missing_webview2_html() -> str:
 """
 
 
-def main():  # noqa: C901
+def main():
     from el_sbobinator.app_webview import ElSbobinatorApi
 
     api = ElSbobinatorApi()
@@ -268,7 +268,7 @@ def main():  # noqa: C901
             current_mtime = str(os.path.getmtime(dist_path))
         stored_mtime = ""
         if os.path.exists(mtime_file):
-            with open(mtime_file, "r", encoding="utf-8") as _f:
+            with open(mtime_file, encoding="utf-8") as _f:
                 stored_mtime = _f.read().strip()
         if stored_mtime != current_mtime:
             default_profile = os.path.join(storage_dir, "EBWebView", "Default")

@@ -25,25 +25,25 @@ PRECONVERTED_AUDIO_FINAL = "el_sbobinator_preconverted_mono16k.mp3"
 PRECONVERTED_AUDIO_PARTIAL = "el_sbobinator_preconverted_mono16k.partial.mp3"
 
 __all__ = [
+    "DEFAULT_FALLBACK_MODELS",
     "DEFAULT_MODEL",
-    "SESSION_CLEANUP_MAX_AGE_DAYS",
     "PRECONVERTED_AUDIO_FINAL",
     "PRECONVERTED_AUDIO_PARTIAL",
-    "DEFAULT_FALLBACK_MODELS",
-    "cleanup_orphan_temp_chunks",
-    "SESSION_SCHEMA_VERSION",
+    "SESSION_CLEANUP_MAX_AGE_DAYS",
     "SESSION_ROOT",
+    "SESSION_SCHEMA_VERSION",
+    "_atomic_write_json",
+    "_atomic_write_text",
+    "_file_fingerprint",
+    "_load_json",
     "_now_iso",
     "_safe_mkdir",
-    "_atomic_write_text",
-    "_atomic_write_json",
-    "_load_json",
-    "_file_fingerprint",
-    "_session_id_for_file",
     "_session_dir_for_file",
+    "_session_id_for_file",
+    "cleanup_orphan_sessions",
+    "cleanup_orphan_temp_chunks",
     "get_session_storage_info",
     "invalidate_session_storage_cache",
-    "cleanup_orphan_sessions",
 ]
 
 _storage_info_cache: dict | None = None
@@ -116,7 +116,7 @@ def _atomic_write_json(path: str, data) -> None:
 
 
 def _load_json(path: str):
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -233,7 +233,7 @@ def _folder_newest_mtime(path: str) -> float:
 
 def _compute_session_storage_info() -> dict:
     """
-    Blocking FS traversal – call via get_session_storage_info() which caches
+    Blocking FS traversal - call via get_session_storage_info() which caches
     the result and offloads the work to a background thread.
     """
     total_bytes = 0
@@ -290,9 +290,9 @@ def cleanup_orphan_sessions(max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS) ->
     """
     Delete session folders in SESSION_ROOT whose newest file mtime is older
     than max_age_days days.  Returns a summary dict with keys:
-      removed     – number of folders successfully deleted
-      freed_bytes – total bytes freed
-      errors      – number of folders that could not be deleted
+      removed     - number of folders successfully deleted
+      freed_bytes - total bytes freed
+      errors      - number of folders that could not be deleted
     Best-effort: individual folder errors do not abort the whole sweep.
     """
     removed = 0

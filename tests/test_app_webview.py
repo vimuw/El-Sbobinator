@@ -83,7 +83,7 @@ class AppWebviewTests(unittest.TestCase):
             result = api.save_html_content(path, "<p>New</p>")
         self.assertTrue(result["ok"])
 
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             saved = fh.read()
 
         self.assertIn("<style>body{color:red}</style>", saved)
@@ -392,7 +392,7 @@ class AppWebviewTests(unittest.TestCase):
                 result = api.save_html_content(desktop_html, "<p>New</p>")
 
             self.assertTrue(result["ok"], result.get("error"))
-            with open(session_html, "r", encoding="utf-8") as fh:
+            with open(session_html, encoding="utf-8") as fh:
                 saved = fh.read()
             self.assertIn("<p>New</p>", saved)
 
@@ -455,7 +455,7 @@ class AppWebviewTests(unittest.TestCase):
                 "HTML deve essere scritto nella session dir",
             )
 
-            with open(session_path, "r", encoding="utf-8") as fh:
+            with open(session_path, encoding="utf-8") as fh:
                 updated = json.load(fh)
             self.assertEqual(
                 os.path.basename(updated["outputs"]["html"]),
@@ -532,7 +532,7 @@ class AppWebviewTests(unittest.TestCase):
                 "A file with the input_path-derived basename must not exist",
             )
 
-            with open(session_path, "r", encoding="utf-8") as fh:
+            with open(session_path, encoding="utf-8") as fh:
                 updated = json.load(fh)
             self.assertEqual(
                 os.path.basename(updated["outputs"]["html"]),
@@ -706,7 +706,7 @@ class AppWebviewTests(unittest.TestCase):
                     "shell must be passed from cache — no extra disk read expected",
                 )
 
-            with open(session_html, "r", encoding="utf-8") as fh:
+            with open(session_html, encoding="utf-8") as fh:
                 saved = fh.read()
             self.assertIn("<p>New</p>", saved)
             self.assertIn("<style>body{color:red}</style>", saved)
@@ -773,9 +773,9 @@ class AppWebviewTests(unittest.TestCase):
 
             self.assertTrue(result["ok"], result.get("error"))
 
-            with open(path_b, "r", encoding="utf-8") as fh:
+            with open(path_b, encoding="utf-8") as fh:
                 saved_b = fh.read()
-            with open(path_a, "r", encoding="utf-8") as fh:
+            with open(path_a, encoding="utf-8") as fh:
                 saved_a = fh.read()
 
             self.assertIn(
@@ -900,8 +900,8 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
     def test_read_html_content_rejects_fallback_outside_allowed_roots(self):
         import os
         import tempfile
-
         from unittest.mock import patch
+
         from el_sbobinator.app_webview import ElSbobinatorApi
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -940,8 +940,8 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
     def test_save_html_content_rejects_fallback_outside_allowed_roots(self):
         import os
         import tempfile
-
         from unittest.mock import patch
+
         from el_sbobinator.app_webview import ElSbobinatorApi
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -976,7 +976,7 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
 
             self.assertFalse(result["ok"])
             self.assertIn("Accesso negato", result["error"])
-            with open(outside_html, "r", encoding="utf-8") as fh:
+            with open(outside_html, encoding="utf-8") as fh:
                 self.assertNotIn(
                     "pwned", fh.read(), "file outside allowed roots must not be written"
                 )

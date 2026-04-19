@@ -21,6 +21,13 @@ select = [
     "E722", # bare except:
     "F841", # local variable assigned but never used
     "C90",  # McCabe cyclomatic complexity
+    "I",    # isort — import ordering
+    "B",    # flake8-bugbear — mutable defaults, assert-tuple, etc.
+    "UP",   # pyupgrade — modernise to py311 idioms
+    "RUF",  # ruff-specific — unused noqa, ambiguous unicode, etc.
+]
+ignore = [
+    "B904", # raise-from-err inside except — opinionated, many existing sites
 ]
 
 [tool.ruff.lint.mccabe]

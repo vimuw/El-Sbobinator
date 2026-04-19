@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from typing import ClassVar
 from unittest.mock import patch
 
 from el_sbobinator.validation_service import _check_writable_dir, validate_environment
@@ -60,7 +61,7 @@ class _MiddleFailClient:
 
 
 class _NoGenerateContentModel:
-    supported_actions = ["countTokens"]
+    supported_actions: ClassVar[list[str]] = ["countTokens"]
 
 
 class _NoGenerateContentModels:

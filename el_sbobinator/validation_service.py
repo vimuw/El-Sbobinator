@@ -13,14 +13,14 @@ import tempfile
 
 from google import genai
 
+from el_sbobinator.audio_service import resolve_ffmpeg
+from el_sbobinator.bridge_types import ValidationCheck, ValidationResult
+from el_sbobinator.config_service import CONFIG_FILE, USER_HOME, get_desktop_dir
 from el_sbobinator.model_registry import (
     DEFAULT_FALLBACK_MODELS,
     sanitize_fallback_models,
     sanitize_model_name,
 )
-from el_sbobinator.audio_service import resolve_ffmpeg
-from el_sbobinator.bridge_types import ValidationCheck, ValidationResult
-from el_sbobinator.config_service import CONFIG_FILE, USER_HOME, get_desktop_dir
 from el_sbobinator.shared import DEFAULT_MODEL
 
 
@@ -48,7 +48,7 @@ def _get_model_capabilities(model_info) -> list[str] | None:
                 value = getattr(model_info, field_name, None)
         except Exception:
             value = None
-        if isinstance(value, (list, tuple)):
+        if isinstance(value, list | tuple):
             return [str(item).strip() for item in value if str(item).strip()]
     return None
 

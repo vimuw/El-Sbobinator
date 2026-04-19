@@ -7,8 +7,6 @@ the WebView bridge so those call sites stay smaller and easier to test.
 
 from __future__ import annotations
 
-from typing import Tuple
-
 from el_sbobinator.ffmpeg_utils import (
     cut_chunk_to_mp3,
     get_ffmpeg_exe,
@@ -23,7 +21,7 @@ def resolve_ffmpeg() -> str:
 
 def probe_media_duration(
     path: str, ffmpeg_exe: str | None = None
-) -> Tuple[float | None, str | None]:
+) -> tuple[float | None, str | None]:
     return probe_duration_seconds(path, ffmpeg_exe=ffmpeg_exe)
 
 

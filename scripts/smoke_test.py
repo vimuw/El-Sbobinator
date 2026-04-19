@@ -12,19 +12,17 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import os
+import pathlib
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import time
-import json
-from typing import List
 
 import imageio_ffmpeg
-
-import pathlib
-import sys
 
 # Allow running as `python scripts/smoke_test.py` from the repo root.
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -71,7 +69,7 @@ class FakeClient:
 class DummyApp:
     def __init__(self):
         self.cancel_event = threading.Event()
-        self.file_temporanei: List[str] = []
+        self.file_temporanei: list[str] = []
 
     def winfo_exists(self):
         return False
