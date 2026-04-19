@@ -29,6 +29,7 @@ test_dist/
 _smoke/
 Thumbs.db
 .DS_Store
+*.log
 
 # Coverage and type-check output artifacts
 .coverage
@@ -53,7 +54,6 @@ pyright_full.txt
 venv/
 env/
 .env
-.venv/
 
 # WebUI artifacts
 webui/node_modules/
