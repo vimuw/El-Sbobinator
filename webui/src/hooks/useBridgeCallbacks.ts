@@ -1,4 +1,4 @@
-import { type Dispatch, useEffect, useRef } from 'react';
+import { type Dispatch, useEffect, useLayoutEffect, useRef } from 'react';
 import type React from 'react';
 import { createBridge, type ElSbobinatorBridge } from '../bridge';
 import type { AppStatus, FileDescriptor, FileItem, ProcessDonePayload, ProcessingAction } from '../appState';
@@ -39,14 +39,16 @@ export function useBridgeCallbacks(options: {
   const onBatchResetRef = useRef(options.onBatchReset);
   const onBatchFullyDoneRef = useRef(options.onBatchFullyDone);
 
-  dispatchRef.current = dispatch;
-  appendConsoleRef.current = appendConsole;
-  enqueueUniqueFilesRef.current = enqueueUniqueFiles;
-  setRegeneratePromptRef.current = setRegeneratePrompt;
-  setAskNewKeyPromptRef.current = setAskNewKeyPrompt;
-  onFileContinuedRef.current = options.onFileContinued;
-  onBatchResetRef.current = options.onBatchReset;
-  onBatchFullyDoneRef.current = options.onBatchFullyDone;
+  useLayoutEffect(() => {
+    dispatchRef.current = dispatch;
+    appendConsoleRef.current = appendConsole;
+    enqueueUniqueFilesRef.current = enqueueUniqueFiles;
+    setRegeneratePromptRef.current = setRegeneratePrompt;
+    setAskNewKeyPromptRef.current = setAskNewKeyPrompt;
+    onFileContinuedRef.current = options.onFileContinued;
+    onBatchResetRef.current = options.onBatchReset;
+    onBatchFullyDoneRef.current = options.onBatchFullyDone;
+  });
 
   useEffect(() => {
     window.elSbobinatorBridge = createBridge({

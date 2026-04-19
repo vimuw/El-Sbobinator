@@ -3,23 +3,16 @@ import { useEffect, useState } from 'react';
 const THEME_STORAGE_KEY = 'el-sbobinator.theme.v1';
 
 export function useTheme() {
-  const [themeMode, setThemeMode] = useState<'light' | 'dark'>('dark');
-
-  useEffect(() => {
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
     try {
-      const persistedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-      if (persistedTheme === 'light' || persistedTheme === 'dark') {
-        setThemeMode(persistedTheme);
-        return;
-      }
+      const persisted = window.localStorage.getItem(THEME_STORAGE_KEY);
+      if (persisted === 'light' || persisted === 'dark') return persisted;
     } catch (_) {}
-
     try {
-      setThemeMode(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    } catch (_) {
-      setThemeMode('dark');
-    }
-  }, []);
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    } catch (_) {}
+    return 'dark';
+  });
 
   useEffect(() => {
     try {
