@@ -48,6 +48,7 @@ __all__ = [
 
 _storage_info_cache: dict | None = None
 _storage_info_cache_time: float = 0.0
+_storage_info_future: concurrent.futures.Future[dict] | None = None
 _STORAGE_INFO_TTL: float = 30.0
 _storage_info_lock = threading.Lock()
 _storage_info_executor = concurrent.futures.ThreadPoolExecutor(
@@ -259,7 +260,7 @@ def get_session_storage_info() -> dict:
     a dedicated single-worker thread so the caller is never blocked for longer
     than the OS I/O takes (bounded by a 10-second timeout).
     """
-    global _storage_info_cache, _storage_info_cache_time
+    global _storage_info_cache, _storage_info_cache_time, _storage_info_future
     now = time.time()
     with _storage_info_lock:
         if (
@@ -267,7 +268,11 @@ def get_session_storage_info() -> dict:
             and (now - _storage_info_cache_time) < _STORAGE_INFO_TTL
         ):
             return dict(_storage_info_cache)
-    future = _storage_info_executor.submit(_compute_session_storage_info)
+        if _storage_info_future is None or _storage_info_future.done():
+            _storage_info_future = _storage_info_executor.submit(
+                _compute_session_storage_info
+            )
+        future = _storage_info_future
     try:
         result = future.result(timeout=10.0)
     except Exception:
@@ -280,10 +285,11 @@ def get_session_storage_info() -> dict:
 
 def invalidate_session_storage_cache() -> None:
     """Bust the get_session_storage_info cache (call after deleting sessions)."""
-    global _storage_info_cache, _storage_info_cache_time
+    global _storage_info_cache, _storage_info_cache_time, _storage_info_future
     with _storage_info_lock:
         _storage_info_cache = None
         _storage_info_cache_time = 0.0
+        _storage_info_future = None
 
 
 def cleanup_orphan_sessions(max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS) -> dict:

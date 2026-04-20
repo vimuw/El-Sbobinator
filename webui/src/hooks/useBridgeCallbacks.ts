@@ -17,6 +17,7 @@ export function useBridgeCallbacks(options: {
   onFileContinued: () => void;
   onBatchReset: () => void;
   onBatchFullyDone: (data: ProcessDonePayload) => void;
+  clearCompletionFlash: () => void;
 }) {
   const {
     dispatch,
@@ -38,6 +39,7 @@ export function useBridgeCallbacks(options: {
   const onFileContinuedRef = useRef(options.onFileContinued);
   const onBatchResetRef = useRef(options.onBatchReset);
   const onBatchFullyDoneRef = useRef(options.onBatchFullyDone);
+  const clearCompletionFlashRef = useRef(options.clearCompletionFlash);
 
   useLayoutEffect(() => {
     dispatchRef.current = dispatch;
@@ -48,6 +50,7 @@ export function useBridgeCallbacks(options: {
     onFileContinuedRef.current = options.onFileContinued;
     onBatchResetRef.current = options.onBatchReset;
     onBatchFullyDoneRef.current = options.onBatchFullyDone;
+    clearCompletionFlashRef.current = options.clearCompletionFlash;
   });
 
   useEffect(() => {
@@ -69,6 +72,7 @@ export function useBridgeCallbacks(options: {
         }));
         enqueueUniqueFilesRef.current(filesToAdd);
       },
+      onBatchStart: () => { clearCompletionFlashRef.current(); },
       onAskNewKey: () => {
         setAskNewKeyPromptRef.current(true);
       },

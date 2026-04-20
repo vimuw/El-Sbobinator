@@ -210,21 +210,27 @@
 }
 
 /* ═══ FOOTER ═══ */
-:root:not([data-theme="dark"]) footer a,
-:root:not([data-theme="dark"]) footer span {
-  color: var(--text-secondary);
-}
-
 :root:not([data-theme="dark"]) footer a {
-  opacity: 0.82;
-}
-
-:root:not([data-theme="dark"]) footer a:hover {
+  color: var(--text-primary);
   opacity: 1;
 }
 
+:root:not([data-theme="dark"]) footer a:hover {
+  opacity: 0.7;
+}
+
 :root:not([data-theme="dark"]) footer span {
+  color: var(--text-secondary);
   opacity: 0.5;
+}
+
+:root[data-theme="dark"] footer a {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+:root[data-theme="dark"] footer a:hover {
+  opacity: 0.75;
 }
 
 :root:not([data-theme="dark"]) .editor-toolbar {

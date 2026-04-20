@@ -1,12 +1,12 @@
 # El Sbobinator 🤠
 
+[![codecov](https://codecov.io/gh/vimuw/El-Sbobinator/graph/badge.svg)](https://codecov.io/gh/vimuw/El-Sbobinator)
+
 Un'applicazione gratuita e open-source che trasforma le registrazioni audio delle tue lezioni in vere e proprie **sbobine** dettagliate, ordinate e pronte da studiare.
 
 L'intelligenza artificiale (basata sul modello Gemini 2.5 Flash) ascolterà la tua registrazione e scriverà una dispensa eliminando i difetti tipici del parlato (es. ripetizioni, retorica, esitazioni) e strutturando il discorso con paragrafi chiari, elenchi puntati a dizionario e definizioni in grassetto.
 
 L'obiettivo non è una trascrizione "grezza", ma una vera e propria dispensa leggibile!
-
-[![codecov](https://codecov.io/gh/vimuw/El-Sbobinator/graph/badge.svg)](https://codecov.io/gh/vimuw/El-Sbobinator)
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/bb6eaf42-7b03-4e54-ae51-0765fe8b0727" width="48%" alt="Schermata principale">

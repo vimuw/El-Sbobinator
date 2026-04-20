@@ -25,6 +25,7 @@ describe('createBridge', () => {
       onBatchDone,
       onFileDone,
       onFilesDropped: vi.fn(),
+      onBatchStart: vi.fn(),
     });
 
     dispatch({
@@ -67,6 +68,7 @@ describe('createBridge', () => {
       onBatchDone: vi.fn(),
       onFileDone: vi.fn(),
       onFilesDropped: vi.fn(),
+      onBatchStart: vi.fn(),
     });
 
     bridge.askRegenerate({ filename: 'lesson.mp3' });
@@ -74,6 +76,25 @@ describe('createBridge', () => {
 
     expect(onRegenerate).toHaveBeenCalledWith({ filename: 'lesson.mp3' });
     expect(onAskNewKey).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onBatchStart on updatePhase and setCurrentFile (clears completionFlash)', () => {
+    const onBatchStart = vi.fn();
+    const bridge = createBridge({
+      dispatch: vi.fn(),
+      appendConsole: vi.fn(),
+      onRegenerate: vi.fn(),
+      onAskNewKey: vi.fn(),
+      onBatchDone: vi.fn(),
+      onFileDone: vi.fn(),
+      onFilesDropped: vi.fn(),
+      onBatchStart,
+    });
+
+    bridge.updatePhase('Fase 1/3');
+    bridge.setCurrentFile({ id: 'abc', index: 0, total: 1 });
+
+    expect(onBatchStart).toHaveBeenCalledTimes(2);
   });
 
   it('resets an in-flight file when processDone reports cancellation', () => {
@@ -91,6 +112,7 @@ describe('createBridge', () => {
       onBatchDone,
       onFileDone: vi.fn(),
       onFilesDropped: vi.fn(),
+      onBatchStart: vi.fn(),
     });
 
     dispatch({

@@ -292,7 +292,7 @@ export default function App() {
           sessions: match.sessions,
         });
         for (const s of match.sessions) sessionDirsToHide.add(s.session_dir);
-        dispatch({ type: 'queue/add', files: [{ ...match.incoming, id: replacementId }] });
+        dispatch({ type: 'queue/add', files: [{ ...match.incoming, id: replacementId, resumeSession: false }] });
       }
     }
     if (sessionDirsToHide.size > 0) {
@@ -482,6 +482,7 @@ export default function App() {
     onFileContinued,
     onBatchReset,
     onBatchFullyDone,
+    clearCompletionFlash: () => setCompletionFlash(false),
   });
   useBodyScrollLock(isSettingsOpen || regeneratePrompt !== null || preview.content !== null || askNewKeyPrompt || confirmAction !== null || duplicatePrompt !== null);
 
@@ -525,9 +526,9 @@ export default function App() {
         {showProcessingBanner && (
           <ProcessingStatusBanner
             appState={appState}
-            currentPhase={currentPhase}
+            currentPhase={completionFlash ? '__completed__' : currentPhase}
             currentModel={currentModel}
-            activeProgress={activeProgress}
+            activeProgress={completionFlash ? 100 : activeProgress}
             workTotals={workTotals}
             workDone={workDone}
             currentFileIndex={batchCompleted}

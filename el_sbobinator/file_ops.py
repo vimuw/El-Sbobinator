@@ -110,30 +110,28 @@ def save_html_body_content(
 
     body_inner = sanitize_html_basic(str(content or ""))
 
-    if shell is not None:
-        open_tag, close_tag = shell
-    else:
-        with open(path, encoding="utf-8") as handle:
-            original_html = handle.read()
-        extracted = extract_html_shell(original_html)
-        if extracted is not None:
-            open_tag, close_tag = extracted
-        else:
-            open_tag = close_tag = ""
-
-    if open_tag and close_tag:
-        updated_html = f"{open_tag}\n{body_inner}\n{close_tag}"
-    else:
-        updated_html = (
-            "<!DOCTYPE html>\n"
-            '<html>\n<head>\n<meta charset="utf-8">\n</head>\n'
-            f"<body>\n{body_inner}\n</body>\n</html>\n"
-        )
-
     tmp_path = path + ".tmp"
     with _html_write_lock(path):
         if generation is not None and generation <= _html_last_gen.get(path, 0):
             return False
+        if shell is not None:
+            open_tag, close_tag = shell
+        else:
+            with open(path, encoding="utf-8") as handle:
+                original_html = handle.read()
+            extracted = extract_html_shell(original_html)
+            if extracted is not None:
+                open_tag, close_tag = extracted
+            else:
+                open_tag = close_tag = ""
+        if open_tag and close_tag:
+            updated_html = f"{open_tag}\n{body_inner}\n{close_tag}"
+        else:
+            updated_html = (
+                "<!DOCTYPE html>\n"
+                '<html>\n<head>\n<meta charset="utf-8">\n</head>\n'
+                f"<body>\n{body_inner}\n</body>\n</html>\n"
+            )
         with open(tmp_path, "w", encoding="utf-8") as handle:
             handle.write(updated_html)
         os.replace(tmp_path, path)

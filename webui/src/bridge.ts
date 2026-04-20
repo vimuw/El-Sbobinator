@@ -114,13 +114,14 @@ export function createBridge(options: {
   onBatchDone: (data: ProcessDonePayload) => void;
   onFileDone: (data: FileDonePayload) => void;
   onFilesDropped: (files: FileDescriptor[]) => void;
+  onBatchStart: () => void;
 }): BridgeCallbacks {
-  const { dispatch, appendConsole, onRegenerate, onAskNewKey, onBatchDone, onFileDone, onFilesDropped } = options;
+  const { dispatch, appendConsole, onRegenerate, onAskNewKey, onBatchDone, onFileDone, onFilesDropped, onBatchStart } = options;
 
   return {
     appendConsole,
     updateProgress: value => dispatch({ type: 'bridge/update_progress', value }),
-    updatePhase: text => dispatch({ type: 'bridge/update_phase', text }),
+    updatePhase: text => { onBatchStart(); dispatch({ type: 'bridge/update_phase', text }); },
     updateModel: model => dispatch({ type: 'bridge/update_model', model }),
     processDone: data => {
       dispatch({ type: 'bridge/process_done', data });
@@ -129,7 +130,7 @@ export function createBridge(options: {
     setWorkTotals: data => dispatch({ type: 'bridge/set_work_totals', data }),
     updateWorkDone: data => dispatch({ type: 'bridge/update_work_done', data }),
     registerStepTime: data => dispatch({ type: 'bridge/register_step_time', data }),
-    setCurrentFile: data => dispatch({ type: 'bridge/set_current_file', data }),
+    setCurrentFile: data => { onBatchStart(); dispatch({ type: 'bridge/set_current_file', data }); },
     fileDone: data => {
       dispatch({ type: 'bridge/file_done', data });
       onFileDone(data);

@@ -78,5 +78,244 @@ class PipelineRuntimeTests(unittest.TestCase):
         self.assertEqual(target.file_temporanei, [])
 
 
+class PipelineRuntimeCancelledTests(unittest.TestCase):
+    def test_cancelled_false_when_event_not_set(self):
+        target = _DummyTarget()
+        runtime = PipelineRuntime(target)
+        self.assertFalse(runtime.cancelled())
+
+    def test_cancelled_true_when_event_set(self):
+        target = _DummyTarget()
+        runtime = PipelineRuntime(target)
+        target.cancel_event.set()
+        self.assertTrue(runtime.cancelled())
+
+    def test_cancelled_false_when_no_cancel_event(self):
+        class _NoEventTarget:
+            def __init__(self):
+                self.file_temporanei = []
+
+            last_run_status = "idle"
+            last_run_error = None
+            effective_api_key = None
+
+        runtime = PipelineRuntime(_NoEventTarget())
+        self.assertFalse(runtime.cancelled())
+
+
+class PipelineRuntimeUiAliveTests(unittest.TestCase):
+    def test_ui_alive_true_when_winfo_exists_returns_true(self):
+        target = _DummyTarget()
+        runtime = PipelineRuntime(target)
+        self.assertTrue(runtime.ui_alive())
+
+    def test_ui_alive_false_when_winfo_exists_raises(self):
+        class _BrokenTarget:
+            def __init__(self):
+                self.file_temporanei = []
+
+            last_run_status = "idle"
+            last_run_error = None
+            effective_api_key = None
+
+            def winfo_exists(self):
+                raise RuntimeError("destroyed")
+
+        runtime = PipelineRuntime(_BrokenTarget())
+        self.assertFalse(runtime.ui_alive())
+
+    def test_ui_alive_true_when_no_winfo_exists(self):
+        class _SimpleTarget:
+            def __init__(self):
+                self.file_temporanei = []
+
+            last_run_status = "idle"
+            last_run_error = None
+            effective_api_key = None
+
+        runtime = PipelineRuntime(_SimpleTarget())
+        self.assertTrue(runtime.ui_alive())
+
+
+class PipelineRuntimeScheduleTests(unittest.TestCase):
+    def test_schedule_calls_after_when_available(self):
+        class _AfterTarget(_DummyTarget):
+            def after(self, delay_ms, callback, *args):
+                self.events.append(("after", delay_ms))
+
+        target = _AfterTarget()
+        runtime = PipelineRuntime(target)
+        result = runtime.schedule(100, lambda: None)
+        self.assertTrue(result)
+        self.assertIn(("after", 100), target.events)
+
+    def test_schedule_returns_false_when_no_after_method(self):
+        target = _DummyTarget()
+        runtime = PipelineRuntime(target)
+        result = runtime.schedule(100, lambda: None)
+        self.assertFalse(result)
+
+    def test_schedule_returns_false_when_ui_dead(self):
+        class _DeadTarget(_DummyTarget):
+            def winfo_exists(self):
+                return False
+
+        target = _DeadTarget()
+        runtime = PipelineRuntime(target)
+        result = runtime.schedule(100, lambda: None)
+        self.assertFalse(result)
+
+
+class PipelineRuntimeAskRegenerateTests(unittest.TestCase):
+    def test_ask_regenerate_returns_false_when_no_method(self):
+        target = _DummyTarget()
+        runtime = PipelineRuntime(target)
+        result = runtime.ask_regenerate("file.mp3", lambda: None)
+        self.assertFalse(result)
+
+    def test_ask_regenerate_calls_method_and_returns_true(self):
+        class _RegTarget(_DummyTarget):
+            def ask_regenerate(self, filename, callback, mode="resume"):
+                self.events.append(("ask_regenerate", filename, mode))
+
+        target = _RegTarget()
+        runtime = PipelineRuntime(target)
+        result = runtime.ask_regenerate("audio.mp3", lambda: None, mode="restart")
+        self.assertTrue(result)
+        self.assertIn(("ask_regenerate", "audio.mp3", "restart"), target.events)
+
+    def test_ask_regenerate_returns_false_on_exception(self):
+        class _BrokenTarget(_DummyTarget):
+            def ask_regenerate(self, *args, **kwargs):
+                raise RuntimeError("boom")
+
+        target = _BrokenTarget()
+        runtime = PipelineRuntime(target)
+        result = runtime.ask_regenerate("file.mp3", lambda: None)
+        self.assertFalse(result)
+
+
+class PipelineRuntimeAskNewApiKeyTests(unittest.TestCase):
+    def test_returns_false_when_no_method(self):
+        target = _DummyTarget()
+        runtime = PipelineRuntime(target)
+        result = runtime.ask_new_api_key(lambda: None)
+        self.assertFalse(result)
+
+    def test_calls_method_and_returns_true(self):
+        class _KeyTarget(_DummyTarget):
+            def ask_new_api_key(self, callback):
+                self.events.append(("ask_new_api_key",))
+
+        target = _KeyTarget()
+        runtime = PipelineRuntime(target)
+        result = runtime.ask_new_api_key(lambda: None)
+        self.assertTrue(result)
+        self.assertIn(("ask_new_api_key",), target.events)
+
+    def test_returns_false_on_exception(self):
+        class _BrokenTarget(_DummyTarget):
+            def ask_new_api_key(self, *args):
+                raise RuntimeError("broken")
+
+        target = _BrokenTarget()
+        runtime = PipelineRuntime(target)
+        result = runtime.ask_new_api_key(lambda: None)
+        self.assertFalse(result)
+
+
+class PipelineRuntimeAskConfirmationTests(unittest.TestCase):
+    def test_returns_none_when_no_window(self):
+        target = _DummyTarget()
+        runtime = PipelineRuntime(target)
+        result = runtime.ask_confirmation("Title", "Message")
+        self.assertIsNone(result)
+
+    def test_calls_window_and_returns_bool(self):
+        class _WindowTarget(_DummyTarget):
+            class window:
+                @staticmethod
+                def create_confirmation_dialog(title, message):
+                    return True
+
+        target = _WindowTarget()
+        runtime = PipelineRuntime(target)
+        result = runtime.ask_confirmation("Title", "Message?")
+        self.assertTrue(result)
+
+    def test_returns_none_on_exception(self):
+        class _BrokenWindowTarget(_DummyTarget):
+            class window:
+                @staticmethod
+                def create_confirmation_dialog(*args):
+                    raise RuntimeError("boom")
+
+        target = _BrokenWindowTarget()
+        runtime = PipelineRuntime(target)
+        result = runtime.ask_confirmation("Title", "Message")
+        self.assertIsNone(result)
+
+
+class PipelineRuntimeMiscTests(unittest.TestCase):
+    def test_reset_temp_files_clears_list(self):
+        target = _DummyTarget()
+        target.file_temporanei = ["a.mp3", "b.wav"]
+        runtime = PipelineRuntime(target)
+        runtime.reset_temp_files()
+        self.assertEqual(target.file_temporanei, [])
+
+    def test_update_model_forwarded(self):
+        class _ModelTarget(_DummyTarget):
+            def update_model(self, model):
+                self.events.append(("update_model", model))
+
+        target = _ModelTarget()
+        runtime = PipelineRuntime(target)
+        runtime.update_model("gemini-2.5-flash")
+        self.assertIn(("update_model", "gemini-2.5-flash"), target.events)
+
+    def test_set_run_result_fallback_when_no_method(self):
+        target = _DummyTarget()
+        runtime = PipelineRuntime(target)
+        runtime.set_run_result("failed", "some error")
+        self.assertEqual(target.last_run_status, "failed")
+        self.assertEqual(target.last_run_error, "some error")
+
+    def test_set_effective_api_key_none_strips_to_none(self):
+        target = _DummyTarget()
+        runtime = PipelineRuntime(target)
+        runtime.set_effective_api_key(None)
+        self.assertIsNone(target.effective_api_key)
+
+    def test_set_effective_api_key_exception_suppressed(self):
+        class _BrokenTarget(_DummyTarget):
+            def set_effective_api_key(self, key):
+                raise RuntimeError("broken")
+
+        target = _BrokenTarget()
+        runtime = PipelineRuntime(target)
+        runtime.set_effective_api_key("key")
+
+    def test_safe_call_suppresses_exception(self):
+        class _BrokenMethod(_DummyTarget):
+            def aggiorna_progresso(self, value):
+                raise RuntimeError("crash")
+
+        target = _BrokenMethod()
+        runtime = PipelineRuntime(target)
+        runtime.progress(0.5)
+
+    def test_init_sets_defaults_on_target_without_attributes(self):
+        class _BareTarget:
+            pass
+
+        target = _BareTarget()
+        PipelineRuntime(target)
+        self.assertEqual(target.file_temporanei, [])
+        self.assertEqual(target.last_run_status, "idle")
+        self.assertIsNone(target.last_run_error)
+        self.assertIsNone(target.effective_api_key)
+
+
 if __name__ == "__main__":
     unittest.main()

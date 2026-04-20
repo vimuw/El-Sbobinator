@@ -61,6 +61,7 @@ describe('useBridgeCallbacks auto-continue', () => {
         onFileContinued,
         onBatchReset,
         onBatchFullyDone,
+        clearCompletionFlash: vi.fn(),
       });
     });
 
@@ -124,6 +125,7 @@ describe('useBridgeCallbacks auto-continue', () => {
         onFileContinued,
         onBatchReset,
         onBatchFullyDone,
+        clearCompletionFlash: vi.fn(),
       });
     });
 
@@ -160,6 +162,7 @@ function makeMinimalHook(overrides: Partial<Parameters<typeof useBridgeCallbacks
     onFileContinued: vi.fn(),
     onBatchReset: vi.fn(),
     onBatchFullyDone: vi.fn<(data: ProcessDonePayload) => void>(),
+    clearCompletionFlash: vi.fn(),
     ...overrides,
   };
   return opts;

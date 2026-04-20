@@ -1,10 +1,19 @@
 import os
+import sys
 import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import MagicMock, patch
 
-from el_sbobinator.file_ops import _html_last_gen, save_html_body_content
+from el_sbobinator.file_ops import (
+    _html_last_gen,
+    export_doc_html,
+    extract_html_shell,
+    open_path_with_default_app,
+    read_html_content,
+    save_html_body_content,
+)
 
 _SHELL_HTML = (
     "<!DOCTYPE html><html><head></head><body>",
@@ -120,6 +129,227 @@ class GenerationOrderingTests(unittest.TestCase):
 
         disk = _read(self.path)
         self.assertTrue(disk)  # file exists and is non-empty
+
+
+class ExtractHtmlShellTests(unittest.TestCase):
+    def test_valid_html_returns_tuple(self):
+        html = "<!DOCTYPE html><html><head></head><body><p>Hello</p></body></html>"
+        result = extract_html_shell(html)
+        self.assertIsNotNone(result)
+        open_tag, close_tag = result
+        self.assertIn("<body", open_tag)
+        self.assertIn("</body>", close_tag)
+
+    def test_no_body_tag_returns_none(self):
+        html = "<html><p>no body tag</p></html>"
+        self.assertIsNone(extract_html_shell(html))
+
+    def test_body_with_attributes(self):
+        html = '<html><body class="main"><p>content</p></body></html>'
+        result = extract_html_shell(html)
+        self.assertIsNotNone(result)
+        open_tag, _ = result
+        self.assertIn('class="main"', open_tag)
+
+    def test_empty_string_returns_none(self):
+        self.assertIsNone(extract_html_shell(""))
+
+    def test_only_open_body_no_close_returns_none(self):
+        html = "<html><body><p>no close</p>"
+        self.assertIsNone(extract_html_shell(html))
+
+
+class ReadHtmlContentTests(unittest.TestCase):
+    def test_reads_existing_file(self):
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".html", encoding="utf-8", delete=False
+        ) as f:
+            f.write("<html><body>test</body></html>")
+            path = f.name
+        try:
+            content = read_html_content(path)
+            self.assertIn("test", content)
+        finally:
+            os.unlink(path)
+
+    def test_missing_file_raises(self):
+        with self.assertRaises(FileNotFoundError):
+            read_html_content("/nonexistent/file.html")
+
+
+class SaveHtmlBodyContentWithoutShellTests(unittest.TestCase):
+    def test_reads_shell_from_file_when_not_provided(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "doc.html")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("<html><body><p>original</p></body></html>")
+            result = save_html_body_content(path, "<p>updated</p>", shell=None)
+            self.assertTrue(result)
+            with open(path, encoding="utf-8") as f:
+                disk = f.read()
+            self.assertIn("updated", disk)
+
+    def test_no_body_in_file_writes_fallback_document(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "bare.html")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("no body here at all")
+            result = save_html_body_content(path, "<p>content</p>", shell=None)
+            self.assertTrue(result)
+            with open(path, encoding="utf-8") as f:
+                disk = f.read()
+            self.assertIn("<!DOCTYPE html>", disk)
+
+    def test_missing_file_raises(self):
+        with self.assertRaises(FileNotFoundError):
+            save_html_body_content("/nonexistent/path.html", "<p>x</p>")
+
+    def test_concurrent_shell_none_reads_stay_consistent(self):
+        """Concurrent writers with shell=None must not see a stale shell.
+
+        Before the fix, the file was read outside _html_write_lock, so a
+        concurrent writer could replace the file between the read and the
+        write, leaving the winning thread's output with a stale shell.  With
+        the fix, the read happens inside the lock so both reads always observe
+        the file as it stands at the moment of each writer's turn.
+        """
+        N = 20
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "concurrent.html")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(
+                    "<html><head><meta charset='utf-8'></head>"
+                    "<body><p>init</p></body></html>"
+                )
+
+            barrier = threading.Barrier(N)
+            errors: list[Exception] = []
+
+            def writer(idx: int) -> None:
+                try:
+                    barrier.wait()
+                    save_html_body_content(path, f"<p>thread-{idx}</p>", shell=None)
+                except Exception as exc:
+                    errors.append(exc)
+
+            threads = [threading.Thread(target=writer, args=(i,)) for i in range(N)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+            self.assertEqual(errors, [], errors)
+            with open(path, encoding="utf-8") as f:
+                final = f.read()
+            self.assertIn("<html", final)
+            self.assertIn("</body>", final)
+            self.assertIn("<p>thread-", final)
+
+
+class OpenPathWithDefaultAppTests(unittest.TestCase):
+    def test_empty_string_raises_value_error(self):
+        with self.assertRaises(ValueError):
+            open_path_with_default_app("")
+
+    def test_non_string_raises_value_error(self):
+        with self.assertRaises(ValueError):
+            open_path_with_default_app(None)  # type: ignore[arg-type]
+
+    def test_nonexistent_file_raises_file_not_found(self):
+        with self.assertRaises(FileNotFoundError):
+            open_path_with_default_app("/nonexistent/really/does/not/exist.html")
+
+    def test_disallowed_extension_raises_value_error(self):
+        with tempfile.NamedTemporaryFile(suffix=".exe", delete=False) as f:
+            path = f.name
+        try:
+            with self.assertRaises(ValueError):
+                open_path_with_default_app(path)
+        finally:
+            os.unlink(path)
+
+    def test_allowed_html_file_on_win32(self):
+        with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as f:
+            path = f.name
+        try:
+            with (
+                patch.object(sys, "platform", "win32"),
+                patch("os.startfile", create=True) as mock_sf,
+            ):
+                open_path_with_default_app(path)
+                mock_sf.assert_called_once()
+        finally:
+            os.unlink(path)
+
+    def test_allowed_html_file_on_darwin(self):
+        with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as f:
+            path = f.name
+        try:
+            with (
+                patch.object(sys, "platform", "darwin"),
+                patch("subprocess.Popen") as mock_popen,
+            ):
+                open_path_with_default_app(path)
+                mock_popen.assert_called_once()
+        finally:
+            os.unlink(path)
+
+    def test_url_http_on_win32(self):
+        with (
+            patch.object(sys, "platform", "win32"),
+            patch("os.startfile", create=True) as mock_sf,
+        ):
+            open_path_with_default_app("http://example.com")
+            mock_sf.assert_called_once_with("http://example.com")
+
+    def test_url_https_on_darwin(self):
+        with (
+            patch.object(sys, "platform", "darwin"),
+            patch("subprocess.Popen") as mock_popen,
+        ):
+            open_path_with_default_app("https://example.com")
+            mock_popen.assert_called_once_with(["open", "https://example.com"])
+
+    def test_directory_path_opens_without_extension_check(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(sys, "platform", "win32"),
+                patch("os.startfile", create=True) as mock_sf,
+            ):
+                open_path_with_default_app(tmpdir)
+                mock_sf.assert_called_once()
+
+
+class ExportDocHtmlTests(unittest.TestCase):
+    def _make_fake_html2docx(self):
+        mock_result = MagicMock()
+        mock_result.getvalue.return_value = b"fake docx content"
+        return mock_result
+
+    def test_non_docx_path_appends_docx(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "output.txt")
+            fake_buf = self._make_fake_html2docx()
+            with patch("html2docx.html2docx", return_value=fake_buf):
+                result = export_doc_html(path, "<p>Hello</p>")
+            self.assertTrue(result.endswith(".docx"))
+            self.assertTrue(os.path.exists(result))
+
+    def test_doc_path_appends_x(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "output.doc")
+            fake_buf = self._make_fake_html2docx()
+            with patch("html2docx.html2docx", return_value=fake_buf):
+                result = export_doc_html(path, "<p>Hello</p>")
+            self.assertTrue(result.endswith(".docx"))
+
+    def test_docx_path_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "output.docx")
+            fake_buf = self._make_fake_html2docx()
+            with patch("html2docx.html2docx", return_value=fake_buf):
+                result = export_doc_html(path, "<p>Hello</p>")
+            self.assertEqual(result, path)
 
 
 if __name__ == "__main__":
