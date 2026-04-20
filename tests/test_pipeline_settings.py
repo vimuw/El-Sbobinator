@@ -260,7 +260,7 @@ class BuildDefaultPipelineSettingsTests(unittest.TestCase):
             "el_sbobinator.pipeline.pipeline_settings.load_config",
             return_value=fake_cfg,
         ):
-            result = build_default_pipeline_settings("not a dict")
+            result = build_default_pipeline_settings("not a dict")  # type: ignore[arg-type]
         self.assertEqual(result["model"], "gemini-2.5-flash")
 
 

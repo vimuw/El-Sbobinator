@@ -83,11 +83,13 @@ class GetLoggerTests(unittest.TestCase):
 
     def test_context_included_in_adapter_extra(self):
         adapter = get_logger(run_id="run-42", stage="phase2")
+        assert adapter.extra is not None
         self.assertEqual(adapter.extra.get("run_id"), "run-42")
         self.assertEqual(adapter.extra.get("stage"), "phase2")
 
     def test_empty_context_values_excluded(self):
-        adapter = get_logger(run_id="", session_dir=None)
+        adapter = get_logger(run_id="", session_dir=None)  # type: ignore[arg-type]
+        assert adapter.extra is not None
         self.assertNotIn("run_id", adapter.extra)
         self.assertNotIn("session_dir", adapter.extra)
 

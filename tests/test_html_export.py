@@ -12,7 +12,7 @@ class NormalizeInlineStarListsTests(unittest.TestCase):
         self.assertEqual(normalize_inline_star_lists(""), "")
 
     def test_none_treated_as_empty(self):
-        self.assertEqual(normalize_inline_star_lists(None), "")
+        self.assertEqual(normalize_inline_star_lists(None), "")  # type: ignore[arg-type]
 
     def test_plain_text_unchanged(self):
         text = "Hello world\nAnother line"
@@ -76,7 +76,7 @@ class NormalizeHeadingLevelsTests(unittest.TestCase):
         self.assertEqual(normalize_heading_levels(""), "")
 
     def test_none_treated_as_empty(self):
-        self.assertEqual(normalize_heading_levels(None), "")
+        self.assertEqual(normalize_heading_levels(None), "")  # type: ignore[arg-type]
 
     def test_h1_to_h5_unchanged(self):
         for level in range(1, 6):
@@ -136,7 +136,7 @@ class BuildHtmlDocumentTests(unittest.TestCase):
         self.assertIn("Sbobina", result)
 
     def test_none_title_defaults_to_sbobina(self):
-        result = build_html_document(None, "contenuto")
+        result = build_html_document(None, "contenuto")  # type: ignore[arg-type]
         self.assertIn("Sbobina", result)
 
     def test_markdown_heading_rendered_as_html(self):
@@ -157,7 +157,7 @@ class BuildHtmlDocumentTests(unittest.TestCase):
         self.assertIn("Paragrafo semplice", result)
 
     def test_none_markdown_produces_empty_body(self):
-        result = build_html_document("T", None)
+        result = build_html_document("T", None)  # type: ignore[arg-type]
         self.assertIn("<body>", result)
 
 

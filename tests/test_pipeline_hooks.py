@@ -311,10 +311,10 @@ class PipelineRuntimeMiscTests(unittest.TestCase):
 
         target = _BareTarget()
         PipelineRuntime(target)
-        self.assertEqual(target.file_temporanei, [])
-        self.assertEqual(target.last_run_status, "idle")
-        self.assertIsNone(target.last_run_error)
-        self.assertIsNone(target.effective_api_key)
+        self.assertEqual(target.file_temporanei, [])  # type: ignore[attr-defined]
+        self.assertEqual(target.last_run_status, "idle")  # type: ignore[attr-defined]
+        self.assertIsNone(target.last_run_error)  # type: ignore[attr-defined]
+        self.assertIsNone(target.effective_api_key)  # type: ignore[attr-defined]
 
 
 if __name__ == "__main__":

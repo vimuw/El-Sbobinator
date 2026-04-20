@@ -135,7 +135,7 @@ class ExtractHtmlShellTests(unittest.TestCase):
     def test_valid_html_returns_tuple(self):
         html = "<!DOCTYPE html><html><head></head><body><p>Hello</p></body></html>"
         result = extract_html_shell(html)
-        self.assertIsNotNone(result)
+        assert result is not None
         open_tag, close_tag = result
         self.assertIn("<body", open_tag)
         self.assertIn("</body>", close_tag)
@@ -147,7 +147,7 @@ class ExtractHtmlShellTests(unittest.TestCase):
     def test_body_with_attributes(self):
         html = '<html><body class="main"><p>content</p></body></html>'
         result = extract_html_shell(html)
-        self.assertIsNotNone(result)
+        assert result is not None
         open_tag, _ = result
         self.assertIn('class="main"', open_tag)
 
