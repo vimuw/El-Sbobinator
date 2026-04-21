@@ -232,6 +232,57 @@ def build_missing_webview2_html() -> str:
 """
 
 
+def _boot_bg_color() -> str:
+    """Native background matching the HTML boot skeleton (no flash).
+
+    Resolution order (mirrors index.html inline script):
+      1. theme_pref.txt — written by save_theme_preference() whenever the user
+         toggles the theme inside the app.  Equivalent to localStorage step.
+      2. OS-level signal (registry / defaults).  Equivalent to prefers-color-scheme step.
+    """
+    # Priority 1: explicit in-app preference (mirrors localStorage)
+    try:
+        from el_sbobinator.services.config_service import THEME_PREF_FILE
+
+        with open(THEME_PREF_FILE, encoding="utf-8") as fh:
+            pref = fh.read().strip()
+        if pref == "dark":
+            return "#0f1115"
+        if pref == "light":
+            return "#f3f4f6"
+    except Exception:
+        pass
+    # Priority 2: OS-level signal
+    if sys.platform == "win32":
+        try:
+            import winreg
+
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+            ) as key:
+                value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
+            if value == 0:
+                return "#0f1115"  # dark  → matches --boot-bg dark
+        except Exception:
+            pass
+    elif sys.platform == "darwin":
+        try:
+            import subprocess
+
+            result = subprocess.run(
+                ["defaults", "read", "-g", "AppleInterfaceStyle"],
+                capture_output=True,
+                text=True,
+                timeout=0.5,
+            )
+            if result.stdout.strip().lower() == "dark":
+                return "#0f1115"
+        except Exception:
+            pass
+    return "#f3f4f6"  # light (default)
+
+
 def main():
     from el_sbobinator.app_webview import ElSbobinatorApi
 
@@ -318,7 +369,7 @@ def main():
             x=center_x,
             y=center_y,
             min_size=(750, 620),
-            background_color="#18181b",
+            background_color=_boot_bg_color(),
         )
     else:
         print(
@@ -332,7 +383,7 @@ def main():
             x=center_x,
             y=center_y,
             min_size=(750, 620),
-            background_color="#18181b",
+            background_color=_boot_bg_color(),
         )
     api.set_window(window)
 

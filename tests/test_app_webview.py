@@ -1205,5 +1205,117 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
         self.assertGreaterEqual(call_counts[0], 2)
 
 
+class SaveThemePreferenceTests(unittest.TestCase):
+    """save_theme_preference bridge method."""
+
+    def test_dark_written_to_file(self):
+        import os
+
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pref_file = os.path.join(tmpdir, "theme_pref.txt")
+            with patch("el_sbobinator.app_webview.THEME_PREF_FILE", pref_file):
+                api.save_theme_preference("dark")
+            with open(pref_file, encoding="utf-8") as fh:
+                self.assertEqual(fh.read(), "dark")
+
+    def test_light_written_to_file(self):
+        import os
+
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pref_file = os.path.join(tmpdir, "theme_pref.txt")
+            with patch("el_sbobinator.app_webview.THEME_PREF_FILE", pref_file):
+                api.save_theme_preference("light")
+            with open(pref_file, encoding="utf-8") as fh:
+                self.assertEqual(fh.read(), "light")
+
+    def test_invalid_value_does_not_create_file(self):
+        import os
+
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pref_file = os.path.join(tmpdir, "theme_pref.txt")
+            with patch("el_sbobinator.app_webview.THEME_PREF_FILE", pref_file):
+                api.save_theme_preference("system")
+            self.assertFalse(os.path.exists(pref_file))
+
+    def test_overwrite_updates_value(self):
+        import os
+
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pref_file = os.path.join(tmpdir, "theme_pref.txt")
+            with patch("el_sbobinator.app_webview.THEME_PREF_FILE", pref_file):
+                api.save_theme_preference("dark")
+                api.save_theme_preference("light")
+            with open(pref_file, encoding="utf-8") as fh:
+                self.assertEqual(fh.read(), "light")
+
+
+class BootBgColorTests(unittest.TestCase):
+    """_boot_bg_color resolution order: pref file > OS signal > default."""
+
+    def _call_with_pref(self, pref_path):
+        from el_sbobinator.webview_entry import _boot_bg_color
+
+        with patch("el_sbobinator.services.config_service.THEME_PREF_FILE", pref_path):
+            return _boot_bg_color()
+
+    def test_pref_file_dark_returns_dark_color(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            import os
+
+            pref_file = os.path.join(tmpdir, "theme_pref.txt")
+            with open(pref_file, "w", encoding="utf-8") as fh:
+                fh.write("dark")
+            self.assertEqual(self._call_with_pref(pref_file), "#0f1115")
+
+    def test_pref_file_light_returns_light_color(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            import os
+
+            pref_file = os.path.join(tmpdir, "theme_pref.txt")
+            with open(pref_file, "w", encoding="utf-8") as fh:
+                fh.write("light")
+            self.assertEqual(self._call_with_pref(pref_file), "#f3f4f6")
+
+    def test_missing_pref_file_falls_back_to_default(self):
+        from el_sbobinator.webview_entry import _boot_bg_color
+
+        nonexistent = "/tmp/__no_such_theme_pref_xyz__.txt"
+        with (
+            patch("el_sbobinator.services.config_service.THEME_PREF_FILE", nonexistent),
+            patch("sys.platform", "linux"),
+        ):
+            result = _boot_bg_color()
+        self.assertEqual(result, "#f3f4f6")
+
+    def test_garbage_pref_file_falls_back_to_os_signal(self):
+        import subprocess
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            import os
+
+            pref_file = os.path.join(tmpdir, "theme_pref.txt")
+            with open(pref_file, "w", encoding="utf-8") as fh:
+                fh.write("system")
+
+            fake_result = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="Dark\n", stderr=""
+            )
+            with (
+                patch(
+                    "el_sbobinator.services.config_service.THEME_PREF_FILE", pref_file
+                ),
+                patch("sys.platform", "darwin"),
+                patch("subprocess.run", return_value=fake_result),
+            ):
+                from el_sbobinator.webview_entry import _boot_bg_color
+
+                result = _boot_bg_color()
+        self.assertEqual(result, "#0f1115")
+
+
 if __name__ == "__main__":
     unittest.main()

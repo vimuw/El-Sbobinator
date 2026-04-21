@@ -104,6 +104,7 @@ export interface PywebviewApi {
   update_session_input_path?: (sessionDir: string, newPath: string) => Promise<{ ok: boolean; error?: string }>;
   open_session_folder?: () => Promise<{ ok: boolean; error?: string }>;
   download_and_install_update?: (version: string) => Promise<{ ok: boolean; error?: string }>;
+  save_theme_preference?: (theme: 'light' | 'dark') => Promise<void>;
 }
 
 export function createBridge(options: {

@@ -46,6 +46,7 @@ from el_sbobinator.media_server import LocalMediaServer
 from el_sbobinator.model_registry import DEFAULT_FALLBACK_MODELS, MODEL_OPTIONS
 from el_sbobinator.pipeline.pipeline_adapter import PipelineAdapter, _drain_dnd_paths
 from el_sbobinator.services.config_service import (
+    THEME_PREF_FILE,
     get_desktop_dir,
     load_config,
     save_config,
@@ -143,6 +144,17 @@ class ElSbobinatorApi:
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    def save_theme_preference(self, theme: str) -> None:
+        """Persist theme preference to disk so the native window gets the right background on next launch."""
+        try:
+            if theme not in ("light", "dark"):
+                return
+            os.makedirs(os.path.dirname(THEME_PREF_FILE), exist_ok=True)
+            with open(THEME_PREF_FILE, "w", encoding="utf-8") as fh:
+                fh.write(theme)
+        except Exception:
+            pass
 
     def get_session_storage_info(self) -> dict:
         """Return total size and count of session folders in SESSION_ROOT."""

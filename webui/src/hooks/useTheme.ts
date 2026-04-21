@@ -23,6 +23,10 @@ export function useTheme() {
     try {
       window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
     } catch (_) {}
+
+    try {
+      window.pywebview?.api?.save_theme_preference?.(themeMode);
+    } catch (_) {}
   }, [themeMode]);
 
   return { themeMode, setThemeMode };

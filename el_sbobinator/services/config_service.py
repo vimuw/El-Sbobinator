@@ -163,6 +163,7 @@ def _get_config_file_path(user_home: str) -> str:
 # Usa il profilo utente per salvare la configurazione in modo persistente anche quando è un .exe creato con PyInstaller.
 USER_HOME = _resolve_user_home()
 CONFIG_FILE = _get_config_file_path(USER_HOME)
+THEME_PREF_FILE = os.path.join(os.path.dirname(CONFIG_FILE), "theme_pref.txt")
 LEGACY_CONFIG_FILE = os.path.join(USER_HOME, ".el_sbobinator_config.json")
 
 
