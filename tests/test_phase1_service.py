@@ -3,7 +3,7 @@ import tempfile
 import threading
 import unittest
 from typing import ClassVar
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from el_sbobinator.model_registry import build_model_state
 from el_sbobinator.services.generation_service import (
@@ -208,7 +208,7 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
         input_path="fake.mp3",
         preconv_used_path=None,
         ffmpeg_exe="ffmpeg",
-        cancel_event=None,
+        cancel_event=threading.Event(),
         cancelled=lambda: False,
         start_sec=0,
         total_duration_sec=60,
@@ -530,6 +530,188 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
             self.assertEqual(session.get("last_error"), "phase1_all_models_unavailable")
             self.assertEqual(os.listdir(chunks_dir), [])
             self.assertEqual(calls, 2)
+
+
+class Phase1UploadModeTests(unittest.TestCase):
+    """Tests for the upload audio path and inline→upload fallback inside _call."""
+
+    _COMMON_KWARGS: ClassVar[dict] = dict(
+        model_name="test-model",
+        input_path="fake.mp3",
+        preconv_used_path=None,
+        ffmpeg_exe="ffmpeg",
+        cancel_event=threading.Event(),
+        cancelled=lambda: False,
+        start_sec=0,
+        total_duration_sec=60,
+        step_seconds=60,
+        chunk_seconds=60,
+        bitrate="48k",
+        inline_max_bytes=None,
+        prefetch_enabled=False,
+        system_prompt="test",
+        fallback_keys=[],
+        request_fallback_key=lambda: None,
+    )
+
+    def test_upload_mode_path_when_inline_returns_none(self):
+        """When make_inline_audio_part returns None, _call must use upload_audio_path
+        and wait_for_file_ready to obtain the audio input for the API call."""
+        session = {"stage": "phase1", "phase1": {}}
+
+        class _FakeAudioFile:
+            uri = "gs://fake/audio.mp3"
+            mime_type = "audio/mpeg"
+            name = "files/fake"
+
+        fake_file = _FakeAudioFile()
+        upload_mock = MagicMock(return_value=fake_file)
+        wait_mock = MagicMock(return_value=fake_file)
+        fake_client = MagicMock()
+        fake_client.models.generate_content.return_value = MagicMock()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            chunks_dir = os.path.join(tmpdir, "chunks")
+            os.makedirs(chunks_dir)
+
+            with (
+                patch(
+                    "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                    return_value=(True, None),
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.generation_service.make_inline_audio_part",
+                    return_value=None,
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.generation_service.upload_audio_path",
+                    upload_mock,
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.generation_service.wait_for_file_ready",
+                    wait_mock,
+                ),
+                patch("el_sbobinator.services.phase1_service.types") as mock_types,
+                patch(
+                    "el_sbobinator.services.phase1_service.extract_response_text",
+                    return_value="Testo trascritto.",
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.detect_degenerate_output",
+                    return_value=None,
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.sleep_with_cancel",
+                    return_value=True,
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.retry_with_quota",
+                    side_effect=lambda fn, **kw: (kw["client"], fn(kw["client"])),
+                ),
+            ):
+                mock_types.Part.from_uri.return_value = MagicMock()
+                mock_types.GenerateContentConfig.return_value = MagicMock()
+
+                _, transcript, _ = process_phase1_transcription(  # type: ignore[arg-type]
+                    client=fake_client,
+                    phase1_chunks_dir=chunks_dir,
+                    session=session,
+                    save_session=lambda: True,
+                    runtime=_FakeRuntime(),
+                    **self._COMMON_KWARGS,  # type: ignore[arg-type]
+                )
+
+                self.assertIsNotNone(transcript)
+                self.assertIn("Testo trascritto.", transcript)
+                upload_mock.assert_called_once()
+                wait_mock.assert_called_once()
+                fake_client.models.generate_content.assert_called_once()
+                self.assertEqual(len(os.listdir(chunks_dir)), 1)
+
+    def test_inline_to_upload_fallback_on_payload_error(self):
+        """When inline audio raises a 'too large' error, _call must flip
+        audio_mode to 'upload' and retry, calling upload_audio_path exactly once."""
+        session = {"stage": "phase1", "phase1": {}}
+
+        class _FakeAudioFile:
+            uri = "gs://fake/audio.mp3"
+            mime_type = "audio/mpeg"
+            name = "files/fake"
+
+        fake_file = _FakeAudioFile()
+        upload_mock = MagicMock(return_value=fake_file)
+        wait_mock = MagicMock(return_value=fake_file)
+        generate_call_count = [0]
+
+        def fake_generate(*args, **kw):
+            generate_call_count[0] += 1
+            if generate_call_count[0] == 1:
+                raise RuntimeError("Request payload too large")
+            return MagicMock()
+
+        fake_client = MagicMock()
+        fake_client.models.generate_content.side_effect = fake_generate
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            chunks_dir = os.path.join(tmpdir, "chunks")
+            os.makedirs(chunks_dir)
+
+            with (
+                patch(
+                    "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                    return_value=(True, None),
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.generation_service.make_inline_audio_part",
+                    return_value=object(),
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.generation_service.upload_audio_path",
+                    upload_mock,
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.generation_service.wait_for_file_ready",
+                    wait_mock,
+                ),
+                patch("el_sbobinator.services.phase1_service.types") as mock_types,
+                patch(
+                    "el_sbobinator.services.phase1_service.extract_response_text",
+                    return_value="Testo trascritto via upload.",
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.detect_degenerate_output",
+                    return_value=None,
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.sleep_with_cancel",
+                    return_value=True,
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.retry_with_quota",
+                    side_effect=lambda fn, **kw: (kw["client"], fn(kw["client"])),
+                ),
+            ):
+                mock_types.Part.from_uri.return_value = MagicMock()
+                mock_types.GenerateContentConfig.return_value = MagicMock()
+
+                _, transcript, _ = process_phase1_transcription(  # type: ignore[arg-type]
+                    client=fake_client,
+                    phase1_chunks_dir=chunks_dir,
+                    session=session,
+                    save_session=lambda: True,
+                    runtime=_FakeRuntime(),
+                    **self._COMMON_KWARGS,  # type: ignore[arg-type]
+                )
+
+                self.assertIsNotNone(transcript)
+                self.assertIn("Testo trascritto via upload.", transcript)
+                self.assertEqual(
+                    generate_call_count[0],
+                    2,
+                    "generate_content must be called twice: inline fail then upload succeed",
+                )
+                upload_mock.assert_called_once()
+                wait_mock.assert_called_once()
 
 
 if __name__ == "__main__":

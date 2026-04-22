@@ -58,8 +58,30 @@ jobs:
           flags: python,frontend
           fail_ci_if_error: true
 
+  checks-windows:
+    name: Lint and Test (Windows)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements/requirements.lock
+            requirements/requirements-dev.txt
+
+      - name: Install Python dependencies
+        run: python scripts/build_release.py deps --dev --skip-npm-install
+
+      - name: Run Checks
+        run: python scripts/build_release.py check --skip-webui
+
   build:
-    needs: checks
+    needs: [checks, checks-windows]
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'

@@ -63,3 +63,4 @@ webui/.env.local
 # IDE-specific config
 .windsurf/
 .vscode/
+DESIGN.md
