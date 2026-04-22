@@ -72,6 +72,8 @@ class _BridgeDispatcher:
 
     def flush(self):
         with self._lock:
+            if self._timer is not None:
+                self._timer.cancel()
             self._timer = None
             events: list[tuple[str, object, int]] = []
             # New queued events first (maintain causal order)

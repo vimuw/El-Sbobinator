@@ -54,8 +54,6 @@ omit = [
     "*/__init__.py",
     "el_sbobinator/app.py",
     "el_sbobinator/webview_entry.py",
-    "el_sbobinator/ffmpeg_utils.py",
-    "el_sbobinator/updater.py",
     "el_sbobinator/services/config_service.py",
 ]
 

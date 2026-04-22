@@ -45,5 +45,78 @@ class ExportServiceTests(unittest.TestCase):
             self.assertTrue(os.path.exists(html_path))
 
 
+class LoadRevisedBlocksTests(unittest.TestCase):
+    def _write_rev(self, directory, name, content):
+        path = os.path.join(directory, name)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(content)
+
+    def _read(self, path):
+        with open(path, encoding="utf-8") as fh:
+            return fh.read()
+
+    def test_blocks_returned_in_numeric_order(self):
+        from el_sbobinator.services.export_service import load_revised_blocks
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._write_rev(tmpdir, "rev_003.md", "third")
+            self._write_rev(tmpdir, "rev_001.md", "first")
+            self._write_rev(tmpdir, "rev_002.md", "second")
+            blocks = load_revised_blocks(tmpdir, self._read)
+
+        self.assertEqual(blocks, ["first", "second", "third"])
+
+    def test_raw_md_files_excluded(self):
+        from el_sbobinator.services.export_service import load_revised_blocks
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._write_rev(tmpdir, "rev_001.md", "good")
+            self._write_rev(tmpdir, "rev_002.raw.md", "should-be-excluded")
+            blocks = load_revised_blocks(tmpdir, self._read)
+
+        self.assertEqual(blocks, ["good"])
+
+    def test_empty_dir_returns_empty_list(self):
+        from el_sbobinator.services.export_service import load_revised_blocks
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            blocks = load_revised_blocks(tmpdir, self._read)
+
+        self.assertEqual(blocks, [])
+
+    def test_missing_dir_returns_empty_list(self):
+        from el_sbobinator.services.export_service import load_revised_blocks
+
+        blocks = load_revised_blocks("/no/such/dir", self._read)
+        self.assertEqual(blocks, [])
+
+
+class BuildFinalMarkdownTests(unittest.TestCase):
+    def test_empty_blocks_uses_fallback_body(self):
+        from el_sbobinator.services.export_service import build_final_markdown
+
+        result = build_final_markdown("Titolo", [], "fallback content")
+        self.assertIn("fallback content", result)
+
+    def test_title_included_in_output(self):
+        from el_sbobinator.services.export_service import build_final_markdown
+
+        result = build_final_markdown("Lezione 1", ["## Intro\n\nTesto"], "")
+        self.assertIn("Lezione 1", result)
+
+
+class ResolveOutputHtmlPathTests(unittest.TestCase):
+    def test_empty_input_path_uses_fallback_filename(self):
+        from el_sbobinator.services.export_service import resolve_output_html_path
+
+        _, html_path = resolve_output_html_path(
+            input_path="",
+            output_dir="/out",
+            fallback_output_dir="/fallback",
+            safe_output_basename=lambda v: v,
+        )
+        self.assertIn("Sbobina_Definitiva.html", html_path)
+
+
 if __name__ == "__main__":
     unittest.main()

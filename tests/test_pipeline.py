@@ -653,5 +653,232 @@ class PipelineCleanupCacheTests(unittest.TestCase):
             mock_invalidate.assert_not_called()
 
 
+class PipelineStageRoutingTests(unittest.TestCase):
+    """Tests that verify phase-skipping when resuming from phase2 or boundary."""
+
+    def _base_patches(self, session_ctx, stage, tmpdir=None):
+        """Return the minimal patch set to get past init and into the stage router."""
+        return [
+            patch("google.genai.Client", _FakeClient),
+            patch(
+                "el_sbobinator.pipeline.pipeline.initialize_session_context",
+                return_value=session_ctx,
+            ),
+            patch(
+                "el_sbobinator.pipeline.pipeline.attach_file_handler",
+                return_value=None,
+            ),
+            patch("el_sbobinator.pipeline.pipeline.detach_file_handler"),
+            patch(
+                "el_sbobinator.pipeline.pipeline.get_logger",
+                return_value=_FakeLogger(),
+            ),
+            patch(
+                "el_sbobinator.pipeline.pipeline.load_fallback_keys", return_value=[]
+            ),
+            patch(
+                "el_sbobinator.pipeline.pipeline.resolve_ffmpeg", return_value="ffmpeg"
+            ),
+            patch(
+                "el_sbobinator.pipeline.pipeline.probe_media_duration",
+                return_value=(120.0, None),
+            ),
+            patch("el_sbobinator.pipeline.pipeline.persist_phase1_metadata"),
+            patch(
+                "el_sbobinator.pipeline.pipeline.normalize_stage", return_value=stage
+            ),
+            patch(
+                "el_sbobinator.pipeline.pipeline.list_phase1_chunks", return_value=[]
+            ),
+            patch(
+                "el_sbobinator.pipeline.pipeline.phase1_has_progress",
+                return_value=False,
+            ),
+            patch(
+                "el_sbobinator.pipeline.pipeline.ensure_preconverted_audio",
+                return_value=(False, None),
+            ),
+            patch(
+                "el_sbobinator.pipeline.pipeline.restore_phase1_progress",
+                return_value=SimpleNamespace(
+                    existing_chunks=[],
+                    start_sec=120,
+                    full_transcript="",
+                    prev_memory="",
+                ),
+            ),
+            patch(
+                "el_sbobinator.pipeline.pipeline.build_macro_blocks", return_value=[]
+            ),
+            patch("el_sbobinator.pipeline.pipeline._atomic_write_json"),
+            patch(
+                "el_sbobinator.pipeline.pipeline.process_macro_revision_phase",
+                return_value=(_FakeClient(), ""),
+            ),
+            patch(
+                "el_sbobinator.pipeline.pipeline.process_boundary_revision_phase",
+                return_value=_FakeClient(),
+            ),
+            patch(
+                "el_sbobinator.pipeline.pipeline.export_final_html_document",
+                side_effect=self._make_fake_export(tmpdir),
+            ),
+        ]
+
+    @staticmethod
+    def _make_fake_export(tmpdir):
+        """Return a side_effect for export_final_html_document that creates a real file."""
+        if tmpdir is None:
+            return lambda **kw: ("Title", "/tmp/out.html")
+
+        html_path = os.path.join(tmpdir, "out.html")
+
+        def _fake_export(**kwargs):
+            with open(html_path, "w") as fh:
+                fh.write("<html></html>")
+            return "Title", html_path
+
+        return _fake_export
+
+    def _make_session(self, tmpdir, stage):
+        ctx = _FakeSessionContext(os.path.join(tmpdir, "session"))
+        ctx.session["stage"] = stage
+        return ctx
+
+    def test_phase2_stage_skips_phase1_transcription(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "input.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake")
+
+            session_ctx = self._make_session(tmpdir, "phase2")
+            app = _PromptBlockingApp()
+
+            import contextlib
+
+            with contextlib.ExitStack() as stack:
+                mocks = {}
+                for p in self._base_patches(session_ctx, "phase2", tmpdir):
+                    m = stack.enter_context(p)
+                    mocks[p.attribute if hasattr(p, "attribute") else str(p)] = m
+                phase1_mock = stack.enter_context(
+                    patch(
+                        "el_sbobinator.pipeline.pipeline.process_phase1_transcription"
+                    )
+                )
+                esegui_sbobinatura(input_path, "fake-key", app)
+
+        phase1_mock.assert_not_called()
+
+    def test_boundary_stage_skips_phase1_transcription(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "input.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake")
+
+            session_ctx = self._make_session(tmpdir, "boundary")
+            session_ctx.session["stage"] = "boundary"
+            app = _PromptBlockingApp()
+
+            import contextlib
+
+            with contextlib.ExitStack() as stack:
+                for p in self._base_patches(session_ctx, "boundary", tmpdir):
+                    stack.enter_context(p)
+                phase1_mock = stack.enter_context(
+                    patch(
+                        "el_sbobinator.pipeline.pipeline.process_phase1_transcription"
+                    )
+                )
+                esegui_sbobinatura(input_path, "fake-key", app)
+
+        phase1_mock.assert_not_called()
+
+
+class PipelineEarlyExitTests(unittest.TestCase):
+    """Tests that verify the pipeline exits cleanly on ffmpeg/probe failures."""
+
+    def _make_session_ctx(self, session_dir):
+        return _FakeSessionContext(session_dir)
+
+    def test_resolve_ffmpeg_raises_sets_status_failed(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "input.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake")
+
+            session_ctx = self._make_session_ctx(os.path.join(tmpdir, "session"))
+            app = _PromptBlockingApp()
+
+            with (
+                patch("google.genai.Client", _FakeClient),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.initialize_session_context",
+                    return_value=session_ctx,
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.attach_file_handler",
+                    return_value=None,
+                ),
+                patch("el_sbobinator.pipeline.pipeline.detach_file_handler"),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.get_logger",
+                    return_value=_FakeLogger(),
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.load_fallback_keys",
+                    return_value=[],
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.resolve_ffmpeg",
+                    side_effect=FileNotFoundError("ffmpeg not found"),
+                ),
+            ):
+                esegui_sbobinatura(input_path, "fake-key", app)
+
+        self.assertEqual(app.last_run_status, "failed")
+
+    def test_probe_media_duration_none_sets_status_failed(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "input.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake")
+
+            session_ctx = self._make_session_ctx(os.path.join(tmpdir, "session"))
+            app = _PromptBlockingApp()
+
+            with (
+                patch("google.genai.Client", _FakeClient),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.initialize_session_context",
+                    return_value=session_ctx,
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.attach_file_handler",
+                    return_value=None,
+                ),
+                patch("el_sbobinator.pipeline.pipeline.detach_file_handler"),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.get_logger",
+                    return_value=_FakeLogger(),
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.load_fallback_keys",
+                    return_value=[],
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.resolve_ffmpeg",
+                    return_value="ffmpeg",
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.probe_media_duration",
+                    return_value=(None, "duration_NA"),
+                ),
+            ):
+                esegui_sbobinatura(input_path, "fake-key", app)
+
+        self.assertEqual(app.last_run_status, "failed")
+
+
 if __name__ == "__main__":
     unittest.main()
