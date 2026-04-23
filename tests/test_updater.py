@@ -38,7 +38,7 @@ class UpdaterTests(unittest.TestCase):
             patch.object(sys, "platform", "win32"),
             patch("urllib.request.urlopen", return_value=_FakeResp()) as mock_urlopen,
             patch("builtins.open", mock_open()),
-            patch("os.startfile"),
+            patch("os.startfile", create=True),
             patch("threading.Thread"),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
         ):
@@ -98,7 +98,7 @@ class UpdaterTests(unittest.TestCase):
             patch.object(sys, "platform", "win32"),
             patch("urllib.request.urlopen", return_value=_FakeResp()),
             patch("builtins.open", mock_open()),
-            patch("os.startfile") as mock_start,
+            patch("os.startfile", create=True) as mock_start,
             patch("threading.Thread") as mock_thread,
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
         ):

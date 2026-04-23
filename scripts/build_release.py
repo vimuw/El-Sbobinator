@@ -150,9 +150,9 @@ def install_packaging_dependencies(ui: str) -> None:
 
 
 def install_node_dependencies(skip_npm_install: bool) -> None:
-    ensure_supported_node_version()
     if skip_npm_install:
         return
+    ensure_supported_node_version()
     run(["npm", "install", "--no-audit", "--no-fund"], cwd=WEBUI_DIR)
 
 
