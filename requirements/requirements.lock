@@ -9,6 +9,5 @@ markdown==3.5.2
 keyring==25.6.0
 pywebview==5.4
 plyer==2.1.0
-html2docx==1.6.0
 nh3==0.2.21
 pyinstaller==6.19.0

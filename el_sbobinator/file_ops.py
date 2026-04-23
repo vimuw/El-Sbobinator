@@ -138,20 +138,3 @@ def save_html_body_content(
         if generation is not None:
             _html_last_gen[path] = generation
     return True
-
-
-def export_doc_html(path: str, doc_html: str) -> str:
-    target_path = path
-    if not target_path.lower().endswith(".docx"):
-        if target_path.lower().endswith(".doc"):
-            target_path += "x"
-        else:
-            target_path += ".docx"
-
-    from html2docx import html2docx
-
-    safe_html = sanitize_html_basic(str(doc_html or ""))
-    buf = html2docx(safe_html, title="Sbobina")
-    with open(target_path, "wb") as handle:
-        handle.write(buf.getvalue())
-    return target_path

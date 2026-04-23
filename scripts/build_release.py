@@ -229,8 +229,6 @@ def pyinstaller_command(target: str, ui: str) -> list[str]:
             "imageio_ffmpeg",
             "--collect-all",
             "keyring",
-            "--collect-all",
-            "html2docx",
             "--hidden-import",
             "webview",
             "--hidden-import",

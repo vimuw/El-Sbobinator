@@ -33,7 +33,6 @@ from el_sbobinator.bridge_types import (
     ValidationResult,
 )
 from el_sbobinator.file_ops import (
-    export_doc_html,
     extract_html_shell,
     open_path_with_default_app,
     save_html_body_content,
@@ -926,31 +925,6 @@ class ElSbobinatorApi:
             gen = int(generation) if generation is not None else None
             save_html_body_content(real_path, content, shell=shell, generation=gen)
             return {"ok": True}
-        except Exception as e:
-            return {"ok": False, "error": str(e)}
-
-    def export_docx(self, filename: str, docx_html: str) -> dict:
-        """Salva un file stringa tramite un dialog nativo bypassando eventuali blocchi di download in WebView2/macOS."""
-        if not self._window:
-            return {"ok": False, "error": "Finestra non trovata."}
-        try:
-            save_path = self._window.create_file_dialog(
-                webview.SAVE_DIALOG,
-                save_filename=filename,
-                file_types=("Word Document (*.docx)", "All files (*.*)"),
-            )
-            # Gestisci sia lista che stringa (pywebview può restituire entrambi)
-            if not save_path:
-                return {"ok": False, "error": "Annullato dall'utente"}
-            if isinstance(save_path, list):
-                if len(save_path) == 0:
-                    return {"ok": False, "error": "Annullato dall'utente"}
-                selected_path = save_path[0]
-            else:
-                selected_path = save_path  # È già una stringa
-
-            path = export_doc_html(os.path.normpath(str(selected_path)), docx_html)
-            return {"ok": True, "path": path}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 

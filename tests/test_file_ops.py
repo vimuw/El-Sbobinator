@@ -8,7 +8,6 @@ from unittest.mock import MagicMock, patch
 
 from el_sbobinator.file_ops import (
     _html_last_gen,
-    export_doc_html,
     extract_html_shell,
     open_path_with_default_app,
     read_html_content,
@@ -318,38 +317,6 @@ class OpenPathWithDefaultAppTests(unittest.TestCase):
             ):
                 open_path_with_default_app(tmpdir)
                 mock_sf.assert_called_once()
-
-
-class ExportDocHtmlTests(unittest.TestCase):
-    def _make_fake_html2docx(self):
-        mock_result = MagicMock()
-        mock_result.getvalue.return_value = b"fake docx content"
-        return mock_result
-
-    def test_non_docx_path_appends_docx(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            path = os.path.join(tmpdir, "output.txt")
-            fake_buf = self._make_fake_html2docx()
-            with patch("html2docx.html2docx", return_value=fake_buf):
-                result = export_doc_html(path, "<p>Hello</p>")
-            self.assertTrue(result.endswith(".docx"))
-            self.assertTrue(os.path.exists(result))
-
-    def test_doc_path_appends_x(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            path = os.path.join(tmpdir, "output.doc")
-            fake_buf = self._make_fake_html2docx()
-            with patch("html2docx.html2docx", return_value=fake_buf):
-                result = export_doc_html(path, "<p>Hello</p>")
-            self.assertTrue(result.endswith(".docx"))
-
-    def test_docx_path_unchanged(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            path = os.path.join(tmpdir, "output.docx")
-            fake_buf = self._make_fake_html2docx()
-            with patch("html2docx.html2docx", return_value=fake_buf):
-                result = export_doc_html(path, "<p>Hello</p>")
-            self.assertEqual(result, path)
 
 
 if __name__ == "__main__":

@@ -44,8 +44,8 @@ const HEADING_OPTIONS = [
   { label: 'Titolo 5', value: 'h5' },
 ];
 
-// Matches CSS: h1=1.5rem, h2=1.25rem, h3=1.1rem, h4=1rem, h5=0.9rem at 16px root
-const HEADING_PX: Record<number, number> = { 1: 24, 2: 20, 3: 18, 4: 16, 5: 14 };
+// Matches CSS: h1=20px, h2=16px, h3=14px, h4=12px, h5=11px (same as HTML export)
+const HEADING_PX: Record<number, number> = { 1: 20, 2: 16, 3: 14, 4: 12, 5: 11 };
 
 export const readFileAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {

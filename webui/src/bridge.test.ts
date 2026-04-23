@@ -42,7 +42,7 @@ describe('createBridge', () => {
     });
 
     bridge.setCurrentFile({ id: 'abc', index: 0, total: 1 });
-    bridge.setWorkTotals({ chunks: 4, macro: 2, boundary: 1 });
+    bridge.setWorkTotals({ chunks: 4, macro: 2 });
     bridge.updateWorkDone({ kind: 'chunks', done: 1, total: 4 });
     bridge.registerStepTime({ kind: 'chunks', seconds: 3.5, done: 1, total: 4 });
     bridge.updateProgress(0.42);
