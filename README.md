@@ -1,5 +1,6 @@
 # El Sbobinator 🤠
 
+[![CI](https://github.com/vimuw/El-Sbobinator/actions/workflows/build.yml/badge.svg)](https://github.com/vimuw/El-Sbobinator/actions/workflows/build.yml)
 [![codecov](https://codecov.io/gh/vimuw/El-Sbobinator/graph/badge.svg)](https://codecov.io/gh/vimuw/El-Sbobinator)
 
 Un'applicazione gratuita e open-source che trasforma le registrazioni audio delle tue lezioni in vere e proprie **sbobine** dettagliate, ordinate e pronte da studiare.
@@ -39,7 +40,11 @@ Essendo Google Gemini il cervello del programma, ti serve una password unica (AP
 
 ### 💻 Se usi Windows:
 Esegui il file `El-Sbobinator-Setup-v*.exe` e segui il wizard di installazione. Al termine trovi l'app nel menu Start (o tramite il collegamento creato sul Desktop).
-*(Nota: Se l'antivirus o la schermata blu di Windows ti bloccano al primo avvio, o se vedi una schermata nera, consulta la sezione FAQ qui sotto per risolvere in un clic).*
+
+> ⚠️ **Windows SmartScreen o l'antivirus ti blocca? È normalissimo** — il codice è pubblico e verificabile su GitHub, ma Windows diffida dei programmi senza firma digitale commerciale.
+> - **Schermata blu SmartScreen:** clicca **"Ulteriori informazioni"** → poi **"Esegui comunque"**.
+> - **L'antivirus elimina il file:** apri la *Cronologia protezione* di Windows Defender → clicca sulla minaccia rilevata → **"Consenti nel dispositivo"**.
+> - **Finestra nera / interfaccia non caricata:** installa [Microsoft Edge WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703) e riavvia l'app.
 
 ### 🍎 Se usi Mac:
 Apri il file `.dmg`, trascina `El Sbobinator.app` nella cartella **Applicazioni** e avviala da lì.
