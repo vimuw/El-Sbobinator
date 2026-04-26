@@ -143,8 +143,11 @@ def process_macro_revision_phase(  # noqa: C901
         def _call(current_client):
             response = current_client.models.generate_content(
                 model=current_model_name(model_state, model_name),
-                contents=[block_for_ai, prompt_revisione],  # noqa: B023
-                config=types.GenerateContentConfig(temperature=0.1),
+                contents=[block_for_ai],  # noqa: B023
+                config=types.GenerateContentConfig(
+                    system_instruction=prompt_revisione,
+                    temperature=0.1,
+                ),
             )
             current_text = extract_response_text(response)
             if not current_text:
@@ -285,8 +288,11 @@ def process_macro_revision_phase(  # noqa: C901
             def _call_retry(current_client, _block=block_for_ai_retry):
                 response = current_client.models.generate_content(
                     model=current_model_name(model_state, model_name),
-                    contents=[_block, prompt_revisione],
-                    config=types.GenerateContentConfig(temperature=0.1),
+                    contents=[_block],
+                    config=types.GenerateContentConfig(
+                        system_instruction=prompt_revisione,
+                        temperature=0.1,
+                    ),
                 )
                 current_text = extract_response_text(response)
                 if not current_text:
