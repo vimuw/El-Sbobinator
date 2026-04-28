@@ -156,7 +156,7 @@ export function NavSidebar({
               <path d="M2 12l10 5 10-5"/>
             </svg>
           }
-          label="Sbobinatura"
+          label="Dashboard"
           active={activePage === 'queue'}
           onClick={() => setActivePage('queue')}
           badge={appState === 'processing' ? <HourglassAnim /> : undefined}

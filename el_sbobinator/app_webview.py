@@ -240,6 +240,7 @@ class ElSbobinatorApi:
                     else os.path.basename(str(html_path))
                 )
                 effective_model = data.get("settings", {}).get("effective_model", "")
+                duration_sec = data.get("phase1", {}).get("duration_seconds")
                 sessions.append(
                     {
                         "name": name,
@@ -248,6 +249,11 @@ class ElSbobinatorApi:
                         "effective_model": effective_model,
                         "input_path": str(input_path),
                         "session_dir": str(session_dir),
+                        **(
+                            {"duration_sec": duration_sec}
+                            if duration_sec is not None
+                            else {}
+                        ),
                     }
                 )
             result = {"ok": True, "sessions": sessions}

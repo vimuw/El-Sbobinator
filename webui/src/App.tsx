@@ -26,6 +26,7 @@ import { Toaster, type ToastMessage } from './components/Toast';
 import { StatusBanners } from './components/StatusBanners';
 import { SetupPage } from './components/SetupPage';
 import { DropZone } from './components/DropZone';
+import { WelcomeDashboard } from './components/WelcomeDashboard';
 import { QueueSection } from './components/QueueSection';
 import { CompletedSection } from './components/CompletedSection';
 import { ArchivePage } from './components/ArchivePage';
@@ -56,6 +57,7 @@ type ConfirmActionState =
   | { type: 'stop-processing' }
   | { type: 'remove-file'; fileId: string; fileName: string; isDone: boolean }
   | { type: 'clear-completed'; count: number }
+  | { type: 'clear-all' }
   | { type: 'delete-archive-session'; sessionDir: string; name: string };
 
 type PendingArchiveReplacement = {
@@ -456,6 +458,10 @@ export default function App() {
     if (window.pywebview?.api) await window.pywebview.api.stop_processing?.();
   }, [appendConsole]);
 
+  const handleClearAll = useCallback(() => {
+    setConfirmAction({ type: 'clear-all' });
+  }, []);
+
   const confirmClearCompleted = useCallback(() => {
     setConfirmAction(null);
     dispatch({ type: 'queue/clear_completed' });
@@ -470,6 +476,11 @@ export default function App() {
       dispatch({ type: 'queue/remove', id: confirmAction.fileId });
       setConfirmAction(null);
       if (removedFile?.status === 'done') void refreshArchiveSessions();
+      return;
+    }
+    if (confirmAction.type === 'clear-all') {
+      setConfirmAction(null);
+      dispatch({ type: 'queue/clear_all' });
       return;
     }
     if (confirmAction.type === 'delete-archive-session') {
@@ -575,6 +586,9 @@ export default function App() {
     if (confirmAction.type === 'remove-file') {
       return { title: 'Rimuovere questo elemento?', description: confirmAction.isDone ? `"${confirmAction.fileName}" verrà spostata nell'archivio e rimossa dalla lista. Vuoi continuare?` : `"${confirmAction.fileName}" verrà rimossa dalla lista. Vuoi continuare?`, confirmLabel: 'Conferma rimozione', cancelLabel: 'Tieni elemento' };
     }
+    if (confirmAction.type === 'clear-all') {
+      return { title: 'Svuotare tutta la coda?', description: "Tutti i file in coda verranno rimossi. L'operazione non può essere annullata.", confirmLabel: 'Svuota coda', cancelLabel: 'Annulla' };
+    }
     if (confirmAction.type === 'delete-archive-session') {
       return { title: 'Eliminare questa sbobina?', description: `"${confirmAction.name}" e tutti i suoi dati di sessione verranno eliminati definitivamente dal disco. L'operazione è irreversibile.`, confirmLabel: 'Elimina definitivamente', cancelLabel: 'Annulla' };
     }
@@ -657,13 +671,18 @@ export default function App() {
                   fallbackModels={fallbackModels}
                 />
               ) : uiMode !== 'processing' && uiMode !== 'canceling' && !completionFlash ? (
-                <DropZone
-                  isDragging={isDragging}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onClick={handleBrowseClick}
-                />
+                <>
+                  {uiMode === 'ready-empty' && (
+                    <WelcomeDashboard archiveSessions={archiveSessions} />
+                  )}
+                  <DropZone
+                    isDragging={isDragging}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onClick={handleBrowseClick}
+                  />
+                </>
               ) : null}
 
               <QueueSection
@@ -680,6 +699,7 @@ export default function App() {
                 dndSensors={dndSensors}
                 onDragEnd={handleDragEnd}
                 onRemove={requestRemoveFile}
+                onClearAll={handleClearAll}
                 onRetry={(id) => dispatch({ type: 'queue/retry_one', id })}
                 onPreview={openPreview}
                 onOpenFile={openFile}

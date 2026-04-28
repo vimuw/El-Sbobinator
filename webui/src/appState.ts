@@ -210,7 +210,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         ),
       };
     case 'queue/clear_all':
-      return { ...state, structuralVersion: state.structuralVersion + 1, files: [] };
+      return { ...state, structuralVersion: state.structuralVersion + 1, files: state.files.filter(file => file.status === 'done') };
     case 'app/set_status':
       return { ...state, appState: action.status };
     case 'bridge/update_progress': {

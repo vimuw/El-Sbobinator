@@ -1,8 +1,8 @@
-import { useMemo, type Dispatch, type SetStateAction } from 'react';
+import { useMemo, useRef, useState, useEffect, type Dispatch, type SetStateAction } from 'react';
 import { DndContext, closestCenter, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { motion, AnimatePresence } from 'motion/react';
-import { FileAudio, ListOrdered, Play, Square } from 'lucide-react';
+import { FileAudio, MoreVertical, Play, Square, Trash2 } from 'lucide-react';
 import type { AppStatus, FileItem } from '../appState';
 import { shortModelName } from '../utils';
 import { QueueFileCard } from './QueueFileCard';
@@ -21,6 +21,7 @@ interface QueueSectionProps {
   dndSensors: ReturnType<typeof useSensors>;
   onDragEnd: (event: DragEndEvent) => void;
   onRemove: (id: string) => void;
+  onClearAll: () => void;
   onRetry: (id: string) => void;
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string) => void;
   onOpenFile: (path: string) => void;
@@ -31,10 +32,23 @@ interface QueueSectionProps {
 export function QueueSection({
   pendingFiles, appState, autoContinue, setAutoContinue, preferredModel,
   queuedCount, canStart, hasApiKey, isApiKeyValid, currentPhase,
-  dndSensors, onDragEnd, onRemove, onRetry, onPreview, onOpenFile,
+  dndSensors, onDragEnd, onRemove, onClearAll, onRetry, onPreview, onOpenFile,
   onStart, onStop,
 }: QueueSectionProps) {
   const sortableIds = useMemo(() => pendingFiles.map(f => f.id), [pendingFiles]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [menuOpen]);
 
   return (
     <AnimatePresence>
@@ -46,55 +60,99 @@ export function QueueSection({
           animate={{ opacity: 1, y: 0, transition: { duration: 0.2 } }}
           exit={{ opacity: 0, y: -8, transition: { duration: 0.15 } }}
         >
-          <div className="flex flex-col gap-2 border-b pb-5" style={{ borderColor: 'var(--border-subtle)' }}>
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="text-2xl font-semibold tracking-tight flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+          <div className="flex items-center justify-between gap-3 border-b pb-5" style={{ borderColor: 'var(--border-subtle)' }}>
+            <div className="flex items-center gap-2 min-w-0">
+              <h2 className="text-2xl font-semibold tracking-tight flex items-center gap-2 shrink-0" style={{ color: 'var(--text-primary)' }}>
                 <FileAudio className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
                 Coda di elaborazione
               </h2>
-              <div
-                className="flex items-center gap-2 shrink-0"
-                title={autoContinue ? "Elabora i file in sequenza. Clicca per fermarsi dopo ogni file." : "L'app si fermerà dopo ogni file. Clicca per continuare in automatico."}
+              {pendingFiles.length > 0 && (
+                <>
+                  <span className="status-pill shrink-0">{pendingFiles.length}</span>
+                  {preferredModel && (
+                    <span className="status-pill shrink-0 whitespace-nowrap">{shortModelName(preferredModel)}</span>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="relative shrink-0" ref={menuRef}>
+              <button
+                type="button"
+                className="icon-button compact-icon-button"
+                aria-label="Opzioni coda"
+                title="Opzioni coda"
+                onClick={() => setMenuOpen(v => !v)}
               >
-                <ListOrdered className="w-4 h-4" style={{ color: autoContinue ? 'var(--accent-text)' : 'var(--text-muted)' }} />
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={autoContinue}
-                  onClick={() => setAutoContinue(v => !v)}
+                <MoreVertical className="w-4 h-4" />
+              </button>
+              {menuOpen && (
+                <div
+                  role="menu"
                   style={{
-                    position: 'relative', display: 'inline-flex', alignItems: 'center',
-                    width: '40px', height: '24px', borderRadius: '12px',
-                    background: autoContinue ? 'var(--success-text)' : 'var(--border-default)',
-                    border: 'none', cursor: 'pointer', transition: 'background 0.2s',
-                    flexShrink: 0, padding: 0,
+                    position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+                    minWidth: '200px', zIndex: 50,
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: '10px',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                    padding: '4px',
                   }}
                 >
-                  <span style={{
-                    position: 'absolute', top: '4px', width: '16px', height: '16px',
-                    borderRadius: '50%', background: 'white',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.3)', transition: 'transform 0.2s',
-                    transform: autoContinue ? 'translateX(20px)' : 'translateX(4px)',
-                  }} />
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setAutoContinue(v => !v); }}
+                    title="Avvia automaticamente il file successivo al termine di ogni sbobinatura"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '10px',
+                      width: '100%', padding: '8px 12px', borderRadius: '7px',
+                      border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '14px',
+                      background: autoContinue ? 'var(--success-subtle)' : 'transparent',
+                      color: autoContinue ? 'var(--success-text)' : 'var(--text-primary)',
+                      fontWeight: autoContinue ? 600 : 400,
+                      marginBottom: '2px',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = autoContinue ? 'var(--success-subtle)' : 'var(--bg-hover, var(--border-subtle))')}
+                    onMouseLeave={e => (e.currentTarget.style.background = autoContinue ? 'var(--success-subtle)' : 'transparent')}
+                  >
+                    Coda automatica
+                  </button>
+                  {appState === 'idle' && pendingFiles.length > 0 && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => { onClearAll(); setMenuOpen(false); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '10px',
+                        width: '100%', padding: '8px 12px', borderRadius: '7px',
+                        border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '14px',
+                        background: 'transparent', color: 'var(--error-text)',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--error-subtle)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <Trash2 className="w-4 h-4" style={{ flexShrink: 0 }} />
+                      Svuota coda
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-            {pendingFiles.length > 0 && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="status-pill shrink-0 whitespace-nowrap">
-                  {pendingFiles.length} {pendingFiles.length === 1 ? 'elemento' : 'elementi'}
-                </span>
-                {preferredModel && (
-                  <span className="status-pill shrink-0 whitespace-nowrap">
-                    Modello: {shortModelName(preferredModel)}
-                  </span>
-                )}
-              </div>
-            )}
           </div>
 
           <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+            <div
+              style={{
+                maxHeight: '26rem',
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                scrollbarWidth: 'thin',
+                scrollbarColor: 'var(--border-default) transparent',
+                padding: '4px 8px',
+              }}
+            >
             <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+              <div className="space-y-3" style={{ margin: '-4px -8px' }}>
               <AnimatePresence>
                 {pendingFiles.map((file) => {
                   const isActive = file.status === 'processing';
@@ -112,7 +170,9 @@ export function QueueSection({
                   );
                 })}
               </AnimatePresence>
+              </div>
             </SortableContext>
+            </div>
           </DndContext>
 
           {(appState !== 'idle' || queuedCount > 0) && (

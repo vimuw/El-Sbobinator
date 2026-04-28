@@ -195,12 +195,23 @@ describe('processingReducer', () => {
     expect(state.files[1].status).toBe('error');
   });
 
-  it('queue/clear_all empties file list', () => {
+  it('queue/clear_all removes non-done files', () => {
     const state = processingReducer(
       { ...initialProcessingState, files: [makeFile()] },
       { type: 'queue/clear_all' },
     );
     expect(state.files).toEqual([]);
+  });
+
+  it('queue/clear_all preserves done files', () => {
+    const done = makeFile({ id: 'd1', status: 'done', progress: 100, phase: 3, completedAt: 1000 });
+    const queued = makeFile({ id: 'q1', status: 'queued' });
+    const error = makeFile({ id: 'e1', status: 'error', errorText: 'fail' });
+    const state = processingReducer(
+      { ...initialProcessingState, files: [done, queued, error] },
+      { type: 'queue/clear_all' },
+    );
+    expect(state.files).toEqual([done]);
   });
 
   it('app/set_status changes appState', () => {

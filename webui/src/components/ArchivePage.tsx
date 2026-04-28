@@ -51,7 +51,18 @@ export function ArchivePage({
   const [folderHover, setFolderHover] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  const handleRefresh = useCallback(async () => {
+    if (isRefreshing || !onRefresh) return;
+    setIsRefreshing(true);
+    try {
+      await Promise.all([onRefresh(), new Promise<void>(r => setTimeout(r, 600))]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing, onRefresh]);
 
   const sessionsByDir = useMemo(() => {
     const map = new Map<string, ArchiveSession>();
@@ -193,17 +204,6 @@ export function ArchivePage({
           Archivio Sbobine
         </h2>
         <span className="status-pill">{sessions.length}</span>
-        {onRefresh && (
-          <button
-            onClick={onRefresh}
-            className="icon-button compact-icon-button"
-            style={{ color: 'var(--text-muted)', marginLeft: 'auto' }}
-            title="Aggiorna archivio"
-            aria-label="Aggiorna archivio"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-        )}
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -280,6 +280,18 @@ export function ArchivePage({
                 <ChevronDown className="w-3.5 h-3.5" style={{ opacity: 0.55 }} />
                 {sort === 'newest' ? 'Recente' : 'Meno recente'}
               </button>
+              {onRefresh && (
+                <button
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="icon-button compact-icon-button"
+                  style={{ color: 'var(--text-muted)', flexShrink: 0 }}
+                  title="Aggiorna archivio"
+                  aria-label="Aggiorna archivio"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                </button>
+              )}
             </div>
             {search.trim().length > 0 && (
               <span className="notion-results-count">
@@ -805,7 +817,6 @@ function FolderDetailView({
           <button
             onClick={onBack}
             className="icon-button compact-icon-button"
-            style={{ color: 'var(--text-muted)', borderColor: 'var(--border-default)' }}
             aria-label="Torna all'archivio"
           >
             <ArrowLeft className="w-4 h-4" />

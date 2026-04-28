@@ -71,16 +71,16 @@ export function KebabMenu({ items, align = 'right', buttonClassName }: KebabMenu
           alignItems: 'center',
           justifyContent: 'center',
           padding: 4,
-          background: 'transparent',
+          background: open ? 'var(--sidebar-active-bg)' : 'transparent',
           border: 'none',
           borderRadius: 8,
           color: 'var(--text-muted)',
           opacity: open ? 1 : 0.6,
           cursor: 'pointer',
-          transition: 'opacity 150ms ease',
+          transition: 'background 150ms ease, opacity 150ms ease',
         }}
-        onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-        onMouseLeave={e => { if (!open) e.currentTarget.style.opacity = '0.6'; }}
+        onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'var(--sidebar-active-bg)'; }}
+        onMouseLeave={e => { if (!open) { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.background = 'transparent'; } }}
         aria-label="Altre opzioni"
         title="Altre opzioni"
       >
@@ -106,7 +106,7 @@ export function KebabMenu({ items, align = 'right', buttonClassName }: KebabMenu
                 borderRadius: 12,
                 boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
                 minWidth: 160,
-                overflow: 'hidden',
+                padding: 4,
               }}
               onClick={e => e.stopPropagation()}
             >
@@ -119,14 +119,16 @@ export function KebabMenu({ items, align = 'right', buttonClassName }: KebabMenu
                     key={i}
                     disabled={item.disabled}
                     onClick={e => { e.stopPropagation(); item.onClick(); setOpen(false); }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors hover:bg-white/5"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left bg-transparent transition-colors"
                     style={{
-                      background: 'none',
                       border: 'none',
+                      borderRadius: 7,
                       cursor: item.disabled ? 'default' : 'pointer',
                       color: item.danger ? 'var(--error-text)' : 'var(--text-primary)',
                       opacity: item.disabled ? 0.4 : 1,
                     }}
+                    onMouseEnter={e => { if (!item.disabled) e.currentTarget.style.background = item.danger ? 'var(--error-subtle)' : 'var(--sidebar-active-bg)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
                   >
                     {item.icon && <span className="shrink-0 w-4 h-4 flex items-center justify-center">{item.icon}</span>}
                     <span>{item.label}</span>

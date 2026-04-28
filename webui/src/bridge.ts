@@ -40,6 +40,7 @@ export interface ArchiveSession {
   effective_model: string;
   input_path: string;
   session_dir: string;
+  duration_sec?: number;
 }
 
 export interface ArchiveFolder {

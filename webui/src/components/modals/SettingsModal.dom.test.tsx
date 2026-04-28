@@ -264,7 +264,7 @@ describe('SettingsModal — session folder and cleanup', () => {
       fireEvent.click(screen.getByText('Avanzati').closest('button')!);
     });
     await act(async () => {
-      fireEvent.click(screen.getByText(/Pulisci/));
+      fireEvent.click(screen.getByTitle(/Pulisci/));
     });
     await vi.waitFor(() =>
       expect(screen.getByText(/Rimoss/)).toBeTruthy(),
@@ -386,7 +386,7 @@ describe('SettingsModal — validate environment', () => {
       fireEvent.click(screen.getByText('Avanzati').closest('button')!);
     });
     await act(async () => {
-      fireEvent.click(screen.getByText('Verifica ambiente'));
+      fireEvent.click(screen.getByTitle('Verifica ambiente'));
     });
     await vi.waitFor(() => expect(screen.getByText('Ambiente OK')).toBeTruthy());
     expect(screen.getByText('ffmpeg')).toBeTruthy();
