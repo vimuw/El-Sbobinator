@@ -77,6 +77,18 @@ describe('usePreview', () => {
     expect(appendConsole).toHaveBeenCalledWith(expect.stringContaining('file not found'));
   });
 
+  it('openPreview calls onOpenFailed when bridge returns !ok', async () => {
+    const onOpenFailed = vi.fn();
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: false, error: 'File non trovato.' }),
+    });
+    const { result } = renderHook(() => usePreview({ ...makeOptions(), onOpenFailed }));
+    await act(async () => {
+      await result.current.openPreview('/session/out.html', 'test', undefined, undefined, '/session');
+    });
+    expect(onOpenFailed).toHaveBeenCalledWith('/session/out.html', '/session');
+  });
+
   it('openPreview logs error on thrown exception', async () => {
     const appendConsole = vi.fn();
     setPywebview({

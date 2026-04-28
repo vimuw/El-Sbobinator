@@ -1,6 +1,6 @@
 // App branding — change these to rename the app everywhere
 export const APP_NAME = 'El Sbobinator';
-export const APP_SHORT = 'Sbobinator';
+export const APP_SHORT = 'Sbobinatura';
 export const APP_WINDOW_TITLE = 'El Sbobinator';
 export const GITHUB_REPO = 'vimuw/El-Sbobinator';
 export const GITHUB_URL = `https://github.com/${GITHUB_REPO}`;

@@ -42,6 +42,13 @@ export interface ArchiveSession {
   session_dir: string;
 }
 
+export interface ArchiveFolder {
+  id: string;
+  name: string;
+  color: string;
+  session_dirs: string[];
+}
+
 export type ElSbobinatorBridge = BridgeCallbacks | null;
 
 export interface BridgeCallbacks {
@@ -104,6 +111,8 @@ export interface PywebviewApi {
   open_session_folder?: () => Promise<{ ok: boolean; error?: string }>;
   download_and_install_update?: (version: string) => Promise<{ ok: boolean; error?: string }>;
   save_theme_preference?: (theme: 'light' | 'dark') => Promise<void>;
+  get_archive_folders?: () => Promise<{ ok: boolean; folders: ArchiveFolder[]; error?: string }>;
+  save_archive_folders?: (folders: ArchiveFolder[]) => Promise<{ ok: boolean; error?: string }>;
 }
 
 export function createBridge(options: {

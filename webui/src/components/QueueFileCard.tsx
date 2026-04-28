@@ -5,6 +5,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
 import { errorLabel, formatDuration, formatRelativeTime, formatSize, shortModelName } from '../utils';
+import { KebabMenu, type KebabMenuItem } from './KebabMenu';
 
 interface QueueFileCardProps {
   file: FileItem;
@@ -260,39 +261,29 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
           </div>
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
-          {file.outputHtml && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onPreview(file.outputHtml!, file.name, file.path, file.id); }}
-              className="icon-button"
-              style={{ color: 'var(--success-text)', borderColor: 'var(--success-ring)', background: 'var(--success-subtle)', paddingInline: '10px', gap: '5px', height: '34px', borderRadius: '10px', width: 'auto' }}
-              title="Apri editor"
-              aria-label="Apri editor"
-            >
-              <PenLine className="w-3.5 h-3.5 shrink-0" />
-              <span className="text-xs font-medium">Modifica</span>
-            </button>
-          )}
-          {file.outputHtml && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onOpenFile(file.outputHtml!); }}
-              className="icon-button compact-icon-button"
-              style={{ color: 'var(--text-muted)' }}
-              title="Apri nel browser"
-              aria-label="Apri nel browser"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-            </button>
-          )}
-          <button
-              onClick={(e) => { e.stopPropagation(); onRemove(file.id); }}
-              className="icon-button compact-icon-button"
-              style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}
-              title="Rimuovi"
-              aria-label="Rimuovi"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+        <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+          <KebabMenu
+            items={[
+              ...( file.outputHtml ? [
+                {
+                  label: 'Modifica',
+                  icon: <PenLine className="w-3.5 h-3.5" />,
+                  onClick: () => onPreview(file.outputHtml!, file.name, file.path, file.id),
+                } as KebabMenuItem,
+                {
+                  label: 'Apri nel browser',
+                  icon: <ExternalLink className="w-3.5 h-3.5" />,
+                  onClick: () => onOpenFile(file.outputHtml!),
+                } as KebabMenuItem,
+              ] : []),
+              {
+                label: 'Rimuovi',
+                icon: <Trash2 className="w-3.5 h-3.5" />,
+                danger: true,
+                onClick: () => onRemove(file.id),
+              },
+            ]}
+          />
         </div>
       </div>
     </motion.div>

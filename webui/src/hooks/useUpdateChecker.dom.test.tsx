@@ -56,6 +56,67 @@ describe('useUpdateChecker', () => {
     expect(localStorage.getItem(DISMISSED_KEY)).toBe('v99.0.0');
   });
 
+  it('isDismissed starts false', () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ tag_name: null })));
+    const { result } = renderHook(() => useUpdateChecker());
+    expect(result.current.isDismissed).toBe(false);
+  });
+
+  it('isDismissed is false when new update is available (banner active)', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ tag_name: 'v99.0.0' })));
+    const { result } = renderHook(() => useUpdateChecker());
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.isDismissed).toBe(false);
+    expect(result.current.updateAvailable).toBe('v99.0.0');
+  });
+
+  it('isDismissed becomes true after dismissUpdate', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ tag_name: 'v99.0.0' })));
+    const { result } = renderHook(() => useUpdateChecker());
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    act(() => { result.current.dismissUpdate('v99.0.0'); });
+    expect(result.current.isDismissed).toBe(true);
+    expect(result.current.updateAvailable).toBeNull();
+  });
+
+  it('isDismissed is true on startup when previously dismissed version matches', async () => {
+    localStorage.setItem(DISMISSED_KEY, 'v99.0.0');
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ tag_name: 'v99.0.0' })));
+    const { result } = renderHook(() => useUpdateChecker());
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.isDismissed).toBe(true);
+    expect(result.current.updateAvailable).toBeNull();
+  });
+
+  it('isDismissed resets to false when a newer undismissed version is found', async () => {
+    localStorage.setItem(DISMISSED_KEY, 'v99.0.0');
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify({ tag_name: 'v99.0.0' })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ tag_name: 'v100.0.0' })));
+    const { result } = renderHook(() => useUpdateChecker());
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.isDismissed).toBe(true);
+    await act(async () => { result.current.checkForUpdates(true); });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.isDismissed).toBe(false);
+    expect(result.current.updateAvailable).toBe('v100.0.0');
+  });
+
   it('skips fetch if already checked recently', async () => {
     localStorage.setItem(LAST_CHECK_KEY, String(Date.now()));
     renderHook(() => useUpdateChecker());

@@ -34,9 +34,10 @@ type UsePreviewOptions = {
   appendConsole: (msg: string) => void;
   dispatch: Dispatch<ProcessingAction>;
   setArchiveSessions: Dispatch<SetStateAction<ArchiveSession[]>>;
+  onOpenFailed?: (htmlPath: string, sessionDir: string) => void;
 };
 
-export function usePreview({ appendConsole, dispatch, setArchiveSessions }: UsePreviewOptions) {
+export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed }: UsePreviewOptions) {
   const [preview, setPreview] = useState<PreviewState>(initialPreviewState);
   const currentEditorSessionRef = useRef<EditorSession>({});
   const currentPreviewSessionKeyRef = useRef<string | null>(null);
@@ -109,11 +110,12 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions }: UseP
         await loadPreviewAudio(sourcePath);
       } else {
         appendConsole(`❌ Errore anteprima: ${res.error}`);
+        onOpenFailed?.(htmlPath, sessionDir ?? '');
       }
     } catch (e: unknown) {
       appendConsole(`❌ Errore JS anteprima: ${e instanceof Error ? e.message : String(e)}`);
     }
-  }, [appendConsole, loadPreviewAudio]);
+  }, [appendConsole, loadPreviewAudio, onOpenFailed]);
 
   const closePreview = useCallback(() => {
     const sessionKey = currentPreviewSessionKeyRef.current;

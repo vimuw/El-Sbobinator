@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { Github } from 'lucide-react';
 import { GITHUB_URL, KOFI_URL } from './branding';
-import { type ArchiveSession, type ElSbobinatorBridge, type PywebviewApi } from './bridge';
+import { type ArchiveFolder, type ArchiveSession, type ElSbobinatorBridge, type PywebviewApi } from './bridge';
 import { getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type FileDescriptor, type FileItem, type ProcessDonePayload } from './appState';
 import { GEMINI_KEY_PATTERN } from './utils';
 import { useConsole } from './hooks/useConsole';
@@ -20,12 +21,14 @@ import { SettingsModal } from './components/modals/SettingsModal';
 import { ConfirmActionModal } from './components/modals/ConfirmActionModal';
 import { DuplicateFileModal, type AlreadyProcessedMatch, type DuplicatePrompt } from './components/modals/DuplicateFileModal';
 import { buildArchiveLookup, filterArchiveSessionsByInputPath, getArchiveMatchesForFile } from './duplicateDetection';
-import { AppHeader } from './components/AppHeader';
+import { NavSidebar, type ActivePage } from './components/NavSidebar';
+import { Toaster, type ToastMessage } from './components/Toast';
+import { StatusBanners } from './components/StatusBanners';
 import { SetupPage } from './components/SetupPage';
 import { DropZone } from './components/DropZone';
 import { QueueSection } from './components/QueueSection';
 import { CompletedSection } from './components/CompletedSection';
-import { ArchiveSection } from './components/ArchiveSection';
+import { ArchivePage } from './components/ArchivePage';
 import { ConsolePanel } from './components/ConsolePanel';
 const PreviewModal = React.lazy(() => import('./components/modals/PreviewModal').then(m => ({ default: m.PreviewModal })));
 
@@ -66,7 +69,7 @@ export default function App() {
 
   const { consoleLogs, appendConsole } = useConsole();
   const { themeMode, setThemeMode } = useTheme();
-  const { updateAvailable, latestVersion, isCheckingUpdate, hasChecked, checkFailed, checkForUpdates, dismissUpdate } = useUpdateChecker();
+  const { updateAvailable, latestVersion, isDismissed, isCheckingUpdate, hasChecked, checkFailed, checkForUpdates, dismissUpdate } = useUpdateChecker();
   const {
     apiReady,
     bridgeDelayed,
@@ -83,13 +86,54 @@ export default function App() {
   } = useApiReady(appendConsole);
 
   const [archiveSessions, setArchiveSessions] = useState<ArchiveSession[]>([]);
-  const { preview, openPreview, closePreview, relinkPreviewAudio, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions });
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const prevSessionDirsRef = useRef<Map<string, string>>(new Map());
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  const showToast = useCallback((message: string, type: 'warning' | 'info' = 'info') => {
+    const toastId = crypto.randomUUID();
+    setToasts(prev => [...prev, { id: toastId, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== toastId));
+    }, 5000);
+  }, []);
+
+  const refreshArchiveSessions = useCallback(async () => {
+    try {
+      const result = await window.pywebview?.api?.get_completed_sessions?.();
+      if (result?.ok && result.sessions) {
+        setArchiveSessions(result.sessions);
+        prevSessionDirsRef.current = new Map(result.sessions.map((s: ArchiveSession) => [s.session_dir, s.name]));
+      }
+    } catch (_) {}
+  }, []);
+
+  const handleOpenFailed = useCallback((_htmlPath: string, sessionDir: string) => {
+    showToast('La sbobina non è più disponibile: il file è stato eliminato dal disco.', 'warning');
+    if (sessionDir) {
+      setArchiveSessions(prev => prev.filter(s => s.session_dir !== sessionDir));
+      prevSessionDirsRef.current.delete(sessionDir);
+    }
+  }, [showToast]);
+
+  const { preview, openPreview, closePreview, relinkPreviewAudio, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed });
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [regeneratePrompt, setRegeneratePrompt] = useState<{ filename: string; mode?: 'completed' | 'resume' } | null>(null);
   const [askNewKeyPrompt, setAskNewKeyPrompt] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ConfirmActionState | null>(null);
   const [duplicatePrompt, setDuplicatePrompt] = useState<DuplicatePrompt>(null);
+
+  const [activePage, setActivePage] = useState<ActivePage>('queue');
+  const [folders, setFolders] = useState<ArchiveFolder[]>([]);
+  const [isPeakHour, setIsPeakHour] = useState(() => { const h = new Date().getHours(); return h >= 15 && h < 20; });
+  const [isPeakDismissed, setIsPeakDismissed] = useState(() => {
+    const ts = localStorage.getItem('peakBannerDismissedUntil');
+    return ts ? Date.now() < Number(ts) : false;
+  });
 
   const [isDragging, setIsDragging] = useState(false);
   const [showConsole, setShowConsole] = useState(() => localStorage.getItem('show_console') === 'true');
@@ -117,6 +161,26 @@ export default function App() {
     try { localStorage.setItem('auto_continue', String(autoContinue)); } catch (_) {}
   }, [autoContinue]);
 
+  useEffect(() => {
+    const check = () => { const h = new Date().getHours(); setIsPeakHour(h >= 15 && h < 20); };
+    const id = setInterval(check, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (isPeakHour) {
+      const ts = localStorage.getItem('peakBannerDismissedUntil');
+      setIsPeakDismissed(ts ? Date.now() < Number(ts) : false);
+    }
+  }, [isPeakHour]);
+
+  const handleFoldersChange = useCallback(async (next: ArchiveFolder[]) => {
+    setFolders(next);
+    try {
+      await window.pywebview?.api?.save_archive_folders?.(next);
+    } catch (_) {}
+  }, []);
+
   const pendingFiles = useMemo(() => getPendingFiles(files), [files]);
   const doneFiles = useMemo(() => getDoneFiles(files), [files]);
   const { queuedCount } = useMemo(() => {
@@ -139,17 +203,34 @@ export default function App() {
     [files, completionFlash, doneFiles],
   );
 
-  const refreshArchiveSessions = useCallback(async () => {
-    try {
-      const result = await window.pywebview?.api?.get_completed_sessions?.();
-      if (result?.ok && result.sessions) setArchiveSessions(result.sessions);
-    } catch (_) {}
-  }, []);
-
   useEffect(() => {
     if (!apiReady) return;
     void refreshArchiveSessions();
+    window.pywebview?.api?.get_archive_folders?.().then(res => {
+      if (res?.ok && res.folders) setFolders(res.folders);
+    }).catch(() => {});
   }, [apiReady, refreshArchiveSessions]);
+
+  useEffect(() => {
+    if (activePage !== 'archive') return;
+    prevSessionDirsRef.current = new Map(archiveSessionsRef.current.map(s => [s.session_dir, s.name]));
+    const intervalId = setInterval(async () => {
+      try {
+        const result = await window.pywebview?.api?.get_completed_sessions?.();
+        if (!result?.ok || !result.sessions) return;
+        const newSessions: ArchiveSession[] = result.sessions;
+        const newDirs = new Set<string>(newSessions.map(s => s.session_dir));
+        for (const [dir, name] of prevSessionDirsRef.current.entries()) {
+          if (!newDirs.has(dir)) {
+            showToast(`La sessione "${name}" è stata cancellata e la sbobina non è più disponibile.`, 'warning');
+          }
+        }
+        setArchiveSessions(newSessions);
+        prevSessionDirsRef.current = new Map(newSessions.map(s => [s.session_dir, s.name]));
+      } catch (_) {}
+    }, 30_000);
+    return () => clearInterval(intervalId);
+  }, [activePage, showToast]);
 
   const finalizeArchiveReplacement = useCallback(async (fileId: string) => {
     const pendingReplacement = pendingArchiveReplacementsRef.current.get(fileId);
@@ -506,8 +587,10 @@ export default function App() {
   }, [archiveSessions, files]);
 
   return (
-    <div className="app-shell min-h-screen font-sans flex flex-col" style={{ background: 'var(--bg-base)', color: 'var(--text-secondary)' }}>
-      <AppHeader
+    <div className="app-shell min-h-screen font-sans flex flex-row" style={{ background: 'var(--bg-base)', color: 'var(--text-secondary)' }}>
+      <NavSidebar
+        activePage={activePage}
+        setActivePage={setActivePage}
         apiReady={apiReady}
         bridgeDelayed={bridgeDelayed}
         hasApiKey={hasApiKey}
@@ -518,105 +601,145 @@ export default function App() {
         showConsole={showConsole}
         setShowConsole={setShowConsole}
         setIsSettingsOpen={setIsSettingsOpen}
-        updateAvailable={updateAvailable}
-        latestVersion={latestVersion}
-        dismissUpdate={dismissUpdate}
+        isDismissed={isDismissed}
       />
-      <main className="flex-1 max-w-3xl w-full mx-auto px-5 sm:px-6 py-8 flex flex-col gap-6">
-        {showProcessingBanner && (
-          <ProcessingStatusBanner
-            appState={appState}
-            currentPhase={completionFlash ? '__completed__' : currentPhase}
-            currentModel={currentModel}
-            activeProgress={completionFlash ? 100 : activeProgress}
-            workTotals={workTotals}
-            workDone={workDone}
-            currentFileIndex={batchCompleted}
-            currentBatchTotal={batchTotal}
-            currentFileName={bannerFile?.name}
-            startedAt={bannerFile?.startedAt}
-          />
-        )}
 
-        {uiMode === 'setup' ? (
-          <SetupPage
-            hasProtectedKey={hasProtectedKey}
-            setIsSettingsOpen={setIsSettingsOpen}
-            onSaved={(key) => setApiKey(key)}
-            preferredModel={preferredModel}
-            fallbackKeys={fallbackKeys}
-            fallbackModels={fallbackModels}
-          />
-        ) : uiMode !== 'processing' && uiMode !== 'canceling' && !completionFlash ? (
-          <DropZone
-            isDragging={isDragging}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={handleBrowseClick}
-          />
-        ) : null}
-
-        <QueueSection
-          pendingFiles={pendingFiles}
-          appState={appState}
-          autoContinue={autoContinue}
-          setAutoContinue={setAutoContinue}
-          preferredModel={preferredModel}
-          queuedCount={queuedCount}
-          canStart={canStart}
-          hasApiKey={hasApiKey}
-          isApiKeyValid={isApiKeyValid}
-          currentPhase={currentPhase}
-          dndSensors={dndSensors}
-          onDragEnd={handleDragEnd}
-          onRemove={requestRemoveFile}
-          onRetry={(id) => dispatch({ type: 'queue/retry_one', id })}
-          onPreview={openPreview}
-          onOpenFile={openFile}
-          onStart={() => void startProcessing()}
-          onStop={() => setConfirmAction({ type: 'stop-processing' })}
-        />
-
-        <CompletedSection
-          doneFiles={doneFiles}
-          appState={appState}
-          onRemove={(id) => {
-            const f = filesRef.current.find(f => f.id === id);
-            if (!f) return;
-            if (appState !== 'idle' && f.status !== 'done') return;
-            setConfirmAction({ type: 'remove-file', fileId: id, fileName: f.name, isDone: true });
+      <div className="flex flex-col flex-1 min-w-0 min-h-screen">
+        <StatusBanners
+          isPeakHour={isPeakHour}
+          isPeakDismissed={isPeakDismissed}
+          onDismissPeak={() => {
+            const next = new Date();
+            next.setDate(next.getDate() + 1);
+            next.setHours(15, 0, 0, 0);
+            localStorage.setItem('peakBannerDismissedUntil', String(next.getTime()));
+            setIsPeakDismissed(true);
           }}
-          onPreview={openPreview}
-          onOpenFile={openFile}
-          onClearAll={() => setConfirmAction({ type: 'clear-completed', count: doneFiles.length })}
+          updateAvailable={updateAvailable}
+          dismissUpdate={dismissUpdate}
         />
 
-        <ArchiveSection
-          sessions={archiveFiltered}
-          onPreview={openPreview}
-          onOpenFile={openFile}
-          onDeleteSession={(sessionDir, name) => setConfirmAction({ type: 'delete-archive-session', sessionDir, name })}
-        />
+        <AnimatePresence mode="wait">
+          {activePage === 'queue' ? (
+            <motion.main
+              key="queue"
+              className="flex-1 max-w-3xl w-full mx-auto px-5 sm:px-6 py-8 flex flex-col gap-6 justify-center"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              {showProcessingBanner && (
+                <ProcessingStatusBanner
+                  appState={appState}
+                  currentPhase={completionFlash ? '__completed__' : currentPhase}
+                  currentModel={currentModel}
+                  activeProgress={completionFlash ? 100 : activeProgress}
+                  workTotals={workTotals}
+                  workDone={workDone}
+                  currentFileIndex={batchCompleted}
+                  currentBatchTotal={batchTotal}
+                  currentFileName={bannerFile?.name}
+                  startedAt={bannerFile?.startedAt}
+                />
+              )}
 
-        {showConsole && (
-          <ConsolePanel
-            consoleLogs={consoleLogs}
-            lastConsoleMessage={lastConsoleMessage}
-            appState={appState}
-          />
-        )}
-      </main>
+              {uiMode === 'setup' ? (
+                <SetupPage
+                  hasProtectedKey={hasProtectedKey}
+                  setIsSettingsOpen={setIsSettingsOpen}
+                  onSaved={(key) => setApiKey(key)}
+                  preferredModel={preferredModel}
+                  fallbackKeys={fallbackKeys}
+                  fallbackModels={fallbackModels}
+                />
+              ) : uiMode !== 'processing' && uiMode !== 'canceling' && !completionFlash ? (
+                <DropZone
+                  isDragging={isDragging}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={handleBrowseClick}
+                />
+              ) : null}
 
-      <footer className="text-center py-6 text-sm flex items-center justify-center gap-4" style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border-subtle)' }}>
-        <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="flex items-center gap-1 hover:opacity-80 transition-opacity" style={{ color: 'inherit', textDecoration: 'none' }}>
-          <Github className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
-        </a>
-        <span>·</span>
-        <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }} className="hover:opacity-80 transition-opacity" style={{ color: 'inherit', textDecoration: 'none' }}>
-          ☕ Offrimi un caffè su Ko-fi!
-        </a>
-      </footer>
+              <QueueSection
+                pendingFiles={pendingFiles}
+                appState={appState}
+                autoContinue={autoContinue}
+                setAutoContinue={setAutoContinue}
+                preferredModel={preferredModel}
+                queuedCount={queuedCount}
+                canStart={canStart}
+                hasApiKey={hasApiKey}
+                isApiKeyValid={isApiKeyValid}
+                currentPhase={currentPhase}
+                dndSensors={dndSensors}
+                onDragEnd={handleDragEnd}
+                onRemove={requestRemoveFile}
+                onRetry={(id) => dispatch({ type: 'queue/retry_one', id })}
+                onPreview={openPreview}
+                onOpenFile={openFile}
+                onStart={() => void startProcessing()}
+                onStop={() => setConfirmAction({ type: 'stop-processing' })}
+              />
+
+              <CompletedSection
+                doneFiles={doneFiles}
+                appState={appState}
+                onRemove={(id) => {
+                  const f = filesRef.current.find(f => f.id === id);
+                  if (!f) return;
+                  if (appState !== 'idle' && f.status !== 'done') return;
+                  setConfirmAction({ type: 'remove-file', fileId: id, fileName: f.name, isDone: true });
+                }}
+                onPreview={openPreview}
+                onOpenFile={openFile}
+                onClearAll={() => setConfirmAction({ type: 'clear-completed', count: doneFiles.length })}
+              />
+
+              {showConsole && (
+                <ConsolePanel
+                  consoleLogs={consoleLogs}
+                  lastConsoleMessage={lastConsoleMessage}
+                  appState={appState}
+                />
+              )}
+            </motion.main>
+          ) : (
+            <motion.main
+              key="archive"
+              className="flex-1 max-w-4xl w-full mx-auto px-5 sm:px-6 py-8 flex flex-col justify-center"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+            >
+              <ArchivePage
+                sessions={archiveFiltered}
+                folders={folders}
+                onFoldersChange={handleFoldersChange}
+                onPreview={openPreview}
+                onOpenFile={openFile}
+                onDeleteSession={(sessionDir, name) => setConfirmAction({ type: 'delete-archive-session', sessionDir, name })}
+                onRefresh={refreshArchiveSessions}
+              />
+            </motion.main>
+          )}
+        </AnimatePresence>
+        <footer className="py-4 text-center text-xs flex items-center justify-center gap-2" style={{ color: 'var(--text-faint)' }}>
+          <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="hover:opacity-80 transition-opacity flex items-center gap-1" style={{ color: 'inherit', textDecoration: 'none' }}>
+            <Github className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
+          </a>
+          <span>·</span>
+          <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }} className="hover:opacity-80 transition-opacity" style={{ color: 'inherit', textDecoration: 'none' }}>
+            ☕ Offrimi un caffè su Ko-fi!
+          </a>
+        </footer>
+      </div>
 
       <RegenerateModal
         prompt={regeneratePrompt}
@@ -629,17 +752,15 @@ export default function App() {
         onDismiss={() => setDuplicatePrompt(null)}
         onAddAgain={handleDuplicateAddAgain}
       />
-      {confirmModalCopy && (
-        <ConfirmActionModal
-          isOpen={confirmAction !== null}
-          title={confirmModalCopy.title}
-          description={confirmModalCopy.description}
-          confirmLabel={confirmModalCopy.confirmLabel}
-          cancelLabel={confirmModalCopy.cancelLabel}
-          onClose={() => setConfirmAction(null)}
-          onConfirm={handleConfirmAction}
-        />
-      )}
+      <ConfirmActionModal
+        isOpen={confirmAction !== null && confirmModalCopy !== null}
+        title={confirmModalCopy?.title ?? ''}
+        description={confirmModalCopy?.description ?? ''}
+        confirmLabel={confirmModalCopy?.confirmLabel ?? ''}
+        cancelLabel={confirmModalCopy?.cancelLabel}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={handleConfirmAction}
+      />
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
@@ -675,6 +796,7 @@ export default function App() {
           onScrollTopChange={handleScrollTopChange}
         />
       </React.Suspense>
+      <Toaster toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

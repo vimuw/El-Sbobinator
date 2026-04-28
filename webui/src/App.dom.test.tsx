@@ -42,7 +42,7 @@ const mockApiReadyWithKey = {
 };
 
 vi.mock('./hooks/useUpdateChecker', () => ({
-  useUpdateChecker: () => ({ updateAvailable: null, latestVersion: null, isCheckingUpdate: false, checkForUpdates: vi.fn(), dismissUpdate: vi.fn() }),
+  useUpdateChecker: () => ({ updateAvailable: null, latestVersion: null, isDismissed: false, isCheckingUpdate: false, checkForUpdates: vi.fn(), dismissUpdate: vi.fn() }),
 }));
 
 vi.mock('./hooks/useQueuePersistence', () => ({
@@ -98,7 +98,10 @@ function setElSbobinatorBridge() {
 beforeEach(() => {
   window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
   localStorage.clear();
-  setPywebview({ get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }) });
+  setPywebview({
+    get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
+    get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
+  });
   setElSbobinatorBridge();
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('no network')));
   vi.mocked(useApiReady).mockReturnValue(mockApiReadyDefault);
@@ -146,7 +149,7 @@ describe('App', () => {
     await act(async () => {
       fireEvent.click(screen.getByLabelText('Apri impostazioni'));
     });
-    expect(screen.getByText(/Impostazioni/)).toBeTruthy();
+    expect(screen.getAllByText(/Impostazioni/).length).toBeGreaterThan(1);
   });
 
   it('console toggle button shows console panel', async () => {
@@ -154,7 +157,7 @@ describe('App', () => {
     await act(async () => {
       fireEvent.click(screen.getByLabelText('Mostra console'));
     });
-    expect(screen.getByText('Console')).toBeTruthy();
+    expect(screen.getAllByText('Console').length).toBeGreaterThan(1);
   });
 });
 
@@ -181,7 +184,9 @@ describe('App — ready-empty mode (valid API key, no files)', () => {
 
   it('console panel shows when console toggle is clicked', async () => {
     await act(async () => { render(<App />); });
-    await act(async () => { fireEvent.click(screen.getByLabelText('Mostra console')); });
-    expect(screen.getByText('Console')).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Mostra console'));
+    });
+    expect(screen.getAllByText('Console').length).toBeGreaterThan(1);
   });
 });

@@ -155,14 +155,11 @@
   background: rgba(255, 255, 255, 0.82);
 }
 
-:root:not([data-theme="dark"]) .premium-button-secondary,
-:root:not([data-theme="dark"]) .icon-button {
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.08);
+:root:not([data-theme="dark"]) .premium-button-secondary {
+  background: transparent;
 }
 
-:root:not([data-theme="dark"]) .icon-button.modal-icon-button,
-:root:not([data-theme="dark"]) .icon-button.modal-icon-button:hover {
+:root:not([data-theme="dark"]) .icon-button.modal-icon-button {
   background: transparent;
   box-shadow: none;
   border-color: transparent;
@@ -199,13 +196,19 @@
 }
 
 :root:not([data-theme="dark"]) .dropzone-card {
-  background:
-    linear-gradient(140deg, rgba(255, 255, 255, 0.85), transparent 46%),
-    rgba(228, 234, 245, 0.70);
+  background: rgba(228, 234, 245, 0.70);
+}
+
+:root:not([data-theme="dark"]) .dropzone-card::before {
+  background: radial-gradient(circle at 50% 45%, rgba(100, 116, 139, 0.11), transparent 65%);
 }
 
 :root[data-theme="dark"] .dropzone-card:hover {
   box-shadow: 0 24px 50px rgba(0, 0, 0, 0.36);
+}
+
+:root[data-theme="dark"] .dropzone-card::before {
+  background: radial-gradient(circle at 50% 45%, rgba(148, 163, 184, 0.10), transparent 65%);
 }
 
 /* ═══ FOOTER ═══ */
@@ -252,8 +255,7 @@
 }
 
 :root:not([data-theme="dark"]) .editor-button:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.08);
-  border-color: var(--border-default);
+  background: rgba(0, 0, 0, 0.07);
 }
 
 :root:not([data-theme="dark"]) .editor-button.is-active {
@@ -506,11 +508,16 @@ button {
   animation: cta-pulse 2.4s ease-in-out infinite;
 }
 
-.premium-button-secondary,
-.icon-button {
-  background: rgba(255, 255, 255, 0.03);
+.premium-button-secondary {
+  background: transparent;
   color: var(--text-secondary);
-  border-color: var(--border-default);
+  border-color: transparent;
+}
+
+.icon-button {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: transparent;
 }
 
 .premium-button-secondary {
@@ -524,19 +531,18 @@ button {
 }
 
 .premium-button-secondary:hover {
-  transform: translateY(-0.5px);
-  border-color: var(--border-strong);
+  background: var(--sidebar-active-bg);
+  border-color: transparent;
   color: var(--text-primary);
 }
 
 .icon-button:hover {
-  border-color: var(--border-strong);
+  background: var(--sidebar-active-bg);
   color: var(--text-primary);
-  transform: translateY(-1px);
 }
 
 .icon-button:active {
-  transform: scale(0.91);
+  transform: scale(0.94);
   transition-duration: 80ms;
 }
 
@@ -632,9 +638,9 @@ button {
   gap: 0.55rem;
   min-height: 40px;
   padding: 0.75rem 1rem;
-  border: 1px solid var(--border-default);
+  border: 1px solid transparent;
   border-radius: 15px;
-  background: rgba(255, 255, 255, 0.03);
+  background: transparent;
   color: var(--text-secondary);
   font-size: 0.92rem;
   font-weight: 700;
@@ -649,9 +655,8 @@ button {
 }
 
 .modal-action-button:hover:not(:disabled) {
-  transform: translateY(-0.5px);
-  background: rgba(255, 255, 255, 0.05);
-  border-color: var(--border-strong);
+  background: var(--sidebar-active-bg);
+  border-color: transparent;
   color: var(--text-primary);
 }
 
@@ -715,8 +720,7 @@ button {
   box-shadow: none;
 }
 
-.icon-button.modal-icon-button,
-.icon-button.modal-icon-button:hover {
+.icon-button.modal-icon-button {
   background: transparent;
   border: 1px solid transparent;
 }
@@ -858,13 +862,25 @@ button {
   overflow: hidden;
   border-radius: 26px;
   border: none;
-  background:
-    linear-gradient(140deg, rgba(255, 255, 255, 0.04), transparent 46%),
-    rgba(24, 28, 35, 0.72);
+  background: rgba(24, 28, 35, 0.72);
   transition:
     transform 220ms ease,
     background 300ms ease,
     box-shadow 220ms ease;
+}
+
+.dropzone-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 26px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 380ms ease;
+}
+
+.dropzone-card:hover::before {
+  opacity: 1;
 }
 
 .dropzone-card:hover {
@@ -1688,9 +1704,7 @@ button {
 
 .editor-button:hover:not(:disabled) {
   color: var(--text-primary);
-  border-color: var(--border-default);
-  background: rgba(255, 255, 255, 0.04);
-  transform: translateY(-1px);
+  background: var(--sidebar-active-bg);
 }
 
 .editor-button:disabled {
@@ -2104,4 +2118,265 @@ input[type="password"]::-ms-reveal {
 
 @keyframes dz-march {
   to { stroke-dashoffset: -20; }
+}
+
+/* ═══ SIDEBAR ═══ */
+
+:root {
+  --sidebar-bg: rgba(248, 250, 252, 0.96);
+  --sidebar-active-bg: rgba(0, 0, 0, 0.07);
+  --sidebar-active-text: var(--text-primary);
+}
+
+:root[data-theme="dark"] {
+  --sidebar-bg: rgba(15, 17, 21, 0.96);
+  --sidebar-active-bg: rgba(255, 255, 255, 0.08);
+  --sidebar-active-text: var(--text-primary);
+}
+
+.app-sidebar {
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  transition: background 300ms ease;
+  scrollbar-width: none;
+}
+
+.app-sidebar::-webkit-scrollbar {
+  display: none;
+}
+
+.sidebar-nav-item {
+  border: 1px solid transparent;
+  transition: background 0.13s ease, color 0.13s ease, border-color 0.13s ease;
+}
+
+.sidebar-nav-item:hover {
+  background: var(--sidebar-active-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* ═══ FOLDER CARDS ═══ */
+
+.folder-card {
+  overflow: hidden;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+
+.folder-color-dot {
+  display: inline-block;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ═══ ARCHIVE SESSION CARDS ═══ */
+
+.archive-session-card {
+  background: var(--bg-elevated);
+  border-radius: 16px;
+  transition: box-shadow 0.15s ease, background 0.15s ease;
+  outline: none;
+}
+
+.archive-session-card:focus-visible {
+  outline: none;
+}
+
+:root:not([data-theme="dark"]) .archive-session-card {
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.07), 0 4px 12px rgba(15, 23, 42, 0.05);
+}
+
+:root:not([data-theme="dark"]) .archive-session-card:hover {
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.10), 0 8px 20px rgba(15, 23, 42, 0.07);
+}
+
+:root[data-theme="dark"] .archive-session-card {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+:root[data-theme="dark"] .archive-session-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ═══ HOURGLASS BADGE ANIMATION ═══ */
+
+@keyframes hg-rotate {
+  0%,  72% { transform: rotate(0deg); }
+  88%, 100% { transform: rotate(180deg); }
+}
+
+@keyframes hg-sand-t {
+  0%        { y: 1px;  height: 8px; }
+  68%, 100% { y: 9px;  height: 0px; }
+}
+
+@keyframes hg-sand-b {
+  0%        { y: 19px; height: 0px; }
+  68%, 100% { y: 11px; height: 8px; }
+}
+
+.hg-svg {
+  animation: hg-rotate 2.4s linear infinite;
+  transform-origin: 50% 50%;
+  display: block;
+}
+
+.hg-sand-t {
+  animation: hg-sand-t 2.4s linear infinite;
+}
+
+.hg-sand-b {
+  animation: hg-sand-b 2.4s linear infinite;
+}
+
+/* ═══ NOTION SEARCH ═══ */
+
+.notion-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.notion-search-input {
+  width: 100%;
+  height: 36px;
+  padding: 0 2.4rem 0 2.1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+  background: rgba(255, 255, 255, 0.80);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  outline: none;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.notion-search-input::placeholder {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.notion-search-input:hover {
+  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.notion-search-input:focus {
+  border-color: var(--accent-bg);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+:root[data-theme="dark"] .notion-search-input {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--border-default);
+}
+
+:root[data-theme="dark"] .notion-search-input:hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: var(--border-strong);
+}
+
+:root[data-theme="dark"] .notion-search-input:focus {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.notion-search-icon {
+  position: absolute;
+  left: 0.6rem;
+  pointer-events: none;
+  color: var(--text-faint);
+  transition: color 150ms ease;
+}
+
+.notion-search-input:focus ~ .notion-search-icon,
+.notion-search-wrap:focus-within .notion-search-icon {
+  color: var(--text-muted);
+}
+
+.notion-search-clear {
+  position: absolute;
+  right: 0.45rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.notion-search-clear:hover {
+  background: var(--accent-subtle);
+  color: var(--text-muted);
+}
+
+.notion-search-hint {
+  position: absolute;
+  right: 0.55rem;
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.notion-search-hint kbd {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-faint);
+  background: var(--accent-subtle);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 1px 5px;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.notion-sort-chip {
+  height: 36px;
+  padding: 0 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+  background: rgba(255, 255, 255, 0.80);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+  flex-shrink: 0;
+}
+
+.notion-sort-chip:hover {
+  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--text-primary);
+}
+
+:root[data-theme="dark"] .notion-sort-chip {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--border-default);
+}
+
+:root[data-theme="dark"] .notion-sort-chip:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.notion-results-count {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-faint);
+  padding-left: 0.15rem;
 }

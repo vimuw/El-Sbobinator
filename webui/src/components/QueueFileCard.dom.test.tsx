@@ -135,7 +135,7 @@ describe('CompletedFileCard', () => {
     expect(screen.getByText('Nuovo')).toBeTruthy();
   });
 
-  it('shows Modifica and remove buttons when outputHtml is set', () => {
+  it('shows kebab menu button when outputHtml is set', () => {
     render(
       <CompletedFileCard
         file={makeFile({ status: 'done', outputHtml: '/out/file.html' })}
@@ -143,11 +143,10 @@ describe('CompletedFileCard', () => {
         onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
       />,
     );
-    expect(screen.getByLabelText('Apri editor')).toBeTruthy();
-    expect(screen.getByLabelText('Rimuovi')).toBeTruthy();
+    expect(screen.getByLabelText('Altre opzioni')).toBeTruthy();
   });
 
-  it('calls onPreview when Modifica is clicked', () => {
+  it('calls onPreview when Modifica is clicked in kebab menu', () => {
     const onPreview = vi.fn();
     render(
       <CompletedFileCard
@@ -156,11 +155,12 @@ describe('CompletedFileCard', () => {
         onRemove={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByLabelText('Apri editor'));
+    fireEvent.click(screen.getByLabelText('Altre opzioni'));
+    fireEvent.click(screen.getByText('Modifica'));
     expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione.mp3', undefined, 'f1');
   });
 
-  it('calls onRemove when remove button is clicked', () => {
+  it('calls onRemove when Rimuovi is clicked in kebab menu', () => {
     const onRemove = vi.fn();
     render(
       <CompletedFileCard
@@ -169,7 +169,8 @@ describe('CompletedFileCard', () => {
         onRemove={onRemove} onPreview={vi.fn()} onOpenFile={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByLabelText('Rimuovi'));
+    fireEvent.click(screen.getByLabelText('Altre opzioni'));
+    fireEvent.click(screen.getByText('Rimuovi'));
     expect(onRemove).toHaveBeenCalledWith('f1');
   });
 
@@ -186,7 +187,7 @@ describe('CompletedFileCard', () => {
     expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione.mp3', '/src/f.mp3', 'f1');
   });
 
-  it('calls onOpenFile when open-in-browser button clicked', () => {
+  it('calls onOpenFile when Apri nel browser is clicked in kebab menu', () => {
     const onOpenFile = vi.fn();
     render(
       <CompletedFileCard
@@ -195,7 +196,8 @@ describe('CompletedFileCard', () => {
         onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={onOpenFile}
       />,
     );
-    fireEvent.click(screen.getByLabelText('Apri nel browser'));
+    fireEvent.click(screen.getByLabelText('Altre opzioni'));
+    fireEvent.click(screen.getByText('Apri nel browser'));
     expect(onOpenFile).toHaveBeenCalledWith('/out/file.html');
   });
 

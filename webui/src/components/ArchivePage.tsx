@@ -1,0 +1,1167 @@
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
+  ExternalLink, FolderOpen, FolderPlus, History,
+  Pencil, Plus, RefreshCw, Search, Trash2, X,
+} from 'lucide-react';
+import {
+  DndContext, DragOverlay, KeyboardSensor, PointerSensor, useDraggable, useDroppable, useSensor, useSensors,
+  type DragEndEvent, type DragStartEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import type { ArchiveFolder, ArchiveSession } from '../bridge';
+import { formatRelativeTime, shortModelName } from '../utils';
+import { KebabMenu, type KebabMenuItem } from './KebabMenu';
+
+const FOLDER_COLORS = [
+  '#FF6B6B', '#FF922B', '#FFD93D', '#6BCB77',
+  '#4D96FF', '#CC5DE8', '#FF8FAB', '#20C997',
+  '#748FFC', '#94A3B8',
+];
+const ARCHIVE_PAGE_SIZE = 5;
+
+interface ArchivePageProps {
+  sessions: ArchiveSession[];
+  folders: ArchiveFolder[];
+  onFoldersChange: (folders: ArchiveFolder[]) => void;
+  onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string) => void;
+  onOpenFile: (path: string) => void;
+  onDeleteSession: (sessionDir: string, name: string) => void;
+  onRefresh?: () => void;
+}
+
+type FolderModalState =
+  | { type: 'create' }
+  | { type: 'edit'; folder: ArchiveFolder };
+
+export function ArchivePage({
+  sessions, folders, onFoldersChange,
+  onPreview, onOpenFile, onDeleteSession, onRefresh,
+}: ArchivePageProps) {
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<'newest' | 'oldest'>('newest');
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [folderModal, setFolderModal] = useState<FolderModalState | null>(null);
+  const [sessionPage, setSessionPage] = useState(0);
+  const [activeDragSession, setActiveDragSession] = useState<ArchiveSession | null>(null);
+  const [folderHover, setFolderHover] = useState<string | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  const sessionsByDir = useMemo(() => {
+    const map = new Map<string, ArchiveSession>();
+    for (const s of sessions) map.set(s.session_dir, s);
+    return map;
+  }, [sessions]);
+
+  const sessionFolderMap = useMemo(() => {
+    const map = new Map<string, ArchiveFolder>();
+    for (const f of folders) for (const d of f.session_dirs) map.set(d, f);
+    return map;
+  }, [folders]);
+
+  const sortSessions = useCallback((arr: ArchiveSession[]) => {
+    const q = search.trim().toLowerCase();
+    const filtered = q ? arr.filter(s => s.name.toLowerCase().includes(q)) : arr;
+    return [...filtered].sort((a, b) => {
+      const ta = a.completed_at_iso ? new Date(a.completed_at_iso).getTime() : 0;
+      const tb = b.completed_at_iso ? new Date(b.completed_at_iso).getTime() : 0;
+      return sort === 'newest' ? tb - ta : ta - tb;
+    });
+  }, [search, sort]);
+
+  const allSortedSessions = useMemo(
+    () => sortSessions(sessions),
+    [sessions, sortSessions],
+  );
+  const sessionPages = Math.ceil(allSortedSessions.length / ARCHIVE_PAGE_SIZE);
+  const sessionPageData = useMemo(
+    () => allSortedSessions.slice(sessionPage * ARCHIVE_PAGE_SIZE, (sessionPage + 1) * ARCHIVE_PAGE_SIZE),
+    [allSortedSessions, sessionPage],
+  );
+
+  useEffect(() => { setSessionPage(0); }, [search, sort]);
+  useEffect(() => { if (sessionPages > 0 && sessionPage >= sessionPages) setSessionPage(sessionPages - 1); }, [sessionPages, sessionPage]);
+
+  useEffect(() => {
+    if (selectedFolderId && !folders.find(f => f.id === selectedFolderId)) {
+      setSelectedFolderId(null);
+    }
+  }, [folders, selectedFolderId]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== '/') return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable) return;
+      e.preventDefault();
+      searchInputRef.current?.focus();
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
+
+  const assignToFolder = useCallback((sessionDir: string, folderId: string) => {
+    const next = folders.map(f => {
+      if (f.id === folderId) {
+        if (f.session_dirs.includes(sessionDir)) return f;
+        return { ...f, session_dirs: [...f.session_dirs, sessionDir] };
+      }
+      return { ...f, session_dirs: f.session_dirs.filter(d => d !== sessionDir) };
+    });
+    onFoldersChange(next);
+  }, [folders, onFoldersChange]);
+
+  const removeFromFolder = useCallback((sessionDir: string, folderId: string) => {
+    const next = folders.map(f =>
+      f.id === folderId ? { ...f, session_dirs: f.session_dirs.filter(d => d !== sessionDir) } : f,
+    );
+    onFoldersChange(next);
+  }, [folders, onFoldersChange]);
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const session = sessions.find(s => s.session_dir === event.active.id);
+    setActiveDragSession(session ?? null);
+  }, [sessions]);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    setActiveDragSession(null);
+    setFolderHover(null);
+    (document.activeElement as HTMLElement)?.blur();
+    const { active, over } = event;
+    if (!over) return;
+    const sessionDir = String(active.id);
+    const folderId = String(over.id);
+    if (folderId.startsWith('folder:')) {
+      assignToFolder(sessionDir, folderId.slice(7));
+    }
+  }, [assignToFolder]);
+
+  const selectedFolder = selectedFolderId ? folders.find(f => f.id === selectedFolderId) ?? null : null;
+
+  if (selectedFolder) {
+    return (
+      <>
+        <FolderDetailView
+          folder={selectedFolder}
+          sessionsByDir={sessionsByDir}
+          onBack={() => setSelectedFolderId(null)}
+          onEdit={() => setFolderModal({ type: 'edit', folder: selectedFolder })}
+          onDelete={() => {
+            onFoldersChange(folders.filter(f => f.id !== selectedFolder.id));
+            setSelectedFolderId(null);
+          }}
+          onRemoveSession={dir => removeFromFolder(dir, selectedFolder.id)}
+          onAddSession={dir => assignToFolder(dir, selectedFolder.id)}
+          onReorderSessions={dirs => onFoldersChange(folders.map(f =>
+            f.id === selectedFolder.id ? { ...f, session_dirs: dirs } : f,
+          ))}
+          onPreview={onPreview}
+          onOpenFile={onOpenFile}
+          onDeleteSession={onDeleteSession}
+        />
+        <AnimatePresence>
+          {folderModal && (
+            <FolderModal
+              state={folderModal}
+              onClose={() => setFolderModal(null)}
+              onSave={(name, color) => {
+                if (folderModal.type === 'edit') {
+                  onFoldersChange(folders.map(f =>
+                    f.id === folderModal.folder.id ? { ...f, name: name.trim(), color } : f,
+                  ));
+                }
+                setFolderModal(null);
+              }}
+            />
+          )}
+        </AnimatePresence>
+      </>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <h2 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+          Archivio Sbobine
+        </h2>
+        <span className="status-pill">{sessions.length}</span>
+        {onRefresh && (
+          <button
+            onClick={onRefresh}
+            className="icon-button compact-icon-button"
+            style={{ color: 'var(--text-muted)', marginLeft: 'auto' }}
+            title="Aggiorna archivio"
+            aria-label="Aggiorna archivio"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        {/* Folders grid — always visible, first card is "new folder" */}
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+          <NewFolderCard onClick={() => setFolderModal({ type: 'create' })} />
+          {folders.map(folder => (
+            <FolderCard
+              key={folder.id}
+              folder={folder}
+              sessionsByDir={sessionsByDir}
+              isDragHover={folderHover === folder.id}
+              onNavigate={() => setSelectedFolderId(folder.id)}
+              onEdit={() => setFolderModal({ type: 'edit', folder })}
+              onDelete={() => onFoldersChange(folders.filter(f => f.id !== folder.id))}
+              onDragHover={setFolderHover}
+            />
+          ))}
+        </div>
+
+        {/* Unfiled sessions */}
+        <div className="flex flex-col gap-3">
+          <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--text-faint)' }}>
+            Tutte le sbobine
+          </h3>
+
+          {/* Search + Sort */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <div className="notion-search-wrap">
+                <Search className="notion-search-icon w-3.5 h-3.5" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  onFocus={() => setSearchFocused(true)}
+                  onBlur={() => setSearchFocused(false)}
+                  placeholder="Cerca per nome..."
+                  className="notion-search-input"
+                />
+                <AnimatePresence>
+                  {search.trim().length > 0 ? (
+                    <motion.button
+                      key="clear"
+                      initial={{ opacity: 0, scale: 0.7 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.7 }}
+                      transition={{ duration: 0.1 }}
+                      onClick={() => { setSearch(''); searchInputRef.current?.focus(); }}
+                      className="notion-search-clear"
+                      aria-label="Cancella ricerca"
+                    >
+                      <X className="w-3 h-3" />
+                    </motion.button>
+                  ) : !searchFocused ? (
+                    <motion.span
+                      key="hint"
+                      className="notion-search-hint"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.12 }}
+                    >
+                      <kbd>/</kbd>
+                    </motion.span>
+                  ) : null}
+                </AnimatePresence>
+              </div>
+              <button
+                onClick={() => setSort(s => s === 'newest' ? 'oldest' : 'newest')}
+                className="notion-sort-chip"
+              >
+                <ChevronDown className="w-3.5 h-3.5" style={{ opacity: 0.55 }} />
+                {sort === 'newest' ? 'Recente' : 'Meno recente'}
+              </button>
+            </div>
+            {search.trim().length > 0 && (
+              <span className="notion-results-count">
+                {allSortedSessions.length === 0
+                  ? 'Nessun risultato'
+                  : allSortedSessions.length === 1
+                    ? '1 risultato'
+                    : `${allSortedSessions.length} risultati`}
+              </span>
+            )}
+          </div>
+
+          {sessionPageData.length === 0 && sessions.length === 0 && (
+            <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>
+              <History className="w-8 h-8 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">Nessuna sbobina nell&apos;archivio.</p>
+            </div>
+          )}
+
+          {sessionPageData.length === 0 && sessions.length > 0 && search.trim() && (
+            <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+              {`Nessun risultato per "${search}"`}
+            </div>
+          )}
+
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`session-page-${sessionPage}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.12, ease: 'easeOut' }}
+              className="flex flex-col gap-3"
+            >
+              {sessionPageData.map(session => (
+                <DraggableSessionCard
+                  key={session.session_dir}
+                  session={session}
+                  allFolders={folders}
+                  currentFolder={sessionFolderMap.get(session.session_dir)}
+                  onAssignToFolder={fId => assignToFolder(session.session_dir, fId)}
+                  onRemoveFromFolder={() => {
+                    const f = sessionFolderMap.get(session.session_dir);
+                    if (f) removeFromFolder(session.session_dir, f.id);
+                  }}
+                  onPreview={onPreview}
+                  onOpenFile={onOpenFile}
+                  onDeleteSession={onDeleteSession}
+                />
+              ))}
+            </motion.div>
+          </AnimatePresence>
+
+          {sessionPages > 1 && (
+            <div className="flex items-center justify-center gap-3 pt-1">
+              <button
+                onClick={() => setSessionPage(p => Math.max(0, p - 1))}
+                disabled={sessionPage === 0}
+                className="icon-button compact-icon-button"
+                style={{ color: 'var(--text-muted)', opacity: sessionPage === 0 ? 0.35 : 1 }}
+                aria-label="Pagina precedente"
+              ><ChevronLeft className="w-4 h-4" /></button>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{sessionPage + 1} / {sessionPages}</span>
+              <button
+                onClick={() => setSessionPage(p => Math.min(sessionPages - 1, p + 1))}
+                disabled={sessionPage >= sessionPages - 1}
+                className="icon-button compact-icon-button"
+                style={{ color: 'var(--text-muted)', opacity: sessionPage >= sessionPages - 1 ? 0.35 : 1 }}
+                aria-label="Pagina successiva"
+              ><ChevronRight className="w-4 h-4" /></button>
+            </div>
+          )}
+        </div>
+
+        <DragOverlay>
+          {activeDragSession && (
+            <div
+              className="rounded-xl px-4 py-3 text-sm font-medium shadow-lg"
+              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', opacity: 0.9, pointerEvents: 'none' }}
+            >
+              {activeDragSession.name}
+            </div>
+          )}
+        </DragOverlay>
+      </DndContext>
+
+      {/* Folder modal */}
+      <AnimatePresence>
+        {folderModal && (
+          <FolderModal
+            state={folderModal}
+            onClose={() => setFolderModal(null)}
+            onSave={(name, color) => {
+              if (folderModal.type === 'create') {
+                const newFolder: ArchiveFolder = {
+                  id: crypto.randomUUID(),
+                  name: name.trim(),
+                  color,
+                  session_dirs: [],
+                };
+                onFoldersChange([...folders, newFolder]);
+              } else {
+                onFoldersChange(folders.map(f =>
+                  f.id === folderModal.folder.id ? { ...f, name: name.trim(), color } : f,
+                ));
+              }
+              setFolderModal(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── NewFolderCard ───────────────────────────────────────────────────────────
+
+function NewFolderCard({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="folder-card cursor-pointer w-full text-left"
+      style={{
+        border: '2px dashed var(--border-default)',
+        borderRadius: 20,
+        background: 'transparent',
+        minHeight: 72,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        transition: 'border-color 0.15s, background 0.15s',
+      }}
+      onMouseEnter={e => {
+        (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent-text)';
+        (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent-subtle)';
+      }}
+      onMouseLeave={e => {
+        (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-default)';
+        (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+      }}
+    >
+      <FolderPlus className="w-5 h-5" style={{ color: 'var(--accent-text)' }} />
+      <span className="text-xs font-semibold" style={{ color: 'var(--accent-text)' }}>Nuova raccolta</span>
+    </button>
+  );
+}
+
+// ─── FolderCard ──────────────────────────────────────────────────────────────
+
+function FolderCard({
+  folder, sessionsByDir, isDragHover,
+  onNavigate, onEdit, onDelete, onDragHover,
+}: {
+  folder: ArchiveFolder;
+  sessionsByDir: Map<string, ArchiveSession>;
+  isDragHover: boolean;
+  onNavigate: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onDragHover: (id: string | null) => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: `folder:${folder.id}` });
+  const [isHover, setIsHover] = useState(false);
+
+  useEffect(() => {
+    onDragHover(isOver ? folder.id : null);
+  }, [isOver, folder.id, onDragHover]);
+
+  const count = useMemo(
+    () => folder.session_dirs.filter(d => sessionsByDir.has(d)).length,
+    [folder.session_dirs, sessionsByDir],
+  );
+
+  const kebabItems: KebabMenuItem[] = [
+    {
+      label: 'Modifica',
+      icon: <Pencil className="w-3.5 h-3.5" />,
+      onClick: onEdit,
+    },
+    {
+      label: 'Elimina',
+      icon: <Trash2 className="w-3.5 h-3.5" />,
+      danger: true,
+      onClick: onDelete,
+    },
+  ];
+
+  return (
+    <div
+      ref={setNodeRef}
+      className="folder-card cursor-pointer"
+      style={{
+        border: `2px solid ${isDragHover || isOver ? folder.color : isHover ? `${folder.color}90` : `${folder.color}40`}`,
+        borderRadius: 20,
+        background: isOver ? `${folder.color}38` : `${folder.color}26`,
+        transition: 'border-color 0.15s, background 0.15s',
+      }}
+      onClick={onNavigate}
+      onMouseEnter={() => setIsHover(true)}
+      onMouseLeave={() => setIsHover(false)}
+    >
+      <div className="flex items-center gap-3 px-4 pt-3 pb-1">
+        <span className="w-4 h-4 rounded-full shrink-0" style={{ background: folder.color }} />
+        <span className="flex-1 text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+          {folder.name}
+        </span>
+        <div onClick={e => e.stopPropagation()}>
+          <KebabMenu items={kebabItems} />
+        </div>
+      </div>
+      <div className="px-4 pb-3">
+        <p className="text-xs" style={{ color: 'var(--text-faint)' }}>
+          {count === 1 ? '1 lezione' : `${count} lezioni`}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── DraggableSessionCard ─────────────────────────────────────────────────────
+
+function DraggableSessionCard({
+  session, allFolders, currentFolder, onAssignToFolder, onRemoveFromFolder,
+  onPreview, onOpenFile, onDeleteSession,
+}: {
+  session: ArchiveSession;
+  allFolders: ArchiveFolder[];
+  currentFolder?: ArchiveFolder;
+  onAssignToFolder: (folderId: string) => void;
+  onRemoveFromFolder: () => void;
+  onPreview: ArchivePageProps['onPreview'];
+  onOpenFile: ArchivePageProps['onOpenFile'];
+  onDeleteSession: ArchivePageProps['onDeleteSession'];
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: session.session_dir });
+  const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
+
+  const kebabItems: KebabMenuItem[] = [
+    ...allFolders.map(f => ({
+      label: f.name,
+      icon: <span className="w-3 h-3 rounded-full inline-block" style={{ background: f.color }} />,
+      onClick: () => onAssignToFolder(f.id),
+    })),
+    ...(currentFolder ? [{
+      label: `Rimuovi da "${currentFolder.name}"`,
+      icon: <X className="w-3.5 h-3.5" />,
+      onClick: onRemoveFromFolder,
+    } as KebabMenuItem] : []),
+    ...(allFolders.length > 0 || currentFolder ? [{ separator: true } as KebabMenuItem] : []),
+    {
+      label: 'Apri nel browser',
+      icon: <ExternalLink className="w-3.5 h-3.5" />,
+      onClick: () => onOpenFile(session.html_path),
+    },
+    {
+      label: 'Elimina',
+      icon: <Trash2 className="w-3.5 h-3.5" />,
+      danger: true,
+      onClick: () => onDeleteSession(session.session_dir, session.name),
+    },
+  ];
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      onClick={() => onPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir)}
+      className="archive-session-card flex items-center justify-between gap-3 px-4 py-3 cursor-pointer"
+      style={{ border: '1px solid var(--border-subtle)', opacity: isDragging ? 0.4 : 1, transition: 'opacity 0.15s ease' }}
+    >
+      <span
+        {...listeners}
+        className="shrink-0 cursor-grab active:cursor-grabbing"
+        style={{ color: 'var(--text-faint)', touchAction: 'none' }}
+        onClick={e => e.stopPropagation()}
+        title="Trascina in una cartella"
+      >
+        <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor">
+          <circle cx="3" cy="2.5" r="1.3"/><circle cx="9" cy="2.5" r="1.3"/>
+          <circle cx="3" cy="7" r="1.3"/><circle cx="9" cy="7" r="1.3"/>
+          <circle cx="3" cy="11.5" r="1.3"/><circle cx="9" cy="11.5" r="1.3"/>
+        </svg>
+      </span>
+
+      <div className="flex items-center gap-3 overflow-hidden flex-1">
+        <History className="w-4 h-4 shrink-0" style={{ color: 'var(--text-faint)' }} />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{session.name}</p>
+          <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+            {ts > 0 && <span>{formatRelativeTime(ts)}</span>}
+            {session.effective_model && (
+              <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span>{shortModelName(session.effective_model)}</span></>
+            )}
+            {currentFolder && (
+              <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full shrink-0" style={{ background: currentFolder.color }} />{currentFolder.name}</span></>
+            )}
+          </div>
+          <div
+            className="mt-0.5 flex items-center gap-1 text-[11px] hover:underline"
+            style={{ color: 'var(--text-faint)', cursor: 'pointer' }}
+            onClick={e => { e.stopPropagation(); onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path); }}
+          >
+            <FolderOpen className="w-3 h-3 shrink-0" />
+            <span className="truncate">{session.html_path.replace(/\\/g, '/').split('/').slice(-2).join('/')}</span>
+          </div>
+        </div>
+      </div>
+
+      <div onClick={e => e.stopPropagation()}>
+        <KebabMenu items={kebabItems} />
+      </div>
+    </div>
+  );
+}
+
+// ─── SortableSessionCard (inside folder detail view) ─────────────────────────
+
+function SortableSessionCard({
+  session, folderColor, disabled, onRemove,
+  onPreview, onOpenFile, onDeleteSession,
+}: {
+  session: ArchiveSession;
+  folderColor: string;
+  disabled: boolean;
+  onRemove: () => void;
+  onPreview: ArchivePageProps['onPreview'];
+  onOpenFile: ArchivePageProps['onOpenFile'];
+  onDeleteSession: ArchivePageProps['onDeleteSession'];
+}) {
+  const {
+    attributes, listeners, setNodeRef,
+    transform, transition, isDragging,
+  } = useSortable({ id: session.session_dir, disabled });
+
+  const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
+
+  const kebabItems: KebabMenuItem[] = [
+    {
+      label: 'Apri nel browser',
+      icon: <ExternalLink className="w-3.5 h-3.5" />,
+      onClick: () => onOpenFile(session.html_path),
+    },
+    {
+      label: 'Rimuovi dalla cartella',
+      icon: <X className="w-3.5 h-3.5" />,
+      onClick: onRemove,
+    },
+    {
+      label: 'Elimina',
+      icon: <Trash2 className="w-3.5 h-3.5" />,
+      danger: true,
+      onClick: () => onDeleteSession(session.session_dir, session.name),
+    },
+  ];
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      onClick={() => onPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir)}
+      className="archive-session-card flex items-center justify-between gap-3 px-4 py-3 cursor-pointer"
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : 1,
+        border: '1px solid var(--border-subtle)',
+      }}
+    >
+      {!disabled && (
+        <span
+          {...listeners}
+          className="shrink-0 cursor-grab active:cursor-grabbing"
+          style={{ color: 'var(--text-faint)', touchAction: 'none' }}
+          onClick={e => e.stopPropagation()}
+          title="Riordina"
+        >
+          <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor">
+            <circle cx="3" cy="2.5" r="1.3"/><circle cx="9" cy="2.5" r="1.3"/>
+            <circle cx="3" cy="7" r="1.3"/><circle cx="9" cy="7" r="1.3"/>
+            <circle cx="3" cy="11.5" r="1.3"/><circle cx="9" cy="11.5" r="1.3"/>
+          </svg>
+        </span>
+      )}
+      <div className="flex items-center gap-3 overflow-hidden flex-1">
+        <span className="w-4 h-4 rounded-full shrink-0" style={{ background: folderColor, opacity: 0.85 }} />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{session.name}</p>
+          <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+            {ts > 0 && <span>{formatRelativeTime(ts)}</span>}
+            {session.effective_model && (
+              <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span>{shortModelName(session.effective_model)}</span></>
+            )}
+          </div>
+          <div
+            className="mt-0.5 flex items-center gap-1 text-[11px] hover:underline"
+            style={{ color: 'var(--text-faint)', cursor: 'pointer' }}
+            onClick={e => { e.stopPropagation(); onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path); }}
+          >
+            <FolderOpen className="w-3 h-3 shrink-0" />
+            <span className="truncate">{session.html_path.replace(/\\/g, '/').split('/').slice(-2).join('/')}</span>
+          </div>
+        </div>
+      </div>
+      <div onClick={e => e.stopPropagation()}>
+        <KebabMenu items={kebabItems} />
+      </div>
+    </div>
+  );
+}
+
+// ─── FolderDetailView ─────────────────────────────────────────────────────────
+
+function FolderDetailView({
+  folder, sessionsByDir,
+  onBack, onEdit, onDelete,
+  onRemoveSession, onAddSession, onReorderSessions,
+  onPreview, onOpenFile, onDeleteSession,
+}: {
+  folder: ArchiveFolder;
+  sessionsByDir: Map<string, ArchiveSession>;
+  onBack: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onRemoveSession: (dir: string) => void;
+  onAddSession: (dir: string) => void;
+  onReorderSessions: (dirs: string[]) => void;
+  onPreview: ArchivePageProps['onPreview'];
+  onOpenFile: ArchivePageProps['onOpenFile'];
+  onDeleteSession: ArchivePageProps['onDeleteSession'];
+}) {
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
+  const folderSearchInputRef = useRef<HTMLInputElement>(null);
+  const [folderSearchFocused, setFolderSearchFocused] = useState(false);
+
+  const folderSessions = useMemo(() => {
+    const all = folder.session_dirs.map(d => sessionsByDir.get(d)).filter(Boolean) as ArchiveSession[];
+    const q = search.trim().toLowerCase();
+    return q ? all.filter(s => s.name.toLowerCase().includes(q)) : all;
+  }, [folder.session_dirs, sessionsByDir, search]);
+
+  const totalPages = Math.ceil(folderSessions.length / ARCHIVE_PAGE_SIZE);
+  const pageData = useMemo(
+    () => folderSessions.slice(page * ARCHIVE_PAGE_SIZE, (page + 1) * ARCHIVE_PAGE_SIZE),
+    [folderSessions, page],
+  );
+
+  const [showAddPanel, setShowAddPanel] = useState(false);
+  const [addSearch, setAddSearch] = useState('');
+  const [activeSortId, setActiveSortId] = useState<string | null>(null);
+  const isSearching = search.trim().length > 0;
+
+  const sortSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleSortStart = useCallback((event: DragStartEvent) => {
+    setActiveSortId(String(event.active.id));
+  }, []);
+
+  const handleSortEnd = useCallback((event: DragEndEvent) => {
+    setActiveSortId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = folderSessions.findIndex(s => s.session_dir === String(active.id));
+    const newIndex = folderSessions.findIndex(s => s.session_dir === String(over.id));
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reorderedVisible = arrayMove(folderSessions, oldIndex, newIndex).map(s => s.session_dir);
+    const visibleSet = new Set(folderSessions.map(s => s.session_dir));
+    let vi = 0;
+    const merged = folder.session_dirs.map(d => visibleSet.has(d) ? reorderedVisible[vi++] : d);
+    onReorderSessions(merged);
+  }, [folder.session_dirs, folderSessions, onReorderSessions]);
+
+  const availableToAdd = useMemo(() => {
+    const inFolder = new Set(folder.session_dirs);
+    const all = Array.from(sessionsByDir.values()).filter(s => !inFolder.has(s.session_dir));
+    const q = addSearch.trim().toLowerCase();
+    const filtered = q ? all.filter(s => s.name.toLowerCase().includes(q)) : all;
+    return [...filtered].sort((a, b) => {
+      const ta = a.completed_at_iso ? new Date(a.completed_at_iso).getTime() : 0;
+      const tb = b.completed_at_iso ? new Date(b.completed_at_iso).getTime() : 0;
+      return tb - ta;
+    });
+  }, [folder.session_dirs, sessionsByDir, addSearch]);
+
+  useEffect(() => { setPage(0); }, [search]);
+  useEffect(() => { if (totalPages > 0 && page >= totalPages) setPage(totalPages - 1); }, [totalPages, page]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== '/') return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable) return;
+      e.preventDefault();
+      folderSearchInputRef.current?.focus();
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
+
+  const headerKebabItems: KebabMenuItem[] = [
+    {
+      label: 'Modifica cartella',
+      icon: <Pencil className="w-3.5 h-3.5" />,
+      onClick: onEdit,
+    },
+    {
+      label: 'Elimina cartella',
+      icon: <Trash2 className="w-3.5 h-3.5" />,
+      danger: true,
+      onClick: onDelete,
+    },
+  ];
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+            className="icon-button compact-icon-button"
+            style={{ color: 'var(--text-muted)', borderColor: 'var(--border-default)' }}
+            aria-label="Torna all'archivio"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <span className="w-4 h-4 rounded-full shrink-0" style={{ background: folder.color }} />
+          <h2 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+            {folder.name}
+          </h2>
+          <span className="status-pill">{folderSessions.length}</span>
+        </div>
+        <KebabMenu items={headerKebabItems} />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <div className="notion-search-wrap">
+          <Search className="notion-search-icon w-3.5 h-3.5" />
+          <input
+            ref={folderSearchInputRef}
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            onFocus={() => setFolderSearchFocused(true)}
+            onBlur={() => setFolderSearchFocused(false)}
+            placeholder="Cerca per nome..."
+            className="notion-search-input"
+          />
+          <AnimatePresence>
+            {search.trim().length > 0 ? (
+              <motion.button
+                key="clear"
+                initial={{ opacity: 0, scale: 0.7 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.7 }}
+                transition={{ duration: 0.1 }}
+                onClick={() => { setSearch(''); folderSearchInputRef.current?.focus(); }}
+                className="notion-search-clear"
+                aria-label="Cancella ricerca"
+              >
+                <X className="w-3 h-3" />
+              </motion.button>
+            ) : !folderSearchFocused ? (
+              <motion.span
+                key="hint"
+                className="notion-search-hint"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.12 }}
+              >
+                <kbd>/</kbd>
+              </motion.span>
+            ) : null}
+          </AnimatePresence>
+        </div>
+        {search.trim().length > 0 && (
+          <span className="notion-results-count">
+            {folderSessions.length === 0
+              ? 'Nessun risultato'
+              : folderSessions.length === 1
+                ? '1 risultato'
+                : `${folderSessions.length} risultati`}
+          </span>
+        )}
+      </div>
+
+      {/* Add lesson panel */}
+      <div className="flex flex-col gap-3">
+        <button
+          onClick={() => setShowAddPanel(v => !v)}
+          className="flex items-center gap-2 text-sm font-semibold w-full text-left py-1"
+          style={{ color: 'var(--accent-text)', background: 'none', border: 'none', cursor: 'pointer' }}
+        >
+          <Plus className="w-4 h-4" />
+          Aggiungi lezione
+          {showAddPanel
+            ? <ChevronUp className="w-3.5 h-3.5 ml-auto" />
+            : <ChevronDown className="w-3.5 h-3.5 ml-auto" />}
+        </button>
+
+        <AnimatePresence>
+          {showAddPanel && (
+            <motion.div
+              key="add-panel"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              style={{ overflow: 'hidden' }}
+            >
+              <div className="flex flex-col gap-3">
+                {availableToAdd.length === 0 && !addSearch.trim() && (
+                  <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>
+                    Tutte le sbobine sono già in una cartella.
+                  </p>
+                )}
+                {(availableToAdd.length > 0 || addSearch.trim().length > 0) && (
+                  <div className="notion-search-wrap">
+                    <Search className="notion-search-icon w-3.5 h-3.5" />
+                    <input
+                      type="text"
+                      value={addSearch}
+                      onChange={e => setAddSearch(e.target.value)}
+                      placeholder="Cerca per nome..."
+                      className="notion-search-input"
+                    />
+                    <AnimatePresence>
+                      {addSearch.trim().length > 0 && (
+                        <motion.button
+                          key="clear-add"
+                          initial={{ opacity: 0, scale: 0.7 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.7 }}
+                          transition={{ duration: 0.1 }}
+                          onClick={() => setAddSearch('')}
+                          className="notion-search-clear"
+                          aria-label="Cancella ricerca"
+                        >
+                          <X className="w-3 h-3" />
+                        </motion.button>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
+                {availableToAdd.length === 0 && addSearch.trim() && (
+                  <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>
+                    Nessun risultato per &ldquo;{addSearch}&rdquo;
+                  </p>
+                )}
+                <div
+                  className="flex flex-col gap-2"
+                  style={{ maxHeight: 320, overflowY: 'auto' }}
+                >
+                  {availableToAdd.map(session => {
+                    const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
+                    return (
+                      <div
+                        key={session.session_dir}
+                        className="archive-session-card flex items-center justify-between gap-3 px-4 py-3"
+                        style={{ border: '1px solid var(--border-subtle)' }}
+                      >
+                        <div className="flex items-center gap-3 overflow-hidden flex-1">
+                          <History className="w-4 h-4 shrink-0" style={{ color: 'var(--text-faint)' }} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                              {session.name}
+                            </p>
+                            {ts > 0 && (
+                              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                {formatRelativeTime(ts)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => onAddSession(session.session_dir)}
+                          className="icon-button compact-icon-button shrink-0"
+                          style={{ color: 'var(--accent-text)' }}
+                          title="Aggiungi alla cartella"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <DndContext
+        sensors={sortSensors}
+        onDragStart={handleSortStart}
+        onDragEnd={handleSortEnd}
+      >
+        <div className="flex flex-col gap-2">
+          {folderSessions.length === 0 && !search.trim() && (
+            <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>
+              <History className="w-8 h-8 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">Nessuna sbobina in questa cartella.</p>
+            </div>
+          )}
+          {folderSessions.length === 0 && search.trim() && (
+            <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+              Nessun risultato per &ldquo;{search}&rdquo;
+            </div>
+          )}
+          <SortableContext
+            items={pageData.map(s => s.session_dir)}
+            strategy={verticalListSortingStrategy}
+          >
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`folder-page-${page}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.12, ease: 'easeOut' }}
+                className="flex flex-col gap-2"
+              >
+                {pageData.map(session => (
+                  <SortableSessionCard
+                    key={session.session_dir}
+                    session={session}
+                    folderColor={folder.color}
+                    disabled={isSearching}
+                    onRemove={() => onRemoveSession(session.session_dir)}
+                    onPreview={onPreview}
+                    onOpenFile={onOpenFile}
+                    onDeleteSession={onDeleteSession}
+                  />
+                ))}
+              </motion.div>
+            </AnimatePresence>
+          </SortableContext>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3 pt-1">
+              <button
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="icon-button compact-icon-button"
+                style={{ color: 'var(--text-muted)', opacity: page === 0 ? 0.35 : 1 }}
+                aria-label="Pagina precedente"
+              ><ChevronLeft className="w-4 h-4" /></button>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{page + 1} / {totalPages}</span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                disabled={page >= totalPages - 1}
+                className="icon-button compact-icon-button"
+                style={{ color: 'var(--text-muted)', opacity: page >= totalPages - 1 ? 0.35 : 1 }}
+                aria-label="Pagina successiva"
+              ><ChevronRight className="w-4 h-4" /></button>
+            </div>
+          )}
+        </div>
+        <DragOverlay>
+          {activeSortId ? (() => {
+            const s = folderSessions.find(x => x.session_dir === activeSortId);
+            return s ? (
+              <div
+                className="rounded-xl px-4 py-3 text-sm font-medium shadow-lg"
+                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', opacity: 0.9, pointerEvents: 'none' }}
+              >
+                {s.name}
+              </div>
+            ) : null;
+          })() : null}
+        </DragOverlay>
+      </DndContext>
+    </div>
+  );
+}
+
+// ─── FolderModal ─────────────────────────────────────────────────────────────
+
+function FolderModal({
+  state, onClose, onSave,
+}: {
+  state: FolderModalState;
+  onClose: () => void;
+  onSave: (name: string, color: string) => void;
+}) {
+  const [name, setName] = useState(state.type === 'edit' ? state.folder.name : '');
+  const [color, setColor] = useState(state.type === 'edit' ? state.folder.color : FOLDER_COLORS[0]);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setTimeout(() => inputRef.current?.focus(), 80);
+  }, []);
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    onSave(name, color);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'var(--bg-overlay)' }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.96, y: 8 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.96, y: 8 }}
+        transition={{ duration: 0.15, ease: 'easeOut' }}
+        className="modal-card w-full max-w-sm p-6"
+        style={{ background: 'var(--bg-elevated)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
+          {state.type === 'create' ? 'Nuova cartella' : 'Modifica cartella'}
+        </h3>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div>
+            <label className="text-xs font-medium block mb-1.5" style={{ color: 'var(--text-muted)' }}>Nome</label>
+            <input
+              ref={inputRef}
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="es. Anatomia"
+              maxLength={48}
+              className="premium-button-secondary w-full px-3 py-2 rounded-xl text-sm outline-none"
+              style={{ borderColor: 'var(--border-default)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium block mb-2" style={{ color: 'var(--text-muted)' }}>Colore</label>
+            <div className="flex flex-wrap gap-2">
+              {FOLDER_COLORS.map(c => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setColor(c)}
+                  className="w-7 h-7 rounded-full transition-transform hover:scale-110 focus:outline-none"
+                  style={{
+                    background: c,
+                    border: color === c ? '3px solid var(--text-primary)' : '3px solid transparent',
+                    outline: color === c ? `2px solid ${c}` : 'none',
+                    outlineOffset: 2,
+                  }}
+                  aria-label={`Colore ${c}`}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-2 mt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="premium-button-secondary compact-button px-4 py-2 text-sm"
+              style={{ color: 'var(--text-muted)' }}
+            >Annulla</button>
+            <button
+              type="submit"
+              disabled={!name.trim()}
+              className="compact-button px-4 py-2 text-sm rounded-xl font-medium"
+              style={{
+                background: name.trim() ? color : 'var(--btn-disabled-bg)',
+                color: name.trim() ? '#fff' : 'var(--btn-disabled-text)',
+                border: 'none',
+                cursor: name.trim() ? 'pointer' : 'default',
+              }}
+            >
+              {state.type === 'create' ? 'Crea' : 'Salva'}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </motion.div>
+  );
+}

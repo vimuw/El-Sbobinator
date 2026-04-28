@@ -52,6 +52,12 @@ from el_sbobinator.services.config_service import (
     load_config,
     save_config,
 )
+from el_sbobinator.services.folders_service import (
+    get_folders as _get_archive_folders,
+)
+from el_sbobinator.services.folders_service import (
+    save_folders as _save_archive_folders,
+)
 from el_sbobinator.utils.file_ops import (
     extract_html_shell,
     open_path_with_default_app,
@@ -356,6 +362,26 @@ class ElSbobinatorApi:
                 subprocess.Popen(["open", session_root])
             else:
                 subprocess.Popen(["xdg-open", session_root])
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ---- Archive Folders ----
+
+    def get_archive_folders(self) -> dict:
+        """Return the user-defined archive folders."""
+        try:
+            folders = _get_archive_folders()
+            return {"ok": True, "folders": folders}
+        except Exception as e:
+            return {"ok": False, "error": str(e), "folders": []}
+
+    def save_archive_folders(self, folders: list) -> dict:
+        """Persist the archive folder list to disk."""
+        try:
+            if not isinstance(folders, list):
+                return {"ok": False, "error": "folders must be a list"}
+            _save_archive_folders(folders)
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": str(e)}

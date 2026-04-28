@@ -1,7 +1,7 @@
 import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Activity, AlertCircle, AlertTriangle, ArrowDown, ArrowDownToLine, ArrowUp, Bell, ChevronDown, Cpu, Eye, EyeOff, FolderOpen, HardDrive, Loader2, RefreshCw, Settings, SlidersHorizontal, Tag, X, Zap } from 'lucide-react';
+import { Activity, AlertCircle, AlertTriangle, ArrowDown, ArrowDownToLine, ArrowUp, Bell, ChevronDown, Cpu, Eye, EyeOff, FlaskConical, FolderOpen, HardDrive, Loader2, RefreshCw, Settings, SlidersHorizontal, Tag, Trash2, X, Zap } from 'lucide-react';
 import type { ModelOption, ValidationResult } from '../../bridge';
 import { formatSize, GEMINI_KEY_PATTERN } from '../../utils';
 import { APP_VERSION, GITHUB_RELEASES_URL } from '../../branding';
@@ -728,10 +728,11 @@ export function SettingsModal({
                               <button
                                 onClick={handleCleanupSessions}
                                 disabled={isCleaningSession || isLoadingSessionInfo}
-                                className="modal-action-button is-compact disabled:opacity-50"
-                                style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+                                className="icon-button compact-icon-button disabled:opacity-50"
+                                title={`Pulisci sessioni (> ${SESSION_CLEANUP_DAYS} giorni)`}
+                                aria-label={`Pulisci sessioni (> ${SESSION_CLEANUP_DAYS} giorni)`}
                               >
-                                {isCleaningSession ? 'Pulizia…' : `Pulisci (> ${SESSION_CLEANUP_DAYS} giorni)`}
+                                {isCleaningSession ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                               </button>
                             </div>
                             {cleanupResult !== null && (
@@ -757,10 +758,11 @@ export function SettingsModal({
                             <button
                               onClick={runEnvironmentValidation}
                               disabled={isValidatingEnvironment}
-                              className="modal-action-button is-compact"
-                              style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}
+                              className="icon-button compact-icon-button disabled:opacity-50"
+                              title="Verifica ambiente"
+                              aria-label="Verifica ambiente"
                             >
-                              {isValidatingEnvironment ? 'Verifica...' : 'Verifica ambiente'}
+                              {isValidatingEnvironment ? <Loader2 className="w-4 h-4 animate-spin" /> : <FlaskConical className="w-4 h-4" />}
                             </button>
                           </div>
                           <ul className="space-y-1.5 mb-3">

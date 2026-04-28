@@ -15,6 +15,7 @@ const compareVersions = (a: string, b: string): number => {
 export function useUpdateChecker() {
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
+  const [isDismissed, setIsDismissed] = useState(false);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [hasChecked, setHasChecked] = useState(false);
   const [checkFailed, setCheckFailed] = useState(false);
@@ -41,9 +42,15 @@ export function useUpdateChecker() {
           setLatestVersion(latest);
           try {
             const dismissed = window.localStorage.getItem(UPDATE_DISMISSED_KEY);
-            if (dismissed !== latest) setUpdateAvailable(latest);
+            if (dismissed !== latest) {
+              setUpdateAvailable(latest);
+              setIsDismissed(false);
+            } else {
+              setIsDismissed(true);
+            }
           } catch (_) {
             setUpdateAvailable(latest);
+            setIsDismissed(false);
           }
         }
       })
@@ -62,7 +69,8 @@ export function useUpdateChecker() {
   const dismissUpdate = (version: string) => {
     try { window.localStorage.setItem(UPDATE_DISMISSED_KEY, version); } catch (_) {}
     setUpdateAvailable(null);
+    setIsDismissed(true);
   };
 
-  return { updateAvailable, latestVersion, isCheckingUpdate, hasChecked, checkFailed, checkForUpdates, dismissUpdate };
+  return { updateAvailable, latestVersion, isDismissed, isCheckingUpdate, hasChecked, checkFailed, checkForUpdates, dismissUpdate };
 }
