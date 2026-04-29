@@ -168,7 +168,7 @@ describe('App — ready-empty mode (valid API key, no files)', () => {
 
   it('shows DropZone when api key is valid and no files queued', async () => {
     await act(async () => { render(<App />); });
-    expect(screen.getByText('Clicca per sfogliare i file')).toBeTruthy();
+    expect(screen.getByText('Trascina i file qui')).toBeTruthy();
   });
 
   it('shows API ready status in header', async () => {
