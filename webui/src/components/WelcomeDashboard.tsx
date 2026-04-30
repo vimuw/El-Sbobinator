@@ -15,21 +15,33 @@ function formatAudioDuration(totalSec: number): string {
   return '< 1m';
 }
 
+function formatLastSession(archiveSessions: ArchiveSession[]): string {
+  if (archiveSessions.length === 0) return '—';
+  let latest: Date | null = null;
+  for (const s of archiveSessions) {
+    if (!s.completed_at_iso) continue;
+    try {
+      const d = new Date(s.completed_at_iso);
+      if (!latest || d > latest) latest = d;
+    } catch { /* skip */ }
+  }
+  if (!latest) return '—';
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const latestStart = new Date(latest.getFullYear(), latest.getMonth(), latest.getDate());
+  const diffDays = Math.round((todayStart.getTime() - latestStart.getTime()) / 86400000);
+  if (diffDays === 0) return 'Oggi';
+  if (diffDays === 1) return 'Ieri';
+  if (diffDays > 1) return `${diffDays} giorni fa`;
+  return latest.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+}
+
 export function WelcomeDashboard({ archiveSessions }: WelcomeDashboardProps) {
   const stats = useMemo(() => {
     const total = archiveSessions.length;
     const totalSec = archiveSessions.reduce((acc, s) => acc + (s.duration_sec ?? 0), 0);
-    const now = new Date();
-    const thisMonth = archiveSessions.filter(s => {
-      if (!s.completed_at_iso) return false;
-      try {
-        const d = new Date(s.completed_at_iso);
-        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-      } catch {
-        return false;
-      }
-    }).length;
-    return { total, totalSec, thisMonth };
+    const lastSession = formatLastSession(archiveSessions);
+    return { total, totalSec, lastSession };
   }, [archiveSessions]);
 
   const hasSessions = stats.total > 0;
@@ -41,7 +53,7 @@ export function WelcomeDashboard({ archiveSessions }: WelcomeDashboardProps) {
       transition={{ duration: 0.25, ease: 'easeOut' }}
       className="space-y-4"
     >
-      <div className="text-center space-y-2 py-3">
+      <div className="space-y-2 py-3">
         <h1 className="text-4xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
           {hasSessions ? 'Bentornato 👋' : 'Benvenuto in El Sbobinator 👋'}
         </h1>
@@ -68,8 +80,8 @@ export function WelcomeDashboard({ archiveSessions }: WelcomeDashboardProps) {
           />
           <StatCard
             icon={<CalendarDays className="w-5 h-5" />}
-            value={String(stats.thisMonth)}
-            label="Questo mese"
+            value={stats.lastSession}
+            label="Ultima sbobina"
             delay={0.1}
           />
         </div>
@@ -90,13 +102,17 @@ function StatCard({ icon, value, label, delay }: StatCardProps) {
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -5, scale: 1.03, boxShadow: '0 8px 24px rgba(0,0,0,0.10)' }}
+      whileHover={{ y: -5, scale: 1.03 }}
       whileTap={{ scale: 0.96 }}
       transition={{ type: 'spring', stiffness: 300, damping: 20, delay }}
-      className="premium-panel p-4 flex flex-col items-center gap-2 text-center"
+      className="premium-panel stat-card p-4 flex flex-col items-center gap-2 text-center"
       style={{ cursor: 'default' }}
     >
-      <div style={{ color: 'var(--text-muted)' }}>{icon}</div>
+      <motion.div
+        whileHover={{ scale: 1.2 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+        style={{ color: 'var(--text-muted)' }}
+      >{icon}</motion.div>
       <span className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>{value}</span>
       <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</span>
     </motion.div>

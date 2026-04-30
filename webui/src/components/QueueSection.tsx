@@ -51,14 +51,13 @@ export function QueueSection({
   }, [menuOpen]);
 
   return (
-    <AnimatePresence>
+    <>
       {(pendingFiles.length > 0 || appState !== 'idle') && (
         <motion.div
           key="batch-queue"
           className="premium-panel p-5 sm:p-6 space-y-4"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0, transition: { duration: 0.2 } }}
-          exit={{ opacity: 0, y: -8, transition: { duration: 0.15 } }}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' } }}
         >
           <div className="flex items-center justify-between gap-3 border-b pb-5" style={{ borderColor: 'var(--border-subtle)' }}>
             <div className="flex items-center gap-2 min-w-0">
@@ -140,7 +139,7 @@ export function QueueSection({
             </div>
           </div>
 
-          <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={onDragEnd} autoScroll={false}>
             <div
               style={{
                 maxHeight: '26rem',
@@ -190,7 +189,7 @@ export function QueueSection({
                 )}
                 {appState === 'processing' && (
                   <motion.div key="processing" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex justify-end">
-                    <button onClick={onStop} className="premium-button-secondary compact-button px-5 py-2" style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--bg-elevated)' }}>
+                    <button onClick={onStop} className="premium-button-secondary compact-button is-danger px-5 py-2">
                       <Square className="w-3.5 h-3.5 fill-current" /> Stop
                     </button>
                   </motion.div>
@@ -208,6 +207,6 @@ export function QueueSection({
           )}
         </motion.div>
       )}
-    </AnimatePresence>
+    </>
   );
 }

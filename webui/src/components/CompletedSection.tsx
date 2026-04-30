@@ -21,14 +21,13 @@ export function CompletedSection({ doneFiles, appState, onRemove, onPreview, onO
     : doneFiles;
 
   return (
-    <AnimatePresence>
+    <>
       {doneFiles.length > 0 && (
         <motion.div
           key="completed-section"
-          initial={{ opacity: 0, y: 12 }}
+          initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8, transition: { duration: 0.15 } }}
-          transition={{ duration: 0.22, ease: 'easeOut' }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
           className="premium-panel p-5 sm:p-6 space-y-4"
         >
           <div className="flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--border-subtle)' }}>
@@ -93,6 +92,6 @@ export function CompletedSection({ doneFiles, appState, onRemove, onPreview, onO
           </AnimatePresence>
         </motion.div>
       )}
-    </AnimatePresence>
+    </>
   );
 }

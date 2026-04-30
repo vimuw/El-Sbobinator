@@ -372,7 +372,6 @@ export function ProcessingStatusBanner({
     <motion.section
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8, transition: { duration: 0.18, ease: 'easeIn' } }}
       transition={{ duration: 0.22, ease: 'easeOut' }}
       className="relative w-full px-5 py-6 sm:px-7 sm:py-7"
       aria-label="Stato elaborazione"

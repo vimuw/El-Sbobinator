@@ -1,4 +1,4 @@
-import { UploadCloud } from 'lucide-react';
+import { Plus, UploadCloud } from 'lucide-react';
 
 interface DropZoneProps {
   isDragging: boolean;
@@ -6,24 +6,64 @@ interface DropZoneProps {
   onDragLeave: () => void;
   onDrop: (e: React.DragEvent) => void;
   onClick: () => void;
+  compact?: boolean;
 }
 
-export function DropZone({ isDragging, onDragOver, onDragLeave, onDrop, onClick }: DropZoneProps) {
+export function DropZone({ isDragging, onDragOver, onDragLeave, onDrop, onClick, compact = false }: DropZoneProps) {
+  if (compact) {
+    return (
+      <div
+        onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop} onClick={onClick}
+        className={`dropzone-compact cursor-pointer flex items-center gap-3 px-4 group${isDragging ? ' is-dragging' : ''}`}
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => e.key === 'Enter' && onClick()}
+        aria-label="Aggiungi file audio o video"
+      >
+        <div
+          className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center transition-colors duration-150"
+          style={{
+            background: isDragging ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
+            border: '1px solid var(--border-default)',
+            color: isDragging ? 'var(--accent-bg)' : 'var(--text-muted)',
+          }}
+        >
+          <Plus className="w-3.5 h-3.5" />
+        </div>
+        <span className="text-sm" style={{ color: isDragging ? 'var(--accent-bg)' : 'var(--text-secondary)', fontWeight: isDragging ? 500 : 400 }}>
+          {isDragging ? 'Rilascia qui per aggiungere' : 'Trascina file o clicca per aggiungere'}
+        </span>
+        <span className="ml-auto text-xs hidden sm:block" style={{ color: 'var(--text-faint)' }}>
+          .mp3 .m4a .mp4 ...
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div
       onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop} onClick={onClick}
-      className={`dropzone-card relative cursor-pointer flex flex-col items-center justify-center py-12 px-6 text-center group${isDragging ? ' is-dragging' : ''}`}
+      className={`dropzone-card relative cursor-pointer flex flex-col items-center justify-center py-10 px-6 text-center group${isDragging ? ' is-dragging' : ''}`}
     >
-      <svg className="dz-border-svg" aria-hidden="true">
-        <rect className="dz-border-rect" x="0" y="0" width="100%" height="100%" rx="24" ry="24" />
-      </svg>
-      <div className="w-14 h-14 mb-4 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}>
-        <UploadCloud className="w-7 h-7" style={{ color: isDragging ? 'var(--accent-text)' : 'var(--text-muted)' }} />
+      <div
+        className="w-12 h-12 mb-4 rounded-xl flex items-center justify-center transition-colors duration-200"
+        style={{
+          background: isDragging ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
+          border: '1px solid var(--border-default)',
+        }}
+      >
+        <UploadCloud className="w-6 h-6" style={{ color: isDragging ? 'var(--accent-bg)' : 'var(--text-muted)' }} />
       </div>
-      <h3 className="text-lg font-medium mb-2" style={{ color: 'var(--text-primary)' }}>Clicca per sfogliare i file</h3>
-      <p className="text-sm max-w-sm" style={{ color: 'var(--text-muted)' }}>
-        Supporta audio e video (.mp3, .m4a, .wav, .mp4, .mkv, .webm, .ogg, .flac, .aac).<br/>Coda illimitata - elaborazione sequenziale.
+      <h3 className="text-base font-semibold mb-1" style={{ color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>Trascina i file qui</h3>
+      <p className="text-xs max-w-xs" style={{ color: 'var(--text-muted)' }}>
+        .mp3 · .m4a · .wav · .mp4 · .mkv · .webm · .ogg · .flac · .aac
       </p>
+      <div
+        className="mt-4 px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-150"
+        style={{ background: 'var(--accent-subtle)', color: 'var(--accent-text)', border: '1px solid var(--accent-ring)' }}
+      >
+        Sfoglia file
+      </div>
     </div>
   );
 }

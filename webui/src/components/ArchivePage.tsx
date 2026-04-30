@@ -6,7 +6,7 @@ import {
   Pencil, Plus, RefreshCw, Search, Trash2, X,
 } from 'lucide-react';
 import {
-  DndContext, DragOverlay, KeyboardSensor, PointerSensor, useDraggable, useDroppable, useSensor, useSensors,
+  DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors,
   type DragEndEvent, type DragStartEvent,
 } from '@dnd-kit/core';
 import {
@@ -47,12 +47,9 @@ export function ArchivePage({
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [folderModal, setFolderModal] = useState<FolderModalState | null>(null);
   const [sessionPage, setSessionPage] = useState(0);
-  const [activeDragSession, setActiveDragSession] = useState<ArchiveSession | null>(null);
-  const [folderHover, setFolderHover] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const handleRefresh = useCallback(async () => {
     if (isRefreshing || !onRefresh) return;
@@ -135,24 +132,6 @@ export function ArchivePage({
     onFoldersChange(next);
   }, [folders, onFoldersChange]);
 
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    const session = sessions.find(s => s.session_dir === event.active.id);
-    setActiveDragSession(session ?? null);
-  }, [sessions]);
-
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    setActiveDragSession(null);
-    setFolderHover(null);
-    (document.activeElement as HTMLElement)?.blur();
-    const { active, over } = event;
-    if (!over) return;
-    const sessionDir = String(active.id);
-    const folderId = String(over.id);
-    if (folderId.startsWith('folder:')) {
-      assignToFolder(sessionDir, folderId.slice(7));
-    }
-  }, [assignToFolder]);
-
   const selectedFolder = selectedFolderId ? folders.find(f => f.id === selectedFolderId) ?? null : null;
 
   if (selectedFolder) {
@@ -206,177 +185,162 @@ export function ArchivePage({
         <span className="status-pill">{sessions.length}</span>
       </div>
 
-      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        {/* Folders grid — always visible, first card is "new folder" */}
-        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-          <NewFolderCard onClick={() => setFolderModal({ type: 'create' })} />
-          {folders.map(folder => (
-            <FolderCard
-              key={folder.id}
-              folder={folder}
-              sessionsByDir={sessionsByDir}
-              isDragHover={folderHover === folder.id}
-              onNavigate={() => setSelectedFolderId(folder.id)}
-              onEdit={() => setFolderModal({ type: 'edit', folder })}
-              onDelete={() => onFoldersChange(folders.filter(f => f.id !== folder.id))}
-              onDragHover={setFolderHover}
-            />
-          ))}
-        </div>
+      {/* Folders grid — always visible, first card is "new folder" */}
+      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+        <NewFolderCard onClick={() => setFolderModal({ type: 'create' })} />
+        {folders.map(folder => (
+          <FolderCard
+            key={folder.id}
+            folder={folder}
+            sessionsByDir={sessionsByDir}
+            onNavigate={() => setSelectedFolderId(folder.id)}
+            onEdit={() => setFolderModal({ type: 'edit', folder })}
+            onDelete={() => onFoldersChange(folders.filter(f => f.id !== folder.id))}
+          />
+        ))}
+      </div>
 
-        {/* Unfiled sessions */}
-        <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--text-faint)' }}>
-            Tutte le sbobine
-          </h3>
+      {/* Unfiled sessions */}
+      <div className="flex flex-col gap-3">
+        <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--text-faint)' }}>
+          Tutte le sbobine
+        </h3>
 
-          {/* Search + Sort */}
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2">
-              <div className="notion-search-wrap">
-                <Search className="notion-search-icon w-3.5 h-3.5" />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  onFocus={() => setSearchFocused(true)}
-                  onBlur={() => setSearchFocused(false)}
-                  placeholder="Cerca per nome..."
-                  className="notion-search-input"
-                />
-                <AnimatePresence>
-                  {search.trim().length > 0 ? (
-                    <motion.button
-                      key="clear"
-                      initial={{ opacity: 0, scale: 0.7 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.7 }}
-                      transition={{ duration: 0.1 }}
-                      onClick={() => { setSearch(''); searchInputRef.current?.focus(); }}
-                      className="notion-search-clear"
-                      aria-label="Cancella ricerca"
-                    >
-                      <X className="w-3 h-3" />
-                    </motion.button>
-                  ) : !searchFocused ? (
-                    <motion.span
-                      key="hint"
-                      className="notion-search-hint"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.12 }}
-                    >
-                      <kbd>/</kbd>
-                    </motion.span>
-                  ) : null}
-                </AnimatePresence>
-              </div>
-              <button
-                onClick={() => setSort(s => s === 'newest' ? 'oldest' : 'newest')}
-                className="notion-sort-chip"
-              >
-                <ChevronDown className="w-3.5 h-3.5" style={{ opacity: 0.55 }} />
-                {sort === 'newest' ? 'Recente' : 'Meno recente'}
-              </button>
-              {onRefresh && (
-                <button
-                  onClick={handleRefresh}
-                  disabled={isRefreshing}
-                  className="icon-button compact-icon-button"
-                  style={{ color: 'var(--text-muted)', flexShrink: 0 }}
-                  title="Aggiorna archivio"
-                  aria-label="Aggiorna archivio"
-                >
-                  <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                </button>
-              )}
+        {/* Search + Sort */}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <div className="notion-search-wrap">
+              <Search className="notion-search-icon w-3.5 h-3.5" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+                placeholder="Cerca per nome..."
+                className="notion-search-input"
+              />
+              <AnimatePresence>
+                {search.trim().length > 0 ? (
+                  <motion.button
+                    key="clear"
+                    initial={{ opacity: 0, scale: 0.7 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.7 }}
+                    transition={{ duration: 0.1 }}
+                    onClick={() => { setSearch(''); searchInputRef.current?.focus(); }}
+                    className="notion-search-clear"
+                    aria-label="Cancella ricerca"
+                  >
+                    <X className="w-3 h-3" />
+                  </motion.button>
+                ) : !searchFocused ? (
+                  <motion.span
+                    key="hint"
+                    className="notion-search-hint"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.12 }}
+                  >
+                    <kbd>/</kbd>
+                  </motion.span>
+                ) : null}
+              </AnimatePresence>
             </div>
-            {search.trim().length > 0 && (
-              <span className="notion-results-count">
-                {allSortedSessions.length === 0
-                  ? 'Nessun risultato'
-                  : allSortedSessions.length === 1
-                    ? '1 risultato'
-                    : `${allSortedSessions.length} risultati`}
-              </span>
+            <button
+              onClick={() => setSort(s => s === 'newest' ? 'oldest' : 'newest')}
+              className="notion-sort-chip"
+            >
+              <ChevronDown className="w-3.5 h-3.5" style={{ opacity: 0.55 }} />
+              {sort === 'newest' ? 'Recente' : 'Meno recente'}
+            </button>
+            {onRefresh && (
+              <button
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="icon-button compact-icon-button"
+                style={{ color: 'var(--text-muted)', flexShrink: 0 }}
+                title="Aggiorna archivio"
+                aria-label="Aggiorna archivio"
+              >
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </button>
             )}
           </div>
-
-          {sessionPageData.length === 0 && sessions.length === 0 && (
-            <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>
-              <History className="w-8 h-8 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">Nessuna sbobina nell&apos;archivio.</p>
-            </div>
-          )}
-
-          {sessionPageData.length === 0 && sessions.length > 0 && search.trim() && (
-            <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
-              {`Nessun risultato per "${search}"`}
-            </div>
-          )}
-
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={`session-page-${sessionPage}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.12, ease: 'easeOut' }}
-              className="flex flex-col gap-3"
-            >
-              {sessionPageData.map(session => (
-                <DraggableSessionCard
-                  key={session.session_dir}
-                  session={session}
-                  allFolders={folders}
-                  currentFolder={sessionFolderMap.get(session.session_dir)}
-                  onAssignToFolder={fId => assignToFolder(session.session_dir, fId)}
-                  onRemoveFromFolder={() => {
-                    const f = sessionFolderMap.get(session.session_dir);
-                    if (f) removeFromFolder(session.session_dir, f.id);
-                  }}
-                  onPreview={onPreview}
-                  onOpenFile={onOpenFile}
-                  onDeleteSession={onDeleteSession}
-                />
-              ))}
-            </motion.div>
-          </AnimatePresence>
-
-          {sessionPages > 1 && (
-            <div className="flex items-center justify-center gap-3 pt-1">
-              <button
-                onClick={() => setSessionPage(p => Math.max(0, p - 1))}
-                disabled={sessionPage === 0}
-                className="icon-button compact-icon-button"
-                style={{ color: 'var(--text-muted)', opacity: sessionPage === 0 ? 0.35 : 1 }}
-                aria-label="Pagina precedente"
-              ><ChevronLeft className="w-4 h-4" /></button>
-              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{sessionPage + 1} / {sessionPages}</span>
-              <button
-                onClick={() => setSessionPage(p => Math.min(sessionPages - 1, p + 1))}
-                disabled={sessionPage >= sessionPages - 1}
-                className="icon-button compact-icon-button"
-                style={{ color: 'var(--text-muted)', opacity: sessionPage >= sessionPages - 1 ? 0.35 : 1 }}
-                aria-label="Pagina successiva"
-              ><ChevronRight className="w-4 h-4" /></button>
-            </div>
+          {search.trim().length > 0 && (
+            <span className="notion-results-count">
+              {allSortedSessions.length === 0
+                ? 'Nessun risultato'
+                : allSortedSessions.length === 1
+                  ? '1 risultato'
+                  : `${allSortedSessions.length} risultati`}
+            </span>
           )}
         </div>
 
-        <DragOverlay>
-          {activeDragSession && (
-            <div
-              className="rounded-xl px-4 py-3 text-sm font-medium shadow-lg"
-              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', opacity: 0.9, pointerEvents: 'none' }}
-            >
-              {activeDragSession.name}
-            </div>
-          )}
-        </DragOverlay>
-      </DndContext>
+        {sessionPageData.length === 0 && sessions.length === 0 && (
+          <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>
+            <History className="w-8 h-8 mx-auto mb-3 opacity-30" />
+            <p className="text-sm">Nessuna sbobina nell&apos;archivio.</p>
+          </div>
+        )}
+
+        {sessionPageData.length === 0 && sessions.length > 0 && search.trim() && (
+          <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+            {`Nessun risultato per "${search}"`}
+          </div>
+        )}
+
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`session-page-${sessionPage}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.12, ease: 'easeOut' }}
+            className="flex flex-col gap-3"
+          >
+            {sessionPageData.map(session => (
+              <DraggableSessionCard
+                key={session.session_dir}
+                session={session}
+                allFolders={folders}
+                currentFolder={sessionFolderMap.get(session.session_dir)}
+                onAssignToFolder={fId => assignToFolder(session.session_dir, fId)}
+                onRemoveFromFolder={() => {
+                  const f = sessionFolderMap.get(session.session_dir);
+                  if (f) removeFromFolder(session.session_dir, f.id);
+                }}
+                onPreview={onPreview}
+                onOpenFile={onOpenFile}
+                onDeleteSession={onDeleteSession}
+              />
+            ))}
+          </motion.div>
+        </AnimatePresence>
+
+        {sessionPages > 1 && (
+          <div className="flex items-center justify-center gap-3 pt-1">
+            <button
+              onClick={() => setSessionPage(p => Math.max(0, p - 1))}
+              disabled={sessionPage === 0}
+              className="icon-button compact-icon-button"
+              style={{ color: 'var(--text-muted)' }}
+              aria-label="Pagina precedente"
+            ><ChevronLeft className="w-4 h-4" /></button>
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{sessionPage + 1} / {sessionPages}</span>
+            <button
+              onClick={() => setSessionPage(p => Math.min(sessionPages - 1, p + 1))}
+              disabled={sessionPage >= sessionPages - 1}
+              className="icon-button compact-icon-button"
+              style={{ color: 'var(--text-muted)' }}
+              aria-label="Pagina successiva"
+            ><ChevronRight className="w-4 h-4" /></button>
+          </div>
+        )}
+      </div>
 
       {/* Folder modal */}
       <AnimatePresence>
@@ -444,23 +408,16 @@ function NewFolderCard({ onClick }: { onClick: () => void }) {
 // ─── FolderCard ──────────────────────────────────────────────────────────────
 
 function FolderCard({
-  folder, sessionsByDir, isDragHover,
-  onNavigate, onEdit, onDelete, onDragHover,
+  folder, sessionsByDir,
+  onNavigate, onEdit, onDelete,
 }: {
   folder: ArchiveFolder;
   sessionsByDir: Map<string, ArchiveSession>;
-  isDragHover: boolean;
   onNavigate: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  onDragHover: (id: string | null) => void;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `folder:${folder.id}` });
   const [isHover, setIsHover] = useState(false);
-
-  useEffect(() => {
-    onDragHover(isOver ? folder.id : null);
-  }, [isOver, folder.id, onDragHover]);
 
   const count = useMemo(
     () => folder.session_dirs.filter(d => sessionsByDir.has(d)).length,
@@ -483,12 +440,11 @@ function FolderCard({
 
   return (
     <div
-      ref={setNodeRef}
       className="folder-card cursor-pointer"
       style={{
-        border: `2px solid ${isDragHover || isOver ? folder.color : isHover ? `${folder.color}90` : `${folder.color}40`}`,
+        border: `2px solid ${isHover ? `${folder.color}90` : `${folder.color}40`}`,
         borderRadius: 20,
-        background: isOver ? `${folder.color}38` : `${folder.color}26`,
+        background: `${folder.color}26`,
         transition: 'border-color 0.15s, background 0.15s',
       }}
       onClick={onNavigate}
@@ -528,7 +484,6 @@ function DraggableSessionCard({
   onOpenFile: ArchivePageProps['onOpenFile'];
   onDeleteSession: ArchivePageProps['onDeleteSession'];
 }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: session.session_dir });
   const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
 
   const kebabItems: KebabMenuItem[] = [
@@ -558,26 +513,9 @@ function DraggableSessionCard({
 
   return (
     <div
-      ref={setNodeRef}
-      {...attributes}
       onClick={() => onPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir)}
       className="archive-session-card flex items-center justify-between gap-3 px-4 py-3 cursor-pointer"
-      style={{ border: '1px solid var(--border-subtle)', opacity: isDragging ? 0.4 : 1, transition: 'opacity 0.15s ease' }}
     >
-      <span
-        {...listeners}
-        className="shrink-0 cursor-grab active:cursor-grabbing"
-        style={{ color: 'var(--text-faint)', touchAction: 'none' }}
-        onClick={e => e.stopPropagation()}
-        title="Trascina in una cartella"
-      >
-        <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor">
-          <circle cx="3" cy="2.5" r="1.3"/><circle cx="9" cy="2.5" r="1.3"/>
-          <circle cx="3" cy="7" r="1.3"/><circle cx="9" cy="7" r="1.3"/>
-          <circle cx="3" cy="11.5" r="1.3"/><circle cx="9" cy="11.5" r="1.3"/>
-        </svg>
-      </span>
-
       <div className="flex items-center gap-3 overflow-hidden flex-1">
         <History className="w-4 h-4 shrink-0" style={{ color: 'var(--text-faint)' }} />
         <div className="min-w-0 flex-1">
@@ -604,6 +542,45 @@ function DraggableSessionCard({
 
       <div onClick={e => e.stopPropagation()}>
         <KebabMenu items={kebabItems} />
+      </div>
+    </div>
+  );
+}
+
+// ─── FolderSessionCardOverlay (DragOverlay for folder detail view) ────────────
+
+function FolderSessionCardOverlay({ session, folderColor }: {
+  session: ArchiveSession;
+  folderColor: string;
+}) {
+  const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
+  return (
+    <div
+      className="archive-session-card flex items-center justify-between gap-3 px-4 py-3"
+      style={{ pointerEvents: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.18)', opacity: 0.95 }}
+    >
+      <span className="shrink-0 cursor-grab" style={{ color: 'var(--text-faint)' }}>
+        <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor">
+          <circle cx="3" cy="2.5" r="1.3"/><circle cx="9" cy="2.5" r="1.3"/>
+          <circle cx="3" cy="7" r="1.3"/><circle cx="9" cy="7" r="1.3"/>
+          <circle cx="3" cy="11.5" r="1.3"/><circle cx="9" cy="11.5" r="1.3"/>
+        </svg>
+      </span>
+      <div className="flex items-center gap-3 overflow-hidden flex-1">
+        <span className="w-4 h-4 rounded-full shrink-0" style={{ background: folderColor, opacity: 0.85 }} />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{session.name}</p>
+          <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+            {ts > 0 && <span>{formatRelativeTime(ts)}</span>}
+            {session.effective_model && (
+              <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span>{shortModelName(session.effective_model)}</span></>
+            )}
+          </div>
+          <div className="mt-0.5 flex items-center gap-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+            <FolderOpen className="w-3 h-3 shrink-0" />
+            <span className="truncate">{session.html_path.replace(/\\/g, '/').split('/').slice(-2).join('/')}</span>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -659,7 +636,6 @@ function SortableSessionCard({
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.4 : 1,
-        border: '1px solid var(--border-subtle)',
       }}
     >
       {!disabled && (
@@ -955,7 +931,7 @@ function FolderDetailView({
                       <div
                         key={session.session_dir}
                         className="archive-session-card flex items-center justify-between gap-3 px-4 py-3"
-                        style={{ border: '1px solid var(--border-subtle)' }}
+                        style={{}}
                       >
                         <div className="flex items-center gap-3 overflow-hidden flex-1">
                           <History className="w-4 h-4 shrink-0" style={{ color: 'var(--text-faint)' }} />
@@ -1039,7 +1015,7 @@ function FolderDetailView({
                 onClick={() => setPage(p => Math.max(0, p - 1))}
                 disabled={page === 0}
                 className="icon-button compact-icon-button"
-                style={{ color: 'var(--text-muted)', opacity: page === 0 ? 0.35 : 1 }}
+                style={{ color: 'var(--text-muted)' }}
                 aria-label="Pagina precedente"
               ><ChevronLeft className="w-4 h-4" /></button>
               <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{page + 1} / {totalPages}</span>
@@ -1047,7 +1023,7 @@ function FolderDetailView({
                 onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                 disabled={page >= totalPages - 1}
                 className="icon-button compact-icon-button"
-                style={{ color: 'var(--text-muted)', opacity: page >= totalPages - 1 ? 0.35 : 1 }}
+                style={{ color: 'var(--text-muted)' }}
                 aria-label="Pagina successiva"
               ><ChevronRight className="w-4 h-4" /></button>
             </div>
@@ -1056,14 +1032,7 @@ function FolderDetailView({
         <DragOverlay>
           {activeSortId ? (() => {
             const s = folderSessions.find(x => x.session_dir === activeSortId);
-            return s ? (
-              <div
-                className="rounded-xl px-4 py-3 text-sm font-medium shadow-lg"
-                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', opacity: 0.9, pointerEvents: 'none' }}
-              >
-                {s.name}
-              </div>
-            ) : null;
+            return s ? <FolderSessionCardOverlay session={s} folderColor={folder.color} /> : null;
           })() : null}
         </DragOverlay>
       </DndContext>
@@ -1160,13 +1129,7 @@ function FolderModal({
             <button
               type="submit"
               disabled={!name.trim()}
-              className="compact-button px-4 py-2 text-sm rounded-xl font-medium"
-              style={{
-                background: name.trim() ? color : 'var(--btn-disabled-bg)',
-                color: name.trim() ? '#fff' : 'var(--btn-disabled-text)',
-                border: 'none',
-                cursor: name.trim() ? 'pointer' : 'default',
-              }}
+              className="modal-action-button is-primary compact-button"
             >
               {state.type === 'create' ? 'Crea' : 'Salva'}
             </button>

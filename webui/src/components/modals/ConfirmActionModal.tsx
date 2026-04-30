@@ -33,9 +33,9 @@ export function ConfirmActionModal({
             style={{ background: 'var(--bg-overlay)', backdropFilter: 'blur(10px)' }}
           />
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }}
+            exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14, ease: 'easeIn' } }}
             className="modal-card relative w-full max-w-md max-h-[86vh] overflow-hidden flex flex-col"
           >
             <div className="flex items-center justify-between gap-3 px-5 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -48,7 +48,6 @@ export function ConfirmActionModal({
               <button
                 onClick={onClose}
                 className="icon-button modal-icon-button"
-                style={{ color: 'var(--text-muted)' }}
                 aria-label="Chiudi finestra"
               >
                 <X className="w-4 h-4" />
@@ -57,7 +56,7 @@ export function ConfirmActionModal({
             <div className="flex-1 overflow-y-auto px-5 py-5 text-sm" style={{ color: 'var(--text-secondary)' }}>
               <p>{description}</p>
             </div>
-            <div className="px-5 py-4 flex gap-3 shrink-0" style={{ background: 'var(--bg-elevated)', borderTop: '1px solid var(--border-subtle)' }}>
+            <div className="px-5 py-4 flex gap-3 shrink-0" style={{ borderTop: '1px solid var(--border-subtle)' }}>
               <button onClick={onClose} className="modal-action-button flex-1">
                 {cancelLabel}
               </button>

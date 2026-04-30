@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { ConfirmActionModal } from './ConfirmActionModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { Activity, AlertCircle, AlertTriangle, ArrowDown, ArrowDownToLine, ArrowUp, Bell, ChevronDown, Cpu, Eye, EyeOff, FlaskConical, FolderOpen, HardDrive, Loader2, RefreshCw, Settings, SlidersHorizontal, Tag, Trash2, X, Zap } from 'lucide-react';
 import type { ModelOption, ValidationResult } from '../../bridge';
@@ -11,6 +12,7 @@ const SESSION_CLEANUP_DAYS = 14;
 interface CustomSelectOption {
   value: string;
   label: string;
+  description?: string;
 }
 
 interface CustomSelectProps {
@@ -86,7 +88,7 @@ function CustomSelect({ value, onChange, options, placeholder }: CustomSelectPro
           key={opt.value}
           type="button"
           onClick={() => { onChange(opt.value); setOpen(false); }}
-          className="w-full text-left px-4 py-1.5 text-xs transition-colors"
+          className={`w-full text-left px-4 transition-colors ${opt.description ? 'py-2' : 'py-1.5'}`}
           style={{
             color: opt.value === value ? 'var(--text-primary)' : 'var(--text-secondary)',
             background: opt.value === value ? 'var(--accent-subtle)' : undefined,
@@ -94,7 +96,10 @@ function CustomSelect({ value, onChange, options, placeholder }: CustomSelectPro
           onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent-subtle)'; }}
           onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = opt.value === value ? 'var(--accent-subtle)' : ''; }}
         >
-          {opt.label}
+          <span className="block text-xs">{opt.label}</span>
+          {opt.description && (
+            <span className="block text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{opt.description}</span>
+          )}
         </button>
       ))}
     </div>,
@@ -177,27 +182,20 @@ function VersionUpdateRow({ latestVersion, appendConsole }: { latestVersion: str
   };
   return (
     <div className="flex items-center justify-between gap-3 pt-1" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-      <p className="text-xs flex items-center gap-1.5 min-w-0" style={{ color: 'var(--warning-text)' }}>
+      <p className="text-sm flex items-center gap-1.5 min-w-0" style={{ color: 'var(--warning-text)' }}>
         <Zap className="w-3.5 h-3.5 shrink-0" />
         Nuova versione disponibile: <strong>{latestVersion}</strong>
       </p>
       <button
         onClick={() => void handleInstall()}
         disabled={isInstalling}
-        className="flex items-center gap-1 text-xs font-normal transition-opacity disabled:opacity-30 shrink-0"
-        style={{
-          background: 'none', border: 'none', padding: 0,
-          cursor: isInstalling ? 'default' : 'pointer',
-          color: 'var(--accent-text, var(--text-secondary))',
-          opacity: isInstalling ? 0.5 : 0.8,
-          textDecoration: 'underline',
-        }}
-        onMouseEnter={e => { if (!isInstalling) (e.currentTarget as HTMLButtonElement).style.opacity = '1'; }}
-        onMouseLeave={e => { if (!isInstalling) (e.currentTarget as HTMLButtonElement).style.opacity = '0.8'; }}
+        className="icon-button modal-icon-button shrink-0"
+        title={isInstalling ? 'Installazione in corso…' : 'Installa aggiornamento'}
+        aria-label={isInstalling ? 'Installazione in corso…' : 'Installa aggiornamento'}
       >
         {isInstalling
-          ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Installazione…</>
-          : <><ArrowDownToLine className="w-3.5 h-3.5" />Aggiorna</>}
+          ? <Loader2 className="w-4 h-4 animate-spin" />
+          : <ArrowDownToLine className="w-4 h-4" />}
       </button>
     </div>
   );
@@ -232,6 +230,7 @@ export function SettingsModal({
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [isValidatingEnvironment, setIsValidatingEnvironment] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [showCleanupConfirm, setShowCleanupConfirm] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const isSavingRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -346,6 +345,7 @@ export function SettingsModal({
   };
 
   const availableFallbackOptions = availableModels.filter(model => model.id !== preferredModel);
+  const primaryModelSummary = availableModels.find(m => m.id === preferredModel)?.summary;
   const selectedModelSummaries = [preferredModel, ...fallbackModels]
     .map(modelId => availableModels.find(option => option.id === modelId))
     .filter(Boolean) as ModelOption[];
@@ -376,6 +376,7 @@ export function SettingsModal({
   };
 
   return (
+    <>
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -388,9 +389,9 @@ export function SettingsModal({
             style={{ background: 'var(--bg-overlay)', backdropFilter: 'blur(10px)' }}
           />
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }}
+            exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14, ease: 'easeIn' } }}
             className="modal-card relative w-full max-w-md max-h-[86vh] overflow-hidden flex flex-col"
           >
             <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -401,7 +402,6 @@ export function SettingsModal({
                 onClick={handleClose}
                 disabled={isSaving}
                 className="icon-button modal-icon-button disabled:opacity-40"
-                style={{ color: 'var(--text-muted)' }}
                 aria-label="Chiudi impostazioni"
               >
                 <X className="w-5 h-5" />
@@ -534,7 +534,7 @@ export function SettingsModal({
                     onClick={() => checkForUpdates(true)}
                     disabled={isCheckingUpdate}
                     className="icon-button modal-icon-button disabled:opacity-40"
-                    style={{ color: 'var(--text-muted)', width: 26, height: 26, borderRadius: 8 }}
+                    style={{ width: 26, height: 26, borderRadius: 8 }}
                     title="Controlla aggiornamenti"
                     aria-label="Controlla aggiornamenti"
                   >
@@ -543,11 +543,11 @@ export function SettingsModal({
                       : <RefreshCw className="w-3.5 h-3.5" />}
                   </button>
                 </div>
-                <div className="rounded-xl px-4 py-3 space-y-2" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                <div className="rounded-[10px] px-4 py-3 space-y-2" style={{ background: 'var(--card-queued-bg)', border: '1px solid var(--card-queued-border)' }}>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Versione corrente</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono" style={{ color: 'var(--text-primary)' }}>{APP_VERSION}</span>
+                      <span className="text-xs" style={{ color: 'var(--text-primary)' }}>{APP_VERSION}</span>
                       <a
                         href="#"
                         onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL); }}
@@ -610,14 +610,17 @@ export function SettingsModal({
                               Modello Gemini
                             </h3>
                           </div>
-                          <div className="rounded-xl px-4 py-3 space-y-5" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                          <div className="rounded-[10px] px-4 py-3 space-y-5" style={{ background: 'var(--card-queued-bg)', border: '1px solid var(--card-queued-border)' }}>
                             <div className="space-y-4">
                               <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '10px' }}>Modello primario</label>
                               <CustomSelect
                                 value={preferredModel}
                                 onChange={handlePrimaryModelChange}
-                                options={availableModels.map(m => ({ value: m.id, label: m.label }))}
+                                options={availableModels.map(m => ({ value: m.id, label: m.label, description: m.summary }))}
                               />
+                              {primaryModelSummary && (
+                                <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: 4 }}>{primaryModelSummary}</p>
+                              )}
                             </div>
                             <div className="space-y-4">
                               <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '10px' }}>Fallback modelli</label>
@@ -626,7 +629,7 @@ export function SettingsModal({
                                 onChange={val => { if (val) handleAddFallbackModel(val); }}
                                 options={availableFallbackOptions
                                   .filter(model => !fallbackModels.includes(model.id))
-                                  .map(m => ({ value: m.id, label: m.label }))}
+                                  .map(m => ({ value: m.id, label: m.label, description: m.summary }))}
                                 placeholder="Aggiungi un fallback..."
                               />
                               {fallbackModels.length > 0 ? (
@@ -637,8 +640,8 @@ export function SettingsModal({
                                     return (
                                       <div
                                         key={modelId}
-                                        className="rounded-lg px-3 py-2 flex items-start justify-between gap-3"
-                                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
+                                        className="rounded-[8px] px-3 py-2 flex items-start justify-between gap-3"
+                                        style={{ background: 'var(--card-queued-bg)', border: '1px solid var(--card-queued-border)' }}
                                       >
                                         <div className="min-w-0">
                                           <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{model.label}</p>
@@ -649,7 +652,6 @@ export function SettingsModal({
                                             onClick={() => moveFallbackModel(index, -1)}
                                             disabled={index === 0}
                                             className="icon-button modal-icon-button disabled:opacity-40"
-                                            style={{ color: 'var(--text-muted)' }}
                                             title="Sposta su"
                                           >
                                             <ArrowUp className="w-4 h-4" />
@@ -658,7 +660,6 @@ export function SettingsModal({
                                             onClick={() => moveFallbackModel(index, 1)}
                                             disabled={index === fallbackModels.length - 1}
                                             className="icon-button modal-icon-button disabled:opacity-40"
-                                            style={{ color: 'var(--text-muted)' }}
                                             title="Sposta giù"
                                           >
                                             <ArrowDown className="w-4 h-4" />
@@ -666,7 +667,6 @@ export function SettingsModal({
                                           <button
                                             onClick={() => removeFallbackModel(modelId)}
                                             className="icon-button modal-icon-button"
-                                            style={{ color: 'var(--text-muted)' }}
                                             title="Rimuovi fallback"
                                           >
                                             <X className="w-4 h-4" />
@@ -701,6 +701,17 @@ export function SettingsModal({
                               <HardDrive className="w-3.5 h-3.5" />
                               Sessioni salvate
                             </h3>
+                            <button
+                              onClick={() => setShowCleanupConfirm(true)}
+                              disabled={isCleaningSession || isLoadingSessionInfo}
+                              className="icon-button compact-icon-button disabled:opacity-50"
+                              title={`Pulisci sessioni (> ${SESSION_CLEANUP_DAYS} giorni)`}
+                              aria-label={`Pulisci sessioni (> ${SESSION_CLEANUP_DAYS} giorni)`}
+                            >
+                              {isCleaningSession ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                            </button>
+                          </div>
+                          <div className="rounded-[10px] px-4 py-3 space-y-3" style={{ background: 'var(--card-queued-bg)', border: '1px solid var(--card-queued-border)' }}>
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={handleOpenSessionFolder}
@@ -716,25 +727,9 @@ export function SettingsModal({
                                 </span>
                               )}
                             </div>
-                          </div>
-                          <div className="rounded-xl px-4 py-3 space-y-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Spazio occupato</p>
-                                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                                  {isLoadingSessionInfo ? 'Calcolo…' : sessionInfo !== null ? formatSize(sessionInfo.total_bytes) : '—'}
-                                </p>
-                              </div>
-                              <button
-                                onClick={handleCleanupSessions}
-                                disabled={isCleaningSession || isLoadingSessionInfo}
-                                className="icon-button compact-icon-button disabled:opacity-50"
-                                title={`Pulisci sessioni (> ${SESSION_CLEANUP_DAYS} giorni)`}
-                                aria-label={`Pulisci sessioni (> ${SESSION_CLEANUP_DAYS} giorni)`}
-                              >
-                                {isCleaningSession ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                              </button>
-                            </div>
+                            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                              Spazio occupato: <span style={{ color: 'var(--text-muted)' }}>{isLoadingSessionInfo ? 'Calcolo…' : sessionInfo !== null ? formatSize(sessionInfo.total_bytes) : '—'}</span>
+                            </p>
                             {cleanupResult !== null && (
                               <p className="text-xs" style={{ color: cleanupResult.removed > 0 ? 'var(--success-text)' : 'var(--text-muted)' }}>
                                 {cleanupResult.removed > 0
@@ -743,7 +738,7 @@ export function SettingsModal({
                               </p>
                             )}
                             <p className="text-xs" style={{ color: 'var(--text-faint, var(--text-muted))' }}>
-                              Progressi intermedi per riprendere elaborazioni interrotte. La pulizia rimuove le sessioni non toccate da oltre {SESSION_CLEANUP_DAYS} giorni.
+                              Ogni sessione conserva i dati di un'elaborazione (trascrizioni, revisioni) e la sbobina finale. La pulizia elimina definitivamente le sessioni non toccate da oltre {SESSION_CLEANUP_DAYS} giorni, incluse le sbobine completate.
                             </p>
                           </div>
                         </div>
@@ -765,45 +760,42 @@ export function SettingsModal({
                               {isValidatingEnvironment ? <Loader2 className="w-4 h-4 animate-spin" /> : <FlaskConical className="w-4 h-4" />}
                             </button>
                           </div>
-                          <ul className="space-y-1.5 mb-3">
-                            <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Modello primario:</span> <span className="font-mono">{preferredModel}</span></li>
-                            <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Fallback:</span> <span className="font-mono">{fallbackModels.join(' -> ') || 'nessuno'}</span></li>
-                            <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Chunk:</span> <span className="font-mono">{defaultChunkMinutes} min</span></li>
-                            <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Temperatura (phase 1):</span> <span className="font-mono">{defaultTemperature}</span></li>
-                            <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Overlap:</span> <span className="font-mono">30 s</span></li>
-                            <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Pre-conversione:</span> <span className="font-mono">Mono 16kHz 48k</span></li>
-                          </ul>
-                          {selectedModelSummaries.length > 0 && (
-                            <div className="space-y-2 mb-3">
+                          <div className="rounded-[10px] px-4 py-3 space-y-3" style={{ background: 'var(--card-queued-bg)', border: '1px solid var(--card-queued-border)' }}>
+                            <ul className="space-y-1.5">
+                              <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Modello primario:</span> <span>{preferredModel}</span></li>
+                              <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Fallback:</span> <span>{fallbackModels.join(' -> ') || 'nessuno'}</span></li>
+                              <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Chunk:</span> <span>{defaultChunkMinutes} min</span></li>
+                              <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Temperatura (phase 1):</span> <span>{defaultTemperature}</span></li>
+                              <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Overlap:</span> <span>30 s</span></li>
+                              <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Pre-conversione:</span> <span>Mono 16kHz 48k</span></li>
                               {selectedModelSummaries.map(model => (
-                                <div key={model.id} className="rounded-lg px-3 py-2" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
-                                  <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{model.label}</p>
-                                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{model.summary}</p>
-                                </div>
+                                <li key={model.id} className="text-xs" style={{ color: 'var(--text-faint)' }}>
+                                  {model.label}
+                                </li>
                               ))}
-                            </div>
-                          )}
-                          {validationResult && (
-                            <div className="space-y-2 text-sm">
-                              <p style={{ color: validationResult.ok ? 'var(--success-text)' : 'var(--error-text)' }}>{validationResult.summary}</p>
-                              {validationResult.checks.map(check => (
-                                <div key={check.id} className="rounded-lg px-3 py-2 overflow-hidden" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
-                                  <div className="flex items-center justify-between gap-3">
-                                    <span style={{ color: 'var(--text-primary)' }}>{check.label}</span>
-                                    <span style={{ color: check.status === 'ok' ? 'var(--success-text)' : check.status === 'warning' ? 'var(--warning-text)' : 'var(--error-text)' }}>
-                                      {check.status.toUpperCase()}
-                                    </span>
+                            </ul>
+                            {validationResult && (
+                              <div className="space-y-2 text-sm pt-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                                <p style={{ color: validationResult.ok ? 'var(--success-text)' : 'var(--error-text)' }}>{validationResult.summary}</p>
+                                {validationResult.checks.map(check => (
+                                  <div key={check.id} className="rounded-lg px-3 py-2 overflow-hidden" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                                    <div className="flex items-center justify-between gap-3">
+                                      <span style={{ color: 'var(--text-primary)' }}>{check.label}</span>
+                                      <span style={{ color: check.status === 'ok' ? 'var(--success-text)' : check.status === 'warning' ? 'var(--warning-text)' : 'var(--error-text)' }}>
+                                        {check.status.toUpperCase()}
+                                      </span>
+                                    </div>
+                                    <p className="mt-1" style={{ color: 'var(--text-secondary)' }}>{check.message}</p>
+                                    {check.details && (
+                                      <p className="mt-1 text-xs font-mono break-all whitespace-pre-wrap" style={{ color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>
+                                        {check.details}
+                                      </p>
+                                    )}
                                   </div>
-                                  <p className="mt-1" style={{ color: 'var(--text-secondary)' }}>{check.message}</p>
-                                  {check.details && (
-                                    <p className="mt-1 text-xs font-mono break-all whitespace-pre-wrap" style={{ color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>
-                                      {check.details}
-                                    </p>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </motion.div>
@@ -811,7 +803,7 @@ export function SettingsModal({
                 </AnimatePresence>
               </div>
             </div>
-            <div className="px-5 py-4 shrink-0" style={{ background: 'var(--bg-elevated)', borderTop: '1px solid var(--border-subtle)' }}>
+            <div className="px-5 py-4 shrink-0" style={{ borderTop: '1px solid var(--border-subtle)' }}>
               {saveError && (
                 <p className="text-xs mb-3" style={{ color: 'var(--error-text)' }}>{saveError}</p>
               )}
@@ -827,5 +819,15 @@ export function SettingsModal({
         </div>
       )}
     </AnimatePresence>
+    <ConfirmActionModal
+      isOpen={showCleanupConfirm}
+      title="Pulire le sessioni vecchie?"
+      description={`Verranno eliminate definitivamente dal disco le sessioni non toccate da oltre ${SESSION_CLEANUP_DAYS} giorni. L'operazione è irreversibile.`}
+      confirmLabel="Pulisci"
+      cancelLabel="Annulla"
+      onClose={() => setShowCleanupConfirm(false)}
+      onConfirm={() => { setShowCleanupConfirm(false); void handleCleanupSessions(); }}
+    />
+    </>
   );
 }

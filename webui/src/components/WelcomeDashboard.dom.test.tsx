@@ -27,7 +27,7 @@ describe('WelcomeDashboard', () => {
     render(<WelcomeDashboard archiveSessions={[]} />);
     expect(screen.queryByText('Sbobine completate')).toBeNull();
     expect(screen.queryByText('Audio elaborato')).toBeNull();
-    expect(screen.queryByText('Questo mese')).toBeNull();
+    expect(screen.queryByText('Ultima sbobina')).toBeNull();
   });
 
   it('shows returning welcome message when sessions exist', () => {
@@ -39,7 +39,7 @@ describe('WelcomeDashboard', () => {
     render(<WelcomeDashboard archiveSessions={[makeSession()]} />);
     expect(screen.getByText('Sbobine completate')).toBeTruthy();
     expect(screen.getByText('Audio elaborato')).toBeTruthy();
-    expect(screen.getByText('Questo mese')).toBeTruthy();
+    expect(screen.getByText('Ultima sbobina')).toBeTruthy();
   });
 
   it('shows correct total session count', () => {
@@ -78,23 +78,32 @@ describe('WelcomeDashboard', () => {
     expect(screen.getByText('< 1m')).toBeTruthy();
   });
 
-  it('counts only sessions from the current month', () => {
-    const now = new Date();
-    const thisMonth = new Date(now.getFullYear(), now.getMonth(), 10).toISOString();
-    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 10).toISOString();
-    const sessions = [
-      makeSession({ session_dir: '/s/1', completed_at_iso: thisMonth }),
-      makeSession({ session_dir: '/s/2', completed_at_iso: thisMonth }),
-      makeSession({ session_dir: '/s/3', completed_at_iso: lastMonth }),
-    ];
-    render(<WelcomeDashboard archiveSessions={sessions} />);
-    const values = screen.getAllByText('2');
-    expect(values.length).toBeGreaterThanOrEqual(1);
+  it('shows "Oggi" for ultima sbobina when most recent session is today', () => {
+    const today = new Date().toISOString();
+    render(<WelcomeDashboard archiveSessions={[makeSession({ completed_at_iso: today })]} />);
+    expect(screen.getByText('Oggi')).toBeTruthy();
   });
 
-  it('shows 0 for "questo mese" when all sessions are from past months', () => {
-    const lastMonth = new Date(2020, 0, 1).toISOString();
-    render(<WelcomeDashboard archiveSessions={[makeSession({ completed_at_iso: lastMonth })]} />);
-    expect(screen.getByText('0')).toBeTruthy();
+  it('shows "Ieri" for ultima sbobina when most recent session was yesterday', () => {
+    const yesterday = new Date(Date.now() - 86400000).toISOString();
+    render(<WelcomeDashboard archiveSessions={[makeSession({ completed_at_iso: yesterday })]} />);
+    expect(screen.getByText('Ieri')).toBeTruthy();
+  });
+
+  it('shows "X giorni fa" for ultima sbobina when most recent session was 3 days ago', () => {
+    const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString();
+    render(<WelcomeDashboard archiveSessions={[makeSession({ completed_at_iso: threeDaysAgo })]} />);
+    expect(screen.getByText('3 giorni fa')).toBeTruthy();
+  });
+
+  it('picks the most recent session for ultima sbobina when multiple sessions exist', () => {
+    const today = new Date().toISOString();
+    const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString();
+    const sessions = [
+      makeSession({ session_dir: '/s/1', completed_at_iso: threeDaysAgo }),
+      makeSession({ session_dir: '/s/2', completed_at_iso: today }),
+    ];
+    render(<WelcomeDashboard archiveSessions={sessions} />);
+    expect(screen.getByText('Oggi')).toBeTruthy();
   });
 });

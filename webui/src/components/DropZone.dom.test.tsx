@@ -13,7 +13,7 @@ const baseProps = {
 describe('DropZone', () => {
   it('renders the browse text', () => {
     render(<DropZone {...baseProps} />);
-    expect(screen.getByText('Clicca per sfogliare i file')).toBeTruthy();
+    expect(screen.getByText('Trascina i file qui')).toBeTruthy();
   });
 
   it('mentions supported formats', () => {

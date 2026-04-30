@@ -637,125 +637,144 @@ export default function App() {
           {activePage === 'queue' ? (
             <motion.main
               key="queue"
-              className="flex-1 max-w-3xl w-full mx-auto px-5 sm:px-6 py-8 flex flex-col gap-6 justify-center"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="flex-1 max-w-3xl w-full mx-auto flex flex-col"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.15, ease: 'easeOut' }}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
-              {showProcessingBanner && (
-                <ProcessingStatusBanner
-                  appState={appState}
-                  currentPhase={completionFlash ? '__completed__' : currentPhase}
-                  currentModel={currentModel}
-                  activeProgress={completionFlash ? 100 : activeProgress}
-                  workTotals={workTotals}
-                  workDone={workDone}
-                  currentFileIndex={batchCompleted}
-                  currentBatchTotal={batchTotal}
-                  currentFileName={bannerFile?.name}
-                  startedAt={bannerFile?.startedAt}
-                />
-              )}
-
-              {uiMode === 'setup' ? (
-                <SetupPage
-                  hasProtectedKey={hasProtectedKey}
-                  setIsSettingsOpen={setIsSettingsOpen}
-                  onSaved={(key) => setApiKey(key)}
-                  preferredModel={preferredModel}
-                  fallbackKeys={fallbackKeys}
-                  fallbackModels={fallbackModels}
-                />
-              ) : uiMode !== 'processing' && uiMode !== 'canceling' && !completionFlash ? (
-                <>
-                  {uiMode === 'ready-empty' && (
-                    <WelcomeDashboard archiveSessions={archiveSessions} />
-                  )}
-                  <DropZone
-                    isDragging={isDragging}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    onClick={handleBrowseClick}
+              <div className="my-auto px-5 sm:px-6 py-8 flex flex-col gap-5">
+                {uiMode === 'setup' ? (
+                  <SetupPage
+                    hasProtectedKey={hasProtectedKey}
+                    setIsSettingsOpen={setIsSettingsOpen}
+                    onSaved={(key) => setApiKey(key)}
+                    preferredModel={preferredModel}
+                    fallbackKeys={fallbackKeys}
+                    fallbackModels={fallbackModels}
                   />
-                </>
-              ) : null}
+                ) : (
+                  <>
+                    {!(pendingFiles.length > 0 || doneFiles.length > 0 || showProcessingBanner) && (
+                      <WelcomeDashboard archiveSessions={archiveSessions} />
+                    )}
+                    <AnimatePresence>
+                      {showProcessingBanner ? (
+                        <motion.div
+                          key="processing-banner"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ duration: 0.15, ease: 'easeOut' }}
+                        >
+                          <ProcessingStatusBanner
+                            appState={appState}
+                            currentPhase={completionFlash ? '__completed__' : currentPhase}
+                            currentModel={currentModel}
+                            activeProgress={completionFlash ? 100 : activeProgress}
+                            workTotals={workTotals}
+                            workDone={workDone}
+                            currentFileIndex={batchCompleted}
+                            currentBatchTotal={batchTotal}
+                            currentFileName={bannerFile?.name}
+                            startedAt={bannerFile?.startedAt}
+                          />
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          key="dropzone"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ duration: 0.15, ease: 'easeOut' }}
+                        >
+                          <DropZone
+                            compact={pendingFiles.length > 0 || doneFiles.length > 0}
+                            isDragging={isDragging}
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            onDrop={handleDrop}
+                            onClick={handleBrowseClick}
+                          />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </>
+                )}
 
-              <QueueSection
-                pendingFiles={pendingFiles}
-                appState={appState}
-                autoContinue={autoContinue}
-                setAutoContinue={setAutoContinue}
-                preferredModel={preferredModel}
-                queuedCount={queuedCount}
-                canStart={canStart}
-                hasApiKey={hasApiKey}
-                isApiKeyValid={isApiKeyValid}
-                currentPhase={currentPhase}
-                dndSensors={dndSensors}
-                onDragEnd={handleDragEnd}
-                onRemove={requestRemoveFile}
-                onClearAll={handleClearAll}
-                onRetry={(id) => dispatch({ type: 'queue/retry_one', id })}
-                onPreview={openPreview}
-                onOpenFile={openFile}
-                onStart={() => void startProcessing()}
-                onStop={() => setConfirmAction({ type: 'stop-processing' })}
-              />
-
-              <CompletedSection
-                doneFiles={doneFiles}
-                appState={appState}
-                onRemove={(id) => {
-                  const f = filesRef.current.find(f => f.id === id);
-                  if (!f) return;
-                  if (appState !== 'idle' && f.status !== 'done') return;
-                  setConfirmAction({ type: 'remove-file', fileId: id, fileName: f.name, isDone: true });
-                }}
-                onPreview={openPreview}
-                onOpenFile={openFile}
-                onClearAll={() => setConfirmAction({ type: 'clear-completed', count: doneFiles.length })}
-              />
-
-              {showConsole && (
-                <ConsolePanel
-                  consoleLogs={consoleLogs}
-                  lastConsoleMessage={lastConsoleMessage}
+                <QueueSection
+                  pendingFiles={pendingFiles}
                   appState={appState}
+                  autoContinue={autoContinue}
+                  setAutoContinue={setAutoContinue}
+                  preferredModel={preferredModel}
+                  queuedCount={queuedCount}
+                  canStart={canStart}
+                  hasApiKey={hasApiKey}
+                  isApiKeyValid={isApiKeyValid}
+                  currentPhase={currentPhase}
+                  dndSensors={dndSensors}
+                  onDragEnd={handleDragEnd}
+                  onRemove={requestRemoveFile}
+                  onClearAll={handleClearAll}
+                  onRetry={(id) => dispatch({ type: 'queue/retry_one', id })}
+                  onPreview={openPreview}
+                  onOpenFile={openFile}
+                  onStart={() => void startProcessing()}
+                  onStop={() => setConfirmAction({ type: 'stop-processing' })}
                 />
-              )}
+
+                <CompletedSection
+                  doneFiles={doneFiles}
+                  appState={appState}
+                  onRemove={(id) => {
+                    const f = filesRef.current.find(f => f.id === id);
+                    if (!f) return;
+                    if (appState !== 'idle' && f.status !== 'done') return;
+                    setConfirmAction({ type: 'remove-file', fileId: id, fileName: f.name, isDone: true });
+                  }}
+                  onPreview={openPreview}
+                  onOpenFile={openFile}
+                  onClearAll={() => setConfirmAction({ type: 'clear-completed', count: doneFiles.length })}
+                />
+
+                {showConsole && (
+                  <ConsolePanel
+                    consoleLogs={consoleLogs}
+                    lastConsoleMessage={lastConsoleMessage}
+                    appState={appState}
+                  />
+                )}
+              </div>
             </motion.main>
           ) : (
             <motion.main
               key="archive"
-              className="flex-1 max-w-4xl w-full mx-auto px-5 sm:px-6 py-8 flex flex-col justify-center"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="flex-1 max-w-4xl w-full mx-auto flex flex-col"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.15, ease: 'easeOut' }}
             >
-              <ArchivePage
-                sessions={archiveFiltered}
-                folders={folders}
-                onFoldersChange={handleFoldersChange}
-                onPreview={openPreview}
-                onOpenFile={openFile}
-                onDeleteSession={(sessionDir, name) => setConfirmAction({ type: 'delete-archive-session', sessionDir, name })}
-                onRefresh={refreshArchiveSessions}
-              />
+              <div className="my-auto px-5 sm:px-6 py-8 flex flex-col">
+                <ArchivePage
+                  sessions={archiveFiltered}
+                  folders={folders}
+                  onFoldersChange={handleFoldersChange}
+                  onPreview={openPreview}
+                  onOpenFile={openFile}
+                  onDeleteSession={(sessionDir, name) => setConfirmAction({ type: 'delete-archive-session', sessionDir, name })}
+                  onRefresh={refreshArchiveSessions}
+                />
+              </div>
             </motion.main>
           )}
         </AnimatePresence>
-        <footer className="py-4 text-center text-xs flex items-center justify-center gap-2" style={{ color: 'var(--text-faint)' }}>
-          <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="hover:opacity-80 transition-opacity flex items-center gap-1" style={{ color: 'inherit', textDecoration: 'none' }}>
+        <footer className="py-4 text-center flex items-center justify-center gap-2" style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+          <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link" style={{ color: 'inherit' }}>
             <Github className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
           </a>
           <span>·</span>
-          <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }} className="hover:opacity-80 transition-opacity" style={{ color: 'inherit', textDecoration: 'none' }}>
+          <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }} className="footer-link" style={{ color: 'inherit' }}>
             ☕ Offrimi un caffè su Ko-fi!
           </a>
         </footer>

@@ -39,7 +39,7 @@ function QueueFileCardInner({
   });
 
   const sortableStyle: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
+    transform: CSS.Transform.toString(transform ? { ...transform, x: 0 } : null),
     transition: dndTransition ?? undefined,
     zIndex: isDragging ? 50 : undefined,
     position: 'relative',
@@ -48,14 +48,14 @@ function QueueFileCardInner({
   return (
     <div ref={setNodeRef} style={sortableStyle} {...attributes}>
       <motion.div
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: isDragging ? 0.4 : 1, y: 0 }}
         exit={{ opacity: 0, transition: { duration: 0.11, ease: 'easeIn' } }}
         transition={{
-          opacity: { duration: 0.2, ease: 'easeOut' },
-          y: { type: 'spring', stiffness: 380, damping: 30, mass: 0.8 },
+          opacity: { duration: 0.18, ease: 'easeOut' },
+          y: { type: 'spring', stiffness: 400, damping: 32, mass: 0.7 },
         }}
-        className={`queue-card relative transition-colors ${file.status === 'processing' ? (isCanceling ? 'canceling-card px-5 py-4' : 'processing-card px-5 py-4') : file.status === 'queued' ? 'p-4' : 'p-5'}`}
+        className={`queue-card relative transition-colors ${file.status === 'processing' ? (isCanceling ? 'canceling-card' : 'processing-card') : ''} px-4 py-3`}
         style={{
           border: `1px solid ${
             file.status === 'processing'
@@ -64,13 +64,10 @@ function QueueFileCardInner({
                 ? 'var(--error-ring)'
                 : 'var(--card-queued-border)'
           }`,
-          background: file.status === 'processing'
-            ? isCanceling
-              ? 'linear-gradient(180deg, rgba(255,255,255,0.02), var(--error-subtle))'
-              : 'linear-gradient(180deg, rgba(255,255,255,0.02), var(--processing-bg))'
-            : file.status === 'error'
-              ? 'var(--error-subtle)'
-              : 'rgba(255,255,255,0.03)',
+          boxShadow: (file.status === 'processing' || file.status === 'error')
+            ? `inset 3px 0 0 ${(isCanceling || file.status === 'error') ? 'var(--error-ring)' : 'var(--processing-ring)'}`
+            : 'none',
+          background: file.status === 'error' ? 'var(--error-subtle)' : 'var(--card-queued-bg)',
         }}
       >
         <div className="relative z-10 flex items-center justify-between gap-4">
@@ -88,13 +85,9 @@ function QueueFileCardInner({
               </div>
             )}
             <div
-              className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl"
+              className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg"
               style={{
-                background: file.status === 'processing'
-                  ? isCanceling ? 'var(--error-subtle)' : 'var(--processing-bg)'
-                  : file.status === 'error'
-                    ? 'var(--error-subtle)'
-                    : 'rgba(255,255,255,0.03)',
+                background: 'transparent',
                 color: file.status === 'processing'
                   ? isCanceling ? 'var(--error-text)' : 'var(--processing-text)'
                   : file.status === 'error'
@@ -111,7 +104,7 @@ function QueueFileCardInner({
                   : <FileAudio className="w-5 h-5" />}
             </div>
             <div className="min-w-0 flex-1">
-              <h4 className="text-base font-semibold truncate tracking-tight" style={{ color: 'var(--text-primary)' }}>{file.name}</h4>
+              <h4 className="text-sm font-semibold truncate tracking-tight" style={{ color: 'var(--text-primary)' }}>{file.name}</h4>
               <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
                 <span>{formatSize(file.size)}</span>
                 {file.duration > 0 && (
@@ -146,8 +139,7 @@ function QueueFileCardInner({
             {appState === 'idle' && file.status === 'error' && (
               <button
                 onClick={() => onRetry(file.id)}
-                className="icon-button compact-icon-button"
-                style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}
+                className="icon-button compact-icon-button is-danger"
                 title="Riprova"
                 aria-label="Riprova"
               >
@@ -157,8 +149,7 @@ function QueueFileCardInner({
             {appState === 'idle' && (
               <button
                 onClick={() => onRemove(file.id)}
-                className="icon-button compact-icon-button"
-                style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}
+                className="icon-button compact-icon-button is-danger"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -193,24 +184,24 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
         y: { type: 'spring', stiffness: 380, damping: 30, mass: 0.8 },
       }}
       onClick={isClickable ? () => onPreview(file.outputHtml!, file.name, file.path, file.id) : undefined}
-      className={`queue-card relative p-5 transition-colors group/card ${isClickable ? 'cursor-pointer' : ''}`}
+      className={`queue-card relative px-4 py-3 transition-colors group/card ${isClickable ? 'cursor-pointer' : ''}`}
       style={{
         border: '1px solid var(--success-ring)',
-        background: isNewest ? 'rgba(22,163,74,0.04)' : 'rgba(255,255,255,0.03)',
-        boxShadow: isNewest ? '0 0 0 2px rgba(22,163,74,0.10)' : undefined,
+        boxShadow: `inset 3px 0 0 var(--success-ring)${isNewest ? ', 0 0 0 2px rgba(22,163,74,0.08)' : ''}`,
+        background: isNewest ? 'var(--success-subtle)' : 'var(--card-queued-bg)',
       }}
     >
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 overflow-hidden flex-1">
           <div
-            className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl"
-            style={{ background: 'var(--success-subtle)', color: 'var(--success-text)' }}
+            className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg"
+            style={{ background: 'transparent', color: 'var(--success-text)' }}
           >
-            <CheckCircle className="w-5 h-5" />
+            <CheckCircle className="w-4.5 h-4.5" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 min-w-0">
-              <h4 className="text-base font-semibold truncate tracking-tight" style={{ color: 'var(--text-primary)' }}>{file.name}</h4>
+              <h4 className="text-sm font-semibold truncate tracking-tight" style={{ color: 'var(--text-primary)' }}>{file.name}</h4>
               {isNewest && (
                 <span className="shrink-0 whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'var(--success-subtle)', color: 'var(--success-text)', border: '1px solid var(--success-ring)' }}>
                   Nuovo

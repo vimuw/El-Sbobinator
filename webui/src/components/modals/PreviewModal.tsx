@@ -174,9 +174,9 @@ export function PreviewModal({
           style={{ background: 'var(--bg-overlay)', backdropFilter: 'blur(10px)' }}
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }}
+            exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14, ease: 'easeIn' } }}
             onClick={event => event.stopPropagation()}
             className="modal-card w-full max-h-[88vh] flex flex-col overflow-hidden"
             style={{ maxWidth: isTocOpen ? '1400px' : '1100px', transition: 'max-width 0.25s ease' }}
@@ -201,7 +201,6 @@ export function PreviewModal({
                   <button
                     onClick={() => window.pywebview?.api?.open_file?.(htmlPath)}
                     className="icon-button modal-icon-button"
-                    style={{ color: 'var(--text-muted)' }}
                     title="Apri file HTML"
                   >
                     <ExternalLink className="w-4 h-4" />
@@ -211,13 +210,13 @@ export function PreviewModal({
                   <button
                     onClick={handleCopy}
                     className="icon-button modal-icon-button"
-                    style={isCopied ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : { color: 'var(--text-muted)' }}
+                    style={isCopied ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : {}}
                     title={isCopied ? 'Copiato!' : 'Copia per Google Docs'}
                   >
                     {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   </button>
                 </div>
-                <button onClick={() => void flushAndClose()} className="icon-button modal-icon-button" style={{ color: 'var(--text-muted)' }} title={autosaveStatus === 'error' ? 'Chiudi senza salvare' : undefined}>
+                <button onClick={() => void flushAndClose()} className="icon-button modal-icon-button" title={autosaveStatus === 'error' ? 'Chiudi senza salvare' : undefined}>
                   <X className="w-5 h-5" />
                 </button>
               </div>

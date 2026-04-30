@@ -19,6 +19,7 @@ from el_sbobinator.core.model_registry import build_model_state
 from el_sbobinator.core.prompts import PROMPT_REVISIONE, PROMPT_SISTEMA
 from el_sbobinator.core.session_store import _update_session
 from el_sbobinator.core.shared import (
+    PRECONVERTED_AUDIO_FINAL,
     _atomic_write_json,
     _load_json,
     invalidate_session_storage_cache,
@@ -497,9 +498,13 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         logger.info("Pipeline completata con successo.", extra={"stage": "done"})
 
         # Pulizia: rimuovi il file preconvertito (grande) se presente. I progressi testuali restano nella sessione.
+        # Nota: preconv_used_path è None nei resume da phase2/done, quindi si usa il path noto direttamente.
         try:
-            if preconv_used_path and os.path.exists(preconv_used_path):
-                os.remove(preconv_used_path)
+            preconv_final_path = os.path.join(
+                session_ctx.session_dir, PRECONVERTED_AUDIO_FINAL
+            )
+            if os.path.exists(preconv_final_path):
+                os.remove(preconv_final_path)
                 invalidate_session_storage_cache()
         except Exception:
             pass

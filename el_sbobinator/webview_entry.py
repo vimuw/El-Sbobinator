@@ -402,6 +402,7 @@ def main():
     webview.start(
         private_mode=False,
         storage_path=storage_dir,
+        debug=False,
     )
 
 
