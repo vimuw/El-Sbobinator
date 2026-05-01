@@ -10,7 +10,7 @@ import {
   type DragEndEvent, type DragStartEvent,
 } from '@dnd-kit/core';
 import {
-  SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy,
+  SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
@@ -50,6 +50,26 @@ export function ArchivePage({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [activeDragFolderId, setActiveDragFolderId] = useState<string | null>(null);
+
+  const folderDndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleFolderDragStart = useCallback((event: DragStartEvent) => {
+    setActiveDragFolderId(String(event.active.id));
+  }, []);
+
+  const handleFolderDragEnd = useCallback((event: DragEndEvent) => {
+    setActiveDragFolderId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = folders.findIndex(f => f.id === String(active.id));
+    const newIndex = folders.findIndex(f => f.id === String(over.id));
+    if (oldIndex === -1 || newIndex === -1) return;
+    onFoldersChange(arrayMove(folders, oldIndex, newIndex));
+  }, [folders, onFoldersChange]);
 
   const handleRefresh = useCallback(async () => {
     if (isRefreshing || !onRefresh) return;
@@ -186,19 +206,33 @@ export function ArchivePage({
       </div>
 
       {/* Folders grid — always visible, first card is "new folder" */}
-      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-        <NewFolderCard onClick={() => setFolderModal({ type: 'create' })} />
-        {folders.map(folder => (
-          <FolderCard
-            key={folder.id}
-            folder={folder}
-            sessionsByDir={sessionsByDir}
-            onNavigate={() => setSelectedFolderId(folder.id)}
-            onEdit={() => setFolderModal({ type: 'edit', folder })}
-            onDelete={() => onFoldersChange(folders.filter(f => f.id !== folder.id))}
-          />
-        ))}
-      </div>
+      <DndContext
+        sensors={folderDndSensors}
+        onDragStart={handleFolderDragStart}
+        onDragEnd={handleFolderDragEnd}
+      >
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+          <NewFolderCard onClick={() => setFolderModal({ type: 'create' })} />
+          <SortableContext items={folders.map(f => f.id)} strategy={rectSortingStrategy}>
+            {folders.map(folder => (
+              <SortableFolderCard
+                key={folder.id}
+                folder={folder}
+                sessionsByDir={sessionsByDir}
+                onNavigate={() => setSelectedFolderId(folder.id)}
+                onEdit={() => setFolderModal({ type: 'edit', folder })}
+                onDelete={() => onFoldersChange(folders.filter(f => f.id !== folder.id))}
+              />
+            ))}
+          </SortableContext>
+        </div>
+        <DragOverlay>
+          {activeDragFolderId ? (() => {
+            const f = folders.find(x => x.id === activeDragFolderId);
+            return f ? <FolderCardOverlay folder={f} sessionsByDir={sessionsByDir} /> : null;
+          })() : null}
+        </DragOverlay>
+      </DndContext>
 
       {/* Unfiled sessions */}
       <div className="flex flex-col gap-3">
@@ -371,6 +405,83 @@ export function ArchivePage({
   );
 }
 
+// ─── SortableFolderCard ─────────────────────────────────────────────────────
+
+function SortableFolderCard({
+  folder, sessionsByDir, onNavigate, onEdit, onDelete,
+}: {
+  folder: ArchiveFolder;
+  sessionsByDir: Map<string, ArchiveSession>;
+  onNavigate: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const {
+    attributes, listeners, setNodeRef,
+    transform, transition, isDragging,
+  } = useSortable({ id: folder.id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: transform ? `translate3d(${transform.x}px,${transform.y}px,0) scaleX(${transform.scaleX}) scaleY(${transform.scaleY})` : undefined,
+        transition,
+        opacity: isDragging ? 0.4 : 1,
+        touchAction: 'none',
+        cursor: isDragging ? 'grabbing' : 'grab',
+      }}
+      {...attributes}
+      {...listeners}
+    >
+      <FolderCard
+        folder={folder}
+        sessionsByDir={sessionsByDir}
+        onNavigate={onNavigate}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />
+    </div>
+  );
+}
+
+// ─── FolderCardOverlay ───────────────────────────────────────────────────────
+
+function FolderCardOverlay({
+  folder, sessionsByDir,
+}: {
+  folder: ArchiveFolder;
+  sessionsByDir: Map<string, ArchiveSession>;
+}) {
+  const count = folder.session_dirs.filter(d => sessionsByDir.has(d)).length;
+  return (
+    <div
+      className="folder-card"
+      style={{
+        border: `2px solid ${folder.color}90`,
+        borderRadius: 20,
+        background: `${folder.color}26`,
+        boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+        opacity: 0.95,
+        pointerEvents: 'none',
+        cursor: 'grabbing',
+      }}
+    >
+      <div className="flex items-center gap-3 px-4 pt-3 pb-1">
+        <span className="w-4 h-4 rounded-full shrink-0" style={{ background: folder.color }} />
+        <span className="flex-1 text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+          {folder.name}
+        </span>
+      </div>
+      <div className="px-4 pb-3">
+        <p className="text-xs" style={{ color: 'var(--text-faint)' }}>
+          {count === 1 ? '1 lezione' : `${count} lezioni`}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── NewFolderCard ───────────────────────────────────────────────────────────
 
 function NewFolderCard({ onClick }: { onClick: () => void }) {
@@ -440,12 +551,13 @@ function FolderCard({
 
   return (
     <div
-      className="folder-card cursor-pointer"
+      className="folder-card"
       style={{
         border: `2px solid ${isHover ? `${folder.color}90` : `${folder.color}40`}`,
         borderRadius: 20,
         background: `${folder.color}26`,
         transition: 'border-color 0.15s, background 0.15s',
+        cursor: 'pointer',
       }}
       onClick={onNavigate}
       onMouseEnter={() => setIsHover(true)}
@@ -557,15 +669,8 @@ function FolderSessionCardOverlay({ session, folderColor }: {
   return (
     <div
       className="archive-session-card flex items-center justify-between gap-3 px-4 py-3"
-      style={{ pointerEvents: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.18)', opacity: 0.95 }}
+      style={{ pointerEvents: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.18)', opacity: 0.95, cursor: 'grabbing' }}
     >
-      <span className="shrink-0 cursor-grab" style={{ color: 'var(--text-faint)' }}>
-        <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor">
-          <circle cx="3" cy="2.5" r="1.3"/><circle cx="9" cy="2.5" r="1.3"/>
-          <circle cx="3" cy="7" r="1.3"/><circle cx="9" cy="7" r="1.3"/>
-          <circle cx="3" cy="11.5" r="1.3"/><circle cx="9" cy="11.5" r="1.3"/>
-        </svg>
-      </span>
       <div className="flex items-center gap-3 overflow-hidden flex-1">
         <span className="w-4 h-4 rounded-full shrink-0" style={{ background: folderColor, opacity: 0.85 }} />
         <div className="min-w-0 flex-1">
@@ -630,29 +735,17 @@ function SortableSessionCard({
     <div
       ref={setNodeRef}
       {...attributes}
+      {...(!disabled ? listeners : {})}
       onClick={() => onPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir)}
-      className="archive-session-card flex items-center justify-between gap-3 px-4 py-3 cursor-pointer"
+      className="archive-session-card flex items-center justify-between gap-3 px-4 py-3"
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.4 : 1,
+        touchAction: disabled ? undefined : 'none',
+        cursor: isDragging ? 'grabbing' : disabled ? 'pointer' : 'grab',
       }}
     >
-      {!disabled && (
-        <span
-          {...listeners}
-          className="shrink-0 cursor-grab active:cursor-grabbing"
-          style={{ color: 'var(--text-faint)', touchAction: 'none' }}
-          onClick={e => e.stopPropagation()}
-          title="Riordina"
-        >
-          <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor">
-            <circle cx="3" cy="2.5" r="1.3"/><circle cx="9" cy="2.5" r="1.3"/>
-            <circle cx="3" cy="7" r="1.3"/><circle cx="9" cy="7" r="1.3"/>
-            <circle cx="3" cy="11.5" r="1.3"/><circle cx="9" cy="11.5" r="1.3"/>
-          </svg>
-        </span>
-      )}
       <div className="flex items-center gap-3 overflow-hidden flex-1">
         <span className="w-4 h-4 rounded-full shrink-0" style={{ background: folderColor, opacity: 0.85 }} />
         <div className="min-w-0 flex-1">

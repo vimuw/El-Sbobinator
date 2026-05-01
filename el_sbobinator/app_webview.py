@@ -234,6 +234,7 @@ class ElSbobinatorApi:
                     except Exception:
                         pass
                 input_path = data.get("input", {}).get("path", "")
+                input_size = int(data.get("input", {}).get("size", 0) or 0)
                 name = (
                     os.path.basename(input_path)
                     if input_path
@@ -248,6 +249,7 @@ class ElSbobinatorApi:
                         "html_path": str(html_path),
                         "effective_model": effective_model,
                         "input_path": str(input_path),
+                        "input_size": input_size,
                         "session_dir": str(session_dir),
                         **(
                             {"duration_sec": duration_sec}

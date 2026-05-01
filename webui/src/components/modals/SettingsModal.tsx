@@ -346,9 +346,6 @@ export function SettingsModal({
 
   const availableFallbackOptions = availableModels.filter(model => model.id !== preferredModel);
   const primaryModelSummary = availableModels.find(m => m.id === preferredModel)?.summary;
-  const selectedModelSummaries = [preferredModel, ...fallbackModels]
-    .map(modelId => availableModels.find(option => option.id === modelId))
-    .filter(Boolean) as ModelOption[];
   const defaultChunkMinutes = availableModels.find(m => m.id === preferredModel)?.default_chunk_minutes ?? 15;
   const defaultTemperature = availableModels.find(m => m.id === preferredModel)?.phase1_temperature ?? 0.35;
 
@@ -766,13 +763,6 @@ export function SettingsModal({
                               <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Fallback:</span> <span>{fallbackModels.join(' -> ') || 'nessuno'}</span></li>
                               <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Chunk:</span> <span>{defaultChunkMinutes} min</span></li>
                               <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Temperatura (phase 1):</span> <span>{defaultTemperature}</span></li>
-                              <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Overlap:</span> <span>30 s</span></li>
-                              <li className="flex justify-between text-xs" style={{ color: 'var(--text-faint)' }}><span>Pre-conversione:</span> <span>Mono 16kHz 48k</span></li>
-                              {selectedModelSummaries.map(model => (
-                                <li key={model.id} className="text-xs" style={{ color: 'var(--text-faint)' }}>
-                                  {model.label}
-                                </li>
-                              ))}
                             </ul>
                             {validationResult && (
                               <div className="space-y-2 text-sm pt-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>

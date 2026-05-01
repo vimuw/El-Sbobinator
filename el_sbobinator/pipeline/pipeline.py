@@ -514,6 +514,25 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         logger.exception("Errore imprevisto nella pipeline.", extra={"stage": "fatal"})
         print(f"\n[X] ERRORE IMPREVISTO DURANTE L'ESECUZIONE:\n{e}")
     finally:
+        # Safety-net: remove the preconverted audio whenever the session is done,
+        # covering all exit paths (early return on resume-done, exception after
+        # stage is set, or app killed between the happy-path cleanup and here).
+        if session_ctx is not None:
+            try:
+                _final_stage = (
+                    str(session.get("stage", "") if isinstance(session, dict) else "")
+                    .strip()
+                    .lower()
+                )
+                if _final_stage == "done":
+                    _preconv = os.path.join(
+                        session_ctx.session_dir, PRECONVERTED_AUDIO_FINAL
+                    )
+                    if os.path.exists(_preconv):
+                        os.remove(_preconv)
+                        invalidate_session_storage_cache()
+            except Exception:
+                pass
         runtime.set_effective_api_key(
             extract_client_api_key(locals().get("client"))
             or getattr(app_instance, "effective_api_key", None)

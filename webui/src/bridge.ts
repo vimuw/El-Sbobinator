@@ -39,6 +39,7 @@ export interface ArchiveSession {
   html_path: string;
   effective_model: string;
   input_path: string;
+  input_size?: number;
   session_dir: string;
   duration_sec?: number;
 }

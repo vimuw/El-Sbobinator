@@ -1,6 +1,6 @@
-import { useMemo, type ReactNode } from 'react';
-import { motion } from 'motion/react';
-import { CalendarDays, Clock, FileText } from 'lucide-react';
+import { useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { motion, useAnimation, type TargetAndTransition } from 'motion/react';
+import { CalendarDays, FileText } from 'lucide-react';
 import type { ArchiveSession } from '../bridge';
 
 interface WelcomeDashboardProps {
@@ -36,6 +36,38 @@ function formatLastSession(archiveSessions: ArchiveSession[]): string {
   return latest.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
 }
 
+function ClockIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24" height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <circle cx="12" cy="12" r="10" />
+      <motion.g
+        style={{ transformOrigin: '12px 12px', transformBox: 'view-box' }}
+        animate={{ rotate: 360 }}
+        transition={{ duration: 48, repeat: Infinity, ease: 'linear' }}
+      >
+        <line x1="12" y1="12" x2="12" y2="7" />
+      </motion.g>
+      <motion.g
+        style={{ transformOrigin: '12px 12px', transformBox: 'view-box' }}
+        animate={{ rotate: 360 }}
+        transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+      >
+        <line x1="12" y1="12" x2="12" y2="5" />
+      </motion.g>
+    </svg>
+  );
+}
+
 export function WelcomeDashboard({ archiveSessions }: WelcomeDashboardProps) {
   const stats = useMemo(() => {
     const total = archiveSessions.length;
@@ -67,26 +99,85 @@ export function WelcomeDashboard({ archiveSessions }: WelcomeDashboardProps) {
       {hasSessions && (
         <div className="grid grid-cols-3 gap-3">
           <StatCard
-            icon={<FileText className="w-5 h-5" />}
+            icon={<FileText className="w-6 h-6" />}
             value={String(stats.total)}
             label="Sbobine completate"
             delay={0}
+            iconIdleAnim={{ rotateY: [0, -180, -180, -360, -360], transition: { times: [0, 0.25, 0.35, 0.60, 1], duration: 4, repeat: Infinity, ease: ['easeInOut', 'linear', 'easeInOut', 'linear'] } }}
           />
           <StatCard
-            icon={<Clock className="w-5 h-5" />}
+            icon={<ClockIcon />}
             value={formatAudioDuration(stats.totalSec)}
             label="Audio elaborato"
             delay={0.05}
+            iconIdleAnim={{ opacity: 1 }}
           />
           <StatCard
-            icon={<CalendarDays className="w-5 h-5" />}
+            icon={<CalendarDays className="w-6 h-6" />}
             value={stats.lastSession}
             label="Ultima sbobina"
             delay={0.1}
+            iconIdleAnim={{ rotateY: [0, -180, -180, -360, -360], transition: { times: [0, 0.25, 0.35, 0.60, 1], duration: 4.5, repeat: Infinity, ease: ['easeInOut', 'linear', 'easeInOut', 'linear'] } }}
           />
         </div>
       )}
     </motion.div>
+  );
+}
+
+interface AnimatedStatIconProps {
+  children: ReactNode;
+  idleAnim: TargetAndTransition;
+  delay: number;
+}
+
+function AnimatedStatIcon({ children, idleAnim, delay }: AnimatedStatIconProps) {
+  const controls = useAnimation();
+  const mountedRef = useRef(true);
+  const idleAnimRef = useRef(idleAnim);
+  const delayRef = useRef(delay);
+
+  useEffect(() => {
+    idleAnimRef.current = idleAnim;
+  }, [idleAnim]);
+
+  useEffect(() => {
+    delayRef.current = delay;
+  }, [delay]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    async function run() {
+      await controls.start({
+        scale: 1,
+        opacity: 1,
+        rotate: 0,
+        rotateY: 0,
+        y: 0,
+        transition: { type: 'spring', stiffness: 350, damping: 18, delay: delayRef.current },
+      });
+      if (mountedRef.current) {
+        controls.start(idleAnimRef.current);
+      }
+    }
+    run();
+    return () => { mountedRef.current = false; };
+  }, [controls]);
+
+  return (
+    <div style={{ perspective: '160px', display: 'inline-flex' }}>
+      <motion.div
+        style={{ display: 'inline-flex' }}
+      >
+        <motion.div
+          initial={{ scale: 0, opacity: 0, rotate: -20 }}
+          animate={controls}
+          style={{ color: 'var(--text-muted)', display: 'inline-flex' }}
+        >
+          {children}
+        </motion.div>
+      </motion.div>
+    </div>
   );
 }
 
@@ -95,24 +186,22 @@ interface StatCardProps {
   value: string;
   label: string;
   delay: number;
+  iconIdleAnim: TargetAndTransition;
 }
 
-function StatCard({ icon, value, label, delay }: StatCardProps) {
+function StatCard({ icon, value, label, delay, iconIdleAnim }: StatCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -5, scale: 1.03 }}
       whileTap={{ scale: 0.96 }}
       transition={{ type: 'spring', stiffness: 300, damping: 20, delay }}
       className="premium-panel stat-card p-4 flex flex-col items-center gap-2 text-center"
       style={{ cursor: 'default' }}
     >
-      <motion.div
-        whileHover={{ scale: 1.2 }}
-        transition={{ type: 'spring', stiffness: 400, damping: 15 }}
-        style={{ color: 'var(--text-muted)' }}
-      >{icon}</motion.div>
+      <AnimatedStatIcon idleAnim={iconIdleAnim} delay={delay}>
+        {icon}
+      </AnimatedStatIcon>
       <span className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>{value}</span>
       <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</span>
     </motion.div>

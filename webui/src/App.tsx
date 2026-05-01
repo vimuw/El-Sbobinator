@@ -314,8 +314,15 @@ export default function App() {
     const pendingFingerprints = new Set(
       currentFiles.filter(f => f.status !== 'done').map(f => getFileFingerprint(f)),
     );
-    const doneByFingerprint = new Map(
-      currentFiles.filter(f => f.status === 'done').map(f => [getFileFingerprint(f), f]),
+    const doneFiles = currentFiles.filter(f => f.status === 'done');
+    const doneByFingerprint = new Map(doneFiles.map(f => [getFileFingerprint(f), f]));
+    const doneByMeta = new Map(
+      doneFiles
+        .filter(f => Number(f.duration) > 0)
+        .map(f => [
+          `${String(f.name || '').trim().toLowerCase()}::${Number(f.size || 0)}::${Math.round(Number(f.duration || 0))}`,
+          f,
+        ]),
     );
     const archiveLookup = buildArchiveLookup(currentArchive);
     const uniqueFiles: FileItem[] = [];
@@ -329,6 +336,21 @@ export default function App() {
       } else if (doneByFingerprint.has(fp)) {
         alreadyProcessedMatches.push({ source: 'done', existingFile: doneByFingerprint.get(fp)!, incoming: file });
         seenInBatch.add(fp);
+      } else if (Number(file.duration) > 0) {
+        const metaKey = `${String(file.name || '').trim().toLowerCase()}::${Number(file.size || 0)}::${Math.round(Number(file.duration || 0))}`;
+        if (doneByMeta.has(metaKey)) {
+          alreadyProcessedMatches.push({ source: 'done', existingFile: doneByMeta.get(metaKey)!, incoming: file });
+          seenInBatch.add(fp);
+        } else {
+          const archiveMatches = getArchiveMatchesForFile(file, archiveLookup);
+          if (archiveMatches.length > 0) {
+            alreadyProcessedMatches.push({ source: 'archive', sessions: archiveMatches, incoming: file });
+            seenInBatch.add(fp);
+          } else {
+            seenInBatch.add(fp);
+            uniqueFiles.push(file);
+          }
+        }
       } else {
         const archiveMatches = getArchiveMatchesForFile(file, archiveLookup);
         if (archiveMatches.length > 0) {
@@ -355,7 +377,7 @@ export default function App() {
       const replacementId = crypto.randomUUID();
       if (match.source === 'done') {
         const archiveMatches = filterArchiveSessionsByInputPath(
-          match.incoming.path ?? match.existingFile.path,
+          match.existingFile.path ?? match.incoming.path,
           archiveSessionsRef.current,
         );
         if (archiveMatches.length > 0) {
@@ -558,7 +580,8 @@ export default function App() {
       setCompletionFlash(true);
       setTimeout(() => setCompletionFlash(false), 5000);
     }
-  }, [onBatchReset]);
+    void refreshArchiveSessions();
+  }, [onBatchReset, refreshArchiveSessions]);
 
   useQueuePersistence(files, structuralVersion, dispatch, appendConsole);
   useBridgeCallbacks({

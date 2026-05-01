@@ -95,6 +95,33 @@ class _PromptBlockingApp:
         return None
 
 
+class _DoneEarlyReturnApp:
+    """App with no dialog methods so ask_should_regenerate returns False immediately,
+    triggering the early-return path at stage=='done'."""
+
+    def __init__(self):
+        self.cancel_event = threading.Event()
+        self.file_temporanei = []
+        self.last_run_status = "idle"
+        self.last_run_error = None
+        self.effective_api_key = None
+
+    def winfo_exists(self):
+        return True
+
+    def aggiorna_progresso(self, value):
+        pass
+
+    def aggiorna_fase(self, text):
+        pass
+
+    def imposta_output_html(self, path, output_dir=None):
+        pass
+
+    def processo_terminato(self):
+        pass
+
+
 class PipelineCancellationTests(unittest.TestCase):
     def test_regenerate_rebinds_model_state_from_reset_session_settings(self):
         app = _PromptBlockingApp()
@@ -642,6 +669,139 @@ class PipelineCleanupCacheTests(unittest.TestCase):
                 esegui_sbobinatura(input_path, "fake-key", app)
 
             mock_invalidate.assert_not_called()
+
+    def test_cleanup_runs_on_done_early_return(self):
+        """finally-block safety net deletes the preconverted audio on the
+        'done early return' path (stage==done, HTML present, user keeps old result)."""
+        from el_sbobinator.core.shared import PRECONVERTED_AUDIO_FINAL
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir = os.path.join(tmpdir, "session")
+            session_ctx = self._make_session_ctx(session_dir)
+
+            preconv_path = os.path.join(session_dir, PRECONVERTED_AUDIO_FINAL)
+            with open(preconv_path, "wb") as fh:
+                fh.write(b"x" * 8192)
+
+            html_path = os.path.join(session_dir, "output.html")
+            with open(html_path, "w") as fh:
+                fh.write("<html></html>")
+
+            session_ctx.session["stage"] = "done"
+            session_ctx.session["outputs"] = {"html": html_path}
+
+            input_path = os.path.join(tmpdir, "input.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake")
+
+            app = _DoneEarlyReturnApp()
+
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(patch("google.genai.Client", _FakeClient))
+                stack.enter_context(
+                    patch(
+                        "el_sbobinator.pipeline.pipeline.initialize_session_context",
+                        return_value=session_ctx,
+                    )
+                )
+                stack.enter_context(
+                    patch(
+                        "el_sbobinator.pipeline.pipeline.attach_file_handler",
+                        return_value=None,
+                    )
+                )
+                stack.enter_context(
+                    patch("el_sbobinator.pipeline.pipeline.detach_file_handler")
+                )
+                stack.enter_context(
+                    patch(
+                        "el_sbobinator.pipeline.pipeline.get_logger",
+                        return_value=_FakeLogger(),
+                    )
+                )
+                stack.enter_context(
+                    patch(
+                        "el_sbobinator.pipeline.pipeline.load_fallback_keys",
+                        return_value=[],
+                    )
+                )
+                stack.enter_context(
+                    patch(
+                        "el_sbobinator.pipeline.pipeline.resolve_ffmpeg",
+                        return_value="ffmpeg",
+                    )
+                )
+                stack.enter_context(
+                    patch(
+                        "el_sbobinator.pipeline.pipeline.probe_media_duration",
+                        return_value=(120.0, None),
+                    )
+                )
+                stack.enter_context(
+                    patch("el_sbobinator.pipeline.pipeline.persist_phase1_metadata")
+                )
+                stack.enter_context(
+                    patch(
+                        "el_sbobinator.pipeline.pipeline.normalize_stage",
+                        return_value="done",
+                    )
+                )
+                stack.enter_context(
+                    patch(
+                        "el_sbobinator.pipeline.pipeline.list_phase1_chunks",
+                        return_value=[],
+                    )
+                )
+                stack.enter_context(
+                    patch(
+                        "el_sbobinator.pipeline.pipeline.phase1_has_progress",
+                        return_value=True,
+                    )
+                )
+                esegui_sbobinatura(input_path, "fake-key", app, resume_session=True)
+
+            self.assertFalse(
+                os.path.exists(preconv_path),
+                "preconv file must be deleted by finally-block safety net on done early return",
+            )
+            self.assertEqual(app.last_run_status, "completed")
+
+    def test_cleanup_skipped_when_stage_not_done(self):
+        """Preconverted audio is NOT deleted when stage is still phase1 (needed for resume)."""
+        from el_sbobinator.core.shared import PRECONVERTED_AUDIO_FINAL
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir = os.path.join(tmpdir, "session")
+            session_ctx = self._make_session_ctx(session_dir)
+
+            preconv_path = os.path.join(session_dir, PRECONVERTED_AUDIO_FINAL)
+            with open(preconv_path, "wb") as fh:
+                fh.write(b"x" * 8192)
+
+            html_path = os.path.join(tmpdir, "output.html")
+            input_path = os.path.join(tmpdir, "input.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake")
+
+            base_patches = self._make_pipeline_patches(
+                session_ctx, preconv_path, html_path, tmpdir
+            )
+            phase1_fail = patch(
+                "el_sbobinator.pipeline.pipeline.process_phase1_transcription",
+                return_value=(_FakeClient(), None, ""),
+            )
+
+            app = _DoneEarlyReturnApp()
+            with contextlib.ExitStack() as stack:
+                for p in base_patches:
+                    stack.enter_context(p)
+                stack.enter_context(phase1_fail)
+                esegui_sbobinatura(input_path, "fake-key", app)
+
+            self.assertTrue(
+                os.path.exists(preconv_path),
+                "preconv file must be kept when processing is incomplete (stage!=done)",
+            )
 
 
 class PipelineStageRoutingTests(unittest.TestCase):

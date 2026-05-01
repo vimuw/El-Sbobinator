@@ -97,11 +97,12 @@ export function NavSidebar({
         {/* API status */}
         <SidebarTooltip label={apiStatusLabel} disabled={!collapsed}>
           <div
-            className="flex items-center gap-2 rounded-md text-xs font-medium mb-1"
+            className="flex items-center gap-2 rounded-md text-xs font-medium"
             style={{
               color: apiStatusColor,
               padding: collapsed ? '6px 0' : '6px 10px',
               justifyContent: collapsed ? 'center' : 'flex-start',
+              minHeight: 28,
             }}
           >
             <span
