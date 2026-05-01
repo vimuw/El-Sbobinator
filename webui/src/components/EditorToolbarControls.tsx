@@ -400,7 +400,7 @@ export const LinkButton = ({ editor }: { editor: TiptapEditor }) => {
             onChange={e => setUrl(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter') applyLink();
-              if (e.key === 'Escape') setIsOpen(false);
+              if (e.key === 'Escape') { e.stopPropagation(); setIsOpen(false); }
             }}
             className="link-input"
           />

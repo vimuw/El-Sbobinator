@@ -64,8 +64,8 @@ vi.mock('./hooks/usePreview', () => ({
   }),
 }));
 
-vi.mock('./components/modals/PreviewModal', () => ({
-  PreviewModal: () => null,
+vi.mock('./components/EditorFullPage', () => ({
+  EditorFullPage: () => null,
 }));
 
 function setPywebview(api: Record<string, unknown> | undefined) {

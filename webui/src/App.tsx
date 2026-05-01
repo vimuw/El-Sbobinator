@@ -31,7 +31,7 @@ import { QueueSection } from './components/QueueSection';
 import { CompletedSection } from './components/CompletedSection';
 import { ArchivePage } from './components/ArchivePage';
 import { ConsolePanel } from './components/ConsolePanel';
-const PreviewModal = React.lazy(() => import('./components/modals/PreviewModal').then(m => ({ default: m.PreviewModal })));
+const EditorFullPage = React.lazy(() => import('./components/EditorFullPage').then(m => ({ default: m.EditorFullPage })));
 
 declare global {
   interface Window {
@@ -844,7 +844,7 @@ export default function App() {
         checkFailed={checkFailed}
       />
       <React.Suspense fallback={null}>
-        <PreviewModal
+        <EditorFullPage
           previewContent={preview.content}
           previewTitle={preview.title}
           htmlPath={preview.path}

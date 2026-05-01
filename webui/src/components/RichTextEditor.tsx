@@ -36,9 +36,11 @@ interface RichTextEditorProps {
   onTocToggle?: () => void;
   tocHeadings?: Heading[];
   onScrollToHeading?: (heading: Heading) => void;
+  zoomLevel?: number;
+  onZoomChange?: (level: number) => void;
 }
 
-export function RichTextEditor({ initialContent, onChange, onEditorReady, initialScrollTop, onScrollTopChange, onHeadingsChange, isTocOpen = false, onTocToggle, tocHeadings = [], onScrollToHeading }: RichTextEditorProps) {
+export function RichTextEditor({ initialContent, onChange, onEditorReady, initialScrollTop, onScrollTopChange, onHeadingsChange, isTocOpen = false, onTocToggle, tocHeadings = [], onScrollToHeading, zoomLevel, onZoomChange }: RichTextEditorProps) {
   const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number } | null>(null);
   const [findMode, setFindMode] = useState<null | 'find' | 'replace'>(null);
   const [findFocusTrigger, setFindFocusTrigger] = useState(0);
@@ -267,6 +269,8 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
         onInsertImages={insertImageFiles}
         showFindReplace={findMode !== null}
         onToggleFindReplace={() => setFindMode(p => p ? null : 'find')}
+        zoomLevel={zoomLevel}
+        onZoomChange={onZoomChange}
       />
       {findMode && editor && (
         <FindReplacePanel editor={editor} onClose={() => setFindMode(null)} initialMode={findMode} focusTrigger={findFocusTrigger} />
@@ -274,6 +278,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
       <div
         ref={scrollContainerRef}
         className="editor-page-container flex-1 overflow-y-auto"
+        style={{ overflowX: 'auto' }}
         onScroll={() => {
           if (scrollContainerRef.current) {
             onScrollTopChangeRef.current?.(scrollContainerRef.current.scrollTop);
@@ -319,7 +324,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
           </div>
           {/* White paper — centering wrapper takes all remaining space */}
           <div className="editor-page-center">
-            <div className="editor-page">
+            <div className="editor-page" style={zoomLevel !== undefined ? { zoom: zoomLevel / 100 } : undefined}>
               <EditorContent editor={editor} />
             </div>
           </div>

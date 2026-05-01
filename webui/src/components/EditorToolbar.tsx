@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight,
-  Bold, ImagePlus, Italic, List, ListOrdered, Quote, Redo,
+  Bold, ImagePlus, Italic, List, ListOrdered, Minus, Plus, Quote, Redo,
   Search, Strikethrough, Subscript as SubIcon, Superscript as SupIcon,
   Underline as UnderlineIcon, Undo,
 } from 'lucide-react';
@@ -44,11 +44,15 @@ export const MenuBar = ({
   onInsertImages,
   showFindReplace,
   onToggleFindReplace,
+  zoomLevel,
+  onZoomChange,
 }: {
   editor: TiptapEditor | null;
   onInsertImages: (files: FileList | File[]) => void;
   showFindReplace: boolean;
   onToggleFindReplace: () => void;
+  zoomLevel?: number;
+  onZoomChange?: (level: number) => void;
 }) => {
   const [, forceUpdate] = React.useState({});
   const imageInputRef = useRef<HTMLInputElement | null>(null);
@@ -142,6 +146,38 @@ export const MenuBar = ({
       >
         <Search className="h-4 w-4" />
       </button>
+
+      {onZoomChange !== undefined && zoomLevel !== undefined && (
+        <>
+          <div className="editor-separator" />
+          <div className="editor-zoom-control">
+            <button
+              type="button"
+              onClick={() => onZoomChange(Math.max(50, zoomLevel - 10))}
+              className="editor-button"
+              title="Riduci zoom (Ctrl+-)"
+            >
+              <Minus className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onZoomChange(100)}
+              className="editor-zoom-display"
+              title="Reimposta zoom 100% (Ctrl+0)"
+            >
+              {zoomLevel}%
+            </button>
+            <button
+              type="button"
+              onClick={() => onZoomChange(Math.min(200, zoomLevel + 10))}
+              className="editor-button"
+              title="Aumenta zoom (Ctrl+=)"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </>
+      )}
 
       <input
         ref={imageInputRef}
