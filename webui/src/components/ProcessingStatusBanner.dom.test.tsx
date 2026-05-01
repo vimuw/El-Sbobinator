@@ -197,4 +197,42 @@ describe('ProcessingStatusBanner', () => {
     );
     expect(screen.getByText(/\d+h \d+m/)).toBeTruthy();
   });
+
+  it('shows ETA chip when stepMetrics provided with enough data (Fase 1/3)', () => {
+    render(
+      <ProcessingStatusBanner
+        appState="processing"
+        currentPhase="Fase 1/3: trascrizione (chunk 2/6)"
+        currentModel="gemini-2.5-flash"
+        activeProgress={30}
+        workDone={{ chunks: 2, macro: 0 }}
+        workTotals={{ chunks: 6, macro: 0 }}
+        stepMetrics={{
+          chunks: { avgSeconds: 30, done: 2, total: 6 },
+          macro: null,
+        }}
+        currentFileIndex={0}
+        currentBatchTotal={1}
+        currentFileName="lesson.mp3"
+      />,
+    );
+    expect(screen.getByText('ETA ~2m')).toBeTruthy();
+  });
+
+  it('does not show ETA when no stepMetrics provided', () => {
+    render(
+      <ProcessingStatusBanner
+        appState="processing"
+        currentPhase="Fase 1/3: trascrizione (chunk 2/6)"
+        currentModel="gemini-2.5-flash"
+        activeProgress={30}
+        workDone={{ chunks: 2, macro: 0 }}
+        workTotals={{ chunks: 6, macro: 0 }}
+        currentFileIndex={0}
+        currentBatchTotal={1}
+        currentFileName="lesson.mp3"
+      />,
+    );
+    expect(screen.queryByText(/ETA/)).toBeNull();
+  });
 });

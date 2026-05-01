@@ -14,11 +14,12 @@ import {
   Pause,
   Sparkles,
   Timer,
+  Hourglass,
   WifiOff,
   XCircle,
 } from 'lucide-react';
 import { shortModelName } from '../utils';
-import type { AppStatus } from '../appState';
+import type { AppStatus, StepMetricEntry } from '../appState';
 
 interface ProcessingStatusBannerProps {
   appState: AppStatus;
@@ -27,6 +28,7 @@ interface ProcessingStatusBannerProps {
   activeProgress: number;
   workDone: { chunks: number; macro: number };
   workTotals: { chunks: number; macro: number };
+  stepMetrics?: { chunks: StepMetricEntry | null; macro: StepMetricEntry | null };
   currentFileIndex: number;
   currentBatchTotal: number;
   currentFileName?: string;
@@ -217,6 +219,35 @@ function getProgressLabel(
   return null;
 }
 
+function computeEta(
+  stepMetrics: { chunks: StepMetricEntry | null; macro: StepMetricEntry | null } | undefined,
+  workDone: { chunks: number; macro: number },
+  workTotals: { chunks: number; macro: number },
+  currentPhase: string,
+): string | null {
+  if (!stepMetrics) return null;
+  const phase = currentPhase.trim();
+  let metric: StepMetricEntry | null = null;
+  let done = 0;
+  let total = 0;
+  if (phase.startsWith('Fase 1/3') && stepMetrics.chunks) {
+    metric = stepMetrics.chunks;
+    done = workDone.chunks;
+    total = workTotals.chunks;
+  } else if (phase.startsWith('Fase 2/3') && stepMetrics.macro) {
+    metric = stepMetrics.macro;
+    done = workDone.macro;
+    total = workTotals.macro;
+  }
+  if (!metric || total <= 0 || done >= total) return null;
+  const remaining = total - done;
+  const etaSecs = Math.round(remaining * metric.avgSeconds);
+  if (etaSecs < 10) return null;
+  if (etaSecs < 60) return `~${etaSecs}s`;
+  const mins = Math.round(etaSecs / 60);
+  return `~${mins}m`;
+}
+
 function formatElapsed(secs: number): string {
   if (secs < 60) return `Da ${secs}s`;
   const minutes = Math.floor(secs / 60);
@@ -302,6 +333,7 @@ export function ProcessingStatusBanner({
   activeProgress,
   workDone,
   workTotals,
+  stepMetrics,
   currentFileIndex,
   currentBatchTotal,
   currentFileName,
@@ -367,6 +399,10 @@ export function ProcessingStatusBanner({
   if (startedAt && elapsedSecs > 0 && kind !== 'success') {
     metaChips.push({ icon: <Timer className="w-3 h-3" />, label: formatElapsed(elapsedSecs) });
   }
+  const etaLabel = kind === 'normal' ? computeEta(stepMetrics, workDone, workTotals, phaseForMeta) : null;
+  if (etaLabel) {
+    metaChips.push({ icon: <Hourglass className="w-3 h-3" />, label: `ETA ${etaLabel}` });
+  }
 
   return (
     <motion.section
@@ -383,13 +419,13 @@ export function ProcessingStatusBanner({
       />
 
       <div className="relative z-10 flex flex-col items-center gap-5 text-center">
-        <AnimatePresence mode="wait">
+        <AnimatePresence>
           <motion.div
             key={title}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
             className="relative flex items-center justify-center"
           >
             {iconAnimation === 'pulse' && (
@@ -409,13 +445,13 @@ export function ProcessingStatusBanner({
           </motion.div>
         </AnimatePresence>
 
-        <AnimatePresence mode="wait">
+        <AnimatePresence>
           <motion.div
             key={`${title}-${description}`}
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
+            transition={{ duration: 0.12, ease: 'easeOut' }}
             className="flex max-w-xl flex-col items-center gap-1.5"
           >
             <h2 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>

@@ -2,7 +2,6 @@ import { useState, type Dispatch, type ReactNode, type SetStateAction } from 're
 import { motion, AnimatePresence } from 'motion/react';
 import { Archive, Moon, Settings, Sun, Terminal } from 'lucide-react';
 import type { AppStatus } from '../appState';
-
 export type ActivePage = 'queue' | 'archive';
 
 const SIDEBAR_EXPANDED_W = 216;
@@ -64,11 +63,12 @@ export function NavSidebar({
         flexShrink: 0,
         zIndex: 30,
         overflowY: 'auto',
+        overflowX: 'hidden',
       }}
     >
 
       {/* Navigation items */}
-      <div className="flex flex-col gap-0.5 px-2 py-2 flex-1">
+      <div className="flex flex-col gap-0.5 px-2 pt-4 pb-2 flex-1">
         <NavItem
           icon={
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -80,7 +80,7 @@ export function NavSidebar({
           label="Dashboard"
           active={activePage === 'queue'}
           onClick={() => setActivePage('queue')}
-          badge={appState === 'processing' ? <HourglassAnim /> : undefined}
+          isProcessing={appState === 'processing'}
           collapsed={collapsed}
         />
         <NavItem
@@ -100,9 +100,9 @@ export function NavSidebar({
             className="flex items-center gap-2 rounded-md text-xs font-medium"
             style={{
               color: apiStatusColor,
-              padding: collapsed ? '6px 0' : '6px 10px',
-              justifyContent: collapsed ? 'center' : 'flex-start',
-              minHeight: 28,
+              padding: '0 10px',
+              height: 30,
+              justifyContent: 'flex-start',
             }}
           >
             <span
@@ -171,17 +171,16 @@ export function NavSidebar({
 
 function SidebarTooltip({ label, disabled, children }: { label: string; disabled: boolean; children: ReactNode }) {
   const [visible, setVisible] = useState(false);
-  if (disabled) return <>{children}</>;
   return (
     <span
       className="sidebar-tooltip-anchor"
-      onMouseEnter={() => setVisible(true)}
+      onMouseEnter={() => !disabled && setVisible(true)}
       onMouseLeave={() => setVisible(false)}
       style={{ position: 'relative', display: 'block' }}
     >
       {children}
       <AnimatePresence>
-        {visible && (
+        {visible && !disabled && (
           <motion.span
             className="sidebar-tooltip"
             initial={{ opacity: 0, x: -4 }}
@@ -197,35 +196,14 @@ function SidebarTooltip({ label, disabled, children }: { label: string; disabled
   );
 }
 
-function HourglassAnim() {
-  return (
-    <svg className="hg-svg" viewBox="0 0 16 20" width="13" height="13" aria-hidden="true">
-      <defs>
-        <clipPath id="hg-clip-t">
-          <polygon points="1,1 15,1 9,9 7,9" />
-        </clipPath>
-        <clipPath id="hg-clip-b">
-          <polygon points="7,11 9,11 15,19 1,19" />
-        </clipPath>
-      </defs>
-      <polygon points="1,1 15,1 9,9 7,9" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-      <polygon points="7,11 9,11 15,19 1,19" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-      <line x1="7" y1="9" x2="9" y2="9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      <line x1="7" y1="11" x2="9" y2="11" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      <rect className="hg-sand-t" x="1" y="1" width="14" height="8" clipPath="url(#hg-clip-t)" fill="currentColor" opacity="0.65" />
-      <rect className="hg-sand-b" x="1" y="19" width="14" height="0" clipPath="url(#hg-clip-b)" fill="currentColor" opacity="0.65" />
-    </svg>
-  );
-}
-
 function NavItem({
-  icon, label, active, onClick, badge, collapsed,
+  icon, label, active, onClick, isProcessing, collapsed,
 }: {
   icon: ReactNode;
   label: string;
   active: boolean;
   onClick: () => void;
-  badge?: ReactNode;
+  isProcessing?: boolean;
   collapsed: boolean;
 }) {
   return (
@@ -240,16 +218,25 @@ function NavItem({
           cursor: 'pointer',
           fontWeight: active ? 600 : 500,
           gap: collapsed ? 0 : 8,
-          padding: collapsed ? '6px 0' : '6px 10px',
-          justifyContent: collapsed ? 'center' : 'flex-start',
+          padding: '0 10px',
+          height: 32,
+          justifyContent: 'flex-start',
         }}
       >
-        <span className="shrink-0 inline-flex items-center" style={{ color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>{icon}</span>
+        <span className="shrink-0 inline-flex items-center" style={{ position: 'relative', color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>
+          {icon}
+          {isProcessing && (
+            <span style={{ position: 'absolute', top: -3, right: -3, display: 'inline-flex' }}>
+              <span className="animate-ping" style={{ position: 'absolute', width: 8, height: 8, borderRadius: '50%', background: 'var(--processing-dot)', opacity: 0.7 }} />
+              <span style={{ position: 'relative', width: 8, height: 8, borderRadius: '50%', background: 'var(--processing-dot)', border: '1.5px solid var(--sidebar-bg)' }} />
+            </span>
+          )}
+        </span>
         <AnimatePresence initial={false}>
           {!collapsed && (
             <motion.span
               key="nav-label"
-              className="truncate flex-1"
+              className="truncate"
               initial={{ opacity: 0, width: 0 }}
               animate={{ opacity: 1, width: 'auto' }}
               exit={{ opacity: 0, width: 0 }}
@@ -260,7 +247,6 @@ function NavItem({
             </motion.span>
           )}
         </AnimatePresence>
-        {!collapsed && badge && <span className="text-xs shrink-0">{badge}</span>}
       </button>
     </SidebarTooltip>
   );
@@ -288,8 +274,9 @@ function UtilityButton({
           border: 'none',
           cursor: 'pointer',
           gap: collapsed ? 0 : 8,
-          padding: collapsed ? '6px 0' : '6px 10px',
-          justifyContent: collapsed ? 'center' : 'flex-start',
+          padding: '0 10px',
+          height: 30,
+          justifyContent: 'flex-start',
         }}
       >
         <span className="shrink-0 inline-flex items-center" style={{ color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>{icon}</span>

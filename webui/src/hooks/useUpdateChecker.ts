@@ -66,11 +66,11 @@ export function useUpdateChecker() {
     checkForUpdates(false);
   }, [checkForUpdates]);
 
-  const dismissUpdate = (version: string) => {
+  const dismissUpdate = useCallback((version: string) => {
     try { window.localStorage.setItem(UPDATE_DISMISSED_KEY, version); } catch (_) {}
     setUpdateAvailable(null);
     setIsDismissed(true);
-  };
+  }, []);
 
   return { updateAvailable, latestVersion, isDismissed, isCheckingUpdate, hasChecked, checkFailed, checkForUpdates, dismissUpdate };
 }

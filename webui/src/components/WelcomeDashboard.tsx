@@ -62,8 +62,9 @@ function ClockIcon({ className }: { className?: string }) {
         animate={{ rotate: 360 }}
         transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
       >
-        <line x1="12" y1="12" x2="12" y2="5" />
+        <line x1="12" y1="12" x2="12" y2="5.5" />
       </motion.g>
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
     </svg>
   );
 }
@@ -117,7 +118,7 @@ export function WelcomeDashboard({ archiveSessions }: WelcomeDashboardProps) {
             value={stats.lastSession}
             label="Ultima sbobina"
             delay={0.1}
-            iconIdleAnim={{ rotateY: [0, -180, -180, -360, -360], transition: { times: [0, 0.25, 0.35, 0.60, 1], duration: 4.5, repeat: Infinity, ease: ['easeInOut', 'linear', 'easeInOut', 'linear'] } }}
+            iconIdleAnim={{ rotate: [0, -12, 12, -6, 6, 0], transition: { duration: 3.5, repeat: Infinity, ease: 'easeInOut' } }}
           />
         </div>
       )}

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } 
 import { motion, AnimatePresence } from 'motion/react';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { Github } from 'lucide-react';
-import { GITHUB_URL, KOFI_URL } from './branding';
+import { GITHUB_RELEASES_URL, GITHUB_URL, KOFI_URL } from './branding';
 import { type ArchiveFolder, type ArchiveSession, type ElSbobinatorBridge, type PywebviewApi } from './bridge';
 import { getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type FileDescriptor, type FileItem, type ProcessDonePayload } from './appState';
 import { GEMINI_KEY_PATTERN } from './utils';
@@ -23,7 +23,6 @@ import { DuplicateFileModal, type AlreadyProcessedMatch, type DuplicatePrompt } 
 import { buildArchiveLookup, filterArchiveSessionsByInputPath, getArchiveMatchesForFile } from './duplicateDetection';
 import { NavSidebar, type ActivePage } from './components/NavSidebar';
 import { Toaster, type ToastMessage } from './components/Toast';
-import { StatusBanners } from './components/StatusBanners';
 import { SetupPage } from './components/SetupPage';
 import { DropZone } from './components/DropZone';
 import { WelcomeDashboard } from './components/WelcomeDashboard';
@@ -67,7 +66,7 @@ type PendingArchiveReplacement = {
 };
 
 export default function App() {
-  const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone }, dispatch] = useReducer(processingReducer, initialProcessingState);
+  const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone, stepMetrics }, dispatch] = useReducer(processingReducer, initialProcessingState);
 
   const { consoleLogs, appendConsole } = useConsole();
   const { themeMode, setThemeMode } = useTheme();
@@ -95,12 +94,19 @@ export default function App() {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  const showToast = useCallback((message: string, type: 'warning' | 'info' = 'info') => {
+  const showToast = useCallback((message: string, type: 'warning' | 'info' = 'info', opts?: {
+    persistent?: boolean;
+    action?: ToastMessage['action'];
+    onDismiss?: () => void;
+  }) => {
     const toastId = crypto.randomUUID();
-    setToasts(prev => [...prev, { id: toastId, message, type }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== toastId));
-    }, 5000);
+    setToasts(prev => [...prev, { id: toastId, message, type, persistent: opts?.persistent, action: opts?.action, onDismiss: opts?.onDismiss }]);
+    if (!opts?.persistent) {
+      setTimeout(() => {
+        setToasts(prev => prev.filter(t => t.id !== toastId));
+      }, 5000);
+    }
+    return toastId;
   }, []);
 
   const refreshArchiveSessions = useCallback(async () => {
@@ -122,6 +128,7 @@ export default function App() {
   }, [showToast]);
 
   const { preview, openPreview, closePreview, relinkPreviewAudio, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed });
+
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [regeneratePrompt, setRegeneratePrompt] = useState<{ filename: string; mode?: 'completed' | 'resume' } | null>(null);
@@ -175,6 +182,60 @@ export default function App() {
       setIsPeakDismissed(ts ? Date.now() < Number(ts) : false);
     }
   }, [isPeakHour]);
+
+  const peakToastIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isPeakHour) {
+      if (peakToastIdRef.current) {
+        dismissToast(peakToastIdRef.current);
+        peakToastIdRef.current = null;
+      }
+      return;
+    }
+    if (isPeakDismissed || peakToastIdRef.current) return;
+    peakToastIdRef.current = showToast(
+      'Fascia oraria di punta (15:00–20:00): i modelli Gemini Flash possono subire rallentamenti o errori 503.',
+      'warning',
+      {
+        persistent: true,
+        onDismiss: () => {
+          peakToastIdRef.current = null;
+          const next = new Date();
+          next.setDate(next.getDate() + 1);
+          next.setHours(15, 0, 0, 0);
+          localStorage.setItem('peakBannerDismissedUntil', String(next.getTime()));
+          setIsPeakDismissed(true);
+        },
+      }
+    );
+  }, [isPeakHour, isPeakDismissed, showToast, dismissToast]);
+
+  const updateToastShownVersionRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!updateAvailable) return;
+    if (updateToastShownVersionRef.current === updateAvailable) return;
+    updateToastShownVersionRef.current = updateAvailable;
+    showToast(
+      `Nuova versione disponibile: ${updateAvailable}`,
+      'info',
+      {
+        persistent: true,
+        action: {
+          label: 'Aggiorna',
+          loadingLabel: 'Download in corso…',
+          errorSuffix: 'si è aperta la pagina GitHub per scaricare manualmente.',
+          onAction: async () => {
+            const result = await window.pywebview?.api?.download_and_install_update?.(updateAvailable);
+            if (!result?.ok) {
+              window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL);
+              throw new Error(result?.error ?? 'Download fallito');
+            }
+          },
+        },
+        onDismiss: () => dismissUpdate(updateAvailable),
+      }
+    );
+  }, [updateAvailable, showToast, dismissUpdate]);
 
   const handleFoldersChange = useCallback(async (next: ArchiveFolder[]) => {
     setFolders(next);
@@ -579,6 +640,13 @@ export default function App() {
     if (isSuccessfulProcessDone(data)) {
       setCompletionFlash(true);
       setTimeout(() => setCompletionFlash(false), 5000);
+      const completedCount = Number(data.completed ?? 0);
+      if (completedCount > 1 && !document.hasFocus()) {
+        void window.pywebview?.api?.show_notification?.(
+          '✅ Batch completato — El Sbobinator',
+          `${completedCount} sbobine elaborate con successo.`,
+        );
+      }
     }
     void refreshArchiveSessions();
   }, [onBatchReset, refreshArchiveSessions]);
@@ -642,20 +710,6 @@ export default function App() {
       />
 
       <div className="flex flex-col flex-1 min-w-0 min-h-screen">
-        <StatusBanners
-          isPeakHour={isPeakHour}
-          isPeakDismissed={isPeakDismissed}
-          onDismissPeak={() => {
-            const next = new Date();
-            next.setDate(next.getDate() + 1);
-            next.setHours(15, 0, 0, 0);
-            localStorage.setItem('peakBannerDismissedUntil', String(next.getTime()));
-            setIsPeakDismissed(true);
-          }}
-          updateAvailable={updateAvailable}
-          dismissUpdate={dismissUpdate}
-        />
-
         <AnimatePresence mode="wait">
           {activePage === 'queue' ? (
             <motion.main
@@ -698,6 +752,7 @@ export default function App() {
                             activeProgress={completionFlash ? 100 : activeProgress}
                             workTotals={workTotals}
                             workDone={workDone}
+                            stepMetrics={stepMetrics}
                             currentFileIndex={batchCompleted}
                             currentBatchTotal={batchTotal}
                             currentFileName={bannerFile?.name}
