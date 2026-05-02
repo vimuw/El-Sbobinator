@@ -88,9 +88,15 @@ export default function App() {
 
   const [archiveSessions, setArchiveSessions] = useState<ArchiveSession[]>([]);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const toastTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const prevSessionDirsRef = useRef<Map<string, string>>(new Map());
 
   const dismissToast = useCallback((id: string) => {
+    const timer = toastTimersRef.current.get(id);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      toastTimersRef.current.delete(id);
+    }
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
@@ -102,9 +108,11 @@ export default function App() {
     const toastId = crypto.randomUUID();
     setToasts(prev => [...prev, { id: toastId, message, type, persistent: opts?.persistent, action: opts?.action, onDismiss: opts?.onDismiss }]);
     if (!opts?.persistent) {
-      setTimeout(() => {
+      const timer = setTimeout(() => {
+        toastTimersRef.current.delete(toastId);
         setToasts(prev => prev.filter(t => t.id !== toastId));
       }, 5000);
+      toastTimersRef.current.set(toastId, timer);
     }
     return toastId;
   }, []);

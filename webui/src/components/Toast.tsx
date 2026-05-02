@@ -51,35 +51,45 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 20, scale: 0.96 }}
+      initial={{ opacity: 0, y: -16, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 10, scale: 0.96 }}
+      exit={{ opacity: 0, y: -8, scale: 0.96 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
-      className="pointer-events-auto flex flex-col gap-1.5 px-4 py-3 rounded-2xl shadow-lg"
+      className="pointer-events-auto flex flex-col gap-1.5 px-4 py-3 rounded-2xl"
       style={{
-        maxWidth: '26rem',
+        position: 'relative',
+        maxWidth: '18rem',
         width: 'max-content',
+        paddingRight: '2.25rem',
         background: 'var(--bg-elevated)',
-        border: `1px solid ${toast.type === 'warning' ? 'var(--error-ring)' : 'var(--border-default)'}`,
+        border: `1px solid ${toast.type === 'warning' ? 'var(--error-ring)' : 'var(--border-strong)'}`,
         color: 'var(--text-primary)',
-        boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
       }}
     >
+      <button
+        onClick={handleDismiss}
+        disabled={isLoading}
+        className="toast-dismiss-btn"
+        style={{ position: 'absolute', top: '8px', right: '8px', opacity: isLoading ? 0.4 : 1 }}
+        aria-label="Chiudi notifica"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
       <div className="flex items-start gap-3">
         {toast.type === 'warning' ? (
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: 'var(--error-text)' }} />
         ) : (
           <Info className="w-4 h-4 shrink-0 mt-0.5" style={{ color: 'var(--text-muted)' }} />
         )}
-        <span className="text-sm flex-1 leading-snug" style={{ color: 'var(--text-secondary)' }}>
-          {toast.message}
-        </span>
-        <div className="flex items-center gap-2 shrink-0 ml-1">
+        <div className="flex flex-1 flex-col gap-1.5">
+          <span className="text-sm leading-snug" style={{ color: 'var(--text-secondary)' }}>
+            {toast.message}
+          </span>
           {toast.action && (
             <button
               onClick={handleAction}
               disabled={isLoading}
-              className="text-sm flex items-center gap-1"
+              className="self-start text-sm flex items-center gap-1"
               style={{
                 background: 'none',
                 border: 'none',
@@ -97,14 +107,6 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
               )}
             </button>
           )}
-          <button
-            onClick={handleDismiss}
-            className="icon-button shrink-0"
-            style={{ color: 'var(--text-faint)', marginTop: '-2px' }}
-            aria-label="Chiudi notifica"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
         </div>
       </div>
       {errorText && (
@@ -120,7 +122,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
 export function Toaster({ toasts, onDismiss }: ToasterProps) {
   return (
     <div
-      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[90] flex flex-col gap-2 items-center pointer-events-none"
+      className="fixed top-6 right-6 z-[90] flex flex-col gap-2 items-end pointer-events-none"
       style={{ minWidth: 0 }}
     >
       <AnimatePresence initial={false}>

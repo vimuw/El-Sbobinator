@@ -582,6 +582,30 @@ button {
   box-shadow: 0 0 0 3px var(--btn-primary-ring);
 }
 
+.toast-dismiss-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-faint);
+  transition: color 140ms ease;
+}
+
+.toast-dismiss-btn:hover {
+  color: var(--text-primary);
+  background: none;
+}
+
+.toast-dismiss-btn:active {
+  transform: scale(0.92);
+}
+
 .icon-button.is-danger {
   background: var(--error-subtle);
   color: var(--error-text);
