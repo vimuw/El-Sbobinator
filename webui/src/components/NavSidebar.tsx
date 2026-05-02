@@ -105,10 +105,12 @@ export function NavSidebar({
               justifyContent: 'flex-start',
             }}
           >
-            <span
-              className={`inline-flex h-1.5 w-1.5 rounded-full shrink-0 ${appState === 'processing' ? 'animate-pulse' : ''}`}
-              style={{ background: apiStatusColor }}
-            />
+            <span className="shrink-0 inline-flex items-center justify-center" style={{ width: 18, height: 18, lineHeight: 0 }}>
+              <span
+                className={`inline-flex h-1.5 w-1.5 rounded-full ${appState === 'processing' ? 'animate-pulse' : ''}`}
+                style={{ background: apiStatusColor }}
+              />
+            </span>
             <AnimatePresence initial={false}>
               {!collapsed && (
                 <motion.span

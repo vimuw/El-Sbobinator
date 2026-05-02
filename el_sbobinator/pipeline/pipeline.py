@@ -91,7 +91,12 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         runtime.set_effective_api_key(api_key_value.strip())
 
         def request_fallback_key():
-            return generation_service.request_new_api_key(runtime, runtime.cancelled)
+            key = generation_service.request_new_api_key(runtime, runtime.cancelled)
+            if not key or not key.strip():
+                _ce = runtime.cancel_event
+                if _ce is not None:
+                    _ce.set()
+            return key
 
         # ------------------------------
         # SESSIONE (AUTOSAVE / RIPRESA)

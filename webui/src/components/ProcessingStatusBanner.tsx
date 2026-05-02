@@ -415,51 +415,44 @@ export function ProcessingStatusBanner({
 
       <div
         className="absolute left-1/2 top-0 h-28 w-28 -translate-x-1/2 rounded-full blur-3xl"
-        style={{ background: accentSubtle, opacity: 0.45 }}
+        style={{ background: accentSubtle, opacity: 0.45, transition: 'background 0.2s ease-out' }}
       />
 
       <div className="relative z-10 flex flex-col items-center gap-5 text-center">
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           <motion.div
             key={title}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
-            className="relative flex items-center justify-center"
+            className="flex flex-col items-center gap-5"
           >
-            {iconAnimation === 'pulse' && (
-              <span
-                className="absolute inset-0 rounded-full animate-ping"
-                style={{ background: accentSubtle, opacity: 0.6 }}
-              />
-            )}
-            <div
-              className="relative flex h-16 w-16 items-center justify-center rounded-full"
-              style={{ background: accentSubtle, color: accentColor }}
-            >
-              <div className={iconAnimation === 'spin' ? 'animate-spin' : iconAnimation === 'pulse' ? 'animate-pulse' : ''}>
-                {icon}
+            <div className="relative flex items-center justify-center">
+              {iconAnimation === 'pulse' && (
+                <span
+                  className="absolute inset-0 rounded-full animate-ping"
+                  style={{ background: accentSubtle, opacity: 0.6 }}
+                />
+              )}
+              <div
+                className="relative flex h-16 w-16 items-center justify-center rounded-full"
+                style={{ background: accentSubtle, color: accentColor }}
+              >
+                <div className={iconAnimation === 'spin' ? 'animate-spin' : iconAnimation === 'pulse' ? 'animate-pulse' : ''}>
+                  {icon}
+                </div>
               </div>
             </div>
-          </motion.div>
-        </AnimatePresence>
 
-        <AnimatePresence>
-          <motion.div
-            key={`${title}-${description}`}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4 }}
-            transition={{ duration: 0.12, ease: 'easeOut' }}
-            className="flex max-w-xl flex-col items-center gap-1.5"
-          >
-            <h2 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-              {title}
-            </h2>
-            <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-              {description}
-            </p>
+            <div className="flex max-w-xl flex-col items-center gap-1.5">
+              <h2 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                {title}
+              </h2>
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                {description}
+              </p>
+            </div>
           </motion.div>
         </AnimatePresence>
 
