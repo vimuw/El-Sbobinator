@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import plistlib
+import re
 import ssl
 import subprocess
 import sys
@@ -23,7 +24,7 @@ import certifi
 
 def download_and_install_update(version: str) -> dict:
     """Download the correct installer for this OS, launch it, then quit the app."""
-    if not isinstance(version, str) or not version:
+    if not isinstance(version, str) or not re.fullmatch(r"v?\d+\.\d+\.\d+", version):
         return {"ok": False, "error": "Versione non valida."}
 
     version_clean = version.lstrip("v")
@@ -37,9 +38,7 @@ def download_and_install_update(version: str) -> dict:
     else:
         return {"ok": False, "error": f"Piattaforma non supportata: {sys.platform}"}
 
-    url = (
-        f"https://github.com/vimuw/El-Sbobinator/releases/download/{version}/{filename}"
-    )
+    url = f"https://github.com/vimuw/El-Sbobinator/releases/download/v{version_clean}/{filename}"
 
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:

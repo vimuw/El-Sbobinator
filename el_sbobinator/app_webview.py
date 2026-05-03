@@ -79,6 +79,19 @@ _ALLOWED_URL_PREFIXES: tuple[str, ...] = (
 )
 
 
+def _path_under_root(path: str, root: str) -> bool:
+    """Return True if *path* equals or is nested under *root*.
+
+    Uses os.path.normcase so the comparison is case-insensitive on Windows
+    (where realpath does not canonicalise drive/folder casing).
+    Both arguments must already be fully resolved (os.path.realpath) by the
+    caller.
+    """
+    nc_path = os.path.normcase(path)
+    nc_root = os.path.normcase(root)
+    return nc_path == nc_root or nc_path.startswith(nc_root + os.sep)
+
+
 # ---------------------------------------------------------------------------
 # ElSbobinatorApi: exposed to JS via pywebview js_api
 # ---------------------------------------------------------------------------
@@ -278,9 +291,9 @@ class ElSbobinatorApi:
 
         try:
             session_root = self._get_session_root()
-            abs_dir = os.path.abspath(session_dir)
-            abs_root = os.path.abspath(session_root)
-            if not abs_dir.startswith(abs_root + os.sep):
+            abs_dir = os.path.realpath(session_dir)
+            abs_root = os.path.realpath(session_root)
+            if not _path_under_root(abs_dir, abs_root):
                 return {"ok": False, "error": "Percorso non valido"}
             if not os.path.isdir(abs_dir):
                 return {"ok": False, "error": "Cartella non trovata"}
@@ -306,9 +319,9 @@ class ElSbobinatorApi:
 
         try:
             session_root = self._get_session_root()
-            abs_dir = os.path.abspath(session_dir)
-            abs_root = os.path.abspath(session_root)
-            if not abs_dir.startswith(abs_root + os.sep):
+            abs_dir = os.path.realpath(session_dir)
+            abs_root = os.path.realpath(session_root)
+            if not _path_under_root(abs_dir, abs_root):
                 return {"ok": False, "error": "Percorso non valido"}
             session_path = os.path.join(abs_dir, "session.json")
             if not os.path.isfile(session_path):
@@ -852,15 +865,12 @@ class ElSbobinatorApi:
         if not isinstance(path, str) or not path.lower().endswith(".html"):
             return {"ok": False, "error": "Path non valido: deve essere un file .html."}
         # Path traversal protection: resolve and check against allowed roots
-        real_path = os.path.realpath(os.path.abspath(path))
+        real_path = os.path.realpath(path)
         allowed_roots = [
             os.path.realpath(get_desktop_dir()),  # Desktop / OneDrive Desktop
             os.path.realpath(self._get_session_root()),  # Session storage
         ]
-        if not any(
-            real_path.startswith(root + os.sep) or real_path == root
-            for root in allowed_roots
-        ):
+        if not any(_path_under_root(real_path, root) for root in allowed_roots):
             return {
                 "ok": False,
                 "error": "Accesso negato: path fuori dai percorsi consentiti.",
@@ -873,10 +883,7 @@ class ElSbobinatorApi:
                 fallback = self._rebuild_html_from_session(_basename)
             if fallback and os.path.isfile(fallback):
                 real_path = fallback
-                if not any(
-                    real_path.startswith(root + os.sep) or real_path == root
-                    for root in allowed_roots
-                ):
+                if not any(_path_under_root(real_path, root) for root in allowed_roots):
                     return {
                         "ok": False,
                         "error": "Accesso negato: path fuori dai percorsi consentiti.",
@@ -1016,16 +1023,13 @@ class ElSbobinatorApi:
         if not isinstance(path, str) or not path.lower().endswith(".html"):
             return {"ok": False, "error": "Path non valido: deve essere un file .html."}
         # Path traversal protection: resolve and check against allowed roots
-        real_path = os.path.realpath(os.path.abspath(path))
+        real_path = os.path.realpath(path)
         original_real_path = real_path
         allowed_roots = [
             os.path.realpath(get_desktop_dir()),  # Desktop / OneDrive Desktop
             os.path.realpath(self._get_session_root()),  # Session storage
         ]
-        if not any(
-            real_path.startswith(root + os.sep) or real_path == root
-            for root in allowed_roots
-        ):
+        if not any(_path_under_root(real_path, root) for root in allowed_roots):
             return {
                 "ok": False,
                 "error": "Accesso negato: path fuori dai percorsi consentiti.",
@@ -1041,10 +1045,7 @@ class ElSbobinatorApi:
                     fallback = self._rebuild_html_from_session(_basename)
             if fallback and os.path.isfile(fallback):
                 real_path = fallback
-                if not any(
-                    real_path.startswith(root + os.sep) or real_path == root
-                    for root in allowed_roots
-                ):
+                if not any(_path_under_root(real_path, root) for root in allowed_roots):
                     return {
                         "ok": False,
                         "error": "Accesso negato: path fuori dai percorsi consentiti.",

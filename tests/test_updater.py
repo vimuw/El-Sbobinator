@@ -20,9 +20,15 @@ class UpdaterTests(unittest.TestCase):
         result = download_and_install_update(None)  # type: ignore[arg-type]
         self.assertFalse(result["ok"])
 
+    def test_malformed_version_returns_error(self):
+        for bad in ("../../etc/passwd", "1.2", "1.2.3.4", "v1.2.x", " 1.2.3"):
+            with self.subTest(version=bad):
+                result = download_and_install_update(bad)
+                self.assertFalse(result["ok"])
+                self.assertIn("Versione", result["error"])
+
     def test_version_v_prefix_stripped_in_filename(self):
-        """'v1.2.3' must produce filename '1.2.3', not 'v1.2.3'."""
-        captured: list[str] = []
+        """Both 'v1.2.3' and '1.2.3' must produce filename 'Setup-v1.2.3.exe'."""
 
         class _FakeResp:
             def read(self, n):
@@ -34,23 +40,26 @@ class UpdaterTests(unittest.TestCase):
             def __exit__(self, *a):
                 pass
 
-        with (
-            patch.object(sys, "platform", "win32"),
-            patch("urllib.request.urlopen", return_value=_FakeResp()) as mock_urlopen,
-            patch("builtins.open", mock_open()),
-            patch("os.startfile", create=True),
-            patch("threading.Thread"),
-            patch("tempfile.NamedTemporaryFile") as mock_tmp,
-        ):
-            mock_tmp.return_value.__enter__.return_value.name = "/tmp/setup.exe"
-            mock_tmp.return_value.__exit__.return_value = False
-            download_and_install_update("v1.2.3")
-            url = mock_urlopen.call_args[0][0]
-            captured.append(url)
+        for version in ("v1.2.3", "1.2.3"):
+            with self.subTest(version=version):
+                with (
+                    patch.object(sys, "platform", "win32"),
+                    patch(
+                        "urllib.request.urlopen", return_value=_FakeResp()
+                    ) as mock_urlopen,
+                    patch("builtins.open", mock_open()),
+                    patch("os.startfile", create=True),
+                    patch("threading.Thread"),
+                    patch("tempfile.NamedTemporaryFile") as mock_tmp,
+                ):
+                    mock_tmp.return_value.__enter__.return_value.name = "/tmp/setup.exe"
+                    mock_tmp.return_value.__exit__.return_value = False
+                    download_and_install_update(version)
+                    url = mock_urlopen.call_args[0][0]
 
-        self.assertIn("1.2.3", captured[0])
-        self.assertNotIn("vv", captured[0])
-        self.assertIn("Setup-v1.2.3.exe", captured[0])
+                self.assertIn("1.2.3", url)
+                self.assertNotIn("vv", url)
+                self.assertIn("Setup-v1.2.3.exe", url)
 
     # ------------------------------------------------------------------
     # Unsupported platform
