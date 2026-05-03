@@ -917,6 +917,7 @@ export default function App() {
           onRelink={relinkPreviewAudio}
           previewInitAudio={preview.initAudio}
           previewInitScrollTop={preview.initScrollTop}
+          initialSearchTerm={preview.initialSearchTerm}
           onAudioStateChange={handleAudioStateChange}
           onScrollTopChange={handleScrollTopChange}
         />

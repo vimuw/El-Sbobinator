@@ -44,6 +44,21 @@ export interface ArchiveSession {
   duration_sec?: number;
 }
 
+export interface SearchSnippet {
+  before: string;
+  match: string;
+  after: string;
+}
+
+export interface SearchSessionResult {
+  session_dir: string;
+  name: string;
+  html_path: string;
+  completed_at_iso: string;
+  snippets: SearchSnippet[];
+  match_count: number;
+}
+
 export interface ArchiveFolder {
   id: string;
   name: string;
@@ -115,6 +130,7 @@ export interface PywebviewApi {
   save_theme_preference?: (theme: 'light' | 'dark') => Promise<void>;
   get_archive_folders?: () => Promise<{ ok: boolean; folders: ArchiveFolder[]; error?: string }>;
   save_archive_folders?: (folders: ArchiveFolder[]) => Promise<{ ok: boolean; error?: string }>;
+  search_sessions?: (query: string, limit?: number) => Promise<{ ok: boolean; results?: SearchSessionResult[]; error?: string }>;
 }
 
 export function createBridge(options: {

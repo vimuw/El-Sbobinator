@@ -21,6 +21,7 @@ interface EditorFullPageProps {
   onRelink: () => Promise<boolean | undefined>;
   previewInitAudio: { time?: number; playbackRate?: number; volume?: number };
   previewInitScrollTop: number | undefined;
+  initialSearchTerm?: string;
   onAudioStateChange: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
   onScrollTopChange: (scrollTop: number) => void;
 }
@@ -29,6 +30,7 @@ export function EditorFullPage({
   previewContent, previewTitle, htmlPath, onClose,
   audioSrc, audioRelinkNeeded, onRelink,
   previewInitAudio, previewInitScrollTop,
+  initialSearchTerm,
   onAudioStateChange, onScrollTopChange,
 }: EditorFullPageProps) {
   const [isTocOpen, setIsTocOpen] = useState(false);
@@ -271,6 +273,7 @@ export function EditorFullPage({
                 onChange={scheduleAutosave}
                 onEditorReady={getHtml => { getHtmlRef.current = getHtml; }}
                 initialScrollTop={previewInitScrollTop}
+                initialSearchTerm={initialSearchTerm}
                 onScrollTopChange={onScrollTopChange}
                 onHeadingsChange={setHeadings}
                 isTocOpen={isTocOpen}

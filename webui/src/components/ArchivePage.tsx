@@ -2,8 +2,8 @@ import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } fro
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
-  ExternalLink, FolderOpen, FolderPlus, History,
-  Pencil, Plus, RefreshCw, Search, Trash2, X,
+  ExternalLink, FileSearch, FolderOpen, FolderPlus, History,
+  Loader2, Pencil, Plus, RefreshCw, Search, Trash2, X,
 } from 'lucide-react';
 import {
   DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -13,7 +13,7 @@ import {
   SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { ArchiveFolder, ArchiveSession } from '../bridge';
+import type { ArchiveFolder, ArchiveSession, SearchSessionResult } from '../bridge';
 import { formatRelativeTime, shortModelName } from '../utils';
 import { KebabMenu, type KebabMenuItem } from './KebabMenu';
 
@@ -28,7 +28,7 @@ interface ArchivePageProps {
   sessions: ArchiveSession[];
   folders: ArchiveFolder[];
   onFoldersChange: (folders: ArchiveFolder[]) => void;
-  onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string) => void;
+  onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string, searchTerm?: string) => void;
   onOpenFile: (path: string) => void;
   onDeleteSession: (sessionDir: string, name: string) => void;
   onRefresh?: () => void;
@@ -51,6 +51,12 @@ export function ArchivePage({
   const [searchFocused, setSearchFocused] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeDragFolderId, setActiveDragFolderId] = useState<string | null>(null);
+  const [fullTextMode, setFullTextMode] = useState(false);
+  const [ftResults, setFtResults] = useState<SearchSessionResult[] | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [ftError, setFtError] = useState<string | null>(null);
+  const ftDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchGenRef = useRef(0);
 
   const folderDndSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -115,6 +121,39 @@ export function ArchivePage({
 
   useEffect(() => { setSessionPage(0); }, [search, sort]);
   useEffect(() => { if (sessionPages > 0 && sessionPage >= sessionPages) setSessionPage(sessionPages - 1); }, [sessionPages, sessionPage]);
+
+  useEffect(() => {
+    if (ftDebounceRef.current) clearTimeout(ftDebounceRef.current);
+    const q = search.trim();
+    if (!fullTextMode || q.length < 3) {
+      setFtResults(null);
+      setFtError(null);
+      setIsSearching(false);
+      return;
+    }
+    setIsSearching(true);
+    setFtError(null);
+    const gen = ++searchGenRef.current;
+    ftDebounceRef.current = setTimeout(async () => {
+      try {
+        const res = await window.pywebview?.api?.search_sessions?.(q, 20);
+        if (searchGenRef.current !== gen) return;
+        if (res?.ok) {
+          setFtResults(res.results ?? []);
+        } else {
+          setFtError(res?.error ?? 'Errore durante la ricerca');
+          setFtResults([]);
+        }
+      } catch {
+        if (searchGenRef.current !== gen) return;
+        setFtError('Errore durante la ricerca');
+        setFtResults([]);
+      } finally {
+        if (searchGenRef.current === gen) setIsSearching(false);
+      }
+    }, 400);
+    return () => { if (ftDebounceRef.current) clearTimeout(ftDebounceRef.current); };
+  }, [fullTextMode, search]);
 
   useEffect(() => {
     if (selectedFolderId && !folders.find(f => f.id === selectedFolderId)) {
@@ -244,7 +283,9 @@ export function ArchivePage({
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
             <div className="notion-search-wrap">
-              <Search className="notion-search-icon w-3.5 h-3.5" />
+              {isSearching
+                ? <Loader2 className="notion-search-icon w-3.5 h-3.5 animate-spin" />
+                : <Search className="notion-search-icon w-3.5 h-3.5" />}
               <input
                 ref={searchInputRef}
                 type="text"
@@ -252,7 +293,7 @@ export function ArchivePage({
                 onChange={e => setSearch(e.target.value)}
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setSearchFocused(false)}
-                placeholder="Cerca per nome..."
+                placeholder={fullTextMode ? 'Cerca nel contenuto...' : 'Cerca per nome...'}
                 className="notion-search-input"
               />
               <AnimatePresence>
@@ -284,12 +325,23 @@ export function ArchivePage({
               </AnimatePresence>
             </div>
             <button
-              onClick={() => setSort(s => s === 'newest' ? 'oldest' : 'newest')}
+              onClick={() => { setFullTextMode(m => !m); setSearch(''); }}
               className="notion-sort-chip"
+              style={fullTextMode ? { color: 'var(--accent-text)', borderColor: 'var(--accent-text)', background: 'var(--accent-subtle)' } : undefined}
+              title={fullTextMode ? 'Disattiva ricerca nel contenuto' : 'Attiva ricerca nel contenuto'}
             >
-              <ChevronDown className="w-3.5 h-3.5" style={{ opacity: 0.55 }} />
-              {sort === 'newest' ? 'Recente' : 'Meno recente'}
+              <FileSearch className="w-3.5 h-3.5" style={{ opacity: 0.8 }} />
+              Testo completo
             </button>
+            {!fullTextMode && (
+              <button
+                onClick={() => setSort(s => s === 'newest' ? 'oldest' : 'newest')}
+                className="notion-sort-chip"
+              >
+                <ChevronDown className="w-3.5 h-3.5" style={{ opacity: 0.55 }} />
+                {sort === 'newest' ? 'Recente' : 'Meno recente'}
+              </button>
+            )}
             {onRefresh && (
               <button
                 onClick={handleRefresh}
@@ -303,7 +355,7 @@ export function ArchivePage({
               </button>
             )}
           </div>
-          {search.trim().length > 0 && (
+          {!fullTextMode && search.trim().length > 0 && (
             <span className="notion-results-count">
               {allSortedSessions.length === 0
                 ? 'Nessun risultato'
@@ -312,67 +364,94 @@ export function ArchivePage({
                   : `${allSortedSessions.length} risultati`}
             </span>
           )}
+          {fullTextMode && ftResults !== null && !isSearching && (
+            <span className="notion-results-count">
+              {ftError
+                ? ftError
+                : ftResults.length === 0
+                  ? `Nessun risultato per «${search.trim()}»`
+                  : ftResults.length === 1
+                    ? '1 sbobina corrisponde'
+                    : `${ftResults.length} sbobine corrispondono`}
+            </span>
+          )}
+          {fullTextMode && search.trim().length > 0 && search.trim().length < 3 && (
+            <span className="notion-results-count">Digita almeno 3 caratteri</span>
+          )}
         </div>
 
-        {sessionPageData.length === 0 && sessions.length === 0 && (
+        {!fullTextMode && sessionPageData.length === 0 && sessions.length === 0 && (
           <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>
             <History className="w-8 h-8 mx-auto mb-3 opacity-30" />
             <p className="text-sm">Nessuna sbobina nell&apos;archivio.</p>
           </div>
         )}
 
-        {sessionPageData.length === 0 && sessions.length > 0 && search.trim() && (
+        {!fullTextMode && sessionPageData.length === 0 && sessions.length > 0 && search.trim() && (
           <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
             {`Nessun risultato per "${search}"`}
           </div>
         )}
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={`session-page-${sessionPage}`}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.12, ease: 'easeOut' }}
-            className="flex flex-col gap-3"
-          >
-            {sessionPageData.map(session => (
-              <DraggableSessionCard
-                key={session.session_dir}
-                session={session}
-                allFolders={folders}
-                currentFolder={sessionFolderMap.get(session.session_dir)}
-                onAssignToFolder={fId => assignToFolder(session.session_dir, fId)}
-                onRemoveFromFolder={() => {
-                  const f = sessionFolderMap.get(session.session_dir);
-                  if (f) removeFromFolder(session.session_dir, f.id);
-                }}
-                onPreview={onPreview}
-                onOpenFile={onOpenFile}
-                onDeleteSession={onDeleteSession}
-              />
-            ))}
-          </motion.div>
-        </AnimatePresence>
+        {fullTextMode && (
+          <FullTextResultList
+            query={search.trim()}
+            results={ftResults}
+            isSearching={isSearching}
+            onPreview={(r) => onPreview(r.html_path, r.name, undefined, undefined, r.session_dir, search.trim())}
+          />
+        )}
 
-        {sessionPages > 1 && (
-          <div className="flex items-center justify-center gap-3 pt-1">
-            <button
-              onClick={() => setSessionPage(p => Math.max(0, p - 1))}
-              disabled={sessionPage === 0}
-              className="icon-button compact-icon-button"
-              style={{ color: 'var(--text-muted)' }}
-              aria-label="Pagina precedente"
-            ><ChevronLeft className="w-4 h-4" /></button>
-            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{sessionPage + 1} / {sessionPages}</span>
-            <button
-              onClick={() => setSessionPage(p => Math.min(sessionPages - 1, p + 1))}
-              disabled={sessionPage >= sessionPages - 1}
-              className="icon-button compact-icon-button"
-              style={{ color: 'var(--text-muted)' }}
-              aria-label="Pagina successiva"
-            ><ChevronRight className="w-4 h-4" /></button>
-          </div>
+        {!fullTextMode && (
+          <>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`session-page-${sessionPage}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.12, ease: 'easeOut' }}
+                className="flex flex-col gap-3"
+              >
+                {sessionPageData.map(session => (
+                  <DraggableSessionCard
+                    key={session.session_dir}
+                    session={session}
+                    allFolders={folders}
+                    currentFolder={sessionFolderMap.get(session.session_dir)}
+                    onAssignToFolder={fId => assignToFolder(session.session_dir, fId)}
+                    onRemoveFromFolder={() => {
+                      const f = sessionFolderMap.get(session.session_dir);
+                      if (f) removeFromFolder(session.session_dir, f.id);
+                    }}
+                    onPreview={onPreview}
+                    onOpenFile={onOpenFile}
+                    onDeleteSession={onDeleteSession}
+                  />
+                ))}
+              </motion.div>
+            </AnimatePresence>
+
+            {sessionPages > 1 && (
+              <div className="flex items-center justify-center gap-3 pt-1">
+                <button
+                  onClick={() => setSessionPage(p => Math.max(0, p - 1))}
+                  disabled={sessionPage === 0}
+                  className="icon-button compact-icon-button"
+                  style={{ color: 'var(--text-muted)' }}
+                  aria-label="Pagina precedente"
+                ><ChevronLeft className="w-4 h-4" /></button>
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{sessionPage + 1} / {sessionPages}</span>
+                <button
+                  onClick={() => setSessionPage(p => Math.min(sessionPages - 1, p + 1))}
+                  disabled={sessionPage >= sessionPages - 1}
+                  className="icon-button compact-icon-button"
+                  style={{ color: 'var(--text-muted)' }}
+                  aria-label="Pagina successiva"
+                ><ChevronRight className="w-4 h-4" /></button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -401,6 +480,65 @@ export function ArchivePage({
           />
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── FullTextResultList ───────────────────────────────────────────────────────
+
+function FullTextResultList({
+  query, results, isSearching, onPreview,
+}: {
+  query: string;
+  results: SearchSessionResult[] | null;
+  isSearching: boolean;
+  onPreview: (r: SearchSessionResult) => void;
+}) {
+  if (query.length < 3) return null;
+
+  if (isSearching) {
+    return (
+      <div className="py-8 flex items-center justify-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
+        <Loader2 className="w-4 h-4 animate-spin" />
+        Ricerca in corso…
+      </div>
+    );
+  }
+
+  if (!results || results.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-3">
+      {results.map(result => (
+        <button
+          key={result.session_dir}
+          onClick={() => onPreview(result)}
+          className="archive-session-card w-full text-left px-4 py-3 flex flex-col gap-2"
+          style={{ cursor: 'pointer' }}
+        >
+          <div className="flex items-center gap-2">
+            <FileSearch className="w-4 h-4 shrink-0" style={{ color: 'var(--accent-text)' }} />
+            <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{result.name}</span>
+            {result.completed_at_iso && (
+              <span className="text-xs shrink-0" style={{ color: 'var(--text-faint)' }}>
+                {formatRelativeTime(new Date(result.completed_at_iso).getTime())}
+              </span>
+            )}
+            <span className="ml-auto text-xs px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'var(--accent-subtle)', color: 'var(--accent-text)' }}>
+              {result.match_count === 1 ? '1 occorrenza' : `${result.match_count} occorrenze`}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1.5 pl-6">
+            {result.snippets.map((s, i) => (
+              <p key={i} className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                {s.before && <span>…{s.before} </span>}
+                <mark style={{ background: 'var(--accent-subtle)', color: 'var(--accent-text)', borderRadius: 3, padding: '0 2px', fontWeight: 600 }}>{s.match}</mark>
+                {s.after && <span> {s.after}…</span>}
+              </p>
+            ))}
+          </div>
+        </button>
+      ))}
     </div>
   );
 }

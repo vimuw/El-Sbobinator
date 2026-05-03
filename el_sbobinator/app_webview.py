@@ -16,6 +16,7 @@ import os
 import sys
 import threading
 import time
+from collections import OrderedDict
 from typing import ClassVar
 
 import webview
@@ -68,6 +69,8 @@ from el_sbobinator.utils.file_ops import (
 )
 from el_sbobinator.utils.logging_utils import configure_logging, get_logger
 
+_TEXT_CACHE_MAX = 50
+
 _ALLOWED_URL_PREFIXES: tuple[str, ...] = (
     "https://github.com/",
     "https://ko-fi.com/",
@@ -95,6 +98,8 @@ class ElSbobinatorApi:
         self._sessions_cache_ts: float = 0.0
         self._sessions_cache_gen: int = 0
         self._sessions_cache_lock = threading.Lock()
+        self._text_cache: OrderedDict[str, tuple[float, str]] = OrderedDict()
+        self._text_cache_lock = threading.Lock()
         configure_logging()
         self._logger = get_logger("el_sbobinator.webview")
         self._prewarm_thread = threading.Thread(
@@ -373,6 +378,100 @@ class ElSbobinatorApi:
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    # ---- Full-text search ----
+
+    def search_sessions(self, query: str, limit: int = 10) -> dict:
+        """Search the plain-text content of every completed session HTML.
+
+        Returns up to *limit* sessions that contain *query*, ordered by
+        descending match count.  Each entry includes up to 3 context snippets
+        with ``before / match / after`` fields for client-side highlighting.
+        """
+        import json as _json
+
+        from el_sbobinator.services.search_service import (
+            extract_text_from_html,
+            find_snippets,
+        )
+
+        query = str(query).strip()
+        if len(query) < 3 or len(query) > 200:
+            return {
+                "ok": False,
+                "error": "Query troppo corta o troppo lunga",
+                "results": [],
+            }
+
+        session_root = self._get_session_root()
+        if not os.path.isdir(session_root):
+            return {"ok": True, "results": []}
+
+        try:
+            results = []
+            for entry in os.scandir(session_root):
+                if not entry.is_dir():
+                    continue
+                session_path = os.path.join(entry.path, "session.json")
+                if not os.path.isfile(session_path):
+                    continue
+                try:
+                    with open(session_path, encoding="utf-8") as fh:
+                        data = _json.load(fh)
+                    if data.get("stage") != "done":
+                        continue
+                    html_path = str(data.get("outputs", {}).get("html", ""))
+                    if not html_path or not os.path.isfile(html_path):
+                        continue
+
+                    # mtime-keyed cache: re-read only when file changed
+                    try:
+                        mtime = os.path.getmtime(html_path)
+                    except OSError:
+                        continue
+                    with self._text_cache_lock:
+                        cached = self._text_cache.get(html_path)
+                        if cached is not None and cached[0] == mtime:
+                            self._text_cache.move_to_end(html_path)
+                            text = cached[1]
+                        else:
+                            text = None
+                    if text is None:
+                        with open(html_path, encoding="utf-8", errors="replace") as fh:
+                            raw_html = fh.read()
+                        text = extract_text_from_html(raw_html)
+                        with self._text_cache_lock:
+                            self._text_cache[html_path] = (mtime, text)
+                            if len(self._text_cache) > _TEXT_CACHE_MAX:
+                                self._text_cache.popitem(last=False)
+
+                    snippets, match_count = find_snippets(text, query)
+                    if not snippets:
+                        continue
+
+                    input_path = data.get("input", {}).get("path", "")
+                    name = (
+                        os.path.basename(str(input_path))
+                        if input_path
+                        else os.path.basename(html_path)
+                    )
+                    results.append(
+                        {
+                            "session_dir": entry.path,
+                            "name": name,
+                            "html_path": html_path,
+                            "completed_at_iso": data.get("updated_at", ""),
+                            "snippets": snippets,
+                            "match_count": match_count,
+                        }
+                    )
+                except Exception:
+                    continue
+
+            results.sort(key=lambda r: r["match_count"], reverse=True)
+            return {"ok": True, "results": results[: max(0, int(limit))]}
+        except Exception as e:
+            return {"ok": False, "error": str(e), "results": []}
 
     # ---- Archive Folders ----
 

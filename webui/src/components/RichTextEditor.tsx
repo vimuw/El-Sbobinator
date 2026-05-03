@@ -30,6 +30,7 @@ interface RichTextEditorProps {
   onChange?: (html: string) => void;
   onEditorReady?: (getHtml: () => string) => void;
   initialScrollTop?: number;
+  initialSearchTerm?: string;
   onScrollTopChange?: (scrollTop: number) => void;
   onHeadingsChange?: (headings: Heading[]) => void;
   isTocOpen?: boolean;
@@ -40,9 +41,9 @@ interface RichTextEditorProps {
   onZoomChange?: (level: number) => void;
 }
 
-export function RichTextEditor({ initialContent, onChange, onEditorReady, initialScrollTop, onScrollTopChange, onHeadingsChange, isTocOpen = false, onTocToggle, tocHeadings = [], onScrollToHeading, zoomLevel, onZoomChange }: RichTextEditorProps) {
+export function RichTextEditor({ initialContent, onChange, onEditorReady, initialScrollTop, initialSearchTerm, onScrollTopChange, onHeadingsChange, isTocOpen = false, onTocToggle, tocHeadings = [], onScrollToHeading, zoomLevel, onZoomChange }: RichTextEditorProps) {
   const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number } | null>(null);
-  const [findMode, setFindMode] = useState<null | 'find' | 'replace'>(null);
+  const [findMode, setFindMode] = useState<null | 'find' | 'replace'>(initialSearchTerm ? 'find' : null);
   const [findFocusTrigger, setFindFocusTrigger] = useState(0);
   const findModeRef = useRef<null | 'find' | 'replace'>(null);
   useEffect(() => { findModeRef.current = findMode; }, [findMode]);
@@ -273,7 +274,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
         onZoomChange={onZoomChange}
       />
       {findMode && editor && (
-        <FindReplacePanel editor={editor} onClose={() => setFindMode(null)} initialMode={findMode} focusTrigger={findFocusTrigger} />
+        <FindReplacePanel editor={editor} onClose={() => setFindMode(null)} initialMode={findMode} focusTrigger={findFocusTrigger} initialFindText={initialSearchTerm} />
       )}
       <div
         ref={scrollContainerRef}

@@ -15,6 +15,7 @@ export type PreviewState = {
   audioRelinkNeeded: boolean;
   initAudio: { time?: number; playbackRate?: number; volume?: number };
   initScrollTop?: number;
+  initialSearchTerm?: string;
 };
 
 export const initialPreviewState: PreviewState = {
@@ -79,6 +80,7 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
     sourcePath?: string,
     fileId?: string,
     sessionDir?: string,
+    searchTerm?: string,
   ) => {
     if (!window.pywebview?.api?.read_html_content) {
       appendConsole('❌ Funzione anteprima non disponibile in questa versione.');
@@ -106,6 +108,7 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
           audioRelinkNeeded: false,
           initAudio: { time: savedSession.audioTime, playbackRate: savedSession.playbackRate, volume: savedSession.volume },
           initScrollTop: savedSession.scrollTop,
+          initialSearchTerm: searchTerm || undefined,
         });
         await loadPreviewAudio(sourcePath);
       } else {
