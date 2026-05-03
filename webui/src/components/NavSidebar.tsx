@@ -68,8 +68,8 @@ export function NavSidebar({
     >
 
       {/* Logo */}
-      <div className="flex justify-start px-2 pt-3 pb-1">
-        <img src="/icon.png" alt="El Sbobinator" style={{ width: 28, height: 28, borderRadius: 8 }} />
+      <div className="flex justify-start pt-3 pb-1" style={{ paddingLeft: 12 }}>
+        <img src="/icon.png" alt="El Sbobinator" style={{ width: 32, height: 32, borderRadius: 8 }} />
       </div>
 
       {/* Navigation items */}

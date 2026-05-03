@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, useEffect, type Dispatch, type SetStateAction } from 'react';
+import { useMemo, useRef, useState, useEffect, type Dispatch, type SetStateAction } from 'react';
 import { DndContext, closestCenter, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { motion, AnimatePresence } from 'motion/react';
@@ -38,23 +38,21 @@ export function QueueSection({
   const sortableIds = useMemo(() => pendingFiles.map(f => f.id), [pendingFiles]);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [scrollOverflow, setScrollOverflow] = useState<'auto' | 'hidden'>('hidden');
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [isOverflowing, setIsOverflowing] = useState(false);
 
   useEffect(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
+    const outer = scrollRef.current;
+    const inner = innerRef.current;
+    if (!outer || !inner) return;
     const ro = new ResizeObserver(() => {
-      setScrollOverflow(el.scrollHeight > el.clientHeight + 4 ? 'auto' : 'hidden');
+      setIsOverflowing(inner.offsetHeight > outer.clientHeight);
     });
-    ro.observe(el);
+    ro.observe(inner);
+    setIsOverflowing(inner.offsetHeight > outer.clientHeight);
     return () => ro.disconnect();
-  }, [pendingFiles]);
-
-  useLayoutEffect(() => {
-    const el = scrollContainerRef.current;
-    if (el) setScrollOverflow(el.scrollHeight > el.clientHeight + 4 ? 'auto' : 'hidden');
-  }, [pendingFiles]);
+  }, [pendingFiles.length]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -158,10 +156,10 @@ export function QueueSection({
 
           <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={onDragEnd} autoScroll={false}>
             <div
-              ref={scrollContainerRef}
+              ref={scrollRef}
               style={{
                 maxHeight: '26rem',
-                overflowY: scrollOverflow,
+                overflowY: isOverflowing ? 'auto' : 'hidden',
                 overflowX: 'hidden',
                 scrollbarWidth: 'thin',
                 scrollbarColor: 'var(--border-default) transparent',
@@ -169,7 +167,7 @@ export function QueueSection({
               }}
             >
             <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-              <div className="space-y-3" style={{ margin: '-4px -8px' }}>
+              <div ref={innerRef} className="space-y-3" style={{ margin: '-4px -8px' }}>
               <AnimatePresence>
                 {pendingFiles.map((file) => {
                   const isActive = file.status === 'processing';
