@@ -149,7 +149,7 @@ describe('App', () => {
     await act(async () => {
       fireEvent.click(screen.getByLabelText('Apri impostazioni'));
     });
-    expect(screen.getAllByText(/Impostazioni/).length).toBeGreaterThan(1);
+    expect(screen.getByRole('heading', { name: /Impostazioni/ })).toBeTruthy();
   });
 
   it('console toggle button shows console panel', async () => {
@@ -157,7 +157,7 @@ describe('App', () => {
     await act(async () => {
       fireEvent.click(screen.getByLabelText('Mostra console'));
     });
-    expect(screen.getAllByText('Console').length).toBeGreaterThan(1);
+    expect(screen.getByRole('heading', { name: 'Console' })).toBeTruthy();
   });
 });
 
@@ -173,7 +173,7 @@ describe('App — ready-empty mode (valid API key, no files)', () => {
 
   it('shows API ready status in header', async () => {
     await act(async () => { render(<App />); });
-    expect(screen.getByText('API pronta')).toBeTruthy();
+    expect(screen.getByLabelText('API pronta')).toBeTruthy();
   });
 
   it('footer links are visible', async () => {
@@ -187,6 +187,6 @@ describe('App — ready-empty mode (valid API key, no files)', () => {
     await act(async () => {
       fireEvent.click(screen.getByLabelText('Mostra console'));
     });
-    expect(screen.getAllByText('Console').length).toBeGreaterThan(1);
+    expect(screen.getByRole('heading', { name: 'Console' })).toBeTruthy();
   });
 });

@@ -266,6 +266,9 @@ describe('SettingsModal — session folder and cleanup', () => {
     await act(async () => {
       fireEvent.click(screen.getByTitle(/Pulisci/));
     });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Pulisci'));
+    });
     await vi.waitFor(() =>
       expect(screen.getByText(/Rimoss/)).toBeTruthy(),
     );

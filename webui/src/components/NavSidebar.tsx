@@ -67,8 +67,13 @@ export function NavSidebar({
       }}
     >
 
+      {/* Logo */}
+      <div className="flex justify-center px-2 pt-3 pb-1">
+        <img src="/icon.png" alt="El Sbobinator" style={{ width: 28, height: 28, borderRadius: 8 }} />
+      </div>
+
       {/* Navigation items */}
-      <div className="flex flex-col gap-0.5 px-2 pt-4 pb-2 flex-1">
+      <div className="flex flex-col gap-0.5 px-2 pt-2 pb-2 flex-1">
         <NavItem
           icon={
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -97,6 +102,7 @@ export function NavSidebar({
         {/* API status */}
         <SidebarTooltip label={apiStatusLabel} disabled={!collapsed}>
           <div
+            aria-label={apiStatusLabel}
             className="flex items-center gap-2 rounded-md text-xs font-medium"
             style={{
               color: apiStatusColor,
