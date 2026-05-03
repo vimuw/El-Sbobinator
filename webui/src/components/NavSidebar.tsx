@@ -20,7 +20,7 @@ interface NavSidebarProps {
   showConsole: boolean;
   setShowConsole: (v: boolean) => void;
   setIsSettingsOpen: (v: boolean) => void;
-  isDismissed: boolean;
+  hasPendingUpdate: boolean;
 }
 
 export function NavSidebar({
@@ -29,7 +29,7 @@ export function NavSidebar({
   themeMode, setThemeMode,
   showConsole, setShowConsole,
   setIsSettingsOpen,
-  isDismissed,
+  hasPendingUpdate,
 }: NavSidebarProps) {
   const [hovered, setHovered] = useState(false);
   const collapsed = !hovered;
@@ -68,7 +68,7 @@ export function NavSidebar({
     >
 
       {/* Logo */}
-      <div className="flex justify-center px-2 pt-3 pb-1">
+      <div className="flex justify-start px-2 pt-3 pb-1">
         <img src="/icon.png" alt="El Sbobinator" style={{ width: 28, height: 28, borderRadius: 8 }} />
       </div>
 
@@ -158,7 +158,7 @@ export function NavSidebar({
           icon={
             <span style={{ position: 'relative', display: 'inline-flex' }}>
               <Settings size={18} />
-              {isDismissed && (
+              {hasPendingUpdate && (
                 <span style={{ position: 'absolute', top: -3, right: -3, display: 'inline-flex' }}>
                   <span className="animate-ping" style={{ position: 'absolute', width: 8, height: 8, borderRadius: '50%', background: 'var(--warning-text)', opacity: 0.6 }} />
                   <span style={{ position: 'relative', width: 8, height: 8, borderRadius: '50%', background: 'var(--warning-text)', border: '1.5px solid var(--sidebar-bg)' }} />

@@ -714,7 +714,7 @@ export default function App() {
         showConsole={showConsole}
         setShowConsole={setShowConsole}
         setIsSettingsOpen={setIsSettingsOpen}
-        isDismissed={isDismissed}
+        hasPendingUpdate={updateAvailable !== null}
       />
 
       <div className="flex flex-col flex-1 min-w-0 min-h-screen">

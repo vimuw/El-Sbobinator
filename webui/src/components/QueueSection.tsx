@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect, type Dispatch, type SetStateAction } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, useEffect, type Dispatch, type SetStateAction } from 'react';
 import { DndContext, closestCenter, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { motion, AnimatePresence } from 'motion/react';
@@ -38,6 +38,23 @@ export function QueueSection({
   const sortableIds = useMemo(() => pendingFiles.map(f => f.id), [pendingFiles]);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [scrollOverflow, setScrollOverflow] = useState<'auto' | 'hidden'>('hidden');
+
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      setScrollOverflow(el.scrollHeight > el.clientHeight + 4 ? 'auto' : 'hidden');
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [pendingFiles]);
+
+  useLayoutEffect(() => {
+    const el = scrollContainerRef.current;
+    if (el) setScrollOverflow(el.scrollHeight > el.clientHeight + 4 ? 'auto' : 'hidden');
+  }, [pendingFiles]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -141,9 +158,10 @@ export function QueueSection({
 
           <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={onDragEnd} autoScroll={false}>
             <div
+              ref={scrollContainerRef}
               style={{
                 maxHeight: '26rem',
-                overflowY: 'auto',
+                overflowY: scrollOverflow,
                 overflowX: 'hidden',
                 scrollbarWidth: 'thin',
                 scrollbarColor: 'var(--border-default) transparent',
