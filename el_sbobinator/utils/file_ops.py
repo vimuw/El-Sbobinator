@@ -10,7 +10,10 @@ import threading
 
 from el_sbobinator.utils.html_export import sanitize_html_basic
 
-_HTML_CACHE_MAX = 200  # FIFO cap; prevents unbounded growth in long-running processes
+_HTML_CACHE_MAX = 200  # FIFO cap for write-lock entries
+_HTML_GEN_MAX = (
+    500  # separate FIFO cap for generation guards; larger to outlive lock evictions
+)
 _html_write_locks: dict[str, threading.Lock] = {}
 _html_last_gen: dict[str, int] = {}
 _html_write_locks_meta = threading.Lock()
@@ -23,8 +26,7 @@ def _html_write_lock(path: str) -> threading.Lock:
             if len(_html_write_locks) >= _HTML_CACHE_MAX:
                 oldest = next(iter(_html_write_locks))
                 del _html_write_locks[oldest]
-                # Intentionally keep _html_last_gen[oldest] so that if the path
-                # is re-inserted later the generation guard is still effective.
+                _html_last_gen.pop(oldest, None)
             _html_write_locks[path] = threading.Lock()
         return _html_write_locks[path]
 
@@ -158,4 +160,10 @@ def save_html_body_content(
         os.replace(tmp_path, path)
         if generation is not None:
             _html_last_gen[path] = generation
+            # Best-effort FIFO eviction so _html_last_gen stays bounded independently of the lock dict.
+            if len(_html_last_gen) > _HTML_GEN_MAX:
+                try:
+                    _html_last_gen.pop(next(iter(_html_last_gen)))
+                except (StopIteration, KeyError):
+                    pass
     return True

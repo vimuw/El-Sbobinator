@@ -3,6 +3,7 @@
 # Keep this file pinned; update intentionally when needed.
 #
 
+beautifulsoup4==4.14.3
 certifi==2026.2.25
 google-genai==1.73.1
 imageio-ffmpeg==0.6.0

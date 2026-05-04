@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from el_sbobinator.core.session_store import (
     SessionPaths,
     ensure_session_dirs,
+    migrate_session,
     new_session,
     reset_session_dirs,
     resolve_session_paths,
@@ -145,6 +146,7 @@ def initialize_session_context(
             pass
 
     session = None
+    _migrated = False
     if resume_session and os.path.exists(session_paths.session_path):
         try:
             session = load_saved_session(session_paths.session_path)
@@ -158,11 +160,7 @@ def initialize_session_context(
         except Exception:
             pass
     else:
-        session.setdefault("schema_version", session.get("schema_version", 1))
-        session.setdefault("stage", "phase1")
-        session.setdefault("phase1", {})
-        session.setdefault("phase2", {})
-        session.setdefault("outputs", {})
+        session, _migrated = migrate_session(session)
         try:
             current_defaults = build_default_pipeline_settings(load_config())
             if not isinstance(session.get("settings"), dict):
@@ -191,7 +189,7 @@ def initialize_session_context(
         settings=settings,
         settings_changed=settings_changed,
     )
-    if settings_changed:
+    if settings_changed or _migrated:
         context.save()
     return context
 

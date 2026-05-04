@@ -113,6 +113,40 @@ def new_session(input_path: str, settings: dict | None = None) -> dict:
     }
 
 
+def migrate_session(session: dict) -> tuple[dict, bool]:
+    """Apply pending schema migrations in-place and return (session, was_changed).
+
+    Migrations run sequentially so a session at any older version is always
+    brought up to SESSION_SCHEMA_VERSION.  Callers own the deep-copy if needed.
+
+    Adding a new migration: bump SESSION_SCHEMA_VERSION in shared.py and add an
+    ``if version < N:`` block here that transforms/defaults the new fields.
+    """
+    try:
+        version = int(session.get("schema_version", 0) or 0)
+    except (ValueError, TypeError):
+        version = 0
+    changed = False
+
+    if version < 1:
+        # v0 (pre-versioning) → v1: fill in all required top-level keys.
+        session.setdefault("stage", "phase1")
+        session.setdefault("phase1", {})
+        session.setdefault("phase2", {})
+        session.setdefault("outputs", {})
+        session.setdefault("last_error", None)
+        session["schema_version"] = 1
+        changed = True
+
+    # Future migrations go here:
+    # if version < 2:
+    #     session.setdefault("new_field", default_value)
+    #     session["schema_version"] = 2
+    #     changed = True
+
+    return session, changed
+
+
 def clone_session_settings(session: dict) -> dict:
     try:
         return json.loads(json.dumps(session.get("settings", {}), ensure_ascii=False))

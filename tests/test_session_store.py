@@ -151,5 +151,55 @@ class ResolveSessionPathsHintTests(unittest.TestCase):
         self.assertTrue(paths.session_dir.endswith("my_session"))
 
 
+class TestMigrateSession(unittest.TestCase):
+    def test_pre_versioned_session_migrated_to_v1(self):
+        from el_sbobinator.core.session_store import migrate_session
+
+        session = {"stage": "phase2", "settings": {"model": "x"}}
+        result, changed = migrate_session(session)
+        self.assertTrue(changed)
+        self.assertEqual(result["schema_version"], 1)
+        self.assertIn("phase1", result)
+        self.assertIn("phase2", result)
+        self.assertIn("outputs", result)
+        self.assertIn("last_error", result)
+        self.assertEqual(result["stage"], "phase2")
+
+    def test_current_version_is_no_op(self):
+        from el_sbobinator.core.session_store import migrate_session
+
+        session = {
+            "schema_version": 1,
+            "stage": "boundary",
+            "phase1": {"chunks_done": 3},
+            "phase2": {"macro_total": 5},
+            "outputs": {"html": "out.html"},
+            "last_error": None,
+        }
+        result, changed = migrate_session(session)
+        self.assertFalse(changed)
+        self.assertEqual(result["schema_version"], 1)
+        self.assertEqual(result["phase1"]["chunks_done"], 3)
+        self.assertEqual(result["outputs"]["html"], "out.html")
+
+    def test_missing_schema_version_treated_as_pre_versioned(self):
+        from el_sbobinator.core.session_store import migrate_session
+
+        session = {"stage": "done", "outputs": {"html": "path.html"}}
+        result, changed = migrate_session(session)
+        self.assertTrue(changed)
+        self.assertEqual(result["schema_version"], 1)
+        self.assertEqual(result["outputs"]["html"], "path.html")
+
+    def test_migration_is_idempotent(self):
+        from el_sbobinator.core.session_store import migrate_session
+
+        session = {"stage": "phase1"}
+        result, _ = migrate_session(session)
+        result2, changed2 = migrate_session(result)
+        self.assertFalse(changed2)
+        self.assertEqual(result2["schema_version"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

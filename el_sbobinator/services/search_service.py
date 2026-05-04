@@ -8,21 +8,13 @@ from __future__ import annotations
 
 import re
 
+from bs4 import BeautifulSoup  # type: ignore[import-untyped]
+
 
 def extract_text_from_html(html: str) -> str:
-    """Return plain text from an HTML string using BeautifulSoup.
-
-    BeautifulSoup is already a project dependency (beautifulsoup4).
-    Falls back to a simple tag-strip regex if the import fails.
-    """
-    try:
-        from bs4 import BeautifulSoup  # type: ignore[import-untyped]
-
-        soup = BeautifulSoup(html, "html.parser")
-        text = soup.get_text(separator=" ")
-    except Exception:
-        text = re.sub(r"<[^>]+>", " ", html)
-
+    """Return plain text from an HTML string using BeautifulSoup."""
+    soup = BeautifulSoup(html, "html.parser")
+    text = soup.get_text(separator=" ")
     return re.sub(r"\s{2,}", " ", text).strip()
 
 

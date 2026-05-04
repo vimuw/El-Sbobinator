@@ -48,7 +48,9 @@ class LocalMediaServer:
 
             class MediaHandler(http.server.BaseHTTPRequestHandler):
                 def end_headers(self):
-                    self.send_header("Access-Control-Allow-Origin", "*")
+                    origin = self.headers.get("Origin", "")
+                    if re.match(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$", origin):
+                        self.send_header("Access-Control-Allow-Origin", origin)
                     super().end_headers()
 
                 def do_GET(self):
