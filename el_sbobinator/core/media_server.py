@@ -11,11 +11,12 @@ import re
 import socketserver
 import threading
 import time
+import uuid
 from typing import ClassVar
 
 
 class LocalMediaServer:
-    _servers: ClassVar[dict[str, tuple[socketserver.ThreadingTCPServer, int]]] = {}
+    _servers: ClassVar[dict[str, tuple[socketserver.ThreadingTCPServer, int, str]]] = {}
     _lock: ClassVar[threading.Lock] = threading.Lock()
     MAX_ENTRIES = 5  # LRU cap to prevent port exhaustion
 
@@ -26,7 +27,7 @@ class LocalMediaServer:
             return
         # Pop oldest entry (dict preserves insertion order in Python 3.7+)
         oldest_path = next(iter(cls._servers))
-        oldest_server, _ = cls._servers.pop(oldest_path)
+        oldest_server, _, _ = cls._servers.pop(oldest_path)
         threading.Thread(
             target=lambda: (oldest_server.shutdown(), oldest_server.server_close()),
             daemon=True,
@@ -41,10 +42,11 @@ class LocalMediaServer:
             if file_path in cls._servers:
                 entry = cls._servers.pop(file_path)
                 cls._servers[file_path] = entry
-                _, port = entry
-                return f"http://127.0.0.1:{port}/stream.media?t={time.time()}"
+                _, port, token = entry
+                return f"http://127.0.0.1:{port}/stream-{token}/media?t={time.time()}"
 
             served_path = file_path
+            token = uuid.uuid4().hex
 
             class MediaHandler(http.server.BaseHTTPRequestHandler):
                 def end_headers(self):
@@ -54,7 +56,7 @@ class LocalMediaServer:
                     super().end_headers()
 
                 def do_GET(self):
-                    if self.path.split("?", 1)[0] != "/stream.media":
+                    if self.path.split("?", 1)[0] != f"/stream-{token}/media":
                         self.send_error(404)
                         return
                     try:
@@ -130,15 +132,15 @@ class LocalMediaServer:
 
             server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), MediaHandler)
             port = server.server_address[1]
-            cls._servers[file_path] = (server, port)
+            cls._servers[file_path] = (server, port, token)
         threading.Thread(target=server.serve_forever, daemon=True).start()
-        return f"http://127.0.0.1:{port}/stream.media?t={time.time()}"
+        return f"http://127.0.0.1:{port}/stream-{token}/media?t={time.time()}"
 
     @classmethod
     def shutdown_all(cls):
         """Shutdown all servers. Called on app exit."""
         with cls._lock:
-            for server, _ in cls._servers.values():
+            for server, _, _ in cls._servers.values():
                 try:
                     server.shutdown()
                     server.server_close()

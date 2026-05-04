@@ -503,8 +503,13 @@ def process_phase1_transcription(  # noqa: C901
                     save_session()
                     return client, None, prev_memory
 
-                except Exception:
-                    pass  # success remains False
+                except Exception as e:
+                    log.warning(
+                        "Errore non gestito nel chunk %d: %s",
+                        chunk_idx,
+                        e,
+                        exc_info=True,
+                    )  # success remains False
 
             except Exception as e:
                 print(f"   [!] Errore durante l'elaborazione del blocco: {e}")
