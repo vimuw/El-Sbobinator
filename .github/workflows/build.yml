@@ -161,14 +161,18 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: dist/El-Sbobinator-Setup-v*.exe
+          path: |
+            dist/El-Sbobinator-Setup-v*.exe
+            dist/El-Sbobinator-Setup-v*.exe.sha256
 
       - name: Upload Build Artifacts (macOS)
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: dist/El-Sbobinator-v*.dmg
+          path: |
+            dist/El-Sbobinator-v*.dmg
+            dist/El-Sbobinator-v*.dmg.sha256
 
   release:
     name: Create GitHub Release
@@ -185,7 +189,9 @@ jobs:
         run: |
           mkdir release_assets
           find output_files -name "El-Sbobinator-Setup-v*.exe" -exec mv {} release_assets/ \; || echo "Win build not found"
+          find output_files -name "El-Sbobinator-Setup-v*.exe.sha256" -exec mv {} release_assets/ \; || echo "Win checksum not found"
           find output_files -name "El-Sbobinator-v*.dmg" -exec mv {} release_assets/ \; || echo "Mac build not found"
+          find output_files -name "El-Sbobinator-v*.dmg.sha256" -exec mv {} release_assets/ \; || echo "Mac checksum not found"
 
       - name: Publish Release to GitHub
         uses: softprops/action-gh-release@v2

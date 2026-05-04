@@ -8,6 +8,8 @@ a short-delay quit so the webview window closes cleanly.
 
 from __future__ import annotations
 
+import hashlib
+import logging
 import os
 import plistlib
 import re
@@ -17,9 +19,51 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.error
 import urllib.request
 
 import certifi
+
+
+def _verify_sha256(
+    tmp_path: str, checksum_url: str, ssl_ctx: ssl.SSLContext
+) -> str | None:
+    """Download checksum file and verify tmp_path hash. Returns error string or None on success."""
+    try:
+        with urllib.request.urlopen(checksum_url, timeout=30, context=ssl_ctx) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            logging.getLogger(__name__).warning(
+                "SHA-256 checksum file not found for this release (404) — skipping integrity check."
+            )
+            return None
+        return f"Download checksum fallito: {e}"
+    except Exception as e:
+        return f"Download checksum fallito: {e}"
+
+    parts = raw.split()
+    if not parts:
+        return "File checksum vuoto o malformato."
+    expected = parts[0].lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", expected):
+        return "Checksum SHA-256 non valido nel file di verifica."
+
+    sha256 = hashlib.sha256()
+    try:
+        with open(tmp_path, "rb") as fh:
+            while True:
+                chunk = fh.read(65536)
+                if not chunk:
+                    break
+                sha256.update(chunk)
+    except OSError as e:
+        return f"Lettura file temporaneo fallita: {e}"
+    actual = sha256.hexdigest()
+
+    if actual != expected:
+        return "Verifica integrit\u00e0 fallita: il file scaricato non corrisponde al checksum atteso."
+    return None
 
 
 def _launch_windows_installer(tmp_path: str) -> None:
@@ -112,9 +156,12 @@ def download_and_install_update(version: str) -> dict:
     url = f"https://github.com/vimuw/El-Sbobinator/releases/download/v{version_clean}/{filename}"
 
     try:
+        _ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+    except Exception as e:
+        return {"ok": False, "error": f"Configurazione SSL fallita: {e}"}
+    try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             tmp_path = tmp.name
-        _ssl_ctx = ssl.create_default_context(cafile=certifi.where())
         with urllib.request.urlopen(url, timeout=120, context=_ssl_ctx) as resp:
             with open(tmp_path, "wb") as fh:
                 while True:
@@ -124,6 +171,14 @@ def download_and_install_update(version: str) -> dict:
                     fh.write(chunk)
     except Exception as e:
         return {"ok": False, "error": f"Download fallito: {e}"}
+
+    integrity_error = _verify_sha256(tmp_path, url + ".sha256", _ssl_ctx)
+    if integrity_error:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        return {"ok": False, "error": integrity_error}
 
     try:
         if sys.platform == "win32":

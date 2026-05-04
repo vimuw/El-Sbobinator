@@ -11,6 +11,7 @@ This is the single entrypoint used by local scripts and CI for:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import shutil
 import subprocess
@@ -263,6 +264,17 @@ def run_postbuild_smoke(target: str) -> None:
     run([sys.executable, "scripts/smoke_test.py"], cwd=ROOT)
 
 
+def write_sha256(artifact: Path) -> Path:
+    h = hashlib.sha256()
+    with artifact.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            h.update(chunk)
+    digest = h.hexdigest()
+    checksum_path = artifact.with_suffix(artifact.suffix + ".sha256")
+    checksum_path.write_text(f"{digest}  {artifact.name}\n", encoding="utf-8")
+    return checksum_path
+
+
 def _find_iscc() -> str:
     in_path = shutil.which("ISCC") or shutil.which("ISCC.exe")
     if in_path:
@@ -282,6 +294,7 @@ def run_inno_setup(version: str) -> None:
     installer = ROOT / "dist" / f"El-Sbobinator-Setup-v{version}.exe"
     if not installer.exists() or installer.stat().st_size <= 0:
         raise FileNotFoundError(f"Installer mancante o vuoto: {installer}")
+    write_sha256(installer)
 
 
 def run_create_dmg(version: str) -> None:
@@ -310,6 +323,7 @@ def run_create_dmg(version: str) -> None:
     )
     if not dmg_path.exists() or dmg_path.stat().st_size <= 0:
         raise FileNotFoundError(f"DMG mancante o vuoto: {dmg_path}")
+    write_sha256(dmg_path)
 
 
 def command_deps(args: argparse.Namespace) -> None:
