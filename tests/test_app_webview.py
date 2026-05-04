@@ -1,6 +1,8 @@
+import re
 import tempfile
 import threading
 import unittest
+from pathlib import Path
 from unittest.mock import mock_open, patch
 
 from el_sbobinator.app_webview import ElSbobinatorApi, PipelineAdapter
@@ -1806,6 +1808,112 @@ class TestShowNotification(unittest.TestCase):
 
         self.assertFalse(result["ok"])
         self.assertIn("no notifier", result["error"])
+
+
+class TestOpenUrlAllowlistCoverage(unittest.TestCase):
+    """Bidirectional contract between _ALLOWED_URL_PREFIXES and the React open_url() call-sites.
+
+    Parses ``webui/src/branding.ts`` to resolve exported URL constants (template
+    literals included), then scans every non-test ``.ts``/``.tsx`` file for
+    ``open_url?.(<arg>)`` call-sites.  The two tests enforce:
+
+    1. Every URL the React side may pass to ``open_url()`` is covered by at least
+       one prefix in ``_ALLOWED_URL_PREFIXES``.
+    2. Every prefix in ``_ALLOWED_URL_PREFIXES`` is exercised by at least one
+       React call-site (no orphaned allowlist entries).
+
+    If either invariant is violated the failing test message names the offending
+    URL / prefix, making the fix obvious.
+    """
+
+    _WEBUI_SRC = Path(__file__).parents[1] / "webui" / "src"
+    _BRANDING_TS = _WEBUI_SRC / "branding.ts"
+
+    def _resolve_branding_urls(self) -> dict[str, str]:
+        """Return {constant_name: resolved_url} for every https:// export in branding.ts."""
+        text = self._BRANDING_TS.read_text(encoding="utf-8")
+        resolved: dict[str, str] = {}
+        for m in re.finditer(r"export const (\w+)(?::[^=]+)?\s*=\s*'([^']+)'", text):
+            resolved[m.group(1)] = m.group(2)
+        for m in re.finditer(r'export const (\w+)(?::[^=]+)?\s*=\s*"([^"]+)"', text):
+            resolved[m.group(1)] = m.group(2)
+        for _ in range(3):
+            for m in re.finditer(
+                r"export const (\w+)(?::[^=]+)?\s*=\s*`([^`]+)`", text
+            ):
+                name, tmpl = m.group(1), m.group(2)
+                val = re.sub(
+                    r"\$\{(\w+)\}",
+                    lambda mm: resolved.get(mm.group(1), mm.group(0)),
+                    tmpl,
+                )
+                if "${" not in val:
+                    resolved[name] = val
+        return {k: v for k, v in resolved.items() if v.startswith("https://")}
+
+    def _collect_react_open_url_targets(
+        self, branding_urls: dict[str, str]
+    ) -> list[str]:
+        """Return every unique URL string passed to open_url?. in non-test TS/TSX files."""
+        urls: set[str] = set()
+        ts_files = [
+            f
+            for ext in ("*.ts", "*.tsx")
+            for f in self._WEBUI_SRC.rglob(ext)
+            if ".test." not in f.name and ".spec." not in f.name
+        ]
+        for ts_file in ts_files:
+            text = ts_file.read_text(encoding="utf-8", errors="replace")
+            for m in re.finditer(r"open_url\?\.\(\s*['\"]([^'\"]+)['\"]", text):
+                urls.add(m.group(1))
+            # Pattern 2: constant identifier — intentionally restricted to ALL_CAPS
+            # (e.g. GITHUB_URL).  camelCase constants (e.g. githubUrl) would be
+            # silently missed; all current call-sites use ALL_CAPS or string literals.
+            for m in re.finditer(r"open_url\?\.\(\s*([A-Z_][A-Z0-9_]*)\s*\)", text):
+                const = m.group(1)
+                if const in branding_urls:
+                    urls.add(branding_urls[const])
+        return sorted(urls)
+
+    def test_every_react_open_url_target_is_in_allowlist(self):
+        from el_sbobinator.app_webview import _ALLOWED_URL_PREFIXES
+
+        branding_urls = self._resolve_branding_urls()
+        react_urls = self._collect_react_open_url_targets(branding_urls)
+        self.assertTrue(
+            react_urls, "No open_url() call-sites found — scanner may be broken"
+        )
+        not_covered = [
+            u
+            for u in react_urls
+            if not any(u.startswith(p) for p in _ALLOWED_URL_PREFIXES)
+        ]
+        self.assertFalse(
+            not_covered,
+            "React open_url() targets NOT in _ALLOWED_URL_PREFIXES:\n"
+            + "\n".join(f"  {u}" for u in not_covered)
+            + "\n\nAdd a matching prefix to _ALLOWED_URL_PREFIXES in app_webview.py.",
+        )
+
+    def test_no_allowlist_prefix_is_orphaned(self):
+        from el_sbobinator.app_webview import _ALLOWED_URL_PREFIXES
+
+        branding_urls = self._resolve_branding_urls()
+        react_urls = self._collect_react_open_url_targets(branding_urls)
+        self.assertTrue(
+            react_urls, "No open_url() call-sites found — scanner may be broken"
+        )
+        orphaned = [
+            p
+            for p in _ALLOWED_URL_PREFIXES
+            if not any(u.startswith(p) for u in react_urls)
+        ]
+        self.assertFalse(
+            orphaned,
+            "Allowlist prefixes with NO matching open_url() call-site in React source:\n"
+            + "\n".join(f"  {p}" for p in orphaned)
+            + "\n\nRemove orphaned entries from _ALLOWED_URL_PREFIXES or add a React call-site.",
+        )
 
 
 if __name__ == "__main__":

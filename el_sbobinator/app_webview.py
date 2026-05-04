@@ -75,7 +75,6 @@ _TEXT_CACHE_MAX = 50
 _ALLOWED_URL_PREFIXES: tuple[str, ...] = (
     "https://github.com/",
     "https://ko-fi.com/",
-    "https://go.microsoft.com/fwlink/p/?LinkId=2124703",
     "https://aistudio.google.com/",
 )
 
