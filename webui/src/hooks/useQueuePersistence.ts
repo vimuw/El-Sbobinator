@@ -63,7 +63,7 @@ export function useQueuePersistence(
       dispatch({ type: 'queue/add', files: restoredFiles });
       appendConsole(`Coda ripristinata: ${restoredFiles.length} file.`);
     } catch (error) {
-      console.error('Queue restore failed:', error);
+      appendConsole(`[ERRORE] Ripristino coda fallito: ${error}`);
     }
   }, [appendConsole]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -78,7 +78,7 @@ export function useQueuePersistence(
       const persisted = currentFiles.map(serializeQueueFile);
       window.localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(persisted));
     } catch (error) {
-      console.error('Queue persist failed:', error);
+      appendConsole(`[ERRORE] Persistenza coda fallita: ${error}`);
     }
   }, [structuralVersion]);
 }

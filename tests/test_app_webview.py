@@ -1324,5 +1324,422 @@ class BootBgColorTests(unittest.TestCase):
         self.assertEqual(result, "#0f1115")
 
 
+class TestReadHtmlContentPathValidation(unittest.TestCase):
+    """Path-validation branches in read_html_content that differ from save_html_content."""
+
+    def test_rejects_non_html_extension(self):
+        """read_html_content must reject any path whose extension is not .html."""
+        api = ElSbobinatorApi()
+        for bad_path in ("/some/file.txt", "/tmp/note.pdf", "/etc/passwd"):
+            with self.subTest(bad_path=bad_path):
+                result = api.read_html_content(bad_path)
+                self.assertFalse(result["ok"])
+                self.assertIn("html", result["error"].lower())
+
+    def test_rejects_path_outside_allowed_roots(self):
+        """An .html path outside both desktop dir and session root must be denied."""
+        import os
+
+        api = ElSbobinatorApi()
+        with (
+            tempfile.TemporaryDirectory() as outside_dir,
+            tempfile.TemporaryDirectory() as desktop_dir,
+            tempfile.TemporaryDirectory() as session_root,
+        ):
+            outside_html = os.path.join(outside_dir, "secret.html")
+            with open(outside_html, "w", encoding="utf-8") as fh:
+                fh.write("<html><body>secret</body></html>")
+
+            with (
+                patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                patch.object(api, "_get_session_root", return_value=session_root),
+            ):
+                result = api.read_html_content(outside_html)
+
+        self.assertFalse(result["ok"])
+        self.assertIn("Accesso negato", result["error"])
+
+
+class TestSaveHtmlContentPathValidation(unittest.TestCase):
+    """Path-validation branches in save_html_content not covered by existing tests."""
+
+    def test_returns_not_found_when_file_missing_and_no_fallback(self):
+        """When the HTML file is absent and no session-dir copy exists, save returns an error."""
+        import os
+
+        api = ElSbobinatorApi()
+        with (
+            tempfile.TemporaryDirectory() as desktop_dir,
+            tempfile.TemporaryDirectory() as session_root,
+        ):
+            missing_html = os.path.join(desktop_dir, "missing.html")
+            with (
+                patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                patch.object(api, "_get_session_root", return_value=session_root),
+            ):
+                result = api.save_html_content(missing_html, "<p>x</p>")
+
+        self.assertFalse(result["ok"])
+        self.assertIn("trovato", result["error"])
+
+    def test_rejects_non_html_extension(self):
+        """save_html_content must reject paths without a .html extension."""
+        api = ElSbobinatorApi()
+        result = api.save_html_content("/tmp/file.txt", "<p>x</p>")
+        self.assertFalse(result["ok"])
+        self.assertIn("html", result["error"].lower())
+
+
+class TestSearchSessions(unittest.TestCase):
+    """Tests for ElSbobinatorApi.search_sessions."""
+
+    def test_rejects_query_shorter_than_three_chars(self):
+        api = ElSbobinatorApi()
+        result = api.search_sessions("ab")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["results"], [])
+
+    def test_rejects_empty_query(self):
+        api = ElSbobinatorApi()
+        result = api.search_sessions("")
+        self.assertFalse(result["ok"])
+
+    def test_rejects_query_longer_than_200_chars(self):
+        api = ElSbobinatorApi()
+        result = api.search_sessions("x" * 201)
+        self.assertFalse(result["ok"])
+
+    def test_returns_empty_results_when_session_root_missing(self):
+        api = ElSbobinatorApi()
+        with patch.object(
+            api, "_get_session_root", return_value="/nonexistent_session_root_xyz"
+        ):
+            result = api.search_sessions("mitosi")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["results"], [])
+
+    def test_finds_matching_done_session(self):
+        """Happy path: a done session whose HTML contains the query is returned."""
+        import json
+        import os
+
+        api = ElSbobinatorApi()
+        with (
+            tempfile.TemporaryDirectory() as session_root,
+            tempfile.TemporaryDirectory() as html_dir,
+        ):
+            session_dir = os.path.join(session_root, "sess1")
+            os.makedirs(session_dir)
+
+            html_path = os.path.join(html_dir, "lecture.html")
+            with open(html_path, "w", encoding="utf-8") as fh:
+                fh.write(
+                    "<html><body><p>Mitosi e meiosi sono processi cellulari.</p></body></html>"
+                )
+
+            session_data = {
+                "stage": "done",
+                "input": {"path": "/audio/lecture.mp3"},
+                "outputs": {"html": html_path},
+            }
+            with open(
+                os.path.join(session_dir, "session.json"), "w", encoding="utf-8"
+            ) as fh:
+                json.dump(session_data, fh)
+
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                result = api.search_sessions("mitosi")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(len(result["results"]), 1)
+        self.assertEqual(result["results"][0]["name"], "lecture.mp3")
+        self.assertGreater(result["results"][0]["match_count"], 0)
+
+    def test_skips_non_done_session(self):
+        """Sessions with stage != 'done' must not appear in results."""
+        import json
+        import os
+
+        api = ElSbobinatorApi()
+        with (
+            tempfile.TemporaryDirectory() as session_root,
+            tempfile.TemporaryDirectory() as html_dir,
+        ):
+            session_dir = os.path.join(session_root, "in_progress")
+            os.makedirs(session_dir)
+
+            html_path = os.path.join(html_dir, "lecture.html")
+            with open(html_path, "w", encoding="utf-8") as fh:
+                fh.write("<html><body><p>mitosi</p></body></html>")
+
+            session_data = {
+                "stage": "phase2",
+                "input": {"path": "/audio/lecture.mp3"},
+                "outputs": {"html": html_path},
+            }
+            with open(
+                os.path.join(session_dir, "session.json"), "w", encoding="utf-8"
+            ) as fh:
+                json.dump(session_data, fh)
+
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                result = api.search_sessions("mitosi")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["results"], [])
+
+    def test_result_count_capped_by_limit(self):
+        """limit parameter caps the number of returned results."""
+        import json
+        import os
+
+        api = ElSbobinatorApi()
+        with (
+            tempfile.TemporaryDirectory() as session_root,
+            tempfile.TemporaryDirectory() as html_dir,
+        ):
+            for i in range(5):
+                sdir = os.path.join(session_root, f"sess_{i}")
+                os.makedirs(sdir)
+                html_path = os.path.join(html_dir, f"lecture_{i}.html")
+                with open(html_path, "w", encoding="utf-8") as fh:
+                    fh.write(f"<html><body><p>mitosi session {i}</p></body></html>")
+                with open(
+                    os.path.join(sdir, "session.json"), "w", encoding="utf-8"
+                ) as fh:
+                    json.dump(
+                        {
+                            "stage": "done",
+                            "input": {"path": f"/audio/lec{i}.mp3"},
+                            "outputs": {"html": html_path},
+                        },
+                        fh,
+                    )
+
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                result = api.search_sessions("mitosi", limit=2)
+
+        self.assertTrue(result["ok"])
+        self.assertLessEqual(len(result["results"]), 2)
+
+
+class TestUpdateSessionInputPath(unittest.TestCase):
+    """Tests for ElSbobinatorApi.update_session_input_path."""
+
+    def test_rejects_session_dir_outside_session_root(self):
+        import os
+
+        api = ElSbobinatorApi()
+        with (
+            tempfile.TemporaryDirectory() as session_root,
+            tempfile.TemporaryDirectory() as outside_dir,
+        ):
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                result = api.update_session_input_path(outside_dir, "/audio/file.mp3")
+
+        self.assertFalse(result["ok"])
+        self.assertIn("Percorso non valido", result["error"])
+
+    def test_rejects_missing_session_json(self):
+        import os
+
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as session_root:
+            session_dir = os.path.join(session_root, "sess1")
+            os.makedirs(session_dir)
+
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                result = api.update_session_input_path(session_dir, "/audio/file.mp3")
+
+        self.assertFalse(result["ok"])
+        self.assertIn("non trovato", result["error"])
+
+    def test_rejects_empty_new_path(self):
+        import json
+        import os
+
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as session_root:
+            session_dir = os.path.join(session_root, "sess1")
+            os.makedirs(session_dir)
+            with open(
+                os.path.join(session_dir, "session.json"), "w", encoding="utf-8"
+            ) as fh:
+                json.dump({"input": {"path": "/old.mp3"}, "stage": "done"}, fh)
+
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                result = api.update_session_input_path(session_dir, "")
+
+        self.assertFalse(result["ok"])
+        self.assertIn("vuoto", result["error"])
+
+    def test_happy_path_updates_path_and_invalidates_cache(self):
+        import json
+        import os
+
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as session_root:
+            session_dir = os.path.join(session_root, "sess1")
+            os.makedirs(session_dir)
+            session_path = os.path.join(session_dir, "session.json")
+            with open(session_path, "w", encoding="utf-8") as fh:
+                json.dump({"input": {"path": "/old.mp3"}, "stage": "done"}, fh)
+
+            with api._sessions_cache_lock:
+                api._sessions_cache = {"sessions": []}
+            initial_gen = api._sessions_cache_gen
+
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                result = api.update_session_input_path(session_dir, "/new/audio.mp3")
+
+            with open(session_path, encoding="utf-8") as fh:
+                updated = json.load(fh)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(updated["input"]["path"], "/new/audio.mp3")
+        self.assertEqual(updated["input"]["name"], "audio.mp3")
+        with api._sessions_cache_lock:
+            self.assertIsNone(api._sessions_cache)
+            self.assertEqual(api._sessions_cache_gen, initial_gen + 1)
+
+
+class TestStreamMediaFile(unittest.TestCase):
+    """Tests for ElSbobinatorApi.stream_media_file."""
+
+    def test_returns_url_from_media_server(self):
+        api = ElSbobinatorApi()
+        with patch(
+            "el_sbobinator.app_webview.LocalMediaServer.stream_url_for_file",
+            return_value="http://127.0.0.1:8765/audio/abc",
+        ):
+            result = api.stream_media_file("/audio/lecture.mp3")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["url"], "http://127.0.0.1:8765/audio/abc")
+
+    def test_returns_error_dict_on_exception(self):
+        api = ElSbobinatorApi()
+        with patch(
+            "el_sbobinator.app_webview.LocalMediaServer.stream_url_for_file",
+            side_effect=RuntimeError("server failed to bind"),
+        ):
+            result = api.stream_media_file("/bad/path.mp3")
+
+        self.assertFalse(result["ok"])
+        self.assertIn("server failed", result["error"])
+
+
+class TestGetCompletedSessions(unittest.TestCase):
+    """Tests for total count surfacing and load_all (limit=0) in get_completed_sessions."""
+
+    def _make_session(self, tmpdir: str, name: str, html_name: str = "out.html") -> str:
+        import json as _json
+        import os as _os
+
+        session_dir = _os.path.join(tmpdir, name)
+        _os.makedirs(session_dir, exist_ok=True)
+        html_path = _os.path.join(session_dir, html_name)
+        open(html_path, "w").close()
+        session_data = {
+            "stage": "done",
+            "updated_at": "2024-01-01T00:00:00",
+            "outputs": {"html": html_path},
+            "input": {"path": f"/audio/{name}.mp3", "size": 1024},
+            "settings": {},
+        }
+        with open(_os.path.join(session_dir, "session.json"), "w") as fh:
+            _json.dump(session_data, fh)
+        return session_dir
+
+    def _clear_cache(self, api: "ElSbobinatorApi") -> None:
+        with api._sessions_cache_lock:
+            api._sessions_cache = None
+            api._sessions_cache_ts = 0.0
+
+    def test_total_zero_when_no_sessions(self):
+        api = ElSbobinatorApi()
+        api._prewarm_thread.join(timeout=3)
+        with tempfile.TemporaryDirectory() as td:
+            self._clear_cache(api)
+            with patch.object(api, "_get_session_root", return_value=td):
+                result = api.get_completed_sessions()
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["total"], 0)
+        self.assertEqual(result["sessions"], [])
+
+    def test_total_reflects_all_candidates_when_limit_truncates(self):
+        api = ElSbobinatorApi()
+        api._prewarm_thread.join(timeout=3)
+        with tempfile.TemporaryDirectory() as td:
+            for i in range(5):
+                self._make_session(td, f"sess_{i:02d}")
+            self._clear_cache(api)
+            with patch.object(api, "_get_session_root", return_value=td):
+                result = api.get_completed_sessions(limit=2)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["total"], 5)
+        self.assertEqual(len(result["sessions"]), 2)
+
+    def test_total_equals_sessions_when_within_limit(self):
+        api = ElSbobinatorApi()
+        api._prewarm_thread.join(timeout=3)
+        with tempfile.TemporaryDirectory() as td:
+            for i in range(3):
+                self._make_session(td, f"sess_{i:02d}")
+            self._clear_cache(api)
+            with patch.object(api, "_get_session_root", return_value=td):
+                result = api.get_completed_sessions(limit=10)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["total"], 3)
+        self.assertEqual(len(result["sessions"]), 3)
+
+    def test_load_all_returns_all_sessions(self):
+        api = ElSbobinatorApi()
+        api._prewarm_thread.join(timeout=3)
+        with tempfile.TemporaryDirectory() as td:
+            for i in range(5):
+                self._make_session(td, f"sess_{i:02d}")
+            with patch.object(api, "_get_session_root", return_value=td):
+                result = api.get_completed_sessions(limit=0)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["total"], 5)
+        self.assertEqual(len(result["sessions"]), 5)
+
+    def test_load_all_bypasses_and_does_not_write_cache(self):
+        api = ElSbobinatorApi()
+        api._prewarm_thread.join(timeout=3)
+        with tempfile.TemporaryDirectory() as td:
+            for i in range(3):
+                self._make_session(td, f"sess_{i:02d}")
+            with api._sessions_cache_lock:
+                api._sessions_cache = None
+                api._sessions_cache_ts = 0.0
+            with patch.object(api, "_get_session_root", return_value=td):
+                api.get_completed_sessions(limit=0)
+        with api._sessions_cache_lock:
+            self.assertIsNone(api._sessions_cache, "load_all must not write to cache")
+
+    def test_total_included_in_error_return(self):
+        api = ElSbobinatorApi()
+        api._prewarm_thread.join(timeout=3)
+        with tempfile.TemporaryDirectory() as td:
+            self._clear_cache(api)
+            with patch.object(api, "_get_session_root", return_value=td):
+                with patch(
+                    "el_sbobinator.app_webview.os.scandir",
+                    side_effect=OSError("disk error"),
+                ):
+                    result = api.get_completed_sessions()
+        self.assertFalse(result["ok"])
+        self.assertIn("total", result)
+        self.assertEqual(result["total"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

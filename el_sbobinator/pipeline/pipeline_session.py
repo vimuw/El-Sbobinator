@@ -7,8 +7,11 @@ the core generation loop can stay focused on the Gemini workflow.
 
 from __future__ import annotations
 
+import math
 import os
 import re
+import shutil
+import tempfile
 from dataclasses import dataclass
 
 from el_sbobinator.core.session_store import (
@@ -339,6 +342,106 @@ def ensure_preconverted_audio(
     except Exception:
         _cleanup_partial()
     return False, None
+
+
+def _parse_bitrate_bps(audio_bitrate: str) -> float:
+    """Parse a bitrate string like '48k', '128k', '1.5m' to bits per second."""
+    raw = str(audio_bitrate or "48k").lower().strip()
+    try:
+        if raw.endswith("k"):
+            bps = float(raw[:-1]) * 1_000
+        elif raw.endswith("m"):
+            bps = float(raw[:-1]) * 1_000_000
+        else:
+            bps = float(raw)
+        if bps <= 0:
+            raise ValueError("non-positive")
+    except (ValueError, AttributeError):
+        bps = 48_000.0
+    return bps
+
+
+def _fmt_bytes(n: int) -> str:
+    if n >= 1_073_741_824:
+        return f"{n / 1_073_741_824:.1f} GB"
+    return f"{n / 1_048_576:.0f} MB"
+
+
+def check_disk_space(
+    session_dir: str,
+    total_duration_sec: float,
+    settings: PipelineSettings,
+    stage: str,
+    next_start_sec: int = 0,
+) -> None:
+    """Probe available disk space and print a warning if estimated usage may exceed free space.
+
+    Only active when stage == 'phase1'. Never raises — warnings only.
+    """
+    if stage != "phase1":
+        return
+
+    bytes_per_sec = _parse_bitrate_bps(settings.audio_bitrate) / 8.0
+
+    session_needed = 0
+    if settings.preconvert_audio:
+        preconv_path = os.path.join(session_dir, PRECONVERTED_AUDIO_FINAL)
+        if not os.path.exists(preconv_path):
+            session_needed = int(total_duration_sec * bytes_per_sec)
+
+    concurrent_chunks = 2 if settings.prefetch_next_chunk else 1
+    remaining_duration = max(0.0, total_duration_sec - next_start_sec)
+    if remaining_duration > 0:
+        remaining_chunks = math.ceil(remaining_duration / settings.chunk_seconds)
+        effective_concurrent = min(concurrent_chunks, remaining_chunks)
+    else:
+        effective_concurrent = 0
+    temp_needed = int(settings.chunk_seconds * bytes_per_sec) * effective_concurrent
+
+    tmp_dir = tempfile.gettempdir()
+    try:
+        same_fs = os.stat(session_dir).st_dev == os.stat(tmp_dir).st_dev
+    except Exception:
+        same_fs = True
+
+    if same_fs:
+        total_needed = session_needed + temp_needed
+        if total_needed == 0:
+            return
+        try:
+            free = shutil.disk_usage(session_dir).free
+            if free < total_needed:
+                print(
+                    f"[!] ATTENZIONE — Spazio su disco potenzialmente insufficiente.\n"
+                    f"    Stimato necessario (audio pre-convertito + chunk temporanei): ~{_fmt_bytes(total_needed)}\n"
+                    f"    Disponibile: {_fmt_bytes(free)}\n"
+                    f"    Libera spazio prima di continuare per evitare errori durante l'elaborazione."
+                )
+        except Exception:
+            pass
+    else:
+        if session_needed > 0:
+            try:
+                free_sess = shutil.disk_usage(session_dir).free
+                if free_sess < session_needed:
+                    print(
+                        f"[!] ATTENZIONE — Spazio insufficiente per la pre-conversione audio.\n"
+                        f"    Stimato: ~{_fmt_bytes(session_needed)} · Disponibile in {session_dir}: {_fmt_bytes(free_sess)}\n"
+                        f"    Libera spazio prima di continuare."
+                    )
+            except Exception:
+                pass
+        if temp_needed > 0:
+            try:
+                free_tmp = shutil.disk_usage(tmp_dir).free
+                if free_tmp < temp_needed:
+                    print(
+                        f"[!] ATTENZIONE — Spazio insufficiente nella cartella temporanea ({tmp_dir}).\n"
+                        f"    Stimato per i chunk audio: ~{_fmt_bytes(temp_needed)} · Disponibile: {_fmt_bytes(free_tmp)}\n"
+                        f"    Libera spazio prima di continuare."
+                    )
+            except Exception:
+                pass
 
 
 def record_step_metric(

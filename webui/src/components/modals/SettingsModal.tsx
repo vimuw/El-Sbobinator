@@ -168,7 +168,11 @@ function VersionUpdateRow({ latestVersion, appendConsole }: { latestVersion: str
     try {
       const result = await window.pywebview?.api?.download_and_install_update?.(latestVersion);
       if (!result?.ok) {
-        appendConsole(`❌ Aggiornamento fallito: ${result?.error ?? 'errore sconosciuto'}`);
+        if (result?.error === 'permission_denied') {
+          appendConsole('❌ Permesso negato per /Applications — scarica il DMG da GitHub e trascina l\'app in /Applications con Finder.');
+        } else {
+          appendConsole(`❌ Aggiornamento fallito: ${result?.error ?? 'errore sconosciuto'}`);
+        }
         window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL);
         setIsInstalling(false);
       } else {

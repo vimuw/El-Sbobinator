@@ -87,6 +87,8 @@ export default function App() {
   } = useApiReady(appendConsole);
 
   const [archiveSessions, setArchiveSessions] = useState<ArchiveSession[]>([]);
+  const [archiveTotal, setArchiveTotal] = useState(0);
+  const archiveLimitRef = useRef(20);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const toastTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const prevSessionDirsRef = useRef<Map<string, string>>(new Map());
@@ -117,20 +119,28 @@ export default function App() {
     return toastId;
   }, []);
 
-  const refreshArchiveSessions = useCallback(async () => {
+  const refreshArchiveSessions = useCallback(async (limitOverride?: number) => {
+    const lim = limitOverride !== undefined ? limitOverride : archiveLimitRef.current;
     try {
-      const result = await window.pywebview?.api?.get_completed_sessions?.();
+      const result = await window.pywebview?.api?.get_completed_sessions?.(lim <= 0 ? 0 : lim);
       if (result?.ok && result.sessions) {
         setArchiveSessions(result.sessions);
+        setArchiveTotal(result.total ?? result.sessions.length);
         prevSessionDirsRef.current = new Map(result.sessions.map((s: ArchiveSession) => [s.session_dir, s.name]));
       }
     } catch (_) {}
   }, []);
 
+  const handleLoadAll = useCallback(() => {
+    archiveLimitRef.current = 0;
+    void refreshArchiveSessions(0);
+  }, [refreshArchiveSessions]);
+
   const handleOpenFailed = useCallback((_htmlPath: string, sessionDir: string) => {
     showToast('La sbobina non è più disponibile: il file è stato eliminato dal disco.', 'warning');
     if (sessionDir) {
       setArchiveSessions(prev => prev.filter(s => s.session_dir !== sessionDir));
+      setArchiveTotal(prev => Math.max(0, prev - 1));
       prevSessionDirsRef.current.delete(sessionDir);
     }
   }, [showToast]);
@@ -287,7 +297,8 @@ export default function App() {
     prevSessionDirsRef.current = new Map(archiveSessionsRef.current.map(s => [s.session_dir, s.name]));
     const intervalId = setInterval(async () => {
       try {
-        const result = await window.pywebview?.api?.get_completed_sessions?.();
+        const lim = archiveLimitRef.current;
+        const result = await window.pywebview?.api?.get_completed_sessions?.(lim <= 0 ? 0 : lim);
         if (!result?.ok || !result.sessions) return;
         const newSessions: ArchiveSession[] = result.sessions;
         const newDirs = new Set<string>(newSessions.map(s => s.session_dir));
@@ -297,10 +308,14 @@ export default function App() {
           }
         }
         setArchiveSessions(newSessions);
+        setArchiveTotal(result.total ?? newSessions.length);
         prevSessionDirsRef.current = new Map(newSessions.map(s => [s.session_dir, s.name]));
       } catch (_) {}
     }, 30_000);
-    return () => clearInterval(intervalId);
+    return () => {
+      clearInterval(intervalId);
+      archiveLimitRef.current = 20;
+    };
   }, [activePage, showToast]);
 
   const finalizeArchiveReplacement = useCallback(async (fileId: string) => {
@@ -844,12 +859,14 @@ export default function App() {
               <div className="my-auto px-5 sm:px-6 py-8 flex flex-col">
                 <ArchivePage
                   sessions={archiveFiltered}
+                  total={archiveTotal - (archiveSessions.length - archiveFiltered.length)}
                   folders={folders}
                   onFoldersChange={handleFoldersChange}
                   onPreview={openPreview}
                   onOpenFile={openFile}
                   onDeleteSession={(sessionDir, name) => setConfirmAction({ type: 'delete-archive-session', sessionDir, name })}
                   onRefresh={refreshArchiveSessions}
+                  onLoadAll={handleLoadAll}
                 />
               </div>
             </motion.main>

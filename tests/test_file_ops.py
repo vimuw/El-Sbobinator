@@ -6,8 +6,12 @@ import time
 import unittest
 from unittest.mock import MagicMock, patch
 
+import el_sbobinator.utils.file_ops as _fo
 from el_sbobinator.utils.file_ops import (
+    _HTML_CACHE_MAX,
     _html_last_gen,
+    _html_write_locks,
+    evict_html_paths_under,
     extract_html_shell,
     open_path_with_default_app,
     read_html_content,
@@ -243,6 +247,93 @@ class SaveHtmlBodyContentWithoutShellTests(unittest.TestCase):
             self.assertIn("<html", final)
             self.assertIn("</body>", final)
             self.assertIn("<p>thread-", final)
+
+
+class HtmlCacheEvictionTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        with _fo._html_write_locks_meta:
+            _fo._html_write_locks.clear()
+            _fo._html_last_gen.clear()
+
+    def tearDown(self):
+        self._tmp.cleanup()
+        with _fo._html_write_locks_meta:
+            _fo._html_write_locks.clear()
+            _fo._html_last_gen.clear()
+
+    def _make_html(self, name: str) -> str:
+        path = os.path.join(self._tmp.name, name)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("<html><body><p>x</p></body></html>")
+        return path
+
+    def test_cap_evicts_oldest_when_full(self):
+        """Filling the dict beyond _HTML_CACHE_MAX evicts the oldest lock entry
+        but keeps the generation history so the guard survives re-insertion."""
+        paths = [self._make_html(f"doc_{i}.html") for i in range(_HTML_CACHE_MAX + 1)]
+        for p in paths:
+            _write(p, "<p>x</p>", generation=1)
+
+        self.assertNotIn(paths[0], _html_write_locks)  # lock evicted
+        self.assertIn(paths[0], _html_last_gen)  # generation kept
+        self.assertIn(paths[-1], _html_write_locks)
+        self.assertEqual(len(_html_write_locks), _HTML_CACHE_MAX)
+
+    def test_generation_guard_survives_fifo_eviction(self):
+        """Regression: a stale write must be rejected even after the path's lock
+        entry was FIFO-evicted and the path was later re-inserted."""
+        # Fill the cache with _HTML_CACHE_MAX unrelated paths so that the
+        # *next* distinct path triggers eviction of paths[0].
+        first = self._make_html("evict_me.html")
+        _write(first, "<p>initial</p>", generation=10)
+        self.assertEqual(_html_last_gen.get(first), 10)
+
+        fillers = [self._make_html(f"filler_{i}.html") for i in range(_HTML_CACHE_MAX)]
+        for p in fillers:
+            _write(p, "<p>x</p>", generation=1)
+
+        # *first* has been evicted from _html_write_locks ...
+        self.assertNotIn(first, _html_write_locks)
+        # ... but its generation must still be recorded.
+        self.assertEqual(_html_last_gen.get(first), 10)
+
+        # Re-inserting *first*: a stale gen=5 write must still be rejected.
+        stale_result = _write(first, "<p>stale</p>", generation=5)
+        self.assertFalse(stale_result, "stale write should be rejected after eviction")
+        self.assertNotIn("stale", _read(first))
+
+        # A newer gen=11 write must succeed.
+        newer_result = _write(first, "<p>newer</p>", generation=11)
+        self.assertTrue(newer_result)
+        self.assertIn("newer", _read(first))
+
+    def test_evict_html_paths_under_removes_prefixed_leaves_others(self):
+        """evict_html_paths_under clears paths under a prefix, not others.
+        Also covers orphan gen entries whose lock was already FIFO-evicted."""
+        sub = os.path.join(self._tmp.name, "session_abc")
+        os.makedirs(sub, exist_ok=True)
+        p1 = os.path.join(sub, "output.html")
+        p2 = os.path.join(sub, "output2.html")
+        p_other = self._make_html("other.html")
+        for p in (p1, p2):
+            with open(p, "w", encoding="utf-8") as f:
+                f.write("<html><body><p>x</p></body></html>")
+            _write(p, "<p>x</p>", generation=1)
+        _write(p_other, "<p>y</p>", generation=1)
+
+        # Simulate p1's lock having been FIFO-evicted while its gen entry survived.
+        with _fo._html_write_locks_meta:
+            _fo._html_write_locks.pop(p1, None)
+
+        evict_html_paths_under(sub + os.sep)
+
+        self.assertNotIn(p1, _html_write_locks)
+        self.assertNotIn(p1, _html_last_gen)
+        self.assertNotIn(p2, _html_write_locks)
+        self.assertNotIn(p2, _html_last_gen)
+        self.assertIn(p_other, _html_write_locks)
+        self.assertIn(p_other, _html_last_gen)
 
 
 class OpenPathWithDefaultAppTests(unittest.TestCase):

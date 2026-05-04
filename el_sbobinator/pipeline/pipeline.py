@@ -26,6 +26,7 @@ from el_sbobinator.core.shared import (
 )
 from el_sbobinator.pipeline.pipeline_hooks import PipelineRuntime
 from el_sbobinator.pipeline.pipeline_session import (
+    check_disk_space,
     ensure_preconverted_audio,
     initialize_session_context,
     list_phase1_chunks,
@@ -202,6 +203,17 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         stage = normalize_stage(session)
         if stage != previous_stage:
             save_session()
+
+        _next_start_sec = int(
+            (session.get("phase1") or {}).get("next_start_sec", 0) or 0
+        )
+        check_disk_space(
+            session_ctx.session_dir,
+            total_duration_sec,
+            settings,
+            stage,
+            _next_start_sec,
+        )
 
         existing_chunks = list_phase1_chunks(phase1_chunks_dir)
         has_progress = phase1_has_progress(session, stage, existing_chunks)

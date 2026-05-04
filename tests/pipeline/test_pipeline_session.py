@@ -9,6 +9,7 @@ from el_sbobinator.core.shared import (
     PRECONVERTED_AUDIO_PARTIAL,
 )
 from el_sbobinator.pipeline.pipeline_session import (
+    check_disk_space,
     ensure_preconverted_audio,
     initialize_session_context,
     normalize_stage,
@@ -607,6 +608,206 @@ class InitializeSessionContextTests(unittest.TestCase):
 
             self.assertEqual(ctx.settings.model, "gemini-2.5-flash")
             self.assertEqual(ctx.settings.chunk_minutes, 10)
+
+
+class TestCheckDiskSpace(unittest.TestCase):
+    @staticmethod
+    def _settings(**kw) -> PipelineSettings:
+        defaults: dict = dict(
+            model="gemini-2.5-flash",
+            fallback_models=[],
+            effective_model="gemini-2.5-flash",
+            chunk_minutes=15,
+            overlap_seconds=30,
+            macro_char_limit=22000,
+            preconvert_audio=True,
+            audio_bitrate="48k",
+            prefetch_next_chunk=False,
+            inline_audio_max_mb=6.0,
+        )
+        defaults.update(kw)
+        return PipelineSettings(**defaults)
+
+    @staticmethod
+    def _fake_du(free_bytes: int):
+        return SimpleNamespace(total=10 << 30, used=0, free=free_bytes)
+
+    def test_skips_non_phase1(self):
+        """No print for stage != 'phase1'."""
+        with patch("builtins.print") as mock_print:
+            check_disk_space("/any", 3600.0, self._settings(), "phase2")
+            check_disk_space("/any", 3600.0, self._settings(), "done")
+            mock_print.assert_not_called()
+
+    def test_no_warning_when_space_sufficient(self):
+        """No warning when free space is well above estimated needs."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch("shutil.disk_usage", return_value=self._fake_du(10 << 30)),
+                patch("builtins.print") as mock_print,
+            ):
+                check_disk_space(tmpdir, 3600.0, self._settings(), "phase1")
+            mock_print.assert_not_called()
+
+    def test_warns_when_space_tight(self):
+        """Warning printed when total_needed > free space."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            printed: list[str] = []
+            with (
+                patch("shutil.disk_usage", return_value=self._fake_du(1 << 20)),
+                patch("builtins.print", side_effect=printed.append),
+            ):
+                check_disk_space(tmpdir, 3600.0, self._settings(), "phase1")
+        self.assertTrue(any("ATTENZIONE" in m for m in printed))
+
+    def test_preconvert_disabled_no_session_estimate(self):
+        """When preconvert is disabled, session_needed=0; only chunk temp space checked."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch("shutil.disk_usage", return_value=self._fake_du(10 << 30)),
+                patch("builtins.print") as mock_print,
+            ):
+                check_disk_space(
+                    tmpdir, 3600.0, self._settings(preconvert_audio=False), "phase1"
+                )
+            mock_print.assert_not_called()
+
+    def test_preconverted_file_exists_skips_session_estimate(self):
+        """If preconverted audio already exists on disk, session_needed=0 (no double-count)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            preconv = os.path.join(tmpdir, PRECONVERTED_AUDIO_FINAL)
+            open(preconv, "wb").close()
+            with (
+                patch("shutil.disk_usage", return_value=self._fake_du(10 << 30)),
+                patch("builtins.print") as mock_print,
+            ):
+                check_disk_space(tmpdir, 3600.0, self._settings(), "phase1")
+            mock_print.assert_not_called()
+
+    def test_disk_usage_exception_is_silent(self):
+        """OSError from shutil.disk_usage is swallowed — no crash, no print."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch("shutil.disk_usage", side_effect=OSError("no disk")),
+                patch("builtins.print") as mock_print,
+            ):
+                check_disk_space(tmpdir, 3600.0, self._settings(), "phase1")
+            mock_print.assert_not_called()
+
+    def test_warns_different_fs_session_dir_low(self):
+        """Warns about session dir when on a different filesystem and free < session_needed."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fake_tmp = tmpdir + "_tmp"
+
+            def fake_stat(path, *a, **kw):  # type: ignore[arg-type]
+                s = str(path)
+                if s == tmpdir:
+                    return SimpleNamespace(st_dev=1)
+                if s == fake_tmp:
+                    return SimpleNamespace(st_dev=2)
+                raise FileNotFoundError(f"fake: {s}")
+
+            def fake_du(path):  # type: ignore[arg-type]
+                if str(path) == tmpdir:
+                    return self._fake_du(1 << 20)  # 1 MB in session dir
+                return self._fake_du(10 << 30)  # 10 GB in temp dir
+
+            printed: list[str] = []
+            with (
+                patch("os.stat", side_effect=fake_stat),
+                patch("shutil.disk_usage", side_effect=fake_du),
+                patch("tempfile.gettempdir", return_value=fake_tmp),
+                patch("builtins.print", side_effect=printed.append),
+            ):
+                check_disk_space(tmpdir, 3600.0, self._settings(), "phase1")
+        self.assertTrue(any("ATTENZIONE" in m for m in printed))
+
+    def test_warns_different_fs_temp_dir_low(self):
+        """Warns about temp dir when on a different filesystem and free < chunk estimate."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fake_tmp = tmpdir + "_tmp"
+
+            def fake_stat(path, *a, **kw):  # type: ignore[arg-type]
+                s = str(path)
+                if s == tmpdir:
+                    return SimpleNamespace(st_dev=1)
+                if s == fake_tmp:
+                    return SimpleNamespace(st_dev=2)
+                raise FileNotFoundError(f"fake: {s}")
+
+            def fake_du(path):  # type: ignore[arg-type]
+                if str(path) == tmpdir:
+                    return self._fake_du(10 << 30)  # 10 GB session dir fine
+                return self._fake_du(1 << 10)  # 1 KB temp dir — not enough for chunk
+
+            printed: list[str] = []
+            with (
+                patch("os.stat", side_effect=fake_stat),
+                patch("shutil.disk_usage", side_effect=fake_du),
+                patch("tempfile.gettempdir", return_value=fake_tmp),
+                patch("builtins.print", side_effect=printed.append),
+            ):
+                check_disk_space(
+                    tmpdir, 3600.0, self._settings(preconvert_audio=False), "phase1"
+                )
+        self.assertTrue(any("ATTENZIONE" in m for m in printed))
+
+    def test_resume_last_chunk_caps_concurrent_no_spurious_warning(self):
+        """On resume with only 1 chunk remaining, prefetch=True is capped to 1 — no false warning."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            printed: list[str] = []
+            settings = self._settings(preconvert_audio=False, prefetch_next_chunk=True)
+            chunk_sec = settings.chunk_seconds  # 900s
+            bytes_per_sec = 48_000 / 8  # 6000 B/s
+            one_chunk = int(chunk_sec * bytes_per_sec)  # 5_400_000 bytes
+            free = one_chunk + 1  # just enough for 1 chunk, not 2
+            with (
+                patch("shutil.disk_usage", return_value=self._fake_du(free)),
+                patch("builtins.print", side_effect=printed.append),
+            ):
+                check_disk_space(
+                    tmpdir,
+                    3600.0,
+                    settings,
+                    "phase1",
+                    next_start_sec=3600 - settings.step_seconds,
+                )
+        self.assertFalse(
+            any("ATTENZIONE" in m for m in printed),
+            "Should not warn when only 1 chunk remains and free >= 1 chunk",
+        )
+
+    def test_resume_all_chunks_done_temp_zero_no_warning(self):
+        """On resume when next_start_sec >= total_duration, temp_needed=0 — no warning even with tiny free space."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            printed: list[str] = []
+            with (
+                patch("shutil.disk_usage", return_value=self._fake_du(1 << 10)),
+                patch("builtins.print", side_effect=printed.append),
+            ):
+                check_disk_space(
+                    tmpdir,
+                    3600.0,
+                    self._settings(preconvert_audio=False),
+                    "phase1",
+                    next_start_sec=3600,
+                )
+        self.assertFalse(
+            any("ATTENZIONE" in m for m in printed),
+            "Should not warn when no chunks remain (next_start_sec >= total_duration)",
+        )
+
+    def test_invalid_bitrate_uses_fallback_no_crash(self):
+        """Bogus bitrate string falls back to 48k — no crash, estimate still computed."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch("shutil.disk_usage", return_value=self._fake_du(10 << 30)),
+                patch("builtins.print") as mock_print,
+            ):
+                check_disk_space(
+                    tmpdir, 3600.0, self._settings(audio_bitrate="bad!"), "phase1"
+                )
+            mock_print.assert_not_called()
 
 
 if __name__ == "__main__":

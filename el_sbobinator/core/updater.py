@@ -22,6 +22,77 @@ import urllib.request
 import certifi
 
 
+def _launch_windows_installer(tmp_path: str) -> None:
+    """Launch the Windows installer EXE and schedule temp-file cleanup."""
+    os.startfile(tmp_path)  # type: ignore[attr-defined]
+
+    def _cleanup(path: str) -> None:
+        for _ in range(3):
+            time.sleep(5)
+            try:
+                os.unlink(path)
+                return
+            except PermissionError:
+                pass
+            except OSError:
+                return
+
+    threading.Thread(target=_cleanup, args=(tmp_path,), daemon=True).start()
+
+
+def _install_macos_dmg(tmp_path: str) -> dict | None:
+    """Mount DMG, copy app to /Applications, detach. Returns error dict or None on success."""
+    try:
+        result = subprocess.run(
+            ["hdiutil", "attach", "-nobrowse", "-plist", tmp_path],
+            capture_output=True,
+            check=True,
+            timeout=30,
+        )
+        plist = plistlib.loads(result.stdout)
+        mount_point = None
+        for entity in plist.get("system-entities", []):
+            mp = entity.get("mount-point")
+            if mp:
+                mount_point = mp
+                break
+        if not mount_point:
+            return {"ok": False, "error": "Impossibile montare il DMG."}
+        try:
+            app_src = os.path.join(mount_point, "El Sbobinator.app")
+            app_dst = "/Applications/El Sbobinator.app"
+            try:
+                subprocess.run(
+                    ["cp", "-R", app_src, app_dst],
+                    check=True,
+                    timeout=30,
+                    capture_output=True,
+                )
+            except subprocess.CalledProcessError as cp_err:
+                stderr = (
+                    cp_err.stderr.decode("utf-8", errors="replace")
+                    if cp_err.stderr
+                    else ""
+                )
+                if "Permission denied" in stderr or "Operation not permitted" in stderr:
+                    raise PermissionError(stderr) from cp_err
+                raise
+            subprocess.run(
+                ["xattr", "-dr", "com.apple.quarantine", app_dst],
+                check=False,
+                timeout=30,
+            )
+        finally:
+            subprocess.run(["hdiutil", "detach", mount_point], check=False, timeout=30)
+        subprocess.Popen(["open", "/Applications/El Sbobinator.app"])
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+    return None
+
+
 def download_and_install_update(version: str) -> dict:
     """Download the correct installer for this OS, launch it, then quit the app."""
     if not isinstance(version, str) or not re.fullmatch(r"v?\d+\.\d+\.\d+", version):
@@ -56,60 +127,13 @@ def download_and_install_update(version: str) -> dict:
 
     try:
         if sys.platform == "win32":
-            os.startfile(tmp_path)  # type: ignore[attr-defined]
-
-            def _cleanup_installer(path: str) -> None:
-                for _ in range(3):
-                    time.sleep(5)
-                    try:
-                        os.unlink(path)
-                        return
-                    except PermissionError:
-                        pass
-                    except OSError:
-                        return
-
-            threading.Thread(
-                target=_cleanup_installer, args=(tmp_path,), daemon=True
-            ).start()
+            _launch_windows_installer(tmp_path)
         else:
-            try:
-                result = subprocess.run(
-                    ["hdiutil", "attach", "-nobrowse", "-plist", tmp_path],
-                    capture_output=True,
-                    check=True,
-                    timeout=30,
-                )
-                plist = plistlib.loads(result.stdout)
-                mount_point = None
-                for entity in plist.get("system-entities", []):
-                    mp = entity.get("mount-point")
-                    if mp:
-                        mount_point = mp
-                        break
-                if not mount_point:
-                    return {"ok": False, "error": "Impossibile montare il DMG."}
-                try:
-                    app_src = os.path.join(mount_point, "El Sbobinator.app")
-                    app_dst = "/Applications/El Sbobinator.app"
-                    subprocess.run(
-                        ["cp", "-R", app_src, app_dst], check=True, timeout=30
-                    )
-                    subprocess.run(
-                        ["xattr", "-dr", "com.apple.quarantine", app_dst],
-                        check=False,
-                        timeout=30,
-                    )
-                finally:
-                    subprocess.run(
-                        ["hdiutil", "detach", mount_point], check=False, timeout=30
-                    )
-                subprocess.Popen(["open", "/Applications/El Sbobinator.app"])
-            finally:
-                try:
-                    os.unlink(tmp_path)
-                except OSError:
-                    pass
+            err = _install_macos_dmg(tmp_path)
+            if err is not None:
+                return err
+    except PermissionError:
+        return {"ok": False, "error": "permission_denied"}
     except Exception as e:
         return {"ok": False, "error": f"Installazione fallita: {e}"}
 

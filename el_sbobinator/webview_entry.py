@@ -344,20 +344,24 @@ def main():
     except Exception:
         pass
 
-    # Center the window on screen
+    # Center the window on screen (Windows only; other platforms let pywebview center by default)
     win_w, win_h = 900, 820
-    try:
-        if sys.platform == "win32":
+    center_x: int | None = None
+    center_y: int | None = None
+    if sys.platform == "win32":
+        try:
             import ctypes
 
             scr_w = ctypes.windll.user32.GetSystemMetrics(0)
             scr_h = ctypes.windll.user32.GetSystemMetrics(1)
-        else:
-            scr_w, scr_h = 1920, 1080
-        center_x = max(0, (scr_w - win_w) // 2)
-        center_y = max(0, (scr_h - win_h) // 2)
-    except Exception:
-        center_x, center_y = 100, 50
+            center_x = max(0, (scr_w - win_w) // 2)
+            center_y = max(0, (scr_h - win_h) // 2)
+        except Exception:
+            center_x, center_y = 100, 50
+
+    _pos_kwargs: dict[str, int] = {}
+    if center_x is not None and center_y is not None:
+        _pos_kwargs = {"x": center_x, "y": center_y}
 
     if webview2_available:
         window = webview.create_window(
@@ -366,8 +370,7 @@ def main():
             js_api=api,
             width=win_w,
             height=win_h,
-            x=center_x,
-            y=center_y,
+            **_pos_kwargs,
             min_size=(750, 620),
             background_color=_boot_bg_color(),
         )
@@ -380,8 +383,7 @@ def main():
             html=build_missing_webview2_html(),
             width=win_w,
             height=win_h,
-            x=center_x,
-            y=center_y,
+            **_pos_kwargs,
             min_size=(750, 620),
             background_color=_boot_bg_color(),
         )

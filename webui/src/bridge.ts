@@ -122,7 +122,7 @@ export interface PywebviewApi {
   ) => Promise<{ ok: boolean; result?: ValidationResult; error?: string }>;
   get_session_storage_info?: () => Promise<{ ok: boolean; total_bytes?: number; total_sessions?: number; error?: string }>;
   cleanup_old_sessions?: (maxAgeDays?: number) => Promise<{ ok: boolean; removed?: number; freed_bytes?: number; errors?: number; error?: string }>;
-  get_completed_sessions?: (limit?: number) => Promise<{ ok: boolean; sessions?: ArchiveSession[]; error?: string }>;
+  get_completed_sessions?: (limit?: number) => Promise<{ ok: boolean; sessions?: ArchiveSession[]; total?: number; error?: string }>;
   delete_session?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;
   update_session_input_path?: (sessionDir: string, newPath: string) => Promise<{ ok: boolean; error?: string }>;
   open_session_folder?: () => Promise<{ ok: boolean; error?: string }>;

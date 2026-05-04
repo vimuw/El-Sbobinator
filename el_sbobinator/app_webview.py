@@ -60,6 +60,7 @@ from el_sbobinator.services.folders_service import (
     save_folders as _save_archive_folders,
 )
 from el_sbobinator.utils.file_ops import (
+    evict_html_paths_under,
     extract_html_shell,
     open_path_with_default_app,
     save_html_body_content,
@@ -196,9 +197,11 @@ class ElSbobinatorApi:
         """Return the most recent completed sessions for the archive UI."""
         import json as _json
 
+        load_all = int(limit) <= 0
         with self._sessions_cache_lock:
             if (
-                self._sessions_cache is not None
+                not load_all
+                and self._sessions_cache is not None
                 and time.time() - self._sessions_cache_ts < 5.0
             ):
                 cached = self._sessions_cache
@@ -207,7 +210,7 @@ class ElSbobinatorApi:
 
         session_root = self._get_session_root()
         if not os.path.isdir(session_root):
-            return {"ok": True, "sessions": []}
+            return {"ok": True, "sessions": [], "total": 0}
         try:
             candidates: list[tuple[str, dict, str]] = []
             for entry in os.scandir(session_root):
@@ -228,8 +231,10 @@ class ElSbobinatorApi:
                 except Exception:
                     continue
             candidates.sort(key=lambda c: c[0], reverse=True)
+            total = len(candidates)
             sessions = []
-            for _ts, data, session_dir in candidates[: max(0, int(limit))]:
+            effective_limit = len(candidates) if load_all else max(0, int(limit))
+            for _ts, data, session_dir in candidates[:effective_limit]:
                 html_path = data.get("outputs", {}).get("html", "")
                 # Migration: if the stored path (e.g. old Desktop copy) is gone,
                 # look for the same filename inside the session dir and fix session.json.
@@ -276,14 +281,15 @@ class ElSbobinatorApi:
                         ),
                     }
                 )
-            result = {"ok": True, "sessions": sessions}
-            with self._sessions_cache_lock:
-                if self._sessions_cache_gen == gen_at_start:
-                    self._sessions_cache = result
-                    self._sessions_cache_ts = time.time()
+            result = {"ok": True, "sessions": sessions, "total": total}
+            if not load_all:
+                with self._sessions_cache_lock:
+                    if self._sessions_cache_gen == gen_at_start:
+                        self._sessions_cache = result
+                        self._sessions_cache_ts = time.time()
             return {**result, "sessions": list(sessions)}
         except Exception as e:
-            return {"ok": False, "error": str(e), "sessions": []}
+            return {"ok": False, "error": str(e), "sessions": [], "total": 0}
 
     def delete_session(self, session_dir: str) -> dict:
         """Permanently delete a single session folder from disk."""
@@ -298,6 +304,7 @@ class ElSbobinatorApi:
             if not os.path.isdir(abs_dir):
                 return {"ok": False, "error": "Cartella non trovata"}
             shutil.rmtree(abs_dir)
+            evict_html_paths_under(abs_dir + os.sep)
             with self._sessions_cache_lock:
                 self._sessions_cache = None
                 self._sessions_cache_gen += 1

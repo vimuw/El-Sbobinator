@@ -195,7 +195,11 @@ export function AppHeader({
                       try {
                         const result = await window.pywebview?.api?.download_and_install_update?.(updateAvailable!);
                         if (!result?.ok) {
-                          setUpdateError(result?.error ?? 'Download fallito');
+                          setUpdateError(
+                            result?.error === 'permission_denied'
+                              ? 'Permesso negato per /Applications — scarica il DMG da GitHub e trascina l\'app in /Applications con Finder.'
+                              : (result?.error ?? 'Download fallito')
+                          );
                           setIsUpdating(false);
                           window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL);
                         } else {
@@ -227,7 +231,7 @@ export function AppHeader({
               {updateError && (
                 <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-error, #ef4444)' }}>
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                  <span>{updateError} — si è aperta la pagina GitHub per scaricare manualmente.</span>
+                  <span>{updateError}{updateError?.startsWith('Permesso') ? '' : ' — si è aperta la pagina GitHub per scaricare manualmente.'}</span>
                 </div>
               )}
             </div>

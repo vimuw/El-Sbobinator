@@ -26,12 +26,14 @@ const ARCHIVE_PAGE_SIZE = 5;
 
 interface ArchivePageProps {
   sessions: ArchiveSession[];
+  total?: number;
   folders: ArchiveFolder[];
   onFoldersChange: (folders: ArchiveFolder[]) => void;
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string, searchTerm?: string) => void;
   onOpenFile: (path: string) => void;
   onDeleteSession: (sessionDir: string, name: string) => void;
   onRefresh?: () => void;
+  onLoadAll?: () => void;
 }
 
 type FolderModalState =
@@ -39,8 +41,8 @@ type FolderModalState =
   | { type: 'edit'; folder: ArchiveFolder };
 
 export function ArchivePage({
-  sessions, folders, onFoldersChange,
-  onPreview, onOpenFile, onDeleteSession, onRefresh,
+  sessions, total, folders, onFoldersChange,
+  onPreview, onOpenFile, onDeleteSession, onRefresh, onLoadAll,
 }: ArchivePageProps) {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<'newest' | 'oldest'>('newest');
@@ -126,6 +128,7 @@ export function ArchivePage({
     if (ftDebounceRef.current) clearTimeout(ftDebounceRef.current);
     const q = search.trim();
     if (!fullTextMode || q.length < 3) {
+      searchGenRef.current++;
       setFtResults(null);
       setFtError(null);
       setIsSearching(false);
@@ -241,8 +244,27 @@ export function ArchivePage({
         <h2 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
           Archivio Sbobine
         </h2>
-        <span className="status-pill">{sessions.length}</span>
+        <span className="status-pill">{total != null && total > sessions.length ? total : sessions.length}</span>
       </div>
+
+      {/* Truncation notice */}
+      {total != null && total > sessions.length && onLoadAll && (
+        <div
+          className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl text-sm"
+          style={{ background: 'var(--accent-subtle)', color: 'var(--text-secondary)', border: '1px solid var(--accent-text)22' }}
+        >
+          <span style={{ color: 'var(--text-muted)' }}>
+            Mostrate <strong style={{ color: 'var(--text-primary)' }}>{sessions.length}</strong> di <strong style={{ color: 'var(--text-primary)' }}>{total}</strong> sbobine
+          </span>
+          <button
+            onClick={onLoadAll}
+            className="compact-button"
+            style={{ color: 'var(--accent-text)', fontWeight: 600, flexShrink: 0 }}
+          >
+            Mostra tutte
+          </button>
+        </div>
+      )}
 
       {/* Folders grid — always visible, first card is "new folder" */}
       <DndContext

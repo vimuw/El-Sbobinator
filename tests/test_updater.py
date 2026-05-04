@@ -1,4 +1,5 @@
 import io
+import subprocess
 import sys
 import unittest
 from unittest.mock import MagicMock, call, mock_open, patch
@@ -171,6 +172,58 @@ class UpdaterTests(unittest.TestCase):
         self.assertIn("hdiutil", call_names)
         self.assertIn("cp", call_names)
         self.assertIn("hdiutil", call_names)
+
+    # ------------------------------------------------------------------
+    # macOS — no mount point
+    # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # macOS — cp -R permission denied
+    # ------------------------------------------------------------------
+
+    def test_macos_cp_permission_denied_returns_permission_denied_key(self):
+        import plistlib
+
+        fake_plist = plistlib.dumps(
+            {"system-entities": [{"mount-point": "/Volumes/ElSbobinator"}]}
+        )
+
+        class _FakeResp:
+            def read(self, n):
+                return b""
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                pass
+
+        attach_proc = MagicMock()
+        attach_proc.stdout = fake_plist
+        attach_proc.returncode = 0
+
+        def _fake_run(cmd, **kwargs):
+            if cmd[0] == "cp":
+                err = subprocess.CalledProcessError(1, cmd)
+                err.stderr = b"cp: /Applications/El Sbobinator.app: Permission denied"
+                raise err
+            return attach_proc
+
+        with (
+            patch.object(sys, "platform", "darwin"),
+            patch("urllib.request.urlopen", return_value=_FakeResp()),
+            patch("builtins.open", mock_open()),
+            patch("subprocess.run", side_effect=_fake_run),
+            patch("subprocess.Popen"),
+            patch("tempfile.NamedTemporaryFile") as mock_tmp,
+            patch("os.unlink"),
+        ):
+            mock_tmp.return_value.__enter__.return_value.name = "/tmp/app.dmg"
+            mock_tmp.return_value.__exit__.return_value = False
+            result = download_and_install_update("1.5.0")
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "permission_denied")
 
     # ------------------------------------------------------------------
     # macOS — no mount point

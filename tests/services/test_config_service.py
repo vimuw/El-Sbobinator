@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import os
+import tempfile
 import threading
 import time
 import unittest
@@ -338,6 +341,289 @@ class TestSaveConfigWriteLock(unittest.TestCase):
         for i, event in enumerate(call_order):
             if event == "write":
                 self.assertIn(call_order[i + 1], ("done-A", "done-B"))
+
+
+class TestLoadConfigFromRealFile(unittest.TestCase):
+    """Verify that load_config reads actual JSON from disk (not just cache paths)."""
+
+    def setUp(self) -> None:
+        _reset_cache()
+
+    def tearDown(self) -> None:
+        _reset_cache()
+
+    def test_reads_api_key_and_model_from_real_json_file(self) -> None:
+        """load_config reads api_key / preferred_model from a real temp CONFIG_FILE."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            payload = {
+                "api_key": "real-key-xyz",
+                "preferred_model": "gemini-2.5-flash",
+                "fallback_models": [],
+            }
+            with open(cfg_path, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh)
+
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".legacy_absent",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Windows",
+                ),
+            ):
+                result = cs.load_config()
+
+        self.assertEqual(result["api_key"], "real-key-xyz")
+        self.assertEqual(result["preferred_model"], "gemini-2.5-flash")
+
+    def test_falls_back_to_legacy_file_when_main_absent(self) -> None:
+        """When CONFIG_FILE does not exist but LEGACY_CONFIG_FILE does, it's used."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "absent_config.json")
+            legacy_path = os.path.join(tmpdir, "legacy_config.json")
+            payload = {"api_key": "legacy-key", "preferred_model": "gemini-2.0-flash"}
+            with open(legacy_path, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh)
+
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    legacy_path,
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Windows",
+                ),
+                patch("el_sbobinator.services.config_service.save_config", MagicMock()),
+            ):
+                result = cs.load_config()
+
+        self.assertEqual(result["api_key"], "legacy-key")
+
+    def test_returns_defaults_when_both_config_files_absent(self) -> None:
+        """When neither config file exists, default empty values are returned."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch(
+                    "el_sbobinator.services.config_service.CONFIG_FILE",
+                    os.path.join(tmpdir, "absent.json"),
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    os.path.join(tmpdir, "absent2.json"),
+                ),
+            ):
+                result = cs.load_config()
+
+        self.assertEqual(result["api_key"], "")
+        self.assertIn("preferred_model", result)
+
+    def test_skips_corrupt_json_and_returns_defaults(self) -> None:
+        """A corrupt JSON file is silently skipped; defaults are returned."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            with open(cfg_path, "w", encoding="utf-8") as fh:
+                fh.write("{ not valid json }")
+
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".none",
+                ),
+            ):
+                result = cs.load_config()
+
+        self.assertEqual(result["api_key"], "")
+
+    def test_windows_decrypts_api_key_protected(self) -> None:
+        """On Windows, api_key_protected is decrypted via DPAPI helper."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            payload = {"api_key": "", "api_key_protected": "FAKEBASE64=="}
+            with open(cfg_path, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh)
+
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".none",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Windows",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service._dpapi_unprotect_text_windows",
+                    return_value="decrypted-secret",
+                ),
+            ):
+                result = cs.load_config()
+
+        self.assertEqual(result["api_key"], "decrypted-secret")
+
+    def test_windows_sets_has_protected_key_when_dpapi_decrypt_fails(self) -> None:
+        """On Windows, if DPAPI returns empty string, has_protected_key is set True."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            payload = {"api_key": "", "api_key_protected": "FAKEBASE64=="}
+            with open(cfg_path, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh)
+
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".none",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Windows",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service._dpapi_unprotect_text_windows",
+                    return_value="",
+                ),
+            ):
+                result = cs.load_config()
+
+        self.assertTrue(result.get("has_protected_key"))
+        self.assertEqual(result["api_key"], "")
+
+    def test_windows_decrypts_fallback_keys_protected(self) -> None:
+        """On Windows, fallback_keys_protected is JSON-decoded after DPAPI decrypt."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            payload = {
+                "api_key": "main-key",
+                "fallback_keys_protected": "FAKEBASE64==",
+            }
+            with open(cfg_path, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh)
+
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".none",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Windows",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service._dpapi_unprotect_text_windows",
+                    return_value=json.dumps(["fallback-key-1", "fallback-key-2"]),
+                ),
+            ):
+                result = cs.load_config()
+
+        self.assertEqual(result["fallback_keys"], ["fallback-key-1", "fallback-key-2"])
+
+
+class TestSaveConfigToDisk(unittest.TestCase):
+    """Verify that save_config actually writes JSON to disk."""
+
+    def setUp(self) -> None:
+        _reset_cache()
+
+    def tearDown(self) -> None:
+        _reset_cache()
+
+    def test_save_config_writes_real_json_file(self) -> None:
+        """save_config atomically writes api_key + preferred_model to CONFIG_FILE."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".legacy",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Windows",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service._dpapi_protect_text_windows",
+                    return_value="",
+                ),
+            ):
+                cs.save_config("stored-key", preferred_model="gemini-2.5-flash")
+
+            self.assertTrue(os.path.isfile(cfg_path))
+            with open(cfg_path, encoding="utf-8") as fh:
+                data = json.load(fh)
+
+        self.assertEqual(data["api_key"], "stored-key")
+        self.assertEqual(data["preferred_model"], "gemini-2.5-flash")
+
+    def test_save_config_none_key_preserves_existing_protected_on_windows(self) -> None:
+        """On Windows, save_config(api_key=None) copies api_key_protected from the existing file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            existing = {"api_key": "", "api_key_protected": "EXISTING_PROTECTED=="}
+            with open(cfg_path, "w", encoding="utf-8") as fh:
+                json.dump(existing, fh)
+
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".legacy",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Windows",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service._dpapi_protect_text_windows",
+                    return_value="",
+                ),
+            ):
+                cs.save_config(None)
+
+            with open(cfg_path, encoding="utf-8") as fh:
+                data = json.load(fh)
+
+        self.assertEqual(data.get("api_key_protected"), "EXISTING_PROTECTED==")
+
+    def test_save_config_writes_legacy_file_when_env_set(self) -> None:
+        """When EL_SBOBINATOR_WRITE_LEGACY_CONFIG=1, the legacy file is also written."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            legacy_path = os.path.join(tmpdir, "legacy_config.json")
+
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    legacy_path,
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Windows",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service._dpapi_protect_text_windows",
+                    return_value="",
+                ),
+                patch.dict(os.environ, {"EL_SBOBINATOR_WRITE_LEGACY_CONFIG": "1"}),
+            ):
+                cs.save_config("legacy-key")
+
+            self.assertTrue(os.path.isfile(legacy_path))
+            with open(legacy_path, encoding="utf-8") as fh:
+                data = json.load(fh)
+
+        self.assertEqual(data["api_key"], "legacy-key")
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ import threading
 
 from el_sbobinator.utils.html_export import sanitize_html_basic
 
+_HTML_CACHE_MAX = 200  # FIFO cap; prevents unbounded growth in long-running processes
 _html_write_locks: dict[str, threading.Lock] = {}
 _html_last_gen: dict[str, int] = {}
 _html_write_locks_meta = threading.Lock()
@@ -18,8 +19,28 @@ _html_write_locks_meta = threading.Lock()
 def _html_write_lock(path: str) -> threading.Lock:
     with _html_write_locks_meta:
         if path not in _html_write_locks:
+            # FIFO eviction: remove oldest entry from both dicts if at capacity
+            if len(_html_write_locks) >= _HTML_CACHE_MAX:
+                oldest = next(iter(_html_write_locks))
+                del _html_write_locks[oldest]
+                # Intentionally keep _html_last_gen[oldest] so that if the path
+                # is re-inserted later the generation guard is still effective.
             _html_write_locks[path] = threading.Lock()
         return _html_write_locks[path]
+
+
+def evict_html_paths_under(prefix: str) -> None:
+    """Remove all lock/generation entries for paths under *prefix*.
+
+    Called by delete_session so that stale entries are not left behind
+    after a session folder is removed from disk.
+    """
+    with _html_write_locks_meta:
+        all_keys = set(_html_write_locks) | set(_html_last_gen)
+        to_evict = [k for k in all_keys if k.startswith(prefix)]
+        for k in to_evict:
+            _html_write_locks.pop(k, None)
+            _html_last_gen.pop(k, None)
 
 
 _ALLOWED_OPEN_EXTENSIONS: frozenset[str] = frozenset(
