@@ -80,6 +80,37 @@ jobs:
       - name: Run Checks
         run: python scripts/build_release.py check --skip-webui
 
+  audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install pip-audit
+        run: pip install pip-audit==2.9.0
+
+      - name: Audit Python dependencies
+        continue-on-error: true
+        run: pip-audit -r requirements/requirements.lock
+
+      - name: Audit npm dependencies
+        continue-on-error: true
+        working-directory: webui
+        run: npm audit --audit-level=high --omit=dev --package-lock-only
+
   build:
     needs: [checks, checks-windows]
     name: Build on ${{ matrix.os }}
