@@ -626,5 +626,407 @@ class TestSaveConfigToDisk(unittest.TestCase):
         self.assertEqual(data["api_key"], "legacy-key")
 
 
+class TestMacOSKeyringHelpers(unittest.TestCase):
+    """Unit tests for _keyring_get/set/delete_api_key on non-Windows platforms."""
+
+    def setUp(self) -> None:
+        _reset_cache()
+
+    def tearDown(self) -> None:
+        _reset_cache()
+
+    # --- _keyring_get_api_key ---
+
+    def test_keyring_get_returns_empty_on_windows(self) -> None:
+        with patch(
+            "el_sbobinator.services.config_service.platform.system",
+            return_value="Windows",
+        ):
+            result = cs._keyring_get_api_key()
+        self.assertEqual(result, "")
+
+    def test_keyring_get_returns_value_from_keyring(self) -> None:
+        import sys
+
+        mock_kr = MagicMock()
+        mock_kr.get_password.return_value = "secret-key"
+        with (
+            patch(
+                "el_sbobinator.services.config_service.platform.system",
+                return_value="Darwin",
+            ),
+            patch.dict(sys.modules, {"keyring": mock_kr}),
+        ):
+            result = cs._keyring_get_api_key()
+        self.assertEqual(result, "secret-key")
+        mock_kr.get_password.assert_called_once_with(
+            cs._KEYRING_SERVICE, cs._KEYRING_USER_API
+        )
+
+    def test_keyring_get_returns_empty_when_no_key_stored(self) -> None:
+        import sys
+
+        mock_kr = MagicMock()
+        mock_kr.get_password.return_value = None
+        with (
+            patch(
+                "el_sbobinator.services.config_service.platform.system",
+                return_value="Darwin",
+            ),
+            patch.dict(sys.modules, {"keyring": mock_kr}),
+        ):
+            result = cs._keyring_get_api_key()
+        self.assertEqual(result, "")
+
+    def test_keyring_get_returns_empty_on_exception(self) -> None:
+        import sys
+
+        mock_kr = MagicMock()
+        mock_kr.get_password.side_effect = RuntimeError("keyring locked")
+        with (
+            patch(
+                "el_sbobinator.services.config_service.platform.system",
+                return_value="Darwin",
+            ),
+            patch.dict(sys.modules, {"keyring": mock_kr}),
+            patch("el_sbobinator.services.config_service.time.sleep") as mock_sleep,
+        ):
+            result = cs._keyring_get_api_key()
+        self.assertEqual(result, "")
+        mock_sleep.assert_called_once()
+
+    # --- _keyring_set_api_key ---
+
+    def test_keyring_set_returns_false_on_windows(self) -> None:
+        with patch(
+            "el_sbobinator.services.config_service.platform.system",
+            return_value="Windows",
+        ):
+            result = cs._keyring_set_api_key("some-key")
+        self.assertFalse(result)
+
+    def test_keyring_set_returns_true_on_success(self) -> None:
+        import sys
+
+        mock_kr = MagicMock()
+        with (
+            patch(
+                "el_sbobinator.services.config_service.platform.system",
+                return_value="Darwin",
+            ),
+            patch.dict(sys.modules, {"keyring": mock_kr}),
+        ):
+            result = cs._keyring_set_api_key("my-key")
+        self.assertTrue(result)
+        mock_kr.set_password.assert_called_once_with(
+            cs._KEYRING_SERVICE, cs._KEYRING_USER_API, "my-key"
+        )
+
+    def test_keyring_set_returns_false_on_exception(self) -> None:
+        import sys
+
+        mock_kr = MagicMock()
+        mock_kr.set_password.side_effect = RuntimeError("no backend")
+        with (
+            patch(
+                "el_sbobinator.services.config_service.platform.system",
+                return_value="Darwin",
+            ),
+            patch.dict(sys.modules, {"keyring": mock_kr}),
+        ):
+            result = cs._keyring_set_api_key("my-key")
+        self.assertFalse(result)
+
+    # --- _keyring_delete_api_key ---
+
+    def test_keyring_delete_returns_false_on_windows(self) -> None:
+        with patch(
+            "el_sbobinator.services.config_service.platform.system",
+            return_value="Windows",
+        ):
+            result = cs._keyring_delete_api_key()
+        self.assertFalse(result)
+
+    def test_keyring_delete_returns_true_on_success(self) -> None:
+        import sys
+
+        mock_kr = MagicMock()
+        with (
+            patch(
+                "el_sbobinator.services.config_service.platform.system",
+                return_value="Darwin",
+            ),
+            patch.dict(sys.modules, {"keyring": mock_kr}),
+        ):
+            result = cs._keyring_delete_api_key()
+        self.assertTrue(result)
+        mock_kr.delete_password.assert_called_once_with(
+            cs._KEYRING_SERVICE, cs._KEYRING_USER_API
+        )
+
+    def test_keyring_delete_returns_false_on_exception(self) -> None:
+        import sys
+
+        mock_kr = MagicMock()
+        mock_kr.delete_password.side_effect = RuntimeError("not found")
+        with (
+            patch(
+                "el_sbobinator.services.config_service.platform.system",
+                return_value="Darwin",
+            ),
+            patch.dict(sys.modules, {"keyring": mock_kr}),
+        ):
+            result = cs._keyring_delete_api_key()
+        self.assertFalse(result)
+
+
+class TestLoadConfigMacOS(unittest.TestCase):
+    """load_config paths that execute only on non-Windows (keyring integration)."""
+
+    def setUp(self) -> None:
+        _reset_cache()
+
+    def tearDown(self) -> None:
+        _reset_cache()
+
+    def test_macos_api_key_from_keyring_overrides_disk_value(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            payload = {
+                "api_key": "disk-key",
+                "preferred_model": "gemini-2.0-flash-lite",
+            }
+            with open(cfg_path, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh)
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".none",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Darwin",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service._keyring_get_api_key",
+                    return_value="keyring-key",
+                ),
+            ):
+                result = cs.load_config()
+        self.assertEqual(result["api_key"], "keyring-key")
+
+    def test_macos_migrates_plaintext_disk_key_to_keyring(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            payload = {
+                "api_key": "plain-key-on-disk",
+                "preferred_model": "gemini-2.0-flash-lite",
+            }
+            with open(cfg_path, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh)
+            mock_set = MagicMock(return_value=True)
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".none",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Darwin",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service._keyring_get_api_key",
+                    return_value="",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service._keyring_set_api_key",
+                    mock_set,
+                ),
+                patch("el_sbobinator.services.config_service.save_config"),
+            ):
+                cs.load_config()
+        mock_set.assert_called_once_with("plain-key-on-disk")
+
+    def test_macos_sets_has_protected_key_when_use_keyring_true_and_keyring_empty(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            payload = {
+                "api_key": "",
+                "use_keyring": True,
+                "preferred_model": "gemini-2.0-flash-lite",
+            }
+            with open(cfg_path, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh)
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".none",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Darwin",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service._keyring_get_api_key",
+                    return_value="",
+                ),
+            ):
+                result = cs.load_config()
+        self.assertTrue(result.get("has_protected_key"))
+        self.assertEqual(result["api_key"], "")
+
+    def test_macos_reads_fallback_keys_from_keyring(self) -> None:
+        import sys
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            payload = {"api_key": "", "preferred_model": "gemini-2.0-flash-lite"}
+            with open(cfg_path, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh)
+            mock_kr = MagicMock()
+            fk_json = json.dumps(["fk-1", "fk-2"])
+            mock_kr.get_password.side_effect = (
+                lambda svc, usr: fk_json if usr == "gemini_fallback_keys" else None
+            )
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".none",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Darwin",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service._keyring_get_api_key",
+                    return_value="",
+                ),
+                patch.dict(sys.modules, {"keyring": mock_kr}),
+            ):
+                result = cs.load_config()
+        self.assertEqual(result.get("fallback_keys"), ["fk-1", "fk-2"])
+
+
+class TestSaveConfigMacOS(unittest.TestCase):
+    """save_config paths that execute only on non-Windows (keyring integration)."""
+
+    def setUp(self) -> None:
+        _reset_cache()
+
+    def tearDown(self) -> None:
+        _reset_cache()
+
+    def test_macos_stores_api_key_in_keyring_and_clears_disk_field(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".legacy",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Darwin",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service._keyring_set_api_key",
+                    return_value=True,
+                ),
+                patch("el_sbobinator.services.config_service._keyring_delete_api_key"),
+            ):
+                cs.save_config("my-api-key")
+            with open(cfg_path, encoding="utf-8") as fh:
+                data = json.load(fh)
+        self.assertEqual(data["api_key"], "")
+        self.assertTrue(data.get("use_keyring"))
+
+    def test_macos_clears_keyring_entry_when_api_key_is_empty(self) -> None:
+        mock_delete = MagicMock(return_value=True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".legacy",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Darwin",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service._keyring_delete_api_key",
+                    mock_delete,
+                ),
+            ):
+                cs.save_config("")
+        mock_delete.assert_called_once()
+
+    def test_macos_stores_fallback_keys_in_keyring(self) -> None:
+        import sys
+
+        mock_kr = MagicMock()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".legacy",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Darwin",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service._keyring_set_api_key",
+                    return_value=True,
+                ),
+                patch.dict(sys.modules, {"keyring": mock_kr}),
+            ):
+                cs.save_config("my-key", fallback_keys=["fk-a", "fk-b"])
+        fk_calls = [
+            c
+            for c in mock_kr.set_password.call_args_list
+            if c.args[1] == "gemini_fallback_keys"
+        ]
+        self.assertEqual(len(fk_calls), 1)
+        stored = json.loads(fk_calls[0].args[2])
+        self.assertEqual(stored, ["fk-a", "fk-b"])
+
+    def test_macos_preserves_use_keyring_flag_when_api_key_is_none(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            existing = {
+                "api_key": "",
+                "use_keyring": True,
+                "preferred_model": "gemini-2.0-flash-lite",
+            }
+            with open(cfg_path, "w", encoding="utf-8") as fh:
+                json.dump(existing, fh)
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".legacy",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Darwin",
+                ),
+            ):
+                cs.save_config(None)
+            with open(cfg_path, encoding="utf-8") as fh:
+                data = json.load(fh)
+        self.assertTrue(data.get("use_keyring"))
+
+
 if __name__ == "__main__":
     unittest.main()

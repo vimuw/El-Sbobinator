@@ -1,8 +1,9 @@
 import os
+import sys
 import tempfile
 import unittest
 from typing import ClassVar
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from el_sbobinator.services.validation_service import (
     _check_writable_dir,
@@ -278,6 +279,76 @@ class CheckWritableDirTests(unittest.TestCase):
                 ok, msg = _check_writable_dir(tmp)
         self.assertFalse(ok)
         self.assertIn("no write", msg)
+
+
+class TestValidationKeyringCheck(unittest.TestCase):
+    """validate_environment keyring check — only emitted on non-Windows."""
+
+    @patch(
+        "el_sbobinator.services.validation_service.platform.system",
+        return_value="Darwin",
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.resolve_ffmpeg",
+        return_value="ffmpeg",
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.get_desktop_dir", return_value="."
+    )
+    def test_keyring_check_status_ok_when_keyring_accessible(self, *_mocks):
+        mock_kr = MagicMock()
+        mock_kr.get_password.return_value = None
+        with patch.dict(sys.modules, {"keyring": mock_kr}):
+            result = validate_environment(api_key=None, validate_api_key=False)
+
+        keyring_check = next(
+            (c for c in result["checks"] if c["id"] == "keyring"), None
+        )
+        self.assertIsNotNone(
+            keyring_check, "keyring check must be present on non-Windows"
+        )
+        self.assertEqual(keyring_check["status"], "ok")  # type: ignore[index]
+        self.assertIn("protetta", keyring_check["message"])  # type: ignore[index]
+
+    @patch(
+        "el_sbobinator.services.validation_service.platform.system",
+        return_value="Darwin",
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.resolve_ffmpeg",
+        return_value="ffmpeg",
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.get_desktop_dir", return_value="."
+    )
+    def test_keyring_check_status_warning_when_keyring_unavailable(self, *_mocks):
+        mock_kr = MagicMock()
+        mock_kr.get_password.side_effect = RuntimeError("no keyring backend")
+        with patch.dict(sys.modules, {"keyring": mock_kr}):
+            result = validate_environment(api_key=None, validate_api_key=False)
+
+        keyring_check = next(
+            (c for c in result["checks"] if c["id"] == "keyring"), None
+        )
+        self.assertIsNotNone(keyring_check)
+        self.assertEqual(keyring_check["status"], "warning")  # type: ignore[index]
+        self.assertIn("no keyring backend", keyring_check["details"])  # type: ignore[typeddict-item]
+
+    @patch(
+        "el_sbobinator.services.validation_service.platform.system",
+        return_value="Windows",
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.resolve_ffmpeg",
+        return_value="ffmpeg",
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.get_desktop_dir", return_value="."
+    )
+    def test_keyring_check_absent_on_windows(self, *_mocks):
+        result = validate_environment(api_key=None, validate_api_key=False)
+        check_ids = [c["id"] for c in result["checks"]]
+        self.assertNotIn("keyring", check_ids)
 
 
 if __name__ == "__main__":

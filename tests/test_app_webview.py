@@ -1743,5 +1743,70 @@ class TestGetCompletedSessions(unittest.TestCase):
         self.assertEqual(result["total"], 0)
 
 
+class TestShowNotification(unittest.TestCase):
+    """show_notification — Darwin osascript fallback and cross-platform error path."""
+
+    def test_darwin_osascript_popen_called_when_plyer_fails(self):
+        """On darwin, if plyer raises, subprocess.Popen(['osascript', ...]) must be called."""
+        import sys
+        from unittest.mock import MagicMock
+
+        api = ElSbobinatorApi()
+        popen_calls: list[list] = []
+
+        def _fake_popen(cmd, **kwargs):
+            popen_calls.append(list(cmd))
+
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "plyer": MagicMock(
+                        notification=MagicMock(
+                            notify=MagicMock(
+                                side_effect=RuntimeError("plyer unavailable")
+                            )
+                        )
+                    )
+                },
+            ),
+            patch("sys.platform", "darwin"),
+            patch("subprocess.Popen", side_effect=_fake_popen),
+        ):
+            result = api.show_notification("Titolo", "Messaggio di test")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(len(popen_calls), 1)
+        self.assertEqual(popen_calls[0][0], "osascript")
+        joined = " ".join(popen_calls[0])
+        self.assertIn("Messaggio di test", joined)
+        self.assertIn("Titolo", joined)
+
+    def test_non_darwin_plyer_failure_returns_error_dict(self):
+        """On non-darwin platforms, if plyer raises, return ok=False with error string."""
+        import sys
+        from unittest.mock import MagicMock
+
+        api = ElSbobinatorApi()
+
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "plyer": MagicMock(
+                        notification=MagicMock(
+                            notify=MagicMock(side_effect=RuntimeError("no notifier"))
+                        )
+                    )
+                },
+            ),
+            patch("sys.platform", "linux"),
+        ):
+            result = api.show_notification("Titolo", "Messaggio")
+
+        self.assertFalse(result["ok"])
+        self.assertIn("no notifier", result["error"])
+
+
 if __name__ == "__main__":
     unittest.main()

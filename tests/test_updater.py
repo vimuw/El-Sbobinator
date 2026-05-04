@@ -368,8 +368,8 @@ class TestChecksumVerification(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertIn("checksum", result or "")  # type: ignore[operator]
 
-    def test_checksum_404_returns_none(self):
-        """A 404 on the .sha256 file means the release predates checksum support — skip verification."""
+    def test_checksum_404_is_hard_fail(self):
+        """A 404 on the .sha256 file must block the update — CI always emits the checksum."""
         import urllib.error
 
         tmp = self._write_tmp(b"data")
@@ -387,7 +387,8 @@ class TestChecksumVerification(unittest.TestCase):
                 )
         finally:
             os.unlink(tmp)
-        self.assertIsNone(result)
+        self.assertIsNotNone(result)
+        self.assertIn("assente", result or "")  # type: ignore[operator]
 
     def test_checksum_non_404_http_error_returns_error(self):
         """Non-404 HTTP errors (e.g. 503) should still block the update."""
@@ -458,6 +459,235 @@ class TestChecksumIntegration(unittest.TestCase):
         self.assertIn("vuoto", result["error"])
         mock_start.assert_not_called()
         mock_unlink.assert_called_with("/tmp/setup.exe")
+
+
+class TestMacOSDmgInstall(unittest.TestCase):
+    """Unit tests for macOS-only DMG install paths — all subprocess calls mocked."""
+
+    # ------------------------------------------------------------------
+    # Filename / URL construction
+    # ------------------------------------------------------------------
+
+    def test_macos_dmg_url_contains_correct_filename(self):
+        """download_and_install_update on darwin must build URL with El-Sbobinator-v{ver}.dmg."""
+
+        class _FakeResp:
+            def read(self, n):
+                return b""
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                pass
+
+        with (
+            patch.object(sys, "platform", "darwin"),
+            patch("urllib.request.urlopen", return_value=_FakeResp()) as mock_urlopen,
+            patch("builtins.open", mock_open()),
+            patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
+            patch("subprocess.Popen"),
+            patch("threading.Thread"),
+            patch("os.unlink"),
+            patch("tempfile.NamedTemporaryFile") as mock_tmp,
+        ):
+            import plistlib
+
+            fake_plist = plistlib.dumps(
+                {"system-entities": [{"mount-point": "/Volumes/Test"}]}
+            )
+            mock_tmp.return_value.__enter__.return_value.name = "/tmp/app.dmg"
+            mock_tmp.return_value.__exit__.return_value = False
+            mock_run = MagicMock()
+            mock_run.stdout = fake_plist
+            mock_run.returncode = 0
+            with patch("subprocess.run", return_value=mock_run):
+                download_and_install_update("2.3.4")
+            url = mock_urlopen.call_args[0][0]
+
+        self.assertIn("El-Sbobinator-v2.3.4.dmg", url)
+        self.assertNotIn(".exe", url)
+
+    # ------------------------------------------------------------------
+    # hdiutil attach failure
+    # ------------------------------------------------------------------
+
+    def test_macos_hdiutil_attach_failure_returns_installazione_fallita(self):
+        """CalledProcessError from hdiutil attach must bubble as 'Installazione fallita'."""
+
+        class _FakeResp:
+            def read(self, n):
+                return b""
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                pass
+
+        attach_err = subprocess.CalledProcessError(1, ["hdiutil", "attach"])
+        attach_err.stderr = b"hdiutil: attach failed"
+
+        with (
+            patch.object(sys, "platform", "darwin"),
+            patch("urllib.request.urlopen", return_value=_FakeResp()),
+            patch("builtins.open", mock_open()),
+            patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
+            patch("subprocess.run", side_effect=attach_err),
+            patch("tempfile.NamedTemporaryFile") as mock_tmp,
+            patch("os.unlink"),
+        ):
+            mock_tmp.return_value.__enter__.return_value.name = "/tmp/app.dmg"
+            mock_tmp.return_value.__exit__.return_value = False
+            result = download_and_install_update("1.0.0")
+
+        self.assertFalse(result["ok"])
+        self.assertIn("Installazione fallita", result["error"])
+
+    # ------------------------------------------------------------------
+    # Happy path — xattr and open called
+    # ------------------------------------------------------------------
+
+    def test_macos_xattr_and_open_called_in_happy_path(self):
+        """On a successful DMG install xattr (quarantine removal) and Popen(['open',...]) must be called."""
+        import plistlib
+
+        fake_plist = plistlib.dumps(
+            {"system-entities": [{"mount-point": "/Volumes/ElSbobinator"}]}
+        )
+
+        class _FakeResp:
+            def read(self, n):
+                return b""
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                pass
+
+        run_proc = MagicMock()
+        run_proc.stdout = fake_plist
+        run_proc.returncode = 0
+
+        run_cmds: list[list[str]] = []
+
+        def _fake_run(cmd, **kwargs):
+            run_cmds.append(list(cmd))
+            return run_proc
+
+        popen_cmds: list[list[str]] = []
+
+        def _fake_popen(cmd, **kwargs):
+            popen_cmds.append(list(cmd))
+
+        with (
+            patch.object(sys, "platform", "darwin"),
+            patch("urllib.request.urlopen", return_value=_FakeResp()),
+            patch("builtins.open", mock_open()),
+            patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
+            patch("subprocess.run", side_effect=_fake_run),
+            patch("subprocess.Popen", side_effect=_fake_popen),
+            patch("threading.Thread") as mock_thread,
+            patch("tempfile.NamedTemporaryFile") as mock_tmp,
+            patch("os.unlink"),
+        ):
+            mock_tmp.return_value.__enter__.return_value.name = "/tmp/app.dmg"
+            mock_tmp.return_value.__exit__.return_value = False
+            mock_thread.return_value.start.return_value = None
+            result = download_and_install_update("1.5.0")
+
+        self.assertTrue(result["ok"])
+        xattr_cmds = [c for c in run_cmds if c and c[0] == "xattr"]
+        self.assertEqual(len(xattr_cmds), 1, "xattr must be called exactly once")
+        self.assertIn("com.apple.quarantine", xattr_cmds[0])
+        self.assertEqual(
+            len(popen_cmds), 1, "Popen must be called once (to launch the app)"
+        )
+        self.assertEqual(popen_cmds[0][0], "open")
+
+    # ------------------------------------------------------------------
+    # hdiutil detach called in finally even when cp fails (non-permission)
+    # ------------------------------------------------------------------
+
+    def test_macos_hdiutil_detach_called_when_cp_raises_non_permission_error(self):
+        """hdiutil detach must be called in the finally block even when cp -R raises a non-permission error."""
+        import plistlib
+
+        fake_plist = plistlib.dumps(
+            {"system-entities": [{"mount-point": "/Volumes/ElSbobinator"}]}
+        )
+
+        class _FakeResp:
+            def read(self, n):
+                return b""
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                pass
+
+        attach_proc = MagicMock()
+        attach_proc.stdout = fake_plist
+        attach_proc.returncode = 0
+
+        detach_calls: list[list[str]] = []
+
+        def _fake_run(cmd, **kwargs):
+            if cmd[0] == "cp":
+                err = subprocess.CalledProcessError(1, cmd)
+                err.stderr = b"cp: I/O error (not permission)"
+                raise err
+            if cmd[0] == "hdiutil" and len(cmd) > 1 and cmd[1] == "detach":
+                detach_calls.append(list(cmd))
+            return attach_proc
+
+        with (
+            patch.object(sys, "platform", "darwin"),
+            patch("urllib.request.urlopen", return_value=_FakeResp()),
+            patch("builtins.open", mock_open()),
+            patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
+            patch("subprocess.run", side_effect=_fake_run),
+            patch("subprocess.Popen"),
+            patch("tempfile.NamedTemporaryFile") as mock_tmp,
+            patch("os.unlink"),
+        ):
+            mock_tmp.return_value.__enter__.return_value.name = "/tmp/app.dmg"
+            mock_tmp.return_value.__exit__.return_value = False
+            result = download_and_install_update("1.5.0")
+
+        self.assertFalse(result["ok"])
+        self.assertIn("Installazione fallita", result["error"])
+        self.assertEqual(len(detach_calls), 1, "hdiutil detach must always be called")
+        self.assertIn("/Volumes/ElSbobinator", detach_calls[0])
+
+    # ------------------------------------------------------------------
+    # _install_macos_dmg in isolation — no-mount-point path tmp cleanup
+    # ------------------------------------------------------------------
+
+    def test_install_macos_dmg_unlinks_tmp_on_no_mount_point(self):
+        """_install_macos_dmg must delete the tmp file even when no mount point is found."""
+        import plistlib
+
+        from el_sbobinator.core.updater import _install_macos_dmg
+
+        fake_plist = plistlib.dumps({"system-entities": []})
+        fake_proc = MagicMock()
+        fake_proc.stdout = fake_plist
+        fake_proc.returncode = 0
+
+        unlinked: list[str] = []
+
+        with (
+            patch("subprocess.run", return_value=fake_proc),
+            patch("os.unlink", side_effect=lambda p: unlinked.append(p)),
+        ):
+            result = _install_macos_dmg("/tmp/fake.dmg")
+
+        self.assertIsNotNone(result)
+        self.assertFalse(result["ok"])  # type: ignore[index]
+        self.assertIn("/tmp/fake.dmg", unlinked)
 
 
 if __name__ == "__main__":

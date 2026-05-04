@@ -9,7 +9,6 @@ a short-delay quit so the webview window closes cleanly.
 from __future__ import annotations
 
 import hashlib
-import logging
 import os
 import plistlib
 import re
@@ -34,10 +33,7 @@ def _verify_sha256(
             raw = resp.read().decode("utf-8", errors="replace")
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            logging.getLogger(__name__).warning(
-                "SHA-256 checksum file not found for this release (404) — skipping integrity check."
-            )
-            return None
+            return "File checksum SHA-256 assente per questa release — aggiornamento annullato per sicurezza."
         return f"Download checksum fallito: {e}"
     except Exception as e:
         return f"Download checksum fallito: {e}"
