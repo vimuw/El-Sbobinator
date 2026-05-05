@@ -398,9 +398,7 @@ def process_phase1_transcription(  # noqa: C901
                     if generated_text is None:
                         success = False
                     else:
-                        full_transcript += f"\n\n{generated_text}\n\n"
-                        prev_memory = generated_text[-1000:]
-
+                        chunk_file_saved = False
                         try:
                             out_chunk_md = os.path.join(
                                 phase1_chunks_dir,
@@ -410,27 +408,30 @@ def process_phase1_transcription(  # noqa: C901
                             print(
                                 f"   [autosave] Chunk salvato: {os.path.basename(out_chunk_md)}"
                             )
+                            chunk_file_saved = True
                         except Exception as save_err:
                             print(f"   [!] Autosave chunk fallito: {save_err}")
 
-                        _update_session(
-                            session,
-                            {
-                                "stage": "phase1",
-                                "phase1": {
-                                    **session.get("phase1", {}),
-                                    "chunks_done": int(chunk_idx),
-                                    "next_start_sec": int(
-                                        chunk_start_sec + step_seconds
-                                    ),
-                                    "memoria_precedente": prev_memory,
+                        if chunk_file_saved:
+                            full_transcript += f"\n\n{generated_text}\n\n"
+                            prev_memory = generated_text[-1000:]
+                            _update_session(
+                                session,
+                                {
+                                    "stage": "phase1",
+                                    "phase1": {
+                                        **session.get("phase1", {}),
+                                        "chunks_done": int(chunk_idx),
+                                        "next_start_sec": int(
+                                            chunk_start_sec + step_seconds
+                                        ),
+                                        "memoria_precedente": prev_memory,
+                                    },
+                                    "last_error": None,
                                 },
-                                "last_error": None,
-                            },
-                        )
-                        save_session()
-
-                        success = True
+                            )
+                            save_session()
+                            success = True
                         runtime.progress(0.7 * chunk_idx / total_chunks)
                         _step_secs = max(0.0, time.monotonic() - float(chunk_step_t0))
                         runtime.register_step_time(

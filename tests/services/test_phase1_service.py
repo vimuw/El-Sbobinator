@@ -1169,9 +1169,13 @@ class TestPhase1EdgeCases(unittest.TestCase):
 
     # ── autosave / cleanup ─────────────────────────────────────────────────────
 
-    def test_autosave_write_failure_is_swallowed(self):
-        """_atomic_write_text raising does not abort the transcription."""
-        session = {"stage": "phase1", "phase1": {}}
+    def test_autosave_write_failure_stops_pipeline_without_advancing_position(self):
+        """_atomic_write_text raising stops the pipeline and must not advance
+        next_start_sec or memoria_precedente (resume bookmark stays consistent)."""
+        session: dict = {
+            "stage": "phase1",
+            "phase1": {"next_start_sec": 0, "chunks_done": 0, "memoria_precedente": ""},
+        }
 
         with (
             patch(
@@ -1189,7 +1193,10 @@ class TestPhase1EdgeCases(unittest.TestCase):
         ):
             _, transcript, _ = self._run(session)
 
-        self.assertIn("Testo.", transcript)
+        self.assertIsNone(transcript)
+        self.assertEqual(session.get("phase1", {}).get("next_start_sec", 0), 0)
+        self.assertEqual(session.get("phase1", {}).get("memoria_precedente", ""), "")
+        self.assertEqual(session.get("last_error"), "phase1_chunk_failed_1")
 
     def test_chunk_file_removal_failure_is_swallowed(self):
         """os.remove failing in finally block does not abort the transcription."""
@@ -1258,3 +1265,115 @@ class TestPhase1EdgeCases(unittest.TestCase):
             _, transcript, _ = self._run(session, client=fake_client)
 
         self.assertIn("Testo.", transcript)
+
+
+class TestChunkFileSaveFailure(unittest.TestCase):
+    """next_start_sec / memoria_precedente must not advance when the chunk file write fails."""
+
+    _COMMON_KWARGS: ClassVar[dict] = dict(
+        model_name="test-model",
+        model_state=None,
+        input_path="fake.mp3",
+        preconv_used_path=None,
+        ffmpeg_exe="ffmpeg",
+        cancel_event=threading.Event(),
+        cancelled=lambda: False,
+        start_sec=0,
+        total_duration_sec=60,
+        step_seconds=60,
+        chunk_seconds=60,
+        bitrate="48k",
+        inline_max_bytes=None,
+        prefetch_enabled=False,
+        initial_full_transcript="",
+        initial_prev_memory="",
+        fallback_keys=[],
+        request_fallback_key=lambda: None,
+        system_prompt="test",
+        on_model_switched=None,
+        logger=None,
+    )
+
+    def test_chunk_file_write_failure_does_not_advance_next_start_sec(self):
+        """If _atomic_write_text raises (e.g. rename after write fails), next_start_sec
+        and memoria_precedente must NOT be advanced in the session, the pipeline must
+        stop (None transcript), and last_error must be set.  The real
+        _atomic_write_text runs so we also verify that neither the final .md file
+        nor the intermediate .tmp file survives a failed atomic write."""
+        import copy
+
+        session: dict = {
+            "stage": "phase1",
+            "phase1": {"next_start_sec": 0, "chunks_done": 0, "memoria_precedente": ""},
+        }
+        saved_snapshots: list[dict] = []
+
+        def recording_save() -> bool:
+            saved_snapshots.append(copy.deepcopy(session))
+            return True
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            chunks_dir = os.path.join(tmpdir, "chunks")
+            os.makedirs(chunks_dir)
+
+            with (
+                patch(
+                    "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                    return_value=(True, None),
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.retry_with_quota",
+                    return_value=(object(), "Testo trascritto chunk 1."),
+                ),
+                patch(
+                    "el_sbobinator.core.shared.os.replace",
+                    side_effect=OSError("No space left on device"),
+                ),
+            ):
+                _, transcript, _ = process_phase1_transcription(
+                    client=object(),
+                    phase1_chunks_dir=chunks_dir,
+                    session=session,
+                    save_session=recording_save,
+                    runtime=_FakeRuntime(),
+                    **self._COMMON_KWARGS,  # type: ignore[arg-type]
+                )
+
+            self.assertIsNone(
+                transcript, "pipeline must stop when chunk file cannot be written"
+            )
+            self.assertEqual(
+                session.get("phase1", {}).get("next_start_sec", 0),
+                0,
+                "next_start_sec must not advance past an unwritten chunk",
+            )
+            self.assertEqual(
+                session.get("phase1", {}).get("memoria_precedente", ""),
+                "",
+                "memoria_precedente must not be updated when chunk file was not saved",
+            )
+            self.assertEqual(
+                session.get("last_error"),
+                "phase1_chunk_failed_1",
+                "last_error must be set to phase1_chunk_failed_1",
+            )
+            self.assertEqual(
+                os.listdir(chunks_dir),
+                [],
+                "neither the .md chunk file nor the .tmp intermediate must survive a failed atomic write",
+            )
+            self.assertEqual(
+                len(saved_snapshots),
+                1,
+                "save_session must be called exactly once (error-path call only, not the success-path call)",
+            )
+            self.assertEqual(
+                saved_snapshots[0].get("last_error"),
+                "phase1_chunk_failed_1",
+                "snapshot must show last_error == 'phase1_chunk_failed_1' at the moment of save",
+            )
+            self.assertEqual(
+                saved_snapshots[0].get("phase1", {}).get("next_start_sec", 0),
+                0,
+                "snapshot must show next_start_sec == 0 (not advanced past the unwritten chunk)",
+            )
