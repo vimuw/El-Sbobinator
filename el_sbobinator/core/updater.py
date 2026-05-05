@@ -64,7 +64,7 @@ def _verify_sha256(
 
 def _launch_windows_installer(tmp_path: str) -> None:
     """Launch the Windows installer EXE and schedule temp-file cleanup."""
-    os.startfile(tmp_path)  # type: ignore[attr-defined]
+    subprocess.Popen([tmp_path, "/CURRENTUSER"])
 
     def _cleanup(path: str) -> None:
         for _ in range(3):

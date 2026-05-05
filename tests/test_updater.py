@@ -100,7 +100,7 @@ class UpdaterTests(unittest.TestCase):
     # Windows happy path
     # ------------------------------------------------------------------
 
-    def test_windows_calls_startfile_with_exe(self):
+    def test_windows_calls_popen_with_currentuser_flag(self):
         class _FakeResp:
             def read(self, n):
                 return b""
@@ -116,7 +116,7 @@ class UpdaterTests(unittest.TestCase):
             patch("urllib.request.urlopen", return_value=_FakeResp()),
             patch("builtins.open", mock_open()),
             patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
-            patch("os.startfile", create=True) as mock_start,
+            patch("el_sbobinator.core.updater.subprocess.Popen") as mock_popen,
             patch("threading.Thread") as mock_thread,
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
         ):
@@ -126,9 +126,10 @@ class UpdaterTests(unittest.TestCase):
             result = download_and_install_update("2.0.0")
 
         self.assertTrue(result["ok"])
-        mock_start.assert_called_once()
-        called_path = mock_start.call_args[0][0]
-        self.assertTrue(called_path.endswith(".exe"))
+        mock_popen.assert_called_once()
+        called_args = mock_popen.call_args[0][0]
+        self.assertTrue(called_args[0].endswith(".exe"))
+        self.assertIn("/CURRENTUSER", called_args)
 
     # ------------------------------------------------------------------
     # macOS happy path

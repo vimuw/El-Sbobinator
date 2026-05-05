@@ -1205,7 +1205,7 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
             patch("tempfile.NamedTemporaryFile", return_value=_FakeTmpFile()),
             patch.object(sys, "platform", "win32"),
             patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
-            patch("os.startfile", create=True),
+            patch("el_sbobinator.core.updater.subprocess.Popen"),
             patch("os.unlink", side_effect=flaky_unlink),
             patch("builtins.open", mock_open()),
             patch("time.sleep"),

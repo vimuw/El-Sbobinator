@@ -13,7 +13,7 @@ AppPublisher=vimuw
 AppPublisherURL=https://github.com/vimuw/El-Sbobinator
 AppSupportURL=https://github.com/vimuw/El-Sbobinator/issues
 AppUpdatesURL=https://github.com/vimuw/El-Sbobinator/releases
-DefaultDirName={autopf}\El Sbobinator
+DefaultDirName={userpf}\El Sbobinator
 DefaultGroupName=El Sbobinator
 SourceDir={#SourcePath}\..\..
 OutputDir=dist
@@ -22,7 +22,8 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\El Sbobinator.exe
-PrivilegesRequired=admin
+PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog commandline
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 
@@ -35,7 +36,7 @@ Source: "dist\El Sbobinator\*"; DestDir: "{app}"; Flags: ignoreversion recursesu
 
 [Icons]
 Name: "{group}\El Sbobinator"; Filename: "{app}\El Sbobinator.exe"
-Name: "{commondesktop}\El Sbobinator"; Filename: "{app}\El Sbobinator.exe"; Tasks: desktopicon
+Name: "{userdesktop}\El Sbobinator"; Filename: "{app}\El Sbobinator.exe"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
@@ -45,3 +46,46 @@ Filename: "{app}\El Sbobinator.exe"; Description: "{cm:LaunchProgram,El Sbobinat
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"
+
+[Code]
+{ ------------------------------------------------------------------ }
+{ One-time migration: remove a previous HKLM (admin) install so that }
+{ the new per-user install does not leave two copies on disk.         }
+{ The old AppId key is the same GUID with _is1 appended by Inno.     }
+{ ------------------------------------------------------------------ }
+const
+  ADMIN_UNINSTALL_KEY =
+    'Software\Microsoft\Windows\CurrentVersion\Uninstall\' +
+    '{B348000F-C12F-4F17-9130-FF166C04EADF}_is1';
+
+function GetAdminUninstallString(): String;
+var
+  sValue: String;
+begin
+  sValue := '';
+  { Prefer the 64-bit hive (normal location for x64 installs). }
+  if not RegQueryStringValue(HKLM64, ADMIN_UNINSTALL_KEY, 'UninstallString', sValue) then
+    RegQueryStringValue(HKLM, ADMIN_UNINSTALL_KEY, 'UninstallString', sValue);
+  Result := sValue;
+end;
+
+procedure MigrateFromAdminInstall();
+var
+  sUninstaller: String;
+  iResultCode: Integer;
+begin
+  sUninstaller := GetAdminUninstallString();
+  if sUninstaller = '' then
+    Exit;
+  sUninstaller := RemoveQuotes(sUninstaller);
+  { ShellExec 'open' lets Windows apply the uninstaller's UAC manifest, }
+  { so the OS will prompt for elevation if the old exe requires it.     }
+  ShellExec('open', sUninstaller, '/SILENT /NORESTART', '',
+            SW_HIDE, ewWaitUntilTerminated, iResultCode);
+end;
+
+function InitializeSetup(): Boolean;
+begin
+  MigrateFromAdminInstall();
+  Result := True;
+end;
