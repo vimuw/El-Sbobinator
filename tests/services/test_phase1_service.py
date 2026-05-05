@@ -257,6 +257,10 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
                 "el_sbobinator.services.phase1_service.retry_with_quota",
                 side_effect=fake_retry,
             ),
+            patch(
+                "el_sbobinator.services.phase1_service.sleep_with_cancel",
+                return_value=True,
+            ),
         ):
             return process_phase1_transcription(  # type: ignore[arg-type]
                 client=object(),
@@ -718,3 +722,539 @@ class Phase1UploadModeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPhase1EdgeCases(unittest.TestCase):
+    """Tests for uncovered branches in phase1_service.process_phase1_transcription."""
+
+    # Common kwargs for single-chunk runs (60s file, 60s step/chunk = 1 chunk)
+    _COMMON_KWARGS: ClassVar[dict] = {
+        "model_name": "test-model",
+        "model_state": None,
+        "ffmpeg_exe": "ffmpeg",
+        "cancel_event": threading.Event(),
+        "cancelled": lambda: False,
+        "start_sec": 0,
+        "total_duration_sec": 60,
+        "step_seconds": 60,
+        "chunk_seconds": 60,
+        "bitrate": "128k",
+        "inline_max_bytes": 8 * 1024 * 1024,
+        "prefetch_enabled": False,  # off by default; enable per-test when needed
+        "initial_full_transcript": "",
+        "initial_prev_memory": "",
+        "fallback_keys": [],
+        "request_fallback_key": lambda: None,
+        "system_prompt": "Transcribe.",
+        "runtime": _FakeRuntime(),
+        "on_model_switched": None,
+        "logger": None,
+    }
+
+    def _run(self, session, client=None, **overrides):
+        """Helper: run process_phase1_transcription with common defaults."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            chunks_dir = os.path.join(tmpdir, "chunks")
+            os.makedirs(chunks_dir)
+            kwargs = self._COMMON_KWARGS.copy()
+            kwargs.update(overrides)
+            with patch(
+                "el_sbobinator.services.phase1_service.sleep_with_cancel",
+                return_value=True,
+            ):
+                return process_phase1_transcription(
+                    client=client or object(),
+                    input_path="fake.mp3",
+                    preconv_used_path=None,
+                    phase1_chunks_dir=chunks_dir,
+                    session=session,
+                    save_session=lambda: True,
+                    **kwargs,
+                )
+
+    # ── prefetch disabled ──────────────────────────────────────────────────────
+
+    def test_prefetch_disabled_never_calls_start_prefetch(self):
+        """prefetch_enabled=False → only 1 cut call, no thread started."""
+        session = {"stage": "phase1", "phase1": {}}
+        cut_calls = []
+
+        def fake_cut(**kw):
+            cut_calls.append(kw.get("stream_copy"))
+            return True, None
+
+        with (
+            patch(
+                "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                side_effect=fake_cut,
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.retry_with_quota",
+                return_value=(object(), "Testo."),
+            ),
+        ):
+            _, transcript, _ = self._run(session, prefetch_enabled=False)
+
+        self.assertIn("Testo.", transcript)
+        self.assertEqual(len(cut_calls), 1)
+
+    # ── stream-copy fallback ────────────────────────────────────────────────────
+
+    def test_preconv_stream_copy_failure_falls_back_to_reencode(self):
+        """When stream_copy fails, _cut_chunk_to_path re-encodes from the original."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            chunks_dir = os.path.join(tmpdir, "chunks")
+            os.makedirs(chunks_dir)
+            preconv_path = os.path.join(tmpdir, "preconv.mp3")
+            with open(preconv_path, "wb") as fh:
+                fh.write(b"fake audio data")
+
+            session = {"stage": "phase1", "phase1": {}}
+            calls = []
+
+            def fake_cut(**kw):
+                calls.append(bool(kw.get("stream_copy")))
+                return (
+                    (False, "stream_copy failed")
+                    if kw.get("stream_copy")
+                    else (True, None)
+                )
+
+            with (
+                patch(
+                    "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                    side_effect=fake_cut,
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.retry_with_quota",
+                    return_value=(object(), "Testo."),
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.sleep_with_cancel",
+                    return_value=True,
+                ),
+            ):
+                _, transcript, _ = process_phase1_transcription(
+                    client=object(),
+                    input_path="fake.mp3",
+                    preconv_used_path=preconv_path,
+                    phase1_chunks_dir=chunks_dir,
+                    session=session,
+                    save_session=lambda: True,
+                    **self._COMMON_KWARGS,
+                )
+
+        self.assertIn("Testo.", transcript)
+        # First call is stream_copy=True (preconv), second is stream_copy=False (reencode)
+        self.assertEqual(calls, [True, False])
+
+    # ── cancellation ───────────────────────────────────────────────────────────
+
+    def test_cancelled_before_first_chunk_returns_none(self):
+        """If cancelled() is True at the start of the chunk loop, return None."""
+        cancel = threading.Event()
+        cancel.set()
+        session = {"stage": "phase1", "phase1": {}}
+        kwargs = self._COMMON_KWARGS.copy()
+        kwargs["cancel_event"] = cancel
+        kwargs["cancelled"] = cancel.is_set
+
+        with patch(
+            "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+            return_value=(False, "cancelled"),
+        ):
+            _, transcript, _ = self._run(session, **kwargs)
+
+        self.assertIsNone(transcript)
+
+    def test_ffmpeg_error_sets_chunk_failed(self):
+        """FFmpeg failure (non-cancel) raises RuntimeError → chunk_failed session error."""
+        session = {"stage": "phase1", "phase1": {}}
+
+        with patch(
+            "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+            return_value=(False, "ffmpeg io error"),
+        ):
+            _, transcript, _ = self._run(session)
+
+        self.assertIsNone(transcript)
+        self.assertEqual(session.get("last_error"), "phase1_chunk_failed_1")
+
+    def test_cut_raises_exception_sets_chunk_failed(self):
+        """Unhandled exception during cut → outer except → chunk_failed."""
+        session = {"stage": "phase1", "phase1": {}}
+
+        with patch(
+            "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+            side_effect=RuntimeError("disk full"),
+        ):
+            _, transcript, _ = self._run(session)
+
+        self.assertIsNone(transcript)
+        self.assertEqual(session.get("last_error"), "phase1_chunk_failed_1")
+
+    # ── upload mode ────────────────────────────────────────────────────────────
+
+    def test_inline_none_triggers_upload_mode(self):
+        """make_inline_audio_part=None → upload path, transcript still populated."""
+        session = {"stage": "phase1", "phase1": {}}
+        fake_audio = MagicMock()
+        fake_audio.uri = "gs://bucket/audio.mp3"
+        fake_audio.mime_type = "audio/mpeg"
+        fake_client = MagicMock()
+        fake_client.models.generate_content.return_value = MagicMock()
+
+        with (
+            patch(
+                "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                return_value=(True, None),
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.generation_service.make_inline_audio_part",
+                return_value=None,
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.generation_service.upload_audio_path",
+                return_value=fake_audio,
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.generation_service.wait_for_file_ready",
+                return_value=fake_audio,
+            ),
+            patch("el_sbobinator.services.phase1_service.types") as mock_types,
+            patch(
+                "el_sbobinator.services.phase1_service.extract_response_text",
+                return_value="Trascritto.",
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.detect_degenerate_output",
+                return_value=None,
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.retry_with_quota",
+                side_effect=lambda fn, **kw: (kw["client"], fn(kw["client"])),
+            ),
+        ):
+            mock_types.Part.from_uri.return_value = MagicMock()
+            mock_types.GenerateContentConfig.return_value = MagicMock()
+            _, transcript, _ = self._run(session, client=fake_client)
+
+        self.assertIn("Trascritto.", transcript)
+
+    def test_inline_invalid_argument_falls_back_to_upload(self):
+        """'invalid_argument' error during inline generate → fallback to upload → success."""
+        session = {"stage": "phase1", "phase1": {}}
+        fake_audio = MagicMock()
+        fake_audio.uri = "gs://bucket/audio.mp3"
+        fake_audio.mime_type = "audio/mpeg"
+        call_count = [0]
+        fake_client = MagicMock()
+
+        def fake_generate(**_kw):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise RuntimeError("invalid_argument: payload too large")
+            return MagicMock()
+
+        fake_client.models.generate_content.side_effect = fake_generate
+
+        with (
+            patch(
+                "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                return_value=(True, None),
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.generation_service.make_inline_audio_part",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.generation_service.upload_audio_path",
+                return_value=fake_audio,
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.generation_service.wait_for_file_ready",
+                return_value=fake_audio,
+            ),
+            patch("el_sbobinator.services.phase1_service.types") as mock_types,
+            patch(
+                "el_sbobinator.services.phase1_service.extract_response_text",
+                return_value="Trascritto.",
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.detect_degenerate_output",
+                return_value=None,
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.retry_with_quota",
+                side_effect=lambda fn, **kw: (kw["client"], fn(kw["client"])),
+            ),
+        ):
+            mock_types.Part.from_uri.return_value = MagicMock()
+            mock_types.GenerateContentConfig.return_value = MagicMock()
+            _, transcript, _ = self._run(session, client=fake_client)
+
+        self.assertIn("Trascritto.", transcript)
+        self.assertEqual(call_count[0], 2)
+
+    def test_permanent_400_error_sets_bad_request_phase1(self):
+        """400/BadRequest in upload mode raises PermanentError → last_error = bad_request_phase1.
+
+        Inline mode would first trigger the inline→upload fallback (since the error text
+        contains '400'). Using upload mode directly (make_inline_audio_part=None) ensures
+        the permanent-error branch is reached immediately.
+        """
+        session = {"stage": "phase1", "phase1": {}}
+        fake_audio = MagicMock()
+        fake_audio.uri = "gs://bucket/audio.mp3"
+        fake_audio.mime_type = "audio/mpeg"
+        fake_client = MagicMock()
+        # generate_content always raises a hard 400
+        fake_client.models.generate_content.side_effect = RuntimeError(
+            "BadRequest INVALID_ARGUMENT"
+        )
+
+        with (
+            patch(
+                "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                return_value=(True, None),
+            ),
+            # None → upload mode (avoids inline→upload fallback ambiguity)
+            patch(
+                "el_sbobinator.services.phase1_service.generation_service.make_inline_audio_part",
+                return_value=None,
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.generation_service.upload_audio_path",
+                return_value=fake_audio,
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.generation_service.wait_for_file_ready",
+                return_value=fake_audio,
+            ),
+            patch("el_sbobinator.services.phase1_service.types") as mock_types,
+            patch(
+                "el_sbobinator.services.phase1_service.retry_with_quota",
+                side_effect=lambda fn, **kw: (kw["client"], fn(kw["client"])),
+            ),
+        ):
+            mock_types.Part.from_uri.return_value = MagicMock()
+            mock_types.GenerateContentConfig.return_value = MagicMock()
+            _, transcript, _ = self._run(session, client=fake_client)
+
+        self.assertIsNone(transcript)
+        self.assertEqual(session.get("last_error"), "bad_request_phase1")
+
+    # ── chain exhaustion recovery ───────────────────────────────────────────────
+
+    def test_degenerate_output_triggers_recovery_and_succeeds(self):
+        """First retry_with_quota raises DegenerateOutputError → model reset → second call succeeds."""
+        from el_sbobinator.core.model_registry import ModelState
+
+        model_state = ModelState(
+            chain=("flash-1.5", "flash-1.5-8b"), current="flash-1.5-8b"
+        )
+        switched = []
+
+        session = {"stage": "phase1", "phase1": {}}
+        kwargs = self._COMMON_KWARGS.copy()
+        kwargs["model_state"] = model_state
+        kwargs["on_model_switched"] = lambda old, new: switched.append((old, new))
+
+        with (
+            patch(
+                "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                return_value=(True, None),
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.retry_with_quota",
+                side_effect=[
+                    DegenerateOutputError("repetition", "aaabbb"),  # raises → recovery
+                    (object(), "Testo ripreso."),  # returns → success
+                ],
+            ),
+        ):
+            _, transcript, _ = self._run(session, **kwargs)
+
+        self.assertIn("Testo ripreso.", transcript)
+        self.assertEqual(switched, [("flash-1.5-8b", "flash-1.5")])
+
+    def test_degenerate_output_recovery_also_fails_sets_error(self):
+        """Both calls raise DegenerateOutputError → last_error = phase1_degenerate_output."""
+        from el_sbobinator.core.model_registry import ModelState
+
+        model_state = ModelState(
+            chain=("flash-1.5", "flash-1.5-8b"), current="flash-1.5-8b"
+        )
+        session = {"stage": "phase1", "phase1": {}}
+        kwargs = self._COMMON_KWARGS.copy()
+        kwargs["model_state"] = model_state
+
+        with (
+            patch(
+                "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                return_value=(True, None),
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.retry_with_quota",
+                side_effect=[
+                    DegenerateOutputError("repetition", "aaa"),
+                    DegenerateOutputError("repetition again", "bbb"),
+                ],
+            ),
+        ):
+            _, transcript, _ = self._run(session, **kwargs)
+
+        self.assertIsNone(transcript)
+        self.assertEqual(session.get("last_error"), "phase1_degenerate_output")
+
+    def test_all_models_unavailable_triggers_recovery_and_succeeds(self):
+        """AllModelsUnavailableError → model reset → second call succeeds."""
+        from el_sbobinator.core.model_registry import ModelState
+
+        model_state = ModelState(
+            chain=("flash-1.5", "flash-1.5-8b"), current="flash-1.5-8b"
+        )
+        switched = []
+        session = {"stage": "phase1", "phase1": {}}
+        kwargs = self._COMMON_KWARGS.copy()
+        kwargs["model_state"] = model_state
+        kwargs["on_model_switched"] = lambda old, new: switched.append((old, new))
+
+        with (
+            patch(
+                "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                return_value=(True, None),
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.retry_with_quota",
+                side_effect=[
+                    AllModelsUnavailableError("all down"),
+                    (object(), "Testo ripreso."),
+                ],
+            ),
+        ):
+            _, transcript, _ = self._run(session, **kwargs)
+
+        self.assertIn("Testo ripreso.", transcript)
+        self.assertEqual(switched, [("flash-1.5-8b", "flash-1.5")])
+
+    def test_all_models_unavailable_recovery_also_fails_sets_error(self):
+        """Both calls raise AllModelsUnavailableError → last_error = phase1_all_models_unavailable."""
+        from el_sbobinator.core.model_registry import ModelState
+
+        model_state = ModelState(
+            chain=("flash-1.5", "flash-1.5-8b"), current="flash-1.5-8b"
+        )
+        session = {"stage": "phase1", "phase1": {}}
+        kwargs = self._COMMON_KWARGS.copy()
+        kwargs["model_state"] = model_state
+
+        with (
+            patch(
+                "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                return_value=(True, None),
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.retry_with_quota",
+                side_effect=[
+                    AllModelsUnavailableError("all down"),
+                    AllModelsUnavailableError("still down"),
+                ],
+            ),
+        ):
+            _, transcript, _ = self._run(session, **kwargs)
+
+        self.assertIsNone(transcript)
+        self.assertEqual(session.get("last_error"), "phase1_all_models_unavailable")
+
+    # ── autosave / cleanup ─────────────────────────────────────────────────────
+
+    def test_autosave_write_failure_is_swallowed(self):
+        """_atomic_write_text raising does not abort the transcription."""
+        session = {"stage": "phase1", "phase1": {}}
+
+        with (
+            patch(
+                "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                return_value=(True, None),
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.retry_with_quota",
+                return_value=(object(), "Testo."),
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service._atomic_write_text",
+                side_effect=OSError("disk full"),
+            ),
+        ):
+            _, transcript, _ = self._run(session)
+
+        self.assertIn("Testo.", transcript)
+
+    def test_chunk_file_removal_failure_is_swallowed(self):
+        """os.remove failing in finally block does not abort the transcription."""
+        session = {"stage": "phase1", "phase1": {}}
+
+        with (
+            patch(
+                "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                return_value=(True, None),
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.retry_with_quota",
+                return_value=(object(), "Testo."),
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.os.remove",
+                side_effect=OSError("locked"),
+            ),
+        ):
+            _, transcript, _ = self._run(session)
+
+        self.assertIn("Testo.", transcript)
+
+    def test_audio_file_delete_failure_in_finally_is_swallowed(self):
+        """client.files.delete() raising in the finally block is swallowed."""
+        session = {"stage": "phase1", "phase1": {}}
+        fake_audio = MagicMock()
+        fake_audio.uri = "gs://bucket/audio.mp3"
+        fake_audio.mime_type = "audio/mpeg"
+        fake_client = MagicMock()
+        fake_client.files.delete.side_effect = OSError("delete failed")
+
+        with (
+            patch(
+                "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                return_value=(True, None),
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.generation_service.make_inline_audio_part",
+                return_value=None,
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.generation_service.upload_audio_path",
+                return_value=fake_audio,
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.generation_service.wait_for_file_ready",
+                return_value=fake_audio,
+            ),
+            patch("el_sbobinator.services.phase1_service.types") as mock_types,
+            patch(
+                "el_sbobinator.services.phase1_service.extract_response_text",
+                return_value="Testo.",
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.detect_degenerate_output",
+                return_value=None,
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.retry_with_quota",
+                side_effect=lambda fn, **kw: (kw["client"], fn(kw["client"])),
+            ),
+        ):
+            mock_types.Part.from_uri.return_value = MagicMock()
+            mock_types.GenerateContentConfig.return_value = MagicMock()
+            _, transcript, _ = self._run(session, client=fake_client)
+
+        self.assertIn("Testo.", transcript)

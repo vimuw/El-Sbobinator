@@ -812,3 +812,436 @@ class TestCheckDiskSpace(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPipelineSessionEdgeCases(unittest.TestCase):
+    """Tests for uncovered branches in pipeline_session.py."""
+
+    @staticmethod
+    def _make_settings(**kw) -> PipelineSettings:
+        defaults: dict = dict(
+            model="gemini-2.5-flash",
+            fallback_models=[],
+            effective_model="gemini-2.5-flash",
+            chunk_minutes=15,
+            overlap_seconds=30,
+            macro_char_limit=22000,
+            preconvert_audio=True,
+            audio_bitrate="48k",
+            prefetch_next_chunk=False,
+            inline_audio_max_mb=6.0,
+        )
+        defaults.update(kw)
+        return PipelineSettings(**defaults)
+
+    # ── initialize_session_context ─────────────────────────────────────────────
+
+    def test_initialize_session_context_new_session_uses_current_config(self):
+        """resume_session=False creates a fresh session with config-derived model."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "lesson.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake")
+
+            session_dir = os.path.join(tmpdir, "session")
+            os.makedirs(os.path.join(session_dir, "phase1_chunks"), exist_ok=True)
+            os.makedirs(os.path.join(session_dir, "phase2_revised"), exist_ok=True)
+
+            defaults = {
+                "model": "gemini-2.5-flash",
+                "fallback_models": [],
+                "effective_model": "gemini-2.5-flash",
+                "chunk_minutes": 15,
+                "overlap_seconds": 30,
+                "macro_char_limit": 22000,
+                "preconvert_audio": True,
+                "prefetch_next_chunk": True,
+                "inline_audio_max_mb": 6.0,
+                "audio": {"bitrate": "48k"},
+            }
+
+            with (
+                patch(
+                    "el_sbobinator.pipeline.pipeline_session.load_config",
+                    return_value={"preferred_model": "gemini-2.5-flash"},
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline_session.build_default_pipeline_settings",
+                    return_value=defaults,
+                ),
+                patch(
+                    "el_sbobinator.core.session_store._session_dir_for_file",
+                    return_value=session_dir,
+                ),
+                patch("el_sbobinator.pipeline.pipeline_session.reset_session_dirs"),
+                patch("el_sbobinator.pipeline.pipeline_session.save_session_data"),
+            ):
+                ctx = initialize_session_context(input_path, resume_session=False)
+
+            self.assertEqual(ctx.settings.model, "gemini-2.5-flash")
+            self.assertEqual(ctx.session["stage"], "phase1")
+
+    def test_initialize_session_context_resume_migrates_schema(self):
+        """resume_session=True with a schema-v0 file migrates to schema_version=1."""
+        import json
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "lesson.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake")
+
+            session_dir = os.path.join(tmpdir, "session")
+            os.makedirs(os.path.join(session_dir, "phase1_chunks"), exist_ok=True)
+            os.makedirs(os.path.join(session_dir, "phase2_revised"), exist_ok=True)
+
+            # schema v0: no schema_version key
+            session_data = {
+                "created_at": "2024-01-01 00:00:00",
+                "updated_at": "2024-01-01 00:00:00",
+                "stage": "phase1",
+                "input": {"path": input_path, "size": 4, "mtime": 0.0},
+                "settings": {
+                    "model": "gemini-2.5-flash",
+                    "fallback_models": [],
+                    "effective_model": "gemini-2.5-flash",
+                    "chunk_minutes": 15,
+                    "overlap_seconds": 30,
+                    "macro_char_limit": 22000,
+                    "preconvert_audio": True,
+                    "prefetch_next_chunk": True,
+                    "inline_audio_max_mb": 6.0,
+                    "audio": {"bitrate": "48k"},
+                },
+                "phase1": {
+                    "next_start_sec": 0,
+                    "chunks_done": 0,
+                    "memoria_precedente": "",
+                },
+                "phase2": {"macro_total": 0, "revised_done": 0},
+                "outputs": {},
+                "last_error": None,
+            }
+            session_path = os.path.join(session_dir, "session.json")
+            with open(session_path, "w", encoding="utf-8") as fh:
+                json.dump(session_data, fh)
+
+            with (
+                patch(
+                    "el_sbobinator.pipeline.pipeline_session.load_config",
+                    return_value={
+                        "preferred_model": "gemini-2.5-flash",
+                        "fallback_models": [],
+                    },
+                ),
+                patch(
+                    "el_sbobinator.core.session_store._session_dir_for_file",
+                    return_value=session_dir,
+                ),
+                patch("el_sbobinator.pipeline.pipeline_session.save_session_data"),
+            ):
+                ctx = initialize_session_context(input_path, resume_session=True)
+
+            self.assertEqual(ctx.session["schema_version"], 1)
+
+    def test_initialize_session_context_resume_missing_file_falls_back_to_new(self):
+        """resume_session=True but session.json absent → new session created."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "lesson.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake")
+
+            session_dir = os.path.join(tmpdir, "session")
+            os.makedirs(os.path.join(session_dir, "phase1_chunks"), exist_ok=True)
+            os.makedirs(os.path.join(session_dir, "phase2_revised"), exist_ok=True)
+            # No session.json written → file absent
+
+            with (
+                patch(
+                    "el_sbobinator.pipeline.pipeline_session.load_config",
+                    return_value={
+                        "preferred_model": "gemini-2.5-flash",
+                        "fallback_models": [],
+                    },
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline_session.build_default_pipeline_settings",
+                    return_value={
+                        "model": "gemini-2.5-flash",
+                        "fallback_models": [],
+                        "effective_model": "gemini-2.5-flash",
+                        "chunk_minutes": 15,
+                        "overlap_seconds": 30,
+                        "macro_char_limit": 22000,
+                        "preconvert_audio": True,
+                        "prefetch_next_chunk": True,
+                        "inline_audio_max_mb": 6.0,
+                        "audio": {"bitrate": "48k"},
+                    },
+                ),
+                patch(
+                    "el_sbobinator.core.session_store._session_dir_for_file",
+                    return_value=session_dir,
+                ),
+                patch("el_sbobinator.pipeline.pipeline_session.save_session_data"),
+            ):
+                ctx = initialize_session_context(input_path, resume_session=True)
+
+            # Falls back to new session
+            self.assertEqual(ctx.session["stage"], "phase1")
+
+    # ── ensure_preconverted_audio ──────────────────────────────────────────────
+
+    def test_ensure_preconverted_audio_disabled_returns_false_none(self):
+        """preconvert_audio=False → (False, None) without touching disk."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            context = _DummyPreconvContext(tmpdir)
+            context.settings = self._make_settings(preconvert_audio=False)
+
+            enabled, result_path = ensure_preconverted_audio(  # type: ignore[arg-type]
+                context,  # type: ignore[arg-type]
+                input_path="lesson.mp3",
+                stage="phase1",
+                ffmpeg_exe="ffmpeg",
+                cancel_event=None,
+                cancelled=lambda: False,
+                phase_callback=lambda _: None,
+            )
+
+        self.assertFalse(enabled)
+        self.assertIsNone(result_path)
+
+    def test_ensure_preconverted_audio_final_file_already_large_enough_returns_early(
+        self,
+    ):
+        """Final file exists and > 1 KB → return early without re-encoding."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            context = _DummyPreconvContext(tmpdir)
+            final_path = os.path.join(tmpdir, PRECONVERTED_AUDIO_FINAL)
+            with open(final_path, "wb") as fh:
+                fh.write(b"x" * 2048)  # > 1024 bytes
+
+            enabled, result_path = ensure_preconverted_audio(  # type: ignore[arg-type]
+                context,  # type: ignore[arg-type]
+                input_path="lesson.mp3",
+                stage="phase1",
+                ffmpeg_exe="ffmpeg",
+                cancel_event=None,
+                cancelled=lambda: False,
+                phase_callback=lambda _: None,
+            )
+
+        self.assertTrue(enabled)
+        self.assertEqual(result_path, final_path)
+        self.assertEqual(context.save_calls, 0)  # no re-save needed
+
+    def test_ensure_preconverted_audio_conversion_error_returns_false_none(self):
+        """preconvert_media_to_mp3 returning (False, "error") → (False, None)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            context = _DummyPreconvContext(tmpdir)
+
+            with patch(
+                "el_sbobinator.pipeline.pipeline_session.preconvert_media_to_mp3",
+                return_value=(False, "conversion error"),
+            ):
+                enabled, result_path = ensure_preconverted_audio(  # type: ignore[arg-type]
+                    context,  # type: ignore[arg-type]
+                    input_path="lesson.mp3",
+                    stage="phase1",
+                    ffmpeg_exe="ffmpeg",
+                    cancel_event=None,
+                    cancelled=lambda: False,
+                    phase_callback=lambda _: None,
+                )
+
+        self.assertFalse(enabled)
+        self.assertIsNone(result_path)
+
+    # ── check_disk_space ───────────────────────────────────────────────────────
+
+    def test_check_disk_space_stat_exception_on_tempdir_is_silent(self):
+        """os.stat raising on tempdir → silent, no warning printed."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fake_tmp = tmpdir + "_tmp"
+
+            def fake_stat(path, *a, **kw):  # type: ignore[arg-type]
+                if str(path) == tmpdir:
+                    return SimpleNamespace(st_dev=1)
+                raise OSError("stat failed on tmp")
+
+            printed: list[str] = []
+            with (
+                patch("os.stat", side_effect=fake_stat),
+                patch(
+                    "shutil.disk_usage",
+                    return_value=SimpleNamespace(total=10 << 30, used=0, free=10 << 30),
+                ),
+                patch("tempfile.gettempdir", return_value=fake_tmp),
+                patch("builtins.print", side_effect=printed.append),
+            ):
+                check_disk_space(tmpdir, 3600.0, self._make_settings(), "phase1")
+
+        self.assertFalse(any("ATTENZIONE" in m for m in printed))
+
+    def test_check_disk_space_zero_total_duration_skips_estimate(self):
+        """total_duration_sec=0 → remaining=0 → temp_needed=0 → no warning even with 1 byte free."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            printed: list[str] = []
+            with (
+                patch(
+                    "shutil.disk_usage",
+                    return_value=SimpleNamespace(total=10 << 30, used=0, free=1),
+                ),
+                patch("builtins.print", side_effect=printed.append),
+            ):
+                check_disk_space(
+                    tmpdir, 0.0, self._make_settings(preconvert_audio=False), "phase1"
+                )
+
+        self.assertFalse(any("ATTENZIONE" in m for m in printed))
+
+    # ── normalize_stage ────────────────────────────────────────────────────────
+
+    def test_normalize_stage_preserves_known_stages(self):
+        """Valid stage strings are returned unchanged."""
+        for stage in ("phase1", "phase2", "boundary", "done"):
+            session = {"stage": stage}
+            self.assertEqual(normalize_stage(session), stage)
+            self.assertEqual(session["stage"], stage)
+
+    def test_normalize_stage_unknown_becomes_phase1(self):
+        """Unknown stage falls back to 'phase1' and mutates session."""
+        session = {"stage": "invalid_stage"}
+        result = normalize_stage(session)
+        self.assertEqual(result, "phase1")
+        self.assertEqual(session["stage"], "phase1")
+
+    # ── phase1_has_progress ────────────────────────────────────────────────────
+
+    def test_phase1_has_progress_false_when_stage_is_phase1_and_no_data(self):
+        """stage='phase1', no chunks, no outputs, no error → False."""
+        self.assertFalse(phase1_has_progress({}, "phase1", []))
+
+    def test_phase1_has_progress_true_when_stage_is_not_phase1(self):
+        """Any non-'phase1' stage → True (progress already beyond phase1)."""
+        self.assertTrue(phase1_has_progress({}, "done", []))
+        self.assertTrue(phase1_has_progress({}, "phase2", []))
+
+    def test_phase1_has_progress_true_when_chunks_exist(self):
+        """existing_chunks non-empty → True."""
+        self.assertTrue(phase1_has_progress({}, "phase1", [(1, 0, 60, "/p")]))
+
+    def test_phase1_has_progress_true_when_outputs_html_set(self):
+        """outputs.html non-empty → True even in phase1."""
+        session = {"outputs": {"html": "result.html"}}
+        self.assertTrue(phase1_has_progress(session, "phase1", []))
+
+    def test_phase1_has_progress_true_when_last_error_set(self):
+        """last_error non-empty → True (failed run still has progress marker)."""
+        session = {"last_error": "quota_daily_limit"}
+        self.assertTrue(phase1_has_progress(session, "phase1", []))
+
+    # ── record_step_metric ─────────────────────────────────────────────────────
+
+    def test_record_step_metric_creates_entry_from_scratch(self):
+        """First call creates metrics dict and key with correct values."""
+        session: dict = {}
+        record_step_metric(session, "chunks", 2.5, done=1, total=5)
+
+        m = session["metrics"]["chunks"]
+        self.assertEqual(m["count"], 1)
+        self.assertEqual(m["done"], 1)
+        self.assertEqual(m["total"], 5)
+        self.assertAlmostEqual(m["elapsed_seconds"], 2.5)
+
+    def test_record_step_metric_accumulates_elapsed_and_count(self):
+        """Subsequent calls accumulate elapsed_seconds and increment count."""
+        session: dict = {}
+        record_step_metric(session, "chunks", 1.0, done=1, total=3)
+        record_step_metric(session, "chunks", 3.0, done=2, total=3)
+
+        m = session["metrics"]["chunks"]
+        self.assertEqual(m["count"], 2)
+        self.assertEqual(m["done"], 2)
+        self.assertAlmostEqual(m["elapsed_seconds"], 4.0)
+
+    # ── restore_phase1_progress ────────────────────────────────────────────────
+
+    def test_restore_phase1_progress_missing_dir_returns_empty_state(self):
+        """Nonexistent phase1_chunks_dir → empty restore state, start_sec=0."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session = {"phase1": {"next_start_sec": 0, "memoria_precedente": "prev"}}
+            context = _DummyContext(session, os.path.join(tmpdir, "chunks_missing"))
+
+            restored = restore_phase1_progress(context, stage="phase1", step_seconds=30)  # type: ignore[arg-type]
+
+        self.assertEqual(restored.existing_chunks, [])
+        self.assertEqual(restored.start_sec, 0)
+        self.assertEqual(restored.full_transcript, "")
+        self.assertEqual(restored.prev_memory, "prev")
+
+    def test_restore_phase1_progress_read_error_in_chunk_file_gives_empty_transcript(
+        self,
+    ):
+        """Chunk file exists → existing_chunks populated; read error → transcript empty."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            chunk_path = os.path.join(tmpdir, "chunk_001_0_60.md")
+            with open(chunk_path, "w", encoding="utf-8") as fh:
+                fh.write("Chunk body")
+
+            session = {"phase1": {"next_start_sec": 0, "memoria_precedente": ""}}
+            context = _DummyContext(session, tmpdir)
+
+            with patch(
+                "el_sbobinator.pipeline.pipeline_session.read_text_file",
+                side_effect=OSError("locked"),
+            ):
+                restored = restore_phase1_progress(
+                    context, stage="phase1", step_seconds=30
+                )  # type: ignore[arg-type]
+
+        # list_phase1_chunks uses os.listdir (not open), so chunk IS found
+        self.assertEqual(len(restored.existing_chunks), 1)
+        # But reading the content fails → empty transcript/memory
+        self.assertEqual(restored.full_transcript, "")
+        self.assertEqual(restored.prev_memory, "")
+
+    # ── reset_for_regeneration ─────────────────────────────────────────────────
+
+    def test_reset_for_regeneration_replaces_session_settings(self):
+        """reset_for_regeneration builds fresh settings from current config, not old session."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "lesson.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake")
+
+            context = _DummyRegenContext(input_path, os.path.join(tmpdir, "session"))
+            # Old session has model gemini-2.5-flash; new config will use flash-lite
+            fresh_settings = {
+                "model": "gemini-2.5-flash-lite",
+                "fallback_models": [],
+                "effective_model": "gemini-2.5-flash-lite",
+                "chunk_minutes": 15,
+                "overlap_seconds": 30,
+                "macro_char_limit": 22000,
+                "preconvert_audio": True,
+                "prefetch_next_chunk": True,
+                "inline_audio_max_mb": 6.0,
+                "audio": {"bitrate": "48k"},
+            }
+
+            with (
+                patch("el_sbobinator.pipeline.pipeline_session.reset_session_dirs"),
+                patch(
+                    "el_sbobinator.pipeline.pipeline_session.load_config",
+                    return_value={"preferred_model": "gemini-2.5-flash-lite"},
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline_session.build_default_pipeline_settings",
+                    return_value=fresh_settings,
+                ),
+            ):
+                reset_for_regeneration(context)  # type: ignore[arg-type]
+
+        self.assertEqual(context.session["settings"]["model"], "gemini-2.5-flash-lite")
+        self.assertEqual(context.settings.model, "gemini-2.5-flash-lite")
+        self.assertEqual(context.save_calls, 1)

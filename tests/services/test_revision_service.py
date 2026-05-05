@@ -239,3 +239,407 @@ class TestProcessMacroRevisionPhase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _ThrowingRuntime(_FakeRuntime):
+    def update_work_done(self, *a, **kw):
+        raise RuntimeError("UI gone")
+
+
+class TestRevisionEdgeCases(unittest.TestCase):
+    def _make_session(self):
+        return {"phase2": {"revised_done": 0}, "stage": "phase2", "last_error": None}
+
+    def _run_with_patches(
+        self,
+        macro_blocks,
+        phase2_dir,
+        session,
+        rq_side_effect,
+        *,
+        cancelled=lambda: False,
+        sleep_return=True,
+        runtime=None,
+    ):
+        with (
+            patch(
+                "el_sbobinator.services.revision_service.retry_with_quota",
+                side_effect=rq_side_effect,
+            ),
+            patch(
+                "el_sbobinator.services.revision_service.sleep_with_cancel",
+                return_value=sleep_return,
+            ),
+        ):
+            _, revised_text = process_macro_revision_phase(
+                client=object(),
+                model_name="test-model",
+                macro_blocks=macro_blocks,
+                phase2_revised_dir=phase2_dir,
+                session=session,
+                save_session=lambda: True,
+                runtime=runtime or _FakeRuntime(),
+                cancelled=cancelled,
+                fallback_keys=[],
+                request_fallback_key=lambda: None,
+                prompt_revisione="Revisiona.",
+            )
+        return revised_text
+
+    def test_update_work_done_exception_swallowed(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session = self._make_session()
+
+            def success(fn, *, client, **kw):
+                return client, "Testo ok"
+
+            result = self._run_with_patches(
+                ["Blocco."],
+                tmpdir,
+                session,
+                success,
+                runtime=_ThrowingRuntime(),
+            )
+            self.assertIn("Testo ok", result)
+
+    def test_cancelled_at_loop_start_returns_early(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session = self._make_session()
+            called = [0]
+
+            def track(fn, *, client, **kw):
+                called[0] += 1
+                return client, "X"
+
+            result = self._run_with_patches(
+                ["Blocco A.", "Blocco B."],
+                tmpdir,
+                session,
+                track,
+                cancelled=lambda: True,
+            )
+            self.assertEqual(called[0], 0, "fn must not be called when cancelled")
+            self.assertEqual(result, "")
+
+    def test_resume_with_existing_md_skips_and_appends(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            rev_path = os.path.join(tmpdir, "rev_001.md")
+            with open(rev_path, "w", encoding="utf-8") as fh:
+                fh.write("Testo già revisionato.\n")
+
+            session = self._make_session()
+            called = [0]
+
+            def track(fn, *, client, **kw):
+                called[0] += 1
+                return client, "Blocco 2"
+
+            result = self._run_with_patches(
+                ["Blocco 1.", "Blocco 2."],
+                tmpdir,
+                session,
+                track,
+            )
+            self.assertEqual(called[0], 1, "only the missing block should be processed")
+            self.assertIn("Testo già revisionato.", result)
+            self.assertIn("Blocco 2", result)
+            self.assertEqual(session["phase2"]["revised_done"], 2)
+
+    def test_call_body_executed_via_fn_calling_side_effect(self):
+        """Verify the _call nested function body (lines 143-155) is exercised."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session = self._make_session()
+
+            class _FakeResp:
+                text = "Testo generato dal modello"
+
+            class _FakeModels:
+                def generate_content(self, **_kw):
+                    return _FakeResp()
+
+            class _FakeClient:
+                models = _FakeModels()
+
+            def call_fn(fn, *, client, **kw):
+                result = fn(_FakeClient())
+                return _FakeClient(), result
+
+            result = self._run_with_patches(["Blocco."], tmpdir, session, call_fn)
+            self.assertIn("Testo generato dal modello", result)
+
+    def test_current_text_none_in_main_pass_returns_early(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session = self._make_session()
+
+            def returns_none(fn, *, client, **kw):
+                return client, None
+
+            result = self._run_with_patches(
+                ["Blocco A.", "Blocco B."],
+                tmpdir,
+                session,
+                returns_none,
+            )
+            self.assertEqual(result, "")
+
+    def test_quota_in_main_pass_sets_last_error_and_returns(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session = self._make_session()
+
+            def raise_quota(fn, *, client, **kw):
+                raise QuotaDailyLimitError("quota")
+
+            result = self._run_with_patches(["Blocco."], tmpdir, session, raise_quota)
+            self.assertEqual(session.get("last_error"), "quota_daily_limit_phase2")
+            self.assertEqual(result, "")
+
+    def test_sleep_cancel_after_main_pass_returns_early(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session = self._make_session()
+
+            def success(fn, *, client, **kw):
+                return client, "ok"
+
+            self._run_with_patches(
+                ["Blocco A.", "Blocco B."],
+                tmpdir,
+                session,
+                success,
+                sleep_return=False,
+            )
+            rev1 = os.path.join(tmpdir, "rev_001.md")
+            self.assertTrue(os.path.exists(rev1))
+            self.assertFalse(os.path.exists(os.path.join(tmpdir, "rev_002.md")))
+
+    def test_cancelled_in_retry_pass_returns_without_finalizing(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            raw_path = os.path.join(tmpdir, "rev_001.raw.md")
+            with open(raw_path, "w", encoding="utf-8") as fh:
+                fh.write("Contenuto raw.\n")
+
+            session = self._make_session()
+
+            # False on the first call (main-loop guard) so the pre-existing .raw.md
+            # is found and added to pending_retry.  True from the second call onward
+            # so the retry-pass guard fires immediately without finalizing the block.
+            call_count = [0]
+
+            def cancel_after_main_loop():
+                call_count[0] += 1
+                return call_count[0] > 1
+
+            def never_called(fn, *, client, **kw):
+                raise AssertionError("should not be called")
+
+            with (
+                patch(
+                    "el_sbobinator.services.revision_service.retry_with_quota",
+                    side_effect=never_called,
+                ),
+                patch(
+                    "el_sbobinator.services.revision_service.sleep_with_cancel",
+                    return_value=True,
+                ),
+            ):
+                process_macro_revision_phase(
+                    client=object(),
+                    model_name="test-model",
+                    macro_blocks=["Contenuto raw."],
+                    phase2_revised_dir=tmpdir,
+                    session=session,
+                    save_session=lambda: True,
+                    runtime=_FakeRuntime(),
+                    cancelled=cancel_after_main_loop,
+                    fallback_keys=[],
+                    request_fallback_key=lambda: None,
+                    prompt_revisione="Revisiona.",
+                )
+
+            self.assertTrue(
+                os.path.exists(raw_path), ".raw.md must stay when cancelled"
+            )
+            self.assertFalse(
+                os.path.exists(os.path.join(tmpdir, "rev_001.md")),
+                ".md must NOT be created when retry pass is cancelled",
+            )
+
+    def test_exception_reading_raw_path_gives_empty_block_src(self):
+        """If open(raw_path) raises, block_src becomes "" and block is finalized empty."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            raw_path = os.path.join(tmpdir, "rev_001.raw.md")
+            with open(raw_path, "w", encoding="utf-8") as fh:
+                fh.write("Contenuto raw.\n")
+
+            session = self._make_session()
+            _real_open = open
+
+            def selective_open_fail_raw(path, *args, **kwargs):
+                basename = os.path.basename(str(path))
+                mode = args[0] if args else kwargs.get("mode", "r")
+                if basename.endswith(".raw.md") and "w" not in str(mode):
+                    raise OSError("perm denied")
+                return _real_open(path, *args, **kwargs)
+
+            def never_called(fn, *, client, **kw):
+                raise AssertionError(
+                    "retry_with_quota should not be called for empty block"
+                )
+
+            with (
+                patch(
+                    "el_sbobinator.services.revision_service.retry_with_quota",
+                    side_effect=never_called,
+                ),
+                patch(
+                    "el_sbobinator.services.revision_service.sleep_with_cancel",
+                    return_value=True,
+                ),
+                patch("builtins.open", side_effect=selective_open_fail_raw),
+            ):
+                process_macro_revision_phase(
+                    client=object(),
+                    model_name="test-model",
+                    macro_blocks=["Contenuto raw."],
+                    phase2_revised_dir=tmpdir,
+                    session=session,
+                    save_session=lambda: True,
+                    runtime=_FakeRuntime(),
+                    cancelled=lambda: False,
+                    fallback_keys=[],
+                    request_fallback_key=lambda: None,
+                    prompt_revisione="Revisiona.",
+                )
+
+            self.assertIn(1, session.get("revision_failed_blocks", []))
+
+    def test_call_retry_body_executed_via_fn_calling_side_effect(self):
+        """Verify _call_retry (lines 288-300) is exercised."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            raw_path = os.path.join(tmpdir, "rev_001.raw.md")
+            with open(raw_path, "w", encoding="utf-8") as fh:
+                fh.write("Contenuto raw da riprovare.\n")
+
+            session = self._make_session()
+
+            class _FakeResp:
+                text = "Testo dal retry con _call_retry"
+
+            class _FakeModels:
+                def generate_content(self, **_kw):
+                    return _FakeResp()
+
+            class _FakeClient:
+                models = _FakeModels()
+
+            def call_fn(fn, *, client, **kw):
+                result = fn(_FakeClient())
+                return _FakeClient(), result
+
+            result = self._run_with_patches(
+                ["Contenuto raw da riprovare."],
+                tmpdir,
+                session,
+                call_fn,
+            )
+            self.assertIn("Testo dal retry con _call_retry", result)
+            self.assertFalse(os.path.exists(raw_path))
+
+    def test_current_text_none_in_retry_pass_returns_early(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            raw_path = os.path.join(tmpdir, "rev_001.raw.md")
+            with open(raw_path, "w", encoding="utf-8") as fh:
+                fh.write("Contenuto raw.\n")
+
+            session = self._make_session()
+
+            def returns_none(fn, *, client, **kw):
+                return client, None
+
+            result = self._run_with_patches(
+                ["Contenuto raw."],
+                tmpdir,
+                session,
+                returns_none,
+            )
+            self.assertEqual(result, "")
+
+    def test_os_rename_failure_falls_back_to_atomic_write(self):
+        """When os.rename raises in retry fail path, _atomic_write_text is used instead."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session = self._make_session()
+
+            def always_fail(fn, *, client, **kw):
+                raise RuntimeError("always fails")
+
+            with (
+                patch(
+                    "el_sbobinator.services.revision_service.retry_with_quota",
+                    side_effect=always_fail,
+                ),
+                patch(
+                    "el_sbobinator.services.revision_service.sleep_with_cancel",
+                    return_value=True,
+                ),
+                patch("os.rename", side_effect=OSError("cross-device")),
+            ):
+                process_macro_revision_phase(
+                    client=object(),
+                    model_name="test-model",
+                    macro_blocks=["Blocco."],
+                    phase2_revised_dir=tmpdir,
+                    session=session,
+                    save_session=lambda: True,
+                    runtime=_FakeRuntime(),
+                    cancelled=lambda: False,
+                    fallback_keys=[],
+                    request_fallback_key=lambda: None,
+                    prompt_revisione="Revisiona.",
+                )
+
+            rev_path = os.path.join(tmpdir, "rev_001.md")
+            self.assertTrue(os.path.exists(rev_path))
+            self.assertIn(1, session.get("revision_failed_blocks", []))
+
+    def test_exception_reading_final_md_skipped_gracefully(self):
+        """If open raises during the final rebuild loop, the block is skipped."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session = self._make_session()
+
+            def success(fn, *, client, **kw):
+                return client, "Testo ok"
+
+            original_open = open
+
+            def selective_open(path, *args, **kwargs):
+                fname = os.path.basename(str(path))
+                mode = args[0] if args else kwargs.get("mode", "r")
+                if fname == "rev_001.md" and "w" not in str(mode):
+                    raise OSError("read error in rebuild")
+                return original_open(path, *args, **kwargs)
+
+            with (
+                patch(
+                    "el_sbobinator.services.revision_service.retry_with_quota",
+                    side_effect=success,
+                ),
+                patch(
+                    "el_sbobinator.services.revision_service.sleep_with_cancel",
+                    return_value=True,
+                ),
+                patch("builtins.open", side_effect=selective_open),
+            ):
+                _, result = process_macro_revision_phase(
+                    client=object(),
+                    model_name="test-model",
+                    macro_blocks=["Blocco."],
+                    phase2_revised_dir=tmpdir,
+                    session=session,
+                    save_session=lambda: True,
+                    runtime=_FakeRuntime(),
+                    cancelled=lambda: False,
+                    fallback_keys=[],
+                    request_fallback_key=lambda: None,
+                    prompt_revisione="Revisiona.",
+                )
+
+            self.assertEqual(result, "")
