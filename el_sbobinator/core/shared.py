@@ -163,11 +163,12 @@ def _file_fingerprint(path: str) -> dict:
     }
 
 
-def _partial_file_hash(path: str, max_bytes: int = 65536) -> str:
+def _partial_file_hash(path: str, max_bytes: int = 1048576) -> str:
     """
     Calcola SHA256 dei primi max_bytes del file.
     Usato per identificare file identici indipendentemente dal path.
-    Leggere solo i primi 64KB è veloce anche per file multi-gigabyte.
+    Leggere solo il primo 1 MB è veloce anche per file multi-gigabyte e riduce
+    le collisioni su lezioni molto lunghe rispetto ai precedenti 64 KB.
     """
     try:
         hasher = hashlib.sha256()
@@ -185,13 +186,15 @@ _MAX_SESSION_CACHE_SIZE = 500  # LRU cap: at ~200 bytes per entry this stays wel
 
 def _session_id_for_file(path: str) -> str:
     """
-    Genera ID sessione basato su: size + mtime + hash parziale contenuto.
-    Rileva file spostati/ rinominati ma con stesso contenuto.
+    Genera ID sessione basato su: size + hash parziale contenuto (1 MB).
+    mtime è escluso dal blob dell'ID (stabile su cloud-sync), ma è incluso
+    nella cache key in-process per invalidare la cache se il file viene
+    sostituito con uno di uguale dimensione durante la stessa sessione app.
     """
     abs_path = os.path.abspath(path)
     st = os.stat(abs_path)
     size = int(getattr(st, "st_size", 0))
-    mtime = float(getattr(st, "st_mtime", 0.0))
+    mtime = int(getattr(st, "st_mtime_ns", 0)) or st.st_mtime
 
     cache_key = (abs_path, size, mtime)
     _cached = _session_id_cache.get(cache_key)
@@ -206,7 +209,6 @@ def _session_id_for_file(path: str) -> str:
     blob = json.dumps(
         {
             "size": size,
-            "mtime": mtime,
             "content_hash": content_hash,
         },
         sort_keys=True,

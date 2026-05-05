@@ -308,5 +308,93 @@ class SessionStorageCacheHitTests(unittest.TestCase):
         self.assertEqual(call_count, 1)
 
 
+class SessionIdForFileTests(unittest.TestCase):
+    def _write_file(self, directory: str, name: str, content: bytes) -> str:
+        path = os.path.join(directory, name)
+        with open(path, "wb") as f:
+            f.write(content)
+        return path
+
+    def test_same_content_same_id_regardless_of_mtime(self):
+        """Cloud sync rewrites mtime → session ID must be stable."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = self._write_file(tmpdir, "lecture.mp3", b"audio" * 1000)
+            shared._session_id_cache.clear()
+            id1 = shared._session_id_for_file(path)
+            now = time.time()
+            os.utime(path, (now - 3600, now - 3600))
+            shared._session_id_cache.clear()
+            id2 = shared._session_id_for_file(path)
+            self.assertEqual(id1, id2)
+
+    def test_different_content_different_id(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            p1 = self._write_file(tmpdir, "a.mp3", b"audio_version_1" * 500)
+            p2 = self._write_file(tmpdir, "b.mp3", b"audio_version_2" * 500)
+            shared._session_id_cache.clear()
+            self.assertNotEqual(
+                shared._session_id_for_file(p1),
+                shared._session_id_for_file(p2),
+            )
+
+    def test_renamed_file_same_content_same_id(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            p1 = self._write_file(tmpdir, "original.mp3", b"lecture_data" * 200)
+            shared._session_id_cache.clear()
+            id1 = shared._session_id_for_file(p1)
+            p2 = os.path.join(tmpdir, "renamed.mp3")
+            os.rename(p1, p2)
+            shared._session_id_cache.clear()
+            id2 = shared._session_id_for_file(p2)
+            self.assertEqual(id1, id2)
+
+    def test_cache_hit_returns_same_result(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = self._write_file(tmpdir, "lecture.mp3", b"data" * 100)
+            shared._session_id_cache.clear()
+            id1 = shared._session_id_for_file(path)
+            id2 = shared._session_id_for_file(path)
+            self.assertEqual(id1, id2)
+
+    def test_cache_miss_after_size_change(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = self._write_file(tmpdir, "lecture.mp3", b"x" * 1000)
+            shared._session_id_cache.clear()
+            id1 = shared._session_id_for_file(path)
+            with open(path, "ab") as f:
+                f.write(b"extra")
+            id2 = shared._session_id_for_file(path)
+            self.assertNotEqual(id1, id2)
+
+    def test_different_content_same_size_different_id(self):
+        """Overwriting a file with equal-size but different content must yield a new ID.
+
+        The cache key includes mtime precisely for this case.  If mtime were
+        removed from the key, (abs_path, size) would still match and the stale
+        cached ID would be returned — making this assertion fail.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = self._write_file(tmpdir, "lecture.mp3", b"A" * 1000)
+            shared._session_id_cache.clear()
+            id1 = shared._session_id_for_file(path)
+            with open(path, "wb") as f:
+                f.write(b"B" * 1000)
+            now = time.time()
+            os.utime(path, (now, now + 3600))
+            id2 = shared._session_id_for_file(path)
+            self.assertNotEqual(id1, id2)
+
+    def test_partial_hash_default_reads_one_megabyte(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "big.bin")
+            with open(path, "wb") as f:
+                f.write(b"A" * (2 * 1024 * 1024))
+            h_default = shared._partial_file_hash(path)
+            h_1mb = shared._partial_file_hash(path, max_bytes=1048576)
+            self.assertEqual(h_default, h_1mb)
+            h_64k = shared._partial_file_hash(path, max_bytes=65536)
+            self.assertNotEqual(h_default, h_64k)
+
+
 if __name__ == "__main__":
     unittest.main()
