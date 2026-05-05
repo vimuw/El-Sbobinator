@@ -16,6 +16,7 @@ import json
 import os
 import platform
 import re
+import shutil
 import threading
 import time
 
@@ -372,6 +373,7 @@ def load_config() -> dict:  # noqa: C901
             return _hit
         gen_at_start = _config_cache_gen
     # Prefer new location, but migrate from legacy (<= 2026-03) file if present.
+    _corrupt_path: str | None = None
     for path in (CONFIG_FILE, LEGACY_CONFIG_FILE):
         if not os.path.exists(path):
             continue
@@ -470,6 +472,20 @@ def load_config() -> dict:  # noqa: C901
                 result["fallback_models"] = list(data.get("fallback_models") or [])
                 result["fallback_keys"] = list(data.get("fallback_keys") or [])
                 return result
+        except json.JSONDecodeError:
+            try:
+                _ts = int(time.time())
+                _dest = f"{path}.corrupt-{_ts}"
+                try:
+                    os.close(os.open(_dest, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+                except FileExistsError:
+                    pass  # concurrent caller already backed up the same (identical) file
+                else:
+                    shutil.copy2(path, _dest)
+            except Exception:
+                pass
+            if _corrupt_path is None:
+                _corrupt_path = path
         except Exception:
             pass
     _default = {
@@ -483,10 +499,15 @@ def load_config() -> dict:  # noqa: C901
             _cache_entry["fallback_models"] = list(
                 _default.get("fallback_models") or []
             )
+            if _corrupt_path is not None:
+                _cache_entry["config_recovered_from"] = _corrupt_path
             _config_cache = _cache_entry
             _config_cache_ts = time.monotonic()
     result = dict(_default)
     result["fallback_models"] = list(_default.get("fallback_models") or [])
+    result["fallback_keys"] = list(_default.get("fallback_keys") or [])
+    if _corrupt_path is not None:
+        result["config_recovered_from"] = _corrupt_path
     return result
 
 
@@ -654,22 +675,25 @@ def save_config(  # noqa: C901
         except Exception:
             pass
 
+        # Atomic write to avoid truncation on crash/force-close.
+        tmp_path = CONFIG_FILE + ".tmp"
         try:
-            # Atomic write to avoid truncation on crash/force-close.
-            tmp_path = CONFIG_FILE + ".tmp"
             with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False)
             os.replace(tmp_path, CONFIG_FILE)
-
-            # Restrict permissions on POSIX systems (best-effort).
-            if platform.system() != "Windows":
-                try:
-                    os.chmod(CONFIG_FILE, 0o600)
-                except Exception:
-                    pass
         except Exception:
-            # Best-effort: non bloccare l'app se il config non e' scrivibile.
-            return
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+
+        # Restrict permissions on POSIX systems (best-effort).
+        if platform.system() != "Windows":
+            try:
+                os.chmod(CONFIG_FILE, 0o600)
+            except Exception:
+                pass
 
         # Back-compat (opt-in): write legacy file only if explicitly requested.
         # Avoid duplicating secrets (especially on Windows).

@@ -264,8 +264,8 @@ class TestSaveConfigWriteLock(unittest.TestCase):
         self.assertTrue(lock_held, "os.replace was never called")
         self.assertTrue(all(lock_held), "_write_lock must be held during os.replace")
 
-    def test_write_lock_released_on_early_return(self) -> None:
-        """_write_lock must be released even when the file write fails (early return path)."""
+    def test_write_lock_released_on_write_error(self) -> None:
+        """_write_lock must be released even when the file write raises."""
         with (
             patch(
                 "el_sbobinator.services.config_service.platform.system",
@@ -282,10 +282,11 @@ class TestSaveConfigWriteLock(unittest.TestCase):
             ),
             patch("builtins.open", side_effect=OSError("disk full")),
         ):
-            cs.save_config("test-key")  # must not raise
+            with self.assertRaises(OSError):
+                cs.save_config("test-key")
 
         self.assertFalse(
-            cs._write_lock.locked(), "_write_lock must be released after early return"
+            cs._write_lock.locked(), "_write_lock must be released after write error"
         )
 
     def test_concurrent_writes_are_serialised(self) -> None:
@@ -294,13 +295,11 @@ class TestSaveConfigWriteLock(unittest.TestCase):
         barrier = threading.Barrier(2)
         errors: list[Exception] = []
 
-        real_replace = cs.os.replace
-
-        def _tracked_replace(src: str, dst: str) -> None:
-            call_order.append("write")
-            real_replace(src, dst)
-
         def _save(tag: str, key: str) -> None:
+            def _tracked_replace(src: str, dst: str) -> None:
+                call_order.append("write")
+                call_order.append(f"done-{tag}")
+
             try:
                 barrier.wait()
                 with patch(
@@ -308,7 +307,6 @@ class TestSaveConfigWriteLock(unittest.TestCase):
                     side_effect=_tracked_replace,
                 ):
                     cs.save_config(key)
-                call_order.append(f"done-{tag}")
             except Exception as exc:
                 errors.append(exc)
 
@@ -1026,6 +1024,242 @@ class TestSaveConfigMacOS(unittest.TestCase):
             with open(cfg_path, encoding="utf-8") as fh:
                 data = json.load(fh)
         self.assertTrue(data.get("use_keyring"))
+
+
+class TestCorruptConfigRecovery(unittest.TestCase):
+    """Regression tests for issue 1.1: corrupt config.json backup + config_recovered_from."""
+
+    def setUp(self) -> None:
+        _reset_cache()
+
+    def tearDown(self) -> None:
+        _reset_cache()
+
+    def test_corrupt_json_creates_backup_file(self) -> None:
+        """A corrupt JSON file is copied to config.json.corrupt-<ts> before falling back."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            with open(cfg_path, "w", encoding="utf-8") as fh:
+                fh.write("{truncated by power loss")
+
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".absent",
+                ),
+            ):
+                cs.load_config()
+
+            backups = [
+                f for f in os.listdir(tmpdir) if f.startswith("config.json.corrupt-")
+            ]
+        self.assertEqual(len(backups), 1, f"Expected 1 backup, found: {backups}")
+
+    def test_corrupt_json_returns_config_recovered_from(self) -> None:
+        """config_recovered_from field is set when a corrupt config is encountered."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            with open(cfg_path, "w", encoding="utf-8") as fh:
+                fh.write("{truncated")
+
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".absent",
+                ),
+            ):
+                result = cs.load_config()
+
+        self.assertEqual(result.get("config_recovered_from"), cfg_path)
+        self.assertEqual(result["api_key"], "")
+
+    def test_valid_config_has_no_config_recovered_from(self) -> None:
+        """config_recovered_from must NOT appear when the file loads cleanly."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            with open(cfg_path, "w", encoding="utf-8") as fh:
+                json.dump({"api_key": "ok-key"}, fh)
+
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".absent",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Windows",
+                ),
+            ):
+                result = cs.load_config()
+
+        self.assertNotIn("config_recovered_from", result)
+
+    def test_corrupt_config_recovered_from_persists_in_cache(self) -> None:
+        """config_recovered_from must survive a cache hit on the second call (Bug 2 regression)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            with open(cfg_path, "w", encoding="utf-8") as fh:
+                fh.write("{truncated")
+
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".absent",
+                ),
+            ):
+                first = cs.load_config()
+                second = cs.load_config()
+
+        self.assertEqual(first.get("config_recovered_from"), cfg_path)
+        self.assertEqual(second.get("config_recovered_from"), cfg_path)
+
+    def test_concurrent_backup_not_overwritten_when_same_timestamp(self) -> None:
+        """Bug 3 regression: if backup for this second already exists (concurrent caller),
+        copy2 is skipped rather than overwriting identical content."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            with open(cfg_path, "w", encoding="utf-8") as fh:
+                fh.write("{truncated by power loss")
+
+            fixed_ts = 1700000000
+            existing_backup = f"{cfg_path}.corrupt-{fixed_ts}"
+            with open(existing_backup, "w", encoding="utf-8") as fh:
+                fh.write("{truncated by power loss")
+
+            copy2_calls: list[str] = []
+
+            def tracking_copy2(src: str, dst: str) -> None:
+                copy2_calls.append(dst)
+
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".absent",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.time.time",
+                    return_value=float(fixed_ts),
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.shutil.copy2",
+                    side_effect=tracking_copy2,
+                ),
+            ):
+                cs.load_config()
+
+        self.assertEqual(
+            copy2_calls, [], "copy2 must not be called when backup already exists"
+        )
+
+    def test_corrupt_backup_fails_silently_if_copy_raises(self) -> None:
+        """If shutil.copy2 raises (e.g. read-only fs), load_config still returns defaults."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            with open(cfg_path, "w", encoding="utf-8") as fh:
+                fh.write("{bad json")
+
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".absent",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.shutil.copy2",
+                    side_effect=OSError("read-only"),
+                ),
+            ):
+                result = cs.load_config()
+
+        self.assertEqual(result["api_key"], "")
+        self.assertEqual(result.get("config_recovered_from"), cfg_path)
+
+
+class TestSaveConfigPropagatesError(unittest.TestCase):
+    """Regression tests for issue 1.2: save_config raises on write failure."""
+
+    def setUp(self) -> None:
+        _reset_cache()
+
+    def tearDown(self) -> None:
+        _reset_cache()
+
+    def test_save_config_raises_on_write_error(self) -> None:
+        """OSError from open() is propagated rather than silently swallowed."""
+        with (
+            patch(
+                "el_sbobinator.services.config_service.platform.system",
+                return_value="Windows",
+            ),
+            patch(
+                "el_sbobinator.services.config_service.os.path.exists",
+                return_value=False,
+            ),
+            patch("el_sbobinator.services.config_service.os.makedirs"),
+            patch(
+                "el_sbobinator.services.config_service._dpapi_protect_text_windows",
+                return_value="",
+            ),
+            patch("builtins.open", side_effect=OSError("disk full")),
+        ):
+            with self.assertRaises(OSError):
+                cs.save_config("my-key")
+
+    def test_save_config_raises_on_os_replace_error(self) -> None:
+        """OSError from os.replace() (e.g. cross-device rename) is propagated."""
+        with (
+            patch(
+                "el_sbobinator.services.config_service.platform.system",
+                return_value="Windows",
+            ),
+            patch(
+                "el_sbobinator.services.config_service.os.path.exists",
+                return_value=False,
+            ),
+            patch("el_sbobinator.services.config_service.os.makedirs"),
+            patch(
+                "el_sbobinator.services.config_service._dpapi_protect_text_windows",
+                return_value="",
+            ),
+            patch("builtins.open", MagicMock()),
+            patch(
+                "el_sbobinator.services.config_service.os.replace",
+                side_effect=OSError("permission denied"),
+            ),
+        ):
+            with self.assertRaises(OSError):
+                cs.save_config("my-key")
+
+    def test_save_settings_returns_ok_false_on_write_error(self) -> None:
+        """The app_webview bridge wrapper returns {ok: False, error: ...} on write failure."""
+        import el_sbobinator.app_webview as aw
+
+        api = aw.ElSbobinatorApi()
+        with (
+            patch(
+                "el_sbobinator.services.config_service.platform.system",
+                return_value="Windows",
+            ),
+            patch(
+                "el_sbobinator.services.config_service.os.path.exists",
+                return_value=False,
+            ),
+            patch("el_sbobinator.services.config_service.os.makedirs"),
+            patch(
+                "el_sbobinator.services.config_service._dpapi_protect_text_windows",
+                return_value="",
+            ),
+            patch("builtins.open", side_effect=OSError("disk full")),
+        ):
+            result = api.save_settings("my-key", [], "gemini-2.0-flash-lite", [])
+
+        self.assertFalse(result["ok"])
+        self.assertIn("disk full", result.get("error", ""))
 
 
 if __name__ == "__main__":

@@ -132,7 +132,7 @@ class ElSbobinatorApi:
         """Load saved config from disk."""
         try:
             cfg = load_config()
-            return {
+            result: dict = {
                 "api_key": cfg.get("api_key", ""),
                 "fallback_keys": cfg.get("fallback_keys", []),
                 "preferred_model": cfg.get("preferred_model", DEFAULT_MODEL),
@@ -140,6 +140,9 @@ class ElSbobinatorApi:
                 "available_models": list(MODEL_OPTIONS),
                 "has_protected_key": bool(cfg.get("has_protected_key")),
             }
+            if cfg.get("config_recovered_from"):
+                result["config_recovered_from"] = cfg["config_recovered_from"]
+            return result
         except Exception:
             return {
                 "api_key": "",
