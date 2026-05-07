@@ -1642,6 +1642,49 @@ class TestStreamMediaFile(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("server failed", result["error"])
 
+    def test_rejects_disallowed_extension(self):
+        api = ElSbobinatorApi()
+        with patch(
+            "el_sbobinator.app_webview.LocalMediaServer.stream_url_for_file"
+        ) as mock_server:
+            result = api.stream_media_file("/some/file.html")
+            mock_server.assert_not_called()
+
+        self.assertFalse(result["ok"])
+        self.assertIn("non supportato", result["error"])
+
+    def test_rejects_no_extension(self):
+        api = ElSbobinatorApi()
+        with patch(
+            "el_sbobinator.app_webview.LocalMediaServer.stream_url_for_file"
+        ) as mock_server:
+            result = api.stream_media_file("/etc/passwd")
+            mock_server.assert_not_called()
+
+        self.assertFalse(result["ok"])
+
+    def test_extension_check_is_case_insensitive(self):
+        api = ElSbobinatorApi()
+        with patch(
+            "el_sbobinator.app_webview.LocalMediaServer.stream_url_for_file",
+            return_value="http://127.0.0.1:9000/stream-xyz/media",
+        ):
+            result = api.stream_media_file("/audio/lecture.MP3")
+
+        self.assertTrue(result["ok"])
+
+    def test_all_allowed_extensions_pass_guard(self):
+        api = ElSbobinatorApi()
+        allowed = api._ALLOWED_STREAM_EXTS
+        for ext in allowed:
+            with self.subTest(ext=ext):
+                with patch(
+                    "el_sbobinator.app_webview.LocalMediaServer.stream_url_for_file",
+                    return_value="http://127.0.0.1:9001/stream-abc/media",
+                ):
+                    result = api.stream_media_file(f"/audio/file{ext}")
+                self.assertTrue(result["ok"], f"Expected ok for extension {ext}")
+
 
 class TestGetCompletedSessions(unittest.TestCase):
     """Tests for total count surfacing and load_all (limit=0) in get_completed_sessions."""

@@ -612,6 +612,17 @@ class ElSbobinatorApi:
         ".flac",
         ".aac",
     }
+    _ALLOWED_STREAM_EXTS: ClassVar[set[str]] = {
+        ".mp3",
+        ".m4a",
+        ".wav",
+        ".mp4",
+        ".mkv",
+        ".webm",
+        ".ogg",
+        ".flac",
+        ".aac",
+    }
 
     def collect_dropped_files(self, names: list) -> dict:
         """Called by JS after postMessageWithAdditionalObjects('FilesDropped') to retrieve OS paths."""
@@ -1099,6 +1110,12 @@ class ElSbobinatorApi:
 
     def stream_media_file(self, file_path: str) -> dict:
         """Avvia o riavvia un micro-server HTTP per inviare l'audio nativo a React via streaming byte-range."""
+        ext = os.path.splitext(str(file_path))[1].lower()
+        if ext not in self._ALLOWED_STREAM_EXTS:
+            return {
+                "ok": False,
+                "error": "Tipo di file non supportato per lo streaming.",
+            }
         try:
             return {"ok": True, "url": LocalMediaServer.stream_url_for_file(file_path)}
         except Exception as e:
