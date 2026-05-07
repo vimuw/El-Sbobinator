@@ -12,6 +12,7 @@ import os
 import re
 import shutil
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from el_sbobinator.core.session_store import (
@@ -43,6 +44,52 @@ from el_sbobinator.services.config_service import load_config
 
 CHUNK_MD_RE = re.compile(r"^chunk_(\d{3})_(\d+)_(\d+)\.md$", re.IGNORECASE)
 ChunkEntry = tuple[int, int, int, str]
+
+
+class AutosaveFailedError(BaseException):
+    """Raised by SaveSessionGuard when session autosave fails consecutively."""
+
+
+class SaveSessionGuard:
+    """Wraps a save callable and raises AutosaveFailedError after THRESHOLD consecutive failures.
+
+    Tracks consecutive save failures.  On the first failure it returns ``False``
+    silently (existing behaviour).  After *THRESHOLD* consecutive failures it
+    calls *on_fatal* with a descriptive message, sets an internal fatal flag so
+    that every subsequent call also raises immediately (without attempting the
+    underlying save again), and then raises ``AutosaveFailedError``.
+    """
+
+    THRESHOLD: int = 2
+
+    def __init__(
+        self,
+        save_fn: Callable[[], bool],
+        on_fatal: Callable[[str], None],
+    ) -> None:
+        self._save_fn = save_fn
+        self._on_fatal = on_fatal
+        self._consecutive_failures: int = 0
+        self._fatal: bool = False
+
+    def __call__(self) -> bool:
+        if self._fatal:
+            raise AutosaveFailedError("autosave_failed")
+        ok = self._save_fn()
+        if ok:
+            self._consecutive_failures = 0
+        else:
+            self._consecutive_failures += 1
+            if self._consecutive_failures >= self.THRESHOLD:
+                self._fatal = True
+                msg = (
+                    f"[!!] ERRORE CRITICO: autosalvataggio sessione fallito "
+                    f"{self.THRESHOLD} volte di seguito. "
+                    "Disco pieno o directory non scrivibile? Elaborazione interrotta."
+                )
+                self._on_fatal(msg)
+                raise AutosaveFailedError("autosave_failed")
+        return ok
 
 
 @dataclass

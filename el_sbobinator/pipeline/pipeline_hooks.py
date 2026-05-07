@@ -57,6 +57,9 @@ class PipelineRuntime:
     def phase(self, text: str) -> None:
         self._safe_call("aggiorna_fase", text)
 
+    def console_error(self, msg: str) -> None:
+        self._safe_call("emit", "appendConsole", msg, batched=False)
+
     def output_html(self, path: str, output_dir: str | None = None) -> None:
         self._safe_call("imposta_output_html", path, output_dir=output_dir)
 

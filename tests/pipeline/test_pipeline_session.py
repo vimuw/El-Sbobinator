@@ -9,6 +9,8 @@ from el_sbobinator.core.shared import (
     PRECONVERTED_AUDIO_PARTIAL,
 )
 from el_sbobinator.pipeline.pipeline_session import (
+    AutosaveFailedError,
+    SaveSessionGuard,
     check_disk_space,
     ensure_preconverted_audio,
     initialize_session_context,
@@ -1245,3 +1247,115 @@ class TestPipelineSessionEdgeCases(unittest.TestCase):
         self.assertEqual(context.session["settings"]["model"], "gemini-2.5-flash-lite")
         self.assertEqual(context.settings.model, "gemini-2.5-flash-lite")
         self.assertEqual(context.save_calls, 1)
+
+
+class TestSaveSessionGuard(unittest.TestCase):
+    """Unit tests for SaveSessionGuard and its AutosaveFailedError integration."""
+
+    def test_single_failure_returns_false_no_exception(self):
+        """First consecutive failure returns False silently — no exception."""
+        guard = SaveSessionGuard(lambda: False, lambda msg: None)
+        result = guard()
+        self.assertFalse(result)
+
+    def test_success_resets_counter(self):
+        """A success between failures resets the counter so no exception is raised."""
+        results = iter([False, True, False])
+        guard = SaveSessionGuard(lambda: next(results), lambda msg: None)
+        guard()  # failure 1
+        guard()  # success → counter reset
+        guard()  # failure 1 again — should NOT raise
+
+    def test_two_consecutive_failures_raise(self):
+        """Two consecutive failures trigger AutosaveFailedError."""
+        guard = SaveSessionGuard(lambda: False, lambda msg: None)
+        guard()  # failure 1 — silent
+        with self.assertRaises(AutosaveFailedError):
+            guard()  # failure 2 — raises
+
+    def test_on_fatal_callback_receives_message(self):
+        """on_fatal is called exactly once with a non-empty diagnostic message."""
+        messages: list[str] = []
+        guard = SaveSessionGuard(lambda: False, messages.append)
+        try:
+            guard()
+            guard()
+        except AutosaveFailedError:
+            pass
+        self.assertEqual(len(messages), 1)
+        self.assertIn("autosalvataggio", messages[0].lower())
+
+    def test_subsequent_calls_raise_without_invoking_save_fn(self):
+        """Once fatal, every subsequent call raises immediately without calling save_fn."""
+        call_count = 0
+
+        def counting_save() -> bool:
+            nonlocal call_count
+            call_count += 1
+            return False
+
+        guard = SaveSessionGuard(counting_save, lambda msg: None)
+        try:
+            guard()
+            guard()  # triggers fatal
+        except AutosaveFailedError:
+            pass
+        count_after_fatal = call_count
+        with self.assertRaises(AutosaveFailedError):
+            guard()  # must NOT call counting_save again
+        self.assertEqual(call_count, count_after_fatal)
+
+    def test_read_only_session_triggers_fatal(
+        self,
+    ):
+        """Regression: simulates a read-only session dir mid-run.
+
+        Two consecutive PermissionError saves must trigger the fatal guard and
+        emit a diagnostic message without calling save_fn a third time.
+        """
+        messages: list[str] = []
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "lesson.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake")
+
+            with patch(
+                "el_sbobinator.core.session_store._session_dir_for_file",
+                return_value=os.path.join(tmpdir, "session"),
+            ):
+                session_ctx = initialize_session_context(input_path)
+
+            with patch(
+                "el_sbobinator.pipeline.pipeline_session.save_session_data",
+                side_effect=PermissionError("read-only"),
+            ):
+                guard = SaveSessionGuard(session_ctx.save, messages.append)
+
+                first = (
+                    guard()
+                )  # failure 1 — save_session_data raises → save() returns False
+                self.assertFalse(first)
+                self.assertEqual(len(messages), 0)  # no warning yet
+
+                with self.assertRaises(AutosaveFailedError):
+                    guard()  # failure 2 → fatal
+
+            self.assertEqual(len(messages), 1)
+            self.assertIn("autosalvataggio", messages[0].lower())
+
+    def test_autosave_failed_error_is_not_caught_by_except_exception(self):
+        """AutosaveFailedError(BaseException) must escape broad except Exception handlers."""
+        guard = SaveSessionGuard(lambda: False, lambda msg: None)
+        guard()  # failure 1 — silent
+        escaped = False
+        try:
+            try:
+                guard()  # failure 2 — raises AutosaveFailedError
+            except Exception:
+                pass  # must NOT land here
+        except AutosaveFailedError:
+            escaped = True
+        self.assertTrue(
+            escaped, "AutosaveFailedError was swallowed by except Exception"
+        )

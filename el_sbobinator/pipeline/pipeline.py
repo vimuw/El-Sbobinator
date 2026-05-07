@@ -26,6 +26,8 @@ from el_sbobinator.core.shared import (
 )
 from el_sbobinator.pipeline.pipeline_hooks import PipelineRuntime
 from el_sbobinator.pipeline.pipeline_session import (
+    AutosaveFailedError,
+    SaveSessionGuard,
     check_disk_space,
     ensure_preconverted_audio,
     initialize_session_context,
@@ -121,8 +123,13 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         phase2_revised_dir = session_ctx.phase2_revised_dir
         macro_path = session_ctx.macro_path
 
-        def save_session():
-            return session_ctx.save()
+        def _on_autosave_fatal(msg: str) -> None:
+            print(msg)
+            runtime.console_error(msg)
+            if isinstance(session, dict):
+                session["last_error"] = "autosave_failed"
+
+        save_session = SaveSessionGuard(session_ctx.save, _on_autosave_fatal)
 
         def on_model_switched(previous_model: str, new_model: str):
             assert session is not None
@@ -526,6 +533,12 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         except Exception:
             pass
 
+    except AutosaveFailedError:
+        runtime.set_run_result("failed", "autosave_failed")
+        logger.warning(
+            "Autosalvataggio fallito ripetutamente: elaborazione interrotta.",
+            extra={"stage": "autosave_fatal"},
+        )
     except Exception as e:
         runtime.set_run_result("failed", str(e))
         logger.exception("Errore imprevisto nella pipeline.", extra={"stage": "fatal"})
