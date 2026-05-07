@@ -85,7 +85,7 @@ describe('QueueFileCard', () => {
     expect(screen.getByText('Annullamento in corso')).toBeTruthy();
   });
 
-  it('shows retry button for error status when idle', () => {
+  it('shows Riprendi CTA for resumable error (quota) when idle', () => {
     const onRetry = vi.fn();
     render(
       <QueueWrapper>
@@ -96,8 +96,41 @@ describe('QueueFileCard', () => {
         />
       </QueueWrapper>,
     );
+    expect(screen.getByText('Riprendi')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Riprendi'));
+    expect(onRetry).toHaveBeenCalledWith('f1');
+  });
+
+  it('shows Riprova icon button for chunk_failed error when idle', () => {
+    const onRetry = vi.fn();
+    render(
+      <QueueWrapper>
+        <QueueFileCard
+          file={makeFile({ status: 'error', errorText: 'phase1_chunk_failed_3' })}
+          appState="idle"
+          onRemove={vi.fn()} onRetry={onRetry} onPreview={vi.fn()} onOpenFile={vi.fn()}
+        />
+      </QueueWrapper>,
+    );
     fireEvent.click(screen.getByLabelText('Riprova'));
     expect(onRetry).toHaveBeenCalledWith('f1');
+    expect(screen.queryByLabelText('Riprendi')).toBeNull();
+  });
+
+  it('shows Riprova icon button for non-resumable error when idle', () => {
+    const onRetry = vi.fn();
+    render(
+      <QueueWrapper>
+        <QueueFileCard
+          file={makeFile({ status: 'error', errorText: 'html_export_failed' })}
+          appState="idle"
+          onRemove={vi.fn()} onRetry={onRetry} onPreview={vi.fn()} onOpenFile={vi.fn()}
+        />
+      </QueueWrapper>,
+    );
+    fireEvent.click(screen.getByLabelText('Riprova'));
+    expect(onRetry).toHaveBeenCalledWith('f1');
+    expect(screen.queryByLabelText('Riprendi')).toBeNull();
   });
 
   it('calls onRemove when trash button is clicked', () => {

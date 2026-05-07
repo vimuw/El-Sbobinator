@@ -4,14 +4,26 @@ const _ERROR_MAP: Record<string, string> = {
   phase1_degenerate_output: 'Trascrizione interrotta: testo non valido anche dopo il retry automatico.',
   quota_daily_limit_phase1: 'Quota giornaliera API esaurita durante la trascrizione.',
   quota_daily_limit_phase2: 'Quota giornaliera API esaurita durante la revisione.',
-  quota_daily_limit_boundary: 'Quota giornaliera API esaurita durante la revisione dei confini.',
   bad_request_phase1: 'Richiesta non valida durante la trascrizione (errore 400).',
-  boundary_ai_failed: 'Errore durante la revisione AI dei confini tra blocchi.',
+  autosave_failed: 'Errore critico: salvataggio sessione fallito ripetutamente. Disco pieno o directory non scrivibile?',
   html_export_failed: 'Errore durante il salvataggio del file di output.',
   html_export_missing: 'File di output non trovato dopo il salvataggio.',
   processing_failed: 'Elaborazione non completata.',
   api_key_mancante: 'API key mancante o non valida.',
+  phase1_all_models_unavailable: 'Tutti i modelli AI temporaneamente non disponibili.',
 };
+
+const _RESUMABLE_ERRORS = new Set([
+  'quota_daily_limit_phase1',
+  'quota_daily_limit_phase2',
+  'phase1_all_models_unavailable',
+]);
+
+export function isResumableError(raw: string | undefined): boolean {
+  if (!raw) return false;
+  const r = raw.trim();
+  return _RESUMABLE_ERRORS.has(r);
+}
 
 export function errorLabel(raw: string | undefined): string {
   if (!raw) return 'Elaborazione non completata.';

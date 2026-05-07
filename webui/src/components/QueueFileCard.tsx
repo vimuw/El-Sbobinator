@@ -4,7 +4,7 @@ import { AlertCircle, CheckCircle, Clock, ExternalLink, FileAudio, FolderOpen, G
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
-import { errorLabel, formatDuration, formatRelativeTime, formatSize, shortModelName } from '../utils';
+import { errorLabel, formatDuration, formatRelativeTime, formatSize, isResumableError, shortModelName } from '../utils';
 import { KebabMenu, type KebabMenuItem } from './KebabMenu';
 
 interface QueueFileCardProps {
@@ -137,14 +137,27 @@ function QueueFileCardInner({
 
           <div className="flex items-center gap-2 shrink-0">
             {appState === 'idle' && file.status === 'error' && (
-              <button
-                onClick={() => onRetry(file.id)}
-                className="icon-button compact-icon-button is-danger"
-                title="Riprova"
-                aria-label="Riprova"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
+              isResumableError(file.errorText) ? (
+                <button
+                  onClick={() => onRetry(file.id)}
+                  className="premium-button-secondary compact-button"
+                  style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-text)', borderColor: 'transparent' }}
+                  title="Il progresso è salvato: riprendi da dove è rimasto"
+                  aria-label="Riprendi"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Riprendi
+                </button>
+              ) : (
+                <button
+                  onClick={() => onRetry(file.id)}
+                  className="icon-button compact-icon-button is-danger"
+                  title={file.errorText?.startsWith('phase1_chunk_failed_') ? 'I blocchi precedenti sono salvati — riprova (potrebbe fallire di nuovo se il blocco è corrotto)' : 'Riprova'}
+                  aria-label="Riprova"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+              )
             )}
             {appState === 'idle' && (
               <button
