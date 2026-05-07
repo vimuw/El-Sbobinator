@@ -149,7 +149,7 @@ export default function App() {
 
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [regeneratePrompt, setRegeneratePrompt] = useState<{ filename: string; mode?: 'completed' | 'resume' } | null>(null);
+  const [regeneratePrompt, setRegeneratePrompt] = useState<{ filename: string; mode?: 'completed' | 'resume'; sessionDir?: string } | null>(null);
   const [askNewKeyPrompt, setAskNewKeyPrompt] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ConfirmActionState | null>(null);
   const [duplicatePrompt, setDuplicatePrompt] = useState<DuplicatePrompt>(null);
@@ -607,8 +607,18 @@ export default function App() {
   }, [confirmAction, confirmClearCompleted, confirmStopProcessing, appendConsole, refreshArchiveSessions]);
 
   const handleRegenerateAnswer = async (ans: boolean | null) => {
+    const currentPrompt = regeneratePrompt;
     setRegeneratePrompt(null);
     try {
+      if (ans === true && preview.content !== null) {
+        const regenDir = (currentPrompt?.sessionDir ?? '').replace(/\\/g, '/').toLowerCase();
+        const previewDir = preview.sessionDir.replace(/\\/g, '/').toLowerCase();
+        if (regenDir && previewDir && regenDir === previewDir) {
+          const cancelFn = (window as unknown as Record<string, () => void>).__elSbobinatorCancelPendingAutosave;
+          cancelFn?.();
+          closePreview();
+        }
+      }
       if (window.pywebview?.api?.answer_regenerate) await window.pywebview.api.answer_regenerate(ans);
     } catch (e) { console.error('Failed to send answer to Python:', e); }
   };

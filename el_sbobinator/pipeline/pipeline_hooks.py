@@ -109,13 +109,17 @@ class PipelineRuntime:
             pass
 
     def ask_regenerate(
-        self, filename: str, callback: Callable, mode: str = "resume"
+        self,
+        filename: str,
+        callback: Callable,
+        mode: str = "resume",
+        session_dir: str = "",
     ) -> bool:
         method = getattr(self.target, "ask_regenerate", None)
         if not method:
             return False
         try:
-            method(filename, callback, mode)
+            method(filename, callback, mode, session_dir=session_dir)
             return True
         except Exception:
             return False

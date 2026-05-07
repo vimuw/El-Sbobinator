@@ -80,7 +80,7 @@ export interface BridgeCallbacks {
   setCurrentFile: (data: SetCurrentFilePayload) => void;
   fileDone: (data: FileDonePayload) => void;
   fileFailed: (data: FileFailedPayload) => void;
-  askRegenerate: (data: { filename: string; mode?: 'completed' | 'resume' }) => void;
+  askRegenerate: (data: { filename: string; mode?: 'completed' | 'resume'; sessionDir?: string }) => void;
   askNewKey: () => void;
   filesDropped: (files: FileDescriptor[]) => void;
 }
@@ -136,7 +136,7 @@ export interface PywebviewApi {
 export function createBridge(options: {
   dispatch: Dispatch<ProcessingAction>;
   appendConsole: (msg: string) => void;
-  onRegenerate: (data: { filename: string; mode?: 'completed' | 'resume' }) => void;
+  onRegenerate: (data: { filename: string; mode?: 'completed' | 'resume'; sessionDir?: string }) => void;
   onAskNewKey: () => void;
   onBatchDone: (data: ProcessDonePayload) => void;
   onFileDone: (data: FileDonePayload) => void;

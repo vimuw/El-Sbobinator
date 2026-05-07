@@ -10,7 +10,7 @@ export function useBridgeCallbacks(options: {
   filesRef: React.RefObject<FileItem[]>;
   appStateRef: React.RefObject<AppStatus>;
   enqueueUniqueFiles: (files: FileItem[]) => void;
-  setRegeneratePrompt: (data: { filename: string; mode?: 'completed' | 'resume' } | null) => void;
+  setRegeneratePrompt: (data: { filename: string; mode?: 'completed' | 'resume'; sessionDir?: string } | null) => void;
   setAskNewKeyPrompt: (open: boolean) => void;
   autoContinueRef: React.RefObject<boolean>;
   startProcessingRef: React.RefObject<(isContinuation?: boolean) => Promise<boolean>>;

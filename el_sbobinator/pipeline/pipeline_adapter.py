@@ -190,11 +190,15 @@ class PipelineAdapter:
         }
         self._emit_js("registerStepTime", payload, batched=True)
 
-    def ask_regenerate(self, filename: str, callback, mode: str = "resume"):
+    def ask_regenerate(
+        self, filename: str, callback, mode: str = "resume", session_dir: str = ""
+    ):
         with self._lock:
             self._regenerate_callback = callback
         self._emit_js(
-            "askRegenerate", {"filename": filename, "mode": mode}, batched=False
+            "askRegenerate",
+            {"filename": filename, "mode": mode, "sessionDir": session_dir},
+            batched=False,
         )
 
     def ask_new_api_key(self, callback):

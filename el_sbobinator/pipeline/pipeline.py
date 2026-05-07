@@ -241,7 +241,10 @@ def _esegui_sbobinatura_impl(  # noqa: C901
 
                     regenerate_mode = "completed" if stage == "done" else "resume"
                     if runtime.ask_regenerate(
-                        os.path.basename(input_path), on_answer, regenerate_mode
+                        os.path.basename(input_path),
+                        on_answer,
+                        regenerate_mode,
+                        session_dir=str(session_ctx.session_dir),
                     ):
                         deadline = time.monotonic() + _REGENERATE_DIALOG_TIMEOUT_SECONDS
                         while not event.is_set():

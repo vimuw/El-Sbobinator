@@ -175,14 +175,18 @@ class PipelineRuntimeAskRegenerateTests(unittest.TestCase):
 
     def test_ask_regenerate_calls_method_and_returns_true(self):
         class _RegTarget(_DummyTarget):
-            def ask_regenerate(self, filename, callback, mode="resume"):
-                self.events.append(("ask_regenerate", filename, mode))
+            def ask_regenerate(self, filename, callback, mode="resume", session_dir=""):
+                self.events.append(("ask_regenerate", filename, mode, session_dir))
 
         target = _RegTarget()
         runtime = PipelineRuntime(target)
-        result = runtime.ask_regenerate("audio.mp3", lambda: None, mode="restart")
+        result = runtime.ask_regenerate(
+            "audio.mp3", lambda: None, mode="restart", session_dir="/sessions/abc"
+        )
         self.assertTrue(result)
-        self.assertIn(("ask_regenerate", "audio.mp3", "restart"), target.events)
+        self.assertIn(
+            ("ask_regenerate", "audio.mp3", "restart", "/sessions/abc"), target.events
+        )
 
     def test_ask_regenerate_returns_false_on_exception(self):
         class _BrokenTarget(_DummyTarget):

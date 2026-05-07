@@ -77,7 +77,7 @@ class _PromptBlockingApp:
     def winfo_exists(self):
         return True
 
-    def ask_regenerate(self, filename, callback, mode="resume"):
+    def ask_regenerate(self, filename, callback, mode="resume", session_dir=""):
         self.prompt_shown.set()
         self._callback = callback
         return None

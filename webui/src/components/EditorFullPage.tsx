@@ -113,6 +113,19 @@ export function EditorFullPage({
     };
   }, []);
 
+  useEffect(() => {
+    (window as unknown as Record<string, unknown>).__elSbobinatorCancelPendingAutosave = () => {
+      if (autosaveTimerRef.current) {
+        window.clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+      isDirtyRef.current = false;
+    };
+    return () => {
+      delete (window as unknown as Record<string, unknown>).__elSbobinatorCancelPendingAutosave;
+    };
+  }, []);
+
   const flushAndClose = useCallback(async () => {
     if (isDirtyRef.current && !saveErrorOnCloseRef.current) {
       if (autosaveTimerRef.current) { window.clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
