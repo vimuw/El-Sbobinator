@@ -1,10 +1,10 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { AlertCircle, CheckCircle, Clock, ExternalLink, FileAudio, FolderOpen, GripVertical, PenLine, RotateCcw, Trash2, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, ExternalLink, FileAudio, FolderOpen, GripVertical, PenLine, RotateCcw, Settings, Trash2, XCircle } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
-import { errorLabel, formatDuration, formatRelativeTime, formatSize, isResumableError, shortModelName } from '../utils';
+import { errorLabel, formatDuration, formatRelativeTime, formatSize, isQuotaError, isResumableError, shortModelName } from '../utils';
 import { KebabMenu, type KebabMenuItem } from './KebabMenu';
 
 interface QueueFileCardProps {
@@ -15,6 +15,7 @@ interface QueueFileCardProps {
   onRetry: (id: string) => void;
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string) => void;
   onOpenFile: (path: string) => void;
+  onOpenSettings?: () => void;
   /** @deprecated kept for interface compatibility */
 }
 
@@ -30,6 +31,7 @@ function QueueFileCardInner({
   onRetry,
   onPreview: _onPreview,
   onOpenFile: _onOpenFile,
+  onOpenSettings,
 }: QueueFileCardProps) {
   const isCanceling = appState === 'canceling' && file.status === 'processing';
   const isDraggable = file.status === 'queued' && appState === 'idle';
@@ -136,6 +138,17 @@ function QueueFileCardInner({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {appState === 'idle' && file.status === 'error' && onOpenSettings && isQuotaError(file.errorText) && (
+              <button
+                onClick={onOpenSettings}
+                className="premium-button-secondary compact-button"
+                title="Aggiungi una chiave API di riserva per evitare interruzioni"
+                aria-label="Chiavi di riserva"
+              >
+                <Settings className="w-3.5 h-3.5" />
+                Chiavi di riserva
+              </button>
+            )}
             {appState === 'idle' && file.status === 'error' && (
               isResumableError(file.errorText) ? (
                 <button

@@ -61,11 +61,11 @@ describe('ProcessingStatusBanner', () => {
     expect(screen.getByText('File 2 di 3')).toBeTruthy();
   });
 
-  it('shows wait banner for Modello non disponibile phase', () => {
+  it('shows wait banner for Server Gemini occupato phase', () => {
     render(
       <ProcessingStatusBanner
         appState="processing"
-        currentPhase="Modello non disponibile: riprovando tra 3s"
+        currentPhase="Server Gemini occupato — ritento tra 3s"
         currentModel="gemini-2.5-flash"
         activeProgress={30}
         workDone={{ chunks: 2, macro: 0 }}
@@ -217,6 +217,28 @@ describe('ProcessingStatusBanner', () => {
       />,
     );
     expect(screen.getByText('ETA ~2m')).toBeTruthy();
+  });
+
+  it('shows Fase 2/3 description with progress and ETA when stepMetrics available', () => {
+    render(
+      <ProcessingStatusBanner
+        appState="processing"
+        currentPhase="Fase 2/3: revisione (3/10)"
+        currentModel="gemini-2.5-flash"
+        activeProgress={55}
+        workDone={{ chunks: 8, macro: 3 }}
+        workTotals={{ chunks: 8, macro: 10 }}
+        stepMetrics={{
+          chunks: null,
+          macro: { avgSeconds: 60, done: 3, total: 10 },
+        }}
+        currentFileIndex={0}
+        currentBatchTotal={1}
+        currentFileName="lesson.mp3"
+      />,
+    );
+    expect(screen.getByText(/Sezione \d+ di 10.*circa.*rimanenti/)).toBeTruthy();
+    expect(screen.queryByText(/ETA/)).toBeNull();
   });
 
   it('does not show ETA when no stepMetrics provided', () => {

@@ -505,23 +505,21 @@ class RetryWithQuotaTests(unittest.TestCase):
             )
 
         resume_text = "Fase 1/3: trascrizione (chunk 1/5)"
-        wait1 = "Modello non disponibile: attesa 0s... (retry 1/2)"
-        wait2 = "Modello non disponibile: attesa 0s... (retry 2/2)"
-        self.assertIn(wait1, rt.phase_calls)
-        self.assertIn(wait2, rt.phase_calls)
+        wait_msg = "Server Gemini occupato — ritento tra 0s"
+        self.assertIn(wait_msg, rt.phase_calls)
         self.assertIn(resume_text, rt.phase_calls)
-        first_wait1 = rt.phase_calls.index(wait1)
+        first_wait = rt.phase_calls.index(wait_msg)
         first_resume = rt.phase_calls.index(resume_text)
         self.assertGreater(
             first_resume,
-            first_wait1,
+            first_wait,
             "resume phase must appear after first wait message",
         )
-        first_wait2 = rt.phase_calls.index(wait2)
-        second_resume = rt.phase_calls.index(resume_text, first_wait2)
+        second_wait = rt.phase_calls.index(wait_msg, first_resume)
+        second_resume = rt.phase_calls.index(resume_text, second_wait)
         self.assertGreater(
             second_resume,
-            first_wait2,
+            second_wait,
             "resume phase must appear after second wait message",
         )
 
@@ -671,15 +669,13 @@ class RetryWithQuotaTests(unittest.TestCase):
             resume_phase_text="Fase 1/3: trascrizione (chunk 3/10)",
         )
 
-        wait1 = "Modello non disponibile: attesa 0s... (retry 1/2)"
-        wait2 = "Modello non disponibile: attesa 0s... (retry 2/2)"
+        wait_msg = "Server Gemini occupato — ritento tra 0s"
         restore = "Fase 1/3: trascrizione (chunk 3/10)"
-        self.assertIn(wait1, rt.phase_calls)
-        self.assertIn(wait2, rt.phase_calls)
+        self.assertIn(wait_msg, rt.phase_calls)
         self.assertIn(restore, rt.phase_calls)
-        idx_w1 = rt.phase_calls.index(wait1)
+        idx_w1 = rt.phase_calls.index(wait_msg)
         idx_r1 = rt.phase_calls.index(restore)
-        idx_w2 = rt.phase_calls.index(wait2)
+        idx_w2 = rt.phase_calls.index(wait_msg, idx_r1)
         idx_r2 = rt.phase_calls.index(restore, idx_w2)
         self.assertLess(idx_w1, idx_r1)
         self.assertLess(idx_r1, idx_w2)

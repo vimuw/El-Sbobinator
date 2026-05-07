@@ -2,8 +2,8 @@ export const GEMINI_KEY_PATTERN = /^(AIza[0-9A-Za-z_-]{20,}|AQ\.[0-9A-Za-z_-]{20
 
 const _ERROR_MAP: Record<string, string> = {
   phase1_degenerate_output: 'Trascrizione interrotta: testo non valido anche dopo il retry automatico.',
-  quota_daily_limit_phase1: 'Quota giornaliera API esaurita durante la trascrizione.',
-  quota_daily_limit_phase2: 'Quota giornaliera API esaurita durante la revisione.',
+  quota_daily_limit_phase1: 'Quota API giornaliera esaurita — riprova domani, oppure aggiungi una chiave di riserva nelle impostazioni.',
+  quota_daily_limit_phase2: 'Quota API esaurita durante la revisione — riprova domani, oppure aggiungi una chiave di riserva nelle impostazioni.',
   bad_request_phase1: 'Richiesta non valida durante la trascrizione (errore 400).',
   autosave_failed: 'Errore critico: salvataggio sessione fallito ripetutamente. Disco pieno o directory non scrivibile?',
   html_export_failed: 'Errore durante il salvataggio del file di output.',
@@ -18,6 +18,12 @@ const _RESUMABLE_ERRORS = new Set([
   'quota_daily_limit_phase2',
   'phase1_all_models_unavailable',
 ]);
+
+export function isQuotaError(raw: string | undefined): boolean {
+  if (!raw) return false;
+  const r = raw.trim();
+  return r === 'quota_daily_limit_phase1' || r === 'quota_daily_limit_phase2';
+}
 
 export function isResumableError(raw: string | undefined): boolean {
   if (!raw) return false;

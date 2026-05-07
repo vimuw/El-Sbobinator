@@ -127,12 +127,12 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
     };
   }
 
-  if (phase.startsWith('Modello non disponibile')) {
+  if (phase.startsWith('Server Gemini occupato')) {
     return {
       icon: <WifiOff className="w-8 h-8" />,
       iconAnimation: 'pulse',
       title: 'In attesa...',
-      description: "Il modello AI è temporaneamente non disponibile. Riprovo automaticamente.",
+      description: phase,
       kind: 'wait',
     };
   }
@@ -390,9 +390,6 @@ export function ProcessingStatusBanner({
   if (currentModel && kind !== 'success') {
     metaChips.push({ icon: <Bot className="w-3 h-3" />, label: shortModelName(currentModel) });
   }
-  if (progressLabel) {
-    metaChips.push({ icon: <Layers className="w-3 h-3" />, label: progressLabel });
-  }
   if (currentBatchTotal > 1) {
     metaChips.push({ icon: <Files className="w-3 h-3" />, label: `File ${currentFileIndex + 1} di ${currentBatchTotal}` });
   }
@@ -400,7 +397,23 @@ export function ProcessingStatusBanner({
     metaChips.push({ icon: <Timer className="w-3 h-3" />, label: formatElapsed(elapsedSecs) });
   }
   const etaLabel = kind === 'normal' ? computeEta(stepMetrics, workDone, workTotals, phaseForMeta) : null;
-  if (etaLabel) {
+
+  const phase2Description: string | null = (() => {
+    if (!phaseForMeta.trim().startsWith('Fase 2/3') || kind !== 'normal') return null;
+    if (!progressLabel && !etaLabel) return null;
+    const parts: string[] = [];
+    if (progressLabel) parts.push(progressLabel);
+    if (etaLabel) {
+      const friendly = etaLabel.replace(/^~(\d+)m$/, '$1 min').replace(/^~(\d+)s$/, '$1s');
+      parts.push(`circa ${friendly} rimanenti`);
+    }
+    return parts.join(' — ');
+  })();
+
+  if (progressLabel && !phase2Description) {
+    metaChips.push({ icon: <Layers className="w-3 h-3" />, label: progressLabel });
+  }
+  if (etaLabel && !phase2Description) {
     metaChips.push({ icon: <Hourglass className="w-3 h-3" />, label: `ETA ${etaLabel}` });
   }
 
@@ -450,7 +463,7 @@ export function ProcessingStatusBanner({
                 {title}
               </h2>
               <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                {description}
+                {phase2Description ?? description}
               </p>
             </div>
           </motion.div>

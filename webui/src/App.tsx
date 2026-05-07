@@ -859,6 +859,7 @@ export default function App() {
                   onOpenFile={openFile}
                   onStart={() => void startProcessing()}
                   onStop={() => setConfirmAction({ type: 'stop-processing' })}
+                  onOpenSettings={() => setIsSettingsOpen(true)}
                 />
 
                 <CompletedSection

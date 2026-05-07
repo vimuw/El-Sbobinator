@@ -27,13 +27,14 @@ interface QueueSectionProps {
   onOpenFile: (path: string) => void;
   onStart: () => void;
   onStop: () => void;
+  onOpenSettings?: () => void;
 }
 
 export function QueueSection({
   pendingFiles, appState, autoContinue, setAutoContinue, preferredModel,
   queuedCount, canStart, hasApiKey, isApiKeyValid, currentPhase,
   dndSensors, onDragEnd, onRemove, onClearAll, onRetry, onPreview, onOpenFile,
-  onStart, onStop,
+  onStart, onStop, onOpenSettings,
 }: QueueSectionProps) {
   const sortableIds = useMemo(() => pendingFiles.map(f => f.id), [pendingFiles]);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -181,6 +182,7 @@ export function QueueSection({
                       onRetry={(id) => onRetry(id)}
                       onPreview={onPreview}
                       onOpenFile={onOpenFile}
+                      onOpenSettings={onOpenSettings}
                     />
                   );
                 })}

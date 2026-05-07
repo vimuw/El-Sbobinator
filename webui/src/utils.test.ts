@@ -1,5 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { errorLabel, formatDuration, formatRelativeTime, formatSize, isResumableError, shortModelName } from './utils';
+import { errorLabel, formatDuration, formatRelativeTime, formatSize, isQuotaError, isResumableError, shortModelName } from './utils';
+
+describe('isQuotaError', () => {
+  it('returns false for undefined', () => {
+    expect(isQuotaError(undefined)).toBe(false);
+  });
+
+  it('returns true for quota_daily_limit_phase1', () => {
+    expect(isQuotaError('quota_daily_limit_phase1')).toBe(true);
+  });
+
+  it('returns true for quota_daily_limit_phase2', () => {
+    expect(isQuotaError('quota_daily_limit_phase2')).toBe(true);
+  });
+
+  it('returns false for non-quota errors', () => {
+    expect(isQuotaError('phase1_all_models_unavailable')).toBe(false);
+    expect(isQuotaError('html_export_failed')).toBe(false);
+  });
+});
 
 describe('isResumableError', () => {
   it('returns false for undefined', () => {

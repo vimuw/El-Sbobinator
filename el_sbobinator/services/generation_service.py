@@ -547,9 +547,7 @@ def retry_with_quota(  # noqa: C901
                         f"      [Modello {current_model} temporaneamente indisponibile."
                         f" Riprovo tra {int(_wait)}s... (retry {_retry_idx}/{_total})]"
                     )
-                    runtime.phase(
-                        f"Modello non disponibile: attesa {int(_wait)}s... (retry {_retry_idx}/{_total})"
-                    )
+                    runtime.phase(f"Server Gemini occupato — ritento tra {int(_wait)}s")
                     if not sleep_with_cancel(cancelled, _wait):
                         print("   [*] Operazione annullata dall'utente.")
                         return client, None
