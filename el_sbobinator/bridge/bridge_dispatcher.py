@@ -28,6 +28,7 @@ class _BridgeDispatcher:
         "appendConsole",
         "askRegenerate",
         "askNewKey",
+        "updateDownloadProgress",
     ]
     _ALL_EVENTS: frozenset[str] = frozenset(get_args(_BridgeEvent))
     BATCHABLE: frozenset[str] = frozenset(

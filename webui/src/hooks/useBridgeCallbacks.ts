@@ -1,6 +1,6 @@
 import { type Dispatch, useEffect, useLayoutEffect, useRef } from 'react';
 import type React from 'react';
-import { createBridge, type ElSbobinatorBridge } from '../bridge';
+import { createBridge, type ElSbobinatorBridge, type UpdateDownloadProgressPayload } from '../bridge';
 import type { AppStatus, FileDescriptor, FileItem, ProcessDonePayload, ProcessingAction } from '../appState';
 import { shortModelName } from '../utils';
 
@@ -18,6 +18,7 @@ export function useBridgeCallbacks(options: {
   onBatchReset: () => void;
   onBatchFullyDone: (data: ProcessDonePayload) => void;
   clearCompletionFlash: () => void;
+  onDownloadProgress?: (data: UpdateDownloadProgressPayload) => void;
 }) {
   const {
     dispatch,
@@ -40,6 +41,7 @@ export function useBridgeCallbacks(options: {
   const onBatchResetRef = useRef(options.onBatchReset);
   const onBatchFullyDoneRef = useRef(options.onBatchFullyDone);
   const clearCompletionFlashRef = useRef(options.clearCompletionFlash);
+  const onDownloadProgressRef = useRef(options.onDownloadProgress);
 
   useLayoutEffect(() => {
     dispatchRef.current = dispatch;
@@ -51,6 +53,7 @@ export function useBridgeCallbacks(options: {
     onBatchResetRef.current = options.onBatchReset;
     onBatchFullyDoneRef.current = options.onBatchFullyDone;
     clearCompletionFlashRef.current = options.clearCompletionFlash;
+    onDownloadProgressRef.current = options.onDownloadProgress;
   });
 
   useEffect(() => {
@@ -73,6 +76,7 @@ export function useBridgeCallbacks(options: {
         enqueueUniqueFilesRef.current(filesToAdd);
       },
       onBatchStart: () => { clearCompletionFlashRef.current(); },
+      onDownloadProgress: data => { onDownloadProgressRef.current?.(data); },
       onAskNewKey: () => {
         setAskNewKeyPromptRef.current(true);
       },

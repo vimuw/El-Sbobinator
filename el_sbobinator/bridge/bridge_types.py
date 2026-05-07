@@ -77,3 +77,10 @@ class ValidationResult(TypedDict):
     ok: bool
     summary: str
     checks: list[ValidationCheck]
+
+
+class UpdateDownloadProgressPayload(TypedDict):
+    status: Literal["downloading", "verifying", "installing", "done", "error"]
+    bytes_done: int
+    bytes_total: int
+    error: NotRequired[str]

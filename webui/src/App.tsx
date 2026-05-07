@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { Github } from 'lucide-react';
 import { GITHUB_RELEASES_URL, GITHUB_URL, KOFI_URL } from './branding';
-import { type ArchiveFolder, type ArchiveSession, type ElSbobinatorBridge, type PywebviewApi } from './bridge';
+import { type ArchiveFolder, type ArchiveSession, type ElSbobinatorBridge, type PywebviewApi, type UpdateDownloadProgressPayload } from './bridge';
 import { getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type FileDescriptor, type FileItem, type ProcessDonePayload } from './appState';
 import { GEMINI_KEY_PATTERN } from './utils';
 import { useConsole } from './hooks/useConsole';
@@ -177,6 +177,7 @@ export default function App() {
   const archiveSessionsRef = useRef<ArchiveSession[]>(archiveSessions);
   const pendingArchiveReplacementsRef = useRef<Map<string, PendingArchiveReplacement>>(new Map());
   const archiveReplacementCleanupInFlightRef = useRef<Set<string>>(new Set());
+  const downloadCompletionRef = useRef<{ resolve: () => void; reject: (e: Error) => void } | null>(null);
 
   filesRef.current = files;
   appStateRef.current = appState;
@@ -248,9 +249,25 @@ export default function App() {
               window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL);
               throw new Error(result?.error ?? 'Download fallito');
             }
+            await new Promise<void>((resolve, reject) => {
+              downloadCompletionRef.current = { resolve, reject };
+            }).catch((e: Error) => {
+              if (e.message === 'dismissed') return;
+              if (e.message === 'uac_denied') return;
+              window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL);
+              throw new Error(
+                e.message === 'permission_denied'
+                  ? 'Permesso negato per /Applications — scarica il DMG da GitHub e trascinalo in /Applications con Finder.'
+                  : e.message,
+              );
+            });
           },
         },
-        onDismiss: () => dismissUpdate(updateAvailable),
+        onDismiss: () => {
+          downloadCompletionRef.current?.reject(new Error('dismissed'));
+          downloadCompletionRef.current = null;
+          dismissUpdate(updateAvailable);
+        },
       }
     );
   }, [updateAvailable, showToast, dismissUpdate]);
@@ -699,6 +716,15 @@ export default function App() {
     onBatchReset,
     onBatchFullyDone,
     clearCompletionFlash: () => setCompletionFlash(false),
+    onDownloadProgress: useCallback((data: UpdateDownloadProgressPayload) => {
+      if (data.status === 'done') {
+        downloadCompletionRef.current?.resolve();
+        downloadCompletionRef.current = null;
+      } else if (data.status === 'error') {
+        downloadCompletionRef.current?.reject(new Error(data.error ?? 'Errore sconosciuto'));
+        downloadCompletionRef.current = null;
+      }
+    }, []),
   });
   useBodyScrollLock(isSettingsOpen || regeneratePrompt !== null || preview.content !== null || askNewKeyPrompt || confirmAction !== null || duplicatePrompt !== null);
 

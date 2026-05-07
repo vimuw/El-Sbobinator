@@ -68,6 +68,13 @@ export interface ArchiveFolder {
 
 export type ElSbobinatorBridge = BridgeCallbacks | null;
 
+export interface UpdateDownloadProgressPayload {
+  status: 'downloading' | 'verifying' | 'installing' | 'done' | 'error';
+  bytes_done: number;
+  bytes_total: number;
+  error?: string;
+}
+
 export interface BridgeCallbacks {
   appendConsole: (msg: string) => void;
   updateProgress: (value: number) => void;
@@ -83,6 +90,7 @@ export interface BridgeCallbacks {
   askRegenerate: (data: { filename: string; mode?: 'completed' | 'resume'; sessionDir?: string }) => void;
   askNewKey: () => void;
   filesDropped: (files: FileDescriptor[]) => void;
+  updateDownloadProgress: (data: UpdateDownloadProgressPayload) => void;
 }
 
 export interface PywebviewApi {
@@ -126,7 +134,7 @@ export interface PywebviewApi {
   delete_session?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;
   update_session_input_path?: (sessionDir: string, newPath: string) => Promise<{ ok: boolean; error?: string }>;
   open_session_folder?: () => Promise<{ ok: boolean; error?: string }>;
-  download_and_install_update?: (version: string) => Promise<{ ok: boolean; error?: string }>;
+  download_and_install_update?: (version: string) => Promise<{ ok: boolean; status?: string; error?: string }>;
   save_theme_preference?: (theme: 'light' | 'dark') => Promise<void>;
   get_archive_folders?: () => Promise<{ ok: boolean; folders: ArchiveFolder[]; error?: string }>;
   save_archive_folders?: (folders: ArchiveFolder[]) => Promise<{ ok: boolean; error?: string }>;
@@ -142,8 +150,9 @@ export function createBridge(options: {
   onFileDone: (data: FileDonePayload) => void;
   onFilesDropped: (files: FileDescriptor[]) => void;
   onBatchStart: () => void;
+  onDownloadProgress?: (data: UpdateDownloadProgressPayload) => void;
 }): BridgeCallbacks {
-  const { dispatch, appendConsole, onRegenerate, onAskNewKey, onBatchDone, onFileDone, onFilesDropped, onBatchStart } = options;
+  const { dispatch, appendConsole, onRegenerate, onAskNewKey, onBatchDone, onFileDone, onFilesDropped, onBatchStart, onDownloadProgress } = options;
 
   return {
     appendConsole,
@@ -166,5 +175,6 @@ export function createBridge(options: {
     askRegenerate: onRegenerate,
     askNewKey: onAskNewKey,
     filesDropped: onFilesDropped,
+    updateDownloadProgress: data => { onDownloadProgress?.(data); },
   };
 }

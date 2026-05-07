@@ -9,10 +9,26 @@ import unittest
 from unittest.mock import MagicMock, call, mock_open, patch
 
 from el_sbobinator.core.updater import (
+    _download_and_install_background,
     _poll_then_destroy,
     _verify_sha256,
     download_and_install_update,
 )
+
+
+class _SyncThread:
+    """threading.Thread replacement that runs target() synchronously on start()."""
+
+    def __init__(self, target=None, args=(), daemon=False, **kw):
+        self._target = target
+        self._args = args
+
+    def start(self):
+        if self._target:
+            self._target(*self._args)
+
+    def join(self, timeout=None):
+        pass
 
 
 class UpdaterTests(unittest.TestCase):
@@ -38,36 +54,18 @@ class UpdaterTests(unittest.TestCase):
 
     def test_version_v_prefix_stripped_in_filename(self):
         """Both 'v1.2.3' and '1.2.3' must produce filename 'Setup-v1.2.3.exe'."""
-
-        class _FakeResp:
-            def read(self, n):
-                return b""
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                pass
-
         for version in ("v1.2.3", "1.2.3"):
             with self.subTest(version=version):
                 with (
                     patch.object(sys, "platform", "win32"),
-                    patch(
-                        "urllib.request.urlopen", return_value=_FakeResp()
-                    ) as mock_urlopen,
-                    patch("builtins.open", mock_open()),
-                    patch(
-                        "el_sbobinator.core.updater._verify_sha256", return_value=None
-                    ),
-                    patch("os.startfile", create=True),
-                    patch("threading.Thread"),
+                    patch("el_sbobinator.core.updater._Thread") as mock_thread,
                     patch("tempfile.NamedTemporaryFile") as mock_tmp,
+                    patch("ssl.create_default_context"),
                 ):
                     mock_tmp.return_value.__enter__.return_value.name = "/tmp/setup.exe"
                     mock_tmp.return_value.__exit__.return_value = False
                     download_and_install_update(version)
-                    url = mock_urlopen.call_args[0][0]
+                    url = mock_thread.call_args[1]["args"][0]
 
                 self.assertIn("1.2.3", url)
                 self.assertNotIn("vv", url)
@@ -88,45 +86,66 @@ class UpdaterTests(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_download_failure_returns_error(self):
+        events: list[dict] = []
+
+        def _emit(evt: str, payload: dict) -> None:
+            events.append(payload)
+
         with (
             patch.object(sys, "platform", "win32"),
             patch("urllib.request.urlopen", side_effect=OSError("network error")),
+            patch(
+                "el_sbobinator.core.updater._Thread",
+                side_effect=_SyncThread,
+            ),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
         ):
             mock_tmp.return_value.__enter__.return_value.name = "/tmp/setup.exe"
             mock_tmp.return_value.__exit__.return_value = False
-            result = download_and_install_update("1.0.0")
+            result = download_and_install_update("1.0.0", emit_fn=_emit)
 
-        self.assertFalse(result["ok"])
-        self.assertIn("Download", result["error"])
+        self.assertTrue(result["ok"])
+        self.assertEqual(result.get("status"), "downloading")
+        error_events = [e for e in events if e.get("status") == "error"]
+        self.assertTrue(len(error_events) > 0)
+        self.assertIn("Download", error_events[0].get("error", ""))
 
     # ------------------------------------------------------------------
     # Windows happy path
     # ------------------------------------------------------------------
 
     def test_windows_calls_popen_with_currentuser_flag(self):
-        class _FakeResp:
-            def read(self, n):
-                return b""
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                pass
+        fake_proc = MagicMock()
+        fake_proc.poll.return_value = (
+            1  # exits immediately so _poll_then_destroy returns fast
+        )
 
         with (
             patch.object(sys, "platform", "win32"),
-            patch("urllib.request.urlopen", return_value=_FakeResp()),
+            patch(
+                "urllib.request.urlopen",
+                return_value=MagicMock(
+                    __enter__=lambda s, *a: s,
+                    __exit__=lambda s, *a: None,
+                    read=lambda s, n=None: b"",
+                ),
+            ),
             patch("builtins.open", mock_open()),
             patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
-            patch("el_sbobinator.core.updater.subprocess.Popen") as mock_popen,
-            patch("threading.Thread") as mock_thread,
+            patch(
+                "el_sbobinator.core.updater.subprocess.Popen",
+                return_value=fake_proc,
+            ) as mock_popen,
+            patch(
+                "el_sbobinator.core.updater._Thread",
+                side_effect=_SyncThread,
+            ),
+            patch("el_sbobinator.core.updater.time.sleep"),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
+            patch.dict("sys.modules", {"webview": MagicMock(windows=[])}),
         ):
             mock_tmp.return_value.__enter__.return_value.name = "/tmp/setup.exe"
             mock_tmp.return_value.__exit__.return_value = False
-            mock_thread.return_value.start.return_value = None
             result = download_and_install_update("2.0.0")
 
         self.assertTrue(result["ok"])
@@ -146,16 +165,6 @@ class UpdaterTests(unittest.TestCase):
             {"system-entities": [{"mount-point": "/Volumes/ElSbobinator"}]}
         )
 
-        class _FakeResp:
-            def read(self, n):
-                return b""
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                pass
-
         fake_proc = MagicMock()
         fake_proc.stdout = fake_plist
         fake_proc.returncode = 0
@@ -168,24 +177,34 @@ class UpdaterTests(unittest.TestCase):
 
         with (
             patch.object(sys, "platform", "darwin"),
-            patch("urllib.request.urlopen", return_value=_FakeResp()),
+            patch(
+                "urllib.request.urlopen",
+                return_value=MagicMock(
+                    __enter__=lambda s, *a: s,
+                    __exit__=lambda s, *a: None,
+                    read=lambda s, n=None: b"",
+                ),
+            ),
             patch("builtins.open", mock_open()),
             patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
             patch("subprocess.run", side_effect=_fake_run),
             patch("subprocess.Popen"),
-            patch("threading.Thread") as mock_thread,
+            patch(
+                "el_sbobinator.core.updater._Thread",
+                side_effect=_SyncThread,
+            ),
+            patch("el_sbobinator.core.updater.time.sleep"),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
             patch("os.unlink"),
+            patch.dict("sys.modules", {"webview": MagicMock(windows=[])}),
         ):
             mock_tmp.return_value.__enter__.return_value.name = "/tmp/app.dmg"
             mock_tmp.return_value.__exit__.return_value = False
-            mock_thread.return_value.start.return_value = None
             result = download_and_install_update("1.5.0")
 
         self.assertTrue(result["ok"])
         self.assertIn("hdiutil", call_names)
         self.assertIn("cp", call_names)
-        self.assertIn("hdiutil", call_names)
 
     # ------------------------------------------------------------------
     # macOS — no mount point
@@ -202,16 +221,6 @@ class UpdaterTests(unittest.TestCase):
             {"system-entities": [{"mount-point": "/Volumes/ElSbobinator"}]}
         )
 
-        class _FakeResp:
-            def read(self, n):
-                return b""
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                pass
-
         attach_proc = MagicMock()
         attach_proc.stdout = fake_plist
         attach_proc.returncode = 0
@@ -223,22 +232,40 @@ class UpdaterTests(unittest.TestCase):
                 raise err
             return attach_proc
 
+        events: list[dict] = []
+
+        def _emit(evt: str, payload: dict) -> None:
+            events.append(payload)
+
         with (
             patch.object(sys, "platform", "darwin"),
-            patch("urllib.request.urlopen", return_value=_FakeResp()),
+            patch(
+                "urllib.request.urlopen",
+                return_value=MagicMock(
+                    __enter__=lambda s, *a: s,
+                    __exit__=lambda s, *a: None,
+                    read=lambda s, n=None: b"",
+                ),
+            ),
             patch("builtins.open", mock_open()),
             patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
             patch("subprocess.run", side_effect=_fake_run),
             patch("subprocess.Popen"),
+            patch(
+                "el_sbobinator.core.updater._Thread",
+                side_effect=_SyncThread,
+            ),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
             patch("os.unlink"),
         ):
             mock_tmp.return_value.__enter__.return_value.name = "/tmp/app.dmg"
             mock_tmp.return_value.__exit__.return_value = False
-            result = download_and_install_update("1.5.0")
+            result = download_and_install_update("1.5.0", emit_fn=_emit)
 
-        self.assertFalse(result["ok"])
-        self.assertEqual(result["error"], "permission_denied")
+        self.assertTrue(result["ok"])
+        error_events = [e for e in events if e.get("status") == "error"]
+        self.assertTrue(len(error_events) > 0)
+        self.assertEqual(error_events[0].get("error"), "permission_denied")
 
     # ------------------------------------------------------------------
     # macOS — no mount point
@@ -249,35 +276,43 @@ class UpdaterTests(unittest.TestCase):
 
         fake_plist = plistlib.dumps({"system-entities": []})
 
-        class _FakeResp:
-            def read(self, n):
-                return b""
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                pass
-
         fake_proc = MagicMock()
         fake_proc.stdout = fake_plist
         fake_proc.returncode = 0
 
+        events: list[dict] = []
+
+        def _emit2(evt: str, payload: dict) -> None:
+            events.append(payload)
+
         with (
             patch.object(sys, "platform", "darwin"),
-            patch("urllib.request.urlopen", return_value=_FakeResp()),
+            patch(
+                "urllib.request.urlopen",
+                return_value=MagicMock(
+                    __enter__=lambda s, *a: s,
+                    __exit__=lambda s, *a: None,
+                    read=lambda s, n=None: b"",
+                ),
+            ),
             patch("builtins.open", mock_open()),
             patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
             patch("subprocess.run", return_value=fake_proc),
+            patch(
+                "el_sbobinator.core.updater._Thread",
+                side_effect=_SyncThread,
+            ),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
             patch("os.unlink"),
         ):
             mock_tmp.return_value.__enter__.return_value.name = "/tmp/app.dmg"
             mock_tmp.return_value.__exit__.return_value = False
-            result = download_and_install_update("1.5.0")
+            result = download_and_install_update("1.5.0", emit_fn=_emit2)
 
-        self.assertFalse(result["ok"])
-        self.assertIn("DMG", result["error"])
+        self.assertTrue(result["ok"])
+        error_events = [e for e in events if e.get("status") == "error"]
+        self.assertTrue(len(error_events) > 0)
+        self.assertIn("DMG", error_events[0].get("error", ""))
 
 
 class TestChecksumVerification(unittest.TestCase):
@@ -438,31 +473,38 @@ class TestChecksumVerification(unittest.TestCase):
 
 class TestChecksumIntegration(unittest.TestCase):
     def test_checksum_failure_blocks_install_and_deletes_tmp(self):
-        class _FakeResp:
-            def read(self, n=None):
-                return b""
+        events: list[dict] = []
 
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                pass
+        def _emit(evt: str, payload: dict) -> None:
+            events.append(payload)
 
         with (
             patch.object(sys, "platform", "win32"),
-            patch("urllib.request.urlopen", return_value=_FakeResp()),
+            patch(
+                "urllib.request.urlopen",
+                return_value=MagicMock(
+                    __enter__=lambda s, *a: s,
+                    __exit__=lambda s, *a: None,
+                    read=lambda *_: b"",
+                    headers=MagicMock(get=lambda *_: None),
+                ),
+            ),
             patch("builtins.open", mock_open()),
+            patch(
+                "el_sbobinator.core.updater._Thread",
+                side_effect=_SyncThread,
+            ),
             patch("os.unlink") as mock_unlink,
-            patch("os.startfile", create=True) as mock_start,
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
         ):
             mock_tmp.return_value.__enter__.return_value.name = "/tmp/setup.exe"
             mock_tmp.return_value.__exit__.return_value = False
-            result = download_and_install_update("1.0.0")
+            result = download_and_install_update("1.0.0", emit_fn=_emit)
 
-        self.assertFalse(result["ok"])
-        self.assertIn("vuoto", result["error"])
-        mock_start.assert_not_called()
+        self.assertTrue(result["ok"])
+        error_events = [e for e in events if e.get("status") == "error"]
+        self.assertTrue(len(error_events) > 0)
+        self.assertIn("vuoto", error_events[0].get("error", ""))
         mock_unlink.assert_called_with("/tmp/setup.exe")
 
 
@@ -475,40 +517,15 @@ class TestMacOSDmgInstall(unittest.TestCase):
 
     def test_macos_dmg_url_contains_correct_filename(self):
         """download_and_install_update on darwin must build URL with El-Sbobinator-v{ver}.dmg."""
-
-        class _FakeResp:
-            def read(self, n):
-                return b""
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                pass
-
         with (
             patch.object(sys, "platform", "darwin"),
-            patch("urllib.request.urlopen", return_value=_FakeResp()) as mock_urlopen,
-            patch("builtins.open", mock_open()),
-            patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
-            patch("subprocess.Popen"),
-            patch("threading.Thread"),
-            patch("os.unlink"),
+            patch("el_sbobinator.core.updater._Thread") as mock_thread,
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
         ):
-            import plistlib
-
-            fake_plist = plistlib.dumps(
-                {"system-entities": [{"mount-point": "/Volumes/Test"}]}
-            )
             mock_tmp.return_value.__enter__.return_value.name = "/tmp/app.dmg"
             mock_tmp.return_value.__exit__.return_value = False
-            mock_run = MagicMock()
-            mock_run.stdout = fake_plist
-            mock_run.returncode = 0
-            with patch("subprocess.run", return_value=mock_run):
-                download_and_install_update("2.3.4")
-            url = mock_urlopen.call_args[0][0]
+            download_and_install_update("2.3.4")
+            url = mock_thread.call_args[1]["args"][0]
 
         self.assertIn("El-Sbobinator-v2.3.4.dmg", url)
         self.assertNotIn(".exe", url)
@@ -519,35 +536,42 @@ class TestMacOSDmgInstall(unittest.TestCase):
 
     def test_macos_hdiutil_attach_failure_returns_installazione_fallita(self):
         """CalledProcessError from hdiutil attach must bubble as 'Installazione fallita'."""
-
-        class _FakeResp:
-            def read(self, n):
-                return b""
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                pass
-
         attach_err = subprocess.CalledProcessError(1, ["hdiutil", "attach"])
         attach_err.stderr = b"hdiutil: attach failed"
 
+        events: list[dict] = []
+
+        def _emit(evt: str, payload: dict) -> None:
+            events.append(payload)
+
         with (
             patch.object(sys, "platform", "darwin"),
-            patch("urllib.request.urlopen", return_value=_FakeResp()),
+            patch(
+                "urllib.request.urlopen",
+                return_value=MagicMock(
+                    __enter__=lambda s, *a: s,
+                    __exit__=lambda s, *a: None,
+                    read=lambda s, n=None: b"",
+                ),
+            ),
             patch("builtins.open", mock_open()),
             patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
             patch("subprocess.run", side_effect=attach_err),
+            patch(
+                "el_sbobinator.core.updater._Thread",
+                side_effect=_SyncThread,
+            ),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
             patch("os.unlink"),
         ):
             mock_tmp.return_value.__enter__.return_value.name = "/tmp/app.dmg"
             mock_tmp.return_value.__exit__.return_value = False
-            result = download_and_install_update("1.0.0")
+            result = download_and_install_update("1.0.0", emit_fn=_emit)
 
-        self.assertFalse(result["ok"])
-        self.assertIn("Installazione fallita", result["error"])
+        self.assertTrue(result["ok"])
+        error_events = [e for e in events if e.get("status") == "error"]
+        self.assertTrue(len(error_events) > 0)
+        self.assertIn("Installazione fallita", error_events[0].get("error", ""))
 
     # ------------------------------------------------------------------
     # Happy path — xattr and open called
@@ -560,16 +584,6 @@ class TestMacOSDmgInstall(unittest.TestCase):
         fake_plist = plistlib.dumps(
             {"system-entities": [{"mount-point": "/Volumes/ElSbobinator"}]}
         )
-
-        class _FakeResp:
-            def read(self, n):
-                return b""
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                pass
 
         run_proc = MagicMock()
         run_proc.stdout = fake_plist
@@ -588,18 +602,29 @@ class TestMacOSDmgInstall(unittest.TestCase):
 
         with (
             patch.object(sys, "platform", "darwin"),
-            patch("urllib.request.urlopen", return_value=_FakeResp()),
+            patch(
+                "urllib.request.urlopen",
+                return_value=MagicMock(
+                    __enter__=lambda s, *a: s,
+                    __exit__=lambda s, *a: None,
+                    read=lambda s, n=None: b"",
+                ),
+            ),
             patch("builtins.open", mock_open()),
             patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
             patch("subprocess.run", side_effect=_fake_run),
             patch("subprocess.Popen", side_effect=_fake_popen),
-            patch("threading.Thread") as mock_thread,
+            patch(
+                "el_sbobinator.core.updater._Thread",
+                side_effect=_SyncThread,
+            ),
+            patch("el_sbobinator.core.updater.time.sleep"),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
             patch("os.unlink"),
+            patch.dict("sys.modules", {"webview": MagicMock(windows=[])}),
         ):
             mock_tmp.return_value.__enter__.return_value.name = "/tmp/app.dmg"
             mock_tmp.return_value.__exit__.return_value = False
-            mock_thread.return_value.start.return_value = None
             result = download_and_install_update("1.5.0")
 
         self.assertTrue(result["ok"])
@@ -623,16 +648,6 @@ class TestMacOSDmgInstall(unittest.TestCase):
             {"system-entities": [{"mount-point": "/Volumes/ElSbobinator"}]}
         )
 
-        class _FakeResp:
-            def read(self, n):
-                return b""
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                pass
-
         attach_proc = MagicMock()
         attach_proc.stdout = fake_plist
         attach_proc.returncode = 0
@@ -648,22 +663,40 @@ class TestMacOSDmgInstall(unittest.TestCase):
                 detach_calls.append(list(cmd))
             return attach_proc
 
+        events: list[dict] = []
+
+        def _emit(evt: str, payload: dict) -> None:
+            events.append(payload)
+
         with (
             patch.object(sys, "platform", "darwin"),
-            patch("urllib.request.urlopen", return_value=_FakeResp()),
+            patch(
+                "urllib.request.urlopen",
+                return_value=MagicMock(
+                    __enter__=lambda s, *a: s,
+                    __exit__=lambda s, *a: None,
+                    read=lambda s, n=None: b"",
+                ),
+            ),
             patch("builtins.open", mock_open()),
             patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
             patch("subprocess.run", side_effect=_fake_run),
             patch("subprocess.Popen"),
+            patch(
+                "el_sbobinator.core.updater._Thread",
+                side_effect=_SyncThread,
+            ),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
             patch("os.unlink"),
         ):
             mock_tmp.return_value.__enter__.return_value.name = "/tmp/app.dmg"
             mock_tmp.return_value.__exit__.return_value = False
-            result = download_and_install_update("1.5.0")
+            result = download_and_install_update("1.5.0", emit_fn=_emit)
 
-        self.assertFalse(result["ok"])
-        self.assertIn("Installazione fallita", result["error"])
+        self.assertTrue(result["ok"])
+        error_events = [e for e in events if e.get("status") == "error"]
+        self.assertTrue(len(error_events) > 0)
+        self.assertIn("Installazione fallita", error_events[0].get("error", ""))
         self.assertEqual(len(detach_calls), 1, "hdiutil detach must always be called")
         self.assertIn("/Volumes/ElSbobinator", detach_calls[0])
 
@@ -728,7 +761,11 @@ class TestWindowsInstallerLaunch(unittest.TestCase):
     def test_popen_called_with_detached_process_creationflag(self):
         """Popen must include DETACHED_PROCESS (0x8) in creationflags on Windows."""
         fake_proc = MagicMock()
-        fake_proc.poll.return_value = None
+        fake_proc.poll.return_value = (
+            1  # exits immediately so _poll_then_destroy returns fast
+        )
+
+        _SyncThreadCls = self._sync_thread_cls()
 
         with (
             patch.object(sys, "platform", "win32"),
@@ -738,8 +775,13 @@ class TestWindowsInstallerLaunch(unittest.TestCase):
             patch(
                 "el_sbobinator.core.updater.subprocess.Popen", return_value=fake_proc
             ) as mock_popen,
-            patch("el_sbobinator.core.updater.threading.Thread") as mock_thread,
+            patch(
+                "el_sbobinator.core.updater._Thread",
+                side_effect=_SyncThreadCls,
+            ),
+            patch("el_sbobinator.core.updater.time.sleep"),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
+            patch.dict("sys.modules", {"webview": MagicMock(windows=[])}),
         ):
             mock_tmp.return_value.__enter__.return_value.name = "/tmp/setup.exe"
             mock_tmp.return_value.__exit__.return_value = False
@@ -749,9 +791,6 @@ class TestWindowsInstallerLaunch(unittest.TestCase):
         self.assertIn("creationflags", kw)
         self.assertTrue(
             kw["creationflags"] & 0x00000008, "DETACHED_PROCESS bit must be set"
-        )
-        mock_thread.assert_called_once_with(
-            target=_poll_then_destroy, args=(fake_proc,), daemon=True
         )
 
     def test_window_destroyed_when_installer_stays_alive(self):
@@ -774,9 +813,7 @@ class TestWindowsInstallerLaunch(unittest.TestCase):
                 "el_sbobinator.core.updater.subprocess.Popen", return_value=fake_proc
             ),
             patch("el_sbobinator.core.updater.time.sleep"),
-            patch(
-                "el_sbobinator.core.updater.threading.Thread", side_effect=_SyncThread
-            ),
+            patch("el_sbobinator.core.updater._Thread", side_effect=_SyncThread),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
             patch.dict("sys.modules", {"webview": fake_webview}),
         ):
@@ -807,9 +844,7 @@ class TestWindowsInstallerLaunch(unittest.TestCase):
                 "el_sbobinator.core.updater.subprocess.Popen", return_value=fake_proc
             ),
             patch("el_sbobinator.core.updater.time.sleep"),
-            patch(
-                "el_sbobinator.core.updater.threading.Thread", side_effect=_SyncThread
-            ),
+            patch("el_sbobinator.core.updater._Thread", side_effect=_SyncThread),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
             patch.dict("sys.modules", {"webview": fake_webview}),
         ):
@@ -907,6 +942,49 @@ class TestPollThenDestroy(unittest.TestCase):
             _poll_then_destroy(fake_proc)
 
         self.assertEqual(fake_proc.poll.call_count, 1)
+
+    def test_emit_fn_done_called_when_installer_confirmed_alive(self):
+        """emit_fn must receive 'done' (not 'error') when installer survives the confirmation window."""
+        fake_proc = MagicMock()
+        fake_proc.poll.return_value = None  # never exits
+
+        events: list[tuple[str, str]] = []
+
+        def _emit(
+            status: str, *, bytes_done: int = 0, bytes_total: int = 0, error: str = ""
+        ) -> None:
+            events.append((status, error))
+
+        with (
+            patch("el_sbobinator.core.updater.time.sleep"),
+            patch.dict("sys.modules", {"webview": MagicMock(windows=[])}),
+        ):
+            _poll_then_destroy(fake_proc, _emit)
+
+        statuses = [s for s, _ in events]
+        self.assertIn("done", statuses)
+        self.assertNotIn("error", statuses)
+
+    def test_emit_fn_uac_denied_called_when_installer_exits_quickly(self):
+        """emit_fn must receive error='uac_denied' (not 'done') when installer exits immediately."""
+        fake_proc = MagicMock()
+        fake_proc.poll.return_value = 1  # exits on first poll — UAC denied
+
+        events: list[tuple[str, str]] = []
+
+        def _emit(
+            status: str, *, bytes_done: int = 0, bytes_total: int = 0, error: str = ""
+        ) -> None:
+            events.append((status, error))
+
+        with (
+            patch("el_sbobinator.core.updater.time.sleep"),
+            patch.dict("sys.modules", {"webview": MagicMock(windows=[MagicMock()])}),
+        ):
+            _poll_then_destroy(fake_proc, _emit)
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0], ("error", "uac_denied"))
 
 
 if __name__ == "__main__":

@@ -26,6 +26,7 @@ import certifi
 
 _CREATE_NEW_PROCESS_GROUP = 0x00000200
 _DETACHED_PROCESS = 0x00000008
+_Thread = threading.Thread
 
 
 def _verify_sha256(
@@ -88,17 +89,29 @@ def _launch_windows_installer(tmp_path: str) -> subprocess.Popen[bytes]:
     return proc
 
 
-def _poll_then_destroy(proc: subprocess.Popen[bytes]) -> None:
+def _poll_then_destroy(proc: subprocess.Popen[bytes], emit_fn=None) -> None:
     """Poll the installer process; destroy the app window only once it is confirmed alive.
 
     Prevents the window from closing when the user denies UAC (installer exits immediately).
+    Emits 'done' via emit_fn when the installer is confirmed alive, or 'error' with
+    error='uac_denied' if it exits before the liveness window elapses.
     """
     _POLL_INTERVAL = 0.3
     _ALIVE_CONFIRM_POLLS = 5  # 5 x 0.3 s ~ 1.5 s
     for _ in range(_ALIVE_CONFIRM_POLLS):
         time.sleep(_POLL_INTERVAL)
         if proc.poll() is not None:
+            if emit_fn is not None:
+                try:
+                    emit_fn("error", error="uac_denied")
+                except Exception:
+                    pass
             return  # installer exited quickly — UAC denied or launch failure; leave app open
+    if emit_fn is not None:
+        try:
+            emit_fn("done")
+        except Exception:
+            pass
     try:
         import webview  # type: ignore
 
@@ -161,8 +174,109 @@ def _install_macos_dmg(tmp_path: str) -> dict | None:
     return None
 
 
-def download_and_install_update(version: str) -> dict:
-    """Download the correct installer for this OS, launch it, then quit the app."""
+def _download_and_install_background(
+    url: str,
+    tmp_path: str,
+    ssl_ctx: ssl.SSLContext,
+    emit_fn,
+) -> None:
+    """Background worker: download, verify checksum, and install the update asset."""
+
+    def _emit(
+        status: str, *, bytes_done: int = 0, bytes_total: int = 0, error: str = ""
+    ) -> None:
+        if emit_fn is None:
+            return
+        payload: dict = {
+            "status": status,
+            "bytes_done": bytes_done,
+            "bytes_total": bytes_total,
+        }
+        if error:
+            payload["error"] = error
+        try:
+            emit_fn("updateDownloadProgress", payload)
+        except Exception:
+            pass
+
+    # --- Download ---
+    try:
+        last_emit = 0.0
+        with urllib.request.urlopen(url, timeout=120, context=ssl_ctx) as resp:
+            try:
+                total = int(resp.headers.get("Content-Length") or 0)
+            except (AttributeError, TypeError):
+                total = 0
+            done = 0
+            with open(tmp_path, "wb") as fh:
+                while True:
+                    chunk = resp.read(65536)
+                    if not chunk:
+                        break
+                    fh.write(chunk)
+                    done += len(chunk)
+                    now = time.monotonic()
+                    if now - last_emit >= 0.25:
+                        last_emit = now
+                        _emit("downloading", bytes_done=done, bytes_total=total)
+    except Exception as e:
+        _try_unlink(tmp_path)
+        _emit("error", error=f"Download fallito: {e}")
+        return
+
+    # --- Checksum ---
+    _emit("verifying")
+    integrity_error = _verify_sha256(tmp_path, url + ".sha256", ssl_ctx)
+    if integrity_error:
+        _try_unlink(tmp_path)
+        _emit("error", error=integrity_error)
+        return
+
+    # --- Install ---
+    _emit("installing")
+    try:
+        if sys.platform == "win32":
+            proc = _launch_windows_installer(tmp_path)
+            _Thread(target=_poll_then_destroy, args=(proc, _emit), daemon=True).start()
+            return  # done/error emitted by _poll_then_destroy once UAC outcome is known
+        else:
+            err = _install_macos_dmg(tmp_path)
+            if err is not None:
+                _emit("error", error=err.get("error", "Installazione fallita."))
+                return
+
+            def _delayed_destroy() -> None:
+                time.sleep(0.8)
+                try:
+                    import webview  # type: ignore
+
+                    if webview.windows:
+                        webview.windows[0].destroy()
+                except Exception:
+                    pass
+
+            _Thread(target=_delayed_destroy, daemon=True).start()
+    except PermissionError:
+        _emit("error", error="permission_denied")
+        return
+    except Exception as e:
+        _emit("error", error=f"Installazione fallita: {e}")
+        return
+
+    _emit("done")
+
+
+def download_and_install_update(version: str, emit_fn=None) -> dict:
+    """Start the installer download in a background thread; return immediately.
+
+    Synchronous errors (invalid version, unsupported platform, SSL/tempfile failure)
+    are returned as ``{"ok": False, "error": "..."}``.  All other outcomes —
+    download progress, checksum failures, install errors, and completion — are
+    reported asynchronously via *emit_fn* (``"updateDownloadProgress"`` bridge event).
+
+    Returns ``{"ok": True, "status": "downloading"}`` when the background thread
+    has been successfully started.
+    """
     if not isinstance(version, str) or not re.fullmatch(r"v?\d+\.\d+\.\d+", version):
         return {"ok": False, "error": "Versione non valida."}
 
@@ -183,52 +297,16 @@ def download_and_install_update(version: str) -> dict:
         _ssl_ctx = ssl.create_default_context(cafile=certifi.where())
     except Exception as e:
         return {"ok": False, "error": f"Configurazione SSL fallita: {e}"}
+
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             tmp_path = tmp.name
-        with urllib.request.urlopen(url, timeout=120, context=_ssl_ctx) as resp:
-            with open(tmp_path, "wb") as fh:
-                while True:
-                    chunk = resp.read(65536)
-                    if not chunk:
-                        break
-                    fh.write(chunk)
     except Exception as e:
-        return {"ok": False, "error": f"Download fallito: {e}"}
+        return {"ok": False, "error": f"Creazione file temporaneo fallita: {e}"}
 
-    integrity_error = _verify_sha256(tmp_path, url + ".sha256", _ssl_ctx)
-    if integrity_error:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        return {"ok": False, "error": integrity_error}
-
-    try:
-        if sys.platform == "win32":
-            proc = _launch_windows_installer(tmp_path)
-            threading.Thread(
-                target=_poll_then_destroy, args=(proc,), daemon=True
-            ).start()
-            return {"ok": True}
-        else:
-            err = _install_macos_dmg(tmp_path)
-            if err is not None:
-                return err
-    except PermissionError:
-        return {"ok": False, "error": "permission_denied"}
-    except Exception as e:
-        return {"ok": False, "error": f"Installazione fallita: {e}"}
-
-    def _delayed_destroy() -> None:
-        time.sleep(0.8)
-        try:
-            import webview  # type: ignore
-
-            if webview.windows:
-                webview.windows[0].destroy()
-        except Exception:
-            pass
-
-    threading.Thread(target=_delayed_destroy, daemon=True).start()
-    return {"ok": True}
+    _Thread(
+        target=_download_and_install_background,
+        args=(url, tmp_path, _ssl_ctx, emit_fn),
+        daemon=True,
+    ).start()
+    return {"ok": True, "status": "downloading"}

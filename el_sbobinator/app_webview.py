@@ -1123,7 +1123,7 @@ class ElSbobinatorApi:
 
     def download_and_install_update(self, version: str) -> dict:
         """Download the correct installer for this OS, launch it, then quit the app."""
-        return _download_and_install_update(version)
+        return _download_and_install_update(version, emit_fn=self._adapter.emit)
 
     # ---- Console push helper ----
 

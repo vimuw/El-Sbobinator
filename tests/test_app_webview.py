@@ -3,9 +3,24 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
-from unittest.mock import mock_open, patch
+from unittest.mock import MagicMock, mock_open, patch
 
 from el_sbobinator.app_webview import ElSbobinatorApi, PipelineAdapter
+
+
+class _SyncThread:
+    """threading.Thread replacement that runs target() synchronously on start()."""
+
+    def __init__(self, target=None, args=(), daemon=False, **kw):
+        self._target = target
+        self._args = args
+
+    def start(self):
+        if self._target:
+            self._target(*self._args)
+
+    def join(self, timeout=None):
+        pass
 
 
 class _FakeWindow:
@@ -1072,6 +1087,9 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
                 def __exit__(self, *_):
                     pass
 
+            fake_proc = MagicMock()
+            fake_proc.poll.return_value = 1  # exits immediately in _poll_then_destroy
+
             with (
                 patch(
                     "urllib.request.urlopen", return_value=_FakeResp()
@@ -1079,10 +1097,16 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
                 patch("tempfile.NamedTemporaryFile", return_value=_FakeTmpFile()),
                 patch.object(sys, "platform", "win32"),
                 patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
-                patch("os.startfile", create=True),
-                patch("os.unlink"),
-                patch("time.sleep"),
-                patch("sys.exit"),
+                patch(
+                    "el_sbobinator.core.updater.subprocess.Popen",
+                    return_value=fake_proc,
+                ),
+                patch(
+                    "el_sbobinator.core.updater._Thread",
+                    side_effect=_SyncThread,
+                ),
+                patch("el_sbobinator.core.updater.time.sleep"),
+                patch.dict("sys.modules", {"webview": MagicMock(windows=[])}),
             ):
                 api.download_and_install_update("v1.2.3")
 
@@ -1197,14 +1221,26 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
             def __exit__(self, *_):
                 pass
 
+        fake_proc = MagicMock()
+        fake_proc.poll.return_value = 1  # exits immediately in _poll_then_destroy
+
         with (
             patch("urllib.request.urlopen", return_value=_FakeResp()),
             patch("tempfile.NamedTemporaryFile", return_value=_FakeTmpFile()),
             patch.object(sys, "platform", "win32"),
             patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
-            patch("el_sbobinator.core.updater.subprocess.Popen"),
+            patch(
+                "el_sbobinator.core.updater.subprocess.Popen",
+                return_value=fake_proc,
+            ),
             patch("el_sbobinator.core.updater.atexit.register", side_effect=_capture),
+            patch(
+                "el_sbobinator.core.updater._Thread",
+                side_effect=_SyncThread,
+            ),
+            patch("el_sbobinator.core.updater.time.sleep"),
             patch("builtins.open", mock_open()),
+            patch.dict("sys.modules", {"webview": MagicMock(windows=[])}),
         ):
             api.download_and_install_update("v1.0.0")
 
