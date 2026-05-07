@@ -8,7 +8,11 @@ import tempfile
 import unittest
 from unittest.mock import MagicMock, call, mock_open, patch
 
-from el_sbobinator.core.updater import _verify_sha256, download_and_install_update
+from el_sbobinator.core.updater import (
+    _poll_then_destroy,
+    _verify_sha256,
+    download_and_install_update,
+)
 
 
 class UpdaterTests(unittest.TestCase):
@@ -689,6 +693,220 @@ class TestMacOSDmgInstall(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertFalse(result["ok"])  # type: ignore[index]
         self.assertIn("/tmp/fake.dmg", unlinked)
+
+
+class TestWindowsInstallerLaunch(unittest.TestCase):
+    """Tests for poll-then-destroy guard that prevents window close on UAC denial."""
+
+    class _FakeResp:
+        def read(self, n):
+            return b""
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            pass
+
+    def _sync_thread_cls(self):
+        """Return a threading.Thread replacement that runs target() synchronously on start()."""
+
+        class _SyncThread:
+            def __init__(self, target=None, args=(), daemon=False, **kw):
+                self._target = target
+                self._args = args
+
+            def start(self):
+                if self._target:
+                    self._target(*self._args)
+
+            def join(self, timeout=None):
+                pass
+
+        return _SyncThread
+
+    def test_popen_called_with_detached_process_creationflag(self):
+        """Popen must include DETACHED_PROCESS (0x8) in creationflags on Windows."""
+        fake_proc = MagicMock()
+        fake_proc.poll.return_value = None
+
+        with (
+            patch.object(sys, "platform", "win32"),
+            patch("urllib.request.urlopen", return_value=self._FakeResp()),
+            patch("builtins.open", mock_open()),
+            patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
+            patch(
+                "el_sbobinator.core.updater.subprocess.Popen", return_value=fake_proc
+            ) as mock_popen,
+            patch("el_sbobinator.core.updater.threading.Thread") as mock_thread,
+            patch("tempfile.NamedTemporaryFile") as mock_tmp,
+        ):
+            mock_tmp.return_value.__enter__.return_value.name = "/tmp/setup.exe"
+            mock_tmp.return_value.__exit__.return_value = False
+            download_and_install_update("2.0.0")
+
+        kw = mock_popen.call_args[1]
+        self.assertIn("creationflags", kw)
+        self.assertTrue(
+            kw["creationflags"] & 0x00000008, "DETACHED_PROCESS bit must be set"
+        )
+        mock_thread.assert_called_once_with(
+            target=_poll_then_destroy, args=(fake_proc,), daemon=True
+        )
+
+    def test_window_destroyed_when_installer_stays_alive(self):
+        """destroy() must be called when the installer process remains alive past the confirm threshold."""
+        fake_proc = MagicMock()
+        fake_proc.poll.return_value = None  # installer never exits
+
+        fake_window = MagicMock()
+        fake_webview = MagicMock()
+        fake_webview.windows = [fake_window]
+
+        _SyncThread = self._sync_thread_cls()
+
+        with (
+            patch.object(sys, "platform", "win32"),
+            patch("urllib.request.urlopen", return_value=self._FakeResp()),
+            patch("builtins.open", mock_open()),
+            patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
+            patch(
+                "el_sbobinator.core.updater.subprocess.Popen", return_value=fake_proc
+            ),
+            patch("el_sbobinator.core.updater.time.sleep"),
+            patch(
+                "el_sbobinator.core.updater.threading.Thread", side_effect=_SyncThread
+            ),
+            patch("tempfile.NamedTemporaryFile") as mock_tmp,
+            patch.dict("sys.modules", {"webview": fake_webview}),
+        ):
+            mock_tmp.return_value.__enter__.return_value.name = "/tmp/setup.exe"
+            mock_tmp.return_value.__exit__.return_value = False
+            result = download_and_install_update("2.0.0")
+
+        self.assertTrue(result["ok"])
+        fake_window.destroy.assert_called_once()
+
+    def test_window_not_destroyed_when_installer_exits_quickly(self):
+        """destroy() must NOT be called when the installer exits immediately (e.g. UAC denied)."""
+        fake_proc = MagicMock()
+        fake_proc.poll.return_value = 1  # exits on first poll — UAC denied
+
+        fake_window = MagicMock()
+        fake_webview = MagicMock()
+        fake_webview.windows = [fake_window]
+
+        _SyncThread = self._sync_thread_cls()
+
+        with (
+            patch.object(sys, "platform", "win32"),
+            patch("urllib.request.urlopen", return_value=self._FakeResp()),
+            patch("builtins.open", mock_open()),
+            patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
+            patch(
+                "el_sbobinator.core.updater.subprocess.Popen", return_value=fake_proc
+            ),
+            patch("el_sbobinator.core.updater.time.sleep"),
+            patch(
+                "el_sbobinator.core.updater.threading.Thread", side_effect=_SyncThread
+            ),
+            patch("tempfile.NamedTemporaryFile") as mock_tmp,
+            patch.dict("sys.modules", {"webview": fake_webview}),
+        ):
+            mock_tmp.return_value.__enter__.return_value.name = "/tmp/setup.exe"
+            mock_tmp.return_value.__exit__.return_value = False
+            result = download_and_install_update("2.0.0")
+
+        self.assertTrue(result["ok"])
+        fake_window.destroy.assert_not_called()
+
+
+class TestPollThenDestroy(unittest.TestCase):
+    """Direct unit tests for _poll_then_destroy — verifies UAC-denial guard logic."""
+
+    def test_destroy_called_after_full_confirmation_window(self):
+        """destroy() is called when the installer survives all _ALIVE_CONFIRM_POLLS polls."""
+        fake_proc = MagicMock()
+        fake_proc.poll.return_value = None  # process never exits
+
+        fake_window = MagicMock()
+        fake_webview = MagicMock()
+        fake_webview.windows = [fake_window]
+
+        with (
+            patch("el_sbobinator.core.updater.time.sleep"),
+            patch.dict("sys.modules", {"webview": fake_webview}),
+        ):
+            _poll_then_destroy(fake_proc)
+
+        fake_window.destroy.assert_called_once()
+
+    def test_destroy_not_called_when_process_exits_on_first_poll(self):
+        """destroy() is NOT called when the installer exits immediately (UAC denied)."""
+        fake_proc = MagicMock()
+        fake_proc.poll.return_value = 1  # exits on every check
+
+        fake_window = MagicMock()
+        fake_webview = MagicMock()
+        fake_webview.windows = [fake_window]
+
+        with (
+            patch("el_sbobinator.core.updater.time.sleep"),
+            patch.dict("sys.modules", {"webview": fake_webview}),
+        ):
+            _poll_then_destroy(fake_proc)
+
+        fake_window.destroy.assert_not_called()
+
+    def test_destroy_not_called_when_process_exits_mid_window(self):
+        """destroy() is NOT called when the installer exits before the confirmation threshold."""
+        fake_proc = MagicMock()
+        # Returns None for the first 2 polls, then exits — never reaches full confirmation
+        fake_proc.poll.side_effect = [None, None, 1, 1, 1]
+
+        fake_window = MagicMock()
+        fake_webview = MagicMock()
+        fake_webview.windows = [fake_window]
+
+        with (
+            patch("el_sbobinator.core.updater.time.sleep"),
+            patch.dict("sys.modules", {"webview": fake_webview}),
+        ):
+            _poll_then_destroy(fake_proc)
+
+        fake_window.destroy.assert_not_called()
+
+    def test_poll_called_exactly_alive_confirm_count_when_always_alive(self):
+        """poll() is called exactly _ALIVE_CONFIRM_POLLS (5) times when process stays alive."""
+        fake_proc = MagicMock()
+        fake_proc.poll.return_value = None
+
+        fake_webview = MagicMock()
+        fake_webview.windows = []
+
+        with (
+            patch("el_sbobinator.core.updater.time.sleep"),
+            patch.dict("sys.modules", {"webview": fake_webview}),
+        ):
+            _poll_then_destroy(fake_proc)
+
+        self.assertEqual(fake_proc.poll.call_count, 5)
+
+    def test_poll_called_once_when_exits_on_first_check(self):
+        """poll() is called exactly once when process exits on the first check."""
+        fake_proc = MagicMock()
+        fake_proc.poll.return_value = 1
+
+        fake_webview = MagicMock()
+        fake_webview.windows = [MagicMock()]
+
+        with (
+            patch("el_sbobinator.core.updater.time.sleep"),
+            patch.dict("sys.modules", {"webview": fake_webview}),
+        ):
+            _poll_then_destroy(fake_proc)
+
+        self.assertEqual(fake_proc.poll.call_count, 1)
 
 
 if __name__ == "__main__":

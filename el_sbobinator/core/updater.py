@@ -8,6 +8,7 @@ a short-delay quit so the webview window closes cleanly.
 
 from __future__ import annotations
 
+import atexit
 import hashlib
 import os
 import plistlib
@@ -22,6 +23,9 @@ import urllib.error
 import urllib.request
 
 import certifi
+
+_CREATE_NEW_PROCESS_GROUP = 0x00000200
+_DETACHED_PROCESS = 0x00000008
 
 
 def _verify_sha256(
@@ -62,22 +66,46 @@ def _verify_sha256(
     return None
 
 
-def _launch_windows_installer(tmp_path: str) -> None:
+def _try_unlink(path: str) -> None:
+    """Best-effort unlink; silently ignores all OS errors."""
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+
+
+def _launch_windows_installer(tmp_path: str) -> subprocess.Popen[bytes]:
     """Launch the Windows installer EXE and schedule temp-file cleanup."""
-    subprocess.Popen([tmp_path, "/CURRENTUSER"])
+    proc = subprocess.Popen(
+        [tmp_path, "/CURRENTUSER"],
+        creationflags=_CREATE_NEW_PROCESS_GROUP | _DETACHED_PROCESS,
+    )
+    # atexit fires during normal interpreter shutdown (after webview.start() returns),
+    # by which time Inno Setup has already copied itself — a single attempt suffices.
+    # A daemon thread cannot be used here because the process exits (~1.5 s after
+    # _poll_then_destroy calls destroy()) before the thread's first sleep completes.
+    atexit.register(_try_unlink, tmp_path)
+    return proc
 
-    def _cleanup(path: str) -> None:
-        for _ in range(3):
-            time.sleep(5)
-            try:
-                os.unlink(path)
-                return
-            except PermissionError:
-                pass
-            except OSError:
-                return
 
-    threading.Thread(target=_cleanup, args=(tmp_path,), daemon=True).start()
+def _poll_then_destroy(proc: subprocess.Popen[bytes]) -> None:
+    """Poll the installer process; destroy the app window only once it is confirmed alive.
+
+    Prevents the window from closing when the user denies UAC (installer exits immediately).
+    """
+    _POLL_INTERVAL = 0.3
+    _ALIVE_CONFIRM_POLLS = 5  # 5 x 0.3 s ~ 1.5 s
+    for _ in range(_ALIVE_CONFIRM_POLLS):
+        time.sleep(_POLL_INTERVAL)
+        if proc.poll() is not None:
+            return  # installer exited quickly — UAC denied or launch failure; leave app open
+    try:
+        import webview  # type: ignore
+
+        if webview.windows:
+            webview.windows[0].destroy()
+    except Exception:
+        pass
 
 
 def _install_macos_dmg(tmp_path: str) -> dict | None:
@@ -178,7 +206,11 @@ def download_and_install_update(version: str) -> dict:
 
     try:
         if sys.platform == "win32":
-            _launch_windows_installer(tmp_path)
+            proc = _launch_windows_installer(tmp_path)
+            threading.Thread(
+                target=_poll_then_destroy, args=(proc,), daemon=True
+            ).start()
+            return {"ok": True}
         else:
             err = _install_macos_dmg(tmp_path)
             if err is not None:

@@ -1167,19 +1167,16 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
             self.assertEqual(api._sessions_cache_gen, initial_gen + 1)
             self.assertIsNone(api._sessions_cache)
 
-    def test_cleanup_installer_daemon_retries_on_permission_error(self):
-        import os
+    def test_cleanup_registers_atexit_handler_for_temp_exe(self):
         import sys
 
-        api = ElSbobinatorApi()
-        call_counts = [0]
-        done_event = threading.Event()
+        from el_sbobinator.core.updater import _try_unlink
 
-        def flaky_unlink(path):
-            call_counts[0] += 1
-            if call_counts[0] < 2:
-                raise PermissionError("locked")
-            done_event.set()
+        api = ElSbobinatorApi()
+        registered: list[tuple] = []
+
+        def _capture(*args: object) -> None:
+            registered.append(args)
 
         class _FakeResp:
             def read(self, n):
@@ -1206,14 +1203,21 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
             patch.object(sys, "platform", "win32"),
             patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
             patch("el_sbobinator.core.updater.subprocess.Popen"),
-            patch("os.unlink", side_effect=flaky_unlink),
+            patch("el_sbobinator.core.updater.atexit.register", side_effect=_capture),
             patch("builtins.open", mock_open()),
-            patch("time.sleep"),
         ):
             api.download_and_install_update("v1.0.0")
-            done_event.wait(timeout=2.0)
 
-        self.assertGreaterEqual(call_counts[0], 2)
+        self.assertEqual(len(registered), 1)
+        args = registered[0]
+        self.assertIs(args[0], _try_unlink)
+        self.assertEqual(args[1], "/tmp/fake_setup.exe")
+
+    def test_try_unlink_silently_ignores_oserror(self):
+        from el_sbobinator.core.updater import _try_unlink
+
+        with patch("el_sbobinator.core.updater.os.unlink", side_effect=OSError("gone")):
+            _try_unlink("/nonexistent/path")  # must not raise
 
 
 class SaveThemePreferenceTests(unittest.TestCase):
