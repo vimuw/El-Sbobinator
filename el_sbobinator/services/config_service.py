@@ -670,6 +670,11 @@ def save_config(  # noqa: C901
                     data["fallback_keys"] = []
             except Exception:
                 pass
+        # Preserve non-credential config keys (e.g. session_root) from the existing config.
+        for _preserve_key in ("session_root",):
+            if _preserve_key in current_cfg and _preserve_key not in data:
+                data[_preserve_key] = current_cfg[_preserve_key]
+
         try:
             os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
         except Exception:
@@ -715,3 +720,45 @@ def save_config(  # noqa: C901
                         pass
         except Exception:
             pass
+
+
+def save_session_root_to_config(path: str) -> None:
+    """Persist a custom session_root to config.json without touching credentials."""
+    global _config_cache, _config_cache_gen
+    with _write_lock:
+        with _config_lock:
+            _config_cache = None
+            _config_cache_gen += 1
+        current_cfg: dict = {}
+        for _p in (CONFIG_FILE, LEGACY_CONFIG_FILE):
+            if not os.path.exists(_p):
+                continue
+            try:
+                with open(_p, encoding="utf-8") as _f:
+                    raw = json.load(_f)
+                if isinstance(raw, dict):
+                    current_cfg = raw
+                    break
+            except Exception:
+                pass
+        current_cfg["session_root"] = str(path)
+        try:
+            os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+        except Exception:
+            pass
+        tmp = CONFIG_FILE + ".tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as _f:
+                json.dump(current_cfg, _f, ensure_ascii=False)
+            os.replace(tmp, CONFIG_FILE)
+            if platform.system() != "Windows":
+                try:
+                    os.chmod(CONFIG_FILE, 0o600)
+                except Exception:
+                    pass
+        except Exception:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise

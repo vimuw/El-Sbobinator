@@ -41,7 +41,11 @@ from el_sbobinator.core.shared import (
     _atomic_write_json,
     cleanup_orphan_sessions,
     cleanup_orphan_temp_chunks,
+    get_session_root,
     get_session_storage_info,
+    invalidate_session_storage_cache,
+    migrate_legacy_session_root,
+    set_session_root,
 )
 from el_sbobinator.core.updater import (
     download_and_install_update as _download_and_install_update,
@@ -52,6 +56,7 @@ from el_sbobinator.services.config_service import (
     get_desktop_dir,
     load_config,
     save_config,
+    save_session_root_to_config,
 )
 from el_sbobinator.services.folders_service import (
     get_folders as _get_archive_folders,
@@ -113,8 +118,25 @@ class ElSbobinatorApi:
         self._sessions_cache_lock = threading.Lock()
         self._text_cache: OrderedDict[str, tuple[float, str]] = OrderedDict()
         self._text_cache_lock = threading.Lock()
+        self._move_state: dict = {
+            "status": "idle",
+            "moved": 0,
+            "total": 0,
+            "error": None,
+        }
+        self._move_lock = threading.Lock()
         configure_logging()
         self._logger = get_logger("el_sbobinator.webview")
+        # Initialise session root: apply persisted override or auto-migrate legacy path.
+        try:
+            _cfg = load_config()
+            _custom_root = str(_cfg.get("session_root") or "").strip()
+            if _custom_root and os.path.isabs(_custom_root):
+                set_session_root(_custom_root)
+            else:
+                migrate_legacy_session_root()
+        except Exception:
+            pass
         self._prewarm_thread = threading.Thread(
             target=self.get_completed_sessions,
             daemon=True,
@@ -191,9 +213,16 @@ class ElSbobinatorApi:
                 "ok": True,
                 "total_bytes": info["total_bytes"],
                 "total_sessions": info["total_sessions"],
+                "session_root": get_session_root(),
             }
         except Exception as e:
-            return {"ok": False, "error": str(e), "total_bytes": 0, "total_sessions": 0}
+            return {
+                "ok": False,
+                "error": str(e),
+                "total_bytes": 0,
+                "total_sessions": 0,
+                "session_root": "",
+            }
 
     def get_completed_sessions(self, limit: int = 20) -> dict:
         """Return the most recent completed sessions for the archive UI."""
@@ -924,9 +953,201 @@ class ElSbobinatorApi:
 
     def _get_session_root(self) -> str:
         """Return the session storage root directory."""
-        from el_sbobinator.core.shared import SESSION_ROOT
+        return get_session_root()
 
-        return SESSION_ROOT
+    def ask_session_folder(self) -> dict:
+        """Open a folder-picker dialog and return the user-selected path."""
+        try:
+            if self._window is None:
+                return {"ok": False, "error": "Finestra non disponibile"}
+            result = self._window.create_file_dialog(webview.FOLDER_DIALOG)
+            if not result:
+                return {"ok": False, "cancelled": True}
+            path = str(result[0]) if isinstance(result, list | tuple) else str(result)
+            return {"ok": True, "path": path}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def move_session_root(self, new_path: str) -> dict:
+        """Start an async move of the session-storage folder to new_path."""
+        new_path = str(new_path or "").strip()
+        if not new_path or not os.path.isabs(new_path):
+            return {"ok": False, "error": "Percorso non valido"}
+        old_root = get_session_root()
+        if os.path.normcase(os.path.realpath(new_path)) == os.path.normcase(
+            os.path.realpath(old_root)
+        ):
+            return {"ok": False, "error": "Percorso identico a quello attuale"}
+        if _path_under_root(
+            os.path.normcase(os.path.realpath(new_path)),
+            os.path.normcase(os.path.realpath(old_root)),
+        ):
+            return {
+                "ok": False,
+                "error": "La destinazione è dentro la cartella attuale",
+            }
+        if self._processing_thread is not None and self._processing_thread.is_alive():
+            return {"ok": False, "error": "Impossibile spostare durante l'elaborazione"}
+        with self._move_lock:
+            if self._move_state.get("status") == "moving":
+                return {"ok": False, "error": "Spostamento già in corso"}
+            self._move_state = {
+                "status": "moving",
+                "moved": 0,
+                "total": 0,
+                "error": None,
+            }
+        thread = threading.Thread(
+            target=self._do_move_session_root,
+            args=(old_root, new_path),
+            daemon=True,
+            name="session-move",
+        )
+        thread.start()
+        return {"ok": True, "started": True}
+
+    def get_session_move_status(self) -> dict:
+        """Return the current status of an ongoing or completed session move."""
+        with self._move_lock:
+            return dict(self._move_state)
+
+    def _do_move_session_root(self, old_root: str, new_path: str) -> None:
+        """Background worker: moves session root, using atomic rename when possible.
+
+        Fast path (same filesystem): removes the empty new_path stub we just
+        created, then calls os.rename(old_root, new_path) which is atomic on
+        both POSIX and Windows NTFS.
+
+        Cross-device fallback: moves items one-by-one.  On any mid-loop
+        failure SESSION_ROOT is still updated to new_path so the app scans
+        the files that made it there; the error message identifies how many
+        sessions remain at old_root.
+        """
+        import shutil as _shutil
+
+        try:
+            items = os.listdir(old_root) if os.path.isdir(old_root) else []
+        except Exception:
+            items = []
+        total = len(items)
+        with self._move_lock:
+            self._move_state = {
+                "status": "moving",
+                "moved": 0,
+                "total": total,
+                "error": None,
+            }
+        try:
+            os.makedirs(new_path, exist_ok=True)
+        except Exception as e:
+            with self._move_lock:
+                self._move_state = {
+                    "status": "error",
+                    "moved": 0,
+                    "total": total,
+                    "error": str(e),
+                }
+            return
+        try:
+            if os.listdir(new_path):
+                with self._move_lock:
+                    self._move_state = {
+                        "status": "error",
+                        "moved": 0,
+                        "total": total,
+                        "error": "Cartella di destinazione non vuota",
+                    }
+                return
+        except Exception as e:
+            with self._move_lock:
+                self._move_state = {
+                    "status": "error",
+                    "moved": 0,
+                    "total": total,
+                    "error": str(e),
+                }
+            return
+
+        # Fast path: atomic rename (same filesystem).
+        # Remove the empty stub we just created so rename can take its place.
+        try:
+            os.rmdir(new_path)
+            os.rename(old_root, new_path)
+            self._finish_move(new_path)
+            with self._move_lock:
+                self._move_state = {
+                    "status": "done",
+                    "moved": total,
+                    "total": total,
+                    "error": None,
+                }
+            return
+        except OSError:
+            # Cross-device link, or new_path reappeared, or other OS error.
+            # Recreate the stub and fall through to item-by-item copy.
+            os.makedirs(new_path, exist_ok=True)
+
+        # Cross-device fallback: item-by-item.
+        moved = 0
+        error_msg: str | None = None
+        failed_item: str | None = None
+        for name in items:
+            src = os.path.join(old_root, name)
+            dst = os.path.join(new_path, name)
+            try:
+                _shutil.move(src, dst)
+                moved += 1
+                with self._move_lock:
+                    self._move_state["moved"] = moved
+            except Exception as e:
+                error_msg = str(e)
+                failed_item = name
+                break
+
+        # Always update SESSION_ROOT to new_path.  If the move was partial,
+        # the app must scan new_path (not the half-emptied old_root) going
+        # forward; the error message describes what remains at old_root.
+        self._finish_move(new_path)
+
+        if error_msg is not None:
+            remaining = total - moved
+            split_note = (
+                f" {moved} sessioni spostate; {remaining} rimasta/e in {old_root}."
+                if remaining > 0
+                else ""
+            )
+            with self._move_lock:
+                self._move_state = {
+                    "status": "error",
+                    "moved": moved,
+                    "total": total,
+                    "error": f"Errore spostamento {failed_item}: {error_msg}.{split_note}",
+                }
+            return
+
+        try:
+            os.rmdir(old_root)
+        except Exception:
+            pass
+        with self._move_lock:
+            self._move_state = {
+                "status": "done",
+                "moved": moved,
+                "total": total,
+                "error": None,
+            }
+
+    def _finish_move(self, new_path: str) -> None:
+        """Persist new SESSION_ROOT and invalidate all caches after a move."""
+        set_session_root(new_path)
+        try:
+            save_session_root_to_config(new_path)
+        except Exception:
+            pass
+        invalidate_session_storage_cache()
+        with self._sessions_cache_lock:
+            self._sessions_cache = None
+            self._sessions_cache_gen += 1
 
     def _find_html_in_session_dirs(self, basename: str) -> str | None:
         """Cerca un file HTML con lo stesso nome nelle cartelle di sessione.

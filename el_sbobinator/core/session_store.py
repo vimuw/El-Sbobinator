@@ -14,7 +14,6 @@ import tempfile
 from dataclasses import dataclass
 
 from el_sbobinator.core.shared import (
-    SESSION_ROOT,
     SESSION_SCHEMA_VERSION,
     _atomic_write_json,
     _file_fingerprint,
@@ -22,6 +21,7 @@ from el_sbobinator.core.shared import (
     _now_iso,
     _safe_mkdir,
     _session_dir_for_file,
+    get_session_root,
 )
 from el_sbobinator.pipeline.pipeline_settings import build_default_pipeline_settings
 
@@ -54,7 +54,7 @@ def resolve_session_paths(
     input_path: str, session_dir_hint: str | None = None
 ) -> SessionPaths:
     try:
-        _safe_mkdir(SESSION_ROOT)
+        _safe_mkdir(get_session_root())
     except Exception:
         pass
 

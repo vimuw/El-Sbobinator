@@ -398,5 +398,113 @@ class SessionIdForFileTests(unittest.TestCase):
             self.assertNotEqual(h_default, h_64k)
 
 
+class SessionRootTests(unittest.TestCase):
+    def test_get_default_session_root_windows(self):
+        with (
+            patch("el_sbobinator.core.shared.platform.system", return_value="Windows"),
+            patch.dict(
+                os.environ,
+                {"LOCALAPPDATA": r"C:\Users\test\AppData\Local"},
+                clear=False,
+            ),
+        ):
+            result = shared._get_default_session_root(r"C:\Users\test")
+        self.assertIn("El Sbobinator", result)
+        self.assertTrue(result.endswith("sessions"))
+        self.assertIn("AppData", result)
+        self.assertNotIn("Roaming", result)
+
+    def test_get_default_session_root_windows_fallback_no_env(self):
+        env_without_localappdata = {
+            k: v for k, v in os.environ.items() if k != "LOCALAPPDATA"
+        }
+        with (
+            patch("el_sbobinator.core.shared.platform.system", return_value="Windows"),
+            patch.dict(os.environ, env_without_localappdata, clear=True),
+        ):
+            result = shared._get_default_session_root(r"C:\Users\test")
+        self.assertIn("AppData", result)
+        self.assertIn("Local", result)
+        self.assertTrue(result.endswith("sessions"))
+
+    def test_get_default_session_root_macos(self):
+        with patch("el_sbobinator.core.shared.platform.system", return_value="Darwin"):
+            result = shared._get_default_session_root("/Users/test")
+        self.assertIn("Library", result)
+        self.assertIn("Caches", result)
+        self.assertIn("El Sbobinator", result)
+        self.assertTrue(result.endswith("sessions"))
+
+    def test_get_default_session_root_linux(self):
+        with patch("el_sbobinator.core.shared.platform.system", return_value="Linux"):
+            result = shared._get_default_session_root("/home/test")
+        self.assertEqual(result, os.path.join("/home/test", ".el_sbobinator_sessions"))
+
+    def test_get_and_set_session_root_round_trip(self):
+        original = shared.get_session_root()
+        try:
+            shared.set_session_root("/custom/sessions/path")
+            self.assertEqual(shared.get_session_root(), "/custom/sessions/path")
+            self.assertEqual(shared.SESSION_ROOT, "/custom/sessions/path")
+        finally:
+            shared.set_session_root(original)
+        self.assertEqual(shared.get_session_root(), original)
+
+    def test_migrate_legacy_session_root_happy_path(self):
+        with tempfile.TemporaryDirectory() as base:
+            old_root = os.path.join(base, "old_sessions")
+            new_root = os.path.join(base, "new_sessions")
+            os.makedirs(old_root)
+            os.makedirs(os.path.join(old_root, "abc123"))
+
+            with (
+                patch("el_sbobinator.core.shared.SESSION_ROOT", new_root),
+                patch("el_sbobinator.core.shared._LEGACY_SESSION_ROOT", old_root),
+            ):
+                result = shared.migrate_legacy_session_root()
+
+            self.assertTrue(result)
+            self.assertFalse(os.path.exists(old_root))
+            self.assertTrue(os.path.isdir(new_root))
+            self.assertTrue(os.path.isdir(os.path.join(new_root, "abc123")))
+
+    def test_migrate_legacy_session_root_noop_if_old_absent(self):
+        with tempfile.TemporaryDirectory() as base:
+            old_root = os.path.join(base, "nonexistent")
+            new_root = os.path.join(base, "new_sessions")
+            with (
+                patch("el_sbobinator.core.shared.SESSION_ROOT", new_root),
+                patch("el_sbobinator.core.shared._LEGACY_SESSION_ROOT", old_root),
+            ):
+                result = shared.migrate_legacy_session_root()
+            self.assertFalse(result)
+            self.assertFalse(os.path.exists(new_root))
+
+    def test_migrate_legacy_session_root_noop_if_new_exists(self):
+        with tempfile.TemporaryDirectory() as base:
+            old_root = os.path.join(base, "old_sessions")
+            new_root = os.path.join(base, "new_sessions")
+            os.makedirs(old_root)
+            os.makedirs(new_root)
+            with (
+                patch("el_sbobinator.core.shared.SESSION_ROOT", new_root),
+                patch("el_sbobinator.core.shared._LEGACY_SESSION_ROOT", old_root),
+            ):
+                result = shared.migrate_legacy_session_root()
+            self.assertFalse(result)
+            self.assertTrue(os.path.exists(old_root))
+
+    def test_migrate_legacy_session_root_noop_if_paths_identical(self):
+        with tempfile.TemporaryDirectory() as base:
+            same_root = os.path.join(base, "sessions")
+            os.makedirs(same_root)
+            with (
+                patch("el_sbobinator.core.shared.SESSION_ROOT", same_root),
+                patch("el_sbobinator.core.shared._LEGACY_SESSION_ROOT", same_root),
+            ):
+                result = shared.migrate_legacy_session_root()
+            self.assertFalse(result)
+
+
 if __name__ == "__main__":
     unittest.main()

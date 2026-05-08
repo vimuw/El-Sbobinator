@@ -61,7 +61,7 @@ Quando esce una nuova versione, l'app mostra direttamente nell'interfaccia un pu
 |---|---|---|
 | **Versione minima** | Windows 10 (64-bit) | macOS 11 Big Sur |
 | **Connessione internet** | ✅ Richiesta durante l'elaborazione | ✅ Richiesta durante l'elaborazione |
-| **Spazio su disco** | ~50 MB (app) + variabile per le sessioni | ~50 MB (app) + variabile per le sessioni |
+| **Spazio su disco** | ~50 MB (app) + ~0.5–2 GB per lezione durante l'elaborazione | ~50 MB (app) + ~0.5–2 GB per lezione durante l'elaborazione |
 | **RAM consigliata** | 4 GB | 4 GB |
 
 > ⚠️ Il PC deve rimanere **acceso e connesso a internet** per tutta la durata dell'elaborazione. L'AI gira sui server di Google, non sul tuo processore: la potenza del tuo PC non influisce sulla velocità.
@@ -102,7 +102,7 @@ El Sbobinator 🤠 salva automaticamente i progressi mentre lavora e le modifich
 Se chiudi l'app per sbaglio, se il PC si spegne, o se finisci la quota giornaliera dell'API, **non perdi quasi nulla**.
 Quando riaprirai l'app e ricaricherai lo stesso file audio, El Sbobinator 🤠 ti chiederà se vuoi "riutilizzare" i risultati salvati per riprendere esattamente da dove si era interrotto, o se vuoi ricominciare da capo.
 
-I dati di sessione (blocchi di testo già elaborati, progressi parziali) vengono salvati in una cartella nascosta sul tuo computer (`~/.el_sbobinator_sessions/`). Questa cartella può crescere nel tempo se elabori molti file. Nelle **Impostazioni** trovi il tasto **"Pulisci sessioni vecchie"** per eliminare automaticamente i dati più vecchi di 14 giorni e liberare spazio.
+I dati di sessione (blocchi di testo già elaborati, progressi parziali, audio pre-convertito) vengono salvati in una cartella locale sul tuo computer, **fuori dalle cartelle sincronizzate** dal cloud (OneDrive o iCloud): su Windows in `%LOCALAPPDATA%\El Sbobinator\sessions`, su macOS in `~/Library/Caches/El Sbobinator/sessions`. Le sessioni usano **~0.5–2 GB per lezione** durante l'elaborazione. La cartella può crescere nel tempo: nelle **Impostazioni** trovi il tasto **"Pulisci sessioni vecchie"** per eliminare automaticamente i dati più vecchi di 14 giorni, e il tasto **"Sposta…"** per spostare la cartella in un'altra posizione.
 
 ---
 

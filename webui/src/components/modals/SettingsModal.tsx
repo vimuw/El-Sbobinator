@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ConfirmActionModal } from './ConfirmActionModal';
 import { motion, AnimatePresence } from 'motion/react';
-import { Activity, AlertCircle, AlertTriangle, ArrowDown, ArrowDownToLine, ArrowUp, Bell, ChevronDown, Cpu, Eye, EyeOff, FlaskConical, FolderOpen, HardDrive, Loader2, RefreshCw, Settings, SlidersHorizontal, Tag, Trash2, X, Zap } from 'lucide-react';
+import { Activity, AlertCircle, AlertTriangle, ArrowDown, ArrowDownToLine, ArrowRight, ArrowUp, Bell, ChevronDown, Cpu, Eye, EyeOff, FlaskConical, FolderOpen, HardDrive, Loader2, RefreshCw, Settings, SlidersHorizontal, Tag, Trash2, X, Zap } from 'lucide-react';
 import type { ModelOption, ValidationResult } from '../../bridge';
 import { formatSize, GEMINI_KEY_PATTERN } from '../../utils';
 import { APP_VERSION, GITHUB_RELEASES_URL } from '../../branding';
@@ -227,7 +227,7 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('notifications_enabled') !== 'false');
   const [showApiKeys, setShowApiKeys] = useState(false);
-  const [sessionInfo, setSessionInfo] = useState<{ total_bytes: number; total_sessions: number } | null>(null);
+  const [sessionInfo, setSessionInfo] = useState<{ total_bytes: number; total_sessions: number; session_root?: string } | null>(null);
   const [isLoadingSessionInfo, setIsLoadingSessionInfo] = useState(false);
   const [isCleaningSession, setIsCleaningSession] = useState(false);
   const [cleanupResult, setCleanupResult] = useState<{ removed: number; freed_bytes: number } | null>(null);
@@ -235,6 +235,12 @@ export function SettingsModal({
   const [isValidatingEnvironment, setIsValidatingEnvironment] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [showCleanupConfirm, setShowCleanupConfirm] = useState(false);
+  const [isMoveInProgress, setIsMoveInProgress] = useState(false);
+  const [moveProgress, setMoveProgress] = useState<{ moved: number; total: number } | null>(null);
+  const [moveError, setMoveError] = useState<string | null>(null);
+  const [showMoveConfirm, setShowMoveConfirm] = useState(false);
+  const [pendingMovePath, setPendingMovePath] = useState<string | null>(null);
+  const moveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const isSavingRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -245,7 +251,7 @@ export function SettingsModal({
   }, [isOpen, checkForUpdates]);
 
   useEffect(() => {
-    if (!isOpen) { setIsAdvancedOpen(false); setIsSaving(false); isSavingRef.current = false; return; }
+    if (!isOpen) { setIsAdvancedOpen(false); setIsSaving(false); isSavingRef.current = false; setIsMoveInProgress(false); setMoveProgress(null); setMoveError(null); if (moveTimerRef.current) { clearTimeout(moveTimerRef.current); moveTimerRef.current = null; } return; }
     setNotificationsEnabled(localStorage.getItem('notifications_enabled') !== 'false');
     setSaveError(null);
     setCleanupResult(null);
@@ -254,7 +260,7 @@ export function SettingsModal({
     setIsLoadingSessionInfo(true);
     setSessionInfo(null);
     window.pywebview.api.get_session_storage_info()
-      .then(res => { if (!aborted && res?.ok) setSessionInfo({ total_bytes: res.total_bytes ?? 0, total_sessions: res.total_sessions ?? 0 }); })
+      .then(res => { if (!aborted && res?.ok) setSessionInfo({ total_bytes: res.total_bytes ?? 0, total_sessions: res.total_sessions ?? 0, session_root: res.session_root ?? '' }); })
       .catch(() => {})
       .finally(() => { if (!aborted) setIsLoadingSessionInfo(false); });
     return () => { aborted = true; };
@@ -262,6 +268,56 @@ export function SettingsModal({
 
   const handleOpenSessionFolder = () => {
     window.pywebview?.api?.open_session_folder?.();
+  };
+
+  const pollMoveStatus = useCallback(async () => {
+    try {
+      const res = await window.pywebview?.api?.get_session_move_status?.();
+      if (!res) return;
+      if (res.status === 'moving') {
+        setMoveProgress({ moved: res.moved ?? 0, total: res.total ?? 0 });
+        moveTimerRef.current = setTimeout(() => void pollMoveStatus(), 500);
+      } else if (res.status === 'done') {
+        setIsMoveInProgress(false);
+        setMoveProgress(null);
+        try {
+          const info = await window.pywebview?.api?.get_session_storage_info?.();
+          if (info?.ok) setSessionInfo({ total_bytes: info.total_bytes ?? 0, total_sessions: info.total_sessions ?? 0, session_root: info.session_root ?? '' });
+        } catch { /* non-critical refresh */ }
+      } else if (res.status === 'error') {
+        setIsMoveInProgress(false);
+        setMoveProgress(null);
+        setMoveError(res.error ?? 'Errore sconosciuto');
+      } else {
+        setIsMoveInProgress(false);
+        setMoveProgress(null);
+        setMoveError(`Stato imprevisto: ${String(res.status)}`);
+      }
+    } catch { /* ignore polling errors */ }
+  }, []);
+
+  const handleAskMoveFolder = async () => {
+    if (isMoveInProgress) return;
+    const res = await window.pywebview?.api?.ask_session_folder?.();
+    if (!res?.ok || !res.path) return;
+    setPendingMovePath(res.path);
+    setMoveError(null);
+    setShowMoveConfirm(true);
+  };
+
+  const handleConfirmMove = async () => {
+    if (!pendingMovePath) return;
+    setShowMoveConfirm(false);
+    setMoveError(null);
+    const res = await window.pywebview?.api?.move_session_root?.(pendingMovePath);
+    setPendingMovePath(null);
+    if (!res?.ok) {
+      setMoveError(res?.error ?? 'Errore sconosciuto');
+      return;
+    }
+    setIsMoveInProgress(true);
+    setMoveProgress({ moved: 0, total: 0 });
+    void pollMoveStatus();
   };
 
   const handleCleanupSessions = async () => {
@@ -275,7 +331,7 @@ export function SettingsModal({
         if (window.pywebview?.api?.get_session_storage_info) {
           try {
             const info = await window.pywebview.api.get_session_storage_info();
-            if (info?.ok) setSessionInfo({ total_bytes: info.total_bytes ?? 0, total_sessions: info.total_sessions ?? 0 });
+            if (info?.ok) setSessionInfo({ total_bytes: info.total_bytes ?? 0, total_sessions: info.total_sessions ?? 0, session_root: info.session_root ?? '' });
           } catch { /* non-critical refresh — cleanup already succeeded */ }
         }
       } else {
@@ -728,6 +784,38 @@ export function SettingsModal({
                                 </span>
                               )}
                             </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs shrink-0" style={{ color: 'var(--text-muted)' }}>Cartella:</span>
+                              <span
+                                className="text-xs font-mono truncate flex-1"
+                                title={sessionInfo?.session_root ?? ''}
+                                style={{ color: 'var(--text-faint, var(--text-muted))', minWidth: 0 }}
+                              >
+                                {sessionInfo?.session_root || (isLoadingSessionInfo ? '…' : '—')}
+                              </span>
+                              {isMoveInProgress ? (
+                                <span className="text-xs shrink-0 flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                  {moveProgress && moveProgress.total > 0
+                                    ? `${moveProgress.moved}/${moveProgress.total}`
+                                    : 'Spostamento…'}
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => void handleAskMoveFolder()}
+                                  disabled={isCleaningSession || isLoadingSessionInfo || isMoveInProgress}
+                                  className="icon-button compact-icon-button shrink-0 disabled:opacity-50 flex items-center gap-1"
+                                  style={{ fontSize: '11px', padding: '2px 7px', height: 22, borderRadius: 6 }}
+                                  title="Sposta cartella sessioni"
+                                >
+                                  <ArrowRight className="w-3 h-3" />
+                                  Sposta…
+                                </button>
+                              )}
+                            </div>
+                            {moveError && (
+                              <p className="text-xs" style={{ color: 'var(--error-text)' }}>{moveError}</p>
+                            )}
                             <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                               Spazio occupato: <span style={{ color: 'var(--text-muted)' }}>{isLoadingSessionInfo ? 'Calcolo…' : sessionInfo !== null ? formatSize(sessionInfo.total_bytes) : '—'}</span>
                             </p>
@@ -821,6 +909,18 @@ export function SettingsModal({
       cancelLabel="Annulla"
       onClose={() => setShowCleanupConfirm(false)}
       onConfirm={() => { setShowCleanupConfirm(false); void handleCleanupSessions(); }}
+    />
+    <ConfirmActionModal
+      isOpen={showMoveConfirm}
+      title="Spostare la cartella sessioni?"
+      description={`Tutte le sessioni verranno spostate in:
+${pendingMovePath ?? ''}
+
+L'operazione è rapida se la destinazione è sullo stesso disco.`}
+      confirmLabel="Sposta"
+      cancelLabel="Annulla"
+      onClose={() => { setShowMoveConfirm(false); setPendingMovePath(null); }}
+      onConfirm={() => { void handleConfirmMove(); }}
     />
     </>
   );

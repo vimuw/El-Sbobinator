@@ -128,12 +128,15 @@ export interface PywebviewApi {
     preferredModel?: string,
     fallbackModels?: string[],
   ) => Promise<{ ok: boolean; result?: ValidationResult; error?: string }>;
-  get_session_storage_info?: () => Promise<{ ok: boolean; total_bytes?: number; total_sessions?: number; error?: string }>;
+  get_session_storage_info?: () => Promise<{ ok: boolean; total_bytes?: number; total_sessions?: number; session_root?: string; error?: string }>;
   cleanup_old_sessions?: (maxAgeDays?: number) => Promise<{ ok: boolean; removed?: number; freed_bytes?: number; errors?: number; error?: string }>;
   get_completed_sessions?: (limit?: number) => Promise<{ ok: boolean; sessions?: ArchiveSession[]; total?: number; error?: string }>;
   delete_session?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;
   update_session_input_path?: (sessionDir: string, newPath: string) => Promise<{ ok: boolean; error?: string }>;
   open_session_folder?: () => Promise<{ ok: boolean; error?: string }>;
+  ask_session_folder?: () => Promise<{ ok: boolean; path?: string; cancelled?: boolean; error?: string }>;
+  move_session_root?: (newPath: string) => Promise<{ ok: boolean; started?: boolean; error?: string }>;
+  get_session_move_status?: () => Promise<{ status: string; moved?: number; total?: number; error?: string | null }>;
   download_and_install_update?: (version: string) => Promise<{ ok: boolean; status?: string; error?: string }>;
   save_theme_preference?: (theme: 'light' | 'dark') => Promise<void>;
   get_archive_folders?: () => Promise<{ ok: boolean; folders: ArchiveFolder[]; error?: string }>;

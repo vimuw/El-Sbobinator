@@ -11,6 +11,7 @@ import concurrent.futures
 import hashlib
 import json
 import os
+import platform
 import shutil
 import tempfile
 import threading
@@ -43,8 +44,11 @@ __all__ = [
     "_session_id_for_file",
     "cleanup_orphan_sessions",
     "cleanup_orphan_temp_chunks",
+    "get_session_root",
     "get_session_storage_info",
     "invalidate_session_storage_cache",
+    "migrate_legacy_session_root",
+    "set_session_root",
 ]
 
 _storage_info_cache: dict | None = None
@@ -92,7 +96,65 @@ def cleanup_orphan_temp_chunks(max_age_seconds: int = 12 * 3600) -> int:
 # SESSIONI (AUTOSAVE / RIPRESA)
 # ==========================================
 SESSION_SCHEMA_VERSION = 1
-SESSION_ROOT = os.path.join(USER_HOME, ".el_sbobinator_sessions")
+
+_LEGACY_SESSION_ROOT = os.path.join(USER_HOME, ".el_sbobinator_sessions")
+
+
+def _get_default_session_root(user_home: str) -> str:
+    """
+    Return the default session-storage root for the current platform.
+    - Windows: %LOCALAPPDATA%\\El Sbobinator\\sessions  (not synced by OneDrive)
+    - macOS:   ~/Library/Caches/El Sbobinator/sessions   (excluded from iCloud)
+    - Linux:   ~/.el_sbobinator_sessions                  (unchanged)
+    """
+    system = platform.system()
+    if system == "Windows":
+        local_app_data = os.environ.get("LOCALAPPDATA") or os.path.join(
+            user_home, "AppData", "Local"
+        )
+        return os.path.join(local_app_data, "El Sbobinator", "sessions")
+    if system == "Darwin":
+        return os.path.join(user_home, "Library", "Caches", "El Sbobinator", "sessions")
+    return os.path.join(user_home, ".el_sbobinator_sessions")
+
+
+SESSION_ROOT = _get_default_session_root(USER_HOME)
+
+
+def get_session_root() -> str:
+    """Return the current session-storage root directory (may be overridden at runtime)."""
+    return SESSION_ROOT
+
+
+def set_session_root(path: str) -> None:
+    """Override the session-storage root directory at runtime."""
+    global SESSION_ROOT
+    SESSION_ROOT = str(path)
+
+
+def migrate_legacy_session_root() -> bool:
+    """
+    On first launch after an upgrade, move ~/.el_sbobinator_sessions to the new
+    platform-appropriate default (LOCALAPPDATA on Windows, Library/Caches on macOS).
+    No-op if the legacy path is absent, new default already exists, or both paths
+    are identical (Linux). Returns True if migration was performed.
+    """
+    new_root = SESSION_ROOT
+    old_root = _LEGACY_SESSION_ROOT
+    if os.path.normcase(os.path.normpath(new_root)) == os.path.normcase(
+        os.path.normpath(old_root)
+    ):
+        return False  # Linux: paths are identical, nothing to do
+    if not os.path.isdir(old_root):
+        return False  # No legacy sessions to migrate
+    if os.path.isdir(new_root):
+        return False  # New location already exists; previous migration done
+    try:
+        os.makedirs(os.path.dirname(new_root), exist_ok=True)
+        shutil.move(old_root, new_root)
+        return True
+    except Exception:
+        return False
 
 
 def _now_iso() -> str:

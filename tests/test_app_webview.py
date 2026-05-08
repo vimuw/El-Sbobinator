@@ -1828,6 +1828,138 @@ class TestGetCompletedSessions(unittest.TestCase):
         self.assertEqual(result["total"], 0)
 
 
+class TestMoveSessionRoot(unittest.TestCase):
+    """Tests for _do_move_session_root: atomic-rename fast path, cross-device
+    fallback, and partial-failure option-b (SESSION_ROOT updated even on error)."""
+
+    _SET_ROOT = "el_sbobinator.app_webview.set_session_root"
+    _SAVE_ROOT = "el_sbobinator.app_webview.save_session_root_to_config"
+    _INVALIDATE = "el_sbobinator.app_webview.invalidate_session_storage_cache"
+
+    def setUp(self):
+        self.api = ElSbobinatorApi()
+
+    def test_atomic_rename_on_same_filesystem(self):
+        """Fast path: os.rename succeeds; shutil.move must never be called."""
+        import os as _os
+
+        with (
+            tempfile.TemporaryDirectory() as parent,
+            patch(self._SET_ROOT) as mock_set,
+            patch(self._SAVE_ROOT),
+            patch(self._INVALIDATE),
+            patch(
+                "shutil.move", side_effect=AssertionError("must not reach item-by-item")
+            ),
+        ):
+            old_root = _os.path.join(parent, "old")
+            new_path = _os.path.join(parent, "new")
+            _os.makedirs(_os.path.join(old_root, "sess_01"))
+            _os.makedirs(_os.path.join(old_root, "sess_02"))
+
+            self.api._do_move_session_root(old_root, new_path)
+
+            # Filesystem checks inside block — temp dir is still alive here.
+            self.assertFalse(_os.path.exists(old_root))
+            self.assertTrue(_os.path.isdir(new_path))
+
+        state = dict(self.api._move_state)
+        self.assertEqual(state["status"], "done")
+        self.assertEqual(state["moved"], 2)
+        self.assertEqual(state["total"], 2)
+        mock_set.assert_called_once_with(new_path)
+
+    def test_cross_device_fallback_full_success(self):
+        """os.rename raises OSError (cross-device); item-by-item completes, root updated."""
+        import os as _os
+
+        with (
+            tempfile.TemporaryDirectory() as parent,
+            patch(self._SET_ROOT) as mock_set,
+            patch(self._SAVE_ROOT),
+            patch(self._INVALIDATE),
+            patch("os.rename", side_effect=OSError("cross-device link")),
+        ):
+            old_root = _os.path.join(parent, "old")
+            new_path = _os.path.join(parent, "new")
+            _os.makedirs(_os.path.join(old_root, "sess_01"))
+            _os.makedirs(_os.path.join(old_root, "sess_02"))
+
+            self.api._do_move_session_root(old_root, new_path)
+
+        state = dict(self.api._move_state)
+        self.assertEqual(state["status"], "done")
+        self.assertEqual(state["moved"], 2)
+        mock_set.assert_called_once_with(new_path)
+
+    def test_partial_move_still_updates_session_root(self):
+        """Core bug fix: SESSION_ROOT updated to new_path even on mid-loop failure;
+        error message reports the split state."""
+        import os as _os
+        import shutil as _shutil_module
+
+        # Capture the real function BEFORE the patch context so that calling it
+        # inside _fail_on_second doesn't re-enter the mock.
+        _real_move = _shutil_module.move
+
+        move_call_count = 0
+
+        def _fail_on_second(src, dst):
+            nonlocal move_call_count
+            move_call_count += 1
+            if move_call_count >= 2:
+                raise OSError("disk full")
+            # os.rename is patched to always fail, so _real_move falls back to
+            # copytree for directories — the item still lands in new_path.
+            _real_move(src, dst)
+
+        with (
+            tempfile.TemporaryDirectory() as parent,
+            patch(self._SET_ROOT) as mock_set,
+            patch(self._SAVE_ROOT),
+            patch(self._INVALIDATE),
+            patch("os.rename", side_effect=OSError("cross-device link")),
+            patch("shutil.move", side_effect=_fail_on_second),
+        ):
+            old_root = _os.path.join(parent, "old")
+            new_path = _os.path.join(parent, "new")
+            _os.makedirs(_os.path.join(old_root, "sess_01"))
+            _os.makedirs(_os.path.join(old_root, "sess_02"))
+            _os.makedirs(_os.path.join(old_root, "sess_03"))
+
+            self.api._do_move_session_root(old_root, new_path)
+
+        state = dict(self.api._move_state)
+        self.assertEqual(state["status"], "error")
+        self.assertEqual(state["moved"], 1)
+        self.assertEqual(state["total"], 3)
+        mock_set.assert_called_once_with(new_path)
+        self.assertIn("2 rimasta", state["error"])
+        self.assertIn(old_root, state["error"])
+
+    def test_non_empty_destination_aborts_without_touching_root(self):
+        """Destination already contains files: returns error, SESSION_ROOT untouched."""
+        import os as _os
+
+        with (
+            tempfile.TemporaryDirectory() as parent,
+            patch(self._SET_ROOT) as mock_set,
+            patch(self._SAVE_ROOT),
+            patch(self._INVALIDATE),
+        ):
+            old_root = _os.path.join(parent, "old")
+            new_path = _os.path.join(parent, "new")
+            _os.makedirs(_os.path.join(old_root, "sess_01"))
+            _os.makedirs(_os.path.join(new_path, "existing"))
+
+            self.api._do_move_session_root(old_root, new_path)
+
+        state = dict(self.api._move_state)
+        self.assertEqual(state["status"], "error")
+        self.assertIn("non vuota", state["error"])
+        mock_set.assert_not_called()
+
+
 class TestShowNotification(unittest.TestCase):
     """show_notification — Darwin osascript fallback and cross-platform error path."""
 
