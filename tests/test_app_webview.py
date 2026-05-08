@@ -1406,6 +1406,62 @@ class TestReadHtmlContentPathValidation(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("Accesso negato", result["error"])
 
+    def test_stale_path_outside_root_resolved_via_session_fallback(self):
+        """A stale html_path (outside allowed roots, file absent) is resolved via
+        _find_html_in_session_dirs so manually-moved sessions become accessible."""
+        import os
+
+        api = ElSbobinatorApi()
+        with (
+            tempfile.TemporaryDirectory() as outside_dir,
+            tempfile.TemporaryDirectory() as desktop_dir,
+            tempfile.TemporaryDirectory() as session_root,
+        ):
+            stale_html = os.path.join(outside_dir, "lecture_Sbobina.html")
+            session_subdir = os.path.join(session_root, "abc123session")
+            os.makedirs(session_subdir, exist_ok=True)
+            actual_html = os.path.join(session_subdir, "lecture_Sbobina.html")
+            with open(actual_html, "w", encoding="utf-8") as fh:
+                fh.write("<html><body><p>contenuto</p></body></html>")
+
+            with (
+                patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                patch.object(api, "_get_session_root", return_value=session_root),
+            ):
+                result = api.read_html_content(stale_html)
+
+        self.assertTrue(result["ok"], result.get("error"))
+        self.assertIn("contenuto", result["content"])
+
+    def test_existing_file_outside_allowed_roots_still_rejected(self):
+        """Security: a file that EXISTS outside allowed roots must still be denied."""
+        import os
+
+        api = ElSbobinatorApi()
+        with (
+            tempfile.TemporaryDirectory() as outside_dir,
+            tempfile.TemporaryDirectory() as desktop_dir,
+            tempfile.TemporaryDirectory() as session_root,
+        ):
+            outside_html = os.path.join(outside_dir, "evil.html")
+            with open(outside_html, "w", encoding="utf-8") as fh:
+                fh.write("<html><body>evil</body></html>")
+
+            with (
+                patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                patch.object(api, "_get_session_root", return_value=session_root),
+            ):
+                result = api.read_html_content(outside_html)
+
+        self.assertFalse(result["ok"])
+        self.assertIn("Accesso negato", result["error"])
+
 
 class TestSaveHtmlContentPathValidation(unittest.TestCase):
     """Path-validation branches in save_html_content not covered by existing tests."""
@@ -1438,6 +1494,78 @@ class TestSaveHtmlContentPathValidation(unittest.TestCase):
         result = api.save_html_content("/tmp/file.txt", "<p>x</p>")
         self.assertFalse(result["ok"])
         self.assertIn("html", result["error"].lower())
+
+    def test_stale_path_outside_root_resolved_via_session_fallback(self):
+        """A stale html_path (outside allowed roots, file absent) is resolved via
+        _find_html_in_session_dirs so saves still reach the session-dir copy."""
+        import os
+
+        api = ElSbobinatorApi()
+        with (
+            tempfile.TemporaryDirectory() as outside_dir,
+            tempfile.TemporaryDirectory() as desktop_dir,
+            tempfile.TemporaryDirectory() as session_root,
+        ):
+            stale_html = os.path.join(outside_dir, "lecture_Sbobina.html")
+            session_subdir = os.path.join(session_root, "abc123session")
+            os.makedirs(session_subdir, exist_ok=True)
+            actual_html = os.path.join(session_subdir, "lecture_Sbobina.html")
+            with open(actual_html, "w", encoding="utf-8") as fh:
+                fh.write("<html><body><p>old</p></body></html>")
+
+            with (
+                patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                patch.object(api, "_get_session_root", return_value=session_root),
+                patch("el_sbobinator.app_webview.save_html_body_content") as mock_save,
+            ):
+                result = api.save_html_content(stale_html, "<p>new</p>")
+                saved_path = mock_save.call_args[0][0] if mock_save.called else None
+
+        self.assertTrue(result["ok"], result.get("error"))
+        self.assertIsNotNone(
+            saved_path, "save_html_body_content should have been called"
+        )
+        self.assertTrue(
+            os.path.normcase(os.path.realpath(saved_path)).startswith(
+                os.path.normcase(os.path.realpath(session_root))
+            ),
+            "save must write to the resolved session-dir path, not the stale path",
+        )
+
+    def test_existing_file_outside_allowed_roots_still_rejected(self):
+        """Security: a file that EXISTS outside allowed roots must still be denied."""
+        import os
+
+        api = ElSbobinatorApi()
+        with (
+            tempfile.TemporaryDirectory() as outside_dir,
+            tempfile.TemporaryDirectory() as desktop_dir,
+            tempfile.TemporaryDirectory() as session_root,
+        ):
+            outside_html = os.path.join(outside_dir, "evil.html")
+            with open(outside_html, "w", encoding="utf-8") as fh:
+                fh.write("<html><body>evil</body></html>")
+
+            with (
+                patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                patch.object(api, "_get_session_root", return_value=session_root),
+            ):
+                result = api.save_html_content(outside_html, "<p>pwned</p>")
+
+            with open(outside_html, encoding="utf-8") as fh:
+                file_content = fh.read()
+
+        self.assertFalse(result["ok"])
+        self.assertIn("Accesso negato", result["error"])
+        self.assertNotIn(
+            "pwned", file_content, "file outside allowed roots must not be written"
+        )
 
 
 class TestSearchSessions(unittest.TestCase):

@@ -913,23 +913,34 @@ class ElSbobinatorApi:
         """Legge ed estrae il contenuto di un file HTML per l'anteprima."""
         if not isinstance(path, str) or not path.lower().endswith(".html"):
             return {"ok": False, "error": "Path non valido: deve essere un file .html."}
-        # Path traversal protection: resolve and check against allowed roots
+        # Path traversal protection: resolve and check against allowed roots.
+        # Security: reject immediately only when the file EXISTS at a disallowed
+        # path (genuine traversal attempt).  If the file is absent at that path
+        # (e.g. stale html_path in session.json after a manual session move),
+        # fall through to the session-dir fallback so the file can still be found.
         real_path = os.path.realpath(path)
         allowed_roots = [
             os.path.realpath(get_desktop_dir()),  # Desktop / OneDrive Desktop
             os.path.realpath(self._get_session_root()),  # Session storage
         ]
-        if not any(_path_under_root(real_path, root) for root in allowed_roots):
+        path_is_allowed = any(
+            _path_under_root(real_path, root) for root in allowed_roots
+        )
+        if not path_is_allowed and os.path.isfile(real_path):
             return {
                 "ok": False,
                 "error": "Accesso negato: path fuori dai percorsi consentiti.",
             }
         requested_real_path = real_path
-        if not os.path.isfile(real_path):
+        if not path_is_allowed or not os.path.isfile(real_path):
             _basename = os.path.basename(real_path)
-            fallback = self._find_html_in_session_dirs(_basename)
-            if not fallback:
-                fallback = self._rebuild_html_from_session(_basename)
+            cached_resolution = self._resolved_path_cache.get(requested_real_path)
+            if cached_resolution and os.path.isfile(cached_resolution):
+                fallback = cached_resolution
+            else:
+                fallback = self._find_html_in_session_dirs(_basename)
+                if not fallback:
+                    fallback = self._rebuild_html_from_session(_basename)
             if fallback and os.path.isfile(fallback):
                 real_path = fallback
                 if not any(_path_under_root(real_path, root) for root in allowed_roots):
@@ -1263,19 +1274,25 @@ class ElSbobinatorApi:
         """Aggiorna solo il contenuto del <body>, preservando head, stile e CSP dell'export originale."""
         if not isinstance(path, str) or not path.lower().endswith(".html"):
             return {"ok": False, "error": "Path non valido: deve essere un file .html."}
-        # Path traversal protection: resolve and check against allowed roots
+        # Path traversal protection: resolve and check against allowed roots.
+        # Security: reject immediately only when the file EXISTS at a disallowed
+        # path (genuine traversal attempt).  If absent (stale/moved path), fall
+        # through to the session-dir fallback so edits can still reach the file.
         real_path = os.path.realpath(path)
         original_real_path = real_path
         allowed_roots = [
             os.path.realpath(get_desktop_dir()),  # Desktop / OneDrive Desktop
             os.path.realpath(self._get_session_root()),  # Session storage
         ]
-        if not any(_path_under_root(real_path, root) for root in allowed_roots):
+        path_is_allowed = any(
+            _path_under_root(real_path, root) for root in allowed_roots
+        )
+        if not path_is_allowed and os.path.isfile(real_path):
             return {
                 "ok": False,
                 "error": "Accesso negato: path fuori dai percorsi consentiti.",
             }
-        if not os.path.isfile(real_path):
+        if not path_is_allowed or not os.path.isfile(real_path):
             _basename = os.path.basename(real_path)
             cached_resolution = self._resolved_path_cache.get(original_real_path)
             if cached_resolution and os.path.isfile(cached_resolution):
