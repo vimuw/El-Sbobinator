@@ -79,6 +79,12 @@ describe('errorLabel', () => {
   it('returns raw key for boundary_ai_failed (no Python emitter, no mapping)', () => {
     expect(errorLabel('boundary_ai_failed')).toBe('boundary_ai_failed');
   });
+
+  it('maps session_collision to Italian human-readable message mentioning Impostazioni', () => {
+    const label = errorLabel('session_collision');
+    expect(label).toContain('sbobina');
+    expect(label).toContain('Impostazioni');
+  });
 });
 
 describe('formatSize', () => {

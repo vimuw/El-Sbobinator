@@ -6,6 +6,7 @@ const _ERROR_MAP: Record<string, string> = {
   quota_daily_limit_phase2: 'Quota API esaurita durante la revisione — riprova domani, oppure aggiungi una chiave di riserva nelle impostazioni.',
   bad_request_phase1: 'Richiesta non valida durante la trascrizione (errore 400).',
   autosave_failed: 'Errore critico: salvataggio sessione fallito ripetutamente. Disco pieno o directory non scrivibile?',
+  session_collision: 'Questo file sembra corrispondere a una sbobina già completata ma con contenuto diverso. Apri Impostazioni → Sessioni per risolvere.',
   html_export_failed: 'Errore durante il salvataggio del file di output.',
   html_export_missing: 'File di output non trovato dopo il salvataggio.',
   processing_failed: 'Elaborazione non completata.',

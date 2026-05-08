@@ -35,6 +35,7 @@ __all__ = [
     "_atomic_write_json",
     "_atomic_write_text",
     "_file_fingerprint",
+    "_file_tail_hash",
     "_load_json",
     "_now_iso",
     "_safe_mkdir",
@@ -180,23 +181,47 @@ def _partial_file_hash(path: str, max_bytes: int = 1048576) -> str:
         return ""
 
 
+def _file_tail_hash(path: str, max_bytes: int = 1048576, file_size: int = -1) -> str:
+    """
+    Calcola SHA256 degli ultimi max_bytes del file.
+    Complementa _partial_file_hash per distinguere file con stesso inizio ma
+    diversa fine (es. lezioni dello stesso corso con intro identica).
+    Per file più piccoli di max_bytes torna l'hash dell'intero file.
+    """
+    try:
+        size = file_size if file_size >= 0 else os.path.getsize(path)
+        offset = max(0, size - max_bytes)
+        hasher = hashlib.sha256()
+        with open(path, "rb") as f:
+            if offset > 0:
+                f.seek(offset)
+            chunk = f.read(max_bytes)
+            hasher.update(chunk)
+        return hasher.hexdigest()
+    except Exception:
+        return ""
+
+
 _session_id_cache: dict[tuple, str] = {}
 _MAX_SESSION_CACHE_SIZE = 500  # LRU cap: at ~200 bytes per entry this stays well under 100 KB; prevents unbounded growth in long-running processes
 
 
 def _session_id_for_file(path: str) -> str:
     """
-    Genera ID sessione basato su: size + hash parziale contenuto (1 MB).
-    mtime è escluso dal blob dell'ID (stabile su cloud-sync), ma è incluso
-    nella cache key in-process per invalidare la cache se il file viene
-    sostituito con uno di uguale dimensione durante la stessa sessione app.
+    Genera ID sessione basato su: size + sha256(primi 1 MB) + sha256(ultimi 1 MB).
+    Il tail hash distingue file con intro identica ma contenuto diverso (es. lezioni settimanali
+    dello stesso corso registrate con la stessa app). mtime_ns è escluso dal blob dell'ID
+    (stabile su cloud-sync): i tool di sync riscrivono l'mtime anche su file invariati, e due
+    file con stesso contenuto devono avere lo stesso ID indipendentemente dal timestamp.
+    mtime_ns resta nella cache key per invalidare la cache se il file viene sovrascritto
+    in-place durante la stessa sessione app.
     """
     abs_path = os.path.abspath(path)
     st = os.stat(abs_path)
     size = int(getattr(st, "st_size", 0))
-    mtime = int(getattr(st, "st_mtime_ns", 0)) or st.st_mtime
+    mtime_ns = int(getattr(st, "st_mtime_ns", 0)) or int(st.st_mtime * 1_000_000_000)
 
-    cache_key = (abs_path, size, mtime)
+    cache_key = (abs_path, size, mtime_ns)
     _cached = _session_id_cache.get(cache_key)
     if _cached is not None:
         return _cached
@@ -205,11 +230,15 @@ def _session_id_for_file(path: str) -> str:
     if len(_session_id_cache) >= _MAX_SESSION_CACHE_SIZE:
         _session_id_cache.pop(next(iter(_session_id_cache)))
 
-    content_hash = _partial_file_hash(abs_path)
+    head_hash = _partial_file_hash(abs_path)
+    tail_hash = (
+        head_hash if size <= 1048576 else _file_tail_hash(abs_path, file_size=size)
+    )
     blob = json.dumps(
         {
             "size": size,
-            "content_hash": content_hash,
+            "head_hash": head_hash,
+            "tail_hash": tail_hash,
         },
         sort_keys=True,
     ).encode("utf-8", errors="ignore")

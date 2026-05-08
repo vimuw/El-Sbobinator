@@ -26,6 +26,21 @@ from el_sbobinator.core.shared import (
 from el_sbobinator.pipeline.pipeline_settings import build_default_pipeline_settings
 
 
+class SessionCollisionError(Exception):
+    """Raised when initialize_session_context would silently destroy a completed session.
+
+    Occurs when resume_session=False and the computed session directory already
+    contains a finished sbobina (stage=='done' + existing HTML output).  This
+    protects against the fingerprint-collision scenario where two different
+    recordings resolve to the same session ID and the newer file would wipe the
+    older completed work without any user confirmation.
+    """
+
+    def __init__(self, session_dir: str) -> None:
+        self.session_dir = session_dir
+        super().__init__("session_collision")
+
+
 @dataclass(frozen=True)
 class SessionPaths:
     session_dir: str

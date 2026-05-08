@@ -4,9 +4,12 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from el_sbobinator.core.session_store import SessionCollisionError
 from el_sbobinator.core.shared import (
     PRECONVERTED_AUDIO_FINAL,
     PRECONVERTED_AUDIO_PARTIAL,
+    _file_tail_hash,
+    _session_id_for_file,
 )
 from el_sbobinator.pipeline.pipeline_session import (
     AutosaveFailedError,
@@ -1359,3 +1362,211 @@ class TestSaveSessionGuard(unittest.TestCase):
         self.assertTrue(
             escaped, "AutosaveFailedError was swallowed by except Exception"
         )
+
+
+class TestSessionCollisionGuard(unittest.TestCase):
+    """initialize_session_context must raise SessionCollisionError instead of wiping
+    a completed session when resume_session=False."""
+
+    def _make_session_dir(self, tmpdir: str, stage: str, html_exists: bool) -> str:
+        session_dir = os.path.join(tmpdir, "session")
+        os.makedirs(os.path.join(session_dir, "phase1_chunks"), exist_ok=True)
+        os.makedirs(os.path.join(session_dir, "phase2_revised"), exist_ok=True)
+        html_path = os.path.join(session_dir, "output.html")
+        if html_exists:
+            with open(html_path, "w", encoding="utf-8") as fh:
+                fh.write("<html><body>done</body></html>")
+        import json
+
+        session_data = {
+            "schema_version": 1,
+            "stage": stage,
+            "outputs": {"html": html_path if html_exists else ""},
+        }
+        with open(
+            os.path.join(session_dir, "session.json"), "w", encoding="utf-8"
+        ) as fh:
+            json.dump(session_data, fh)
+        return session_dir
+
+    def test_no_collision_when_dir_absent(self):
+        """No error when the session directory does not exist yet."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "lesson.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake audio")
+
+            non_existent = os.path.join(tmpdir, "no_such_session")
+            with (
+                patch(
+                    "el_sbobinator.core.session_store._session_dir_for_file",
+                    return_value=non_existent,
+                ),
+                patch("el_sbobinator.pipeline.pipeline_session.save_session_data"),
+            ):
+                ctx = initialize_session_context(input_path, resume_session=False)
+            self.assertEqual(ctx.session["stage"], "phase1")
+
+    def test_no_collision_when_stage_not_done(self):
+        """No error when existing session is not done (in-progress phase1)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "lesson.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake audio")
+
+            session_dir = self._make_session_dir(
+                tmpdir, stage="phase1", html_exists=False
+            )
+            with (
+                patch(
+                    "el_sbobinator.core.session_store._session_dir_for_file",
+                    return_value=session_dir,
+                ),
+                patch("el_sbobinator.pipeline.pipeline_session.save_session_data"),
+            ):
+                ctx = initialize_session_context(input_path, resume_session=False)
+            self.assertEqual(ctx.session["stage"], "phase1")
+
+    def test_no_collision_when_html_absent(self):
+        """No error when stage==done but the HTML file no longer exists on disk."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "lesson.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake audio")
+
+            session_dir = self._make_session_dir(
+                tmpdir, stage="done", html_exists=False
+            )
+            with (
+                patch(
+                    "el_sbobinator.core.session_store._session_dir_for_file",
+                    return_value=session_dir,
+                ),
+                patch("el_sbobinator.pipeline.pipeline_session.save_session_data"),
+            ):
+                ctx = initialize_session_context(input_path, resume_session=False)
+            self.assertEqual(ctx.session["stage"], "phase1")
+
+    def test_raises_when_stage_done_and_html_exists(self):
+        """SessionCollisionError raised when session is done + HTML exists + resume=False."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "lesson.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake audio")
+
+            session_dir = self._make_session_dir(tmpdir, stage="done", html_exists=True)
+            with (
+                patch(
+                    "el_sbobinator.core.session_store._session_dir_for_file",
+                    return_value=session_dir,
+                ),
+                patch("el_sbobinator.pipeline.pipeline_session.save_session_data"),
+            ):
+                with self.assertRaises(SessionCollisionError) as cm:
+                    initialize_session_context(input_path, resume_session=False)
+            self.assertEqual(str(cm.exception), "session_collision")
+            self.assertEqual(cm.exception.session_dir, session_dir)
+
+    def test_no_collision_when_resume_true(self):
+        """resume_session=True must never trigger the collision guard."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "lesson.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake audio")
+
+            session_dir = self._make_session_dir(tmpdir, stage="done", html_exists=True)
+            with (
+                patch(
+                    "el_sbobinator.core.session_store._session_dir_for_file",
+                    return_value=session_dir,
+                ),
+                patch("el_sbobinator.pipeline.pipeline_session.save_session_data"),
+                patch(
+                    "el_sbobinator.pipeline.pipeline_session.load_config",
+                    return_value={},
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline_session.build_default_pipeline_settings",
+                    return_value={
+                        "model": "gemini-2.5-flash",
+                        "fallback_models": [],
+                        "effective_model": "gemini-2.5-flash",
+                        "chunk_minutes": 15,
+                        "overlap_seconds": 30,
+                        "macro_char_limit": 22000,
+                        "preconvert_audio": True,
+                        "prefetch_next_chunk": True,
+                        "inline_audio_max_mb": 6.0,
+                        "audio": {"bitrate": "48k"},
+                    },
+                ),
+            ):
+                ctx = initialize_session_context(input_path, resume_session=True)
+            self.assertEqual(ctx.session["stage"], "done")
+
+    def test_session_collision_str_is_error_code(self):
+        """str(SessionCollisionError) returns the raw error code consumed by the pipeline."""
+        err = SessionCollisionError("/some/dir")
+        self.assertEqual(str(err), "session_collision")
+        self.assertEqual(err.session_dir, "/some/dir")
+
+
+class TestSessionFingerprint(unittest.TestCase):
+    """_session_id_for_file must distinguish files that share size and first 1 MB."""
+
+    def test_same_head_different_tail_yields_different_id(self):
+        """Two files with identical first bytes but different tails must get different IDs."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shared_head = b"A" * (1024 * 1024 + 512)  # 1 MB + 512 bytes common prefix
+
+            path_a = os.path.join(tmpdir, "a.mp3")
+            path_b = os.path.join(tmpdir, "b.mp3")
+            with open(path_a, "wb") as fh:
+                fh.write(shared_head + b"\x01" * 512)
+            with open(path_b, "wb") as fh:
+                fh.write(shared_head + b"\x02" * 512)
+
+            id_a = _session_id_for_file(path_a)
+            id_b = _session_id_for_file(path_b)
+            self.assertNotEqual(id_a, id_b)
+
+    def test_identical_files_yield_same_id(self):
+        """Two copies of the same content must yield the same session ID."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            content = b"lecture content" * 10000
+
+            path_a = os.path.join(tmpdir, "copy_a.mp3")
+            path_b = os.path.join(tmpdir, "copy_b.mp3")
+            with open(path_a, "wb") as fh:
+                fh.write(content)
+            with open(path_b, "wb") as fh:
+                fh.write(content)
+
+            id_a = _session_id_for_file(path_a)
+            id_b = _session_id_for_file(path_b)
+            self.assertEqual(id_a, id_b)
+
+    def test_file_tail_hash_differs_for_different_endings(self):
+        """_file_tail_hash returns different digests for files with different last bytes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path_a = os.path.join(tmpdir, "a.bin")
+            path_b = os.path.join(tmpdir, "b.bin")
+            with open(path_a, "wb") as fh:
+                fh.write(b"same start" + b"\xff" * 100)
+            with open(path_b, "wb") as fh:
+                fh.write(b"same start" + b"\x00" * 100)
+
+            self.assertNotEqual(_file_tail_hash(path_a), _file_tail_hash(path_b))
+
+    def test_file_tail_hash_small_file_equals_full_hash(self):
+        """For files smaller than max_bytes, tail hash == hash of whole file."""
+        import hashlib
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "small.bin")
+            data = b"tiny file content"
+            with open(path, "wb") as fh:
+                fh.write(data)
+
+            expected = hashlib.sha256(data).hexdigest()
+            self.assertEqual(_file_tail_hash(path), expected)

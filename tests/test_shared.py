@@ -315,8 +315,10 @@ class SessionIdForFileTests(unittest.TestCase):
             f.write(content)
         return path
 
-    def test_same_content_same_id_regardless_of_mtime(self):
-        """Cloud sync rewrites mtime → session ID must be stable."""
+    def test_same_content_different_mtime_yields_same_id(self):
+        """mtime_ns is excluded from the fingerprint blob (cloud-sync stability).
+        Touching a file (mtime change only, same content) must not change the session ID
+        so that cloud-sync tools that rewrite mtime on unmodified files do not break resume."""
         with tempfile.TemporaryDirectory() as tmpdir:
             path = self._write_file(tmpdir, "lecture.mp3", b"audio" * 1000)
             shared._session_id_cache.clear()
