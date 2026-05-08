@@ -121,8 +121,29 @@ export function EditorFullPage({
       }
       isDirtyRef.current = false;
     };
+    (window as unknown as Record<string, unknown>).__elSbobinatorFlushPendingAutosave = async (): Promise<boolean> => {
+      if (!isDirtyRef.current) return true;
+      if (saveErrorOnCloseRef.current) return false;
+      if (autosaveTimerRef.current) { window.clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
+      const path = htmlPathRef.current;
+      const snap = getHtmlRef.current?.() ?? '';
+      if (path && snap && snap !== lastPersistedRef.current && window.pywebview?.api?.save_html_content) {
+        const gen = ++autosaveGenRef.current;
+        try {
+          const res = await window.pywebview.api.save_html_content(path, snap, gen);
+          if (res.ok) {
+            lastPersistedRef.current = snap;
+            if (gen === autosaveGenRef.current) isDirtyRef.current = false;
+            return true;
+          }
+          saveErrorOnCloseRef.current = true; setAutosaveStatus('error'); return false;
+        } catch (_) { saveErrorOnCloseRef.current = true; setAutosaveStatus('error'); return false; }
+      }
+      return true;
+    };
     return () => {
       delete (window as unknown as Record<string, unknown>).__elSbobinatorCancelPendingAutosave;
+      delete (window as unknown as Record<string, unknown>).__elSbobinatorFlushPendingAutosave;
     };
   }, []);
 
@@ -133,9 +154,13 @@ export function EditorFullPage({
       const snap = getHtmlRef.current?.() ?? '';
       if (path && snap && snap !== lastPersistedRef.current && window.pywebview?.api?.save_html_content) {
         setAutosaveStatus('saving');
+        const gen = ++autosaveGenRef.current;
         try {
-          const res = await window.pywebview.api.save_html_content(path, snap, ++autosaveGenRef.current);
-          if (res.ok) { lastPersistedRef.current = snap; isDirtyRef.current = false; }
+          const res = await window.pywebview.api.save_html_content(path, snap, gen);
+          if (res.ok) {
+            lastPersistedRef.current = snap;
+            if (gen === autosaveGenRef.current) isDirtyRef.current = false;
+          }
           else { saveErrorOnCloseRef.current = true; setAutosaveStatus('error'); return; }
         } catch { saveErrorOnCloseRef.current = true; setAutosaveStatus('error'); return; }
       }

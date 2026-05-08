@@ -153,6 +153,7 @@ export default function App() {
   const [askNewKeyPrompt, setAskNewKeyPrompt] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ConfirmActionState | null>(null);
   const [duplicatePrompt, setDuplicatePrompt] = useState<DuplicatePrompt>(null);
+  const [regenDirtyConfirm, setRegenDirtyConfirm] = useState<{ filename: string } | null>(null);
 
   const [activePage, setActivePage] = useState<ActivePage>('queue');
   const [folders, setFolders] = useState<ArchiveFolder[]>([]);
@@ -631,6 +632,21 @@ export default function App() {
         const regenDir = (currentPrompt?.sessionDir ?? '').replace(/\\/g, '/').toLowerCase();
         const previewDir = preview.sessionDir.replace(/\\/g, '/').toLowerCase();
         if (regenDir && previewDir && regenDir === previewDir) {
+          const dirtyContent = (window as unknown as Record<string, () => unknown>).__elSbobinatorGetDirtyEditorContent?.();
+          if (dirtyContent) {
+            const flushFn = (window as unknown as Record<string, () => Promise<boolean>>).__elSbobinatorFlushPendingAutosave;
+            if (flushFn) {
+              const flushed = await flushFn();
+              if (!flushed) {
+                try {
+                  if (window.pywebview?.api?.answer_regenerate) await window.pywebview.api.answer_regenerate(false);
+                } catch (e) { console.error('Failed to send regen cancel after flush error:', e); }
+                return;
+              }
+            }
+            setRegenDirtyConfirm({ filename: currentPrompt?.filename ?? '' });
+            return;
+          }
           const cancelFn = (window as unknown as Record<string, () => void>).__elSbobinatorCancelPendingAutosave;
           cancelFn?.();
           closePreview();
@@ -639,6 +655,23 @@ export default function App() {
       if (window.pywebview?.api?.answer_regenerate) await window.pywebview.api.answer_regenerate(ans);
     } catch (e) { console.error('Failed to send answer to Python:', e); }
   };
+
+  const handleRegenDirtyConfirm = useCallback(async () => {
+    setRegenDirtyConfirm(null);
+    const cancelFn = (window as unknown as Record<string, () => void>).__elSbobinatorCancelPendingAutosave;
+    cancelFn?.();
+    closePreview();
+    try {
+      if (window.pywebview?.api?.answer_regenerate) await window.pywebview.api.answer_regenerate(true);
+    } catch (e) { console.error('Failed to send regen answer:', e); }
+  }, [closePreview]);
+
+  const handleRegenDirtyCancel = useCallback(async () => {
+    setRegenDirtyConfirm(null);
+    try {
+      if (window.pywebview?.api?.answer_regenerate) await window.pywebview.api.answer_regenerate(false);
+    } catch (e) { console.error('Failed to send regen cancel:', e); }
+  }, []);
 
   const openFile = useCallback(async (path: string) => {
     if (!window.pywebview?.api) return;
@@ -726,7 +759,7 @@ export default function App() {
       }
     }, []),
   });
-  useBodyScrollLock(isSettingsOpen || regeneratePrompt !== null || preview.content !== null || askNewKeyPrompt || confirmAction !== null || duplicatePrompt !== null);
+  useBodyScrollLock(isSettingsOpen || regeneratePrompt !== null || preview.content !== null || askNewKeyPrompt || confirmAction !== null || duplicatePrompt !== null || regenDirtyConfirm !== null);
 
   const confirmModalCopy = useMemo(() => {
     if (!confirmAction) return null;
@@ -939,6 +972,15 @@ export default function App() {
         cancelLabel={confirmModalCopy?.cancelLabel}
         onClose={() => setConfirmAction(null)}
         onConfirm={handleConfirmAction}
+      />
+      <ConfirmActionModal
+        isOpen={regenDirtyConfirm !== null}
+        title="Conferma rigenerazione"
+        description={`La rigenerazione sovrascriverà il testo revisionato di "${regenDirtyConfirm?.filename ?? ''}". Vuoi procedere comunque?`}
+        confirmLabel="Rigenera comunque"
+        cancelLabel="Annulla"
+        onClose={() => void handleRegenDirtyCancel()}
+        onConfirm={() => void handleRegenDirtyConfirm()}
       />
       <SettingsModal
         isOpen={isSettingsOpen}
