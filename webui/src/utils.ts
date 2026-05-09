@@ -12,6 +12,7 @@ const _ERROR_MAP: Record<string, string> = {
   processing_failed: 'Elaborazione non completata.',
   api_key_mancante: 'API key mancante o non valida.',
   phase1_all_models_unavailable: 'Tutti i modelli AI temporaneamente non disponibili.',
+  revision_failed_blocks: 'Alcuni blocchi sono stati inclusi non revisionati.',
 };
 
 const _RESUMABLE_ERRORS = new Set([

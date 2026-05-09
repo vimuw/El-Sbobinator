@@ -7,6 +7,7 @@ export interface ToastMessage {
   message: string;
   type: 'warning' | 'info';
   persistent?: boolean;
+  dedupeKey?: string;
   action?: {
     label: string;
     loadingLabel?: string;

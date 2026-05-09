@@ -4,7 +4,7 @@ import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-ki
 import { Github } from 'lucide-react';
 import { GITHUB_RELEASES_URL, GITHUB_URL, KOFI_URL } from './branding';
 import { type ArchiveFolder, type ArchiveSession, type ElSbobinatorBridge, type PywebviewApi, type UpdateDownloadProgressPayload } from './bridge';
-import { getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type FileDescriptor, type FileItem, type ProcessDonePayload } from './appState';
+import { getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type FileDescriptor, type FileDonePayload, type FileItem, type ProcessDonePayload } from './appState';
 import { GEMINI_KEY_PATTERN } from './utils';
 import { useConsole } from './hooks/useConsole';
 import { useTheme } from './hooks/useTheme';
@@ -70,7 +70,7 @@ export default function App() {
 
   const { consoleLogs, appendConsole } = useConsole();
   const { themeMode, setThemeMode } = useTheme();
-  const { updateAvailable, latestVersion, isDismissed, isCheckingUpdate, hasChecked, checkFailed, checkForUpdates, dismissUpdate } = useUpdateChecker();
+  const { updateAvailable, latestVersion, isCheckingUpdate, hasChecked, checkFailed, checkForUpdates, dismissUpdate } = useUpdateChecker();
   const {
     apiReady,
     bridgeDelayed,
@@ -91,33 +91,51 @@ export default function App() {
   const archiveLimitRef = useRef(20);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const toastTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const toastDedupeMapRef = useRef<Map<string, string>>(new Map());
+  const warnedRevisionSessionsRef = useRef<Set<string>>(new Set());
   const prevSessionDirsRef = useRef<Map<string, string>>(new Map());
 
   const dismissToast = useCallback((id: string) => {
     const timer = toastTimersRef.current.get(id);
+
     if (timer !== undefined) {
       clearTimeout(timer);
       toastTimersRef.current.delete(id);
     }
-    setToasts(prev => prev.filter(t => t.id !== id));
+    setToasts(prev => {
+      const toast = prev.find(t => t.id === id);
+      if (toast?.dedupeKey) toastDedupeMapRef.current.delete(toast.dedupeKey);
+      return prev.filter(t => t.id !== id);
+    });
   }, []);
 
   const showToast = useCallback((message: string, type: 'warning' | 'info' = 'info', opts?: {
     persistent?: boolean;
+    dedupeKey?: string;
+    durationMs?: number;
     action?: ToastMessage['action'];
     onDismiss?: () => void;
   }) => {
+    if (opts?.dedupeKey) {
+      const existingId = toastDedupeMapRef.current.get(opts.dedupeKey);
+      if (existingId) return existingId;
+    }
     const toastId = crypto.randomUUID();
-    setToasts(prev => [...prev, { id: toastId, message, type, persistent: opts?.persistent, action: opts?.action, onDismiss: opts?.onDismiss }]);
+    if (opts?.dedupeKey) toastDedupeMapRef.current.set(opts.dedupeKey, toastId);
+    setToasts(prev => [...prev, { id: toastId, message, type, persistent: opts?.persistent, dedupeKey: opts?.dedupeKey, action: opts?.action, onDismiss: opts?.onDismiss }]);
     if (!opts?.persistent) {
       const timer = setTimeout(() => {
         toastTimersRef.current.delete(toastId);
+        if (opts?.dedupeKey) toastDedupeMapRef.current.delete(opts.dedupeKey);
         setToasts(prev => prev.filter(t => t.id !== toastId));
-      }, 5000);
+      }, opts?.durationMs ?? 5000);
       toastTimersRef.current.set(toastId, timer);
     }
     return toastId;
   }, []);
+
+  const normalizeSessionDir = useCallback((value?: string) =>
+    String(value || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase(), []);
 
   const refreshArchiveSessions = useCallback(async (limitOverride?: number) => {
     const lim = limitOverride !== undefined ? limitOverride : archiveLimitRef.current;
@@ -144,6 +162,75 @@ export default function App() {
       prevSessionDirsRef.current.delete(sessionDir);
     }
   }, [showToast]);
+
+  const handleRetryFailedRevisionBlocks = useCallback(async (sessionDir: string, _fileId?: string) => {
+    if (!sessionDir) throw new Error('Sessione non disponibile.');
+    const res = await window.pywebview?.api?.retry_failed_revision_blocks?.(sessionDir);
+    if (!res?.ok) {
+      if (res?.conflict) {
+        showToast('La sbobina è stata modificata: retry annullato per evitare sovrascritture.', 'warning', { durationMs: 9000 });
+      } else if (res?.cancelled) {
+        showToast('Retry annullato.', 'info');
+      } else if (res?.quota_exhausted) {
+        showToast('Quota giornaliera esaurita: riprova domani.', 'warning', { durationMs: 9000 });
+      }
+      throw new Error(res?.error ?? 'Retry non riuscito.');
+    }
+    const normalizedSessionDir = res.session_dir ?? sessionDir;
+    const remaining = Array.isArray(res.remaining_failed_blocks) ? res.remaining_failed_blocks : [];
+    dispatch({
+      type: 'queue/update_revision_failed_blocks',
+      fileId: _fileId,
+      sessionDir: normalizedSessionDir,
+      blocks: remaining,
+      htmlPath: res.html_path,
+      effectiveModel: res.effective_model,
+    });
+    setArchiveSessions(prev => prev.map(session =>
+      normalizeSessionDir(session.session_dir) === normalizeSessionDir(normalizedSessionDir)
+        ? {
+            ...session,
+            html_path: res.html_path ?? session.html_path,
+            effective_model: res.effective_model ?? session.effective_model,
+            revision_failed_blocks: remaining,
+          }
+        : session,
+    ));
+    if (remaining.length > 0) {
+      if (res.cancelled) {
+        showToast(`Retry annullato: ${remaining.length} ${remaining.length === 1 ? 'blocco resta' : 'blocchi restano'} non revisionato.`, 'warning');
+      } else if (res.quota_exhausted) {
+        showToast(`Quota giornaliera esaurita: ${remaining.length} ${remaining.length === 1 ? 'blocco resta' : 'blocchi restano'} non revisionato. Riprova domani.`, 'warning', { durationMs: 9000 });
+      } else {
+        showToast(`${remaining.length} ${remaining.length === 1 ? 'blocco resta' : 'blocchi restano'} non revisionato. Puoi riprovare piu tardi.`, 'warning');
+      }
+    } else {
+      showToast('Blocchi mancanti revisionati e HTML aggiornato.', 'info');
+    }
+    void refreshArchiveSessions();
+  }, [refreshArchiveSessions, showToast]);
+
+  const handleRevisionWarning = useCallback((data: FileDonePayload) => {
+    const count = data.revision_failed_blocks?.length ?? 0;
+    if (count <= 0) return;
+    const key = normalizeSessionDir(data.output_dir || data.id);
+    if (key && warnedRevisionSessionsRef.current.has(key)) return;
+    if (key) warnedRevisionSessionsRef.current.add(key);
+    showToast(
+      `Sbobina pronta, ma ${count} ${count === 1 ? 'sezione e stata inclusa' : 'sezioni sono state incluse'} non revisionate.`,
+      'warning',
+      {
+        dedupeKey: key || undefined,
+        durationMs: 12000,
+        action: {
+          label: 'Riprova',
+          loadingLabel: 'Riprovo...',
+          errorSuffix: 'puoi usare il pulsante sulla scheda',
+          onAction: () => handleRetryFailedRevisionBlocks(data.output_dir, data.id),
+        },
+      },
+    );
+  }, [handleRetryFailedRevisionBlocks, normalizeSessionDir, showToast]);
 
   const { preview, openPreview, closePreview, relinkPreviewAudio, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed });
 
@@ -749,6 +836,7 @@ export default function App() {
     onBatchReset,
     onBatchFullyDone,
     clearCompletionFlash: () => setCompletionFlash(false),
+    onRevisionWarning: handleRevisionWarning,
     onDownloadProgress: useCallback((data: UpdateDownloadProgressPayload) => {
       if (data.status === 'done') {
         downloadCompletionRef.current?.resolve();
@@ -907,6 +995,7 @@ export default function App() {
                   onPreview={openPreview}
                   onOpenFile={openFile}
                   onClearAll={() => setConfirmAction({ type: 'clear-completed', count: doneFiles.length })}
+                  onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
                 />
 
                 {showConsole && (
@@ -937,6 +1026,7 @@ export default function App() {
                   onDeleteSession={(sessionDir, name) => setConfirmAction({ type: 'delete-archive-session', sessionDir, name })}
                   onRefresh={refreshArchiveSessions}
                   onLoadAll={handleLoadAll}
+                  onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
                 />
               </div>
             </motion.main>

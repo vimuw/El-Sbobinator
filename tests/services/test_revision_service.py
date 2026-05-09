@@ -7,6 +7,7 @@ from el_sbobinator.services.generation_service import QuotaDailyLimitError
 from el_sbobinator.services.revision_service import (
     build_macro_blocks,
     process_macro_revision_phase,
+    retry_failed_revision_blocks,
 )
 
 # ---------------------------------------------------------------------------
@@ -118,7 +119,7 @@ class TestProcessMacroRevisionPhase(unittest.TestCase):
 
             self._run(["Blocco grezzo."], tmpdir, session, always_fail)
 
-            self.assertFalse(os.path.exists(os.path.join(tmpdir, "rev_001.raw.md")))
+            self.assertTrue(os.path.exists(os.path.join(tmpdir, "rev_001.raw.md")))
             self.assertTrue(os.path.exists(os.path.join(tmpdir, "rev_001.md")))
             self.assertIn(1, session.get("revision_failed_blocks", []))
 
@@ -185,7 +186,7 @@ class TestProcessMacroRevisionPhase(unittest.TestCase):
 
             rev_path = os.path.join(tmpdir, "rev_001.md")
             self.assertTrue(os.path.exists(rev_path))
-            self.assertFalse(os.path.exists(os.path.join(tmpdir, "rev_001.raw.md")))
+            self.assertTrue(os.path.exists(os.path.join(tmpdir, "rev_001.raw.md")))
             self.assertIn(1, session.get("revision_failed_blocks", []))
 
     def test_quota_in_retry_pass_leaves_raw_md_and_does_not_finalize(self):
@@ -235,10 +236,6 @@ class TestProcessMacroRevisionPhase(unittest.TestCase):
                 ".md must NOT be created if retry was interrupted",
             )
             self.assertEqual(session.get("last_error"), "quota_daily_limit_phase2")
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 class _ThrowingRuntime(_FakeRuntime):
@@ -643,3 +640,259 @@ class TestRevisionEdgeCases(unittest.TestCase):
                 )
 
             self.assertEqual(result, "")
+
+
+class TestRetryFailedRevisionBlocks(unittest.TestCase):
+    def _make_session(self, failed_blocks, macro_total=3):
+        return {
+            "phase2": {"macro_total": macro_total, "revised_done": 2},
+            "revision_failed_blocks": list(failed_blocks),
+            "revision_pending_blocks": [],
+            "last_error": None,
+        }
+
+    def _run(self, session, phase2_dir, rq_side_effect, cancelled=lambda: False):
+        with patch(
+            "el_sbobinator.services.revision_service.retry_with_quota",
+            side_effect=rq_side_effect,
+        ):
+            _, result = retry_failed_revision_blocks(
+                client=object(),
+                model_name="test-model",
+                phase2_revised_dir=phase2_dir,
+                session=session,
+                save_session=lambda: True,
+                runtime=_FakeRuntime(),
+                cancelled=cancelled,
+                fallback_keys=[],
+                request_fallback_key=lambda: None,
+                prompt_revisione="Revisiona.",
+            )
+        return result
+
+    def test_empty_failed_blocks_returns_immediately(self):
+        """No revision_failed_blocks → early return with empty result, AI never called."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session = self._make_session([])
+            called = [0]
+
+            def track(fn, *, client, **kw):
+                called[0] += 1
+                return client, "X"
+
+            result = self._run(session, tmpdir, track)
+
+            self.assertEqual(called[0], 0)
+            self.assertEqual(result["retried_blocks"], [])
+            self.assertEqual(result["failed_blocks"], [])
+            self.assertFalse(result["cancelled"])
+            self.assertFalse(result["quota_exhausted"])
+
+    def test_happy_path_raw_md_source(self):
+        """Block in revision_failed_blocks with .raw.md → AI succeeds →
+        .md written, .raw.md deleted, retried_blocks=[idx], session cleared."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            raw_path = os.path.join(tmpdir, "rev_001.raw.md")
+            with open(raw_path, "w", encoding="utf-8") as fh:
+                fh.write("Blocco da recuperare.\n")
+
+            session = self._make_session([1])
+
+            def success(fn, *, client, **kw):
+                return client, "Testo recuperato"
+
+            result = self._run(session, tmpdir, success)
+
+            rev_path = os.path.join(tmpdir, "rev_001.md")
+            self.assertTrue(os.path.exists(rev_path))
+            with open(rev_path, encoding="utf-8") as fh:
+                self.assertIn("Testo recuperato", fh.read())
+            self.assertFalse(os.path.exists(raw_path))
+            self.assertEqual(result["retried_blocks"], [1])
+            self.assertEqual(result["failed_blocks"], [])
+            self.assertEqual(session["revision_failed_blocks"], [])
+            self.assertIsNone(session.get("last_error"))
+
+    def test_legacy_rev_md_fallback_when_no_raw_md(self):
+        """If .raw.md is absent, source falls back to existing .md (legacy sessions)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            rev_path = os.path.join(tmpdir, "rev_002.md")
+            with open(rev_path, "w", encoding="utf-8") as fh:
+                fh.write("Contenuto grezzo salvato come md.\n")
+
+            session = self._make_session([2])
+
+            def success(fn, *, client, **kw):
+                return client, "Testo riprocessato"
+
+            result = self._run(session, tmpdir, success)
+
+            with open(rev_path, encoding="utf-8") as fh:
+                self.assertIn("Testo riprocessato", fh.read())
+            self.assertEqual(result["retried_blocks"], [2])
+            self.assertEqual(result["failed_blocks"], [])
+
+    def test_partial_failure_remaining_blocks_preserved_in_session(self):
+        """2 blocks: block 1 succeeds, block 2 raises RuntimeError →
+        retried=[1], failed=[2], session revised_failed_blocks=[2]."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for idx in [1, 2]:
+                with open(
+                    os.path.join(tmpdir, f"rev_{idx:03}.raw.md"), "w", encoding="utf-8"
+                ) as fh:
+                    fh.write(f"Blocco {idx} grezzo.\n")
+
+            session = self._make_session([1, 2])
+            calls = [0]
+
+            def first_ok_second_fail(fn, *, client, **kw):
+                calls[0] += 1
+                if calls[0] == 1:
+                    return client, "Blocco 1 ok"
+                raise RuntimeError("network error on block 2")
+
+            result = self._run(session, tmpdir, first_ok_second_fail)
+
+            self.assertEqual(result["retried_blocks"], [1])
+            self.assertEqual(result["failed_blocks"], [2])
+            self.assertFalse(result["cancelled"])
+            self.assertFalse(result["quota_exhausted"])
+            self.assertEqual(session["revision_failed_blocks"], [2])
+
+    def test_quota_after_partial_sets_quota_exhausted_and_last_error(self):
+        """Block 1 succeeds, block 2 raises QuotaDailyLimitError →
+        quota_exhausted=True, last_error set, failed_blocks=[2]."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for idx in [1, 2]:
+                with open(
+                    os.path.join(tmpdir, f"rev_{idx:03}.raw.md"), "w", encoding="utf-8"
+                ) as fh:
+                    fh.write(f"Blocco {idx}.\n")
+
+            session = self._make_session([1, 2])
+            calls = [0]
+
+            def first_ok_then_quota(fn, *, client, **kw):
+                calls[0] += 1
+                if calls[0] == 1:
+                    return client, "Blocco 1 ok"
+                raise QuotaDailyLimitError("quota giornaliera")
+
+            result = self._run(session, tmpdir, first_ok_then_quota)
+
+            self.assertTrue(result["quota_exhausted"])
+            self.assertEqual(result["failed_blocks"], [2])
+            self.assertEqual(result["retried_blocks"], [1])
+            self.assertEqual(session.get("last_error"), "quota_daily_limit_phase2")
+
+    def test_cancellation_before_first_block(self):
+        """cancelled() returns True immediately → all blocks preserved, was_cancelled=True."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for idx in [1, 2]:
+                with open(
+                    os.path.join(tmpdir, f"rev_{idx:03}.raw.md"), "w", encoding="utf-8"
+                ) as fh:
+                    fh.write(f"Blocco {idx}.\n")
+
+            session = self._make_session([1, 2])
+            called = [0]
+
+            def never_called(fn, *, client, **kw):
+                raise AssertionError("should not be called when cancelled at start")
+
+            result = self._run(session, tmpdir, never_called, cancelled=lambda: True)
+
+            self.assertTrue(result["cancelled"])
+            self.assertEqual(result["retried_blocks"], [])
+            self.assertEqual(sorted(result["failed_blocks"]), [1, 2])
+            self.assertEqual(called[0], 0)
+
+    def test_cancellation_mid_pass_preserves_remaining_blocks(self):
+        """Block 1 processed successfully, then cancelled →
+        retried=[1], failed=[2], was_cancelled=True."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for idx in [1, 2]:
+                with open(
+                    os.path.join(tmpdir, f"rev_{idx:03}.raw.md"), "w", encoding="utf-8"
+                ) as fh:
+                    fh.write(f"Blocco {idx}.\n")
+
+            session = self._make_session([1, 2])
+            cancel_calls = [0]
+
+            def cancel_after_first():
+                cancel_calls[0] += 1
+                return cancel_calls[0] > 1
+
+            def success(fn, *, client, **kw):
+                return client, "Blocco ok"
+
+            result = self._run(session, tmpdir, success, cancelled=cancel_after_first)
+
+            self.assertTrue(result["cancelled"])
+            self.assertEqual(result["retried_blocks"], [1])
+            self.assertEqual(result["failed_blocks"], [2])
+            self.assertEqual(session["revision_failed_blocks"], [2])
+
+    def test_current_text_none_breaks_and_preserves_remaining(self):
+        """retry_with_quota returning (client, None) → remaining blocks kept,
+        result includes all unprocessed indexes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for idx in [1, 2]:
+                with open(
+                    os.path.join(tmpdir, f"rev_{idx:03}.raw.md"), "w", encoding="utf-8"
+                ) as fh:
+                    fh.write(f"Blocco {idx}.\n")
+
+            session = self._make_session([1, 2])
+
+            def returns_none(fn, *, client, **kw):
+                return client, None
+
+            result = self._run(session, tmpdir, returns_none)
+
+            self.assertEqual(result["retried_blocks"], [])
+            self.assertEqual(sorted(result["failed_blocks"]), [1, 2])
+
+    def test_empty_block_src_skipped_without_ai_call(self):
+        """If source file contains only whitespace, block goes to remaining_blocks
+        without calling retry_with_quota."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            raw_path = os.path.join(tmpdir, "rev_001.raw.md")
+            with open(raw_path, "w", encoding="utf-8") as fh:
+                fh.write("   \n")
+
+            session = self._make_session([1])
+            called = [0]
+
+            def track(fn, *, client, **kw):
+                called[0] += 1
+                return client, "X"
+
+            result = self._run(session, tmpdir, track)
+
+            self.assertEqual(called[0], 0, "AI must not be called for empty block")
+            self.assertEqual(result["retried_blocks"], [])
+            self.assertIn(1, result["failed_blocks"])
+
+    def test_macro_total_inferred_from_max_failed_when_session_missing(self):
+        """When session has no phase2.macro_total, macro_total is inferred as
+        max(failed_blocks) — function must not crash and must process the block."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            raw_path = os.path.join(tmpdir, "rev_005.raw.md")
+            with open(raw_path, "w", encoding="utf-8") as fh:
+                fh.write("Blocco 5.\n")
+
+            session = {"revision_failed_blocks": [5], "last_error": None}
+
+            def success(fn, *, client, **kw):
+                return client, "Blocco 5 ok"
+
+            result = self._run(session, tmpdir, success)
+
+            self.assertEqual(result["retried_blocks"], [5])
+            self.assertEqual(result["failed_blocks"], [])
+
+
+if __name__ == "__main__":
+    unittest.main()

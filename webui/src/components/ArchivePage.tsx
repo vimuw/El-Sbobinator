@@ -1,7 +1,7 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type FormEvent, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
+  AlertTriangle, ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
   ExternalLink, FileSearch, FolderOpen, FolderPlus, History,
   Loader2, Pencil, Plus, RefreshCw, Search, Trash2, X,
 } from 'lucide-react';
@@ -34,6 +34,7 @@ interface ArchivePageProps {
   onDeleteSession: (sessionDir: string, name: string) => void;
   onRefresh?: () => void;
   onLoadAll?: () => void;
+  onRetryFailedRevisionBlocks?: (sessionDir: string) => Promise<void>;
 }
 
 type FolderModalState =
@@ -43,6 +44,7 @@ type FolderModalState =
 export function ArchivePage({
   sessions, total, folders, onFoldersChange,
   onPreview, onOpenFile, onDeleteSession, onRefresh, onLoadAll,
+  onRetryFailedRevisionBlocks,
 }: ArchivePageProps) {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<'newest' | 'oldest'>('newest');
@@ -216,6 +218,7 @@ export function ArchivePage({
           onPreview={onPreview}
           onOpenFile={onOpenFile}
           onDeleteSession={onDeleteSession}
+          onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
         />
         <AnimatePresence>
           {folderModal && (
@@ -449,6 +452,7 @@ export function ArchivePage({
                     onPreview={onPreview}
                     onOpenFile={onOpenFile}
                     onDeleteSession={onDeleteSession}
+                    onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
                   />
                 ))}
               </motion.div>
@@ -745,7 +749,7 @@ function FolderCard({
 
 function DraggableSessionCard({
   session, allFolders, currentFolder, onAssignToFolder, onRemoveFromFolder,
-  onPreview, onOpenFile, onDeleteSession,
+  onPreview, onOpenFile, onDeleteSession, onRetryFailedRevisionBlocks,
 }: {
   session: ArchiveSession;
   allFolders: ArchiveFolder[];
@@ -755,8 +759,22 @@ function DraggableSessionCard({
   onPreview: ArchivePageProps['onPreview'];
   onOpenFile: ArchivePageProps['onOpenFile'];
   onDeleteSession: ArchivePageProps['onDeleteSession'];
+  onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
 }) {
   const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
+  const [isRetryingBlocks, setIsRetryingBlocks] = useState(false);
+  const failedBlockCount = session.revision_failed_blocks?.length ?? 0;
+  const canRetryBlocks = failedBlockCount > 0 && Boolean(onRetryFailedRevisionBlocks);
+  const handleRetryBlocks = async (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (!canRetryBlocks || isRetryingBlocks) return;
+    setIsRetryingBlocks(true);
+    try {
+      await onRetryFailedRevisionBlocks?.(session.session_dir);
+    } finally {
+      setIsRetryingBlocks(false);
+    }
+  };
 
   const kebabItems: KebabMenuItem[] = [
     ...allFolders.map(f => ({
@@ -800,7 +818,22 @@ function DraggableSessionCard({
             {currentFolder && (
               <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full shrink-0" style={{ background: currentFolder.color }} />{currentFolder.name}</span></>
             )}
+            {failedBlockCount > 0 && (
+              <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}><AlertTriangle className="w-3 h-3" />{failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}</span></>
+            )}
           </div>
+          {canRetryBlocks && (
+            <button
+              type="button"
+              onClick={handleRetryBlocks}
+              disabled={isRetryingBlocks}
+              className="mt-1.5 premium-button-secondary compact-button text-xs"
+              style={{ color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRetryingBlocks ? 'animate-spin' : ''}`} />
+              {isRetryingBlocks ? 'Riprovo...' : 'Riprova i blocchi mancanti'}
+            </button>
+          )}
           <div
             className="mt-0.5 flex items-center gap-1 text-[11px] hover:underline"
             style={{ color: 'var(--text-faint)', cursor: 'pointer' }}
@@ -855,7 +888,7 @@ function FolderSessionCardOverlay({ session, folderColor }: {
 
 function SortableSessionCard({
   session, folderColor, disabled, onRemove,
-  onPreview, onOpenFile, onDeleteSession,
+  onPreview, onOpenFile, onDeleteSession, onRetryFailedRevisionBlocks,
 }: {
   session: ArchiveSession;
   folderColor: string;
@@ -864,6 +897,7 @@ function SortableSessionCard({
   onPreview: ArchivePageProps['onPreview'];
   onOpenFile: ArchivePageProps['onOpenFile'];
   onDeleteSession: ArchivePageProps['onDeleteSession'];
+  onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
 }) {
   const {
     attributes, listeners, setNodeRef,
@@ -871,6 +905,19 @@ function SortableSessionCard({
   } = useSortable({ id: session.session_dir, disabled });
 
   const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
+  const [isRetryingBlocks, setIsRetryingBlocks] = useState(false);
+  const failedBlockCount = session.revision_failed_blocks?.length ?? 0;
+  const canRetryBlocks = failedBlockCount > 0 && Boolean(onRetryFailedRevisionBlocks);
+  const handleRetryBlocks = async (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (!canRetryBlocks || isRetryingBlocks) return;
+    setIsRetryingBlocks(true);
+    try {
+      await onRetryFailedRevisionBlocks?.(session.session_dir);
+    } finally {
+      setIsRetryingBlocks(false);
+    }
+  };
 
   const kebabItems: KebabMenuItem[] = [
     {
@@ -915,7 +962,22 @@ function SortableSessionCard({
             {session.effective_model && (
               <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span>{shortModelName(session.effective_model)}</span></>
             )}
+            {failedBlockCount > 0 && (
+              <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}><AlertTriangle className="w-3 h-3" />{failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}</span></>
+            )}
           </div>
+          {canRetryBlocks && (
+            <button
+              type="button"
+              onClick={handleRetryBlocks}
+              disabled={isRetryingBlocks}
+              className="mt-1.5 premium-button-secondary compact-button text-xs"
+              style={{ color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRetryingBlocks ? 'animate-spin' : ''}`} />
+              {isRetryingBlocks ? 'Riprovo...' : 'Riprova i blocchi mancanti'}
+            </button>
+          )}
           <div
             className="mt-0.5 flex items-center gap-1 text-[11px] hover:underline"
             style={{ color: 'var(--text-faint)', cursor: 'pointer' }}
@@ -939,7 +1001,7 @@ function FolderDetailView({
   folder, sessionsByDir,
   onBack, onEdit, onDelete,
   onRemoveSession, onAddSession, onReorderSessions,
-  onPreview, onOpenFile, onDeleteSession,
+  onPreview, onOpenFile, onDeleteSession, onRetryFailedRevisionBlocks,
 }: {
   folder: ArchiveFolder;
   sessionsByDir: Map<string, ArchiveSession>;
@@ -952,6 +1014,7 @@ function FolderDetailView({
   onPreview: ArchivePageProps['onPreview'];
   onOpenFile: ArchivePageProps['onOpenFile'];
   onDeleteSession: ArchivePageProps['onDeleteSession'];
+  onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
 }) {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
@@ -1257,6 +1320,7 @@ function FolderDetailView({
                     onPreview={onPreview}
                     onOpenFile={onOpenFile}
                     onDeleteSession={onDeleteSession}
+                    onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
                   />
                 ))}
               </motion.div>

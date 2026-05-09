@@ -42,6 +42,7 @@ export interface ArchiveSession {
   input_size?: number;
   session_dir: string;
   duration_sec?: number;
+  revision_failed_blocks?: number[];
 }
 
 export interface SearchSnippet {
@@ -142,6 +143,18 @@ export interface PywebviewApi {
   get_archive_folders?: () => Promise<{ ok: boolean; folders: ArchiveFolder[]; error?: string }>;
   save_archive_folders?: (folders: ArchiveFolder[]) => Promise<{ ok: boolean; error?: string }>;
   search_sessions?: (query: string, limit?: number) => Promise<{ ok: boolean; results?: SearchSessionResult[]; error?: string }>;
+  retry_failed_revision_blocks?: (sessionDir: string) => Promise<{
+    ok: boolean;
+    error?: string;
+    retried_blocks?: number[];
+    remaining_failed_blocks?: number[];
+    html_path?: string;
+    session_dir?: string;
+    effective_model?: string;
+    cancelled?: boolean;
+    quota_exhausted?: boolean;
+    conflict?: boolean;
+  }>;
 }
 
 export function createBridge(options: {

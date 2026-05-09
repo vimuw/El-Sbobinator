@@ -17,7 +17,7 @@ from google import genai
 
 from el_sbobinator.core.model_registry import build_model_state
 from el_sbobinator.core.prompts import PROMPT_REVISIONE, PROMPT_SISTEMA
-from el_sbobinator.core.session_store import _update_session
+from el_sbobinator.core.session_store import _update_session, mark_html_exported
 from el_sbobinator.core.shared import (
     PRECONVERTED_AUDIO_FINAL,
     _atomic_write_json,
@@ -301,6 +301,13 @@ def _esegui_sbobinatura_impl(  # noqa: C901
                         f"[*] File gia' completato, l'utente ha scelto di usare la versione pronta."
                     )
                     runtime.output_html(str(existing_html))
+                    try:
+                        app_instance.last_revision_failed_blocks = [
+                            int(idx)
+                            for idx in (session.get("revision_failed_blocks") or [])
+                        ]
+                    except Exception:
+                        pass
                     runtime.set_run_result("completed")
                     return
 
@@ -504,6 +511,7 @@ def _esegui_sbobinatura_impl(  # noqa: C901
                     "outputs": {**session.get("outputs", {}), "html": html_path},
                 },
             )
+            mark_html_exported(session)
             save_session()
         except Exception:
             pass
@@ -521,6 +529,12 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         print(f"Tempo totale: {minutes}m {seconds}s")
         print(f"File salvato in: {session_html_dir}")
         runtime.phase("Fase: completato")
+        try:
+            app_instance.last_revision_failed_blocks = [
+                int(idx) for idx in (session.get("revision_failed_blocks") or [])
+            ]
+        except Exception:
+            pass
         runtime.set_run_result("completed")
         logger.info("Pipeline completata con successo.", extra={"stage": "done"})
 

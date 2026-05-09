@@ -69,6 +69,7 @@ class PipelineAdapter:
         self.last_output_dir: str | None = None
         self.last_primary_model: str | None = None
         self.last_effective_model: str | None = None
+        self.last_revision_failed_blocks: list[int] = []
         self.last_run_status: str = "idle"
         self.last_run_error: str | None = None
         self.effective_api_key: str | None = None
@@ -146,6 +147,7 @@ class PipelineAdapter:
         self.last_output_dir = None
         self.last_primary_model = None
         self.last_effective_model = None
+        self.last_revision_failed_blocks = []
         self.last_run_status = "failed"
         self.last_run_error = None
         self.effective_api_key = str(api_key or "").strip() or None

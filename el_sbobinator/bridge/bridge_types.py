@@ -38,6 +38,7 @@ class FileDonePayload(TypedDict):
     output_html: str
     output_dir: str
     effective_model: str
+    revision_failed_blocks: NotRequired[list[int]]
     primary_model: NotRequired[str]
 
 

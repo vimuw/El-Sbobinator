@@ -108,6 +108,10 @@ def _update_session(session: dict, updates: dict) -> dict:
     return snapshot
 
 
+def mark_html_exported(session: dict) -> dict:
+    return _update_session(session, {"user_edited": False})
+
+
 def new_session(input_path: str, settings: dict | None = None) -> dict:
     try:
         fp = _file_fingerprint(input_path)

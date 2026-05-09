@@ -17,6 +17,7 @@ export function serializeQueueFile(file: FileItem): Record<string, unknown> {
     completedAt: file.completedAt,
     primaryModel: file.primaryModel,
     effectiveModel: file.effectiveModel,
+    revisionFailedBlocks: file.revisionFailedBlocks,
   };
 }
 
@@ -36,6 +37,9 @@ export function deserializeQueueFile(file: Partial<FileItem>, index: number): Fi
     completedAt: file.completedAt ? Number(file.completedAt) : undefined,
     primaryModel: file.primaryModel ? String(file.primaryModel) : undefined,
     effectiveModel: file.effectiveModel ? String(file.effectiveModel) : undefined,
+    revisionFailedBlocks: Array.isArray(file.revisionFailedBlocks)
+      ? file.revisionFailedBlocks.map(Number).filter(n => Number.isFinite(n) && n > 0)
+      : [],
   };
 }
 

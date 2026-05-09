@@ -35,10 +35,12 @@ from el_sbobinator.bridge.bridge_types import (
 )
 from el_sbobinator.core.media_server import LocalMediaServer
 from el_sbobinator.core.model_registry import DEFAULT_FALLBACK_MODELS, MODEL_OPTIONS
+from el_sbobinator.core.session_store import mark_html_exported, save_session
 from el_sbobinator.core.shared import (
     DEFAULT_MODEL,
     SESSION_CLEANUP_MAX_AGE_DAYS,
     _atomic_write_json,
+    _load_json,
     cleanup_orphan_sessions,
     cleanup_orphan_temp_chunks,
     get_session_root,
@@ -84,6 +86,41 @@ _ALLOWED_URL_PREFIXES: tuple[str, ...] = (
 )
 
 
+class _RetryRuntime:
+    def __init__(self, adapter: PipelineAdapter, cancel_event: threading.Event):
+        self._adapter = adapter
+        self._cancel_event = cancel_event
+        self.effective_api_key: str | None = None
+
+    def cancelled(self) -> bool:
+        return self._cancel_event.is_set()
+
+    def phase(self, _text: str) -> None:
+        return None
+
+    def progress(self, _value: float) -> None:
+        return None
+
+    def set_work_totals(self, *_args, **_kwargs) -> None:
+        return None
+
+    def update_work_done(self, *_args, **_kwargs) -> None:
+        return None
+
+    def register_step_time(self, *_args, **_kwargs) -> None:
+        return None
+
+    def set_effective_api_key(self, api_key: str | None) -> None:
+        self.effective_api_key = str(api_key or "").strip() or None
+
+    def ask_new_api_key(self, callback) -> bool:
+        try:
+            self._adapter.ask_new_api_key(callback)
+            return True
+        except Exception:
+            return False
+
+
 def _path_under_root(path: str, root: str) -> bool:
     """Return True if *path* equals or is nested under *root*.
 
@@ -97,6 +134,61 @@ def _path_under_root(path: str, root: str) -> bool:
     return nc_path == nc_root or nc_path.startswith(nc_root + os.sep)
 
 
+def _retry_zero_retried_response(
+    *,
+    retried_blocks: list,
+    remaining: list,
+    cancelled: bool,
+    quota_exhausted: bool,
+    session_dir: str,
+    html_path: str,
+) -> dict | None:
+    if retried_blocks:
+        return None
+    if cancelled:
+        error = "Operazione annullata."
+    elif quota_exhausted:
+        error = "Quota giornaliera esaurita: riprova domani."
+    elif remaining:
+        error = "Nessun blocco recuperato. Riprova piu tardi."
+    else:
+        return {
+            "ok": True,
+            "remaining_failed_blocks": remaining,
+            "retried_blocks": retried_blocks,
+            "html_path": html_path,
+            "session_dir": session_dir,
+        }
+    return {
+        "ok": False,
+        "error": error,
+        "remaining_failed_blocks": remaining,
+        "retried_blocks": retried_blocks,
+        "session_dir": session_dir,
+        "cancelled": cancelled,
+        "quota_exhausted": quota_exhausted,
+    }
+
+
+def _retry_would_overwrite_user_html(session: dict, existing_html: str | None) -> bool:
+    user_edited = session.get("user_edited")
+    return user_edited is True or (user_edited is None and existing_html is not None)
+
+
+def _retry_no_failed_blocks_response(
+    session: dict, failed_blocks: object, session_dir: str
+) -> dict | None:
+    if isinstance(failed_blocks, list) and failed_blocks:
+        return None
+    return {
+        "ok": True,
+        "retried_blocks": [],
+        "remaining_failed_blocks": [],
+        "html_path": session.get("outputs", {}).get("html", ""),
+        "session_dir": session_dir,
+    }
+
+
 # ---------------------------------------------------------------------------
 # ElSbobinatorApi: exposed to JS via pywebview js_api
 # ---------------------------------------------------------------------------
@@ -104,6 +196,10 @@ def _path_under_root(path: str, root: str) -> bool:
 
 class ElSbobinatorApi:
     """Methods callable from React via window.pywebview.api.*"""
+
+    _retry_global_lock: ClassVar[threading.Lock] = threading.Lock()
+    _retry_locks: ClassVar[dict[str, threading.Lock]] = {}
+    _retry_locks_mutex: ClassVar[threading.Lock] = threading.Lock()
 
     def __init__(self):
         self._window: webview.Window | None = None
@@ -125,6 +221,8 @@ class ElSbobinatorApi:
             "error": None,
         }
         self._move_lock = threading.Lock()
+        self._retry_active_count: int = 0
+        self._pipeline_lifecycle_lock = threading.Lock()
         configure_logging()
         self._logger = get_logger("el_sbobinator.webview")
         # Initialise session root: apply persisted override or auto-migrate legacy path.
@@ -296,6 +394,11 @@ class ElSbobinatorApi:
                 )
                 effective_model = data.get("settings", {}).get("effective_model", "")
                 duration_sec = data.get("phase1", {}).get("duration_seconds")
+                revision_failed_blocks = [
+                    int(idx)
+                    for idx in data.get("revision_failed_blocks", [])
+                    if str(idx).strip().isdigit()
+                ]
                 sessions.append(
                     {
                         "name": name,
@@ -305,6 +408,7 @@ class ElSbobinatorApi:
                         "input_path": str(input_path),
                         "input_size": input_size,
                         "session_dir": str(session_dir),
+                        "revision_failed_blocks": revision_failed_blocks,
                         **(
                             {"duration_sec": duration_sec}
                             if duration_sec is not None
@@ -350,6 +454,203 @@ class ElSbobinatorApi:
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    def _resolve_retry_session(self, session_dir: str) -> tuple[str, str]:
+        session_root = os.path.realpath(self._get_session_root())
+        abs_dir = os.path.realpath(str(session_dir or ""))
+        if not _path_under_root(abs_dir, session_root):
+            raise ValueError("Sessione non valida.")
+        session_path = os.path.join(abs_dir, "session.json")
+        if not os.path.isfile(session_path):
+            raise FileNotFoundError("Sessione non trovata.")
+        return abs_dir, session_path
+
+    def retry_failed_revision_blocks(self, session_dir: str) -> dict:
+        """Retry only macro blocks that were included unrevised in a done session."""
+        if self._adapter.is_running:
+            return {
+                "ok": False,
+                "error": "Elaborazione in corso: riprova al termine.",
+            }
+        retry_lock: threading.Lock | None = None
+        retry_global_lock_acquired = False
+        retry_lock_acquired = False
+        _retry_count_incremented = False
+        try:
+            from google import genai
+
+            from el_sbobinator.core.model_registry import build_model_state
+            from el_sbobinator.core.prompts import PROMPT_REVISIONE
+            from el_sbobinator.pipeline.pipeline_session import read_text_file
+            from el_sbobinator.services.config_service import safe_output_basename
+            from el_sbobinator.services.export_service import export_final_html_document
+            from el_sbobinator.services.generation_service import (
+                load_fallback_keys,
+                request_new_api_key,
+            )
+            from el_sbobinator.services.revision_service import (
+                retry_failed_revision_blocks as _retry_failed_revision_blocks,
+            )
+
+            abs_dir, session_path = self._resolve_retry_session(session_dir)
+
+            retry_global_lock_acquired = self._retry_global_lock.acquire(blocking=False)
+            if not retry_global_lock_acquired:
+                return {
+                    "ok": False,
+                    "error": "Retry gia' in corso: riprova al termine.",
+                }
+
+            lock_key = os.path.normcase(abs_dir)
+            with self._retry_locks_mutex:
+                retry_lock = self._retry_locks.setdefault(lock_key, threading.Lock())
+            retry_lock_acquired = retry_lock.acquire(blocking=False)
+            if not retry_lock_acquired:
+                return {
+                    "ok": False,
+                    "error": "Retry gia' in corso per questa sessione.",
+                }
+            with self._pipeline_lifecycle_lock:
+                if self._adapter.is_running:
+                    return {
+                        "ok": False,
+                        "error": "Elaborazione in corso: riprova al termine.",
+                    }
+                self._retry_active_count += 1
+            _retry_count_incremented = True
+
+            session = _load_json(session_path)
+            if not isinstance(session, dict) or session.get("stage") != "done":
+                return {"ok": False, "error": "Sessione non completata."}
+            if _retry_would_overwrite_user_html(
+                session, self._existing_html_for_session(session, abs_dir)
+            ):
+                return {
+                    "ok": False,
+                    "conflict": True,
+                    "error": "HTML modificato dall'utente: retry annullato per evitare sovrascrittura.",
+                    "session_dir": abs_dir,
+                }
+            failed_blocks = session.get("revision_failed_blocks", [])
+            no_failed_blocks = _retry_no_failed_blocks_response(
+                session, failed_blocks, abs_dir
+            )
+            if no_failed_blocks is not None:
+                return no_failed_blocks
+
+            cfg = load_config()
+            api_key = str(cfg.get("api_key") or "").strip()
+            if not api_key:
+                return {
+                    "ok": False,
+                    "error": "API key mancante: aggiungila nelle impostazioni.",
+                }
+
+            settings = session.get("settings", {}) if isinstance(session, dict) else {}
+            primary_model = str(
+                settings.get("model") or cfg.get("preferred_model") or DEFAULT_MODEL
+            ).strip()
+            fallback_models = settings.get("fallback_models") or cfg.get(
+                "fallback_models", []
+            )
+            model_state = build_model_state(primary_model, fallback_models)
+            client = genai.Client(api_key=api_key)
+            retry_cancel_event = threading.Event()
+            runtime = _RetryRuntime(self._adapter, retry_cancel_event)
+            fallback_keys = load_fallback_keys()
+
+            def _save_session() -> bool:
+                try:
+                    save_session(session_path, session)
+                    return True
+                except Exception:
+                    return False
+
+            def _request_fallback_key() -> str | None:
+                key = request_new_api_key(runtime, runtime.cancelled)
+                if not key or not str(key).strip():
+                    retry_cancel_event.set()
+                return key
+
+            def _on_model_switched(_old: str, new: str) -> None:
+                session.setdefault("settings", {})
+                session["settings"]["effective_model"] = new
+                _save_session()
+
+            phase2_revised_dir = os.path.join(abs_dir, "phase2_revised")
+            client, retry_result = _retry_failed_revision_blocks(
+                client=client,
+                model_name=primary_model,
+                model_state=model_state,
+                phase2_revised_dir=phase2_revised_dir,
+                session=session,
+                save_session=_save_session,
+                runtime=runtime,
+                cancelled=runtime.cancelled,
+                fallback_keys=fallback_keys,
+                request_fallback_key=_request_fallback_key,
+                prompt_revisione=PROMPT_REVISIONE,
+                on_model_switched=_on_model_switched,
+            )
+
+            retried_blocks = list(retry_result.get("retried_blocks", []))
+            remaining = list(retry_result.get("failed_blocks", []))
+            cancelled = bool(retry_result.get("cancelled"))
+            quota_exhausted = bool(retry_result.get("quota_exhausted"))
+            zero_response = _retry_zero_retried_response(
+                retried_blocks=retried_blocks,
+                remaining=remaining,
+                cancelled=cancelled,
+                quota_exhausted=quota_exhausted,
+                session_dir=abs_dir,
+                html_path=str(session.get("outputs", {}).get("html", "") or ""),
+            )
+            if zero_response is not None:
+                return zero_response
+
+            input_path = str(session.get("input", {}).get("path", "") or "")
+            _title, html_path = export_final_html_document(
+                input_path=input_path,
+                phase2_revised_dir=phase2_revised_dir,
+                fallback_body="",
+                read_text=read_text_file,
+                output_dir=abs_dir,
+                fallback_output_dir=abs_dir,
+                safe_output_basename=safe_output_basename,
+            )
+            session.setdefault("outputs", {})
+            session["outputs"]["html"] = html_path
+            session.setdefault("settings", {})
+            session["settings"]["effective_model"] = model_state.current
+            mark_html_exported(session)
+            _save_session()
+            invalidate_session_storage_cache()
+            evict_html_paths_under(abs_dir + os.sep)
+            with self._text_cache_lock:
+                self._text_cache.pop(html_path, None)
+            with self._sessions_cache_lock:
+                self._sessions_cache = None
+                self._sessions_cache_gen += 1
+            return {
+                "ok": True,
+                "retried_blocks": retried_blocks,
+                "remaining_failed_blocks": remaining,
+                "html_path": html_path,
+                "session_dir": abs_dir,
+                "effective_model": model_state.current,
+                "cancelled": cancelled,
+                "quota_exhausted": quota_exhausted,
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        finally:
+            if _retry_count_incremented:
+                with self._pipeline_lifecycle_lock:
+                    self._retry_active_count -= 1
+            if retry_lock is not None and retry_lock_acquired:
+                retry_lock.release()
+            if retry_global_lock_acquired:
+                self._retry_global_lock.release()
 
     def update_session_input_path(self, session_dir: str, new_path: str) -> dict:
         """Persist a relinked audio path to session.json."""
@@ -678,8 +979,12 @@ class ElSbobinatorApi:
         """Start the pipeline in a background thread."""
         if not files or not api_key:
             return {"ok": False, "error": "File o API key mancanti"}
-        if self._adapter.is_running:
-            return {"ok": False, "error": "Elaborazione già in corso"}
+        with self._pipeline_lifecycle_lock:
+            if self._adapter.is_running:
+                return {"ok": False, "error": "Elaborazione già in corso"}
+            if self._retry_active_count > 0:
+                return {"ok": False, "error": "Retry in corso: riprova al termine."}
+            self._adapter.is_running = True
 
         # Save config (including model so the pipeline always uses what's selected in the UI)
         try:
@@ -703,7 +1008,6 @@ class ElSbobinatorApi:
 
         # Setup adapter
         self._cancel_event.clear()
-        self._adapter.is_running = True
         self._adapter.file_temporanei = []
         self._adapter._run_started_monotonic = time.monotonic()
         self._adapter._step_times = {}
@@ -780,6 +1084,9 @@ class ElSbobinatorApi:
                                 "id": file_info.get("id", ""),
                                 "output_html": self._adapter.last_output_html,
                                 "output_dir": self._adapter.last_output_dir or "",
+                                "revision_failed_blocks": list(
+                                    self._adapter.last_revision_failed_blocks or []
+                                ),
                                 "primary_model": self._adapter.last_primary_model or "",
                                 "effective_model": self._adapter.last_effective_model
                                 or "",
@@ -1268,6 +1575,46 @@ class ElSbobinatorApi:
             return None
         return None
 
+    def _existing_html_for_session(self, session: dict, session_dir: str) -> str | None:
+        """Return an existing HTML path for a session without rebuilding it."""
+        html_path = str(session.get("outputs", {}).get("html", "") or "")
+        if html_path and os.path.isfile(html_path):
+            return os.path.realpath(html_path)
+
+        try:
+            if not os.path.isdir(session_dir):
+                return None
+            html_basename = os.path.basename(html_path) if html_path else ""
+            if html_basename:
+                session_copy = os.path.join(session_dir, html_basename)
+                if os.path.isfile(session_copy):
+                    return os.path.realpath(session_copy)
+            for entry in os.scandir(session_dir):
+                if entry.is_file() and entry.name.lower().endswith(".html"):
+                    return os.path.realpath(entry.path)
+        except Exception:
+            return None
+        return None
+
+    def _mark_session_user_edited_for_html(self, real_path: str) -> None:
+        try:
+            session_path = os.path.join(os.path.dirname(real_path), "session.json")
+            if not os.path.isfile(session_path):
+                return
+            session = _load_json(session_path)
+            if not isinstance(session, dict) or bool(session.get("user_edited", False)):
+                return
+            session["user_edited"] = True
+            save_session(session_path, session)
+            with self._sessions_cache_lock:
+                self._sessions_cache = None
+                self._sessions_cache_gen += 1
+        except Exception as exc:
+            self._logger.debug(
+                "Impossibile marcare sessione come modificata dall'utente: %s",
+                exc,
+            )
+
     def save_html_content(
         self, path: str, content: str, generation: int | None = None
     ) -> dict:
@@ -1316,7 +1663,11 @@ class ElSbobinatorApi:
                 original_real_path
             )
             gen = int(generation) if generation is not None else None
-            save_html_body_content(real_path, content, shell=shell, generation=gen)
+            saved = save_html_body_content(
+                real_path, content, shell=shell, generation=gen
+            )
+            if saved:
+                self._mark_session_user_edited_for_html(real_path)
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": str(e)}

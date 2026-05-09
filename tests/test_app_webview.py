@@ -1,3 +1,5 @@
+import json
+import os
 import re
 import tempfile
 import threading
@@ -1528,6 +1530,7 @@ class TestSaveHtmlContentPathValidation(unittest.TestCase):
         self.assertIsNotNone(
             saved_path, "save_html_body_content should have been called"
         )
+        assert saved_path is not None
         self.assertTrue(
             os.path.normcase(os.path.realpath(saved_path)).startswith(
                 os.path.normcase(os.path.realpath(session_root))
@@ -2153,6 +2156,228 @@ class TestShowNotification(unittest.TestCase):
         self.assertIn("no notifier", result["error"])
 
 
+class TestRetryFailedRevisionBlocksBridge(unittest.TestCase):
+    def _make_done_session(
+        self,
+        root: str,
+        *,
+        user_edited: bool = False,
+        omit_user_edited: bool = False,
+        failed_blocks: list[int] | None = None,
+        create_html: bool = True,
+    ) -> tuple[str, str]:
+        session_dir = os.path.join(root, "session-a")
+        os.makedirs(os.path.join(session_dir, "phase2_revised"), exist_ok=True)
+        html_path = os.path.join(session_dir, "out.html")
+        if create_html:
+            with open(html_path, "w", encoding="utf-8") as fh:
+                fh.write("<html><body><p>Originale</p></body></html>")
+        with open(
+            os.path.join(session_dir, "phase2_revised", "rev_001.raw.md"),
+            "w",
+            encoding="utf-8",
+        ) as fh:
+            fh.write("Grezzo.\n")
+        session: dict = {
+            "stage": "done",
+            "input": {"path": os.path.join(root, "audio.mp3")},
+            "outputs": {"html": html_path},
+            "settings": {"model": "gemini-test", "fallback_models": []},
+            "phase2": {"macro_total": 1},
+            "revision_failed_blocks": failed_blocks
+            if failed_blocks is not None
+            else [1],
+        }
+        if not omit_user_edited:
+            session["user_edited"] = user_edited
+        session_path = os.path.join(session_dir, "session.json")
+        with open(session_path, "w", encoding="utf-8") as fh:
+            json.dump(session, fh)
+        return session_dir, session_path
+
+    def test_retry_refuses_while_pipeline_is_running(self):
+        api = ElSbobinatorApi()
+        api._adapter.is_running = True
+
+        result = api.retry_failed_revision_blocks("ignored")
+
+        self.assertFalse(result["ok"])
+        self.assertIn("Elaborazione in corso", result["error"])
+
+    def test_retry_aborts_on_missing_user_edited_with_existing_html(self):
+        """Legacy sessions without user_edited key must be treated as potentially
+        edited when an HTML file is present — conservative guard."""
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir, _session_path = self._make_done_session(
+                tmpdir, omit_user_edited=True, create_html=True
+            )
+            with patch(
+                "el_sbobinator.app_webview.get_session_root", return_value=tmpdir
+            ):
+                result = api.retry_failed_revision_blocks(session_dir)
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["conflict"])
+
+    def test_retry_aborts_on_missing_user_edited_with_stale_html_path(self):
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir, session_path = self._make_done_session(
+                tmpdir, omit_user_edited=True, create_html=True
+            )
+            with open(session_path, encoding="utf-8") as fh:
+                session = json.load(fh)
+            session["outputs"]["html"] = os.path.join(tmpdir, "missing", "out.html")
+            with open(session_path, "w", encoding="utf-8") as fh:
+                json.dump(session, fh)
+
+            with patch(
+                "el_sbobinator.app_webview.get_session_root", return_value=tmpdir
+            ):
+                result = api.retry_failed_revision_blocks(session_dir)
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["conflict"])
+
+    def test_retry_proceeds_on_missing_user_edited_without_html(self):
+        """Legacy sessions without user_edited key but no HTML on disk are safe
+        to retry (nothing to overwrite)."""
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir, _session_path = self._make_done_session(
+                tmpdir, omit_user_edited=True, create_html=False, failed_blocks=[]
+            )
+            with patch(
+                "el_sbobinator.app_webview.get_session_root", return_value=tmpdir
+            ):
+                result = api.retry_failed_revision_blocks(session_dir)
+
+        self.assertTrue(result["ok"])
+        self.assertFalse(result.get("conflict", False))
+
+    def test_retry_aborts_on_user_edited_flag(self):
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir, _session_path = self._make_done_session(
+                tmpdir, user_edited=True
+            )
+            with patch(
+                "el_sbobinator.app_webview.get_session_root", return_value=tmpdir
+            ):
+                result = api.retry_failed_revision_blocks(session_dir)
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["conflict"])
+
+    def test_retry_skips_export_when_zero_blocks_retried(self):
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir, _session_path = self._make_done_session(tmpdir)
+            with (
+                patch(
+                    "el_sbobinator.app_webview.get_session_root", return_value=tmpdir
+                ),
+                patch(
+                    "el_sbobinator.app_webview.load_config",
+                    return_value={
+                        "api_key": "key",
+                        "preferred_model": "gemini-test",
+                        "fallback_models": [],
+                    },
+                ),
+                patch("google.genai.Client", return_value=object()),
+                patch(
+                    "el_sbobinator.services.revision_service.retry_failed_revision_blocks",
+                    return_value=(
+                        object(),
+                        {
+                            "retried_blocks": [],
+                            "failed_blocks": [1],
+                            "quota_exhausted": True,
+                            "cancelled": False,
+                        },
+                    ),
+                ),
+                patch(
+                    "el_sbobinator.services.export_service.export_final_html_document"
+                ) as mock_export,
+            ):
+                result = api.retry_failed_revision_blocks(session_dir)
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["quota_exhausted"])
+        mock_export.assert_not_called()
+
+    def test_retry_concurrent_same_session_rejected(self):
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir, _session_path = self._make_done_session(tmpdir)
+            lock_key = os.path.normcase(os.path.realpath(session_dir))
+            lock = threading.Lock()
+            lock.acquire()
+            ElSbobinatorApi._retry_locks[lock_key] = lock
+            try:
+                with patch(
+                    "el_sbobinator.app_webview.get_session_root", return_value=tmpdir
+                ):
+                    result = api.retry_failed_revision_blocks(session_dir)
+            finally:
+                lock.release()
+                ElSbobinatorApi._retry_locks.pop(lock_key, None)
+
+        self.assertFalse(result["ok"])
+        self.assertIn("Retry gia", result["error"])
+
+    def test_retry_concurrent_different_session_rejected_by_global_lock(self):
+        api = ElSbobinatorApi()
+        global_lock = threading.Lock()
+        global_lock.acquire()
+        old_global_lock = ElSbobinatorApi._retry_global_lock
+        ElSbobinatorApi._retry_global_lock = global_lock
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                session_dir, _session_path = self._make_done_session(tmpdir)
+                with patch(
+                    "el_sbobinator.app_webview.get_session_root", return_value=tmpdir
+                ):
+                    result = api.retry_failed_revision_blocks(session_dir)
+        finally:
+            global_lock.release()
+            ElSbobinatorApi._retry_global_lock = old_global_lock
+
+        self.assertFalse(result["ok"])
+        self.assertIn("Retry gia", result["error"])
+
+    def test_save_html_content_marks_user_edited_only_when_body_save_writes(self):
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            html_path = os.path.join(tmpdir, "out.html")
+            session_path = os.path.join(tmpdir, "session.json")
+            with open(html_path, "w", encoding="utf-8") as fh:
+                fh.write("<html><body><p>Old</p></body></html>")
+            with open(session_path, "w", encoding="utf-8") as fh:
+                json.dump({"stage": "done", "user_edited": False}, fh)
+
+            with patch(
+                "el_sbobinator.app_webview.get_desktop_dir", return_value=tmpdir
+            ):
+                first = api.save_html_content(html_path, "<p>New</p>", generation=1)
+            self.assertTrue(first["ok"])
+            with open(session_path, encoding="utf-8") as fh:
+                self.assertTrue(json.load(fh)["user_edited"])
+
+            with open(session_path, "w", encoding="utf-8") as fh:
+                json.dump({"stage": "done", "user_edited": False}, fh)
+            with patch(
+                "el_sbobinator.app_webview.get_desktop_dir", return_value=tmpdir
+            ):
+                stale = api.save_html_content(html_path, "<p>Stale</p>", generation=1)
+            self.assertTrue(stale["ok"])
+            with open(session_path, encoding="utf-8") as fh:
+                self.assertFalse(json.load(fh)["user_edited"])
+
+
 class TestOpenUrlAllowlistCoverage(unittest.TestCase):
     """Bidirectional contract between _ALLOWED_URL_PREFIXES and the React open_url() call-sites.
 
@@ -2257,6 +2482,68 @@ class TestOpenUrlAllowlistCoverage(unittest.TestCase):
             + "\n".join(f"  {p}" for p in orphaned)
             + "\n\nRemove orphaned entries from _ALLOWED_URL_PREFIXES or add a React call-site.",
         )
+
+
+class TestRetryStartProcessingGuard(unittest.TestCase):
+    """start_processing must be rejected while any retry is in flight."""
+
+    def _make_file(self) -> str:
+        with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            tmp.write(b"fake")
+            return tmp.name
+
+    def test_start_processing_blocked_while_retry_active(self):
+        api = ElSbobinatorApi()
+        with api._pipeline_lifecycle_lock:
+            api._retry_active_count = 1
+
+        result = api.start_processing(
+            [{"id": "f1", "path": self._make_file(), "name": "x.mp3", "size": 4}],
+            api_key="key",
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertIn("Retry", result["error"])
+
+    def test_start_processing_allowed_when_retry_count_is_zero(self):
+        api = ElSbobinatorApi()
+
+        with (
+            patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura") as mock_run,
+            patch("el_sbobinator.app_webview.threading.Thread", _SyncThread),
+        ):
+            mock_run.return_value = None
+            api._adapter.set_run_result("done", "")
+
+            result = api.start_processing(
+                [{"id": "f1", "path": self._make_file(), "name": "x.mp3", "size": 4}],
+                api_key="key",
+            )
+
+        self.assertTrue(result["ok"])
+
+    def test_retry_active_count_is_zero_after_retry_completes(self):
+        api = ElSbobinatorApi()
+        with api._pipeline_lifecycle_lock:
+            api._retry_active_count += 1
+        with api._pipeline_lifecycle_lock:
+            api._retry_active_count -= 1
+
+        with api._pipeline_lifecycle_lock:
+            self.assertEqual(api._retry_active_count, 0)
+
+    def test_start_processing_not_blocked_when_adapter_running_not_retry(self):
+        api = ElSbobinatorApi()
+        api._adapter.is_running = True
+
+        result = api.start_processing(
+            [{"id": "f1", "path": self._make_file(), "name": "x.mp3", "size": 4}],
+            api_key="key",
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertIn("in corso", result["error"])
+        self.assertNotIn("Retry", result["error"])
 
 
 if __name__ == "__main__":

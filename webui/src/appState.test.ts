@@ -124,6 +124,54 @@ describe('processingReducer', () => {
     expect(completedAt!).toBeLessThanOrEqual(after);
   });
 
+  it('queue/update_revision_failed_blocks matches by fileId first', () => {
+    const files = [
+      makeFile({ id: 'target', status: 'done', outputDir: 'C:/sessions/new', revisionFailedBlocks: [1, 2] }),
+      makeFile({ id: 'other', status: 'done', outputDir: 'C:/sessions/old', revisionFailedBlocks: [3] }),
+    ];
+    const state = { ...initialProcessingState, structuralVersion: 2, files };
+    const next = processingReducer(state, {
+      type: 'queue/update_revision_failed_blocks',
+      fileId: 'target',
+      sessionDir: 'C:/sessions/old',
+      blocks: [],
+      htmlPath: 'out.html',
+      effectiveModel: 'gemini-test',
+    });
+
+    expect(next.structuralVersion).toBe(3);
+    expect(next.files[0].revisionFailedBlocks).toEqual([]);
+    expect(next.files[0].outputHtml).toBe('out.html');
+    expect(next.files[0].effectiveModel).toBe('gemini-test');
+    expect(next.files[1].revisionFailedBlocks).toEqual([3]);
+  });
+
+  it('queue/update_revision_failed_blocks falls back to normalized outputDir when fileId is missing', () => {
+    const file = makeFile({ id: 'target', status: 'done', outputDir: 'C:\\Sessions\\Done\\', revisionFailedBlocks: [1] });
+    const state = { ...initialProcessingState, structuralVersion: 5, files: [file] };
+    const next = processingReducer(state, {
+      type: 'queue/update_revision_failed_blocks',
+      sessionDir: 'c:/sessions/done',
+      blocks: [],
+    });
+
+    expect(next.structuralVersion).toBe(6);
+    expect(next.files[0].revisionFailedBlocks).toEqual([]);
+  });
+
+  it('queue/update_revision_failed_blocks leaves state unchanged when no file matches', () => {
+    const file = makeFile({ id: 'target', status: 'done', outputDir: 'C:/sessions/done', revisionFailedBlocks: [1] });
+    const state = { ...initialProcessingState, structuralVersion: 5, files: [file] };
+    const next = processingReducer(state, {
+      type: 'queue/update_revision_failed_blocks',
+      fileId: 'missing',
+      sessionDir: 'C:/sessions/missing',
+      blocks: [],
+    });
+
+    expect(next).toBe(state);
+  });
+
   it('queue/clear_completed removes only done files, leaving queued and error intact', () => {
     const files = [
       makeFile({ id: 'q1', status: 'queued' }),

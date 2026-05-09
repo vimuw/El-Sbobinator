@@ -11,9 +11,10 @@ interface CompletedSectionProps {
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string) => void;
   onOpenFile: (path: string) => void;
   onClearAll: () => void;
+  onRetryFailedRevisionBlocks?: (sessionDir: string, fileId?: string) => Promise<void>;
 }
 
-export function CompletedSection({ doneFiles, appState, onRemove, onPreview, onOpenFile, onClearAll }: CompletedSectionProps) {
+export function CompletedSection({ doneFiles, appState, onRemove, onPreview, onOpenFile, onClearAll, onRetryFailedRevisionBlocks }: CompletedSectionProps) {
   const [completedSearch, setCompletedSearch] = useState('');
 
   const filteredDoneFiles = completedSearch.trim()
@@ -75,6 +76,7 @@ export function CompletedSection({ doneFiles, appState, onRemove, onPreview, onO
                 onRemove={onRemove}
                 onPreview={onPreview}
                 onOpenFile={onOpenFile}
+                onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
               />
             ))}
             {completedSearch.trim() && filteredDoneFiles.length === 0 && (

@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { AlertCircle, CheckCircle, Clock, ExternalLink, FileAudio, FolderOpen, GripVertical, PenLine, RotateCcw, Settings, Trash2, XCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle, Clock, ExternalLink, FileAudio, FolderOpen, GripVertical, PenLine, RotateCcw, Settings, Trash2, XCircle } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
@@ -196,10 +196,24 @@ interface CompletedFileCardProps {
   onRemove: (id: string) => void;
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string) => void;
   onOpenFile: (path: string) => void;
+  onRetryFailedRevisionBlocks?: (sessionDir: string, fileId?: string) => Promise<void>;
 }
 
-function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFile }: CompletedFileCardProps) {
+function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFile, onRetryFailedRevisionBlocks }: CompletedFileCardProps) {
   const isClickable = Boolean(file.outputHtml);
+  const [isRetryingBlocks, setIsRetryingBlocks] = React.useState(false);
+  const failedBlockCount = file.revisionFailedBlocks?.length ?? 0;
+  const canRetryBlocks = failedBlockCount > 0 && Boolean(file.outputDir) && Boolean(onRetryFailedRevisionBlocks);
+  const handleRetryBlocks = async (event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (!canRetryBlocks || !file.outputDir || isRetryingBlocks) return;
+    setIsRetryingBlocks(true);
+    try {
+      await onRetryFailedRevisionBlocks?.(file.outputDir, file.id);
+    } finally {
+      setIsRetryingBlocks(false);
+    }
+  };
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -263,7 +277,32 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
               <span style={{ color: 'var(--success-text)' }}>
                 {file.completedAt ? formatRelativeTime(file.completedAt) : 'Completato'}
               </span>
+              {failedBlockCount > 0 && (
+                <>
+                  <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
+                  <span
+                    className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
+                    style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}
+                  >
+                    <AlertTriangle className="w-3 h-3" />
+                    {failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}
+                  </span>
+                </>
+              )}
             </div>
+            {canRetryBlocks && (
+              <button
+                type="button"
+                onClick={handleRetryBlocks}
+                disabled={isRetryingBlocks}
+                className="mt-2 premium-button-secondary compact-button text-xs"
+                style={{ color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
+                title="Riprova solo i blocchi inclusi senza revisione"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 ${isRetryingBlocks ? 'animate-spin' : ''}`} />
+                {isRetryingBlocks ? 'Riprovo...' : 'Riprova i blocchi mancanti'}
+              </button>
+            )}
             {file.outputHtml && (
               <div
                 className="mt-1 flex items-center gap-1 text-[11px] hover:underline"

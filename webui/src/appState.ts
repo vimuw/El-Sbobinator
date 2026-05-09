@@ -17,7 +17,12 @@ export type FileItem = {
   primaryModel?: string;
   effectiveModel?: string;
   resumeSession?: boolean;
+  revisionFailedBlocks?: number[];
 };
+
+function normalizeSessionPath(path?: string): string {
+  return String(path || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+}
 
 export function getPendingFiles(files: FileItem[]): FileItem[] {
   return files.filter(f => f.status !== 'done');
@@ -65,6 +70,7 @@ export type FileDonePayload = {
   output_dir: string;
   primary_model?: string;
   effective_model?: string;
+  revision_failed_blocks?: number[];
 };
 
 export type FileFailedPayload = {
@@ -128,6 +134,7 @@ export type ProcessingAction =
   | { type: 'queue/clear_completed' }
   | { type: 'queue/retry_failed' }
   | { type: 'queue/retry_one'; id: string }
+  | { type: 'queue/update_revision_failed_blocks'; fileId?: string; sessionDir: string; blocks: number[]; htmlPath?: string; effectiveModel?: string }
   | { type: 'queue/clear_all' }
   | { type: 'app/set_status'; status: AppStatus }
   | { type: 'bridge/update_progress'; value: number }
@@ -209,6 +216,28 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
             : file,
         ),
       };
+    case 'queue/update_revision_failed_blocks': {
+      const targetDir = normalizeSessionPath(action.sessionDir);
+      const hasFileIdMatch = action.fileId
+        ? state.files.some(file => file.id === action.fileId)
+        : false;
+      let changed = false;
+      const files = state.files.map(file => {
+        const matches = hasFileIdMatch
+          ? file.id === action.fileId
+          : normalizeSessionPath(file.outputDir) === targetDir;
+        if (!matches) return file;
+        changed = true;
+        return {
+          ...file,
+          revisionFailedBlocks: action.blocks,
+          outputHtml: action.htmlPath ?? file.outputHtml,
+          effectiveModel: action.effectiveModel ?? file.effectiveModel,
+        };
+      });
+      if (!changed) return state;
+      return { ...state, structuralVersion: state.structuralVersion + 1, files };
+    }
     case 'queue/clear_all':
       return { ...state, structuralVersion: state.structuralVersion + 1, files: state.files.filter(file => file.status === 'done') };
     case 'app/set_status':
@@ -316,6 +345,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
                 completedAt: Date.now(),
                 primaryModel: action.data.primary_model || undefined,
                 effectiveModel: action.data.effective_model || undefined,
+                revisionFailedBlocks: Array.isArray(action.data.revision_failed_blocks) ? action.data.revision_failed_blocks : [],
               }
             : file,
         ),
