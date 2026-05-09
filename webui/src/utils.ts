@@ -21,6 +21,10 @@ const _RESUMABLE_ERRORS = new Set([
   'phase1_all_models_unavailable',
 ]);
 
+function sentence(text: string): string {
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
 export function isQuotaError(raw: string | undefined): boolean {
   if (!raw) return false;
   const r = raw.trim();
@@ -33,13 +37,18 @@ export function isResumableError(raw: string | undefined): boolean {
   return _RESUMABLE_ERRORS.has(r);
 }
 
-export function errorLabel(raw: string | undefined): string {
+export function errorLabel(raw: string | undefined, detail?: string): string {
   if (!raw) return 'Elaborazione non completata.';
   const r = raw.trim();
+  const d = String(detail || '').trim();
+  if ((r === 'quota_daily_limit_phase1' || r === 'quota_daily_limit_phase2') && d === 'api_key_prompt_timeout') {
+    return 'Attesa chiave API scaduta. Sessione salvata — riprendi quando vuoi.';
+  }
   if (r in _ERROR_MAP) return _ERROR_MAP[r];
   if (r.startsWith('phase1_chunk_failed_')) {
     const chunkNum = r.replace('phase1_chunk_failed_', '');
-    return `Errore critico durante l'elaborazione del blocco ${chunkNum}.`;
+    const detailText = d ? ` Dettaglio: ${sentence(d)}` : '';
+    return `Errore al blocco ${chunkNum} dopo 4 tentativi.${detailText} Clicca Riprendi per continuare dal blocco ${chunkNum}.`;
   }
   return r;
 }

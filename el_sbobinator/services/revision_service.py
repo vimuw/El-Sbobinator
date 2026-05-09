@@ -134,6 +134,7 @@ def process_macro_revision_phase(  # noqa: C901
                             "revised_done": int(revised_done),
                         },
                         "last_error": None,
+                        "last_error_detail": None,
                     },
                 )
                 save_session()
@@ -203,6 +204,7 @@ def process_macro_revision_phase(  # noqa: C901
                         "revised_done": int(revised_done),
                     },
                     "last_error": None,
+                    "last_error_detail": None,
                 },
             )
             save_session()
@@ -219,6 +221,8 @@ def process_macro_revision_phase(  # noqa: C901
         except QuotaDailyLimitError:
             print("   Interruzione: progressi salvati. Potrai riprendere più tardi.")
             session["last_error"] = "quota_daily_limit_phase2"
+            if session.get("last_error_detail") != "api_key_prompt_timeout":
+                session["last_error_detail"] = None
             save_session()
             return client, revised_text
         except Exception as exc:
@@ -351,6 +355,7 @@ def process_macro_revision_phase(  # noqa: C901
                             "revised_done": int(revised_done),
                         },
                         "last_error": None,
+                        "last_error_detail": None,
                     },
                 )
                 save_session()
@@ -366,6 +371,8 @@ def process_macro_revision_phase(  # noqa: C901
                     "   Interruzione: quota giornaliera raggiunta durante retry pass."
                 )
                 session["last_error"] = "quota_daily_limit_phase2"
+                if session.get("last_error_detail") != "api_key_prompt_timeout":
+                    session["last_error_detail"] = None
                 save_session()
                 return client, revised_text
             except Exception as exc:
@@ -583,6 +590,8 @@ def retry_failed_revision_blocks(
         except QuotaDailyLimitError:
             quota_exhausted = True
             session["last_error"] = "quota_daily_limit_phase2"
+            if session.get("last_error_detail") != "api_key_prompt_timeout":
+                session["last_error_detail"] = None
             remaining_blocks.append(index)
             remaining_blocks.extend(failed_blocks[position:])
             save_session()
@@ -603,6 +612,7 @@ def retry_failed_revision_blocks(
     }
     if not remaining_blocks:
         session_update["last_error"] = None
+        session_update["last_error_detail"] = None
     _update_session(session, session_update)
     save_session()
 

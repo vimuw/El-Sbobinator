@@ -285,6 +285,22 @@ class PipelineRuntimeMiscTests(unittest.TestCase):
         self.assertEqual(target.last_run_status, "failed")
         self.assertEqual(target.last_run_error, "some error")
 
+    def test_set_run_error_detail_fallback_when_no_method(self):
+        target = _DummyTarget()
+        runtime = PipelineRuntime(target)
+        runtime.set_run_error_detail("detail")
+        self.assertEqual(target.last_run_error_detail, "detail")
+
+    def test_dismiss_new_api_key_prompt_forwarded(self):
+        class _DismissTarget(_DummyTarget):
+            def dismiss_new_api_key_prompt(self):
+                self.events.append(("dismiss_new_api_key_prompt",))
+
+        target = _DismissTarget()
+        runtime = PipelineRuntime(target)
+        runtime.dismiss_new_api_key_prompt()
+        self.assertIn(("dismiss_new_api_key_prompt",), target.events)
+
     def test_set_effective_api_key_none_strips_to_none(self):
         target = _DummyTarget()
         runtime = PipelineRuntime(target)
@@ -318,6 +334,7 @@ class PipelineRuntimeMiscTests(unittest.TestCase):
         self.assertEqual(target.file_temporanei, [])  # type: ignore[attr-defined]
         self.assertEqual(target.last_run_status, "idle")  # type: ignore[attr-defined]
         self.assertIsNone(target.last_run_error)  # type: ignore[attr-defined]
+        self.assertIsNone(target.last_run_error_detail)  # type: ignore[attr-defined]
         self.assertIsNone(target.effective_api_key)  # type: ignore[attr-defined]
 
 

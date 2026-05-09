@@ -35,6 +35,7 @@ function QueueFileCardInner({
 }: QueueFileCardProps) {
   const isCanceling = appState === 'canceling' && file.status === 'processing';
   const isDraggable = file.status === 'queued' && appState === 'idle';
+  const isPhase1ChunkFailure = Boolean(file.errorText?.startsWith('phase1_chunk_failed_'));
   const { attributes, listeners, setNodeRef, transform, transition: dndTransition, isDragging } = useSortable({
     id: file.id,
     disabled: !isDraggable,
@@ -118,7 +119,7 @@ function QueueFileCardInner({
                 {file.status === 'error' && (
                   <>
                     <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
-                    <span title={file.errorText} style={{ color: 'var(--error-text)' }}>{errorLabel(file.errorText)}</span>
+                    <span title={file.errorDetail || file.errorText} style={{ color: 'var(--error-text)' }}>{errorLabel(file.errorText, file.errorDetail)}</span>
                   </>
                 )}
               </div>
@@ -150,12 +151,12 @@ function QueueFileCardInner({
               </button>
             )}
             {appState === 'idle' && file.status === 'error' && (
-              isResumableError(file.errorText) ? (
+              isResumableError(file.errorText) || isPhase1ChunkFailure ? (
                 <button
                   onClick={() => onRetry(file.id)}
                   className="premium-button-secondary compact-button"
                   style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-text)', borderColor: 'transparent' }}
-                  title="Il progresso è salvato: riprendi da dove è rimasto"
+                  title={isPhase1ChunkFailure ? 'I blocchi precedenti sono salvati: riprendi dal blocco fallito' : 'Il progresso è salvato: riprendi da dove è rimasto'}
                   aria-label="Riprendi"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
@@ -165,7 +166,7 @@ function QueueFileCardInner({
                 <button
                   onClick={() => onRetry(file.id)}
                   className="icon-button compact-icon-button is-danger"
-                  title={file.errorText?.startsWith('phase1_chunk_failed_') ? 'I blocchi precedenti sono salvati — riprova (potrebbe fallire di nuovo se il blocco è corrotto)' : 'Riprova'}
+                  title="Riprova"
                   aria-label="Riprova"
                 >
                   <RotateCcw className="w-4 h-4" />

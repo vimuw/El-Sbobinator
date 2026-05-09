@@ -52,10 +52,11 @@ Source: `_BridgeDispatcher` + `PipelineAdapter` in `el_sbobinator/app_webview.py
 | `registerStepTime` | yes | `{kind, seconds, done?, total?}` | `PipelineAdapter.register_step_time` | Elapsed time for a single step; drives the EMA-based ETA. |
 | `setCurrentFile` | no | `{index: int, id: string, total: int}` | Inside `ElSbobinatorApi.start_processing._run` | New file in the batch has started. |
 | `fileDone` | no | `{index, id, output_html, output_dir, primary_model?, effective_model?}` | `ElSbobinatorApi.start_processing._run` | File completed successfully. |
-| `fileFailed` | no | `{index, id, error}` | `ElSbobinatorApi.start_processing._run` | File failed; `error` may be a `last_error` key mapped via `utils.errorLabel`. |
-| `processDone` | no | `{cancelled: bool, completed: int, failed: int, total: int}` | `ElSbobinatorApi.start_processing._run` (finally) | Batch has finished (or was cancelled). |
+| `fileFailed` | no | `{index, id, error, error_detail?}` | `ElSbobinatorApi.start_processing._run` | File failed; `error` may be a `last_error` key mapped via `utils.errorLabel`; `error_detail` carries optional session detail such as `api_key_prompt_timeout`. |
+| `processDone` | no | `{cancelled: bool, completed: int, failed: int, total: int, quota_exhausted?}` | `ElSbobinatorApi.start_processing._run` (finally) | Batch has finished (or was cancelled). `quota_exhausted` marks a terminal quota stop so auto-continue does not restart queued files. |
 | `askRegenerate` | no | `{filename: string, mode?: "completed" \| "resume"}` | `PipelineAdapter.ask_regenerate` | Pipeline needs the user to decide "regenerate vs. use saved". |
 | `askNewKey` | no | `{}` | `PipelineAdapter.ask_new_api_key` | Quota exhausted; ask the user for a new API key. |
+| `dismissNewKey` | no | `{}` | `PipelineAdapter.dismiss_new_api_key_prompt` | Close the new-key prompt after backend timeout without treating it as a user cancellation. |
 | `filesDropped` | no | `FileDescriptor[]` | `ElSbobinatorApi.collect_dropped_files` | New files dropped on the window; front-end adds them to the queue. |
 | `appendConsole` | no | `string` | `_ConsoleTee` (wraps `sys.stdout`/`stderr`) | Forwarded stdout/stderr for the in-app terminal. |
 

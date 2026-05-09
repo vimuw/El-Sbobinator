@@ -129,6 +129,7 @@ def new_session(input_path: str, settings: dict | None = None) -> dict:
         "phase2": {"macro_total": 0, "revised_done": 0},
         "outputs": {},
         "last_error": None,
+        "last_error_detail": None,
     }
 
 
@@ -154,6 +155,7 @@ def migrate_session(session: dict) -> tuple[dict, bool]:
         session.setdefault("phase2", {})
         session.setdefault("outputs", {})
         session.setdefault("last_error", None)
+        session.setdefault("last_error_detail", None)
         session["schema_version"] = 1
         changed = True
 

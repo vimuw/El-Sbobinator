@@ -8,6 +8,7 @@ process_phase1_transcription() that contains all chunk-loop logic.
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 import threading
 import time
@@ -34,6 +35,17 @@ from el_sbobinator.services.generation_service import (
     sleep_with_cancel,
 )
 from el_sbobinator.utils.logging_utils import get_logger
+
+
+def _sanitize_error_detail(error: object, max_len: int = 500) -> str:
+    if isinstance(error, BaseException):
+        text = f"{type(error).__name__}: {error}"
+    else:
+        text = str(error or "")
+    text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\bAIza[0-9A-Za-z_-]{20,}\b", "[API_KEY_REDACTED]", text)
+    text = re.sub(r"\bAQ\.[0-9A-Za-z_-]{20,}\b", "[API_KEY_REDACTED]", text)
+    return text[:max_len]
 
 
 def process_phase1_transcription(  # noqa: C901
@@ -178,6 +190,7 @@ def process_phase1_transcription(  # noqa: C901
             audio_file = None
             file_client = None
             success = False
+            last_failure_detail: str | None = None
 
             try:
                 # 1. Taglio
@@ -410,6 +423,7 @@ def process_phase1_transcription(  # noqa: C901
                             )
                             chunk_file_saved = True
                         except Exception as save_err:
+                            last_failure_detail = _sanitize_error_detail(save_err)
                             print(f"   [!] Autosave chunk fallito: {save_err}")
 
                         if chunk_file_saved:
@@ -428,6 +442,7 @@ def process_phase1_transcription(  # noqa: C901
                                         "memoria_precedente": prev_memory,
                                     },
                                     "last_error": None,
+                                    "last_error_detail": None,
                                 },
                             )
                             save_session()
@@ -447,6 +462,8 @@ def process_phase1_transcription(  # noqa: C901
 
                 except QuotaDailyLimitError:
                     session["last_error"] = "quota_daily_limit_phase1"
+                    if session.get("last_error_detail") != "api_key_prompt_timeout":
+                        session["last_error_detail"] = None
                     save_session()
                     print(
                         "[*] Interruzione: progressi salvati. Potrai riprendere piu' tardi."
@@ -456,6 +473,7 @@ def process_phase1_transcription(  # noqa: C901
                 except PermanentError as pe:
                     print(f"   [!] Richiesta non valida (400). Dettagli:\n{pe}")
                     session["last_error"] = "bad_request_phase1"
+                    session["last_error_detail"] = None
                     save_session()
                     return client, None, prev_memory
 
@@ -482,6 +500,7 @@ def process_phase1_transcription(  # noqa: C901
                         f'   [!] Output degenerato nel blocco {chunk_idx}: anche il pass di recovery ha fallito reason="{de}"{_excerpt_log}'
                     )
                     session["last_error"] = "phase1_degenerate_output"
+                    session["last_error_detail"] = None
                     save_session()
                     return client, None, prev_memory
 
@@ -501,10 +520,12 @@ def process_phase1_transcription(  # noqa: C901
                         )
                         continue
                     session["last_error"] = "phase1_all_models_unavailable"
+                    session["last_error_detail"] = None
                     save_session()
                     return client, None, prev_memory
 
                 except Exception as e:
+                    last_failure_detail = _sanitize_error_detail(e)
                     log.warning(
                         "Errore non gestito nel chunk %d: %s",
                         chunk_idx,
@@ -513,6 +534,7 @@ def process_phase1_transcription(  # noqa: C901
                     )  # success remains False
 
             except Exception as e:
+                last_failure_detail = _sanitize_error_detail(e)
                 print(f"   [!] Errore durante l'elaborazione del blocco: {e}")
 
             finally:
@@ -529,6 +551,9 @@ def process_phase1_transcription(  # noqa: C901
 
             if not success:
                 session["last_error"] = f"phase1_chunk_failed_{chunk_idx}"
+                session["last_error_detail"] = (
+                    last_failure_detail or "Errore sconosciuto durante il blocco."
+                )
                 save_session()
                 print(
                     "   [!] Errore critico durante l'elaborazione del blocco. Interrompo (progressi salvati)."

@@ -24,6 +24,7 @@ class ProcessDonePayload(TypedDict, total=False):
     completed: int
     failed: int
     total: int
+    quota_exhausted: NotRequired[bool]
 
 
 class SetCurrentFilePayload(TypedDict):
@@ -46,6 +47,7 @@ class FileFailedPayload(TypedDict):
     index: int
     id: str
     error: str
+    error_detail: NotRequired[str]
 
 
 class WorkTotalsPayload(TypedDict, total=False):

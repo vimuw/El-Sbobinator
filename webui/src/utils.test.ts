@@ -64,8 +64,25 @@ describe('errorLabel', () => {
     expect(errorLabel('quota_daily_limit_phase1')).toContain('Quota');
   });
 
-  it('returns chunk-specific error for phase1_chunk_failed_ prefix', () => {
-    expect(errorLabel('phase1_chunk_failed_3')).toContain('blocco 3');
+  it('returns generic chunk-specific error for phase1_chunk_failed_ prefix', () => {
+    const label = errorLabel('phase1_chunk_failed_3');
+    expect(label).toContain('blocco 3');
+    expect(label).toContain('4 tentativi');
+    expect(label).toContain('Riprendi');
+    expect(label).not.toContain('rete');
+  });
+
+  it('includes stored detail for phase1_chunk_failed_ prefix', () => {
+    const label = errorLabel('phase1_chunk_failed_3', 'FFmpeg error: disk full');
+    expect(label).toContain('Errore al blocco 3');
+    expect(label).toContain('Dettaglio: FFmpeg error: disk full.');
+    expect(label).toContain('Riprendi');
+  });
+
+  it('returns API-key timeout label when quota detail marks prompt timeout', () => {
+    const label = errorLabel('quota_daily_limit_phase1', 'api_key_prompt_timeout');
+    expect(label).toContain('Attesa chiave API scaduta');
+    expect(label).toContain('riprendi quando vuoi');
   });
 
   it('returns raw string for unknown error key', () => {

@@ -1407,6 +1407,32 @@ class RequestNewApiKeyTests(unittest.TestCase):
 
         self.assertIsNone(request_new_api_key(_FakeRuntime(), cancel.is_set))
 
+    def test_returns_none_and_marks_timeout(self):
+        from el_sbobinator.services.generation_service import request_new_api_key
+
+        timeout_called = threading.Event()
+
+        class _FakeRuntime:
+            dismissed = False
+
+            def ask_new_api_key(self, callback):
+                return True
+
+            def dismiss_new_api_key_prompt(self):
+                self.dismissed = True
+
+        runtime = _FakeRuntime()
+        result = request_new_api_key(
+            runtime,
+            lambda: False,
+            timeout_seconds=0.01,
+            on_timeout=timeout_called.set,
+        )
+
+        self.assertIsNone(result)
+        self.assertTrue(timeout_called.is_set())
+        self.assertTrue(runtime.dismissed)
+
 
 class ExtractResponseTextMoreTests(unittest.TestCase):
     def test_text_none_returns_empty(self):

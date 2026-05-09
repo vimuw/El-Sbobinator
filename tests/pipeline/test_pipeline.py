@@ -247,6 +247,93 @@ class PipelineCancellationTests(unittest.TestCase):
         self.assertEqual(seen.get("current_model"), "gemini-2.5-flash")
         self.assertIn("gemini-2.5-flash-lite", seen.get("chain", ()))
 
+    def test_api_key_prompt_timeout_saves_quota_detail(self):
+        from el_sbobinator.services.generation_service import QuotaDailyLimitError
+
+        app = _DoneEarlyReturnApp()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "input.mp3")
+            with open(input_path, "wb") as handle:
+                handle.write(b"fake")
+
+            session_ctx = _FakeSessionContext(os.path.join(tmpdir, "session"))
+
+            def fake_request_new_api_key(runtime, cancelled, *, on_timeout=None, **_):
+                if on_timeout is not None:
+                    on_timeout()
+                return None
+
+            def fake_phase1(**kwargs):
+                with self.assertRaises(QuotaDailyLimitError):
+                    kwargs["request_fallback_key"]()
+                return kwargs["client"], None, ""
+
+            with (
+                patch("google.genai.Client", _FakeClient),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.initialize_session_context",
+                    return_value=session_ctx,
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.attach_file_handler",
+                    return_value=None,
+                ),
+                patch("el_sbobinator.pipeline.pipeline.detach_file_handler"),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.get_logger",
+                    return_value=_FakeLogger(),
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.load_fallback_keys",
+                    return_value=[],
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.resolve_ffmpeg",
+                    return_value="ffmpeg",
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.probe_media_duration",
+                    return_value=(120.0, None),
+                ),
+                patch("el_sbobinator.pipeline.pipeline.persist_phase1_metadata"),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.normalize_stage",
+                    return_value="phase1",
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.list_phase1_chunks",
+                    return_value=[],
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.phase1_has_progress",
+                    return_value=False,
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.ensure_preconverted_audio",
+                    return_value=(False, None),
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.generation_service.request_new_api_key",
+                    side_effect=fake_request_new_api_key,
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.process_phase1_transcription",
+                    side_effect=fake_phase1,
+                ),
+            ):
+                esegui_sbobinatura(input_path, "fake-key", app)
+
+        self.assertEqual(
+            session_ctx.session.get("last_error"), "quota_daily_limit_phase1"
+        )
+        self.assertEqual(
+            session_ctx.session.get("last_error_detail"), "api_key_prompt_timeout"
+        )
+        self.assertEqual(app.last_run_status, "failed")
+        self.assertEqual(app.last_run_error, "quota_daily_limit_phase1")
+        self.assertEqual(app.last_run_error_detail, "api_key_prompt_timeout")
+
     def test_resume_always_starts_from_primary_ignoring_stale_effective_model(self):
         """On resume, model_state.current must be the primary model, even when the session
         recorded a different effective_model from a previous fallback switch.

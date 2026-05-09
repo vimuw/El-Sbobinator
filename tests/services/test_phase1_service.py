@@ -37,7 +37,12 @@ class _FakeRuntime:
 class Phase1SessionErrorKeyTests(unittest.TestCase):
     def test_daily_quota_records_quota_daily_limit_phase1(self):
         """QuotaDailyLimitError in phase 1 must set last_error='quota_daily_limit_phase1'."""
-        session = {"stage": "phase1", "phase1": {}}
+        session = {
+            "stage": "phase1",
+            "phase1": {},
+            "last_error": "phase1_chunk_failed_1",
+            "last_error_detail": "old detail",
+        }
 
         with tempfile.TemporaryDirectory() as tmpdir:
             chunks_dir = os.path.join(tmpdir, "chunks")
@@ -419,6 +424,7 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
 
         self.assertIsNotNone(transcript)
         self.assertIsNone(session.get("last_error"))
+        self.assertIsNone(session.get("last_error_detail"))
         self.assertEqual(len(saved_chunks), 1)
         self.assertEqual(call_count[0], 2)
         self.assertEqual(model_state.current, "gemini-2.5-flash-lite")
@@ -879,6 +885,7 @@ class TestPhase1EdgeCases(unittest.TestCase):
 
         self.assertIsNone(transcript)
         self.assertEqual(session.get("last_error"), "phase1_chunk_failed_1")
+        self.assertIn("ffmpeg io error", session.get("last_error_detail", ""))
 
     def test_cut_raises_exception_sets_chunk_failed(self):
         """Unhandled exception during cut → outer except → chunk_failed."""
@@ -892,6 +899,7 @@ class TestPhase1EdgeCases(unittest.TestCase):
 
         self.assertIsNone(transcript)
         self.assertEqual(session.get("last_error"), "phase1_chunk_failed_1")
+        self.assertIn("disk full", session.get("last_error_detail", ""))
 
     # ── upload mode ────────────────────────────────────────────────────────────
 

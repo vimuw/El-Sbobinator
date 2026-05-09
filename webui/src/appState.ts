@@ -8,6 +8,7 @@ export type FileItem = {
   phase: number;
   phaseText?: string;
   errorText?: string;
+  errorDetail?: string;
   eta?: string;
   path?: string;
   outputHtml?: string;
@@ -50,6 +51,7 @@ export type ProcessDonePayload = {
   completed?: number;
   failed?: number;
   total?: number;
+  quota_exhausted?: boolean;
 };
 
 export function isSuccessfulProcessDone(data?: ProcessDonePayload | null): boolean {
@@ -77,6 +79,7 @@ export type FileFailedPayload = {
   index: number;
   id: string;
   error: string;
+  error_detail?: string;
 };
 
 export type WorkTotalsPayload = {
@@ -202,7 +205,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         structuralVersion: state.structuralVersion + 1,
         files: state.files.map(file =>
           file.status === 'error'
-            ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorText: undefined }
+            ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorText: undefined, errorDetail: undefined }
             : file,
         ),
       };
@@ -212,7 +215,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         structuralVersion: state.structuralVersion + 1,
         files: state.files.map(file =>
           file.id === action.id && file.status === 'error'
-            ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorText: undefined }
+            ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorDetail: undefined, errorText: undefined }
             : file,
         ),
       };
@@ -269,7 +272,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         files: action.data?.cancelled
           ? state.files.map(file =>
               file.status === 'processing'
-                ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined }
+                ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorText: undefined, errorDetail: undefined }
                 : file,
             )
           : state.files,
@@ -322,7 +325,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         stepMetrics: { chunks: null, macro: null },
         files: state.files.map(file =>
           file.id === action.data.id
-            ? { ...file, status: 'processing', progress: 0, phase: 1, phaseText: undefined, errorText: undefined, startedAt: Date.now() }
+            ? { ...file, status: 'processing', progress: 0, phase: 1, phaseText: undefined, errorText: undefined, errorDetail: undefined, startedAt: Date.now() }
             : file,
         ),
       };
@@ -342,6 +345,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
                 outputDir: action.data.output_dir,
                 phaseText: undefined,
                 errorText: undefined,
+                errorDetail: undefined,
                 completedAt: Date.now(),
                 primaryModel: action.data.primary_model || undefined,
                 effectiveModel: action.data.effective_model || undefined,
@@ -363,6 +367,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
                 phase: 0,
                 phaseText: 'Errore',
                 errorText: action.data.error || 'Elaborazione non completata.',
+                errorDetail: action.data.error_detail || undefined,
               }
             : file,
         ),

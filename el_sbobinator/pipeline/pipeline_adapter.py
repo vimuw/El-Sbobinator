@@ -72,6 +72,7 @@ class PipelineAdapter:
         self.last_revision_failed_blocks: list[int] = []
         self.last_run_status: str = "idle"
         self.last_run_error: str | None = None
+        self.last_run_error_detail: str | None = None
         self.effective_api_key: str | None = None
 
         # For ETA
@@ -150,11 +151,15 @@ class PipelineAdapter:
         self.last_revision_failed_blocks = []
         self.last_run_status = "failed"
         self.last_run_error = None
+        self.last_run_error_detail = None
         self.effective_api_key = str(api_key or "").strip() or None
 
     def set_run_result(self, status: str, error: str | None = None):
         self.last_run_status = str(status or "failed").strip() or "failed"
         self.last_run_error = str(error).strip() if error else None
+
+    def set_run_error_detail(self, detail: str | None = None):
+        self.last_run_error_detail = str(detail).strip() if detail else None
 
     def set_effective_api_key(self, api_key: str | None):
         self.effective_api_key = str(api_key or "").strip() or None
@@ -207,6 +212,11 @@ class PipelineAdapter:
         with self._lock:
             self._new_key_callback = callback
         self._emit_js("askNewKey", {}, batched=False)
+
+    def dismiss_new_api_key_prompt(self):
+        with self._lock:
+            self._new_key_callback = None
+        self._emit_js("dismissNewKey", {}, batched=False)
 
     def answer_regenerate(self, regenerate: bool | None):
         with self._lock:

@@ -21,6 +21,8 @@ class PipelineRuntime:
             self.target.last_run_status = "idle"
         if not hasattr(self.target, "last_run_error"):
             self.target.last_run_error = None
+        if not hasattr(self.target, "last_run_error_detail"):
+            self.target.last_run_error_detail = None
         if not hasattr(self.target, "effective_api_key"):
             self.target.effective_api_key = None
 
@@ -95,6 +97,15 @@ class PipelineRuntime:
         except Exception:
             pass
 
+    def set_run_error_detail(self, detail: str | None = None) -> None:
+        try:
+            if hasattr(self.target, "set_run_error_detail"):
+                self.target.set_run_error_detail(detail)
+            else:
+                self.target.last_run_error_detail = detail
+        except Exception:
+            pass
+
     def update_model(self, model: str) -> None:
         self._safe_call("update_model", model)
 
@@ -133,6 +144,9 @@ class PipelineRuntime:
             return True
         except Exception:
             return False
+
+    def dismiss_new_api_key_prompt(self) -> None:
+        self._safe_call("dismiss_new_api_key_prompt")
 
     def ask_confirmation(self, title: str, message: str) -> bool | None:
         try:

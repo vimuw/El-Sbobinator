@@ -56,11 +56,12 @@ describe('useQueuePersistence — serialization contract', () => {
     expect(restored.progress).toBe(0);
   });
 
-  it('error status and errorText are preserved on restore', () => {
-    const file = makeFile({ status: 'error', progress: 0, phase: 0, errorText: 'timeout' });
+  it('error status, errorText and errorDetail are preserved on restore', () => {
+    const file = makeFile({ status: 'error', progress: 0, phase: 0, errorText: 'timeout', errorDetail: 'api_key_prompt_timeout' });
     const restored = roundTrip(file);
     expect(restored.status).toBe('error');
     expect(restored.errorText).toBe('timeout');
+    expect(restored.errorDetail).toBe('api_key_prompt_timeout');
   });
 
   it('effectiveModel is preserved through a JSON round-trip', () => {

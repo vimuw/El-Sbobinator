@@ -322,6 +322,55 @@ class WorkflowEndToEndTests(unittest.TestCase):
         joined = "\n".join(window.calls)
         self.assertIn('"cancelled": true', joined)
 
+    def test_api_key_prompt_timeout_stops_batch_as_failed_quota(self):
+        api = ElSbobinatorApi()
+        window = _FakeWindow()
+        api.set_window(window)  # type: ignore[arg-type]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            files = []
+            for i in range(2):
+                input_path = os.path.join(tmpdir, f"input_{i}.mp3")
+                with open(input_path, "wb") as handle:
+                    handle.write(b"fake")
+                files.append(
+                    {
+                        "id": f"file-{i}",
+                        "path": input_path,
+                        "name": f"input_{i}.mp3",
+                        "size": 4,
+                        "duration": 1.0,
+                    }
+                )
+
+            call_count = {"n": 0}
+
+            def fake_pipeline(file_path, api_key, adapter, **kwargs):
+                call_count["n"] += 1
+                adapter.set_run_error_detail("api_key_prompt_timeout")
+                adapter.set_run_result("failed", "quota_daily_limit_phase1")
+
+            with (
+                patch("google.genai.Client", _FakeClient),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.esegui_sbobinatura",
+                    side_effect=fake_pipeline,
+                ),
+            ):
+                result = api.start_processing(files, "fake-key", resume_session=False)  # type: ignore[arg-type]
+                self.assertTrue(result["ok"])
+                assert api._processing_thread is not None
+                api._processing_thread.join(timeout=5)
+                api._adapter._dispatcher.flush()
+
+        self.assertEqual(call_count["n"], 1)
+        joined = "\n".join(window.calls)
+        self.assertIn("fileFailed", joined)
+        self.assertIn('"error": "quota_daily_limit_phase1"', joined)
+        self.assertIn('"error_detail": "api_key_prompt_timeout"', joined)
+        self.assertIn('"cancelled": false', joined)
+        self.assertIn('"quota_exhausted": true', joined)
+
 
 if __name__ == "__main__":
     unittest.main()

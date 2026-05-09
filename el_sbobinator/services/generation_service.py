@@ -49,6 +49,7 @@ _MODEL_UNAVAILABLE_RETRY_DELAYS: tuple[float, ...] = (
 # Gemini enforces a per-minute request quota that resets after ~60 s; sleeping
 # 65 s adds a small buffer to ensure the window has fully elapsed before retry.
 _RATE_LIMIT_SLEEP_SECONDS: float = 65.0
+_NEW_API_KEY_TIMEOUT_SECONDS: float = 600.0
 
 
 def _error_text(exc: Exception) -> str:
@@ -324,10 +325,21 @@ def make_inline_audio_part(path_str: str, max_bytes: int | None = None):
         return None
 
 
-def request_new_api_key(runtime, cancelled: Callable[[], bool]):
+def request_new_api_key(
+    runtime,
+    cancelled: Callable[[], bool],
+    *,
+    timeout_seconds: float | None = _NEW_API_KEY_TIMEOUT_SECONDS,
+    on_timeout: Callable[[], None] | None = None,
+):
     print("   [In attesa di una nuova chiave API dall'utente nel popup...]")
     event = threading.Event()
     result = {"new_key": None}
+    deadline = (
+        time.monotonic() + float(timeout_seconds)
+        if timeout_seconds is not None and float(timeout_seconds) >= 0
+        else None
+    )
 
     def handler(response):
         result["new_key"] = response.get("key", None)
@@ -340,7 +352,20 @@ def request_new_api_key(runtime, cancelled: Callable[[], bool]):
     while not event.is_set():
         if cancelled():
             return None
-        event.wait(0.2)
+        wait_seconds = 0.2
+        if deadline is not None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                try:
+                    runtime.dismiss_new_api_key_prompt()
+                except Exception:
+                    pass
+                if on_timeout is not None:
+                    on_timeout()
+                print("   [!] Attesa nuova API Key scaduta.")
+                return None
+            wait_seconds = min(wait_seconds, remaining)
+        event.wait(wait_seconds)
     return result["new_key"]
 
 

@@ -115,6 +115,7 @@ A second helper, `_session_dir_for_file(path)`, joins `SESSION_ROOT` with the fi
     "macro":  { ... }
   },
   "last_error": null,
+  "last_error_detail": null,
   "revision_pending_blocks": [],
   "revision_failed_blocks": []
 }
@@ -126,7 +127,7 @@ Notes:
 - `input.path` is captured once at creation. Since identity is derived from size + mtime + partial hash (not from the path), the stored value is informational — moving the file does not break resume.
 - `settings.effective_model` records the model that was active when the previous run last persisted. On resume the pipeline always resets `ModelState.current` back to `settings.model` (the primary) and lets the fallback chain re-degrade if needed.
 - `metrics.*` entries are maintained by `pipeline_session.record_step_metric(session, kind, seconds, done, total)`. `avg_seconds` is recomputed as `elapsed_seconds / count`; the UI uses a 40/60 EMA of `last_seconds` for live ETA.
-- `last_error` is cleared (`null`) whenever a phase completes cleanly. See [`pipeline.md`](./pipeline.md) for the full list of possible values.
+- `last_error` and `last_error_detail` are cleared (`null`) whenever a phase completes cleanly. `last_error_detail` is optional diagnostic context, currently used for replacement-key prompt timeouts and Phase 1 chunk-failure details. See [`pipeline.md`](./pipeline.md) for the full list of possible values.
 - `revision_pending_blocks` / `revision_failed_blocks` are populated by `revision_service.process_macro_revision_phase` and consumed only for observability.
 
 ## Settings sanitization (`pipeline_settings.load_and_sanitize_settings`)

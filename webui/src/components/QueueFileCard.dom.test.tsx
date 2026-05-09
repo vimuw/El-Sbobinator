@@ -101,20 +101,22 @@ describe('QueueFileCard', () => {
     expect(onRetry).toHaveBeenCalledWith('f1');
   });
 
-  it('shows Riprova icon button for chunk_failed error when idle', () => {
+  it('shows Riprendi CTA for chunk_failed error when idle', () => {
     const onRetry = vi.fn();
     render(
       <QueueWrapper>
         <QueueFileCard
-          file={makeFile({ status: 'error', errorText: 'phase1_chunk_failed_3' })}
+          file={makeFile({ status: 'error', errorText: 'phase1_chunk_failed_3', errorDetail: 'FFmpeg error: disk full' })}
           appState="idle"
           onRemove={vi.fn()} onRetry={onRetry} onPreview={vi.fn()} onOpenFile={vi.fn()}
         />
       </QueueWrapper>,
     );
-    fireEvent.click(screen.getByLabelText('Riprova'));
+    expect(screen.getByText(/FFmpeg error: disk full/)).toBeTruthy();
+    expect(screen.getByText('Riprendi')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Riprendi'));
     expect(onRetry).toHaveBeenCalledWith('f1');
-    expect(screen.queryByLabelText('Riprendi')).toBeNull();
+    expect(screen.queryByLabelText('Riprova')).toBeNull();
   });
 
   it('shows Riprova icon button for non-resumable error when idle', () => {

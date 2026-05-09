@@ -416,11 +416,23 @@ describe('processingReducer', () => {
     const file = makeFile({ id: 'err1', status: 'processing' });
     const state = processingReducer(
       { ...initialProcessingState, files: [file] },
-      { type: 'bridge/file_failed', data: { id: 'err1', index: 0, error: 'quota_daily_limit_phase1' } },
+      { type: 'bridge/file_failed', data: { id: 'err1', index: 0, error: 'quota_daily_limit_phase1', error_detail: 'api_key_prompt_timeout' } },
     );
     expect(state.files[0].status).toBe('error');
     expect(state.files[0].errorText).toBe('quota_daily_limit_phase1');
+    expect(state.files[0].errorDetail).toBe('api_key_prompt_timeout');
     expect(state.files[0].progress).toBe(0);
+  });
+
+  it('queue/retry_one clears errorDetail', () => {
+    const file = makeFile({ id: 'err1', status: 'error', errorText: 'quota_daily_limit_phase1', errorDetail: 'api_key_prompt_timeout' });
+    const state = processingReducer(
+      { ...initialProcessingState, files: [file] },
+      { type: 'queue/retry_one', id: 'err1' },
+    );
+    expect(state.files[0].status).toBe('queued');
+    expect(state.files[0].errorText).toBeUndefined();
+    expect(state.files[0].errorDetail).toBeUndefined();
   });
 
   it('resets processing files to queued on cancelled batch completion', () => {

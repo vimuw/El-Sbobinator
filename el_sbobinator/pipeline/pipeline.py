@@ -94,8 +94,37 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         runtime.set_effective_api_key(api_key_value.strip())
 
         def request_fallback_key():
-            key = generation_service.request_new_api_key(runtime, runtime.cancelled)
+            prompt_timed_out = False
+
+            def _on_timeout() -> None:
+                nonlocal prompt_timed_out
+                prompt_timed_out = True
+
+            key = generation_service.request_new_api_key(
+                runtime,
+                runtime.cancelled,
+                on_timeout=_on_timeout,
+            )
             if not key or not key.strip():
+                if prompt_timed_out:
+                    error_key = "quota_daily_limit_phase1"
+                    if isinstance(session, dict):
+                        stage_name = str(session.get("stage") or "").lower()
+                        if stage_name == "phase2":
+                            error_key = "quota_daily_limit_phase2"
+                        session["last_error"] = error_key
+                        session["last_error_detail"] = "api_key_prompt_timeout"
+                        try:
+                            save_session()
+                        except Exception:
+                            pass
+                    runtime.console_error(
+                        "Attesa chiave API scaduta. Sessione salvata - riprendi quando vuoi."
+                    )
+                    runtime.set_run_error_detail("api_key_prompt_timeout")
+                    raise generation_service.QuotaDailyLimitError(
+                        "api_key_prompt_timeout"
+                    )
                 _ce = runtime.cancel_event
                 if _ce is not None:
                     _ce.set()
@@ -128,6 +157,7 @@ def _esegui_sbobinatura_impl(  # noqa: C901
             runtime.console_error(msg)
             if isinstance(session, dict):
                 session["last_error"] = "autosave_failed"
+                session["last_error_detail"] = None
 
         save_session = SaveSessionGuard(session_ctx.save, _on_autosave_fatal)
 
@@ -395,7 +425,10 @@ def _esegui_sbobinatura_impl(  # noqa: C901
 
         # Se la fase 1 e' terminata senza interruzioni, passa alla fase 2
         if stage == "phase1":
-            _update_session(session, {"stage": "phase2", "last_error": None})
+            _update_session(
+                session,
+                {"stage": "phase2", "last_error": None, "last_error_detail": None},
+            )
             save_session()
 
         # ==========================================
@@ -471,7 +504,10 @@ def _esegui_sbobinatura_impl(  # noqa: C901
 
         current_stage = str(session.get("stage", "phase1")).strip().lower()
         if current_stage in ("phase2", "boundary"):
-            _update_session(session, {"stage": "done", "last_error": None})
+            _update_session(
+                session,
+                {"stage": "done", "last_error": None, "last_error_detail": None},
+            )
             save_session()
 
         # ==========================================
@@ -493,6 +529,7 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         except Exception as e:
             print(f"[!] Errore salvataggio HTML: {e}")
             session["last_error"] = "html_export_failed"
+            session["last_error_detail"] = None
             save_session()
             return
 
@@ -501,6 +538,7 @@ def _esegui_sbobinatura_impl(  # noqa: C901
                 "[!] Errore salvataggio HTML: file finale non trovato dopo la scrittura."
             )
             session["last_error"] = "html_export_missing"
+            session["last_error_detail"] = None
             save_session()
             return
 
@@ -596,7 +634,14 @@ def _esegui_sbobinatura_impl(  # noqa: C901
             )
         else:
             runtime.progress(1.0)
-            if getattr(app_instance, "last_run_status", None) != "completed":
+            if getattr(app_instance, "last_run_status", None) == "completed":
+                runtime.set_run_error_detail(None)
+            else:
+                runtime.set_run_error_detail(
+                    session.get("last_error_detail")
+                    if isinstance(session, dict)
+                    else None
+                )
                 runtime.set_run_result(
                     "failed",
                     getattr(app_instance, "last_run_error", None)

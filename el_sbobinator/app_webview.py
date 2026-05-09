@@ -120,6 +120,12 @@ class _RetryRuntime:
         except Exception:
             return False
 
+    def dismiss_new_api_key_prompt(self) -> None:
+        try:
+            self._adapter.dismiss_new_api_key_prompt()
+        except Exception:
+            pass
+
 
 def _path_under_root(path: str, root: str) -> bool:
     """Return True if *path* equals or is nested under *root*.
@@ -1028,6 +1034,7 @@ class ElSbobinatorApi:
             failed_count = 0
             current_index: int | None = None
             current_file_id = ""
+            quota_exhausted = False
             try:
                 for idx, file_info in enumerate(files):
                     if self._cancel_event.is_set():
@@ -1108,14 +1115,25 @@ class ElSbobinatorApi:
                             self._adapter.emit("fileFailed", ff_payload2, batched=False)
                             failed_count += 1
                     else:
+                        error_detail = (
+                            getattr(self._adapter, "last_run_error_detail", None) or ""
+                        )
                         ff_payload3: FileFailedPayload = {
                             "index": idx,
                             "id": file_info.get("id", ""),
                             "error": self._adapter.last_run_error
                             or "Elaborazione non completata.",
                         }
+                        if error_detail:
+                            ff_payload3["error_detail"] = error_detail
                         self._adapter.emit("fileFailed", ff_payload3, batched=False)
                         failed_count += 1
+                        if ff_payload3["error"] in {
+                            "quota_daily_limit_phase1",
+                            "quota_daily_limit_phase2",
+                        }:
+                            quota_exhausted = True
+                            break
                     current_index = None
                     current_file_id = ""
             except Exception as e:
@@ -1143,6 +1161,8 @@ class ElSbobinatorApi:
                     "failed": failed_count,
                     "total": len(files),
                 }
+                if quota_exhausted:
+                    payload["quota_exhausted"] = True
                 self._adapter.emit("processDone", payload, batched=False)
 
         self._processing_thread = threading.Thread(target=_run, daemon=True)

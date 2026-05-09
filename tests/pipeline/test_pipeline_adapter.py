@@ -100,6 +100,13 @@ class PipelineAdapterBasicTests(unittest.TestCase):
         self.assertEqual(adapter.last_run_status, "failed")
         self.assertEqual(adapter.last_run_error, "something went wrong")
 
+    def test_set_run_error_detail_stores_detail(self):
+        adapter = _make_adapter()
+        adapter.set_run_error_detail(" api_key_prompt_timeout ")
+        self.assertEqual(adapter.last_run_error_detail, "api_key_prompt_timeout")
+        adapter.set_run_error_detail(None)
+        self.assertIsNone(adapter.last_run_error_detail)
+
     def test_set_effective_api_key_strips_and_stores(self):
         adapter = _make_adapter()
         adapter.set_effective_api_key("  my-key  ")
@@ -143,6 +150,14 @@ class PipelineAdapterBasicTests(unittest.TestCase):
         self.assertEqual(regen_received, [{"regenerate": False}])
         self.assertEqual(key_received, [{"key": ""}])
         self.assertIsNone(adapter._regenerate_callback)
+        self.assertIsNone(adapter._new_key_callback)
+
+    def test_dismiss_new_api_key_prompt_clears_without_callback(self):
+        adapter = _make_adapter()
+        received = []
+        adapter._new_key_callback = lambda r: received.append(r)
+        adapter.dismiss_new_api_key_prompt()
+        self.assertEqual(received, [])
         self.assertIsNone(adapter._new_key_callback)
 
 
