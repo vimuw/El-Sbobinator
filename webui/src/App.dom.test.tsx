@@ -26,6 +26,10 @@ const mockApiReadyDefault = {
   apiKey: '',
   setApiKey: vi.fn(),
   hasProtectedKey: false,
+  apiKeyInsecure: false,
+  setApiKeyInsecure: vi.fn(),
+  apiKeyInsecureReason: '',
+  setApiKeyInsecureReason: vi.fn(),
   fallbackKeys: [],
   setFallbackKeys: vi.fn(),
   preferredModel: 'gemini-2.5-flash',
@@ -33,6 +37,7 @@ const mockApiReadyDefault = {
   fallbackModels: [],
   setFallbackModels: vi.fn(),
   availableModels: [],
+  refreshSettings: vi.fn(),
 };
 
 const mockApiReadyWithKey = {

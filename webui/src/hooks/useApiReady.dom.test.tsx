@@ -187,4 +187,57 @@ describe('useApiReady — bootstrap guard', () => {
     expect(appendConsole).toHaveBeenCalledTimes(1);
     expect(appendConsole).toHaveBeenCalledWith('Connesso a Python.');
   });
+
+  it('hydrates plaintext API key warning fields', async () => {
+    const mockLoad = vi.fn().mockResolvedValue({
+      api_key: 'plain-key',
+      api_key_insecure: true,
+      api_key_insecure_reason: 'DPAPI non disponibile',
+    });
+    setPywebview({ load_settings: mockLoad });
+
+    const { result } = renderHook(() => useApiReady(vi.fn()));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.apiKey).toBe('plain-key');
+    expect(result.current.apiKeyInsecure).toBe(true);
+    expect(result.current.apiKeyInsecureReason).toBe('DPAPI non disponibile');
+  });
+
+  it('refreshSettings reloads security flags after bootstrap', async () => {
+    const mockLoad = vi.fn()
+      .mockResolvedValueOnce({
+        api_key: 'plain-key',
+        api_key_insecure: true,
+        api_key_insecure_reason: 'DPAPI non disponibile',
+      })
+      .mockResolvedValueOnce({
+        api_key: 'protected-key',
+        api_key_insecure: false,
+        api_key_insecure_reason: '',
+      });
+    setPywebview({ load_settings: mockLoad });
+
+    const { result } = renderHook(() => useApiReady(vi.fn()));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.apiKeyInsecure).toBe(true);
+
+    await act(async () => {
+      await result.current.refreshSettings();
+    });
+
+    expect(mockLoad).toHaveBeenCalledTimes(2);
+    expect(result.current.apiKey).toBe('protected-key');
+    expect(result.current.apiKeyInsecure).toBe(false);
+    expect(result.current.apiKeyInsecureReason).toBe('');
+  });
 });

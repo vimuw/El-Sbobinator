@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { Github } from 'lucide-react';
+import { AlertTriangle, Github, Trash2 } from 'lucide-react';
 import { GITHUB_RELEASES_URL, GITHUB_URL, KOFI_URL } from './branding';
 import { type ArchiveFolder, type ArchiveSession, type ElSbobinatorBridge, type PywebviewApi, type UpdateDownloadProgressPayload } from './bridge';
 import { getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type FileDescriptor, type FileDonePayload, type FileItem, type ProcessDonePayload } from './appState';
@@ -77,6 +77,10 @@ export default function App() {
     apiKey,
     setApiKey,
     hasProtectedKey,
+    apiKeyInsecure,
+    setApiKeyInsecure,
+    apiKeyInsecureReason,
+    setApiKeyInsecureReason,
     fallbackKeys,
     setFallbackKeys,
     preferredModel,
@@ -84,6 +88,7 @@ export default function App() {
     fallbackModels,
     setFallbackModels,
     availableModels,
+    refreshSettings,
   } = useApiReady(appendConsole);
 
   const [archiveSessions, setArchiveSessions] = useState<ArchiveSession[]>([]);
@@ -208,7 +213,7 @@ export default function App() {
       showToast('Blocchi mancanti revisionati e HTML aggiornato.', 'info');
     }
     void refreshArchiveSessions();
-  }, [refreshArchiveSessions, showToast]);
+  }, [normalizeSessionDir, refreshArchiveSessions, showToast]);
 
   const handleRevisionWarning = useCallback((data: FileDonePayload) => {
     const count = data.revision_failed_blocks?.length ?? 0;
@@ -256,6 +261,7 @@ export default function App() {
   const [batchTotal, setBatchTotal] = useState(0);
   const [batchCompleted, setBatchCompleted] = useState(0);
   const [completionFlash, setCompletionFlash] = useState(false);
+  const [isRemovingInsecureKey, setIsRemovingInsecureKey] = useState(false);
 
   const filesRef = useRef(files);
   const appStateRef = useRef(appState);
@@ -384,6 +390,7 @@ export default function App() {
     queuedCount > 0 ? 'ready-with-files' : 'ready-empty';
   const lastConsoleMessage = consoleLogs.length > 0 ? consoleLogs[consoleLogs.length - 1] : 'Pronto per iniziare.';
   const showProcessingBanner = appState === 'processing' || appState === 'canceling' || completionFlash;
+  const apiKeyInsecureReasonLabel = apiKeyInsecureReason.trim() || 'DPAPI non disponibile.';
   const bannerFile = useMemo(
     () => files.find(f => f.status === 'processing') ?? (completionFlash ? doneFiles[0] : undefined),
     [files, completionFlash, doneFiles],
@@ -422,6 +429,35 @@ export default function App() {
       archiveLimitRef.current = 20;
     };
   }, [activePage, showToast]);
+
+  const handleRemoveInsecureApiKey = useCallback(async () => {
+    if (isRemovingInsecureKey) return;
+    setIsRemovingInsecureKey(true);
+    try {
+      const result = await window.pywebview?.api?.save_settings?.('', fallbackKeys, preferredModel, fallbackModels);
+      if (!result?.ok) {
+        appendConsole(`❌ Errore rimozione chiave API: ${result?.error ?? 'errore sconosciuto'}`);
+        return;
+      }
+      setApiKey('');
+      setApiKeyInsecure(false);
+      setApiKeyInsecureReason('');
+      appendConsole('Chiave API rimossa dal disco.');
+    } catch (error: unknown) {
+      appendConsole(`❌ Errore rimozione chiave API: ${getErrorMessage(error)}`);
+    } finally {
+      setIsRemovingInsecureKey(false);
+    }
+  }, [
+    appendConsole,
+    fallbackKeys,
+    fallbackModels,
+    isRemovingInsecureKey,
+    preferredModel,
+    setApiKey,
+    setApiKeyInsecure,
+    setApiKeyInsecureReason,
+  ]);
 
   const finalizeArchiveReplacement = useCallback(async (fileId: string) => {
     const pendingReplacement = pendingArchiveReplacementsRef.current.get(fileId);
@@ -903,6 +939,39 @@ export default function App() {
               onDrop={handleDrop}
             >
               <div className="my-auto px-5 sm:px-6 py-8 flex flex-col gap-5">
+                {apiKeyInsecure && (
+                  <motion.div
+                    key="api-key-insecure-banner"
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                    className="w-full rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    style={{ background: 'var(--warning-subtle)', border: '1px solid var(--warning-ring)' }}
+                  >
+                    <div className="flex items-start gap-3 text-sm leading-relaxed" style={{ color: 'var(--warning-text)' }}>
+                      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>
+                        La tua chiave API è salvata in chiaro su disco perché la protezione Windows (DPAPI) non è disponibile. Motivo: {apiKeyInsecureReasonLabel} Cancella e reinserisci la chiave, oppure conservala in un password manager.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleRemoveInsecureApiKey()}
+                      disabled={isRemovingInsecureKey}
+                      className="shrink-0 inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition-opacity"
+                      style={{
+                        color: 'var(--warning-text)',
+                        border: '1px solid var(--warning-ring)',
+                        background: 'transparent',
+                        cursor: isRemovingInsecureKey ? 'default' : 'pointer',
+                        opacity: isRemovingInsecureKey ? 0.6 : 1,
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      {isRemovingInsecureKey ? 'Rimozione...' : 'Rimuovi chiave'}
+                    </button>
+                  </motion.div>
+                )}
                 {uiMode === 'setup' ? (
                   <SetupPage
                     hasProtectedKey={hasProtectedKey}
@@ -1091,6 +1160,7 @@ export default function App() {
         isCheckingUpdate={isCheckingUpdate}
         hasChecked={hasChecked}
         checkFailed={checkFailed}
+        onSettingsSaved={refreshSettings}
       />
       <React.Suspense fallback={null}>
         <EditorFullPage

@@ -403,8 +403,15 @@ def load_config() -> dict:  # noqa: C901
                 # Decrypt best-effort on Windows (do not expose protected value to callers).
                 try:
                     if platform.system() == "Windows":
+                        plain_api_key = str(data.get("api_key") or "").strip()
+                        protected = str(data.get("api_key_protected") or "").strip()
+                        if plain_api_key:
+                            data["api_key_insecure"] = True
+                            data.setdefault(
+                                "api_key_insecure_reason",
+                                "Chiave API presente in chiaro nel file di configurazione.",
+                            )
                         if not (str(data.get("api_key") or "").strip()):
-                            protected = str(data.get("api_key_protected") or "").strip()
                             if protected:
                                 dec = _dpapi_unprotect_text_windows(protected)
                                 if dec:
@@ -603,10 +610,18 @@ def save_config(  # noqa: C901
                     data["api_key"] = ""
                     data["api_key_protected"] = protected
                 else:
+                    data["api_key_insecure"] = True
+                    data["api_key_insecure_reason"] = (
+                        "CryptProtectData non ha restituito dati protetti."
+                    )
                     debug_log(
                         "dpapi: CryptProtectData failed; API key stored as plaintext in config"
                     )
         except Exception as _dpapi_exc:
+            data["api_key_insecure"] = True
+            data["api_key_insecure_reason"] = (
+                str(_dpapi_exc) or "Errore DPAPI sconosciuto."
+            )
             debug_log(
                 f"dpapi: exception during protect — API key stored as plaintext in config: {_dpapi_exc}"
             )

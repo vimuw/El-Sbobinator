@@ -69,7 +69,7 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
 
 | Method | Arguments | Returns | Notes |
 |---|---|---|---|
-| `load_settings()` | — | `{api_key, fallback_keys, preferred_model, fallback_models, available_models, has_protected_key}` | `available_models` mirrors `MODEL_OPTIONS`. |
+| `load_settings()` | — | `{api_key, fallback_keys, preferred_model, fallback_models, available_models, has_protected_key, api_key_insecure, api_key_insecure_reason}` | `available_models` mirrors `MODEL_OPTIONS`; `api_key_insecure` warns when Windows DPAPI was unavailable and the key is plaintext on disk. |
 | `save_settings(api_key, fallback_keys, preferred_model, fallback_models)` | API key (nullable), list of strings, model id, list of ids | `{ok, error?}` | Writes via `config_service.save_config`. |
 | `validate_environment(api_key?, check_api_key?, preferred_model?, fallback_models?)` | `{ok, result?: ValidationResult, error?}` | Cached environment check. | |
 | `get_session_storage_info()` | — | `{ok, total_bytes, total_sessions, error?}` | Wraps `shared.get_session_storage_info` (30 s cache). |

@@ -154,6 +154,7 @@ interface SettingsModalProps {
   isCheckingUpdate: boolean;
   hasChecked: boolean;
   checkFailed: boolean;
+  onSettingsSaved?: () => Promise<unknown> | unknown;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -224,6 +225,7 @@ export function SettingsModal({
   isCheckingUpdate,
   hasChecked,
   checkFailed,
+  onSettingsSaved,
 }: SettingsModalProps) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('notifications_enabled') !== 'false');
   const [showApiKeys, setShowApiKeys] = useState(false);
@@ -270,7 +272,7 @@ export function SettingsModal({
     window.pywebview?.api?.open_session_folder?.();
   };
 
-  const pollMoveStatus = useCallback(async () => {
+  async function pollMoveStatus() {
     try {
       const res = await window.pywebview?.api?.get_session_move_status?.();
       if (!res) return;
@@ -294,7 +296,7 @@ export function SettingsModal({
         setMoveError(`Stato imprevisto: ${String(res.status)}`);
       }
     } catch { /* ignore polling errors */ }
-  }, []);
+  }
 
   const handleAskMoveFolder = async () => {
     if (isMoveInProgress) return;
@@ -396,6 +398,11 @@ export function SettingsModal({
         setSaveError(err);
         appendConsole(`❌ ${err}`);
         return;
+      }
+      try {
+        await onSettingsSaved?.();
+      } catch (e: unknown) {
+        appendConsole(`Avviso: impostazioni salvate, ma il refresh dello stato non e riuscito: ${getErrorMessage(e)}`);
       }
       onClose();
     } finally {

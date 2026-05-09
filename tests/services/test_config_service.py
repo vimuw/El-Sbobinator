@@ -494,6 +494,61 @@ class TestLoadConfigFromRealFile(unittest.TestCase):
         self.assertTrue(result.get("has_protected_key"))
         self.assertEqual(result["api_key"], "")
 
+    def test_windows_marks_plaintext_api_key_as_insecure(self) -> None:
+        """On Windows, a plaintext api_key is surfaced as insecure to the UI."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            payload = {"api_key": "plain-key"}
+            with open(cfg_path, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh)
+
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".none",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Windows",
+                ),
+            ):
+                result = cs.load_config()
+
+        self.assertEqual(result["api_key"], "plain-key")
+        self.assertTrue(result.get("api_key_insecure"))
+        self.assertIn("chiaro", result.get("api_key_insecure_reason", ""))
+
+    def test_windows_marks_plaintext_api_key_insecure_with_protected_key(
+        self,
+    ) -> None:
+        """A plaintext api_key on disk is insecure even if api_key_protected exists."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            payload = {
+                "api_key": "plain-key",
+                "api_key_protected": "FAKEBASE64==",
+            }
+            with open(cfg_path, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh)
+
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".none",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Windows",
+                ),
+            ):
+                result = cs.load_config()
+
+        self.assertEqual(result["api_key"], "plain-key")
+        self.assertTrue(result.get("api_key_insecure"))
+        self.assertIn("chiaro", result.get("api_key_insecure_reason", ""))
+
     def test_windows_decrypts_fallback_keys_protected(self) -> None:
         """On Windows, fallback_keys_protected is JSON-decoded after DPAPI decrypt."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -561,6 +616,8 @@ class TestSaveConfigToDisk(unittest.TestCase):
                 data = json.load(fh)
 
         self.assertEqual(data["api_key"], "stored-key")
+        self.assertTrue(data.get("api_key_insecure"))
+        self.assertIn("CryptProtectData", data.get("api_key_insecure_reason", ""))
         self.assertEqual(data["preferred_model"], "gemini-2.5-flash")
 
     def test_save_config_none_key_preserves_existing_protected_on_windows(self) -> None:

@@ -82,6 +82,24 @@ class AppWebviewTests(unittest.TestCase):
         self.assertEqual(adapter.last_primary_model, "gemini-3-flash-preview")
         self.assertEqual(adapter.last_effective_model, "gemini-3-flash-preview")
 
+    def test_load_settings_exposes_insecure_api_key_flag(self):
+        api = ElSbobinatorApi()
+        with patch(
+            "el_sbobinator.app_webview.load_config",
+            return_value={
+                "api_key": "plain-key",
+                "fallback_keys": [],
+                "preferred_model": "gemini-2.5-flash",
+                "fallback_models": [],
+                "api_key_insecure": True,
+                "api_key_insecure_reason": "DPAPI non disponibile",
+            },
+        ):
+            result = api.load_settings()
+
+        self.assertTrue(result["api_key_insecure"])
+        self.assertEqual(result["api_key_insecure_reason"], "DPAPI non disponibile")
+
     def test_save_html_content_preserves_head(self):
         import tempfile as _tempfile
 

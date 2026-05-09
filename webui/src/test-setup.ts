@@ -3,3 +3,8 @@ global.ResizeObserver = class ResizeObserver {
   unobserve() {}
   disconnect() {}
 };
+
+Object.defineProperty(window, 'scrollTo', {
+  value: () => {},
+  writable: true,
+});

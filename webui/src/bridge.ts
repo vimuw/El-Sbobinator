@@ -33,6 +33,17 @@ export interface ModelOption {
   phase1_temperature?: number;
 }
 
+export interface SettingsPayload {
+  api_key?: string;
+  fallback_keys?: string[];
+  preferred_model?: string;
+  fallback_models?: string[];
+  available_models?: ModelOption[];
+  has_protected_key?: boolean;
+  api_key_insecure?: boolean;
+  api_key_insecure_reason?: string;
+}
+
 export interface ArchiveSession {
   name: string;
   completed_at_iso: string;
@@ -95,14 +106,7 @@ export interface BridgeCallbacks {
 }
 
 export interface PywebviewApi {
-  load_settings?: () => Promise<{
-    api_key?: string;
-    fallback_keys?: string[];
-    preferred_model?: string;
-    fallback_models?: string[];
-    available_models?: ModelOption[];
-    has_protected_key?: boolean;
-  }>;
+  load_settings?: () => Promise<SettingsPayload>;
   save_settings?: (
     apiKey: string | null,
     fallbackKeys: string[],

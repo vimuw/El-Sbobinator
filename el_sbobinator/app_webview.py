@@ -259,6 +259,10 @@ class ElSbobinatorApi:
                 "fallback_models": cfg.get("fallback_models", []),
                 "available_models": list(MODEL_OPTIONS),
                 "has_protected_key": bool(cfg.get("has_protected_key")),
+                "api_key_insecure": bool(cfg.get("api_key_insecure")),
+                "api_key_insecure_reason": str(
+                    cfg.get("api_key_insecure_reason") or ""
+                ),
             }
             if cfg.get("config_recovered_from"):
                 result["config_recovered_from"] = cfg["config_recovered_from"]
@@ -271,6 +275,8 @@ class ElSbobinatorApi:
                 "fallback_models": list(DEFAULT_FALLBACK_MODELS),
                 "available_models": list(MODEL_OPTIONS),
                 "has_protected_key": False,
+                "api_key_insecure": False,
+                "api_key_insecure_reason": "",
             }
 
     def save_settings(

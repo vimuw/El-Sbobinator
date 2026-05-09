@@ -107,6 +107,23 @@ describe('SettingsModal — save behavior', () => {
     expect(screen.queryByText(/non disponibile/i)).toBeNull();
   });
 
+  it('successful save: refreshes settings before closing', async () => {
+    const mockSave = vi.fn().mockResolvedValue({ ok: true });
+    setPywebview({ save_settings: mockSave });
+    const onClose = vi.fn();
+    const onSettingsSaved = vi.fn().mockResolvedValue(undefined);
+
+    render(<SettingsModal {...makeProps()} onClose={onClose} onSettingsSaved={onSettingsSaved} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Salva e Chiudi'));
+    });
+
+    expect(onSettingsSaved).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onSettingsSaved.mock.invocationCallOrder[0]).toBeLessThan(onClose.mock.invocationCallOrder[0]);
+  });
+
   it('double-click: save_settings called only once, onClose called only once', async () => {
     let resolveFirst!: (val: { ok: boolean }) => void;
     const firstPromise = new Promise<{ ok: boolean }>(res => { resolveFirst = res; });
