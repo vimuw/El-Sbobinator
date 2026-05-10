@@ -84,7 +84,27 @@ def ensure_session_dirs(paths: SessionPaths) -> None:
     _safe_mkdir(paths.phase2_revised_dir)
 
 
-def reset_session_dirs(paths: SessionPaths) -> None:
+def _completed_html_output_exists(paths: SessionPaths) -> bool:
+    try:
+        session = load_session(paths.session_path)
+        if str(session.get("stage", "")).strip().lower() != "done":
+            return False
+        outputs = session.get("outputs", {})
+        html_path = str(outputs.get("html", "") if isinstance(outputs, dict) else "")
+        return bool(html_path and os.path.exists(html_path))
+    except Exception:
+        return False
+
+
+def reset_session_dirs(
+    paths: SessionPaths, *, allow_completed_destroy: bool = False
+) -> None:
+    if (
+        not allow_completed_destroy
+        and os.path.exists(paths.session_dir)
+        and _completed_html_output_exists(paths)
+    ):
+        raise SessionCollisionError(paths.session_dir)
     if os.path.exists(paths.session_dir):
         import shutil
 

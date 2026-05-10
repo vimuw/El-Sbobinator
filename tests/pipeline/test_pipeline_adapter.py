@@ -140,6 +140,21 @@ class PipelineAdapterBasicTests(unittest.TestCase):
         adapter._new_key_callback = None
         adapter.answer_new_key("key")
 
+    def test_answer_regenerate_none_noop_when_callback_expired(self):
+        cancel = threading.Event()
+        adapter = PipelineAdapter(None, cancel)
+        adapter._regenerate_callback = None
+        adapter.answer_regenerate(None)
+        self.assertFalse(cancel.is_set())
+
+    def test_dismiss_regenerate_prompt_clears_without_callback(self):
+        adapter = _make_adapter()
+        received = []
+        adapter._regenerate_callback = lambda r: received.append(r)
+        adapter.dismiss_regenerate_prompt()
+        self.assertEqual(received, [])
+        self.assertIsNone(adapter._regenerate_callback)
+
     def test_cancel_pending_prompts_fires_both_callbacks(self):
         adapter = _make_adapter()
         regen_received = []

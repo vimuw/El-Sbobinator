@@ -270,13 +270,9 @@ _MAX_SESSION_CACHE_SIZE = 500  # LRU cap: at ~200 bytes per entry this stays wel
 
 def _session_id_for_file(path: str) -> str:
     """
-    Genera ID sessione basato su: size + sha256(primi 1 MB) + sha256(ultimi 1 MB).
-    Il tail hash distingue file con intro identica ma contenuto diverso (es. lezioni settimanali
-    dello stesso corso registrate con la stessa app). mtime_ns è escluso dal blob dell'ID
-    (stabile su cloud-sync): i tool di sync riscrivono l'mtime anche su file invariati, e due
-    file con stesso contenuto devono avere lo stesso ID indipendentemente dal timestamp.
-    mtime_ns resta nella cache key per invalidare la cache se il file viene sovrascritto
-    in-place durante la stessa sessione app.
+    Genera ID sessione basato su size, head hash e tail hash.
+    Il tail hash distingue file con intro identica ma contenuto diverso.
+    mtime_ns partecipa solo alla cache process-local, non all'ID durevole.
     """
     abs_path = os.path.abspath(path)
     st = os.stat(abs_path)

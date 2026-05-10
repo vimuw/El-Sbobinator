@@ -1541,6 +1541,27 @@ class TestSessionFingerprint(unittest.TestCase):
                 fh.write(content)
             with open(path_b, "wb") as fh:
                 fh.write(content)
+            same_mtime_ns = 1_700_000_000_000_000_000
+            os.utime(path_a, ns=(same_mtime_ns, same_mtime_ns))
+            os.utime(path_b, ns=(same_mtime_ns, same_mtime_ns))
+
+            id_a = _session_id_for_file(path_a)
+            id_b = _session_id_for_file(path_b)
+            self.assertEqual(id_a, id_b)
+
+    def test_same_content_different_mtime_yields_same_id(self):
+        """mtime_ns does not participate in the durable session ID."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            content = b"same lecture content" * 10000
+
+            path_a = os.path.join(tmpdir, "copy_a.mp3")
+            path_b = os.path.join(tmpdir, "copy_b.mp3")
+            with open(path_a, "wb") as fh:
+                fh.write(content)
+            with open(path_b, "wb") as fh:
+                fh.write(content)
+            os.utime(path_a, ns=(1_700_000_000_000_000_000, 1_700_000_000_000_000_000))
+            os.utime(path_b, ns=(1_700_000_100_000_000_000, 1_700_000_100_000_000_000))
 
             id_a = _session_id_for_file(path_a)
             id_b = _session_id_for_file(path_b)

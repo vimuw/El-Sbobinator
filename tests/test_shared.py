@@ -316,16 +316,13 @@ class SessionIdForFileTests(unittest.TestCase):
         return path
 
     def test_same_content_different_mtime_yields_same_id(self):
-        """mtime_ns is excluded from the fingerprint blob (cloud-sync stability).
-        Touching a file (mtime change only, same content) must not change the session ID
-        so that cloud-sync tools that rewrite mtime on unmodified files do not break resume."""
+        """mtime_ns invalidates the process cache but not the durable session ID."""
         with tempfile.TemporaryDirectory() as tmpdir:
             path = self._write_file(tmpdir, "lecture.mp3", b"audio" * 1000)
             shared._session_id_cache.clear()
             id1 = shared._session_id_for_file(path)
             now = time.time()
             os.utime(path, (now - 3600, now - 3600))
-            shared._session_id_cache.clear()
             id2 = shared._session_id_for_file(path)
             self.assertEqual(id1, id2)
 

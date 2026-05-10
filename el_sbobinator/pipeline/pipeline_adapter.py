@@ -218,14 +218,19 @@ class PipelineAdapter:
             self._new_key_callback = None
         self._emit_js("dismissNewKey", {}, batched=False)
 
+    def dismiss_regenerate_prompt(self):
+        with self._lock:
+            self._regenerate_callback = None
+
     def answer_regenerate(self, regenerate: bool | None):
         with self._lock:
             cb = self._regenerate_callback
             self._regenerate_callback = None
+        if not cb:
+            return
         if regenerate is None:
             self.cancel_event.set()
-        if cb:
-            cb({"regenerate": regenerate})
+        cb({"regenerate": regenerate})
 
     def answer_new_key(self, key: str):
         with self._lock:

@@ -302,4 +302,12 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(100); });
     expect(onBatchFullyDone).toHaveBeenCalledWith(payload);
   });
+
+  it('processDone clears any regenerate prompt left open by a backend timeout', () => {
+    const setRegeneratePrompt = vi.fn();
+    const opts = makeMinimalHook({ setRegeneratePrompt });
+    renderHook(() => { useBridgeCallbacks(opts); });
+    act(() => { window.elSbobinatorBridge?.processDone({ completed: 0, failed: 1, total: 1 }); });
+    expect(setRegeneratePrompt).toHaveBeenCalledWith(null);
+  });
 });

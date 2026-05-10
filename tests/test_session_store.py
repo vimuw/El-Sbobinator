@@ -1,8 +1,10 @@
+import json
 import os
 import unittest
 from unittest.mock import patch
 
 from el_sbobinator.core.session_store import (
+    SessionCollisionError,
     clone_session_settings,
     new_session,
     resolve_session_paths,
@@ -98,6 +100,62 @@ class EnsureSessionDirsTests(unittest.TestCase):
             self.assertTrue(
                 os.path.isdir(paths.phase1_chunks_dir), "Dir should exist again"
             )
+
+    def test_reset_session_dirs_refuses_completed_session_with_html(self):
+        import tempfile
+
+        from el_sbobinator.core.session_store import SessionPaths, reset_session_dirs
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir = os.path.join(tmpdir, "session")
+            paths = SessionPaths(
+                session_dir=session_dir,
+                session_path=os.path.join(session_dir, "session.json"),
+                phase1_chunks_dir=os.path.join(session_dir, "phase1_chunks"),
+                phase2_revised_dir=os.path.join(session_dir, "phase2_revised"),
+                macro_path=os.path.join(session_dir, "macro.json"),
+            )
+            os.makedirs(paths.phase1_chunks_dir, exist_ok=True)
+            html_path = os.path.join(session_dir, "output.html")
+            sentinel = os.path.join(paths.phase1_chunks_dir, "chunk_000.md")
+            with open(html_path, "w", encoding="utf-8") as fh:
+                fh.write("<html></html>")
+            with open(sentinel, "w", encoding="utf-8") as fh:
+                fh.write("keep me")
+            with open(paths.session_path, "w", encoding="utf-8") as fh:
+                json.dump({"stage": "done", "outputs": {"html": html_path}}, fh)
+
+            with self.assertRaises(SessionCollisionError):
+                reset_session_dirs(paths)
+
+            self.assertTrue(os.path.exists(html_path))
+            self.assertTrue(os.path.exists(sentinel))
+
+    def test_reset_session_dirs_allows_explicit_completed_destroy(self):
+        import tempfile
+
+        from el_sbobinator.core.session_store import SessionPaths, reset_session_dirs
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir = os.path.join(tmpdir, "session")
+            paths = SessionPaths(
+                session_dir=session_dir,
+                session_path=os.path.join(session_dir, "session.json"),
+                phase1_chunks_dir=os.path.join(session_dir, "phase1_chunks"),
+                phase2_revised_dir=os.path.join(session_dir, "phase2_revised"),
+                macro_path=os.path.join(session_dir, "macro.json"),
+            )
+            os.makedirs(paths.phase1_chunks_dir, exist_ok=True)
+            html_path = os.path.join(session_dir, "output.html")
+            with open(html_path, "w", encoding="utf-8") as fh:
+                fh.write("<html></html>")
+            with open(paths.session_path, "w", encoding="utf-8") as fh:
+                json.dump({"stage": "done", "outputs": {"html": html_path}}, fh)
+
+            reset_session_dirs(paths, allow_completed_destroy=True)
+
+            self.assertFalse(os.path.exists(html_path))
+            self.assertTrue(os.path.isdir(paths.phase1_chunks_dir))
 
 
 class SaveLoadSessionTests(unittest.TestCase):

@@ -183,21 +183,10 @@ def initialize_session_context(
     session_paths = resolve_session_paths(input_path, session_dir_hint=session_dir_hint)
 
     if not resume_session and os.path.exists(session_paths.session_dir):
-        # Safety check: raise before destructive reset if a completed sbobina lives here.
-        # This guards against fingerprint collisions where a different file resolves to
-        # the same session ID and would silently wipe an existing completed output.
-        try:
-            existing = load_saved_session(session_paths.session_path)
-            if str(existing.get("stage", "")).strip().lower() == "done":
-                html_path = str(existing.get("outputs", {}).get("html", "") or "")
-                if html_path and os.path.exists(html_path):
-                    raise SessionCollisionError(session_paths.session_dir)
-        except SessionCollisionError:
-            raise
-        except Exception:
-            pass
         try:
             reset_session_dirs(session_paths)
+        except SessionCollisionError:
+            raise
         except Exception:
             pass
     else:
@@ -284,7 +273,7 @@ def phase1_has_progress(
 
 def reset_for_regeneration(context: PipelineSessionContext) -> None:
     try:
-        reset_session_dirs(context.session_paths)
+        reset_session_dirs(context.session_paths, allow_completed_destroy=True)
     except Exception:
         pass
     fresh_settings = build_default_pipeline_settings(load_config())

@@ -87,6 +87,7 @@ export function useBridgeCallbacks(options: {
         setAskNewKeyPromptRef.current(false);
       },
       onBatchDone: data => {
+        setRegeneratePromptRef.current(null);
         if (!data.cancelled && !data.quota_exhausted && autoContinueRef.current) {
           const hasQueued = filesRef.current?.some(f => f.status === 'queued');
           if (hasQueued) {

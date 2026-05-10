@@ -321,6 +321,65 @@ class AppWebviewTests(unittest.TestCase):
         self.assertEqual(process_done_events[0]["total"], 1)
 
     @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
+    def test_failed_run_emits_file_failed_even_if_cancel_event_is_set(
+        self, mock_pipeline_run
+    ):
+        api = ElSbobinatorApi()
+        emitted = []
+
+        def fake_emit(fn_name, data, batched=None):
+            emitted.append((fn_name, data, batched))
+
+        def fake_pipeline_run(_path, _api_key, adapter, resume_session=True):
+            api._cancel_event.set()
+            adapter.set_run_result("failed", "regenerate_prompt_timeout")
+
+        mock_pipeline_run.side_effect = fake_pipeline_run
+        api._adapter.emit = fake_emit
+
+        with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            tmp.write(b"fake")
+            file_path = tmp.name
+
+        try:
+            result = api.start_processing(
+                [
+                    {
+                        "id": "file-1",
+                        "path": file_path,
+                        "name": "lesson.mp3",
+                        "size": 4,
+                        "duration": 1,
+                    }
+                ],
+                api_key="fake-key",
+                resume_session=True,
+            )
+
+            self.assertTrue(result["ok"])
+            self.assertIsNotNone(api._processing_thread)
+            assert api._processing_thread is not None
+            api._processing_thread.join(timeout=2)
+            self.assertFalse(api._processing_thread.is_alive())
+        finally:
+            try:
+                __import__("os").unlink(file_path)
+            except OSError:
+                pass
+
+        file_failed_events = [
+            data for fn_name, data, _batched in emitted if fn_name == "fileFailed"
+        ]
+        process_done_events = [
+            data for fn_name, data, _batched in emitted if fn_name == "processDone"
+        ]
+        self.assertEqual(len(file_failed_events), 1)
+        self.assertEqual(file_failed_events[0]["id"], "file-1")
+        self.assertEqual(file_failed_events[0]["error"], "regenerate_prompt_timeout")
+        self.assertEqual(len(process_done_events), 1)
+        self.assertEqual(process_done_events[0]["failed"], 1)
+
+    @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
     def test_start_processing_honors_file_level_resume_override(
         self, mock_pipeline_run
     ):

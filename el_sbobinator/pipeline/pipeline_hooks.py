@@ -148,6 +148,14 @@ class PipelineRuntime:
     def dismiss_new_api_key_prompt(self) -> None:
         self._safe_call("dismiss_new_api_key_prompt")
 
+    def dismiss_regenerate_prompt(self) -> None:
+        try:
+            method = getattr(self.target, "dismiss_regenerate_prompt", None)
+            if method:
+                method()
+        except Exception:
+            pass
+
     def ask_confirmation(self, title: str, message: str) -> bool | None:
         try:
             window = getattr(self.target, "window", None)

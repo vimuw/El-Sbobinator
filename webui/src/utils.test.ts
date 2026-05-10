@@ -41,6 +41,10 @@ describe('isResumableError', () => {
     expect(isResumableError('phase1_all_models_unavailable')).toBe(true);
   });
 
+  it('returns true for regenerate_prompt_timeout', () => {
+    expect(isResumableError('regenerate_prompt_timeout')).toBe(true);
+  });
+
   it('returns false for phase1_chunk_failed — persistent failure, not confident-resume', () => {
     expect(isResumableError('phase1_chunk_failed_3')).toBe(false);
   });
@@ -101,6 +105,12 @@ describe('errorLabel', () => {
     const label = errorLabel('session_collision');
     expect(label).toContain('sbobina');
     expect(label).toContain('Impostazioni');
+  });
+
+  it('maps regenerate_prompt_timeout to a retry-friendly Italian message', () => {
+    const label = errorLabel('regenerate_prompt_timeout');
+    expect(label).toContain('Nessuna scelta');
+    expect(label).toContain('Riprendi');
   });
 });
 

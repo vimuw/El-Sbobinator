@@ -62,8 +62,9 @@ from el_sbobinator.utils.logging_utils import (
 )
 
 # Maximum seconds to wait for a user response in the "regenerate?" dialog before
-# falling back to "don't regenerate" so the pipeline is never blocked indefinitely.
+# pausing with a visible, resumable error so the pipeline never chooses silently.
 _REGENERATE_DIALOG_TIMEOUT_SECONDS: int = 120
+_REGENERATE_PROMPT_TIMEOUT_ERROR = "regenerate_prompt_timeout"
 
 
 def _esegui_sbobinatura_impl(  # noqa: C901
@@ -82,6 +83,7 @@ def _esegui_sbobinatura_impl(  # noqa: C901
     session = None
     session_ctx = None
     client = None
+    regenerate_prompt_timeout_terminal = False
     try:
         if not api_key_value or api_key_value.strip() == "":
             runtime.set_run_result("failed", "api_key_mancante")
@@ -258,15 +260,19 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         if has_progress and resume_session:
 
             def ask_should_regenerate():
+                nonlocal regenerate_prompt_timeout_terminal
                 if callable(getattr(app_instance, "ask_regenerate", None)):
                     event = threading.Event()
-                    outcome = {"rigenera": False}
+                    rigenera = False
+                    answered_at = None
 
                     def on_answer(payload):
+                        nonlocal answered_at, rigenera
+                        answered_at = time.monotonic()
                         val = payload.get("regenerate", False)
                         if val is None and cancel_event is not None:
                             cancel_event.set()
-                        outcome["rigenera"] = False if val is None else val
+                        rigenera = False if val is None else val
                         event.set()
 
                     regenerate_mode = "completed" if stage == "done" else "resume"
@@ -277,14 +283,19 @@ def _esegui_sbobinatura_impl(  # noqa: C901
                         session_dir=str(session_ctx.session_dir),
                     ):
                         deadline = time.monotonic() + _REGENERATE_DIALOG_TIMEOUT_SECONDS
-                        while not event.is_set():
-                            if runtime.cancelled():
-                                return False
+                        while True:
+                            if event.is_set() and (
+                                answered_at is None or answered_at <= deadline
+                            ):
+                                return rigenera
                             remaining = deadline - time.monotonic()
                             if remaining <= 0:
-                                return False  # timeout fallback: don't regenerate
+                                regenerate_prompt_timeout_terminal = True
+                                runtime.dismiss_regenerate_prompt()
+                                return "timeout"
+                            if runtime.cancelled():
+                                return False
                             event.wait(min(0.2, remaining))
-                        return outcome["rigenera"]
 
                 ans = runtime.ask_confirmation(
                     "File gia' completato",
@@ -300,6 +311,15 @@ def _esegui_sbobinatura_impl(  # noqa: C901
 
             _is_regen = ask_should_regenerate()
             print(f"[*] Risposta Rigenerare dal JS: {_is_regen}")
+            if _is_regen == "timeout":
+                session["last_error"] = _REGENERATE_PROMPT_TIMEOUT_ERROR
+                session["last_error_detail"] = None
+                save_session()
+                runtime.console_error(
+                    "Risposta non ricevuta entro 120 secondi. Sessione salvata - riprendi quando vuoi."
+                )
+                runtime.set_run_result("failed", _REGENERATE_PROMPT_TIMEOUT_ERROR)
+                return
             if _is_regen:
                 print(
                     f"[*] L'utente ha scelto di rigenerare il file {os.path.basename(input_path)}. Pulizia sessione precedente..."
@@ -625,8 +645,10 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         runtime.cleanup_temp_files()
         if (
             runtime.cancelled()
-            or getattr(app_instance, "last_run_status", None) == "cancelled"
-        ):
+            and not regenerate_prompt_timeout_terminal
+            and getattr(app_instance, "last_run_error", None)
+            != _REGENERATE_PROMPT_TIMEOUT_ERROR
+        ) or getattr(app_instance, "last_run_status", None) == "cancelled":
             runtime.phase("Fase: annullato")
             runtime.set_run_result(
                 "cancelled",

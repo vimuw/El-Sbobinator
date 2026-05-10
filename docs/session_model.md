@@ -12,12 +12,12 @@ El Sbobinator persists every run under a session directory so the pipeline can b
 ```python
 fingerprint = SHA256({
     "size": <os.stat size in bytes>,
-    "mtime": <os.stat mtime as float>,
-    "content_hash": SHA256(first 64 KB of the file)
+    "head_hash": SHA256(first 1 MB of the file),
+    "tail_hash": SHA256(last 1 MB of the file)
 })
 ```
 
-This means the session is keyed by **content identity** (including a sampled content hash), not by absolute path — moving or renaming the audio file does not invalidate the session. Results are cached in a process-local LRU (`_session_id_cache`, capped at 500 entries) so recomputing the partial hash is amortized.
+This means the session is keyed by **content identity** (including sampled content hashes), not by absolute path or metadata — moving, renaming, or timestamp-only changes to the audio file do not invalidate the session. Results are cached in a process-local LRU (`_session_id_cache`, capped at 500 entries) keyed by absolute path, size, and `mtime_ns` so recomputing the partial hashes is amortized without making the durable ID metadata-sensitive.
 
 A second helper, `_session_dir_for_file(path)`, joins `SESSION_ROOT` with the fingerprint.
 
@@ -31,7 +31,7 @@ A second helper, `_session_dir_for_file(path)`, joins `SESSION_ROOT` with the fi
 | `session_store.load_session(session_path)` | Reads `session.json`. |
 | `session_store.save_session(session_path, session)` | Writes atomically, updates `updated_at`. |
 | `session_store.ensure_session_dirs(paths)` | `mkdir -p` for all subfolders. |
-| `session_store.reset_session_dirs(paths)` | `rmtree` + recreate (used for "regenerate"). |
+| `session_store.reset_session_dirs(paths, allow_completed_destroy=False)` | `rmtree` + recreate, but refuses completed sessions with existing HTML unless explicit destruction is allowed. |
 | `pipeline_session.reset_for_regeneration(ctx)` | Wipes the directory, creates a brand-new session, overwrites settings with the defaults derived from the current config. |
 | `shared.cleanup_orphan_sessions(max_age_days=14)` | Deletes session directories whose newest contained file is older than the cutoff (triggered by the "Pulisci sessioni vecchie" button in Settings). |
 | `shared.get_session_storage_info()` | Returns `{total_bytes, total_sessions}` with a 30 s cache and a 10 s timeout. Used by the Settings modal. |
@@ -159,7 +159,7 @@ On resume, `normalize_stage(session)` snaps `stage` back to `"phase1"` if it's u
 
 ## Regeneration
 
-If the user answers "rigenera" to the resume prompt, `pipeline.reset_for_regeneration(ctx)` wipes the session directory and creates a fresh session seeded with the current default settings (`build_default_pipeline_settings(load_config())`). All prior progress is lost by design.
+If the user answers "rigenera" to the resume prompt, `pipeline.reset_for_regeneration(ctx)` wipes the session directory with `allow_completed_destroy=True` and creates a fresh session seeded with the current default settings (`build_default_pipeline_settings(load_config())`). All prior progress is lost by design only after that explicit confirmation.
 
 ## Cross-reference
 

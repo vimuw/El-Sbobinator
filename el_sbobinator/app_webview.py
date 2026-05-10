@@ -1082,13 +1082,13 @@ class ElSbobinatorApi:
                     if self._adapter.effective_api_key:
                         active_api_key = self._adapter.effective_api_key
 
+                    last_run_status = self._adapter.last_run_status
                     if (
-                        self._cancel_event.is_set()
-                        or self._adapter.last_run_status == "cancelled"
-                    ):
+                        self._cancel_event.is_set() or last_run_status == "cancelled"
+                    ) and last_run_status != "failed":
                         break
 
-                    if self._adapter.last_run_status == "completed":
+                    if last_run_status == "completed":
                         if self._adapter.last_output_html and os.path.exists(
                             self._adapter.last_output_html
                         ):

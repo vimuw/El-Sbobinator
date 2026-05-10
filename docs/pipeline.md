@@ -144,6 +144,8 @@ All failure modes write a machine-readable string to `session["last_error"]` bef
 | `bad_request_phase1` | HTTP 400 while transcribing a chunk | "Richiesta non valida durante la trascrizione (errore 400)." |
 | `phase1_degenerate_output` | Degenerate output even after chain-exhaustion recovery | "Trascrizione interrotta: testo non valido anche dopo il retry automatico." |
 | `phase1_all_models_unavailable` | Every model 503-unavailable; recovery also failed | Falls through to the raw string. |
+| `regenerate_prompt_timeout` | The regenerate/resume prompt was left unanswered for 120 seconds | "Nessuna scelta ricevuta sulla ripresa entro 120 secondi. Sessione salvata: clicca Riprendi per continuare." |
+| `session_collision` | A fresh/regenerate path tried to overwrite a completed session with existing HTML without explicit confirmation | "Questo file sembra corrispondere a una sbobina gia completata ma con contenuto diverso. Apri Impostazioni -> Sessioni per risolvere." |
 | `phase1_chunk_failed_<N>` | Non-quota exception after all retries on chunk `N`; detail stores the final exception summary | "Errore al blocco `<N>` dopo 4 tentativi. Dettaglio: `<last_error_detail>`. Clicca Riprendi per continuare dal blocco `<N>`." |
 | `quota_daily_limit_phase2` | Daily quota during macro revision (main or retry pass) | "Quota giornaliera API esaurita durante la revisione." With `last_error_detail = "api_key_prompt_timeout"`: "Attesa chiave API scaduta. Sessione salvata — riprendi quando vuoi." |
 | `html_export_failed` | HTML assembly raised | "Errore durante il salvataggio del file di output." |

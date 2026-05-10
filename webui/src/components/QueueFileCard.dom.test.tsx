@@ -101,6 +101,22 @@ describe('QueueFileCard', () => {
     expect(onRetry).toHaveBeenCalledWith('f1');
   });
 
+  it('shows Riprendi CTA for regenerate prompt timeout when idle', () => {
+    const onRetry = vi.fn();
+    render(
+      <QueueWrapper>
+        <QueueFileCard
+          file={makeFile({ status: 'error', errorText: 'regenerate_prompt_timeout' })}
+          appState="idle"
+          onRemove={vi.fn()} onRetry={onRetry} onPreview={vi.fn()} onOpenFile={vi.fn()}
+        />
+      </QueueWrapper>,
+    );
+    expect(screen.getByText(/Nessuna scelta/)).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Riprendi'));
+    expect(onRetry).toHaveBeenCalledWith('f1');
+  });
+
   it('shows Riprendi CTA for chunk_failed error when idle', () => {
     const onRetry = vi.fn();
     render(
