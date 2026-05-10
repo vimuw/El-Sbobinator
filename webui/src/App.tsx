@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { AlertTriangle, Github, Trash2 } from 'lucide-react';
 import { GITHUB_RELEASES_URL, GITHUB_URL, KOFI_URL } from './branding';
-import { type ArchiveFolder, type ArchiveSession, type ElSbobinatorBridge, type PywebviewApi, type UpdateDownloadProgressPayload } from './bridge';
+import { type ArchiveFolder, type ArchiveSession, type ElSbobinatorBridge, type LowDiskWarning, type PywebviewApi, type UpdateDownloadProgressPayload } from './bridge';
 import { getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type FileDescriptor, type FileDonePayload, type FileItem, type ProcessDonePayload } from './appState';
 import { GEMINI_KEY_PATTERN } from './utils';
 import { useConsole } from './hooks/useConsole';
@@ -51,12 +51,18 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes >= 1_073_741_824) return `${(bytes / 1_073_741_824).toFixed(1)} GB`;
+  return `${Math.round(bytes / 1_048_576)} MB`;
+}
+
 type UiMode = 'setup' | 'ready-empty' | 'ready-with-files' | 'processing' | 'canceling';
 type ConfirmActionState =
   | { type: 'stop-processing' }
   | { type: 'remove-file'; fileId: string; fileName: string; isDone: boolean }
   | { type: 'clear-completed'; count: number }
   | { type: 'clear-all' }
+  | { type: 'low-disk-warning'; warning: LowDiskWarning }
   | { type: 'delete-archive-session'; sessionDir: string; name: string };
 
 type PendingArchiveReplacement = {
@@ -267,7 +273,7 @@ export default function App() {
   const appStateRef = useRef(appState);
   const autoContinueRef = useRef(autoContinue);
   const duplicatePromptRef = useRef<DuplicatePrompt>(duplicatePrompt);
-  const startProcessingRef = useRef<(isContinuation?: boolean) => Promise<boolean>>(() => Promise.resolve(false));
+  const startProcessingRef = useRef<(isContinuation?: boolean, overrideLowDisk?: boolean) => Promise<boolean>>(() => Promise.resolve(false));
   const archiveSessionsRef = useRef<ArchiveSession[]>(archiveSessions);
   const pendingArchiveReplacementsRef = useRef<Map<string, PendingArchiveReplacement>>(new Map());
   const archiveReplacementCleanupInFlightRef = useRef<Set<string>>(new Set());
@@ -671,7 +677,7 @@ export default function App() {
     return [{ id: file.id, path: nextPath, name: nextName, size: nextSize, duration: nextDuration, resume_session: file.resumeSession }] as FileDescriptor[];
   }, [appendConsole, dispatch]);
 
-  const startProcessing = async (isContinuation: boolean = false) => {
+  const startProcessing = async (isContinuation: boolean = false, overrideLowDisk: boolean = false) => {
     const currentQueued = filesRef.current.filter(f => f.status === 'queued');
     if (currentQueued.length === 0 || !apiKey.trim()) return false;
     if (isContinuation && appStateRef.current === 'canceling') return false;
@@ -683,8 +689,12 @@ export default function App() {
     try {
       const fileDescriptors = await resolveQueuedFilesForProcessing();
       if (!fileDescriptors || fileDescriptors.length === 0) return false;
-      const result = await window.pywebview.api.start_processing?.(fileDescriptors, apiKey.trim(), true, preferredModel, fallbackModels);
+      const result = await window.pywebview.api.start_processing?.(fileDescriptors, apiKey.trim(), true, preferredModel, fallbackModels, overrideLowDisk);
       if (!result?.ok) {
+        if (result?.low_disk_warning) {
+          setConfirmAction({ type: 'low-disk-warning', warning: result.low_disk_warning });
+          return false;
+        }
         appendConsole(`❌ ${result?.error || "Impossibile avviare l'elaborazione."}`);
         return false;
       }
@@ -728,6 +738,11 @@ export default function App() {
     if (confirmAction.type === 'clear-all') {
       setConfirmAction(null);
       dispatch({ type: 'queue/clear_all' });
+      return;
+    }
+    if (confirmAction.type === 'low-disk-warning') {
+      setConfirmAction(null);
+      void startProcessingRef.current(false, true);
       return;
     }
     if (confirmAction.type === 'delete-archive-session') {
@@ -895,6 +910,16 @@ export default function App() {
     }
     if (confirmAction.type === 'clear-all') {
       return { title: 'Svuotare tutta la coda?', description: "Tutti i file in coda verranno rimossi. L'operazione non può essere annullata.", confirmLabel: 'Svuota coda', cancelLabel: 'Annulla' };
+    }
+    if (confirmAction.type === 'low-disk-warning') {
+      const { warning } = confirmAction;
+      const fileLabel = warning.file_name ? ` per "${warning.file_name}"` : '';
+      return {
+        title: 'Spazio libero insufficiente',
+        description: `Lo spazio libero sembra insufficiente${fileLabel}. Stimato richiesto: ${formatBytes(warning.needed_bytes)} · disponibile: ${formatBytes(warning.free_bytes)} in ${warning.location}. Libera spazio prima di continuare, oppure procedi assumendoti il rischio di errore durante l'elaborazione.`,
+        confirmLabel: 'Continua comunque',
+        cancelLabel: 'Torna alla coda',
+      };
     }
     if (confirmAction.type === 'delete-archive-session') {
       return { title: 'Eliminare questa sbobina?', description: `"${confirmAction.name}" e tutti i suoi dati di sessione verranno eliminati definitivamente dal disco. L'operazione è irreversibile.`, confirmLabel: 'Elimina definitivamente', cancelLabel: 'Annulla' };

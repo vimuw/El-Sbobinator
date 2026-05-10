@@ -5,6 +5,7 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from typing import cast
 from unittest.mock import MagicMock, mock_open, patch
 
 from el_sbobinator.app_webview import ElSbobinatorApi, PipelineAdapter
@@ -379,6 +380,113 @@ class AppWebviewTests(unittest.TestCase):
         self.assertEqual(len(process_done_events), 1)
         self.assertEqual(process_done_events[0]["failed"], 1)
 
+    @patch("threading.Thread", _SyncThread)
+    @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
+    def test_failed_run_file_failed_redacts_adapter_error_fields(
+        self, mock_pipeline_run
+    ):
+        api = ElSbobinatorApi()
+        emitted = []
+        secret = "AIza" + ("C" * 24)
+
+        def fake_emit(fn_name, data, batched=None):
+            emitted.append((fn_name, data, batched))
+
+        def fake_pipeline_run(_path, _api_key, adapter, resume_session=True):
+            adapter.set_run_result("failed", f"SDK failed api_key={secret}")
+            adapter.set_run_error_detail(f"detail key={secret}")
+
+        mock_pipeline_run.side_effect = fake_pipeline_run
+        api._adapter.emit = fake_emit
+
+        with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            tmp.write(b"fake")
+            file_path = tmp.name
+
+        try:
+            result = api.start_processing(
+                [
+                    {
+                        "id": "file-1",
+                        "path": file_path,
+                        "name": "lesson.mp3",
+                        "size": 4,
+                        "duration": 1,
+                    }
+                ],
+                api_key=secret,
+                resume_session=True,
+            )
+        finally:
+            try:
+                __import__("os").unlink(file_path)
+            except OSError:
+                pass
+
+        self.assertTrue(result["ok"])
+        file_failed_events = [
+            data for fn_name, data, _batched in emitted if fn_name == "fileFailed"
+        ]
+        self.assertEqual(len(file_failed_events), 1)
+        self.assertEqual(file_failed_events[0]["id"], "file-1")
+        self.assertNotIn(secret, file_failed_events[0]["error"])
+        self.assertNotIn(secret, file_failed_events[0]["error_detail"])
+        self.assertIn("[API_KEY_REDACTED]", file_failed_events[0]["error"])
+        self.assertIn("[API_KEY_REDACTED]", file_failed_events[0]["error_detail"])
+        self.assertNotIn(secret, api._adapter.last_run_error or "")
+        self.assertNotIn(secret, api._adapter.last_run_error_detail or "")
+
+    @patch("threading.Thread", _SyncThread)
+    @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
+    def test_fatal_exception_file_failed_redacts_secret(self, mock_pipeline_run):
+        api = ElSbobinatorApi()
+        emitted = []
+        secret = "AIza" + ("A" * 24)
+
+        def fake_emit(fn_name, data, batched=None):
+            emitted.append((fn_name, data, batched))
+
+        mock_pipeline_run.side_effect = RuntimeError(f"SDK failed api_key={secret}")
+        api._adapter.emit = fake_emit
+
+        with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            tmp.write(b"fake")
+            file_path = tmp.name
+
+        try:
+            result = api.start_processing(
+                [
+                    {
+                        "id": "file-1",
+                        "path": file_path,
+                        "name": "lesson.mp3",
+                        "size": 4,
+                        "duration": 1,
+                    }
+                ],
+                api_key=secret,
+                resume_session=True,
+            )
+        finally:
+            try:
+                __import__("os").unlink(file_path)
+            except OSError:
+                pass
+
+        self.assertTrue(result["ok"])
+        file_failed_events = [
+            data for fn_name, data, _batched in emitted if fn_name == "fileFailed"
+        ]
+        process_done_events = [
+            data for fn_name, data, _batched in emitted if fn_name == "processDone"
+        ]
+        self.assertEqual(len(file_failed_events), 1)
+        self.assertNotIn(secret, file_failed_events[0]["error"])
+        self.assertIn("[API_KEY_REDACTED]", file_failed_events[0]["error"])
+        self.assertNotIn(secret, api._adapter.last_run_error or "")
+        self.assertEqual(len(process_done_events), 1)
+        self.assertEqual(process_done_events[0]["failed"], 1)
+
     @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
     def test_start_processing_honors_file_level_resume_override(
         self, mock_pipeline_run
@@ -426,6 +534,171 @@ class AppWebviewTests(unittest.TestCase):
                 pass
 
         self.assertEqual(observed_resume_values, [False])
+
+    def test_push_console_redacts_api_keys(self):
+        api = ElSbobinatorApi()
+        emitted = []
+        secret = "AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345"
+
+        def fake_emit(fn_name, data, batched=None):
+            emitted.append((fn_name, data, batched))
+
+        api._adapter.emit = fake_emit
+
+        api._push_console(f"Errore key={secret}")
+
+        self.assertEqual(emitted[0][0], "appendConsole")
+        self.assertNotIn(secret, emitted[0][1])
+        self.assertIn("[API_KEY_REDACTED]", emitted[0][1])
+
+    def test_start_processing_low_disk_warning_does_not_set_running(self):
+        api = ElSbobinatorApi()
+        warning = {
+            "needed_bytes": 100,
+            "free_bytes": 10,
+            "location": "C:\\tmp",
+            "kind": "combined",
+            "file_name": "lesson.mp3",
+        }
+
+        with patch.object(api, "_low_disk_warning_for_files", return_value=warning):
+            result = api.start_processing(
+                [
+                    {
+                        "id": "file-1",
+                        "path": "missing.mp3",
+                        "name": "lesson.mp3",
+                        "size": 4,
+                    }
+                ],
+                api_key="fake-key",
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["low_disk_warning"], warning)
+        self.assertFalse(api._adapter.is_running)
+
+    def test_low_disk_warning_uses_saved_session_settings_on_resume(self):
+        from types import SimpleNamespace
+
+        from el_sbobinator.pipeline.pipeline_session import DiskSpaceEstimate
+        from el_sbobinator.pipeline.pipeline_settings import PipelineSettings
+
+        api = ElSbobinatorApi()
+        captured: dict[str, object] = {}
+        with tempfile.TemporaryDirectory() as session_dir:
+            session_path = os.path.join(session_dir, "session.json")
+            with open(session_path, "w", encoding="utf-8") as fh:
+                json.dump(
+                    {
+                        "stage": "phase1",
+                        "settings": {
+                            "chunk_minutes": 7,
+                            "preconvert_audio": False,
+                            "prefetch_next_chunk": False,
+                            "audio": {"bitrate": "96k"},
+                        },
+                        "phase1": {"next_start_sec": 123},
+                    },
+                    fh,
+                )
+
+            paths = SimpleNamespace(session_dir=session_dir, session_path=session_path)
+
+            def fake_estimate_disk_space(
+                _session_dir, _duration, settings, stage, next_start_sec
+            ):
+                captured["settings"] = settings
+                captured["stage"] = stage
+                captured["next_start_sec"] = next_start_sec
+                return [
+                    DiskSpaceEstimate(
+                        needed_bytes=100,
+                        free_bytes=1,
+                        location=session_dir,
+                        kind="combined",
+                    )
+                ]
+
+            with (
+                patch(
+                    "el_sbobinator.app_webview.resolve_session_paths",
+                    return_value=paths,
+                ),
+                patch(
+                    "el_sbobinator.app_webview.estimate_disk_space",
+                    side_effect=fake_estimate_disk_space,
+                ),
+            ):
+                result = api._low_disk_warning_for_files(
+                    [
+                        {
+                            "id": "file-1",
+                            "path": "lesson.mp3",
+                            "name": "lesson.mp3",
+                            "duration": 3600,
+                        }
+                    ]
+                )
+
+        settings = cast(PipelineSettings, captured["settings"])
+        self.assertEqual(settings.chunk_minutes, 7)
+        self.assertFalse(settings.preconvert_audio)
+        self.assertFalse(settings.prefetch_next_chunk)
+        self.assertEqual(settings.audio_bitrate, "96k")
+        self.assertEqual(captured["stage"], "phase1")
+        self.assertEqual(captured["next_start_sec"], 123)
+        self.assertIsNotNone(result)
+
+    @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
+    def test_start_processing_low_disk_override_starts(self, mock_pipeline_run):
+        api = ElSbobinatorApi()
+        api._adapter.emit = MagicMock()
+
+        def fake_pipeline_run(_path, _api_key, adapter, resume_session=True):
+            adapter.set_run_result("failed", "test_done")
+
+        mock_pipeline_run.side_effect = fake_pipeline_run
+
+        with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            tmp.write(b"fake")
+            file_path = tmp.name
+
+        try:
+            warning = {
+                "needed_bytes": 100,
+                "free_bytes": 10,
+                "location": "C:\\tmp",
+                "kind": "combined",
+            }
+            with patch.object(
+                api, "_low_disk_warning_for_files", return_value=warning
+            ) as mock_low_disk:
+                result = api.start_processing(
+                    [
+                        {
+                            "id": "file-1",
+                            "path": file_path,
+                            "name": "lesson.mp3",
+                            "size": 4,
+                            "duration": 1,
+                        }
+                    ],
+                    api_key="fake-key",
+                    override_low_disk=True,
+                )
+            self.assertTrue(result["ok"])
+            self.assertIsNotNone(api._processing_thread)
+            assert api._processing_thread is not None
+            api._processing_thread.join(timeout=2)
+            self.assertFalse(api._processing_thread.is_alive())
+        finally:
+            try:
+                os.unlink(file_path)
+            except OSError:
+                pass
+
+        mock_low_disk.assert_not_called()
 
     def test_read_html_content_falls_back_to_session_dir(self):
         import os
@@ -1885,6 +2158,19 @@ class TestStreamMediaFile(unittest.TestCase):
 
         self.assertFalse(result["ok"])
         self.assertIn("server failed", result["error"])
+
+    def test_returns_redacted_error_dict_on_exception(self):
+        api = ElSbobinatorApi()
+        secret = "AIza" + ("B" * 24)
+        with patch(
+            "el_sbobinator.app_webview.LocalMediaServer.stream_url_for_file",
+            side_effect=RuntimeError(f"server failed api_key={secret}"),
+        ):
+            result = api.stream_media_file("/bad/path.mp3")
+
+        self.assertFalse(result["ok"])
+        self.assertNotIn(secret, result["error"])
+        self.assertIn("[API_KEY_REDACTED]", result["error"])
 
     def test_rejects_disallowed_extension(self):
         api = ElSbobinatorApi()

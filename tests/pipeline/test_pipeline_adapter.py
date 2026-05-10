@@ -100,12 +100,26 @@ class PipelineAdapterBasicTests(unittest.TestCase):
         self.assertEqual(adapter.last_run_status, "failed")
         self.assertEqual(adapter.last_run_error, "something went wrong")
 
+    def test_set_run_result_redacts_secret(self):
+        adapter = _make_adapter()
+        secret = "AIza" + ("C" * 24)
+        adapter.set_run_result("failed", f"SDK failed api_key={secret}")
+        self.assertNotIn(secret, adapter.last_run_error or "")
+        self.assertIn("[API_KEY_REDACTED]", adapter.last_run_error or "")
+
     def test_set_run_error_detail_stores_detail(self):
         adapter = _make_adapter()
         adapter.set_run_error_detail(" api_key_prompt_timeout ")
         self.assertEqual(adapter.last_run_error_detail, "api_key_prompt_timeout")
         adapter.set_run_error_detail(None)
         self.assertIsNone(adapter.last_run_error_detail)
+
+    def test_set_run_error_detail_redacts_secret(self):
+        adapter = _make_adapter()
+        secret = "AIza" + ("D" * 24)
+        adapter.set_run_error_detail(f" detail key={secret} ")
+        self.assertNotIn(secret, adapter.last_run_error_detail or "")
+        self.assertIn("[API_KEY_REDACTED]", adapter.last_run_error_detail or "")
 
     def test_set_effective_api_key_strips_and_stores(self):
         adapter = _make_adapter()

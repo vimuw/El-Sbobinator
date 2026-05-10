@@ -24,7 +24,7 @@ from el_sbobinator.core.model_registry import (
     next_model_in_chain,
 )
 from el_sbobinator.services.config_service import load_config
-from el_sbobinator.utils.logging_utils import get_logger
+from el_sbobinator.utils.logging_utils import get_logger, redact_secrets
 
 # ---------------------------------------------------------------------------
 # Module-level constants
@@ -192,6 +192,60 @@ def _is_model_not_found(error_text: str, error_code: int | None) -> bool:
     return any(marker in error_text for marker in markers)
 
 
+def _is_invalid_key_probe_failure(error_text: str, error_code: int | None) -> bool:
+    if error_code in (401, 403):
+        return True
+    markers = (
+        "api key not valid",
+        "api_key_invalid",
+        "invalid api key",
+        "invalid_api_key",
+        "malformed api key",
+        "unauthenticated",
+        "permission_denied",
+        "permission denied",
+        "forbidden",
+        "access denied",
+        "does not have permission",
+        "not authorized",
+        "unauthorized",
+    )
+    return any(marker in error_text for marker in markers)
+
+
+def _is_transient_key_probe_failure(
+    error_text: str, error_code: int | None, exc: Exception
+) -> bool:
+    if isinstance(exc, TimeoutError | ConnectionError):
+        return True
+    if error_code in (408, 429, 500, 502, 503, 504):
+        if _is_daily_or_key_exhausted(error_text, error_code):
+            return False
+        return True
+    markers = (
+        "timeout",
+        "timed out",
+        "connection",
+        "network",
+        "temporary",
+        "temporarily",
+        "service unavailable",
+        "backend error",
+        "overloaded",
+        "try again",
+        "retry-after",
+        "retry after",
+        "rate limit",
+        "too many requests",
+        "per minute",
+        "per-minute",
+        "rpm",
+    )
+    if any(marker in error_text for marker in markers):
+        return not _is_daily_or_key_exhausted(error_text, error_code)
+    return False
+
+
 def current_model_name(model_state: ModelState | None, default_model: str) -> str:
     if model_state is None:
         return str(default_model or "").strip()
@@ -250,13 +304,16 @@ def try_rotate_key(
     cancelled: Callable[[], bool] | None = None,
 ):
     log = logger or get_logger("el_sbobinator.generation")
-    while fallback_keys:
+    pass_limit = len([str(item).strip() for item in fallback_keys if str(item).strip()])
+    checked = 0
+    while fallback_keys and checked < pass_limit:
         if cancelled is not None and cancelled():
             return current_client, False, None
         key = fallback_keys[0].strip()
         if not key:
             fallback_keys.pop(0)
             continue
+        checked += 1
         try:
             new_client = genai.Client(api_key=key)
             new_client.models.get(model=model_name)
@@ -270,11 +327,34 @@ def try_rotate_key(
             print(f"   [OK] Chiave di riserva valida! ({len(fallback_keys)} rimanenti)")
             return new_client, True, key
         except Exception as err:
+            error = _error_text(err)
+            error_code = _error_code(err)
+            safe_err = redact_secrets(err)
+            if _is_transient_key_probe_failure(error, error_code, err):
+                fallback_keys.append(fallback_keys.pop(0))
+                log.warning(
+                    "Validazione chiave di fallback temporaneamente non riuscita.",
+                    extra={"stage": "key_rotation"},
+                )
+                print(
+                    "   [!] Validazione temporanea fallita per chiave di riserva: "
+                    f"{safe_err}"
+                )
+                continue
             fallback_keys.pop(0)
-            log.warning(
-                "Chiave di fallback non valida.", extra={"stage": "key_rotation"}
-            )
-            print(f"   [!] Chiave di riserva non valida: {err}")
+            if _is_invalid_key_probe_failure(
+                error, error_code
+            ) or _is_daily_or_key_exhausted(error, error_code):
+                log.warning(
+                    "Chiave di fallback non utilizzabile.",
+                    extra={"stage": "key_rotation"},
+                )
+                print(f"   [!] Chiave di riserva non utilizzabile: {safe_err}")
+            else:
+                log.warning(
+                    "Chiave di fallback non valida.", extra={"stage": "key_rotation"}
+                )
+                print(f"   [!] Chiave di riserva non valida: {safe_err}")
     return current_client, False, None
 
 
@@ -667,7 +747,9 @@ def retry_with_quota(  # noqa: C901
                         print("   [OK] Nuova API Key valida! Ripresa automatica...")
                         continue
                     except Exception as err:
-                        print(f"   [!] Chiave non valida fornita: {err}")
+                        print(
+                            f"   [!] Chiave non valida fornita: {redact_secrets(err)}"
+                        )
 
                 if model_state is not None:
                     _switch_to_next_model(
@@ -690,7 +772,9 @@ def retry_with_quota(  # noqa: C901
             attempts += 1
             if attempts >= max_attempts:
                 raise
-            print(f"      [Errore: {exc}. Riprovo in {int(retry_sleep_seconds)}s...]")
+            print(
+                f"      [Errore: {redact_secrets(exc)}. Riprovo in {int(retry_sleep_seconds)}s...]"
+            )
             if not sleep_with_cancel(cancelled, retry_sleep_seconds):
                 print("   [*] Operazione annullata dall'utente.")
                 return client, None

@@ -26,6 +26,7 @@ from el_sbobinator.services.config_service import (
     USER_HOME,
     get_desktop_dir,
 )
+from el_sbobinator.utils.logging_utils import redact_secrets
 
 
 def _check_writable_dir(path: str) -> tuple[bool, str]:
@@ -35,7 +36,7 @@ def _check_writable_dir(path: str) -> tuple[bool, str]:
         with open(probe_name, "w", encoding="utf-8") as handle:
             handle.write("ok")
     except Exception as exc:
-        return False, str(exc)
+        return False, redact_secrets(exc)
     try:
         os.remove(probe_name)
     except Exception:
@@ -83,7 +84,7 @@ def validate_environment(
                 "label": "FFmpeg",
                 "status": "error",
                 "message": "FFmpeg non trovato o non utilizzabile.",
-                "details": str(exc),
+                "details": redact_secrets(exc),
             }
         )
 
@@ -143,7 +144,7 @@ def validate_environment(
                         "label": "API Key Gemini",
                         "status": "error",
                         "message": "API key non valida o modello primario non accessibile.",
-                        "details": str(exc),
+                        "details": redact_secrets(exc),
                     }
                 )
             else:
@@ -182,7 +183,7 @@ def validate_environment(
                                     if idx == 0
                                     else f"Modello fallback {idx} non accessibile con questa chiave."
                                 ),
-                                "details": f"{model_name}: {exc}",
+                                "details": redact_secrets(f"{model_name}: {exc}"),
                             }
                         )
 
@@ -195,7 +196,7 @@ def validate_environment(
             keyring.get_password("__el_sbobinator_probe__", "__probe__")
             keyring_ok = True
         except Exception as exc:
-            keyring_detail = str(exc)
+            keyring_detail = redact_secrets(exc)
         checks.append(
             {
                 "id": "keyring",

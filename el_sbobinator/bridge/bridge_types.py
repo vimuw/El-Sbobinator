@@ -19,6 +19,14 @@ class BridgeFileItem(TypedDict):
     resume_session: NotRequired[bool]
 
 
+class LowDiskWarningPayload(TypedDict):
+    needed_bytes: int
+    free_bytes: int
+    location: str
+    kind: str
+    file_name: NotRequired[str]
+
+
 class ProcessDonePayload(TypedDict, total=False):
     cancelled: bool
     completed: int

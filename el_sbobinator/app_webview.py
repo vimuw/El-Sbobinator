@@ -29,13 +29,18 @@ from el_sbobinator.bridge.bridge_types import (
     BridgeFileItem,
     FileDonePayload,
     FileFailedPayload,
+    LowDiskWarningPayload,
     ProcessDonePayload,
     SetCurrentFilePayload,
     ValidationResult,
 )
 from el_sbobinator.core.media_server import LocalMediaServer
 from el_sbobinator.core.model_registry import DEFAULT_FALLBACK_MODELS, MODEL_OPTIONS
-from el_sbobinator.core.session_store import mark_html_exported, save_session
+from el_sbobinator.core.session_store import (
+    mark_html_exported,
+    resolve_session_paths,
+    save_session,
+)
 from el_sbobinator.core.shared import (
     DEFAULT_MODEL,
     SESSION_CLEANUP_MAX_AGE_DAYS,
@@ -53,6 +58,11 @@ from el_sbobinator.core.updater import (
     download_and_install_update as _download_and_install_update,
 )
 from el_sbobinator.pipeline.pipeline_adapter import PipelineAdapter, _drain_dnd_paths
+from el_sbobinator.pipeline.pipeline_session import estimate_disk_space, normalize_stage
+from el_sbobinator.pipeline.pipeline_settings import (
+    build_default_pipeline_settings,
+    load_and_sanitize_settings,
+)
 from el_sbobinator.services.config_service import (
     THEME_PREF_FILE,
     get_desktop_dir,
@@ -75,7 +85,11 @@ from el_sbobinator.utils.file_ops import (
 from el_sbobinator.utils.file_ops import (
     read_html_content as read_html_file_content,
 )
-from el_sbobinator.utils.logging_utils import configure_logging, get_logger
+from el_sbobinator.utils.logging_utils import (
+    configure_logging,
+    get_logger,
+    redact_secrets,
+)
 
 _TEXT_CACHE_MAX = 50
 
@@ -302,7 +316,7 @@ class ElSbobinatorApi:
             )
             return {"ok": True}
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": redact_secrets(e)}
 
     def save_theme_preference(self, theme: str) -> None:
         """Persist theme preference to disk so the native window gets the right background on next launch."""
@@ -328,7 +342,7 @@ class ElSbobinatorApi:
         except Exception as e:
             return {
                 "ok": False,
-                "error": str(e),
+                "error": redact_secrets(e),
                 "total_bytes": 0,
                 "total_sessions": 0,
                 "session_root": "",
@@ -436,7 +450,12 @@ class ElSbobinatorApi:
                         self._sessions_cache_ts = time.time()
             return {**result, "sessions": list(sessions)}
         except Exception as e:
-            return {"ok": False, "error": str(e), "sessions": [], "total": 0}
+            return {
+                "ok": False,
+                "error": redact_secrets(e),
+                "sessions": [],
+                "total": 0,
+            }
 
     def delete_session(self, session_dir: str) -> dict:
         """Permanently delete a single session folder from disk."""
@@ -465,7 +484,7 @@ class ElSbobinatorApi:
                 del self._resolved_path_cache[k]
             return {"ok": True}
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": redact_secrets(e)}
 
     def _resolve_retry_session(self, session_dir: str) -> tuple[str, str]:
         session_root = os.path.realpath(self._get_session_root())
@@ -654,7 +673,7 @@ class ElSbobinatorApi:
                 "quota_exhausted": quota_exhausted,
             }
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": redact_secrets(e)}
         finally:
             if _retry_count_incremented:
                 with self._pipeline_lifecycle_lock:
@@ -698,7 +717,7 @@ class ElSbobinatorApi:
                 self._sessions_cache_gen += 1
             return {"ok": True}
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": redact_secrets(e)}
 
     def cleanup_old_sessions(
         self, max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS
@@ -719,7 +738,7 @@ class ElSbobinatorApi:
         except Exception as e:
             return {
                 "ok": False,
-                "error": str(e),
+                "error": redact_secrets(e),
                 "removed": 0,
                 "freed_bytes": 0,
                 "errors": 0,
@@ -741,7 +760,7 @@ class ElSbobinatorApi:
                 subprocess.Popen(["xdg-open", session_root])
             return {"ok": True}
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": redact_secrets(e)}
 
     # ---- Full-text search ----
 
@@ -835,7 +854,7 @@ class ElSbobinatorApi:
             results.sort(key=lambda r: r["match_count"], reverse=True)
             return {"ok": True, "results": results[: max(0, int(limit))]}
         except Exception as e:
-            return {"ok": False, "error": str(e), "results": []}
+            return {"ok": False, "error": redact_secrets(e), "results": []}
 
     # ---- Archive Folders ----
 
@@ -845,7 +864,7 @@ class ElSbobinatorApi:
             folders = _get_archive_folders()
             return {"ok": True, "folders": folders}
         except Exception as e:
-            return {"ok": False, "error": str(e), "folders": []}
+            return {"ok": False, "error": redact_secrets(e), "folders": []}
 
     def save_archive_folders(self, folders: list) -> dict:
         """Persist the archive folder list to disk."""
@@ -855,7 +874,7 @@ class ElSbobinatorApi:
             _save_archive_folders(folders)
             return {"ok": True}
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": redact_secrets(e)}
 
     # ---- File Selection ----
 
@@ -980,25 +999,101 @@ class ElSbobinatorApi:
 
     # ---- Processing ----
 
-    def start_processing(
-        self,
-        files: list[BridgeFileItem],
-        api_key: str,
-        resume_session: bool = True,
-        preferred_model: str | None = None,
-        fallback_models: list[str] | None = None,
-    ) -> dict:
-        """Start the pipeline in a background thread."""
-        if not files or not api_key:
-            return {"ok": False, "error": "File o API key mancanti"}
+    def _start_processing_guard(self, mark_running: bool = False) -> dict | None:
         with self._pipeline_lifecycle_lock:
             if self._adapter.is_running:
                 return {"ok": False, "error": "Elaborazione già in corso"}
             if self._retry_active_count > 0:
                 return {"ok": False, "error": "Retry in corso: riprova al termine."}
-            self._adapter.is_running = True
+            if mark_running:
+                self._adapter.is_running = True
+        return None
 
-        # Save config (including model so the pipeline always uses what's selected in the UI)
+    def _low_disk_warning_for_files(
+        self, files: list[BridgeFileItem]
+    ) -> LowDiskWarningPayload | None:
+        try:
+            cfg = load_config()
+            defaults = build_default_pipeline_settings(cfg)
+            default_session = {"settings": defaults}
+            default_settings, _changed = load_and_sanitize_settings(default_session)
+        except Exception:
+            return None
+
+        worst: LowDiskWarningPayload | None = None
+        for file_info in files:
+            file_path = str(file_info.get("path", "") or "")
+            if not file_path:
+                continue
+            try:
+                duration = float(file_info.get("duration", 0) or 0)
+            except Exception:
+                duration = 0.0
+            if duration <= 0 and os.path.exists(file_path):
+                try:
+                    from el_sbobinator.services.audio_service import (
+                        probe_media_duration,
+                    )
+
+                    probed_duration, _reason = probe_media_duration(file_path)
+                    duration = float(probed_duration or 0)
+                except Exception:
+                    duration = 0.0
+            if duration <= 0:
+                continue
+            try:
+                paths = resolve_session_paths(file_path)
+            except Exception:
+                continue
+            stage = "phase1"
+            next_start_sec = 0
+            settings = default_settings
+            try:
+                if os.path.exists(paths.session_path):
+                    saved = _load_json(paths.session_path)
+                    if isinstance(saved, dict):
+                        settings, _changed = load_and_sanitize_settings(saved)
+                        stage = normalize_stage(saved)
+                        phase1 = saved.get("phase1", {})
+                        if isinstance(phase1, dict):
+                            next_start_sec = int(phase1.get("next_start_sec", 0) or 0)
+            except Exception:
+                stage = "phase1"
+                next_start_sec = 0
+                settings = default_settings
+            for estimate in estimate_disk_space(
+                paths.session_dir,
+                duration,
+                settings,
+                stage,
+                next_start_sec,
+            ):
+                if not estimate.is_clearly_insufficient:
+                    continue
+                payload: LowDiskWarningPayload = {
+                    "needed_bytes": int(estimate.needed_bytes),
+                    "free_bytes": int(estimate.free_bytes),
+                    "location": estimate.location,
+                    "kind": estimate.kind,
+                    "file_name": str(
+                        file_info.get("name", "") or os.path.basename(file_path)
+                    ),
+                }
+                if worst is None:
+                    worst = payload
+                    continue
+                worst_deficit = int(worst["needed_bytes"]) - int(worst["free_bytes"])
+                deficit = int(payload["needed_bytes"]) - int(payload["free_bytes"])
+                if deficit > worst_deficit:
+                    worst = payload
+        return worst
+
+    def _persist_processing_config(
+        self,
+        api_key: str,
+        preferred_model: str | None,
+        fallback_models: list[str] | None,
+    ) -> None:
         try:
             save_config(
                 api_key,
@@ -1009,6 +1104,46 @@ class ElSbobinatorApi:
             )
         except Exception:
             pass
+
+    def _low_disk_start_response(
+        self, files: list[BridgeFileItem], override_low_disk: bool
+    ) -> dict | None:
+        if override_low_disk:
+            return None
+        low_disk_warning = self._low_disk_warning_for_files(files)
+        if low_disk_warning is None:
+            return None
+        return {
+            "ok": False,
+            "error": "Spazio libero insufficiente.",
+            "low_disk_warning": low_disk_warning,
+        }
+
+    def start_processing(
+        self,
+        files: list[BridgeFileItem],
+        api_key: str,
+        resume_session: bool = True,
+        preferred_model: str | None = None,
+        fallback_models: list[str] | None = None,
+        override_low_disk: bool = False,
+    ) -> dict:
+        """Start the pipeline in a background thread."""
+        if not files or not api_key:
+            return {"ok": False, "error": "File o API key mancanti"}
+        guard_error = self._start_processing_guard()
+        if guard_error is not None:
+            return guard_error
+
+        self._persist_processing_config(api_key, preferred_model, fallback_models)
+
+        low_disk_response = self._low_disk_start_response(files, override_low_disk)
+        if low_disk_response is not None:
+            return low_disk_response
+
+        guard_error = self._start_processing_guard(mark_running=True)
+        if guard_error is not None:
+            return guard_error
 
         # Cleanup orphan temp files
         try:
@@ -1118,11 +1253,15 @@ class ElSbobinatorApi:
                         error_detail = (
                             getattr(self._adapter, "last_run_error_detail", None) or ""
                         )
+                        error_message = (
+                            redact_secrets(self._adapter.last_run_error)
+                            or "Elaborazione non completata."
+                        )
+                        error_detail = redact_secrets(error_detail)
                         ff_payload3: FileFailedPayload = {
                             "index": idx,
                             "id": file_info.get("id", ""),
-                            "error": self._adapter.last_run_error
-                            or "Elaborazione non completata.",
+                            "error": error_message,
                         }
                         if error_detail:
                             ff_payload3["error_detail"] = error_detail
@@ -1141,9 +1280,9 @@ class ElSbobinatorApi:
                     ff_payload4: FileFailedPayload = {
                         "index": current_index,
                         "id": current_file_id,
-                        "error": str(e) or "Errore fatale.",
+                        "error": redact_secrets(e) or "Errore fatale.",
                     }
-                    self._adapter.set_run_result("failed", str(e))
+                    self._adapter.set_run_result("failed", redact_secrets(e))
                     self._adapter.emit("fileFailed", ff_payload4, batched=False)
                     failed_count += 1
                 self._push_console(f"[!] Errore fatale: {e}")
@@ -1216,7 +1355,7 @@ class ElSbobinatorApi:
             return {"ok": True, "result": result}
         except Exception as e:
             self._logger.exception("Validazione ambiente fallita.")
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": redact_secrets(e)}
 
     def open_file(self, path: str) -> dict:
         """Open a local file/folder with the system default handler."""
@@ -1228,7 +1367,7 @@ class ElSbobinatorApi:
             open_path_with_default_app(path)
             return {"ok": True}
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": redact_secrets(e)}
 
     def open_url(self, url: str) -> dict:
         """Open an external URL in the system browser (allowlist only)."""
@@ -1240,7 +1379,7 @@ class ElSbobinatorApi:
             open_path_with_default_app(url)
             return {"ok": True}
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": redact_secrets(e)}
 
     def read_html_content(self, path: str) -> dict:
         """Legge ed estrae il contenuto di un file HTML per l'anteprima."""
@@ -1293,7 +1432,7 @@ class ElSbobinatorApi:
                 self._html_shell_cache[real_path] = shell
             return {"ok": True, "content": content}
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": redact_secrets(e)}
 
     def _get_session_root(self) -> str:
         """Return the session storage root directory."""
@@ -1310,7 +1449,7 @@ class ElSbobinatorApi:
             path = str(result[0]) if isinstance(result, list | tuple) else str(result)
             return {"ok": True, "path": path}
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": redact_secrets(e)}
 
     def move_session_root(self, new_path: str) -> dict:
         """Start an async move of the session-storage folder to new_path."""
@@ -1389,7 +1528,7 @@ class ElSbobinatorApi:
                     "status": "error",
                     "moved": 0,
                     "total": total,
-                    "error": str(e),
+                    "error": redact_secrets(e),
                 }
             return
         try:
@@ -1408,7 +1547,7 @@ class ElSbobinatorApi:
                     "status": "error",
                     "moved": 0,
                     "total": total,
-                    "error": str(e),
+                    "error": redact_secrets(e),
                 }
             return
 
@@ -1696,7 +1835,7 @@ class ElSbobinatorApi:
                 self._mark_session_user_edited_for_html(real_path)
             return {"ok": True}
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": redact_secrets(e)}
 
     def show_notification(self, title: str, message: str) -> dict:
         """Mostra una notifica toast nativa di sistema tramite plyer."""
@@ -1721,7 +1860,7 @@ class ElSbobinatorApi:
                 )
                 subprocess.Popen(["osascript", "-e", script])
                 return {"ok": True}
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": redact_secrets(e)}
 
     def stream_media_file(self, file_path: str) -> dict:
         """Avvia o riavvia un micro-server HTTP per inviare l'audio nativo a React via streaming byte-range."""
@@ -1734,7 +1873,7 @@ class ElSbobinatorApi:
         try:
             return {"ok": True, "url": LocalMediaServer.stream_url_for_file(file_path)}
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": redact_secrets(e)}
 
     def download_and_install_update(self, version: str) -> dict:
         """Download the correct installer for this OS, launch it, then quit the app."""
@@ -1743,7 +1882,7 @@ class ElSbobinatorApi:
     # ---- Console push helper ----
 
     def _push_console(self, msg: str):
-        self._adapter.emit("appendConsole", msg, batched=False)
+        self._adapter.emit("appendConsole", redact_secrets(msg), batched=False)
 
 
 # ---------------------------------------------------------------------------

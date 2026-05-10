@@ -12,6 +12,7 @@ import os
 import re
 import shutil
 import tempfile
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -61,15 +62,20 @@ class SaveSessionGuard:
     underlying save again), and then raises ``AutosaveFailedError``.
     """
 
-    THRESHOLD: int = 2
+    THRESHOLD: int = 5
+    BACKOFF_DELAYS: tuple[float, ...] = (0.5, 1.0, 2.0, 4.0, 8.0)
 
     def __init__(
         self,
         save_fn: Callable[[], bool],
         on_fatal: Callable[[str], None],
+        sleep_fn: Callable[[float], None] = time.sleep,
+        backoff_delays: tuple[float, ...] = BACKOFF_DELAYS,
     ) -> None:
         self._save_fn = save_fn
         self._on_fatal = on_fatal
+        self._sleep_fn = sleep_fn
+        self._backoff_delays = backoff_delays
         self._consecutive_failures: int = 0
         self._fatal: bool = False
 
@@ -90,6 +96,12 @@ class SaveSessionGuard:
                 )
                 self._on_fatal(msg)
                 raise AutosaveFailedError("autosave_failed")
+            delay_idx = min(
+                self._consecutive_failures - 1, len(self._backoff_delays) - 1
+            )
+            delay = self._backoff_delays[delay_idx] if self._backoff_delays else 0.0
+            if delay > 0:
+                self._sleep_fn(delay)
         return ok
 
 
@@ -415,19 +427,37 @@ def _fmt_bytes(n: int) -> str:
     return f"{n / 1_048_576:.0f} MB"
 
 
-def check_disk_space(
+def _disk_usage_target(path: str) -> str:
+    current = os.path.abspath(path or tempfile.gettempdir())
+    while current and not os.path.exists(current):
+        parent = os.path.dirname(current)
+        if parent == current:
+            break
+        current = parent
+    return current if current and os.path.exists(current) else tempfile.gettempdir()
+
+
+@dataclass(frozen=True)
+class DiskSpaceEstimate:
+    needed_bytes: int
+    free_bytes: int
+    location: str
+    kind: str
+
+    @property
+    def is_clearly_insufficient(self) -> bool:
+        return self.needed_bytes > 0 and self.free_bytes < int(self.needed_bytes * 0.9)
+
+
+def estimate_disk_space(
     session_dir: str,
     total_duration_sec: float,
     settings: PipelineSettings,
     stage: str,
     next_start_sec: int = 0,
-) -> None:
-    """Probe available disk space and print a warning if estimated usage may exceed free space.
-
-    Only active when stage == 'phase1'. Never raises — warnings only.
-    """
+) -> list[DiskSpaceEstimate]:
     if stage != "phase1":
-        return
+        return []
 
     bytes_per_sec = _parse_bitrate_bps(settings.audio_bitrate) / 8.0
 
@@ -447,49 +477,99 @@ def check_disk_space(
     temp_needed = int(settings.chunk_seconds * bytes_per_sec) * effective_concurrent
 
     tmp_dir = tempfile.gettempdir()
+    session_usage_dir = _disk_usage_target(session_dir)
     try:
-        same_fs = os.stat(session_dir).st_dev == os.stat(tmp_dir).st_dev
+        same_fs = os.stat(session_usage_dir).st_dev == os.stat(tmp_dir).st_dev
     except Exception:
         same_fs = True
 
+    estimates: list[DiskSpaceEstimate] = []
     if same_fs:
         total_needed = session_needed + temp_needed
         if total_needed == 0:
-            return
+            return []
         try:
-            free = shutil.disk_usage(session_dir).free
-            if free < total_needed:
-                print(
-                    f"[!] ATTENZIONE — Spazio su disco potenzialmente insufficiente.\n"
-                    f"    Stimato necessario (audio pre-convertito + chunk temporanei): ~{_fmt_bytes(total_needed)}\n"
-                    f"    Disponibile: {_fmt_bytes(free)}\n"
-                    f"    Libera spazio prima di continuare per evitare errori durante l'elaborazione."
+            free = shutil.disk_usage(session_usage_dir).free
+        except Exception:
+            return []
+        estimates.append(
+            DiskSpaceEstimate(
+                needed_bytes=total_needed,
+                free_bytes=free,
+                location=session_dir,
+                kind="combined",
+            )
+        )
+        return estimates
+
+    if session_needed > 0:
+        try:
+            free_sess = shutil.disk_usage(session_usage_dir).free
+            estimates.append(
+                DiskSpaceEstimate(
+                    needed_bytes=session_needed,
+                    free_bytes=free_sess,
+                    location=session_dir,
+                    kind="session",
                 )
+            )
         except Exception:
             pass
-    else:
-        if session_needed > 0:
-            try:
-                free_sess = shutil.disk_usage(session_dir).free
-                if free_sess < session_needed:
-                    print(
-                        f"[!] ATTENZIONE — Spazio insufficiente per la pre-conversione audio.\n"
-                        f"    Stimato: ~{_fmt_bytes(session_needed)} · Disponibile in {session_dir}: {_fmt_bytes(free_sess)}\n"
-                        f"    Libera spazio prima di continuare."
-                    )
-            except Exception:
-                pass
-        if temp_needed > 0:
-            try:
-                free_tmp = shutil.disk_usage(tmp_dir).free
-                if free_tmp < temp_needed:
-                    print(
-                        f"[!] ATTENZIONE — Spazio insufficiente nella cartella temporanea ({tmp_dir}).\n"
-                        f"    Stimato per i chunk audio: ~{_fmt_bytes(temp_needed)} · Disponibile: {_fmt_bytes(free_tmp)}\n"
-                        f"    Libera spazio prima di continuare."
-                    )
-            except Exception:
-                pass
+    if temp_needed > 0:
+        try:
+            free_tmp = shutil.disk_usage(tmp_dir).free
+            estimates.append(
+                DiskSpaceEstimate(
+                    needed_bytes=temp_needed,
+                    free_bytes=free_tmp,
+                    location=tmp_dir,
+                    kind="temp",
+                )
+            )
+        except Exception:
+            pass
+    return estimates
+
+
+def check_disk_space(
+    session_dir: str,
+    total_duration_sec: float,
+    settings: PipelineSettings,
+    stage: str,
+    next_start_sec: int = 0,
+) -> None:
+    """Probe available disk space and print a warning if estimated usage may exceed free space.
+
+    Only active when stage == 'phase1'. Never raises — warnings only.
+    """
+    for estimate in estimate_disk_space(
+        session_dir,
+        total_duration_sec,
+        settings,
+        stage,
+        next_start_sec,
+    ):
+        if estimate.free_bytes >= estimate.needed_bytes:
+            continue
+        if estimate.kind == "combined":
+            print(
+                f"[!] ATTENZIONE — Spazio su disco potenzialmente insufficiente.\n"
+                f"    Stimato necessario (audio pre-convertito + chunk temporanei): ~{_fmt_bytes(estimate.needed_bytes)}\n"
+                f"    Disponibile: {_fmt_bytes(estimate.free_bytes)}\n"
+                f"    Libera spazio prima di continuare per evitare errori durante l'elaborazione."
+            )
+        elif estimate.kind == "session":
+            print(
+                f"[!] ATTENZIONE — Spazio insufficiente per la pre-conversione audio.\n"
+                f"    Stimato: ~{_fmt_bytes(estimate.needed_bytes)} · Disponibile in {estimate.location}: {_fmt_bytes(estimate.free_bytes)}\n"
+                f"    Libera spazio prima di continuare."
+            )
+        else:
+            print(
+                f"[!] ATTENZIONE — Spazio insufficiente nella cartella temporanea ({estimate.location}).\n"
+                f"    Stimato per i chunk audio: ~{_fmt_bytes(estimate.needed_bytes)} · Disponibile: {_fmt_bytes(estimate.free_bytes)}\n"
+                f"    Libera spazio prima di continuare."
+            )
 
 
 def record_step_metric(

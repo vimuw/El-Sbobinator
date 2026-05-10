@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import App from './App';
 import { useApiReady } from './hooks/useApiReady';
+import { useQueuePersistence } from './hooks/useQueuePersistence';
 
 vi.mock('motion/react', () => ({
   motion: new Proxy({}, {
@@ -193,5 +194,67 @@ describe('App — ready-empty mode (valid API key, no files)', () => {
       fireEvent.click(screen.getByLabelText('Mostra console'));
     });
     expect(screen.getByRole('heading', { name: 'Console' })).toBeTruthy();
+  });
+});
+
+describe('App ? low disk start warning', () => {
+  beforeEach(() => {
+    vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
+  });
+
+  it('shows a blocking low-disk modal and retries with override', async () => {
+    const startProcessing = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        low_disk_warning: {
+          needed_bytes: 2_147_483_648,
+          free_bytes: 536_870_912,
+          location: 'C:\\Temp',
+          kind: 'combined',
+          file_name: 'lesson.mp3',
+        },
+      })
+      .mockResolvedValueOnce({ ok: true });
+
+    setPywebview({
+      get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
+      get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
+      check_path_exists: vi.fn().mockResolvedValue({ ok: true, exists: true }),
+      start_processing: startProcessing,
+    });
+
+    vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
+      React.useEffect(() => {
+        dispatch({
+          type: 'queue/add',
+          files: [{
+            id: 'file-1',
+            name: 'lesson.mp3',
+            size: 123,
+            duration: 60,
+            path: 'C:\\Media\\lesson.mp3',
+            status: 'queued',
+            progress: 0,
+            phase: 0,
+          }],
+        });
+      }, [dispatch]);
+    });
+
+    await act(async () => { render(<App />); });
+    await act(async () => {
+      fireEvent.click(await screen.findByText('Avvia sbobinatura (1 file)'));
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Spazio libero insufficiente' })).toBeTruthy();
+    expect(screen.getAllByText(/lesson\.mp3/).length).toBeGreaterThan(0);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Continua comunque'));
+    });
+
+    expect(startProcessing).toHaveBeenCalledTimes(2);
+    expect(startProcessing.mock.calls[0][5]).toBe(false);
+    expect(startProcessing.mock.calls[1][5]).toBe(true);
   });
 });

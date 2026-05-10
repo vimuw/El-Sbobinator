@@ -16,6 +16,7 @@ from el_sbobinator.pipeline.pipeline_session import (
     SaveSessionGuard,
     check_disk_space,
     ensure_preconverted_audio,
+    estimate_disk_space,
     initialize_session_context,
     normalize_stage,
     phase1_has_progress,
@@ -814,6 +815,24 @@ class TestCheckDiskSpace(unittest.TestCase):
                 )
             mock_print.assert_not_called()
 
+    def test_estimate_marks_clearly_insufficient_only_beyond_ten_percent_deficit(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            settings = self._settings(preconvert_audio=False)
+            needed = int(settings.chunk_seconds * 48_000 / 8)
+            with patch(
+                "shutil.disk_usage",
+                return_value=self._fake_du(int(needed * 0.95)),
+            ):
+                estimates = estimate_disk_space(tmpdir, 3600.0, settings, "phase1")
+            self.assertFalse(estimates[0].is_clearly_insufficient)
+
+            with patch(
+                "shutil.disk_usage",
+                return_value=self._fake_du(int(needed * 0.5)),
+            ):
+                estimates = estimate_disk_space(tmpdir, 3600.0, settings, "phase1")
+            self.assertTrue(estimates[0].is_clearly_insufficient)
+
 
 if __name__ == "__main__":
     unittest.main()
@@ -1257,32 +1276,41 @@ class TestSaveSessionGuard(unittest.TestCase):
 
     def test_single_failure_returns_false_no_exception(self):
         """First consecutive failure returns False silently — no exception."""
-        guard = SaveSessionGuard(lambda: False, lambda msg: None)
+        guard = SaveSessionGuard(
+            lambda: False, lambda msg: None, sleep_fn=lambda _delay: None
+        )
         result = guard()
         self.assertFalse(result)
 
     def test_success_resets_counter(self):
         """A success between failures resets the counter so no exception is raised."""
         results = iter([False, True, False])
-        guard = SaveSessionGuard(lambda: next(results), lambda msg: None)
+        guard = SaveSessionGuard(
+            lambda: next(results), lambda msg: None, sleep_fn=lambda _delay: None
+        )
         guard()  # failure 1
         guard()  # success → counter reset
         guard()  # failure 1 again — should NOT raise
 
-    def test_two_consecutive_failures_raise(self):
-        """Two consecutive failures trigger AutosaveFailedError."""
-        guard = SaveSessionGuard(lambda: False, lambda msg: None)
-        guard()  # failure 1 — silent
+    def test_five_consecutive_failures_raise(self):
+        """Five consecutive failures trigger AutosaveFailedError."""
+        guard = SaveSessionGuard(
+            lambda: False, lambda msg: None, sleep_fn=lambda _delay: None
+        )
+        for _ in range(4):
+            self.assertFalse(guard())
         with self.assertRaises(AutosaveFailedError):
-            guard()  # failure 2 — raises
+            guard()
 
     def test_on_fatal_callback_receives_message(self):
         """on_fatal is called exactly once with a non-empty diagnostic message."""
         messages: list[str] = []
-        guard = SaveSessionGuard(lambda: False, messages.append)
+        guard = SaveSessionGuard(
+            lambda: False, messages.append, sleep_fn=lambda _delay: None
+        )
         try:
-            guard()
-            guard()
+            for _ in range(5):
+                guard()
         except AutosaveFailedError:
             pass
         self.assertEqual(len(messages), 1)
@@ -1297,10 +1325,12 @@ class TestSaveSessionGuard(unittest.TestCase):
             call_count += 1
             return False
 
-        guard = SaveSessionGuard(counting_save, lambda msg: None)
+        guard = SaveSessionGuard(
+            counting_save, lambda msg: None, sleep_fn=lambda _delay: None
+        )
         try:
-            guard()
-            guard()  # triggers fatal
+            for _ in range(5):
+                guard()
         except AutosaveFailedError:
             pass
         count_after_fatal = call_count
@@ -1333,7 +1363,9 @@ class TestSaveSessionGuard(unittest.TestCase):
                 "el_sbobinator.pipeline.pipeline_session.save_session_data",
                 side_effect=PermissionError("read-only"),
             ):
-                guard = SaveSessionGuard(session_ctx.save, messages.append)
+                guard = SaveSessionGuard(
+                    session_ctx.save, messages.append, sleep_fn=lambda _delay: None
+                )
 
                 first = (
                     guard()
@@ -1341,20 +1373,25 @@ class TestSaveSessionGuard(unittest.TestCase):
                 self.assertFalse(first)
                 self.assertEqual(len(messages), 0)  # no warning yet
 
+                for _ in range(3):
+                    self.assertFalse(guard())
                 with self.assertRaises(AutosaveFailedError):
-                    guard()  # failure 2 → fatal
+                    guard()
 
             self.assertEqual(len(messages), 1)
             self.assertIn("autosalvataggio", messages[0].lower())
 
     def test_autosave_failed_error_is_not_caught_by_except_exception(self):
         """AutosaveFailedError(BaseException) must escape broad except Exception handlers."""
-        guard = SaveSessionGuard(lambda: False, lambda msg: None)
-        guard()  # failure 1 — silent
+        guard = SaveSessionGuard(
+            lambda: False, lambda msg: None, sleep_fn=lambda _delay: None
+        )
+        for _ in range(4):
+            guard()
         escaped = False
         try:
             try:
-                guard()  # failure 2 — raises AutosaveFailedError
+                guard()
             except Exception:
                 pass  # must NOT land here
         except AutosaveFailedError:
@@ -1362,6 +1399,19 @@ class TestSaveSessionGuard(unittest.TestCase):
         self.assertTrue(
             escaped, "AutosaveFailedError was swallowed by except Exception"
         )
+
+    def test_failed_saves_use_backoff_sequence_before_fatal(self):
+        delays: list[float] = []
+        guard = SaveSessionGuard(
+            lambda: False, lambda msg: None, sleep_fn=delays.append
+        )
+
+        for _ in range(4):
+            self.assertFalse(guard())
+        with self.assertRaises(AutosaveFailedError):
+            guard()
+
+        self.assertEqual(delays, [0.5, 1.0, 2.0, 4.0])
 
 
 class TestSessionCollisionGuard(unittest.TestCase):

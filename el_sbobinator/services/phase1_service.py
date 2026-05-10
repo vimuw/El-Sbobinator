@@ -8,7 +8,6 @@ process_phase1_transcription() that contains all chunk-loop logic.
 from __future__ import annotations
 
 import os
-import re
 import tempfile
 import threading
 import time
@@ -34,7 +33,7 @@ from el_sbobinator.services.generation_service import (
     retry_with_quota,
     sleep_with_cancel,
 )
-from el_sbobinator.utils.logging_utils import get_logger
+from el_sbobinator.utils.logging_utils import get_logger, redact_secrets
 
 
 def _sanitize_error_detail(error: object, max_len: int = 500) -> str:
@@ -42,10 +41,8 @@ def _sanitize_error_detail(error: object, max_len: int = 500) -> str:
         text = f"{type(error).__name__}: {error}"
     else:
         text = str(error or "")
-    text = re.sub(r"\s+", " ", text).strip()
-    text = re.sub(r"\bAIza[0-9A-Za-z_-]{20,}\b", "[API_KEY_REDACTED]", text)
-    text = re.sub(r"\bAQ\.[0-9A-Za-z_-]{20,}\b", "[API_KEY_REDACTED]", text)
-    return text[:max_len]
+    text = " ".join(text.split())
+    return redact_secrets(text, max_len=max_len)
 
 
 def process_phase1_transcription(  # noqa: C901

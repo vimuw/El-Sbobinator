@@ -13,7 +13,7 @@ export function useBridgeCallbacks(options: {
   setRegeneratePrompt: (data: { filename: string; mode?: 'completed' | 'resume'; sessionDir?: string } | null) => void;
   setAskNewKeyPrompt: (open: boolean) => void;
   autoContinueRef: React.RefObject<boolean>;
-  startProcessingRef: React.RefObject<(isContinuation?: boolean) => Promise<boolean>>;
+  startProcessingRef: React.RefObject<(isContinuation?: boolean, overrideLowDisk?: boolean) => Promise<boolean>>;
   onFileContinued: () => void;
   onBatchReset: () => void;
   onBatchFullyDone: (data: ProcessDonePayload) => void;

@@ -78,6 +78,20 @@ export interface ArchiveFolder {
   session_dirs: string[];
 }
 
+export interface LowDiskWarning {
+  needed_bytes: number;
+  free_bytes: number;
+  location: string;
+  kind: string;
+  file_name?: string;
+}
+
+export interface StartProcessingResult {
+  ok: boolean;
+  error?: string;
+  low_disk_warning?: LowDiskWarning;
+}
+
 export type ElSbobinatorBridge = BridgeCallbacks | null;
 
 export interface UpdateDownloadProgressPayload {
@@ -118,7 +132,7 @@ export interface PywebviewApi {
   ask_media_file?: () => Promise<FileDescriptor | null>;
   check_path_exists?: (path: string) => Promise<{ ok: boolean; exists: boolean }>;
   collect_dropped_files?: (names: string[]) => Promise<{ ok: boolean }>;
-  start_processing?: (files: FileDescriptor[], apiKey: string, resumeSession: boolean, preferredModel: string, fallbackModels: string[]) => Promise<{ ok: boolean; error?: string }>;
+  start_processing?: (files: FileDescriptor[], apiKey: string, resumeSession: boolean, preferredModel: string, fallbackModels: string[], overrideLowDisk?: boolean) => Promise<StartProcessingResult>;
   stop_processing?: () => Promise<{ ok: boolean }>;
   answer_regenerate?: (regenerate: boolean | null) => Promise<{ ok: boolean }>;
   answer_new_key?: (key: string) => Promise<{ ok: boolean }>;

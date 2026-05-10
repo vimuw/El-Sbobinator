@@ -20,6 +20,7 @@ from el_sbobinator.bridge.bridge_types import (
     WorkDonePayload,
     WorkTotalsPayload,
 )
+from el_sbobinator.utils.logging_utils import redact_secrets
 
 # ---------------------------------------------------------------------------
 # DnD helper
@@ -156,10 +157,10 @@ class PipelineAdapter:
 
     def set_run_result(self, status: str, error: str | None = None):
         self.last_run_status = str(status or "failed").strip() or "failed"
-        self.last_run_error = str(error).strip() if error else None
+        self.last_run_error = redact_secrets(error).strip() if error else None
 
     def set_run_error_detail(self, detail: str | None = None):
-        self.last_run_error_detail = str(detail).strip() if detail else None
+        self.last_run_error_detail = redact_secrets(detail).strip() if detail else None
 
     def set_effective_api_key(self, api_key: str | None):
         self.effective_api_key = str(api_key or "").strip() or None

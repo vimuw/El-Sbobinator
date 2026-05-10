@@ -48,13 +48,15 @@ class _PrimaryFailClient:
 
 class _ClientCtorFail:
     def __init__(self, api_key=None, **kwargs):
-        raise RuntimeError("invalid API key")
+        raise RuntimeError(f"invalid API key {api_key}")
 
 
 class _MiddleFailModels:
     def get(self, model=None, **kwargs):
         if model == "gemini-2.5-flash-lite":
-            raise RuntimeError("middle model disabled")
+            raise RuntimeError(
+                "middle model disabled key=AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345"
+            )
         return {"model": model}
 
 
@@ -195,6 +197,7 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertEqual(api_check["status"], "error")
         self.assertEqual(api_check["label"], "API Key Gemini")
         self.assertIn("invalid API key", api_check["details"])  # type: ignore[typeddict-item]
+        self.assertNotIn("AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345", api_check["details"])  # type: ignore[typeddict-item]
 
     @patch(
         "el_sbobinator.services.validation_service.get_desktop_dir", return_value="."
@@ -252,6 +255,10 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertEqual(api_check["status"], "ok")
         self.assertEqual(middle_check["status"], "error")
         self.assertIn("gemini-2.5-flash-lite", middle_check["details"])  # type: ignore[typeddict-item]
+        self.assertNotIn(
+            "AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345", middle_check["details"]
+        )  # type: ignore[typeddict-item]
+        self.assertIn("[API_KEY_REDACTED]", middle_check["details"])  # type: ignore[typeddict-item]
         self.assertEqual(last_check["status"], "ok")
         self.assertEqual(last_check["details"], "gemini-3-flash-preview")  # type: ignore[typeddict-item]
 

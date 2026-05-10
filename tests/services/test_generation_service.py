@@ -11,6 +11,7 @@ from el_sbobinator.services.generation_service import (
     _is_model_unavailable,
     detect_degenerate_output,
     retry_with_quota,
+    try_rotate_key,
 )
 
 
@@ -39,6 +40,113 @@ class _Structured503QuotaError(RuntimeError):
                 "message": "Token balance exhausted for this API key",
             }
         }
+
+
+class TryRotateKeyTests(unittest.TestCase):
+    def test_invalid_key_is_discarded(self):
+        class _InvalidModels:
+            def get(self, model=None, **kwargs):
+                err = RuntimeError("API key not valid")
+                err.code = 401  # type: ignore[attr-defined]
+                raise err
+
+        class _InvalidClient:
+            def __init__(self, api_key=None, **kwargs):
+                self.api_key = api_key
+                self.models = _InvalidModels()
+
+        keys = ["bad-key"]
+        with patch(
+            "el_sbobinator.services.generation_service.genai.Client", _InvalidClient
+        ):
+            client, rotated, key = try_rotate_key(object(), keys, "test-model")
+
+        self.assertFalse(rotated)
+        self.assertIsNone(key)
+        self.assertEqual(keys, [])
+        self.assertIsNotNone(client)
+
+    def test_transient_key_moves_to_back_and_valid_second_key_succeeds(self):
+        class _Models:
+            def __init__(self, api_key):
+                self.api_key = api_key
+
+            def get(self, model=None, **kwargs):
+                if self.api_key == "transient-key":
+                    err = RuntimeError("503 Service Unavailable")
+                    err.code = 503  # type: ignore[attr-defined]
+                    raise err
+                return {"model": model}
+
+        class _Client:
+            def __init__(self, api_key=None, **kwargs):
+                self.api_key = api_key
+                self.models = _Models(api_key)
+
+        keys = ["transient-key", "valid-key"]
+        with patch("el_sbobinator.services.generation_service.genai.Client", _Client):
+            client, rotated, key = try_rotate_key(object(), keys, "test-model")
+
+        self.assertTrue(rotated)
+        self.assertEqual(key, "valid-key")
+        self.assertEqual(keys, ["transient-key"])
+        self.assertEqual(client.api_key, "valid-key")
+
+    def test_all_transient_keys_stop_after_one_pass_without_consuming(self):
+        calls = []
+
+        class _TransientModels:
+            def __init__(self, api_key):
+                self.api_key = api_key
+
+            def get(self, model=None, **kwargs):
+                calls.append(self.api_key)
+                raise TimeoutError("timed out")
+
+        class _TransientClient:
+            def __init__(self, api_key=None, **kwargs):
+                self.api_key = api_key
+                self.models = _TransientModels(api_key)
+
+        original = object()
+        keys = ["k1", "k2"]
+        with patch(
+            "el_sbobinator.services.generation_service.genai.Client", _TransientClient
+        ):
+            client, rotated, key = try_rotate_key(original, keys, "test-model")
+
+        self.assertIs(client, original)
+        self.assertFalse(rotated)
+        self.assertIsNone(key)
+        self.assertEqual(calls, ["k1", "k2"])
+        self.assertEqual(keys, ["k1", "k2"])
+
+    def test_transient_validation_print_redacts_key(self):
+        secret = "AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345"
+        printed = []
+
+        class _TransientModels:
+            def get(self, model=None, **kwargs):
+                err = RuntimeError(f"503 temporary key={secret}")
+                err.code = 503  # type: ignore[attr-defined]
+                raise err
+
+        class _TransientClient:
+            def __init__(self, api_key=None, **kwargs):
+                self.models = _TransientModels()
+
+        with (
+            patch(
+                "el_sbobinator.services.generation_service.genai.Client",
+                _TransientClient,
+            ),
+            patch("builtins.print", side_effect=printed.append),
+        ):
+            try_rotate_key(object(), ["transient-key"], "test-model")
+
+        joined = "\n".join(printed)
+        self.assertNotIn(secret, joined)
+        self.assertIn("[API_KEY_REDACTED]", joined)
 
 
 class RetryWithQuotaTests(unittest.TestCase):
