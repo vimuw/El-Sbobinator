@@ -5,7 +5,7 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
-from typing import cast
+from typing import ClassVar, cast
 from unittest.mock import MagicMock, mock_open, patch
 
 from el_sbobinator.app_webview import ElSbobinatorApi, PipelineAdapter
@@ -26,6 +26,29 @@ class _SyncThread:
         pass
 
 
+class _StartupCleanupThread:
+    instances: ClassVar[list["_StartupCleanupThread"]] = []
+
+    def __init__(self, target=None, args=(), daemon=False, name=None, **kw):
+        self._target = target
+        self._args = args
+        self.daemon = daemon
+        self.name = name
+        self.started = False
+        self.__class__.instances.append(self)
+
+    def start(self):
+        self.started = True
+        if self.name == "temp-chunks-startup-cleanup" and self._target:
+            self._target(*self._args)
+
+    def join(self, timeout=None):
+        pass
+
+    def is_alive(self):
+        return False
+
+
 class _FakeWindow:
     def __init__(self):
         self.calls: list[str] = []
@@ -39,6 +62,41 @@ class _FakeWindow:
 
 
 class AppWebviewTests(unittest.TestCase):
+    def test_startup_schedules_temp_cleanup_thread(self):
+        _StartupCleanupThread.instances = []
+        with (
+            patch("el_sbobinator.app_webview.threading.Thread", _StartupCleanupThread),
+            patch(
+                "el_sbobinator.app_webview.cleanup_orphan_temp_chunks",
+                return_value=0,
+            ) as mock_cleanup,
+        ):
+            api = ElSbobinatorApi()
+
+        cleanup_threads = [
+            t
+            for t in _StartupCleanupThread.instances
+            if t.name == "temp-chunks-startup-cleanup"
+        ]
+        self.assertEqual(len(cleanup_threads), 1)
+        self.assertTrue(cleanup_threads[0].daemon)
+        self.assertTrue(cleanup_threads[0].started)
+        mock_cleanup.assert_called_once()
+        self.assertIsNotNone(api._startup_cleanup_thread)
+
+    def test_startup_temp_cleanup_exception_does_not_break_app_creation(self):
+        _StartupCleanupThread.instances = []
+        with (
+            patch("el_sbobinator.app_webview.threading.Thread", _StartupCleanupThread),
+            patch(
+                "el_sbobinator.app_webview.cleanup_orphan_temp_chunks",
+                side_effect=RuntimeError("boom"),
+            ),
+        ):
+            api = ElSbobinatorApi()
+
+        self.assertIsInstance(api, ElSbobinatorApi)
+
     def test_dispatcher_batches_js_calls(self):
         window = _FakeWindow()
         adapter = PipelineAdapter(window, cancel_event=__import__("threading").Event())  # type: ignore[arg-type]
@@ -699,6 +757,60 @@ class AppWebviewTests(unittest.TestCase):
                 pass
 
         mock_low_disk.assert_not_called()
+
+    def test_start_processing_still_cleans_orphan_temp_chunks(self):
+        api = ElSbobinatorApi()
+        api._startup_cleanup_thread.join(timeout=2)
+        api._adapter.emit = MagicMock()
+
+        with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            tmp.write(b"fake")
+            file_path = tmp.name
+
+        try:
+            with (
+                patch(
+                    "el_sbobinator.pipeline.pipeline.esegui_sbobinatura"
+                ) as mock_pipeline_run,
+                patch(
+                    "el_sbobinator.app_webview.cleanup_orphan_temp_chunks",
+                    return_value=2,
+                ) as mock_cleanup,
+            ):
+
+                def fake_pipeline_run(_path, _api_key, adapter, resume_session=True):
+                    adapter.set_run_result("failed", "test_done")
+
+                mock_pipeline_run.side_effect = fake_pipeline_run
+                result = api.start_processing(
+                    [
+                        {
+                            "id": "file-1",
+                            "path": file_path,
+                            "name": "lesson.mp3",
+                            "size": 4,
+                            "duration": 1,
+                        }
+                    ],
+                    api_key="fake-key",
+                )
+                self.assertIsNotNone(api._processing_thread)
+                assert api._processing_thread is not None
+                api._processing_thread.join(timeout=2)
+                self.assertFalse(api._processing_thread.is_alive())
+        finally:
+            try:
+                os.unlink(file_path)
+            except OSError:
+                pass
+
+        self.assertTrue(result["ok"])
+        mock_cleanup.assert_called_once()
+        api._adapter.emit.assert_any_call(  # type: ignore[attr-defined]
+            "appendConsole",
+            "[*] Pulizia: rimossi 2 file temporanei.",
+            batched=False,
+        )
 
     def test_read_html_content_falls_back_to_session_dir(self):
         import os

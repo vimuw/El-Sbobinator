@@ -403,6 +403,65 @@ class TestLoadConfigFromRealFile(unittest.TestCase):
 
         self.assertEqual(result["api_key"], "legacy-key")
 
+    def test_successful_legacy_migration_removes_legacy_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            legacy_path = os.path.join(tmpdir, "legacy_config.json")
+            payload = {"api_key": "legacy-key", "preferred_model": "gemini-2.0-flash"}
+            with open(legacy_path, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh)
+
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    legacy_path,
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Windows",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service._dpapi_protect_text_windows",
+                    return_value="",
+                ),
+            ):
+                result = cs.load_config()
+
+            self.assertEqual(result["api_key"], "legacy-key")
+            self.assertFalse(os.path.exists(legacy_path))
+            self.assertFalse(os.path.exists(legacy_path + ".migrated"))
+            self.assertTrue(os.path.isfile(cfg_path))
+
+    def test_failed_legacy_migration_leaves_legacy_file_intact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            legacy_path = os.path.join(tmpdir, "legacy_config.json")
+            payload = {"api_key": "legacy-key", "preferred_model": "gemini-2.0-flash"}
+            with open(legacy_path, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh)
+
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    legacy_path,
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Windows",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.save_config",
+                    side_effect=OSError("disk full"),
+                ),
+            ):
+                result = cs.load_config()
+
+            self.assertEqual(result["api_key"], "legacy-key")
+            self.assertTrue(os.path.isfile(legacy_path))
+            self.assertFalse(os.path.exists(legacy_path + ".migrated"))
+
     def test_returns_defaults_when_both_config_files_absent(self) -> None:
         """When neither config file exists, default empty values are returned."""
         with tempfile.TemporaryDirectory() as tmpdir:

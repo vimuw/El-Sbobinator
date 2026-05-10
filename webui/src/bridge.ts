@@ -42,6 +42,7 @@ export interface SettingsPayload {
   has_protected_key?: boolean;
   api_key_insecure?: boolean;
   api_key_insecure_reason?: string;
+  config_recovered_from?: string;
 }
 
 export interface ArchiveSession {

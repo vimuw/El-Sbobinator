@@ -31,6 +31,7 @@ const mockApiReadyDefault = {
   setApiKeyInsecure: vi.fn(),
   apiKeyInsecureReason: '',
   setApiKeyInsecureReason: vi.fn(),
+  configRecoveredFrom: '',
   fallbackKeys: [],
   setFallbackKeys: vi.fn(),
   preferredModel: 'gemini-2.5-flash',
@@ -164,6 +165,42 @@ describe('App', () => {
       fireEvent.click(screen.getByLabelText('Mostra console'));
     });
     expect(screen.getByRole('heading', { name: 'Console' })).toBeTruthy();
+  });
+
+  it('shows config recovery warning without exposing the full path', async () => {
+    localStorage.setItem('peakBannerDismissedUntil', String(Date.now() + 86_400_000));
+    vi.mocked(useApiReady).mockReturnValue({
+      ...mockApiReadyDefault,
+      configRecoveredFrom: 'C:\\Users\\me\\AppData\\Roaming\\El Sbobinator\\config.json',
+    });
+
+    await act(async () => { render(<App />); });
+
+    expect(screen.getByText(/file di configurazione era corrotto/i)).toBeTruthy();
+    expect(screen.queryByText(/C:\\Users\\me/)).toBeNull();
+  });
+
+  it('does not show config recovery warning again after dismissal for same path', async () => {
+    localStorage.setItem('peakBannerDismissedUntil', String(Date.now() + 86_400_000));
+    const recoveredPath = 'C:\\broken\\config.json';
+    vi.mocked(useApiReady).mockReturnValue({
+      ...mockApiReadyDefault,
+      configRecoveredFrom: recoveredPath,
+    });
+
+    let unmount: () => void = () => {};
+    await act(async () => {
+      ({ unmount } = render(<App />));
+    });
+    expect(await screen.findByText(/file di configurazione era corrotto/i)).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Chiudi notifica'));
+    });
+    unmount();
+
+    await act(async () => { render(<App />); });
+    expect(screen.queryByText(/file di configurazione era corrotto/i)).toBeNull();
   });
 });
 

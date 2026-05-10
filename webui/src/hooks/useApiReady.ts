@@ -8,6 +8,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
   const [hasProtectedKey, setHasProtectedKey] = useState(false);
   const [apiKeyInsecure, setApiKeyInsecure] = useState(false);
   const [apiKeyInsecureReason, setApiKeyInsecureReason] = useState('');
+  const [configRecoveredFrom, setConfigRecoveredFrom] = useState('');
   const [fallbackKeys, setFallbackKeys] = useState<string[]>([]);
   const [preferredModel, setPreferredModel] = useState('gemini-2.5-flash');
   const [fallbackModels, setFallbackModels] = useState<string[]>([]);
@@ -32,6 +33,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
     setHasProtectedKey(Boolean(cfg?.has_protected_key) && !nextApiKey);
     setApiKeyInsecure(Boolean(cfg?.api_key_insecure));
     setApiKeyInsecureReason(String(cfg?.api_key_insecure_reason ?? ''));
+    setConfigRecoveredFrom(String(cfg?.config_recovered_from ?? ''));
     setFallbackKeys(Array.isArray(cfg?.fallback_keys) ? cfg.fallback_keys : []);
     setPreferredModel(cfg?.preferred_model || 'gemini-2.5-flash');
     setFallbackModels(Array.isArray(cfg?.fallback_models) ? cfg.fallback_models : []);
@@ -114,6 +116,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
     setApiKeyInsecure,
     apiKeyInsecureReason,
     setApiKeyInsecureReason,
+    configRecoveredFrom,
     fallbackKeys,
     setFallbackKeys,
     preferredModel,

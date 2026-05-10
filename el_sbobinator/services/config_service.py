@@ -360,6 +360,23 @@ def safe_output_basename(name: str) -> str:
     return s[:140] if len(s) > 140 else s
 
 
+def _remove_legacy_config_after_migration() -> None:
+    migrated_path = LEGACY_CONFIG_FILE + ".migrated"
+    try:
+        os.replace(LEGACY_CONFIG_FILE, migrated_path)
+    except FileNotFoundError:
+        return
+    except Exception as exc:
+        debug_log(f"legacy config migration cleanup: replace failed: {exc}")
+        return
+    try:
+        os.remove(migrated_path)
+    except FileNotFoundError:
+        pass
+    except Exception as exc:
+        debug_log(f"legacy config migration cleanup: remove failed: {exc}")
+
+
 def load_config() -> dict:  # noqa: C901
     global _config_cache, _config_cache_ts
     with _config_lock:
@@ -452,6 +469,7 @@ def load_config() -> dict:  # noqa: C901
                             preferred_model=data.get("preferred_model"),
                             fallback_models=data.get("fallback_models"),
                         )
+                        _remove_legacy_config_after_migration()
                     except Exception:
                         pass
                 preferred_model = sanitize_model_name(

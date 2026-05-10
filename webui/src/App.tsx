@@ -87,6 +87,7 @@ export default function App() {
     setApiKeyInsecure,
     apiKeyInsecureReason,
     setApiKeyInsecureReason,
+    configRecoveredFrom,
     fallbackKeys,
     setFallbackKeys,
     preferredModel,
@@ -301,6 +302,29 @@ export default function App() {
       setIsPeakDismissed(ts ? Date.now() < Number(ts) : false);
     }
   }, [isPeakHour]);
+
+  const configRecoveryToastPathRef = useRef<string | null>(null);
+  useEffect(() => {
+    const recoveredPath = configRecoveredFrom.trim();
+    if (!recoveredPath) return;
+    if (configRecoveryToastPathRef.current === recoveredPath) return;
+    const storageKey = `el-sbobinator.config-recovery-dismissed.v1:${recoveredPath}`;
+    try {
+      if (localStorage.getItem(storageKey) === '1') return;
+    } catch (_) {}
+    configRecoveryToastPathRef.current = recoveredPath;
+    showToast(
+      'Il file di configurazione era corrotto: ho ripristinato i valori predefiniti e salvato una copia di backup del file precedente.',
+      'warning',
+      {
+        persistent: true,
+        dedupeKey: `config-recovery:${recoveredPath}`,
+        onDismiss: () => {
+          try { localStorage.setItem(storageKey, '1'); } catch (_) {}
+        },
+      },
+    );
+  }, [configRecoveredFrom, showToast]);
 
   const peakToastIdRef = useRef<string | null>(null);
   useEffect(() => {

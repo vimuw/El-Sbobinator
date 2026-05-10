@@ -255,12 +255,29 @@ class ElSbobinatorApi:
                 migrate_legacy_session_root()
         except Exception:
             pass
+        self._startup_cleanup_thread = threading.Thread(
+            target=self._cleanup_orphan_temp_chunks_on_startup,
+            daemon=True,
+            name="temp-chunks-startup-cleanup",
+        )
+        self._startup_cleanup_thread.start()
         self._prewarm_thread = threading.Thread(
             target=self.get_completed_sessions,
             daemon=True,
             name="sessions-prewarm",
         )
         self._prewarm_thread.start()
+
+    def _cleanup_orphan_temp_chunks_on_startup(self) -> None:
+        try:
+            removed = cleanup_orphan_temp_chunks()
+            if removed > 0 and self._adapter.window is not None:
+                self._push_console(f"[*] Pulizia: rimossi {removed} file temporanei.")
+        except Exception as exc:
+            try:
+                self._logger.debug("startup temp cleanup failed: %s", exc)
+            except Exception:
+                pass
 
     def set_window(self, window: webview.Window):
         self._window = window

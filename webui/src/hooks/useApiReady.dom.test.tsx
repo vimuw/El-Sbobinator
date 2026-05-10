@@ -208,6 +208,23 @@ describe('useApiReady — bootstrap guard', () => {
     expect(result.current.apiKeyInsecureReason).toBe('DPAPI non disponibile');
   });
 
+  it('hydrates config recovery path', async () => {
+    const mockLoad = vi.fn().mockResolvedValue({
+      api_key: '',
+      config_recovered_from: 'C:\\Users\\me\\AppData\\Roaming\\El Sbobinator\\config.json',
+    });
+    setPywebview({ load_settings: mockLoad });
+
+    const { result } = renderHook(() => useApiReady(vi.fn()));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.configRecoveredFrom).toBe('C:\\Users\\me\\AppData\\Roaming\\El Sbobinator\\config.json');
+  });
+
   it('refreshSettings reloads security flags after bootstrap', async () => {
     const mockLoad = vi.fn()
       .mockResolvedValueOnce({
@@ -239,5 +256,30 @@ describe('useApiReady — bootstrap guard', () => {
     expect(result.current.apiKey).toBe('protected-key');
     expect(result.current.apiKeyInsecure).toBe(false);
     expect(result.current.apiKeyInsecureReason).toBe('');
+  });
+
+  it('refreshSettings reloads config recovery path', async () => {
+    const mockLoad = vi.fn()
+      .mockResolvedValueOnce({ api_key: '' })
+      .mockResolvedValueOnce({
+        api_key: '',
+        config_recovered_from: 'C:\\broken\\config.json',
+      });
+    setPywebview({ load_settings: mockLoad });
+
+    const { result } = renderHook(() => useApiReady(vi.fn()));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.configRecoveredFrom).toBe('');
+
+    await act(async () => {
+      await result.current.refreshSettings();
+    });
+
+    expect(result.current.configRecoveredFrom).toBe('C:\\broken\\config.json');
   });
 });
