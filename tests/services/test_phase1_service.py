@@ -801,6 +801,8 @@ class TestPhase1EdgeCases(unittest.TestCase):
         ):
             _, transcript, _ = self._run(session, prefetch_enabled=False)
 
+        self.assertIsNotNone(transcript)
+        assert transcript is not None
         self.assertIn("Testo.", transcript)
         self.assertEqual(len(cut_calls), 1)
 
@@ -850,6 +852,8 @@ class TestPhase1EdgeCases(unittest.TestCase):
                     **self._COMMON_KWARGS,
                 )
 
+        self.assertIsNotNone(transcript)
+        assert transcript is not None
         self.assertIn("Testo.", transcript)
         # First call is stream_copy=True (preconv), second is stream_copy=False (reencode)
         self.assertEqual(calls, [True, False])
@@ -947,6 +951,8 @@ class TestPhase1EdgeCases(unittest.TestCase):
             mock_types.GenerateContentConfig.return_value = MagicMock()
             _, transcript, _ = self._run(session, client=fake_client)
 
+        self.assertIsNotNone(transcript)
+        assert transcript is not None
         self.assertIn("Trascritto.", transcript)
 
     def test_inline_invalid_argument_falls_back_to_upload(self):
@@ -1001,6 +1007,8 @@ class TestPhase1EdgeCases(unittest.TestCase):
             mock_types.GenerateContentConfig.return_value = MagicMock()
             _, transcript, _ = self._run(session, client=fake_client)
 
+        self.assertIsNotNone(transcript)
+        assert transcript is not None
         self.assertIn("Trascritto.", transcript)
         self.assertEqual(call_count[0], 2)
 
@@ -1083,6 +1091,8 @@ class TestPhase1EdgeCases(unittest.TestCase):
         ):
             _, transcript, _ = self._run(session, **kwargs)
 
+        self.assertIsNotNone(transcript)
+        assert transcript is not None
         self.assertIn("Testo ripreso.", transcript)
         self.assertEqual(switched, [("flash-1.5-8b", "flash-1.5")])
 
@@ -1143,6 +1153,8 @@ class TestPhase1EdgeCases(unittest.TestCase):
         ):
             _, transcript, _ = self._run(session, **kwargs)
 
+        self.assertIsNotNone(transcript)
+        assert transcript is not None
         self.assertIn("Testo ripreso.", transcript)
         self.assertEqual(switched, [("flash-1.5-8b", "flash-1.5")])
 
@@ -1226,6 +1238,8 @@ class TestPhase1EdgeCases(unittest.TestCase):
         ):
             _, transcript, _ = self._run(session)
 
+        self.assertIsNotNone(transcript)
+        assert transcript is not None
         self.assertIn("Testo.", transcript)
 
     def test_audio_file_delete_failure_in_finally_is_swallowed(self):
@@ -1272,6 +1286,8 @@ class TestPhase1EdgeCases(unittest.TestCase):
             mock_types.GenerateContentConfig.return_value = MagicMock()
             _, transcript, _ = self._run(session, client=fake_client)
 
+        self.assertIsNotNone(transcript)
+        assert transcript is not None
         self.assertIn("Testo.", transcript)
 
 

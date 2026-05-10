@@ -1220,8 +1220,10 @@ class TestPipelineSessionEdgeCases(unittest.TestCase):
                 side_effect=OSError("locked"),
             ):
                 restored = restore_phase1_progress(
-                    context, stage="phase1", step_seconds=30
-                )  # type: ignore[arg-type]
+                    context,  # type: ignore[arg-type]
+                    stage="phase1",
+                    step_seconds=30,
+                )
 
         # list_phase1_chunks uses os.listdir (not open), so chunk IS found
         self.assertEqual(len(restored.existing_chunks), 1)

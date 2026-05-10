@@ -1,6 +1,6 @@
 import threading
 import unittest
-from typing import ClassVar
+from typing import Any, ClassVar, cast
 from unittest.mock import patch
 
 from el_sbobinator.core.model_registry import build_model_state
@@ -90,7 +90,7 @@ class TryRotateKeyTests(unittest.TestCase):
         self.assertTrue(rotated)
         self.assertEqual(key, "valid-key")
         self.assertEqual(keys, ["transient-key"])
-        self.assertEqual(client.api_key, "valid-key")
+        self.assertEqual(cast(Any, client).api_key, "valid-key")
 
     def test_all_transient_keys_stop_after_one_pass_without_consuming(self):
         calls = []
@@ -1606,6 +1606,7 @@ class DetectDegenerateMoreTests(unittest.TestCase):
         long_para = "parola " * 2000
         result = detect_degenerate_output(long_para)
         self.assertIsNotNone(result)
+        assert result is not None
         self.assertIn("troppo lungo", result)
 
     def test_duplicate_paragraph_ratio_threshold(self):

@@ -13,6 +13,7 @@ class _DummyTarget:
         self.events = []
         self.last_run_status = "idle"
         self.last_run_error = None
+        self.last_run_error_detail = None
         self.effective_api_key = None
 
     def winfo_exists(self):

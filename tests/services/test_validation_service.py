@@ -254,13 +254,13 @@ class ValidationServiceTests(unittest.TestCase):
 
         self.assertEqual(api_check["status"], "ok")
         self.assertEqual(middle_check["status"], "error")
-        self.assertIn("gemini-2.5-flash-lite", middle_check["details"])  # type: ignore[typeddict-item]
-        self.assertNotIn(
-            "AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345", middle_check["details"]
-        )  # type: ignore[typeddict-item]
-        self.assertIn("[API_KEY_REDACTED]", middle_check["details"])  # type: ignore[typeddict-item]
+        middle_details = middle_check.get("details", "")
+        last_details = last_check.get("details")
+        self.assertIn("gemini-2.5-flash-lite", middle_details)
+        self.assertNotIn("AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345", middle_details)
+        self.assertIn("[API_KEY_REDACTED]", middle_details)
         self.assertEqual(last_check["status"], "ok")
-        self.assertEqual(last_check["details"], "gemini-3-flash-preview")  # type: ignore[typeddict-item]
+        self.assertEqual(last_details, "gemini-3-flash-preview")
 
 
 class CheckWritableDirTests(unittest.TestCase):

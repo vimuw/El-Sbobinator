@@ -11,6 +11,7 @@ import os
 import sys
 import warnings
 from html import escape
+from typing import Any
 
 import webview
 
@@ -359,7 +360,7 @@ def main():
         except Exception:
             center_x, center_y = 100, 50
 
-    _pos_kwargs: dict[str, int] = {}
+    _pos_kwargs: dict[str, Any] = {}
     if center_x is not None and center_y is not None:
         _pos_kwargs = {"x": center_x, "y": center_y}
 
