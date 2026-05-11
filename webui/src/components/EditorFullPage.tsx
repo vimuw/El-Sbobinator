@@ -2,6 +2,8 @@ import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Check, Copy, ExternalLink, FileText } from 'lucide-react';
 import type { Heading } from './RichTextEditor';
+import type { SaveHtmlResult } from '../bridge';
+import { nextHtmlAutosaveGeneration, seedHtmlAutosaveGeneration } from '../autosaveGeneration';
 import { normalizePreviewHtmlContent } from '../previewHtml';
 
 const LazyAudioPlayer = React.lazy(() =>
@@ -10,6 +12,8 @@ const LazyAudioPlayer = React.lazy(() =>
 const LazyRichTextEditor = React.lazy(() =>
   import('./RichTextEditor').then(m => ({ default: m.RichTextEditor }))
 );
+
+const isSaveCommitted = (res: SaveHtmlResult) => res.ok && res.saved !== false;
 
 interface EditorFullPageProps {
   previewContent: string | null;
@@ -45,10 +49,14 @@ export function EditorFullPage({
   const isDirtyRef = useRef(false);
   const lastPersistedRef = useRef(previewContent ?? '');
   const autosaveTimerRef = useRef<number | null>(null);
-  const autosaveGenRef = useRef(0);
+  const [autosaveGenSeed] = useState(() => seedHtmlAutosaveGeneration(htmlPath));
+  const autosaveGenRef = useRef(autosaveGenSeed);
   const saveErrorOnCloseRef = useRef(false);
   const htmlPathRef = useRef(htmlPath);
-  useEffect(() => { htmlPathRef.current = htmlPath; }, [htmlPath]);
+  useEffect(() => {
+    htmlPathRef.current = htmlPath;
+    autosaveGenRef.current = seedHtmlAutosaveGeneration(htmlPath);
+  }, [htmlPath]);
 
   const [zoomLevel, setZoomLevel] = useState<number>(() => {
     const stored = localStorage.getItem('editor_zoom');
@@ -94,7 +102,9 @@ export function EditorFullPage({
       const path = htmlPathRef.current;
       const snap = getHtmlRef.current?.() ?? '';
       if (path && snap && snap !== lastPersistedRef.current) {
-        void window.pywebview?.api?.save_html_content(path, snap, ++autosaveGenRefAtCleanup.current);
+        const gen = nextHtmlAutosaveGeneration(path);
+        autosaveGenRefAtCleanup.current = gen;
+        void window.pywebview?.api?.save_html_content(path, snap, gen);
       }
     };
   }, []);
@@ -128,10 +138,11 @@ export function EditorFullPage({
       const path = htmlPathRef.current;
       const snap = getHtmlRef.current?.() ?? '';
       if (path && snap && snap !== lastPersistedRef.current && window.pywebview?.api?.save_html_content) {
-        const gen = ++autosaveGenRef.current;
+        const gen = nextHtmlAutosaveGeneration(path);
+        autosaveGenRef.current = gen;
         try {
           const res = await window.pywebview.api.save_html_content(path, snap, gen);
-          if (res.ok) {
+          if (isSaveCommitted(res)) {
             lastPersistedRef.current = snap;
             if (gen === autosaveGenRef.current) isDirtyRef.current = false;
             return true;
@@ -154,10 +165,11 @@ export function EditorFullPage({
       const snap = getHtmlRef.current?.() ?? '';
       if (path && snap && snap !== lastPersistedRef.current && window.pywebview?.api?.save_html_content) {
         setAutosaveStatus('saving');
-        const gen = ++autosaveGenRef.current;
+        const gen = nextHtmlAutosaveGeneration(path);
+        autosaveGenRef.current = gen;
         try {
           const res = await window.pywebview.api.save_html_content(path, snap, gen);
-          if (res.ok) {
+          if (isSaveCommitted(res)) {
             lastPersistedRef.current = snap;
             if (gen === autosaveGenRef.current) isDirtyRef.current = false;
           }
@@ -195,7 +207,8 @@ export function EditorFullPage({
     saveErrorOnCloseRef.current = false;
     if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
     const savedForPath = htmlPath;
-    const gen = ++autosaveGenRef.current;
+    const gen = nextHtmlAutosaveGeneration(savedForPath);
+    autosaveGenRef.current = gen;
     autosaveTimerRef.current = window.setTimeout(async () => {
       if (!isDirtyRef.current || !window.pywebview?.api?.save_html_content) return;
       const snap = getHtmlRef.current?.() ?? '';
@@ -205,7 +218,7 @@ export function EditorFullPage({
         const res = await window.pywebview.api.save_html_content(savedForPath, snap, gen);
         if (htmlPathRef.current !== savedForPath) return;
         if (gen !== autosaveGenRef.current) return;
-        if (res.ok) { lastPersistedRef.current = snap; isDirtyRef.current = false; setAutosaveStatus('saved'); }
+        if (isSaveCommitted(res)) { lastPersistedRef.current = snap; isDirtyRef.current = false; setAutosaveStatus('saved'); }
         else setAutosaveStatus('error');
       } catch { setAutosaveStatus('error'); }
     }, 700);

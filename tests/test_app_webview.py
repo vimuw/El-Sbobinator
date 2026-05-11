@@ -2232,6 +2232,7 @@ class TestSaveHtmlContentPathValidation(unittest.TestCase):
                 saved_path = mock_save.call_args[0][0] if mock_save.called else None
 
         self.assertTrue(result["ok"], result.get("error"))
+        self.assertTrue(result["saved"])
         self.assertIsNotNone(
             saved_path, "save_html_body_content should have been called"
         )
@@ -3082,6 +3083,7 @@ class TestRetryFailedRevisionBlocksBridge(unittest.TestCase):
             ):
                 first = api.save_html_content(html_path, "<p>New</p>", generation=1)
             self.assertTrue(first["ok"])
+            self.assertTrue(first["saved"])
             with open(session_path, encoding="utf-8") as fh:
                 self.assertTrue(json.load(fh)["user_edited"])
 
@@ -3091,9 +3093,20 @@ class TestRetryFailedRevisionBlocksBridge(unittest.TestCase):
                 "el_sbobinator.app_webview.get_desktop_dir", return_value=tmpdir
             ):
                 stale = api.save_html_content(html_path, "<p>Stale</p>", generation=1)
-            self.assertTrue(stale["ok"])
+            self.assertFalse(stale["ok"])
+            self.assertFalse(stale["saved"])
+            self.assertIn("più vecchio", stale["error"])
             with open(session_path, encoding="utf-8") as fh:
                 self.assertFalse(json.load(fh)["user_edited"])
+
+            with patch(
+                "el_sbobinator.app_webview.get_desktop_dir", return_value=tmpdir
+            ):
+                newest = api.save_html_content(html_path, "<p>Newest</p>", generation=2)
+            self.assertTrue(newest["ok"])
+            self.assertTrue(newest["saved"])
+            with open(html_path, encoding="utf-8") as fh:
+                self.assertIn("<p>Newest</p>", fh.read())
 
 
 class TestOpenUrlAllowlistCoverage(unittest.TestCase):

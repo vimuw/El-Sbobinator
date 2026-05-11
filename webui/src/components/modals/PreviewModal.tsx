@@ -2,10 +2,14 @@ import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react
 import { motion, AnimatePresence } from 'motion/react';
 import { Check, Copy, ExternalLink, FileText, X } from 'lucide-react';
 import type { Heading } from '../RichTextEditor';
+import type { SaveHtmlResult } from '../../bridge';
+import { nextHtmlAutosaveGeneration, seedHtmlAutosaveGeneration } from '../../autosaveGeneration';
 import { normalizePreviewHtmlContent } from '../../previewHtml';
 
 const LazyAudioPlayer = React.lazy(() => import('../AudioPlayer').then(module => ({ default: module.AudioPlayer })));
 const LazyRichTextEditor = React.lazy(() => import('../RichTextEditor').then(module => ({ default: module.RichTextEditor })));
+
+const isSaveCommitted = (res: SaveHtmlResult) => res.ok && res.saved !== false;
 
 interface PreviewModalProps {
   previewContent: string | null;
@@ -38,10 +42,14 @@ export function PreviewModal({
   const isDirtyRef = useRef(false);
   const lastPersistedRef = useRef(previewContent ?? '');
   const autosaveTimerRef = useRef<number | null>(null);
-  const autosaveGenRef = useRef(0);
+  const [autosaveGenSeed] = useState(() => seedHtmlAutosaveGeneration(htmlPath));
+  const autosaveGenRef = useRef(autosaveGenSeed);
   const saveErrorOnCloseRef = useRef(false);
   const htmlPathRef = useRef(htmlPath);
-  useEffect(() => { htmlPathRef.current = htmlPath; }, [htmlPath]);
+  useEffect(() => {
+    htmlPathRef.current = htmlPath;
+    autosaveGenRef.current = seedHtmlAutosaveGeneration(htmlPath);
+  }, [htmlPath]);
   useEffect(() => {
     lastPersistedRef.current = previewContent ?? '';
     isDirtyRef.current = false;
@@ -64,7 +72,9 @@ export function PreviewModal({
       const path = htmlPathRef.current;
       const snap = getHtmlRef.current?.() ?? '';
       if (path && snap && snap !== lastPersistedRef.current) {
-        void window.pywebview?.api?.save_html_content(path, snap, ++autosaveGenRefAtCleanup.current);
+        const gen = nextHtmlAutosaveGeneration(path);
+        autosaveGenRefAtCleanup.current = gen;
+        void window.pywebview?.api?.save_html_content(path, snap, gen);
       }
     };
   }, []); // empty deps: runs cleanup only on unmount
@@ -91,8 +101,10 @@ export function PreviewModal({
       if (path && snap && snap !== lastPersistedRef.current && window.pywebview?.api?.save_html_content) {
         setAutosaveStatus('saving');
         try {
-          const res = await window.pywebview.api.save_html_content(path, snap, ++autosaveGenRef.current);
-          if (res.ok) { lastPersistedRef.current = snap; isDirtyRef.current = false; }
+          const gen = nextHtmlAutosaveGeneration(path);
+          autosaveGenRef.current = gen;
+          const res = await window.pywebview.api.save_html_content(path, snap, gen);
+          if (isSaveCommitted(res)) { lastPersistedRef.current = snap; isDirtyRef.current = false; }
           else { saveErrorOnCloseRef.current = true; setAutosaveStatus('error'); return; }
         } catch { saveErrorOnCloseRef.current = true; setAutosaveStatus('error'); return; }
       }
@@ -113,7 +125,8 @@ export function PreviewModal({
     saveErrorOnCloseRef.current = false;
     if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
     const savedForPath = htmlPath;
-    const gen = ++autosaveGenRef.current;
+    const gen = nextHtmlAutosaveGeneration(savedForPath);
+    autosaveGenRef.current = gen;
     autosaveTimerRef.current = window.setTimeout(async () => {
       if (!isDirtyRef.current || !window.pywebview?.api?.save_html_content) return;
       const snap = getHtmlRef.current?.() ?? '';
@@ -123,7 +136,7 @@ export function PreviewModal({
         const res = await window.pywebview.api.save_html_content(savedForPath, snap, gen);
         if (htmlPathRef.current !== savedForPath) return;
         if (gen !== autosaveGenRef.current) return;
-        if (res.ok) { lastPersistedRef.current = snap; isDirtyRef.current = false; setAutosaveStatus('saved'); }
+        if (isSaveCommitted(res)) { lastPersistedRef.current = snap; isDirtyRef.current = false; setAutosaveStatus('saved'); }
         else setAutosaveStatus('error');
       } catch { setAutosaveStatus('error'); }
     }, 700);

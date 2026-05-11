@@ -1976,7 +1976,12 @@ class ElSbobinatorApi:
             )
             if saved:
                 self._mark_session_user_edited_for_html(real_path)
-            return {"ok": True}
+                return {"ok": True, "saved": True}
+            return {
+                "ok": False,
+                "saved": False,
+                "error": "Salvataggio ignorato perché più vecchio dell'ultima versione.",
+            }
         except Exception as e:
             return {"ok": False, "error": redact_secrets(e)}
 
