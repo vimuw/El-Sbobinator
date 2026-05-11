@@ -61,28 +61,29 @@ _storage_info_executor = concurrent.futures.ThreadPoolExecutor(
     max_workers=1, thread_name_prefix="storage_info"
 )
 
+_TEMP_CHUNK_AUDIO_EXTS = (".mp3", ".wav", ".m4a")
 
-def cleanup_orphan_temp_chunks(max_age_seconds: int = 12 * 3600) -> int:
-    """
-    Best-effort cleanup of temp chunk files left behind by crashes/forced closes.
-    Only touches files matching our own prefix in the OS temp directory.
-    """
+
+def _is_old_enough(path: str, now: float, max_age_seconds: int) -> bool:
+    try:
+        age = now - float(os.path.getmtime(path))
+        return age >= max(0, int(max_age_seconds))
+    except Exception:
+        return False
+
+
+def _cleanup_legacy_temp_chunks(tmpdir: str, now: float, max_age_seconds: int) -> int:
     removed = 0
     try:
-        tmpdir = tempfile.gettempdir()
-        now = time.time()
         for name in os.listdir(tmpdir):
             low = name.lower()
             if not low.startswith("el_sbobinator_temp_"):
                 continue
-            if not (
-                low.endswith(".mp3") or low.endswith(".wav") or low.endswith(".m4a")
-            ):
+            if not low.endswith(_TEMP_CHUNK_AUDIO_EXTS):
                 continue
             path = os.path.join(tmpdir, name)
             try:
-                age = now - float(os.path.getmtime(path))
-                if age < max(0, int(max_age_seconds)):
+                if not _is_old_enough(path, now, max_age_seconds):
                     continue
                 os.remove(path)
                 removed += 1
@@ -90,6 +91,80 @@ def cleanup_orphan_temp_chunks(max_age_seconds: int = 12 * 3600) -> int:
                 pass
     except Exception:
         pass
+    return removed
+
+
+def _cleanup_session_temp_chunks(now: float, max_age_seconds: int) -> int:
+    removed = 0
+    try:
+        session_root = SESSION_ROOT
+        with os.scandir(session_root) as sessions:
+            for session_entry in sessions:
+                try:
+                    if not session_entry.is_dir():
+                        continue
+                    temp_chunks_dir = os.path.join(session_entry.path, "temp_chunks")
+                    if not os.path.isdir(temp_chunks_dir):
+                        continue
+                    with os.scandir(temp_chunks_dir) as run_dirs:
+                        for run_entry in run_dirs:
+                            try:
+                                name = run_entry.name.lower()
+                                if (
+                                    not name.startswith("run_")
+                                    or not run_entry.is_dir()
+                                ):
+                                    continue
+                                run_dir_old = _is_old_enough(
+                                    run_entry.path,
+                                    now,
+                                    max_age_seconds,
+                                )
+                                removed_in_run = 0
+                                with os.scandir(run_entry.path) as chunk_files:
+                                    for chunk_entry in chunk_files:
+                                        try:
+                                            chunk_name = chunk_entry.name.lower()
+                                            if not chunk_entry.is_file():
+                                                continue
+                                            if not chunk_name.startswith("chunk_"):
+                                                continue
+                                            if not chunk_name.endswith(
+                                                _TEMP_CHUNK_AUDIO_EXTS
+                                            ):
+                                                continue
+                                            if not _is_old_enough(
+                                                chunk_entry.path,
+                                                now,
+                                                max_age_seconds,
+                                            ):
+                                                continue
+                                            os.remove(chunk_entry.path)
+                                            removed += 1
+                                            removed_in_run += 1
+                                        except Exception:
+                                            pass
+                                if run_dir_old or removed_in_run > 0:
+                                    try:
+                                        os.rmdir(run_entry.path)
+                                    except Exception:
+                                        pass
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return removed
+
+
+def cleanup_orphan_temp_chunks(max_age_seconds: int = 12 * 3600) -> int:
+    """
+    Best-effort cleanup of temp chunk files left behind by crashes/forced closes.
+    """
+    now = time.time()
+    removed = _cleanup_legacy_temp_chunks(tempfile.gettempdir(), now, max_age_seconds)
+    removed += _cleanup_session_temp_chunks(now, max_age_seconds)
     return removed
 
 

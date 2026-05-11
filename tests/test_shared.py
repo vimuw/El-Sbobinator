@@ -266,6 +266,43 @@ class CleanupOrphanTempChunksTests(unittest.TestCase):
             self.assertEqual(removed, 0)
             self.assertTrue(os.path.exists(non_audio))
 
+    def test_removes_old_session_temp_chunk_files_and_empty_run_dir(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir = os.path.join(tmpdir, "session-a")
+            run_dir = os.path.join(session_dir, "temp_chunks", "run_123_abc")
+            os.makedirs(run_dir)
+            chunk_path = os.path.join(run_dir, "chunk_001_0_60.mp3")
+            with open(chunk_path, "wb") as f:
+                f.write(b"x")
+
+            old = time.time() - 13 * 3600
+            os.utime(chunk_path, (old, old))
+
+            with (
+                patch("tempfile.gettempdir", return_value=os.path.join(tmpdir, "tmp")),
+                patch("el_sbobinator.core.shared.SESSION_ROOT", tmpdir),
+            ):
+                removed = cleanup_orphan_temp_chunks(max_age_seconds=12 * 3600)
+
+            self.assertEqual(removed, 1)
+            self.assertFalse(os.path.exists(chunk_path))
+            self.assertFalse(os.path.exists(run_dir))
+
+    def test_preserves_fresh_empty_session_temp_run_dir(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir = os.path.join(tmpdir, "session-a")
+            run_dir = os.path.join(session_dir, "temp_chunks", "run_123_abc")
+            os.makedirs(run_dir)
+
+            with (
+                patch("tempfile.gettempdir", return_value=os.path.join(tmpdir, "tmp")),
+                patch("el_sbobinator.core.shared.SESSION_ROOT", tmpdir),
+            ):
+                removed = cleanup_orphan_temp_chunks(max_age_seconds=12 * 3600)
+
+            self.assertEqual(removed, 0)
+            self.assertTrue(os.path.exists(run_dir))
+
 
 class PartialFileHashTests(unittest.TestCase):
     def test_existing_file_returns_hex_string(self):

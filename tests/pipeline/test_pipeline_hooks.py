@@ -78,6 +78,24 @@ class PipelineRuntimeTests(unittest.TestCase):
         self.assertFalse(os.path.exists(path))
         self.assertEqual(target.file_temporanei, [])
 
+    def test_runtime_removes_empty_phase1_temp_run_dir_after_cleaning_files(self):
+        target = _DummyTarget()
+        runtime = PipelineRuntime(target)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = os.path.join(tmpdir, "session", "temp_chunks", "run_test")
+            os.makedirs(run_dir)
+            chunk_path = os.path.join(run_dir, "chunk_001_0_60.mp3")
+            with open(chunk_path, "wb") as handle:
+                handle.write(b"x")
+            runtime.track_temp_file(chunk_path)
+
+            runtime.cleanup_temp_files()
+
+            self.assertFalse(os.path.exists(chunk_path))
+            self.assertFalse(os.path.exists(run_dir))
+            self.assertEqual(target.file_temporanei, [])
+
 
 class PipelineRuntimeCancelledTests(unittest.TestCase):
     def test_cancelled_false_when_event_not_set(self):

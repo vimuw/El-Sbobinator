@@ -6,6 +6,7 @@ from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 from el_sbobinator.core.model_registry import build_model_state
+from el_sbobinator.pipeline.pipeline_hooks import PipelineRuntime
 from el_sbobinator.services.generation_service import (
     AllModelsUnavailableError,
     DegenerateOutputError,
@@ -32,6 +33,325 @@ class _FakeRuntime:
 
     def register_step_time(self, *_, **__):
         pass
+
+
+class _RecordingRuntime(_FakeRuntime):
+    def __init__(self):
+        self.temp_files: list[str] = []
+
+    def track_temp_file(self, path):
+        self.temp_files.append(path)
+
+
+class Phase1TempChunkPathTests(unittest.TestCase):
+    def _capture_single_chunk_paths(
+        self, chunks_dir: str
+    ) -> tuple[list[str], list[str]]:
+        session = {"stage": "phase1", "phase1": {}}
+        runtime = _RecordingRuntime()
+        cut_paths: list[str] = []
+
+        def fake_cut(**kwargs):
+            cut_paths.append(str(kwargs.get("output_path", "")))
+            return True, None
+
+        with (
+            patch(
+                "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                side_effect=fake_cut,
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.retry_with_quota",
+                return_value=(object(), "Testo."),
+            ),
+        ):
+            _, transcript, _ = process_phase1_transcription(
+                client=object(),
+                model_name="test",
+                input_path="fake.mp3",
+                preconv_used_path=None,
+                ffmpeg_exe="ffmpeg",
+                cancel_event=threading.Event(),
+                cancelled=lambda: False,
+                start_sec=0,
+                total_duration_sec=60,
+                step_seconds=60,
+                chunk_seconds=60,
+                bitrate="48k",
+                inline_max_bytes=None,
+                prefetch_enabled=False,
+                phase1_chunks_dir=chunks_dir,
+                session=session,
+                save_session=lambda: True,
+                fallback_keys=[],
+                request_fallback_key=lambda: None,
+                system_prompt="test",
+                runtime=runtime,
+            )
+
+        self.assertIsNotNone(transcript)
+        return cut_paths, runtime.temp_files
+
+    def test_identical_chunk_ranges_in_two_sessions_generate_different_temp_paths(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            chunks_a = os.path.join(tmpdir, "session-a", "phase1_chunks")
+            chunks_b = os.path.join(tmpdir, "session-b", "phase1_chunks")
+            os.makedirs(chunks_a)
+            os.makedirs(chunks_b)
+
+            cut_paths_a, tracked_a = self._capture_single_chunk_paths(chunks_a)
+            cut_paths_b, tracked_b = self._capture_single_chunk_paths(chunks_b)
+
+            path_a = cut_paths_a[0]
+            path_b = cut_paths_b[0]
+            prefix_a = os.path.join(tmpdir, "session-a", "temp_chunks") + os.sep
+            prefix_b = os.path.join(tmpdir, "session-b", "temp_chunks") + os.sep
+
+            self.assertNotEqual(path_a, path_b)
+            self.assertTrue(
+                os.path.normcase(path_a).startswith(os.path.normcase(prefix_a))
+            )
+            self.assertTrue(
+                os.path.normcase(path_b).startswith(os.path.normcase(prefix_b))
+            )
+            self.assertEqual(os.path.basename(path_a), "chunk_001_0_60.mp3")
+            self.assertEqual(os.path.basename(path_b), "chunk_001_0_60.mp3")
+            self.assertEqual(tracked_a, cut_paths_a)
+            self.assertEqual(tracked_b, cut_paths_b)
+
+    def test_identical_chunk_ranges_in_same_session_generate_different_run_paths(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            chunks_dir = os.path.join(tmpdir, "session", "phase1_chunks")
+            os.makedirs(chunks_dir)
+
+            cut_paths_a, _ = self._capture_single_chunk_paths(chunks_dir)
+            cut_paths_b, _ = self._capture_single_chunk_paths(chunks_dir)
+
+            path_a = cut_paths_a[0]
+            path_b = cut_paths_b[0]
+
+            self.assertNotEqual(path_a, path_b)
+            self.assertNotEqual(os.path.dirname(path_a), os.path.dirname(path_b))
+
+    def test_success_removes_empty_temp_run_dir(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            chunks_dir = os.path.join(tmpdir, "session", "phase1_chunks")
+            os.makedirs(chunks_dir)
+
+            cut_paths, _ = self._capture_single_chunk_paths(chunks_dir)
+
+            run_dir = os.path.dirname(cut_paths[0])
+            self.assertFalse(os.path.exists(run_dir))
+
+    def test_quota_return_removes_empty_temp_run_dir_after_chunk_cleanup(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            chunks_dir = os.path.join(tmpdir, "session", "phase1_chunks")
+            os.makedirs(chunks_dir)
+            session = {"stage": "phase1", "phase1": {}}
+            runtime = _RecordingRuntime()
+            cut_paths: list[str] = []
+
+            def fake_cut(**kwargs):
+                output_path = str(kwargs.get("output_path", ""))
+                cut_paths.append(output_path)
+                with open(output_path, "wb") as handle:
+                    handle.write(b"x" * 2048)
+                return True, None
+
+            with (
+                patch(
+                    "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                    side_effect=fake_cut,
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.generation_service.make_inline_audio_part",
+                    return_value=None,
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.retry_with_quota",
+                    side_effect=QuotaDailyLimitError("daily"),
+                ),
+            ):
+                _, transcript, _ = process_phase1_transcription(
+                    client=object(),
+                    model_name="test",
+                    input_path="fake.mp3",
+                    preconv_used_path=None,
+                    ffmpeg_exe="ffmpeg",
+                    cancel_event=threading.Event(),
+                    cancelled=lambda: False,
+                    start_sec=0,
+                    total_duration_sec=60,
+                    step_seconds=60,
+                    chunk_seconds=60,
+                    bitrate="48k",
+                    inline_max_bytes=None,
+                    prefetch_enabled=False,
+                    phase1_chunks_dir=chunks_dir,
+                    session=session,
+                    save_session=lambda: True,
+                    fallback_keys=[],
+                    request_fallback_key=lambda: None,
+                    system_prompt="test",
+                    runtime=runtime,
+                )
+
+            self.assertIsNone(transcript)
+            self.assertEqual(session["last_error"], "quota_daily_limit_phase1")
+            self.assertEqual(len(cut_paths), 1)
+            self.assertFalse(os.path.exists(cut_paths[0]))
+            self.assertFalse(os.path.exists(os.path.dirname(cut_paths[0])))
+
+    def test_prefetched_chunk_uses_same_session_temp_run_dir(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            chunks_dir = os.path.join(tmpdir, "session", "phase1_chunks")
+            os.makedirs(chunks_dir)
+            session = {"stage": "phase1", "phase1": {}}
+            runtime = _RecordingRuntime()
+            cut_paths: list[str] = []
+
+            def fake_cut(**kwargs):
+                output_path = str(kwargs.get("output_path", ""))
+                cut_paths.append(output_path)
+                with open(output_path, "wb") as handle:
+                    handle.write(b"x" * 2048)
+                return True, None
+
+            with (
+                patch(
+                    "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                    side_effect=fake_cut,
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.generation_service.make_inline_audio_part",
+                    return_value=None,
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.retry_with_quota",
+                    return_value=(object(), "Testo."),
+                ),
+            ):
+                _, transcript, _ = process_phase1_transcription(
+                    client=object(),
+                    model_name="test",
+                    input_path="fake.mp3",
+                    preconv_used_path=None,
+                    ffmpeg_exe="ffmpeg",
+                    cancel_event=threading.Event(),
+                    cancelled=lambda: False,
+                    start_sec=0,
+                    total_duration_sec=120,
+                    step_seconds=60,
+                    chunk_seconds=60,
+                    bitrate="48k",
+                    inline_max_bytes=None,
+                    prefetch_enabled=True,
+                    phase1_chunks_dir=chunks_dir,
+                    session=session,
+                    save_session=lambda: True,
+                    fallback_keys=[],
+                    request_fallback_key=lambda: None,
+                    system_prompt="test",
+                    runtime=runtime,
+                )
+
+            self.assertIsNotNone(transcript)
+            prefix = os.path.join(tmpdir, "session", "temp_chunks") + os.sep
+            self.assertEqual(len(cut_paths), 2)
+            self.assertEqual(
+                {os.path.dirname(path) for path in cut_paths},
+                {os.path.dirname(cut_paths[0])},
+            )
+            self.assertTrue(
+                os.path.normcase(cut_paths[0]).startswith(os.path.normcase(prefix))
+            )
+            self.assertEqual(
+                sorted(os.path.basename(path) for path in cut_paths),
+                ["chunk_001_0_60.mp3", "chunk_002_60_120.mp3"],
+            )
+            self.assertEqual(list(dict.fromkeys(runtime.temp_files)), cut_paths)
+
+    def test_pipeline_cleanup_removes_empty_run_dir_after_prefetch_quota_abort(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            chunks_dir = os.path.join(tmpdir, "session", "phase1_chunks")
+            os.makedirs(chunks_dir)
+            session = {"stage": "phase1", "phase1": {}}
+
+            class _Target:
+                def __init__(self):
+                    self.cancel_event = threading.Event()
+                    self.file_temporanei: list[str] = []
+
+            target = _Target()
+            runtime = PipelineRuntime(target)
+            prefetch_written = threading.Event()
+            cut_paths: list[str] = []
+
+            def fake_cut(**kwargs):
+                output_path = str(kwargs.get("output_path", ""))
+                start_sec = int(kwargs.get("start_sec", 0))
+                cut_paths.append(output_path)
+                with open(output_path, "wb") as handle:
+                    handle.write(b"x" * 2048)
+                if start_sec == 60:
+                    prefetch_written.set()
+                return True, None
+
+            def fake_retry(*_, **__):
+                self.assertTrue(prefetch_written.wait(timeout=2.0))
+                raise QuotaDailyLimitError("daily")
+
+            with (
+                patch(
+                    "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                    side_effect=fake_cut,
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.generation_service.make_inline_audio_part",
+                    return_value=None,
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.retry_with_quota",
+                    side_effect=fake_retry,
+                ),
+            ):
+                _, transcript, _ = process_phase1_transcription(
+                    client=object(),
+                    model_name="test",
+                    input_path="fake.mp3",
+                    preconv_used_path=None,
+                    ffmpeg_exe="ffmpeg",
+                    cancel_event=threading.Event(),
+                    cancelled=lambda: False,
+                    start_sec=0,
+                    total_duration_sec=120,
+                    step_seconds=60,
+                    chunk_seconds=60,
+                    bitrate="48k",
+                    inline_max_bytes=None,
+                    prefetch_enabled=True,
+                    phase1_chunks_dir=chunks_dir,
+                    session=session,
+                    save_session=lambda: True,
+                    fallback_keys=[],
+                    request_fallback_key=lambda: None,
+                    system_prompt="test",
+                    runtime=runtime,
+                )
+
+            self.assertIsNone(transcript)
+            self.assertEqual(session["last_error"], "quota_daily_limit_phase1")
+            self.assertEqual(
+                sorted(os.path.basename(path) for path in cut_paths),
+                ["chunk_001_0_60.mp3", "chunk_002_60_120.mp3"],
+            )
+            run_dir = os.path.dirname(cut_paths[0])
+            self.assertTrue(os.path.exists(run_dir))
+
+            runtime.cleanup_temp_files()
+
+            self.assertFalse(os.path.exists(run_dir))
+            self.assertEqual(target.file_temporanei, [])
 
 
 class Phase1SessionErrorKeyTests(unittest.TestCase):

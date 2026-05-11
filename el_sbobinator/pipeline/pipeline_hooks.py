@@ -172,10 +172,21 @@ class PipelineRuntime:
         self.target.file_temporanei.append(path)
 
     def cleanup_temp_files(self) -> None:
+        parent_dirs = []
         for path in list(getattr(self.target, "file_temporanei", [])):
             try:
+                parent_dirs.append(os.path.dirname(os.path.abspath(path)))
                 if os.path.exists(path):
                     os.remove(path)
+            except Exception:
+                pass
+        for parent_dir in dict.fromkeys(parent_dirs):
+            try:
+                if (
+                    os.path.basename(parent_dir).startswith("run_")
+                    and os.path.basename(os.path.dirname(parent_dir)) == "temp_chunks"
+                ):
+                    os.rmdir(parent_dir)
             except Exception:
                 pass
         self.target.file_temporanei = []

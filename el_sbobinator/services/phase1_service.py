@@ -8,9 +8,9 @@ process_phase1_transcription() that contains all chunk-loop logic.
 from __future__ import annotations
 
 import os
-import tempfile
 import threading
 import time
+import uuid
 from collections.abc import Callable
 
 from google.genai import types
@@ -45,8 +45,96 @@ def _sanitize_error_detail(error: object, max_len: int = 500) -> str:
     return redact_secrets(text, max_len=max_len)
 
 
-def process_phase1_transcription(  # noqa: C901
+def _phase1_temp_run_dir(phase1_chunks_dir: str) -> str:
+    session_dir = os.path.dirname(os.path.abspath(phase1_chunks_dir))
+    run_name = f"run_{os.getpid()}_{uuid.uuid4().hex}"
+    return os.path.join(session_dir, "temp_chunks", run_name)
+
+
+def _phase1_chunk_temp_path(
+    temp_run_dir: str, chunk_idx: int, start_s: int, end_s: float
+) -> str:
+    os.makedirs(temp_run_dir, exist_ok=True)
+    return os.path.join(
+        temp_run_dir,
+        f"chunk_{int(chunk_idx):03}_{int(start_s)}_{int(end_s)}.mp3",
+    )
+
+
+def _cleanup_phase1_temp_run_dir(temp_run_dir: str) -> None:
+    try:
+        os.rmdir(temp_run_dir)
+    except Exception:
+        pass
+
+
+def process_phase1_transcription(
     *,
+    client,
+    model_name: str,
+    model_state: ModelState | None = None,
+    input_path: str,
+    preconv_used_path: str | None,
+    ffmpeg_exe: str,
+    cancel_event,
+    cancelled: Callable[[], bool],
+    start_sec: int,
+    total_duration_sec: float,
+    step_seconds: int,
+    chunk_seconds: int,
+    bitrate: str,
+    inline_max_bytes,
+    prefetch_enabled: bool,
+    initial_full_transcript: str = "",
+    initial_prev_memory: str = "",
+    phase1_chunks_dir: str,
+    session: dict,
+    save_session: Callable[[], bool],
+    fallback_keys: list,
+    request_fallback_key: Callable[[], str | None],
+    system_prompt: str,
+    runtime,
+    on_model_switched=None,
+    logger=None,
+) -> tuple[object, str | None, str]:
+    temp_run_dir = _phase1_temp_run_dir(phase1_chunks_dir)
+    try:
+        return _process_phase1_transcription_impl(
+            client=client,
+            model_name=model_name,
+            model_state=model_state,
+            input_path=input_path,
+            preconv_used_path=preconv_used_path,
+            ffmpeg_exe=ffmpeg_exe,
+            cancel_event=cancel_event,
+            cancelled=cancelled,
+            start_sec=start_sec,
+            total_duration_sec=total_duration_sec,
+            step_seconds=step_seconds,
+            chunk_seconds=chunk_seconds,
+            bitrate=bitrate,
+            inline_max_bytes=inline_max_bytes,
+            prefetch_enabled=prefetch_enabled,
+            initial_full_transcript=initial_full_transcript,
+            initial_prev_memory=initial_prev_memory,
+            phase1_chunks_dir=phase1_chunks_dir,
+            session=session,
+            save_session=save_session,
+            fallback_keys=fallback_keys,
+            request_fallback_key=request_fallback_key,
+            system_prompt=system_prompt,
+            runtime=runtime,
+            on_model_switched=on_model_switched,
+            logger=logger,
+            temp_run_dir=temp_run_dir,
+        )
+    finally:
+        _cleanup_phase1_temp_run_dir(temp_run_dir)
+
+
+def _process_phase1_transcription_impl(  # noqa: C901
+    *,
+    temp_run_dir: str,
     client,
     model_name: str,
     model_state: ModelState | None = None,
@@ -82,6 +170,11 @@ def process_phase1_transcription(  # noqa: C901
     The session's last_error is set before returning None for error cases.
     """
     log = logger or get_logger("el_sbobinator.phase1")
+
+    def _finish(
+        result: tuple[object, str | None, str],
+    ) -> tuple[object, str | None, str]:
+        return result
 
     full_transcript = initial_full_transcript
     prev_memory = initial_prev_memory
@@ -125,7 +218,9 @@ def process_phase1_transcription(  # noqa: C901
             stop_event=cancel_event,
         )
 
-    def _start_prefetch(next_start_s: int, next_end_s: float, brate: str):
+    def _start_prefetch(
+        next_chunk_idx: int, next_start_s: int, next_end_s: float, brate: str
+    ):
         nonlocal next_cut
         if not prefetch_enabled:
             return
@@ -134,9 +229,8 @@ def process_phase1_transcription(  # noqa: C901
         if next_cut is not None:
             return
         try:
-            path_next = os.path.join(
-                tempfile.gettempdir(),
-                f"el_sbobinator_temp_{int(next_start_s)}_{int(next_end_s)}.mp3",
+            path_next = _phase1_chunk_temp_path(
+                temp_run_dir, next_chunk_idx, next_start_s, next_end_s
             )
         except Exception:
             return
@@ -172,15 +266,14 @@ def process_phase1_transcription(  # noqa: C901
 
         if cancelled():
             print("   [*] Operazione annullata dall'utente.")
-            return client, None, prev_memory
+            return _finish((client, None, prev_memory))
 
         chain_exhaustion_recovery_used = False
 
         while True:
             chunk_step_t0 = time.monotonic()
-            chunk_path = os.path.join(
-                tempfile.gettempdir(),
-                f"el_sbobinator_temp_{chunk_start_sec}_{int(chunk_end_sec)}.mp3",
+            chunk_path = _phase1_chunk_temp_path(
+                temp_run_dir, chunk_idx, chunk_start_sec, chunk_end_sec
             )
             runtime.track_temp_file(chunk_path)
 
@@ -228,7 +321,7 @@ def process_phase1_transcription(  # noqa: C901
                     if not ok:
                         if str(err or "").strip().lower() == "cancelled" or cancelled():
                             print("   [*] Operazione annullata dall'utente.")
-                            return client, None, prev_memory
+                            return _finish((client, None, prev_memory))
                         if err:
                             raise RuntimeError(
                                 f"FFmpeg ha fallito l'estrazione audio:\n{err}"
@@ -313,7 +406,9 @@ def process_phase1_transcription(  # noqa: C901
                         next_end = min(
                             float(next_start + chunk_seconds), float(total_duration_sec)
                         )
-                        _start_prefetch(next_start, next_end, brate=bitrate)
+                        _start_prefetch(
+                            chunk_idx + 1, next_start, next_end, brate=bitrate
+                        )
                 except Exception as e:
                     debug_log(f"prefetch schedule error: {e}")
 
@@ -465,14 +560,14 @@ def process_phase1_transcription(  # noqa: C901
                     print(
                         "[*] Interruzione: progressi salvati. Potrai riprendere piu' tardi."
                     )
-                    return client, None, prev_memory
+                    return _finish((client, None, prev_memory))
 
                 except PermanentError as pe:
                     print(f"   [!] Richiesta non valida (400). Dettagli:\n{pe}")
                     session["last_error"] = "bad_request_phase1"
                     session["last_error_detail"] = None
                     save_session()
-                    return client, None, prev_memory
+                    return _finish((client, None, prev_memory))
 
                 except DegenerateOutputError as de:
                     if not chain_exhaustion_recovery_used:
@@ -499,7 +594,7 @@ def process_phase1_transcription(  # noqa: C901
                     session["last_error"] = "phase1_degenerate_output"
                     session["last_error_detail"] = None
                     save_session()
-                    return client, None, prev_memory
+                    return _finish((client, None, prev_memory))
 
                 except AllModelsUnavailableError as ue:
                     if not chain_exhaustion_recovery_used:
@@ -519,7 +614,7 @@ def process_phase1_transcription(  # noqa: C901
                     session["last_error"] = "phase1_all_models_unavailable"
                     session["last_error_detail"] = None
                     save_session()
-                    return client, None, prev_memory
+                    return _finish((client, None, prev_memory))
 
                 except Exception as e:
                     last_failure_detail = _sanitize_error_detail(e)
@@ -555,11 +650,11 @@ def process_phase1_transcription(  # noqa: C901
                 print(
                     "   [!] Errore critico durante l'elaborazione del blocco. Interrompo (progressi salvati)."
                 )
-                return client, None, prev_memory
+                return _finish((client, None, prev_memory))
             break
 
         if not sleep_with_cancel(cancelled, 5):
             print("   [*] Operazione annullata dall'utente.")
-            return client, None, prev_memory
+            return _finish((client, None, prev_memory))
 
-    return client, full_transcript, prev_memory
+    return _finish((client, full_transcript, prev_memory))
