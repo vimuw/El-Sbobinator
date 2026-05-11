@@ -56,6 +56,14 @@ function formatBytes(bytes: number): string {
   return `${Math.round(bytes / 1_048_576)} MB`;
 }
 
+const SUPPORTED_MEDIA_EXTENSIONS = new Set(['.mp3', '.m4a', '.wav', '.ogg', '.flac', '.aac', '.mp4', '.mkv', '.webm']);
+const UNSUPPORTED_MEDIA_ERROR = 'Formato non supportato. Seleziona un file audio/video: MP3, M4A, WAV, OGG, FLAC, AAC, MP4, MKV o WEBM.';
+
+function isSupportedMediaPath(path: string): boolean {
+  const match = String(path || '').trim().toLowerCase().match(/\.[^.\\/]+$/);
+  return Boolean(match && SUPPORTED_MEDIA_EXTENSIONS.has(match[0]));
+}
+
 type UiMode = 'setup' | 'ready-empty' | 'ready-with-files' | 'processing' | 'canceling';
 type ConfirmActionState =
   | { type: 'stop-processing' }
@@ -684,6 +692,10 @@ export default function App() {
     if (queuedFiles.length === 0) return [] as FileDescriptor[];
     const file = queuedFiles[0];
     const p = String(file.path || '').trim();
+    if (p && !isSupportedMediaPath(p)) {
+      appendConsole(`❌ ${UNSUPPORTED_MEDIA_ERROR}`);
+      return [];
+    }
     const exists = p && api?.check_path_exists ? Boolean((await api.check_path_exists(p))?.exists) : Boolean(p);
     let nextPath = p;
     let nextName = file.name;
@@ -694,6 +706,7 @@ export default function App() {
       appendConsole(`Audio non trovato per ${file.name}. Selezionalo di nuovo per continuare.`);
       const selectedFile = await api.ask_media_file();
       if (!selectedFile?.path) { appendConsole(`Avvio annullato: audio non ricollegato per ${file.name}.`); return []; }
+      if (!isSupportedMediaPath(selectedFile.path)) { appendConsole(`❌ ${UNSUPPORTED_MEDIA_ERROR}`); return []; }
       nextPath = selectedFile.path; nextName = selectedFile.name; nextSize = selectedFile.size; nextDuration = selectedFile.duration || 0;
       dispatch({ type: 'queue/update_source', id: file.id, path: nextPath, name: nextName, size: nextSize, duration: nextDuration });
       appendConsole(`Audio ricollegato: ${nextName}`);

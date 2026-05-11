@@ -5,7 +5,7 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
-from typing import ClassVar, cast
+from typing import Any, ClassVar, cast
 from unittest.mock import MagicMock, mock_open, patch
 
 from el_sbobinator.app_webview import ElSbobinatorApi, PipelineAdapter
@@ -52,16 +52,28 @@ class _StartupCleanupThread:
 class _FakeWindow:
     def __init__(self):
         self.calls: list[str] = []
+        self.dialog_calls: list[tuple[tuple[object, ...], dict[str, Any]]] = []
         self.dialog_result: str | None = None
 
     def evaluate_js(self, script):
         self.calls.append(script)
 
-    def create_file_dialog(self, *_args, **_kwargs):
+    def create_file_dialog(self, *args: object, **kwargs: Any):
+        self.dialog_calls.append((args, kwargs))
         return self.dialog_result
 
 
 class AppWebviewTests(unittest.TestCase):
+    def setUp(self):
+        self._probe_media_duration_patch = patch(
+            "el_sbobinator.services.audio_service.probe_media_duration",
+            return_value=(60.0, None),
+        )
+        self._probe_media_duration_patch.start()
+
+    def tearDown(self):
+        self._probe_media_duration_patch.stop()
+
     def test_startup_schedules_temp_cleanup_thread(self):
         _StartupCleanupThread.instances = []
         with (
@@ -241,6 +253,52 @@ class AppWebviewTests(unittest.TestCase):
         self.assertEqual(result[0]["path"], window.dialog_result)
         self.assertEqual(
             result[0]["name"], __import__("os").path.basename(window.dialog_result)
+        )
+
+    def test_ask_files_rejects_invalid_extension_from_dialog(self):
+        api = ElSbobinatorApi()
+        api._adapter.emit = MagicMock()
+        window = _FakeWindow()
+        with tempfile.NamedTemporaryFile("wb", suffix=".pdf", delete=False) as tmp:
+            file_path = tmp.name
+            window.dialog_result = file_path
+        api.set_window(window)  # type: ignore[arg-type]
+
+        try:
+            result = api.ask_files()
+        finally:
+            os.unlink(file_path)
+
+        self.assertEqual(result, [])
+        file_types = window.dialog_calls[0][1]["file_types"]
+        self.assertNotIn("All files (*.*)", file_types)
+        api._adapter.emit.assert_called_with(  # type: ignore[attr-defined]
+            "appendConsole",
+            f"⚠ {ElSbobinatorApi._UNSUPPORTED_MEDIA_ERROR}",
+            batched=False,
+        )
+
+    def test_ask_media_file_rejects_invalid_relink_path(self):
+        api = ElSbobinatorApi()
+        api._adapter.emit = MagicMock()
+        window = _FakeWindow()
+        with tempfile.NamedTemporaryFile("wb", suffix=".zip", delete=False) as tmp:
+            file_path = tmp.name
+            window.dialog_result = file_path
+        api.set_window(window)  # type: ignore[arg-type]
+
+        try:
+            result = api.ask_media_file()
+        finally:
+            os.unlink(file_path)
+
+        self.assertIsNone(result)
+        file_types = window.dialog_calls[0][1]["file_types"]
+        self.assertNotIn("All files (*.*)", file_types)
+        api._adapter.emit.assert_called_with(  # type: ignore[attr-defined]
+            "appendConsole",
+            f"⚠ {ElSbobinatorApi._UNSUPPORTED_MEDIA_ERROR}",
+            batched=False,
         )
 
     @patch("el_sbobinator.services.validation_service.validate_environment")
@@ -516,6 +574,106 @@ class AppWebviewTests(unittest.TestCase):
         self.assertEqual(len(process_done_events), 1)
         self.assertEqual(process_done_events[0]["failed"], 1)
 
+    @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
+    def test_start_processing_rejects_invalid_extension_before_pipeline(
+        self, mock_pipeline_run
+    ):
+        api = ElSbobinatorApi()
+        with tempfile.NamedTemporaryFile("wb", suffix=".docx", delete=False) as tmp:
+            tmp.write(b"fake")
+            file_path = tmp.name
+
+        try:
+            result = api.start_processing(
+                [
+                    {
+                        "id": "file-1",
+                        "path": file_path,
+                        "name": "lesson.docx",
+                        "size": 4,
+                        "duration": 1,
+                    }
+                ],
+                api_key="fake-key",
+                resume_session=True,
+            )
+        finally:
+            os.unlink(file_path)
+
+        self.assertFalse(result["ok"])
+        self.assertIn("Formato non supportato", result["error"])
+        mock_pipeline_run.assert_not_called()
+        self.assertFalse(api._adapter.is_running)
+
+    @patch("el_sbobinator.services.audio_service.probe_media_duration")
+    @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
+    def test_start_processing_rejects_unprobeable_media_duration(
+        self, mock_pipeline_run, mock_probe_duration
+    ):
+        api = ElSbobinatorApi()
+        mock_probe_duration.return_value = (None, "duration_NA")
+        with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            tmp.write(b"fake")
+            file_path = tmp.name
+
+        try:
+            result = api.start_processing(
+                [
+                    {
+                        "id": "file-1",
+                        "path": file_path,
+                        "name": "lesson.mp3",
+                        "size": 4,
+                        "duration": 0,
+                    }
+                ],
+                api_key="fake-key",
+                resume_session=True,
+            )
+        finally:
+            os.unlink(file_path)
+
+        self.assertFalse(result["ok"])
+        self.assertIn("durata", result["error"])
+        self.assertIn("audio/video", result["error"])
+        mock_pipeline_run.assert_not_called()
+        self.assertFalse(api._adapter.is_running)
+
+    @patch("el_sbobinator.services.audio_service.probe_media_duration")
+    @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
+    def test_start_processing_rejects_unprobeable_media_even_with_payload_duration(
+        self, mock_pipeline_run, mock_probe_duration
+    ):
+        api = ElSbobinatorApi()
+        mock_probe_duration.return_value = (None, "duration_NA")
+        with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            tmp.write(b"fake")
+            file_path = tmp.name
+
+        try:
+            result = api.start_processing(
+                [
+                    {
+                        "id": "file-1",
+                        "path": file_path,
+                        "name": "lesson.mp3",
+                        "size": 4,
+                        "duration": 1,
+                    }
+                ],
+                api_key="fake-key",
+                resume_session=True,
+            )
+        finally:
+            os.unlink(file_path)
+
+        self.assertFalse(result["ok"])
+        self.assertIn("durata", result["error"])
+        self.assertIn("audio/video", result["error"])
+        mock_probe_duration.assert_called_once_with(file_path)
+        mock_pipeline_run.assert_not_called()
+        self.assertFalse(api._adapter.is_running)
+
     @patch("threading.Thread", _SyncThread)
     @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
     def test_failed_run_file_failed_redacts_adapter_error_fields(
@@ -696,19 +854,26 @@ class AppWebviewTests(unittest.TestCase):
             "kind": "combined",
             "file_name": "lesson.mp3",
         }
+        with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            tmp.write(b"fake")
+            file_path = tmp.name
 
-        with patch.object(api, "_low_disk_warning_for_files", return_value=warning):
-            result = api.start_processing(
-                [
-                    {
-                        "id": "file-1",
-                        "path": "missing.mp3",
-                        "name": "lesson.mp3",
-                        "size": 4,
-                    }
-                ],
-                api_key="fake-key",
-            )
+        try:
+            with patch.object(api, "_low_disk_warning_for_files", return_value=warning):
+                result = api.start_processing(
+                    [
+                        {
+                            "id": "file-1",
+                            "path": file_path,
+                            "name": "lesson.mp3",
+                            "size": 4,
+                            "duration": 1,
+                        }
+                    ],
+                    api_key="fake-key",
+                )
+        finally:
+            os.unlink(file_path)
 
         self.assertFalse(result["ok"])
         self.assertEqual(result["low_disk_warning"], warning)
@@ -3040,6 +3205,16 @@ class TestOpenUrlAllowlistCoverage(unittest.TestCase):
 class TestRetryStartProcessingGuard(unittest.TestCase):
     """start_processing must be rejected while any retry is in flight."""
 
+    def setUp(self):
+        self._probe_media_duration_patch = patch(
+            "el_sbobinator.services.audio_service.probe_media_duration",
+            return_value=(60.0, None),
+        )
+        self._probe_media_duration_patch.start()
+
+    def tearDown(self):
+        self._probe_media_duration_patch.stop()
+
     def _make_file(self) -> str:
         with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
             tmp.write(b"fake")
@@ -3069,7 +3244,15 @@ class TestRetryStartProcessingGuard(unittest.TestCase):
             api._adapter.set_run_result("done", "")
 
             result = api.start_processing(
-                [{"id": "f1", "path": self._make_file(), "name": "x.mp3", "size": 4}],
+                [
+                    {
+                        "id": "f1",
+                        "path": self._make_file(),
+                        "name": "x.mp3",
+                        "size": 4,
+                        "duration": 1,
+                    }
+                ],
                 api_key="key",
             )
 

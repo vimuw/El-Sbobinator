@@ -223,6 +223,28 @@ class ElSbobinatorApi:
     _retry_global_lock: ClassVar[threading.Lock] = threading.Lock()
     _retry_locks: ClassVar[dict[str, threading.Lock]] = {}
     _retry_locks_mutex: ClassVar[threading.Lock] = threading.Lock()
+    _ALLOWED_MEDIA_EXTS: ClassVar[set[str]] = {
+        ".mp3",
+        ".m4a",
+        ".wav",
+        ".ogg",
+        ".flac",
+        ".aac",
+        ".mp4",
+        ".mkv",
+        ".webm",
+    }
+    _SUPPORTED_MEDIA_LABEL: ClassVar[str] = (
+        "MP3, M4A, WAV, OGG, FLAC, AAC, MP4, MKV o WEBM"
+    )
+    _UNSUPPORTED_MEDIA_ERROR: ClassVar[str] = (
+        "Formato non supportato. Seleziona un file audio/video: "
+        f"{_SUPPORTED_MEDIA_LABEL}."
+    )
+    _UNREADABLE_MEDIA_ERROR: ClassVar[str] = (
+        "Impossibile leggere la durata del file. Seleziona un file audio/video "
+        f"valido: {_SUPPORTED_MEDIA_LABEL}."
+    )
 
     def __init__(self):
         self._window: webview.Window | None = None
@@ -976,6 +998,51 @@ class ElSbobinatorApi:
             "duration": duration,
         }
 
+    @classmethod
+    def _validate_media_path(
+        cls, path: str, *, require_duration: bool = False
+    ) -> tuple[bool, str, float | None]:
+        normalized_path = str(path or "").strip()
+        if not normalized_path or not os.path.isfile(normalized_path):
+            return (
+                False,
+                "File non trovato. Seleziona un file audio/video esistente.",
+                None,
+            )
+        ext = os.path.splitext(normalized_path)[1].lower()
+        if ext not in cls._ALLOWED_MEDIA_EXTS:
+            return False, cls._UNSUPPORTED_MEDIA_ERROR, None
+        if not require_duration:
+            return True, "", None
+        try:
+            from el_sbobinator.services.audio_service import probe_media_duration
+
+            duration, _reason = probe_media_duration(normalized_path)
+            duration_value = float(duration or 0)
+        except Exception:
+            duration_value = 0.0
+        if duration_value <= 0:
+            return False, cls._UNREADABLE_MEDIA_ERROR, None
+        return True, "", duration_value
+
+    def _build_valid_media_descriptor(self, path: str) -> BridgeFileItem | None:
+        ok, error, _duration = self._validate_media_path(path)
+        if not ok:
+            self._push_console(f"⚠ {error}")
+            return None
+        return self._build_file_descriptor(path)
+
+    def _validate_processing_files(self, files: list[BridgeFileItem]) -> str | None:
+        for file_info in files:
+            file_path = str(file_info.get("path", "") or "").strip()
+            ok, error, probed_duration = self._validate_media_path(
+                file_path, require_duration=True
+            )
+            if not ok:
+                return error
+            file_info["duration"] = float(probed_duration or 0)
+        return None
+
     def ask_files(self) -> list[BridgeFileItem]:
         """Open native file dialog and return file info."""
         if not self._window:
@@ -987,7 +1054,6 @@ class ElSbobinatorApi:
                 file_types=(
                     "Audio (*.mp3;*.m4a;*.wav;*.ogg;*.flac;*.aac)",
                     "Video (*.mp4;*.mkv;*.webm)",
-                    "All files (*.*)",
                 ),
             )
         except Exception:
@@ -1003,7 +1069,12 @@ class ElSbobinatorApi:
             if isinstance(file_paths, list | tuple)
             else [str(file_paths)]
         )
-        return [self._build_file_descriptor(path) for path in selected_paths]
+        descriptors = []
+        for path in selected_paths:
+            descriptor = self._build_valid_media_descriptor(path)
+            if descriptor is not None:
+                descriptors.append(descriptor)
+        return descriptors
 
     def ask_media_file(self) -> BridgeFileItem | None:
         """Open a native file dialog for a single media file."""
@@ -1016,7 +1087,6 @@ class ElSbobinatorApi:
                 file_types=(
                     "Audio (*.mp3;*.m4a;*.wav;*.ogg;*.flac;*.aac)",
                     "Video (*.mp4;*.mkv;*.webm)",
-                    "All files (*.*)",
                 ),
             )
         except Exception:
@@ -1029,7 +1099,7 @@ class ElSbobinatorApi:
         selected_path = str(
             file_paths[0] if isinstance(file_paths, list | tuple) else file_paths
         )
-        return self._build_file_descriptor(selected_path)
+        return self._build_valid_media_descriptor(selected_path)
 
     def check_path_exists(self, path: str) -> dict:
         """Check whether a persisted source path still exists on disk."""
@@ -1039,28 +1109,8 @@ class ElSbobinatorApi:
             "exists": bool(normalized_path and os.path.exists(normalized_path)),
         }
 
-    _ALLOWED_DROP_EXTS: ClassVar[set[str]] = {
-        ".mp3",
-        ".m4a",
-        ".wav",
-        ".mp4",
-        ".mkv",
-        ".webm",
-        ".ogg",
-        ".flac",
-        ".aac",
-    }
-    _ALLOWED_STREAM_EXTS: ClassVar[set[str]] = {
-        ".mp3",
-        ".m4a",
-        ".wav",
-        ".mp4",
-        ".mkv",
-        ".webm",
-        ".ogg",
-        ".flac",
-        ".aac",
-    }
+    _ALLOWED_DROP_EXTS: ClassVar[set[str]] = _ALLOWED_MEDIA_EXTS
+    _ALLOWED_STREAM_EXTS: ClassVar[set[str]] = _ALLOWED_MEDIA_EXTS
 
     def collect_dropped_files(self, names: list) -> dict:
         """Called by JS after postMessageWithAdditionalObjects('FilesDropped') to retrieve OS paths."""
@@ -1196,6 +1246,26 @@ class ElSbobinatorApi:
             "low_disk_warning": low_disk_warning,
         }
 
+    def _prepare_start_processing(
+        self,
+        files: list[BridgeFileItem],
+        api_key: str,
+        preferred_model: str | None,
+        fallback_models: list[str] | None,
+        override_low_disk: bool,
+    ) -> dict | None:
+        guard_error = self._start_processing_guard()
+        if guard_error is not None:
+            return guard_error
+        validation_error = self._validate_processing_files(files)
+        if validation_error is not None:
+            return {"ok": False, "error": validation_error}
+        self._persist_processing_config(api_key, preferred_model, fallback_models)
+        low_disk_response = self._low_disk_start_response(files, override_low_disk)
+        if low_disk_response is not None:
+            return low_disk_response
+        return self._start_processing_guard(mark_running=True)
+
     def start_processing(
         self,
         files: list[BridgeFileItem],
@@ -1208,19 +1278,15 @@ class ElSbobinatorApi:
         """Start the pipeline in a background thread."""
         if not files or not api_key:
             return {"ok": False, "error": "File o API key mancanti"}
-        guard_error = self._start_processing_guard()
-        if guard_error is not None:
-            return guard_error
-
-        self._persist_processing_config(api_key, preferred_model, fallback_models)
-
-        low_disk_response = self._low_disk_start_response(files, override_low_disk)
-        if low_disk_response is not None:
-            return low_disk_response
-
-        guard_error = self._start_processing_guard(mark_running=True)
-        if guard_error is not None:
-            return guard_error
+        start_error = self._prepare_start_processing(
+            files,
+            api_key,
+            preferred_model,
+            fallback_models,
+            override_low_disk,
+        )
+        if start_error is not None:
+            return start_error
 
         # Cleanup orphan temp files
         try:

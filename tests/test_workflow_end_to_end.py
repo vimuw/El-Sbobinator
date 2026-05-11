@@ -28,6 +28,16 @@ class _FakeClient:
 
 
 class WorkflowEndToEndTests(unittest.TestCase):
+    def setUp(self):
+        self._probe_media_duration_patch = patch(
+            "el_sbobinator.services.audio_service.probe_media_duration",
+            return_value=(60.0, None),
+        )
+        self._probe_media_duration_patch.start()
+
+    def tearDown(self):
+        self._probe_media_duration_patch.stop()
+
     def test_start_processing_emits_file_done_and_process_done(self):
         api = ElSbobinatorApi()
         window = _FakeWindow()
