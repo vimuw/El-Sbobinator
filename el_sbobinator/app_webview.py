@@ -54,6 +54,9 @@ from el_sbobinator.core.shared import (
     migrate_legacy_session_root,
     set_session_root,
 )
+from el_sbobinator.core.shared import (
+    cleanup_completed_sessions as _cleanup_completed_sessions,
+)
 from el_sbobinator.core.updater import (
     download_and_install_update as _download_and_install_update,
 )
@@ -487,21 +490,32 @@ class ElSbobinatorApi:
             if not os.path.isdir(abs_dir):
                 return {"ok": False, "error": "Cartella non trovata"}
             shutil.rmtree(abs_dir)
-            evict_html_paths_under(abs_dir + os.sep)
+            self._evict_deleted_session_caches(abs_dir)
             with self._sessions_cache_lock:
                 self._sessions_cache = None
                 self._sessions_cache_gen += 1
-            _prefix = abs_dir + os.sep
-            _evict = [
-                k
-                for k, v in self._resolved_path_cache.items()
-                if v == abs_dir or v.startswith(_prefix)
-            ]
-            for k in _evict:
-                del self._resolved_path_cache[k]
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": redact_secrets(e)}
+
+    def _evict_deleted_session_caches(self, session_dir: str) -> None:
+        abs_dir = os.path.realpath(session_dir)
+        prefix = abs_dir + os.sep
+        evict_html_paths_under(prefix)
+        resolved_to_evict = [
+            key
+            for key, value in self._resolved_path_cache.items()
+            if value == abs_dir or str(value).startswith(prefix)
+        ]
+        for key in resolved_to_evict:
+            del self._resolved_path_cache[key]
+        shell_to_evict = [
+            key
+            for key in self._html_shell_cache
+            if key == abs_dir or str(key).startswith(prefix)
+        ]
+        for key in shell_to_evict:
+            del self._html_shell_cache[key]
 
     def _resolve_retry_session(self, session_dir: str) -> tuple[str, str]:
         session_root = os.path.realpath(self._get_session_root())
@@ -739,7 +753,7 @@ class ElSbobinatorApi:
     def cleanup_old_sessions(
         self, max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS
     ) -> dict:
-        """Delete session folders older than max_age_days days."""
+        """Delete incomplete session folders older than max_age_days days."""
         try:
             result = cleanup_orphan_sessions(max(1, int(max_age_days)))
             if result["removed"] > 0:
@@ -751,6 +765,9 @@ class ElSbobinatorApi:
                 "removed": result["removed"],
                 "freed_bytes": result["freed_bytes"],
                 "errors": result["errors"],
+                "candidates": result.get("candidates", result["removed"]),
+                "preserved_completed": result.get("preserved_completed", 0),
+                "missing_completed_html": result.get("missing_completed_html", 0),
             }
         except Exception as e:
             return {
@@ -759,6 +776,49 @@ class ElSbobinatorApi:
                 "removed": 0,
                 "freed_bytes": 0,
                 "errors": 0,
+                "candidates": 0,
+                "preserved_completed": 0,
+                "missing_completed_html": 0,
+            }
+
+    def cleanup_completed_sessions(
+        self,
+        max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS,
+        dry_run: bool = True,
+    ) -> dict:
+        """Count or delete completed session folders older than max_age_days days."""
+        try:
+            result = _cleanup_completed_sessions(
+                max(1, int(max_age_days)),
+                dry_run=bool(dry_run),
+            )
+            if result["removed"] > 0:
+                for deleted_dir in result.get("deleted_paths", []):
+                    self._evict_deleted_session_caches(str(deleted_dir))
+                with self._sessions_cache_lock:
+                    self._sessions_cache = None
+                    self._sessions_cache_gen += 1
+                with self._text_cache_lock:
+                    self._text_cache.clear()
+            return {
+                "ok": True,
+                "removed": result["removed"],
+                "freed_bytes": result["freed_bytes"],
+                "errors": result["errors"],
+                "candidates": result.get("candidates", result["removed"]),
+                "preserved_completed": result.get("preserved_completed", 0),
+                "missing_completed_html": result.get("missing_completed_html", 0),
+            }
+        except Exception as e:
+            return {
+                "ok": False,
+                "error": redact_secrets(e),
+                "removed": 0,
+                "freed_bytes": 0,
+                "errors": 0,
+                "candidates": 0,
+                "preserved_completed": 0,
+                "missing_completed_html": 0,
             }
 
     def open_session_folder(self) -> dict:

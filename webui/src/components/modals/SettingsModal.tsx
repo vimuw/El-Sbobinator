@@ -157,6 +157,14 @@ interface SettingsModalProps {
   onSettingsSaved?: () => Promise<unknown> | unknown;
 }
 
+type CleanupSummary = {
+  removed: number;
+  freed_bytes: number;
+  candidates?: number;
+  preserved_completed?: number;
+  missing_completed_html?: number;
+};
+
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -232,11 +240,16 @@ export function SettingsModal({
   const [sessionInfo, setSessionInfo] = useState<{ total_bytes: number; total_sessions: number; session_root?: string } | null>(null);
   const [isLoadingSessionInfo, setIsLoadingSessionInfo] = useState(false);
   const [isCleaningSession, setIsCleaningSession] = useState(false);
-  const [cleanupResult, setCleanupResult] = useState<{ removed: number; freed_bytes: number } | null>(null);
+  const [cleanupResult, setCleanupResult] = useState<CleanupSummary | null>(null);
+  const [isCleaningCompletedSessions, setIsCleaningCompletedSessions] = useState(false);
+  const [completedCleanupPreview, setCompletedCleanupPreview] = useState<CleanupSummary | null>(null);
+  const [completedCleanupResult, setCompletedCleanupResult] = useState<CleanupSummary | null>(null);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [isValidatingEnvironment, setIsValidatingEnvironment] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [showCleanupConfirm, setShowCleanupConfirm] = useState(false);
+  const [showCompletedCleanupConfirm, setShowCompletedCleanupConfirm] = useState(false);
+
   const [isMoveInProgress, setIsMoveInProgress] = useState(false);
   const [moveProgress, setMoveProgress] = useState<{ moved: number; total: number } | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
@@ -253,10 +266,13 @@ export function SettingsModal({
   }, [isOpen, checkForUpdates]);
 
   useEffect(() => {
-    if (!isOpen) { setIsAdvancedOpen(false); setIsSaving(false); isSavingRef.current = false; setIsMoveInProgress(false); setMoveProgress(null); setMoveError(null); if (moveTimerRef.current) { clearTimeout(moveTimerRef.current); moveTimerRef.current = null; } return; }
+    if (!isOpen) { setIsAdvancedOpen(false); setIsSaving(false); isSavingRef.current = false; setIsMoveInProgress(false); setMoveProgress(null); setMoveError(null); setShowCompletedCleanupConfirm(false); setCompletedCleanupPreview(null); if (moveTimerRef.current) { clearTimeout(moveTimerRef.current); moveTimerRef.current = null; } return; }
+
     setNotificationsEnabled(localStorage.getItem('notifications_enabled') !== 'false');
     setSaveError(null);
     setCleanupResult(null);
+    setCompletedCleanupResult(null);
+
     if (!window.pywebview?.api?.get_session_storage_info) return;
     let aborted = false;
     setIsLoadingSessionInfo(true);
@@ -329,12 +345,18 @@ export function SettingsModal({
     try {
       const res = await window.pywebview.api.cleanup_old_sessions(SESSION_CLEANUP_DAYS);
       if (res?.ok) {
-        setCleanupResult({ removed: res.removed ?? 0, freed_bytes: res.freed_bytes ?? 0 });
+        setCleanupResult({
+          removed: res.removed ?? 0,
+          freed_bytes: res.freed_bytes ?? 0,
+          candidates: res.candidates ?? res.removed ?? 0,
+          preserved_completed: res.preserved_completed ?? 0,
+          missing_completed_html: res.missing_completed_html ?? 0,
+        });
         if (window.pywebview?.api?.get_session_storage_info) {
           try {
             const info = await window.pywebview.api.get_session_storage_info();
             if (info?.ok) setSessionInfo({ total_bytes: info.total_bytes ?? 0, total_sessions: info.total_sessions ?? 0, session_root: info.session_root ?? '' });
-          } catch { /* non-critical refresh — cleanup already succeeded */ }
+          } catch {}
         }
       } else {
         appendConsole(`❌ Pulizia sessioni fallita: ${res?.error || 'errore sconosciuto'}`);
@@ -343,6 +365,60 @@ export function SettingsModal({
       appendConsole(`❌ Pulizia sessioni fallita: ${getErrorMessage(e)}`);
     }
     setIsCleaningSession(false);
+  };
+
+  const handleAskCompletedCleanup = async () => {
+    if (!window.pywebview?.api?.cleanup_completed_sessions || isCleaningCompletedSessions) return;
+    setIsCleaningCompletedSessions(true);
+    setCompletedCleanupPreview(null);
+    try {
+      const res = await window.pywebview.api.cleanup_completed_sessions(SESSION_CLEANUP_DAYS, true);
+      if (res?.ok) {
+        setCompletedCleanupPreview({
+          removed: res.removed ?? 0,
+          freed_bytes: res.freed_bytes ?? 0,
+          candidates: res.candidates ?? 0,
+          preserved_completed: res.preserved_completed ?? 0,
+          missing_completed_html: res.missing_completed_html ?? 0,
+        });
+        setShowCompletedCleanupConfirm(true);
+      } else {
+        appendConsole(`❌ Conteggio sbobine completate fallito: ${res?.error || 'errore sconosciuto'}`);
+      }
+    } catch (e: unknown) {
+      appendConsole(`❌ Conteggio sbobine completate fallito: ${getErrorMessage(e)}`);
+    }
+    setIsCleaningCompletedSessions(false);
+  };
+
+  const handleCleanupCompletedSessions = async () => {
+    if (!window.pywebview?.api?.cleanup_completed_sessions) return;
+    setShowCompletedCleanupConfirm(false);
+    setIsCleaningCompletedSessions(true);
+    setCompletedCleanupResult(null);
+    try {
+      const res = await window.pywebview.api.cleanup_completed_sessions(SESSION_CLEANUP_DAYS, false);
+      if (res?.ok) {
+        setCompletedCleanupResult({
+          removed: res.removed ?? 0,
+          freed_bytes: res.freed_bytes ?? 0,
+          candidates: res.candidates ?? res.removed ?? 0,
+          preserved_completed: res.preserved_completed ?? 0,
+          missing_completed_html: res.missing_completed_html ?? 0,
+        });
+        if (window.pywebview?.api?.get_session_storage_info) {
+          try {
+            const info = await window.pywebview.api.get_session_storage_info();
+            if (info?.ok) setSessionInfo({ total_bytes: info.total_bytes ?? 0, total_sessions: info.total_sessions ?? 0, session_root: info.session_root ?? '' });
+          } catch {}
+        }
+      } else {
+        appendConsole(`❌ Eliminazione sbobine completate fallita: ${res?.error || 'errore sconosciuto'}`);
+      }
+    } catch (e: unknown) {
+      appendConsole(`❌ Eliminazione sbobine completate fallita: ${getErrorMessage(e)}`);
+    }
+    setIsCleaningCompletedSessions(false);
   };
 
   const runEnvironmentValidation = async () => {
@@ -767,10 +843,10 @@ export function SettingsModal({
                             </h3>
                             <button
                               onClick={() => setShowCleanupConfirm(true)}
-                              disabled={isCleaningSession || isLoadingSessionInfo}
+                              disabled={isCleaningSession || isCleaningCompletedSessions || isLoadingSessionInfo}
                               className="icon-button compact-icon-button disabled:opacity-50"
-                              title={`Pulisci sessioni (> ${SESSION_CLEANUP_DAYS} giorni)`}
-                              aria-label={`Pulisci sessioni (> ${SESSION_CLEANUP_DAYS} giorni)`}
+                              title={`Elimina solo elaborazioni incomplete più vecchie di ${SESSION_CLEANUP_DAYS} giorni`}
+                              aria-label={`Elimina solo elaborazioni incomplete più vecchie di ${SESSION_CLEANUP_DAYS} giorni`}
                             >
                               {isCleaningSession ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                             </button>
@@ -810,7 +886,7 @@ export function SettingsModal({
                               ) : (
                                 <button
                                   onClick={() => void handleAskMoveFolder()}
-                                  disabled={isCleaningSession || isLoadingSessionInfo || isMoveInProgress}
+                                  disabled={isCleaningSession || isCleaningCompletedSessions || isLoadingSessionInfo || isMoveInProgress}
                                   className="icon-button compact-icon-button shrink-0 disabled:opacity-50 flex items-center gap-1"
                                   style={{ fontSize: '11px', padding: '2px 7px', height: 22, borderRadius: 6 }}
                                   title="Sposta cartella sessioni"
@@ -829,12 +905,44 @@ export function SettingsModal({
                             {cleanupResult !== null && (
                               <p className="text-xs" style={{ color: cleanupResult.removed > 0 ? 'var(--success-text)' : 'var(--text-muted)' }}>
                                 {cleanupResult.removed > 0
-                                  ? `Rimoss${cleanupResult.removed === 1 ? 'a' : 'e'} ${cleanupResult.removed} ${cleanupResult.removed === 1 ? 'sessione' : 'sessioni'}, liberati ${formatSize(cleanupResult.freed_bytes)}.`
-                                  : 'Nessuna sessione da pulire (tutte recenti o cartella vuota).'}
+                                  ? `Rimoss${cleanupResult.removed === 1 ? 'a' : 'e'} ${cleanupResult.removed} ${cleanupResult.removed === 1 ? 'elaborazione incompleta' : 'elaborazioni incomplete'}, liberati ${formatSize(cleanupResult.freed_bytes)}.`
+                                  : 'Nessuna elaborazione incompleta da eliminare.'}
+                              </p>
+                            )}
+                            {(cleanupResult?.preserved_completed ?? 0) > 0 && (
+                              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                {cleanupResult?.preserved_completed} {cleanupResult?.preserved_completed === 1 ? 'sbobina completata preservata' : 'sbobine completate preservate'}.
+                              </p>
+                            )}
+                            {(cleanupResult?.missing_completed_html ?? 0) > 0 && (
+                              <p className="text-xs" style={{ color: 'var(--warning-text)' }}>
+                                {cleanupResult?.missing_completed_html} {cleanupResult?.missing_completed_html === 1 ? 'sessione completata senza HTML finale è stata trattata come incompleta' : 'sessioni completate senza HTML finale sono state trattate come incomplete'}.
+                              </p>
+                            )}
+                            <div className="flex items-center justify-between gap-3 rounded-[8px] px-3 py-2" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+                              <div className="min-w-0">
+                                <p className="text-xs font-medium" style={{ color: 'var(--error-text)' }}>Elimina sbobine completate vecchie</p>
+                                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Azione separata e irreversibile: elimina anche le note finite.</p>
+                              </div>
+                              <button
+                                onClick={() => void handleAskCompletedCleanup()}
+                                disabled={isCleaningSession || isCleaningCompletedSessions || isLoadingSessionInfo}
+                                className="icon-button compact-icon-button disabled:opacity-50 shrink-0"
+                                title={`Conta ed elimina sbobine completate più vecchie di ${SESSION_CLEANUP_DAYS} giorni`}
+                                aria-label={`Conta ed elimina sbobine completate più vecchie di ${SESSION_CLEANUP_DAYS} giorni`}
+                              >
+                                {isCleaningCompletedSessions ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                              </button>
+                            </div>
+                            {completedCleanupResult !== null && (
+                              <p className="text-xs" style={{ color: completedCleanupResult.removed > 0 ? 'var(--success-text)' : 'var(--text-muted)' }}>
+                                {completedCleanupResult.removed > 0
+                                  ? `Eliminat${completedCleanupResult.removed === 1 ? 'a' : 'e'} ${completedCleanupResult.removed} ${completedCleanupResult.removed === 1 ? 'sbobina completata' : 'sbobine completate'}, liberati ${formatSize(completedCleanupResult.freed_bytes)}.`
+                                  : 'Nessuna sbobina completata vecchia da eliminare.'}
                               </p>
                             )}
                             <p className="text-xs" style={{ color: 'var(--text-faint, var(--text-muted))' }}>
-                              Ogni sessione conserva i dati di un'elaborazione (trascrizioni, revisioni) e la sbobina finale. La pulizia elimina definitivamente le sessioni non toccate da oltre {SESSION_CLEANUP_DAYS} giorni, incluse le sbobine completate.
+                              Ogni sessione conserva i dati di un'elaborazione. La pulizia normale elimina solo elaborazioni incomplete più vecchie di {SESSION_CLEANUP_DAYS} giorni e preserva le sbobine completate con HTML finale.
                             </p>
                           </div>
                         </div>
@@ -910,12 +1018,21 @@ export function SettingsModal({
     </AnimatePresence>
     <ConfirmActionModal
       isOpen={showCleanupConfirm}
-      title="Pulire le sessioni vecchie?"
-      description={`Verranno eliminate definitivamente dal disco le sessioni non toccate da oltre ${SESSION_CLEANUP_DAYS} giorni. L'operazione è irreversibile.`}
-      confirmLabel="Pulisci"
+      title="Eliminare le elaborazioni incomplete vecchie?"
+      description={`Verranno eliminate definitivamente dal disco solo le elaborazioni incomplete più vecchie di ${SESSION_CLEANUP_DAYS} giorni. Le sbobine completate con HTML finale saranno preservate.`}
+      confirmLabel="Elimina incomplete"
       cancelLabel="Annulla"
       onClose={() => setShowCleanupConfirm(false)}
       onConfirm={() => { setShowCleanupConfirm(false); void handleCleanupSessions(); }}
+    />
+    <ConfirmActionModal
+      isOpen={showCompletedCleanupConfirm}
+      title="Eliminare le sbobine completate vecchie?"
+      description={`Questa operazione elimina le sbobine completate più vecchie di ${SESSION_CLEANUP_DAYS} giorni. Sbobine interessate: ${completedCleanupPreview?.candidates ?? 0}. Spazio stimato: ${formatSize(completedCleanupPreview?.freed_bytes ?? 0)}. L'operazione è irreversibile.`}
+      confirmLabel="Elimina sbobine completate"
+      cancelLabel="Annulla"
+      onClose={() => setShowCompletedCleanupConfirm(false)}
+      onConfirm={() => { void handleCleanupCompletedSessions(); }}
     />
     <ConfirmActionModal
       isOpen={showMoveConfirm}

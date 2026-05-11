@@ -42,6 +42,7 @@ __all__ = [
     "_safe_mkdir",
     "_session_dir_for_file",
     "_session_id_for_file",
+    "cleanup_completed_sessions",
     "cleanup_orphan_sessions",
     "cleanup_orphan_temp_chunks",
     "get_session_root",
@@ -413,9 +414,51 @@ def invalidate_session_storage_cache() -> None:
         _storage_info_future = None
 
 
-def cleanup_orphan_sessions(max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS) -> dict:
+def _resolve_session_html_path(session_dir: str, html_path: object) -> str:
+    value = str(html_path or "").strip()
+    if not value:
+        return ""
+    if os.path.isabs(value):
+        return value
+    return os.path.join(session_dir, value)
+
+
+def _session_completed_html_exists(session_dir: str, session: dict) -> bool:
+    outputs = session.get("outputs", {})
+    html_path = str(outputs.get("html", "") if isinstance(outputs, dict) else "")
+    resolved = _resolve_session_html_path(session_dir, html_path)
+    if resolved and os.path.isfile(resolved):
+        return True
+    if html_path:
+        fallback = os.path.join(session_dir, os.path.basename(html_path))
+        if os.path.isfile(fallback):
+            return True
+    return False
+
+
+def _session_cleanup_kind(session_dir: str) -> str:
+    session_path = os.path.join(session_dir, "session.json")
+    try:
+        session = _load_json(session_path)
+    except Exception:
+        return "incomplete"
+    if not isinstance(session, dict):
+        return "incomplete"
+    if str(session.get("stage", "")).strip().lower() != "done":
+        return "incomplete"
+    if _session_completed_html_exists(session_dir, session):
+        return "completed"
+    return "completed_missing_html"
+
+
+def cleanup_orphan_sessions(
+    max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS,
+    *,
+    mode: str = "incomplete",
+    dry_run: bool = False,
+) -> dict:
     """
-    Delete session folders in SESSION_ROOT whose newest file mtime is older
+    Delete selected session folders in SESSION_ROOT whose newest file mtime is older
     than max_age_days days.  Returns a summary dict with keys:
       removed     - number of folders successfully deleted
       freed_bytes - total bytes freed
@@ -425,9 +468,24 @@ def cleanup_orphan_sessions(max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS) ->
     removed = 0
     freed_bytes = 0
     errors = 0
+    candidates = 0
+    preserved_completed = 0
+    missing_completed_html = 0
+    deleted_paths: list[str] = []
+    mode = str(mode or "incomplete").strip().lower()
+    if mode not in {"incomplete", "completed"}:
+        raise ValueError("cleanup mode non valida")
     try:
         if not os.path.isdir(SESSION_ROOT):
-            return {"removed": 0, "freed_bytes": 0, "errors": 0}
+            return {
+                "removed": 0,
+                "freed_bytes": 0,
+                "errors": 0,
+                "candidates": 0,
+                "preserved_completed": 0,
+                "missing_completed_html": 0,
+                "deleted_paths": [],
+            }
         now = time.time()
         cutoff = now - max(1, int(max_age_days)) * 86400
         for name in os.listdir(SESSION_ROOT):
@@ -438,13 +496,48 @@ def cleanup_orphan_sessions(max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS) ->
                 newest_mtime = _folder_newest_mtime(session_dir)
                 if newest_mtime >= cutoff:
                     continue
+                kind = _session_cleanup_kind(session_dir)
+                if kind == "completed":
+                    if mode == "incomplete":
+                        preserved_completed += 1
+                        continue
+                elif kind == "completed_missing_html":
+                    missing_completed_html += 1
+                    if mode == "completed":
+                        continue
+                elif mode == "completed":
+                    continue
+                candidates += 1
                 size = _folder_size(session_dir)
+                if dry_run:
+                    freed_bytes += size
+                    continue
                 shutil.rmtree(session_dir)
                 removed += 1
                 freed_bytes += size
+                deleted_paths.append(session_dir)
             except Exception:
                 errors += 1
     except Exception:
         pass
-    invalidate_session_storage_cache()
-    return {"removed": removed, "freed_bytes": freed_bytes, "errors": errors}
+    if removed > 0 and not dry_run:
+        invalidate_session_storage_cache()
+    return {
+        "removed": removed,
+        "freed_bytes": freed_bytes,
+        "errors": errors,
+        "candidates": candidates,
+        "preserved_completed": preserved_completed,
+        "missing_completed_html": missing_completed_html,
+        "deleted_paths": deleted_paths,
+    }
+
+
+def cleanup_completed_sessions(
+    max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS, *, dry_run: bool = False
+) -> dict:
+    return cleanup_orphan_sessions(
+        max_age_days,
+        mode="completed",
+        dry_run=dry_run,
+    )

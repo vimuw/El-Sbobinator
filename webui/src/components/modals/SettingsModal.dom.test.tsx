@@ -273,22 +273,50 @@ describe('SettingsModal — session folder and cleanup', () => {
     expect(openFolder).toHaveBeenCalledTimes(1);
   });
 
-  it('calls cleanup_old_sessions when Pulisci button clicked and shows result', async () => {
-    const cleanupFn = vi.fn().mockResolvedValue({ ok: true, removed: 3, freed_bytes: 1024 });
+  it('calls cleanup_old_sessions for incomplete cleanup and shows result', async () => {
+    const cleanupFn = vi.fn().mockResolvedValue({ ok: true, removed: 3, freed_bytes: 1024, preserved_completed: 2 });
     setPywebview({ cleanup_old_sessions: cleanupFn });
     render(<SettingsModal {...makeProps()} />);
     await act(async () => {
       fireEvent.click(screen.getByText('Avanzati').closest('button')!);
     });
     await act(async () => {
-      fireEvent.click(screen.getByTitle(/Pulisci/));
+      fireEvent.click(screen.getByTitle(/Elimina solo elaborazioni incomplete/));
     });
     await act(async () => {
-      fireEvent.click(screen.getByText('Pulisci'));
+      fireEvent.click(screen.getByText('Elimina incomplete'));
     });
     await vi.waitFor(() =>
       expect(screen.getByText(/Rimoss/)).toBeTruthy(),
     );
+    expect(screen.getByText(/sbobine completate preservate/)).toBeTruthy();
+    expect(cleanupFn).toHaveBeenCalledWith(14);
+  });
+
+  it('counts completed notes before dangerous cleanup and deletes only after confirmation', async () => {
+    const cleanupCompletedFn = vi.fn()
+      .mockResolvedValueOnce({ ok: true, removed: 0, candidates: 4, freed_bytes: 2048 })
+      .mockResolvedValueOnce({ ok: true, removed: 4, candidates: 4, freed_bytes: 2048 });
+    setPywebview({ cleanup_completed_sessions: cleanupCompletedFn });
+    render(<SettingsModal {...makeProps()} />);
+    await act(async () => {
+      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTitle(/Conta ed elimina sbobine completate/));
+    });
+    expect(await screen.findByText(/Sbobine interessate: 4/)).toBeTruthy();
+    expect(cleanupCompletedFn).toHaveBeenCalledTimes(1);
+    expect(cleanupCompletedFn).toHaveBeenCalledWith(14, true);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Elimina sbobine completate'));
+    });
+    await vi.waitFor(() =>
+      expect(screen.getByText(/Eliminate 4 sbobine completate/)).toBeTruthy(),
+    );
+    expect(cleanupCompletedFn).toHaveBeenCalledTimes(2);
+    expect(cleanupCompletedFn).toHaveBeenLastCalledWith(14, false);
   });
 });
 

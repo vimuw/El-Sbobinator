@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import time
@@ -18,6 +19,28 @@ from el_sbobinator.pipeline.pipeline_settings import (
 
 
 class SharedCleanupTests(unittest.TestCase):
+    def _make_session(
+        self, root: str, name: str, stage: str, *, with_html: bool
+    ) -> str:
+        session_dir = os.path.join(root, name)
+        os.makedirs(session_dir, exist_ok=True)
+        html_path = os.path.join(session_dir, "out.html")
+        if with_html:
+            with open(html_path, "w", encoding="utf-8") as fh:
+                fh.write("<html></html>")
+        with open(
+            os.path.join(session_dir, "session.json"), "w", encoding="utf-8"
+        ) as fh:
+            json.dump({"stage": stage, "outputs": {"html": html_path}}, fh)
+        return session_dir
+
+    def _make_old(self, path: str, days: int = 15) -> None:
+        old = time.time() - days * 86400
+        for dirpath, _, filenames in os.walk(path):
+            for filename in filenames:
+                os.utime(os.path.join(dirpath, filename), (old, old))
+        os.utime(path, (old, old))
+
     def test_cleanup_orphan_sessions_respects_cutoff_days(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             expired_dir = os.path.join(tmpdir, "expired")
@@ -45,6 +68,84 @@ class SharedCleanupTests(unittest.TestCase):
             self.assertEqual(result["errors"], 0)
             self.assertFalse(os.path.exists(expired_dir))
             self.assertTrue(os.path.exists(recent_dir))
+
+    def test_cleanup_orphan_sessions_preserves_old_completed_html(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            completed_dir = self._make_session(
+                tmpdir, "completed", "done", with_html=True
+            )
+            self._make_old(completed_dir)
+
+            with patch("el_sbobinator.core.shared.SESSION_ROOT", tmpdir):
+                result = shared.cleanup_orphan_sessions()
+
+            self.assertEqual(result["removed"], 0)
+            self.assertEqual(result["preserved_completed"], 1)
+            self.assertTrue(os.path.exists(completed_dir))
+
+    def test_cleanup_orphan_sessions_removes_old_incomplete(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            incomplete_dir = self._make_session(
+                tmpdir, "incomplete", "phase2", with_html=False
+            )
+            self._make_old(incomplete_dir)
+
+            with patch("el_sbobinator.core.shared.SESSION_ROOT", tmpdir):
+                result = shared.cleanup_orphan_sessions()
+
+            self.assertEqual(result["removed"], 1)
+            self.assertFalse(os.path.exists(incomplete_dir))
+
+    def test_cleanup_orphan_sessions_reports_done_missing_html_as_incomplete(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            missing_dir = self._make_session(tmpdir, "missing", "done", with_html=False)
+            self._make_old(missing_dir)
+
+            with patch("el_sbobinator.core.shared.SESSION_ROOT", tmpdir):
+                result = shared.cleanup_orphan_sessions()
+
+            self.assertEqual(result["removed"], 1)
+            self.assertEqual(result["missing_completed_html"], 1)
+            self.assertFalse(os.path.exists(missing_dir))
+
+    def test_cleanup_completed_sessions_dry_run_counts_without_deleting(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            completed_dir = self._make_session(
+                tmpdir, "completed", "done", with_html=True
+            )
+            incomplete_dir = self._make_session(
+                tmpdir, "incomplete", "phase1", with_html=False
+            )
+            self._make_old(completed_dir)
+            self._make_old(incomplete_dir)
+
+            with patch("el_sbobinator.core.shared.SESSION_ROOT", tmpdir):
+                result = shared.cleanup_completed_sessions(dry_run=True)
+
+            self.assertEqual(result["removed"], 0)
+            self.assertEqual(result["candidates"], 1)
+            self.assertEqual(result["deleted_paths"], [])
+            self.assertTrue(os.path.exists(completed_dir))
+            self.assertTrue(os.path.exists(incomplete_dir))
+
+    def test_cleanup_completed_sessions_deletes_only_completed_html_sessions(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            completed_dir = self._make_session(
+                tmpdir, "completed", "done", with_html=True
+            )
+            incomplete_dir = self._make_session(
+                tmpdir, "incomplete", "phase1", with_html=False
+            )
+            self._make_old(completed_dir)
+            self._make_old(incomplete_dir)
+
+            with patch("el_sbobinator.core.shared.SESSION_ROOT", tmpdir):
+                result = shared.cleanup_completed_sessions(dry_run=False)
+
+            self.assertEqual(result["removed"], 1)
+            self.assertEqual(result["deleted_paths"], [completed_dir])
+            self.assertFalse(os.path.exists(completed_dir))
+            self.assertTrue(os.path.exists(incomplete_dir))
 
     def test_get_session_storage_info_ignores_preconverted_partial_until_promoted(self):
         with tempfile.TemporaryDirectory() as tmpdir:
