@@ -54,6 +54,7 @@ export interface ArchiveSession {
   input_size?: number;
   session_dir: string;
   duration_sec?: number;
+  completion_status?: 'completed' | 'completed_with_warnings';
   revision_failed_blocks?: number[];
 }
 
@@ -178,6 +179,7 @@ export interface PywebviewApi {
     html_path?: string;
     session_dir?: string;
     effective_model?: string;
+    completion_status?: 'completed' | 'completed_with_warnings';
     cancelled?: boolean;
     quota_exhausted?: boolean;
     conflict?: boolean;

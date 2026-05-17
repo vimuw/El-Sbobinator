@@ -254,6 +254,7 @@ def process_macro_revision_phase(  # noqa: C901
             return client, revised_text
 
     # ---- RETRY PASS: second attempt on provisionally-failed blocks ----
+    failed_blocks: list[int] = []
     if pending_retry:
         print(
             f"\n[*] Retry pass: {len(pending_retry)} blocco/i senza revisione. Riprovo..."
@@ -262,8 +263,6 @@ def process_macro_revision_phase(  # noqa: C901
             session, {"revision_pending_blocks": [idx for idx, _, _ in pending_retry]}
         )
         save_session()
-
-        failed_blocks: list[int] = []
 
         for index, raw_path, rev_path in pending_retry:
             if cancelled():
@@ -417,15 +416,23 @@ def process_macro_revision_phase(  # noqa: C901
 
             runtime.progress(0.7 + 0.2 * (revised_done / max(1, macro_total)))
 
-        session_update: dict = {"revision_pending_blocks": []}
-        if failed_blocks:
-            session_update["revision_failed_blocks"] = failed_blocks
-        _update_session(session, session_update)
-        save_session()
         if failed_blocks:
             print(
                 f"\n[!!] ATTENZIONE: i seguenti blocchi sono stati inclusi non revisionati: {failed_blocks}"
             )
+
+    session_update: dict = {
+        "revision_pending_blocks": [],
+        "revision_failed_blocks": failed_blocks,
+        "completion_status": "completed_with_warnings"
+        if failed_blocks
+        else "completed",
+    }
+    if not failed_blocks:
+        session_update["last_error"] = None
+        session_update["last_error_detail"] = None
+    _update_session(session, session_update)
+    save_session()
 
     # Rebuild revised_text from all final .md files (authoritative source of truth)
     revised_text = ""
@@ -609,6 +616,9 @@ def retry_failed_revision_blocks(
     session_update = {
         "revision_failed_blocks": remaining_blocks,
         "revision_pending_blocks": [],
+        "completion_status": "completed_with_warnings"
+        if remaining_blocks
+        else "completed",
     }
     if not remaining_blocks:
         session_update["last_error"] = None

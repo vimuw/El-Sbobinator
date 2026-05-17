@@ -33,13 +33,13 @@ describe('CompletedSection', () => {
   it('renders heading and file count when files are present', () => {
     render(<CompletedSection {...baseProps} doneFiles={[makeFile()]} />);
     expect(screen.getByText('Sbobine completate')).toBeTruthy();
-    expect(screen.getByText('1 sbobina')).toBeTruthy();
+    expect(screen.getByText('1 complete')).toBeTruthy();
   });
 
-  it('uses plural "sbobine" for multiple files', () => {
+  it('uses plural count for multiple files', () => {
     const files = [makeFile({ id: 'f1' }), makeFile({ id: 'f2' })];
     render(<CompletedSection {...baseProps} doneFiles={files} />);
-    expect(screen.getByText('2 sbobine')).toBeTruthy();
+    expect(screen.getByText('2 complete')).toBeTruthy();
   });
 
   it('renders "Pulisci tutto" button when appState is idle', () => {

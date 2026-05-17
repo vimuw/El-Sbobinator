@@ -20,6 +20,8 @@ export function CompletedSection({ doneFiles, appState, onRemove, onPreview, onO
   const filteredDoneFiles = completedSearch.trim()
     ? doneFiles.filter(f => f.name.toLowerCase().includes(completedSearch.toLowerCase()))
     : doneFiles;
+  const warningCount = doneFiles.filter(f => f.completionStatus === 'completed_with_warnings' || (f.revisionFailedBlocks?.length ?? 0) > 0).length;
+  const fullyCompletedCount = doneFiles.length - warningCount;
 
   return (
     <>
@@ -38,7 +40,7 @@ export function CompletedSection({ doneFiles, appState, onRemove, onPreview, onO
                 Sbobine completate
               </h2>
               <span className="status-pill self-start sm:self-auto shrink-0 whitespace-nowrap" style={{ color: 'var(--success-text)', borderColor: 'var(--success-ring)', background: 'rgba(255,255,255,0.03)' }}>
-                {doneFiles.length} {doneFiles.length === 1 ? 'sbobina' : 'sbobine'}
+                {fullyCompletedCount} complete{warningCount > 0 ? ` · ${warningCount} con avvisi` : ''}
               </span>
             </div>
             <div className="flex items-center gap-2 shrink-0">

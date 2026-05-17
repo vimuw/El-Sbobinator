@@ -49,6 +49,8 @@ describe('getPendingFiles / getDoneFiles selectors', () => {
 
   it('isSuccessfulProcessDone only returns true for all-success completions', () => {
     expect(isSuccessfulProcessDone({ completed: 1, failed: 0, total: 1 })).toBe(true);
+    expect(isSuccessfulProcessDone({ completed: 0, completed_with_warnings: 1, failed: 0, total: 1 })).toBe(false);
+    expect(isSuccessfulProcessDone({ completed: 1, completed_with_warnings: 1, failed: 0, total: 2 })).toBe(false);
     expect(isSuccessfulProcessDone({ completed: 0, failed: 1, total: 1 })).toBe(false);
     expect(isSuccessfulProcessDone({ completed: 1, failed: 1, total: 2 })).toBe(false);
     expect(isSuccessfulProcessDone({ cancelled: true, completed: 1, failed: 0, total: 1 })).toBe(false);
@@ -84,6 +86,26 @@ describe('processingReducer', () => {
     });
     expect(state.files[0].status).toBe('done');
     expect(state.files[0].outputHtml).toBe('out.html');
+  });
+
+  it('bridge/file_done records completed_with_warnings status', () => {
+    const file = makeFile({ id: 'abc' });
+    const state = processingReducer(
+      { ...initialProcessingState, files: [file] },
+      {
+        type: 'bridge/file_done',
+        data: {
+          id: 'abc',
+          index: 0,
+          output_html: 'out.html',
+          output_dir: 'dir',
+          completion_status: 'completed_with_warnings',
+          revision_failed_blocks: [2],
+        },
+      },
+    );
+    expect(state.files[0].completionStatus).toBe('completed_with_warnings');
+    expect(state.files[0].revisionFailedBlocks).toEqual([2]);
   });
 
   it('resets error files to queued on retry_failed', () => {

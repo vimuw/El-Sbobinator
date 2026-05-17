@@ -764,6 +764,7 @@ function DraggableSessionCard({
   const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
   const [isRetryingBlocks, setIsRetryingBlocks] = useState(false);
   const failedBlockCount = session.revision_failed_blocks?.length ?? 0;
+  const hasRevisionWarnings = session.completion_status === 'completed_with_warnings' || failedBlockCount > 0;
   const canRetryBlocks = failedBlockCount > 0 && Boolean(onRetryFailedRevisionBlocks);
   const handleRetryBlocks = async (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -805,9 +806,11 @@ function DraggableSessionCard({
     <div
       onClick={() => onPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir)}
       className="archive-session-card flex items-center justify-between gap-3 px-4 py-3 cursor-pointer"
+      style={hasRevisionWarnings ? { borderColor: 'var(--warning-ring)', boxShadow: 'inset 3px 0 0 var(--warning-ring)', background: 'var(--warning-subtle)' } : undefined}
     >
       <div className="flex items-center gap-3 overflow-hidden flex-1">
-        <History className="w-4 h-4 shrink-0" style={{ color: 'var(--text-faint)' }} />
+        <History className="w-4 h-4 shrink-0" style={{ color: hasRevisionWarnings ? 'var(--warning-text)' : 'var(--text-faint)' }} />
+
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{session.name}</p>
           <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -815,24 +818,29 @@ function DraggableSessionCard({
             {session.effective_model && (
               <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span>{shortModelName(session.effective_model)}</span></>
             )}
-            {currentFolder && (
-              <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full shrink-0" style={{ background: currentFolder.color }} />{currentFolder.name}</span></>
+            {hasRevisionWarnings && (
+              <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span style={{ color: 'var(--warning-text)', fontWeight: 600 }}>Completata con avvisi</span></>
             )}
             {failedBlockCount > 0 && (
               <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}><AlertTriangle className="w-3 h-3" />{failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}</span></>
             )}
           </div>
           {canRetryBlocks && (
-            <button
-              type="button"
-              onClick={handleRetryBlocks}
-              disabled={isRetryingBlocks}
-              className="mt-1.5 premium-button-secondary compact-button text-xs"
-              style={{ color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRetryingBlocks ? 'animate-spin' : ''}`} />
-              {isRetryingBlocks ? 'Riprovo...' : 'Riprova i blocchi mancanti'}
-            </button>
+            <div className="mt-2 flex flex-col gap-2 rounded-xl px-3 py-2" style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid var(--warning-ring)' }}>
+              <p className="text-xs font-medium" style={{ color: 'var(--warning-text)' }}>
+                Alcune sezioni sono nella nota senza revisione AI.
+              </p>
+              <button
+                type="button"
+                onClick={handleRetryBlocks}
+                disabled={isRetryingBlocks}
+                className="premium-button-secondary compact-button text-xs self-start"
+                style={{ color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRetryingBlocks ? 'animate-spin' : ''}`} />
+                {isRetryingBlocks ? 'Riprovo...' : 'Riprova revisione AI'}
+              </button>
+            </div>
           )}
           <div
             className="mt-0.5 flex items-center gap-1 text-[11px] hover:underline"
@@ -859,10 +867,12 @@ function FolderSessionCardOverlay({ session, folderColor }: {
   folderColor: string;
 }) {
   const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
+  const failedBlockCount = session.revision_failed_blocks?.length ?? 0;
+  const hasRevisionWarnings = session.completion_status === 'completed_with_warnings' || failedBlockCount > 0;
   return (
     <div
       className="archive-session-card flex items-center justify-between gap-3 px-4 py-3"
-      style={{ pointerEvents: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.18)', opacity: 0.95, cursor: 'grabbing' }}
+      style={{ pointerEvents: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.18)', opacity: 0.95, cursor: 'grabbing', borderColor: hasRevisionWarnings ? 'var(--warning-ring)' : undefined, background: hasRevisionWarnings ? 'var(--warning-subtle)' : undefined }}
     >
       <div className="flex items-center gap-3 overflow-hidden flex-1">
         <span className="w-4 h-4 rounded-full shrink-0" style={{ background: folderColor, opacity: 0.85 }} />
@@ -872,6 +882,9 @@ function FolderSessionCardOverlay({ session, folderColor }: {
             {ts > 0 && <span>{formatRelativeTime(ts)}</span>}
             {session.effective_model && (
               <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span>{shortModelName(session.effective_model)}</span></>
+            )}
+            {hasRevisionWarnings && (
+              <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span style={{ color: 'var(--warning-text)', fontWeight: 600 }}>Completata con avvisi</span></>
             )}
           </div>
           <div className="mt-0.5 flex items-center gap-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
@@ -907,6 +920,7 @@ function SortableSessionCard({
   const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
   const [isRetryingBlocks, setIsRetryingBlocks] = useState(false);
   const failedBlockCount = session.revision_failed_blocks?.length ?? 0;
+  const hasRevisionWarnings = session.completion_status === 'completed_with_warnings' || failedBlockCount > 0;
   const canRetryBlocks = failedBlockCount > 0 && Boolean(onRetryFailedRevisionBlocks);
   const handleRetryBlocks = async (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -951,6 +965,9 @@ function SortableSessionCard({
         opacity: isDragging ? 0.4 : 1,
         touchAction: disabled ? undefined : 'none',
         cursor: isDragging ? 'grabbing' : disabled ? 'pointer' : 'grab',
+        borderColor: hasRevisionWarnings ? 'var(--warning-ring)' : undefined,
+        boxShadow: hasRevisionWarnings ? 'inset 3px 0 0 var(--warning-ring)' : undefined,
+        background: hasRevisionWarnings ? 'var(--warning-subtle)' : undefined,
       }}
     >
       <div className="flex items-center gap-3 overflow-hidden flex-1">
@@ -962,21 +979,29 @@ function SortableSessionCard({
             {session.effective_model && (
               <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span>{shortModelName(session.effective_model)}</span></>
             )}
+            {hasRevisionWarnings && (
+              <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span style={{ color: 'var(--warning-text)', fontWeight: 600 }}>Completata con avvisi</span></>
+            )}
             {failedBlockCount > 0 && (
               <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}><AlertTriangle className="w-3 h-3" />{failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}</span></>
             )}
           </div>
           {canRetryBlocks && (
-            <button
-              type="button"
-              onClick={handleRetryBlocks}
-              disabled={isRetryingBlocks}
-              className="mt-1.5 premium-button-secondary compact-button text-xs"
-              style={{ color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRetryingBlocks ? 'animate-spin' : ''}`} />
-              {isRetryingBlocks ? 'Riprovo...' : 'Riprova i blocchi mancanti'}
-            </button>
+            <div className="mt-2 flex flex-col gap-2 rounded-xl px-3 py-2" style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid var(--warning-ring)' }}>
+              <p className="text-xs font-medium" style={{ color: 'var(--warning-text)' }}>
+                Alcune sezioni sono nella nota senza revisione AI.
+              </p>
+              <button
+                type="button"
+                onClick={handleRetryBlocks}
+                disabled={isRetryingBlocks}
+                className="premium-button-secondary compact-button text-xs self-start"
+                style={{ color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRetryingBlocks ? 'animate-spin' : ''}`} />
+                {isRetryingBlocks ? 'Riprovo...' : 'Riprova revisione AI'}
+              </button>
+            </div>
           )}
           <div
             className="mt-0.5 flex items-center gap-1 text-[11px] hover:underline"

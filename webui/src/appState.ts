@@ -18,6 +18,7 @@ export type FileItem = {
   primaryModel?: string;
   effectiveModel?: string;
   resumeSession?: boolean;
+  completionStatus?: 'completed' | 'completed_with_warnings';
   revisionFailedBlocks?: number[];
 };
 
@@ -49,6 +50,7 @@ export type AppStatus = 'idle' | 'processing' | 'canceling';
 export type ProcessDonePayload = {
   cancelled?: boolean;
   completed?: number;
+  completed_with_warnings?: number;
   failed?: number;
   total?: number;
   quota_exhausted?: boolean;
@@ -56,7 +58,7 @@ export type ProcessDonePayload = {
 
 export function isSuccessfulProcessDone(data?: ProcessDonePayload | null): boolean {
   if (!data || data.cancelled) return false;
-  return Number(data.completed ?? 0) > 0 && Number(data.failed ?? 0) === 0;
+  return Number(data.completed ?? 0) > 0 && Number(data.completed_with_warnings ?? 0) === 0 && Number(data.failed ?? 0) === 0;
 }
 
 export type SetCurrentFilePayload = {
@@ -72,6 +74,7 @@ export type FileDonePayload = {
   output_dir: string;
   primary_model?: string;
   effective_model?: string;
+  completion_status?: 'completed' | 'completed_with_warnings';
   revision_failed_blocks?: number[];
 };
 
@@ -234,6 +237,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         return {
           ...file,
           revisionFailedBlocks: action.blocks,
+          completionStatus: action.blocks.length > 0 ? ('completed_with_warnings' as const) : ('completed' as const),
           outputHtml: action.htmlPath ?? file.outputHtml,
           effectiveModel: action.effectiveModel ?? file.effectiveModel,
         };
@@ -349,6 +353,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
                 completedAt: Date.now(),
                 primaryModel: action.data.primary_model || undefined,
                 effectiveModel: action.data.effective_model || undefined,
+                completionStatus: action.data.completion_status || (Array.isArray(action.data.revision_failed_blocks) && action.data.revision_failed_blocks.length > 0 ? 'completed_with_warnings' : 'completed'),
                 revisionFailedBlocks: Array.isArray(action.data.revision_failed_blocks) ? action.data.revision_failed_blocks : [],
               }
             : file,

@@ -30,6 +30,7 @@ class LowDiskWarningPayload(TypedDict):
 class ProcessDonePayload(TypedDict, total=False):
     cancelled: bool
     completed: int
+    completed_with_warnings: int
     failed: int
     total: int
     quota_exhausted: NotRequired[bool]
@@ -47,6 +48,7 @@ class FileDonePayload(TypedDict):
     output_html: str
     output_dir: str
     effective_model: str
+    completion_status: NotRequired[Literal["completed", "completed_with_warnings"]]
     revision_failed_blocks: NotRequired[list[int]]
     primary_model: NotRequired[str]
 

@@ -829,6 +829,75 @@ class AppWebviewTests(unittest.TestCase):
 
         self.assertEqual(observed_resume_values, [False])
 
+    @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
+    def test_completed_with_warnings_is_not_counted_as_full_success(
+        self, mock_pipeline_run
+    ):
+        api = ElSbobinatorApi()
+        emitted = []
+
+        def fake_emit(fn_name, data, batched=None):
+            emitted.append((fn_name, data, batched))
+
+        def fake_pipeline_run(_path, _api_key, adapter, resume_session=True):
+            html_path = _path + ".html"
+            with open(html_path, "w", encoding="utf-8") as handle:
+                handle.write("<html><body>ok</body></html>")
+            adapter.set_run_result("completed_with_warnings", "")
+            adapter.last_output_html = html_path
+            adapter.last_output_dir = os.path.dirname(html_path)
+            adapter.last_revision_failed_blocks = [1]
+
+        mock_pipeline_run.side_effect = fake_pipeline_run
+        api._adapter.emit = fake_emit
+
+        with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            tmp.write(b"fake")
+            file_path = tmp.name
+        html_path = file_path + ".html"
+
+        try:
+            result = api.start_processing(
+                [
+                    {
+                        "id": "file-1",
+                        "path": file_path,
+                        "name": "lesson.mp3",
+                        "size": 4,
+                        "duration": 1,
+                    }
+                ],
+                api_key="fake-key",
+                resume_session=True,
+            )
+            self.assertIsNotNone(api._processing_thread)
+            assert api._processing_thread is not None
+            api._processing_thread.join(timeout=2)
+            self.assertFalse(api._processing_thread.is_alive())
+        finally:
+            for path in (file_path, html_path):
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
+
+        self.assertTrue(result["ok"])
+        file_done_events = [
+            data for fn_name, data, _batched in emitted if fn_name == "fileDone"
+        ]
+        process_done_events = [
+            data for fn_name, data, _batched in emitted if fn_name == "processDone"
+        ]
+        self.assertEqual(len(file_done_events), 1)
+        self.assertEqual(
+            file_done_events[0]["completion_status"], "completed_with_warnings"
+        )
+        self.assertEqual(file_done_events[0]["revision_failed_blocks"], [1])
+        self.assertEqual(len(process_done_events), 1)
+        self.assertEqual(process_done_events[0]["completed"], 0)
+        self.assertEqual(process_done_events[0]["completed_with_warnings"], 1)
+        self.assertEqual(process_done_events[0]["failed"], 0)
+
     def test_push_console_redacts_api_keys(self):
         api = ElSbobinatorApi()
         emitted = []
@@ -1185,6 +1254,59 @@ class AppWebviewTests(unittest.TestCase):
                 html_name,
                 "session.json deve essere aggiornato con il nuovo path",
             )
+
+    def test_rebuild_html_ignores_malformed_revision_failed_blocks(self):
+        import json
+        import os
+
+        api = ElSbobinatorApi()
+        with (
+            tempfile.TemporaryDirectory() as desktop_dir,
+            tempfile.TemporaryDirectory() as session_root,
+            tempfile.TemporaryDirectory() as audio_dir,
+        ):
+            session_dir = os.path.join(session_root, "abc123")
+            phase2_revised_dir = os.path.join(session_dir, "phase2_revised")
+            os.makedirs(phase2_revised_dir)
+
+            with open(
+                os.path.join(phase2_revised_dir, "rev_000.md"), "w", encoding="utf-8"
+            ) as fh:
+                fh.write("## Contenuto recuperabile")
+
+            audio_path = os.path.join(audio_dir, "Lesson.mp3")
+            with open(audio_path, "wb") as fh:
+                fh.write(b"fake")
+
+            html_name = "Lesson_Sbobina.html"
+            session_json = {
+                "schema_version": 1,
+                "stage": "done",
+                "input": {"path": audio_path},
+                "outputs": {"html": os.path.join(desktop_dir, html_name)},
+                "settings": {},
+                "phase1": {},
+                "phase2": {},
+                "revision_failed_blocks": ["1", "bad"],
+                "last_error": None,
+            }
+            with open(
+                os.path.join(session_dir, "session.json"), "w", encoding="utf-8"
+            ) as fh:
+                json.dump(session_json, fh)
+
+            with (
+                patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                patch.object(api, "_get_session_root", return_value=session_root),
+            ):
+                result = api.read_html_content(os.path.join(desktop_dir, html_name))
+
+            self.assertTrue(result["ok"], result.get("error"))
+            self.assertIn("Contenuto recuperabile", result["content"])
+            self.assertIn("revision-warning-banner", result["content"])
 
     def test_rebuild_html_uses_html_basename_when_input_path_renamed(self):
         """If input_path in session.json produces a different basename than the

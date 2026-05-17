@@ -108,6 +108,30 @@ class TestProcessMacroRevisionPhase(unittest.TestCase):
             self.assertEqual(session["phase2"]["revised_done"], 1)
             self.assertEqual(session.get("revision_failed_blocks", []), [])
 
+    def test_clean_main_pass_clears_stale_failed_blocks_and_warning_state(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session = self._make_session()
+            session.update(
+                {
+                    "revision_pending_blocks": [1],
+                    "revision_failed_blocks": [1],
+                    "completion_status": "completed_with_warnings",
+                    "last_error": "stale_error",
+                    "last_error_detail": "stale detail",
+                }
+            )
+
+            def success(fn, *, client, **kw):
+                return client, "Testo revisionato"
+
+            self._run(["Blocco."], tmpdir, session, success)
+
+            self.assertEqual(session.get("revision_pending_blocks"), [])
+            self.assertEqual(session.get("revision_failed_blocks"), [])
+            self.assertEqual(session.get("completion_status"), "completed")
+            self.assertIsNone(session.get("last_error"))
+            self.assertIsNone(session.get("last_error_detail"))
+
     def test_main_pass_failure_writes_raw_md_not_md(self):
         """Main pass fail → .raw.md written (not .md), retry pass also fails →
         finalized to .md with raw content, block in revision_failed_blocks."""
@@ -188,6 +212,9 @@ class TestProcessMacroRevisionPhase(unittest.TestCase):
             self.assertTrue(os.path.exists(rev_path))
             self.assertTrue(os.path.exists(os.path.join(tmpdir, "rev_001.raw.md")))
             self.assertIn(1, session.get("revision_failed_blocks", []))
+            self.assertEqual(
+                session.get("completion_status"), "completed_with_warnings"
+            )
 
     def test_quota_in_retry_pass_leaves_raw_md_and_does_not_finalize(self):
         """Main pass fails (RuntimeError) → .raw.md written.

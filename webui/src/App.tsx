@@ -212,6 +212,7 @@ export default function App() {
             ...session,
             html_path: res.html_path ?? session.html_path,
             effective_model: res.effective_model ?? session.effective_model,
+            completion_status: remaining.length > 0 ? 'completed_with_warnings' : 'completed',
             revision_failed_blocks: remaining,
           }
         : session,
@@ -237,7 +238,7 @@ export default function App() {
     if (key && warnedRevisionSessionsRef.current.has(key)) return;
     if (key) warnedRevisionSessionsRef.current.add(key);
     showToast(
-      `Sbobina pronta, ma ${count} ${count === 1 ? 'sezione e stata inclusa' : 'sezioni sono state incluse'} non revisionate.`,
+      `Completata con avvisi: ${count} ${count === 1 ? 'sezione e stata inclusa' : 'sezioni sono state incluse'} senza revisione AI.`,
       'warning',
       {
         dedupeKey: key || undefined,

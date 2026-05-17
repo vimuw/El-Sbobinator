@@ -358,7 +358,12 @@ def _esegui_sbobinatura_impl(  # noqa: C901
                         ]
                     except Exception:
                         pass
-                    runtime.set_run_result("completed")
+                    _completion_status = (
+                        "completed_with_warnings"
+                        if getattr(app_instance, "last_revision_failed_blocks", [])
+                        else "completed"
+                    )
+                    runtime.set_run_result(_completion_status)
                     return
 
         # ------------------------------------------
@@ -524,9 +529,19 @@ def _esegui_sbobinatura_impl(  # noqa: C901
 
         current_stage = str(session.get("stage", "phase1")).strip().lower()
         if current_stage in ("phase2", "boundary"):
+            _revision_failed_blocks = [
+                int(idx) for idx in (session.get("revision_failed_blocks") or [])
+            ]
             _update_session(
                 session,
-                {"stage": "done", "last_error": None, "last_error_detail": None},
+                {
+                    "stage": "done",
+                    "completion_status": "completed_with_warnings"
+                    if _revision_failed_blocks
+                    else "completed",
+                    "last_error": None,
+                    "last_error_detail": None,
+                },
             )
             save_session()
 
@@ -545,6 +560,9 @@ def _esegui_sbobinatura_impl(  # noqa: C901
                 output_dir=session_html_dir,
                 fallback_output_dir=session_html_dir,
                 safe_output_basename=safe_output_basename,
+                revision_failed_blocks=[
+                    int(idx) for idx in (session.get("revision_failed_blocks") or [])
+                ],
             )
         except Exception as e:
             print(f"[!] Errore salvataggio HTML: {e}")
@@ -593,7 +611,12 @@ def _esegui_sbobinatura_impl(  # noqa: C901
             ]
         except Exception:
             pass
-        runtime.set_run_result("completed")
+        _completion_status = (
+            "completed_with_warnings"
+            if getattr(app_instance, "last_revision_failed_blocks", [])
+            else "completed"
+        )
+        runtime.set_run_result(_completion_status)
         logger.info("Pipeline completata con successo.", extra={"stage": "done"})
 
         # Pulizia: rimuovi il file preconvertito (grande) se presente. I progressi testuali restano nella sessione.
@@ -656,7 +679,10 @@ def _esegui_sbobinatura_impl(  # noqa: C901
             )
         else:
             runtime.progress(1.0)
-            if getattr(app_instance, "last_run_status", None) == "completed":
+            if getattr(app_instance, "last_run_status", None) in {
+                "completed",
+                "completed_with_warnings",
+            }:
                 runtime.set_run_error_detail(None)
             else:
                 runtime.set_run_error_detail(

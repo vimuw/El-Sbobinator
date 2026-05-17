@@ -204,6 +204,7 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
   const isClickable = Boolean(file.outputHtml);
   const [isRetryingBlocks, setIsRetryingBlocks] = React.useState(false);
   const failedBlockCount = file.revisionFailedBlocks?.length ?? 0;
+  const hasRevisionWarnings = file.completionStatus === 'completed_with_warnings' || failedBlockCount > 0;
   const canRetryBlocks = failedBlockCount > 0 && Boolean(file.outputDir) && Boolean(onRetryFailedRevisionBlocks);
   const handleRetryBlocks = async (event: React.MouseEvent) => {
     event.stopPropagation();
@@ -227,18 +228,18 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
       onClick={isClickable ? () => onPreview(file.outputHtml!, file.name, file.path, file.id) : undefined}
       className={`queue-card relative px-4 py-3 transition-colors group/card ${isClickable ? 'cursor-pointer' : ''}`}
       style={{
-        border: '1px solid var(--success-ring)',
-        boxShadow: `inset 3px 0 0 var(--success-ring)${isNewest ? ', 0 0 0 2px rgba(22,163,74,0.08)' : ''}`,
-        background: isNewest ? 'var(--success-subtle)' : 'var(--card-queued-bg)',
+        border: `1px solid ${hasRevisionWarnings ? 'var(--warning-ring)' : 'var(--success-ring)'}`,
+        boxShadow: `inset 3px 0 0 ${hasRevisionWarnings ? 'var(--warning-ring)' : 'var(--success-ring)'}${isNewest && !hasRevisionWarnings ? ', 0 0 0 2px rgba(22,163,74,0.08)' : ''}`,
+        background: hasRevisionWarnings ? 'var(--warning-subtle)' : isNewest ? 'var(--success-subtle)' : 'var(--card-queued-bg)',
       }}
     >
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 overflow-hidden flex-1">
           <div
             className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg"
-            style={{ background: 'transparent', color: 'var(--success-text)' }}
+            style={{ background: 'transparent', color: hasRevisionWarnings ? 'var(--warning-text)' : 'var(--success-text)' }}
           >
-            <CheckCircle className="w-4.5 h-4.5" />
+            {hasRevisionWarnings ? <AlertTriangle className="w-4.5 h-4.5" /> : <CheckCircle className="w-4.5 h-4.5" />}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 min-w-0">
@@ -275,8 +276,8 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
                 </>
               )}
               <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
-              <span style={{ color: 'var(--success-text)' }}>
-                {file.completedAt ? formatRelativeTime(file.completedAt) : 'Completato'}
+              <span style={{ color: hasRevisionWarnings ? 'var(--warning-text)' : 'var(--success-text)' }}>
+                {hasRevisionWarnings ? 'Completata con avvisi' : file.completedAt ? formatRelativeTime(file.completedAt) : 'Completato'}
               </span>
               {failedBlockCount > 0 && (
                 <>
@@ -292,17 +293,22 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
               )}
             </div>
             {canRetryBlocks && (
-              <button
-                type="button"
-                onClick={handleRetryBlocks}
-                disabled={isRetryingBlocks}
-                className="mt-2 premium-button-secondary compact-button text-xs"
-                style={{ color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
-                title="Riprova solo i blocchi inclusi senza revisione"
-              >
-                <RotateCcw className={`w-3.5 h-3.5 ${isRetryingBlocks ? 'animate-spin' : ''}`} />
-                {isRetryingBlocks ? 'Riprovo...' : 'Riprova i blocchi mancanti'}
-              </button>
+              <div className="mt-2 flex flex-col gap-2 rounded-xl px-3 py-2" style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid var(--warning-ring)' }}>
+                <p className="text-xs font-medium" style={{ color: 'var(--warning-text)' }}>
+                  Alcune sezioni sono nella nota senza revisione AI.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleRetryBlocks}
+                  disabled={isRetryingBlocks}
+                  className="premium-button-secondary compact-button text-xs self-start"
+                  style={{ color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
+                  title="Riprova solo i blocchi inclusi senza revisione"
+                >
+                  <RotateCcw className={`w-3.5 h-3.5 ${isRetryingBlocks ? 'animate-spin' : ''}`} />
+                  {isRetryingBlocks ? 'Riprovo...' : 'Riprova revisione AI'}
+                </button>
+              </div>
             )}
             {file.outputHtml && (
               <div

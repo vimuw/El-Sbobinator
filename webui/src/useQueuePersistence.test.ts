@@ -87,4 +87,11 @@ describe('useQueuePersistence — serialization contract', () => {
     expect(restored.primaryModel).toBeUndefined();
     expect(restored.effectiveModel).toBe('gemini-2.5-flash');
   });
+
+  it('completionStatus is preserved through a JSON round-trip', () => {
+    const file = makeFile({ status: 'done', progress: 100, phase: 3, completionStatus: 'completed_with_warnings', revisionFailedBlocks: [1] });
+    const restored = roundTrip(file);
+    expect(restored.completionStatus).toBe('completed_with_warnings');
+    expect(restored.revisionFailedBlocks).toEqual([1]);
+  });
 });

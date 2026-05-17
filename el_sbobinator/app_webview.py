@@ -103,6 +103,12 @@ _ALLOWED_URL_PREFIXES: tuple[str, ...] = (
 )
 
 
+def _normalize_revision_failed_blocks(value: object) -> list[int]:
+    if not isinstance(value, list | tuple | set):
+        return []
+    return [int(idx) for idx in value if str(idx).strip().isdigit()]
+
+
 class _RetryRuntime:
     def __init__(self, adapter: PipelineAdapter, cancel_event: threading.Event):
         self._adapter = adapter
@@ -462,11 +468,15 @@ class ElSbobinatorApi:
                 )
                 effective_model = data.get("settings", {}).get("effective_model", "")
                 duration_sec = data.get("phase1", {}).get("duration_seconds")
-                revision_failed_blocks = [
-                    int(idx)
-                    for idx in data.get("revision_failed_blocks", [])
-                    if str(idx).strip().isdigit()
-                ]
+                revision_failed_blocks = _normalize_revision_failed_blocks(
+                    data.get("revision_failed_blocks", [])
+                )
+                raw_status = str(data.get("completion_status") or "")
+                completion_status = (
+                    "completed_with_warnings"
+                    if raw_status == "completed_with_warnings" or revision_failed_blocks
+                    else "completed"
+                )
                 sessions.append(
                     {
                         "name": name,
@@ -477,6 +487,7 @@ class ElSbobinatorApi:
                         "input_size": input_size,
                         "session_dir": str(session_dir),
                         "revision_failed_blocks": revision_failed_blocks,
+                        "completion_status": completion_status,
                         **(
                             {"duration_sec": duration_sec}
                             if duration_sec is not None
@@ -701,6 +712,7 @@ class ElSbobinatorApi:
                 output_dir=abs_dir,
                 fallback_output_dir=abs_dir,
                 safe_output_basename=safe_output_basename,
+                revision_failed_blocks=remaining,
             )
             session.setdefault("outputs", {})
             session["outputs"]["html"] = html_path
@@ -719,6 +731,9 @@ class ElSbobinatorApi:
                 "ok": True,
                 "retried_blocks": retried_blocks,
                 "remaining_failed_blocks": remaining,
+                "completion_status": "completed_with_warnings"
+                if remaining
+                else "completed",
                 "html_path": html_path,
                 "session_dir": abs_dir,
                 "effective_model": model_state.current,
@@ -1309,6 +1324,7 @@ class ElSbobinatorApi:
 
             active_api_key = api_key
             completed_count = 0
+            completed_with_warnings_count = 0
             failed_count = 0
             current_index: int | None = None
             current_file_id = ""
@@ -1366,24 +1382,35 @@ class ElSbobinatorApi:
                     ) and last_run_status != "failed":
                         break
 
-                    if last_run_status == "completed":
+                    if last_run_status in ("completed", "completed_with_warnings"):
                         if self._adapter.last_output_html and os.path.exists(
                             self._adapter.last_output_html
                         ):
+                            revision_failed_blocks = list(
+                                self._adapter.last_revision_failed_blocks or []
+                            )
+                            completion_status = (
+                                "completed_with_warnings"
+                                if last_run_status == "completed_with_warnings"
+                                or revision_failed_blocks
+                                else "completed"
+                            )
                             fd_payload: FileDonePayload = {
                                 "index": idx,
                                 "id": file_info.get("id", ""),
                                 "output_html": self._adapter.last_output_html,
                                 "output_dir": self._adapter.last_output_dir or "",
-                                "revision_failed_blocks": list(
-                                    self._adapter.last_revision_failed_blocks or []
-                                ),
+                                "completion_status": completion_status,
+                                "revision_failed_blocks": revision_failed_blocks,
                                 "primary_model": self._adapter.last_primary_model or "",
                                 "effective_model": self._adapter.last_effective_model
                                 or "",
                             }
                             self._adapter.emit("fileDone", fd_payload, batched=False)
-                            completed_count += 1
+                            if completion_status == "completed_with_warnings":
+                                completed_with_warnings_count += 1
+                            else:
+                                completed_count += 1
                         else:
                             ff_payload2: FileFailedPayload = {
                                 "index": idx,
@@ -1440,6 +1467,7 @@ class ElSbobinatorApi:
                         or self._adapter.last_run_status == "cancelled"
                     ),
                     "completed": completed_count,
+                    "completed_with_warnings": completed_with_warnings_count,
                     "failed": failed_count,
                     "total": len(files),
                 }
@@ -1857,6 +1885,9 @@ class ElSbobinatorApi:
                         output_dir=entry_path,
                         fallback_output_dir=entry_path,
                         safe_output_basename=safe_output_basename,
+                        revision_failed_blocks=_normalize_revision_failed_blocks(
+                            session_data.get("revision_failed_blocks")
+                        ),
                     )
                     if not os.path.isfile(html_path):
                         continue
