@@ -2611,6 +2611,93 @@ class TestUpdateSessionInputPath(unittest.TestCase):
             self.assertIsNone(api._sessions_cache)
             self.assertEqual(api._sessions_cache_gen, initial_gen + 1)
 
+    def test_happy_path_stores_relative_audio_fallbacks(self):
+        import json
+        import os
+
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as parent:
+            session_root = os.path.join(parent, "sessions")
+            session_dir = os.path.join(session_root, "sess1")
+            audio_dir = os.path.join(parent, "audio")
+            os.makedirs(session_dir)
+            os.makedirs(audio_dir)
+            html_path = os.path.join(session_dir, "out.html")
+            audio_path = os.path.join(audio_dir, "lecture.mp3")
+            open(html_path, "w").close()
+            with open(audio_path, "wb") as fh:
+                fh.write(b"audio")
+            session_path = os.path.join(session_dir, "session.json")
+            with open(session_path, "w", encoding="utf-8") as fh:
+                json.dump(
+                    {
+                        "input": {"path": "/old.mp3"},
+                        "outputs": {"html": html_path},
+                        "stage": "done",
+                    },
+                    fh,
+                )
+
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                result = api.update_session_input_path(session_dir, audio_path)
+
+            with open(session_path, encoding="utf-8") as fh:
+                updated = json.load(fh)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(updated["input"]["path"], audio_path)
+        self.assertEqual(
+            os.path.normpath(updated["input"]["path_rel_to_session"]),
+            os.path.normpath(os.path.join("..", "..", "audio", "lecture.mp3")),
+        )
+        self.assertEqual(
+            os.path.normpath(updated["input"]["path_rel_to_html"]),
+            os.path.normpath(os.path.join("..", "..", "audio", "lecture.mp3")),
+        )
+
+    def test_relink_clears_stale_relative_fallbacks_when_unrepresentable(self):
+        import json
+        import os
+
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as parent:
+            session_root = os.path.join(parent, "sessions")
+            session_dir = os.path.join(session_root, "sess1")
+            os.makedirs(session_dir)
+            html_path = os.path.join(session_dir, "out.html")
+            new_audio_path = os.path.join(parent, "new-audio.mp3")
+            open(html_path, "w").close()
+            with open(new_audio_path, "wb") as fh:
+                fh.write(b"audio")
+            session_path = os.path.join(session_dir, "session.json")
+            with open(session_path, "w", encoding="utf-8") as fh:
+                json.dump(
+                    {
+                        "input": {
+                            "path": "/old/audio.mp3",
+                            "path_rel_to_session": "old-session.mp3",
+                            "path_rel_to_html": "old-html.mp3",
+                        },
+                        "outputs": {"html": html_path},
+                        "stage": "done",
+                    },
+                    fh,
+                )
+
+            with (
+                patch.object(api, "_get_session_root", return_value=session_root),
+                patch("el_sbobinator.app_webview._safe_relpath", return_value=None),
+            ):
+                result = api.update_session_input_path(session_dir, new_audio_path)
+
+            with open(session_path, encoding="utf-8") as fh:
+                updated = json.load(fh)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(updated["input"]["path"], new_audio_path)
+        self.assertNotIn("path_rel_to_session", updated["input"])
+        self.assertNotIn("path_rel_to_html", updated["input"])
+
 
 class TestStreamMediaFile(unittest.TestCase):
     """Tests for ElSbobinatorApi.stream_media_file."""
@@ -2692,6 +2779,48 @@ class TestStreamMediaFile(unittest.TestCase):
                 ):
                     result = api.stream_media_file(f"/audio/file{ext}")
                 self.assertTrue(result["ok"], f"Expected ok for extension {ext}")
+
+    def test_resolves_missing_audio_from_session_relative_fallback(self):
+        import json
+        import os
+
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as parent:
+            session_root = os.path.join(parent, "sessions")
+            session_dir = os.path.join(session_root, "sess1")
+            audio_dir = os.path.join(parent, "audio")
+            os.makedirs(session_dir)
+            os.makedirs(audio_dir)
+            audio_path = os.path.join(audio_dir, "lecture.mp3")
+            with open(audio_path, "wb") as fh:
+                fh.write(b"audio")
+            session_path = os.path.join(session_dir, "session.json")
+            with open(session_path, "w", encoding="utf-8") as fh:
+                json.dump(
+                    {
+                        "stage": "done",
+                        "input": {
+                            "path": os.path.join(parent, "missing", "lecture.mp3"),
+                            "path_rel_to_session": os.path.join(
+                                "..", "..", "audio", "lecture.mp3"
+                            ),
+                        },
+                    },
+                    fh,
+                )
+
+            with (
+                patch.object(api, "_get_session_root", return_value=session_root),
+                patch(
+                    "el_sbobinator.app_webview.LocalMediaServer.stream_url_for_file",
+                    return_value="http://127.0.0.1:8765/audio/rel",
+                ) as mock_server,
+            ):
+                result = api.stream_media_file("/missing/lecture.mp3", session_dir)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["url"], "http://127.0.0.1:8765/audio/rel")
+        mock_server.assert_called_once_with(audio_path)
 
 
 class TestGetCompletedSessions(unittest.TestCase):
@@ -2798,6 +2927,58 @@ class TestGetCompletedSessions(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("total", result)
         self.assertEqual(result["total"], 0)
+
+    def test_recovers_audio_after_parent_folder_rename(self):
+        import json as _json
+        import os as _os
+
+        api = ElSbobinatorApi()
+        api._prewarm_thread.join(timeout=3)
+        with tempfile.TemporaryDirectory() as td:
+            old_parent = _os.path.join(td, "course-old")
+            new_parent = _os.path.join(td, "course-new")
+            old_session_root = _os.path.join(old_parent, "sessions")
+            session_dir = _os.path.join(old_session_root, "sess1")
+            audio_dir = _os.path.join(old_parent, "audio")
+            _os.makedirs(session_dir)
+            _os.makedirs(audio_dir)
+            html_path = _os.path.join(session_dir, "out.html")
+            audio_path = _os.path.join(audio_dir, "lecture.mp3")
+            open(html_path, "w").close()
+            with open(audio_path, "wb") as fh:
+                fh.write(b"audio")
+            session_path = _os.path.join(session_dir, "session.json")
+            with open(session_path, "w", encoding="utf-8") as fh:
+                _json.dump(
+                    {
+                        "stage": "done",
+                        "updated_at": "2024-01-01T00:00:00",
+                        "outputs": {"html": html_path},
+                        "input": {"path": "/old.mp3", "size": 0},
+                        "settings": {},
+                    },
+                    fh,
+                )
+            with patch.object(api, "_get_session_root", return_value=old_session_root):
+                relink_result = api.update_session_input_path(session_dir, audio_path)
+            self.assertTrue(relink_result["ok"])
+
+            _os.rename(old_parent, new_parent)
+            new_session_root = _os.path.join(new_parent, "sessions")
+            new_session_dir = _os.path.join(new_session_root, "sess1")
+            new_audio_path = _os.path.join(new_parent, "audio", "lecture.mp3")
+            self._clear_cache(api)
+            with patch.object(api, "_get_session_root", return_value=new_session_root):
+                result = api.get_completed_sessions(limit=0)
+
+            with open(
+                _os.path.join(new_session_dir, "session.json"), encoding="utf-8"
+            ) as fh:
+                updated = _json.load(fh)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["sessions"][0]["input_path"], new_audio_path)
+        self.assertEqual(updated["input"]["path"], new_audio_path)
 
 
 class TestMoveSessionRoot(unittest.TestCase):

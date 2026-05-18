@@ -571,6 +571,19 @@ function FullTextResultList({
 
 // ─── SortableFolderCard ─────────────────────────────────────────────────────
 
+function FolderIndicatorChip({ folder }: { folder: Pick<ArchiveFolder, 'name' | 'color'> }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0"
+      style={{ background: `${folder.color}22`, color: folder.color, border: `1px solid ${folder.color}55` }}
+      title={`Raccolta: ${folder.name}`}
+    >
+      <span className="w-1.5 h-1.5 rounded-full" style={{ background: folder.color }} />
+      {folder.name}
+    </span>
+  );
+}
+
 function SortableFolderCard({
   folder, sessionsByDir, onNavigate, onEdit, onDelete,
 }: {
@@ -815,6 +828,12 @@ function DraggableSessionCard({
           <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{session.name}</p>
           <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
             {ts > 0 && <span>{formatRelativeTime(ts)}</span>}
+            {currentFolder && (
+              <>
+                <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
+                <FolderIndicatorChip folder={currentFolder} />
+              </>
+            )}
             {session.effective_model && (
               <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span>{shortModelName(session.effective_model)}</span></>
             )}
@@ -902,6 +921,7 @@ function FolderSessionCardOverlay({ session, folderColor }: {
 function SortableSessionCard({
   session, folderColor, disabled, onRemove,
   onPreview, onOpenFile, onDeleteSession, onRetryFailedRevisionBlocks,
+  canMoveToPreviousPage, canMoveToNextPage, onMoveToPreviousPage, onMoveToNextPage,
 }: {
   session: ArchiveSession;
   folderColor: string;
@@ -911,6 +931,10 @@ function SortableSessionCard({
   onOpenFile: ArchivePageProps['onOpenFile'];
   onDeleteSession: ArchivePageProps['onDeleteSession'];
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
+  canMoveToPreviousPage?: boolean;
+  canMoveToNextPage?: boolean;
+  onMoveToPreviousPage?: () => void;
+  onMoveToNextPage?: () => void;
 }) {
   const {
     attributes, listeners, setNodeRef,
@@ -1013,7 +1037,33 @@ function SortableSessionCard({
           </div>
         </div>
       </div>
-      <div onClick={e => e.stopPropagation()}>
+      <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+        {(onMoveToPreviousPage || onMoveToNextPage) && (
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onMoveToPreviousPage}
+              disabled={!canMoveToPreviousPage}
+              className="icon-button compact-icon-button"
+              style={{ color: 'var(--text-muted)' }}
+              title="Sposta alla pagina precedente"
+              aria-label={`Sposta ${session.name} alla pagina precedente`}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onMoveToNextPage}
+              disabled={!canMoveToNextPage}
+              className="icon-button compact-icon-button"
+              style={{ color: 'var(--text-muted)' }}
+              title="Sposta alla pagina successiva"
+              aria-label={`Sposta ${session.name} alla pagina successiva`}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
         <KebabMenu items={kebabItems} />
       </div>
     </div>
@@ -1084,6 +1134,23 @@ function FolderDetailView({
     let vi = 0;
     const merged = folder.session_dirs.map(d => visibleSet.has(d) ? reorderedVisible[vi++] : d);
     onReorderSessions(merged);
+  }, [folder.session_dirs, folderSessions, onReorderSessions]);
+
+  const moveSessionAcrossPages = useCallback((sessionDir: string, direction: -1 | 1) => {
+    const visibleDirs = folderSessions.map(s => s.session_dir);
+    const oldIndex = visibleDirs.indexOf(sessionDir);
+    if (oldIndex === -1) return;
+    const newIndex = Math.max(
+      0,
+      Math.min(visibleDirs.length - 1, oldIndex + direction * ARCHIVE_PAGE_SIZE),
+    );
+    if (oldIndex === newIndex) return;
+    const reorderedVisible = arrayMove(visibleDirs, oldIndex, newIndex);
+    const visibleSet = new Set(visibleDirs);
+    let vi = 0;
+    const merged = folder.session_dirs.map(d => visibleSet.has(d) ? reorderedVisible[vi++] : d);
+    onReorderSessions(merged);
+    setPage(Math.floor(newIndex / ARCHIVE_PAGE_SIZE));
   }, [folder.session_dirs, folderSessions, onReorderSessions]);
 
   const availableToAdd = useMemo(() => {
@@ -1335,19 +1402,27 @@ function FolderDetailView({
                 transition={{ duration: 0.12, ease: 'easeOut' }}
                 className="flex flex-col gap-2"
               >
-                {pageData.map(session => (
-                  <SortableSessionCard
-                    key={session.session_dir}
-                    session={session}
-                    folderColor={folder.color}
-                    disabled={isSearching}
-                    onRemove={() => onRemoveSession(session.session_dir)}
-                    onPreview={onPreview}
-                    onOpenFile={onOpenFile}
-                    onDeleteSession={onDeleteSession}
-                    onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
-                  />
-                ))}
+                {pageData.map((session, index) => {
+                  const visibleIndex = page * ARCHIVE_PAGE_SIZE + index;
+                  const showPageMoveControls = totalPages > 1 && !isSearching;
+                  return (
+                    <SortableSessionCard
+                      key={session.session_dir}
+                      session={session}
+                      folderColor={folder.color}
+                      disabled={isSearching}
+                      onRemove={() => onRemoveSession(session.session_dir)}
+                      onPreview={onPreview}
+                      onOpenFile={onOpenFile}
+                      onDeleteSession={onDeleteSession}
+                      onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
+                      canMoveToPreviousPage={visibleIndex >= ARCHIVE_PAGE_SIZE}
+                      canMoveToNextPage={visibleIndex < (totalPages - 1) * ARCHIVE_PAGE_SIZE}
+                      onMoveToPreviousPage={showPageMoveControls ? () => moveSessionAcrossPages(session.session_dir, -1) : undefined}
+                      onMoveToNextPage={showPageMoveControls ? () => moveSessionAcrossPages(session.session_dir, 1) : undefined}
+                    />
+                  );
+                })}
               </motion.div>
             </AnimatePresence>
           </SortableContext>

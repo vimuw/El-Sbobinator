@@ -109,6 +109,20 @@ def _normalize_revision_failed_blocks(value: object) -> list[int]:
     return [int(idx) for idx in value if str(idx).strip().isdigit()]
 
 
+def _safe_relpath(path: str, start: str) -> str | None:
+    try:
+        return os.path.relpath(path, start)
+    except (OSError, ValueError):
+        return None
+
+
+def _candidate_from_relative(base_dir: str, rel_path: object) -> str | None:
+    rel = str(rel_path or "").strip()
+    if not rel or os.path.isabs(rel):
+        return None
+    return os.path.realpath(os.path.join(base_dir, rel))
+
+
 class _RetryRuntime:
     def __init__(self, adapter: PipelineAdapter, cancel_event: threading.Event):
         self._adapter = adapter
@@ -459,7 +473,9 @@ class ElSbobinatorApi:
                         )
                     except Exception:
                         pass
-                input_path = data.get("input", {}).get("path", "")
+                input_path = self._resolve_completed_session_audio_path(
+                    data, session_dir, os.path.join(session_dir, "session.json")
+                ) or data.get("input", {}).get("path", "")
                 input_size = int(data.get("input", {}).get("size", 0) or 0)
                 name = (
                     os.path.basename(input_path)
@@ -775,6 +791,17 @@ class ElSbobinatorApi:
                 data["input"] = {}
             data["input"]["path"] = norm_path
             data["input"]["name"] = os.path.basename(norm_path)
+            data["input"].pop("path_rel_to_session", None)
+            data["input"].pop("path_rel_to_html", None)
+            session_rel = _safe_relpath(os.path.realpath(norm_path), abs_dir)
+            if session_rel:
+                data["input"]["path_rel_to_session"] = session_rel
+            html_path = str(data.get("outputs", {}).get("html", "") or "")
+            if html_path:
+                html_dir = os.path.dirname(os.path.realpath(html_path))
+                html_rel = _safe_relpath(os.path.realpath(norm_path), html_dir)
+                if html_rel:
+                    data["input"]["path_rel_to_html"] = html_rel
             try:
                 data["input"]["size"] = os.path.getsize(norm_path)
             except Exception:
@@ -786,6 +813,48 @@ class ElSbobinatorApi:
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": redact_secrets(e)}
+
+    def _resolve_completed_session_audio_path(
+        self, data: dict, session_dir: str, session_path: str | None = None
+    ) -> str | None:
+        input_data = data.get("input", {})
+        if not isinstance(input_data, dict):
+            return None
+        current_path = str(input_data.get("path", "") or "").strip()
+        if current_path and os.path.isfile(current_path):
+            return current_path
+        candidates: list[str] = []
+        session_candidate = _candidate_from_relative(
+            session_dir, input_data.get("path_rel_to_session")
+        )
+        if session_candidate:
+            candidates.append(session_candidate)
+        html_path = str(data.get("outputs", {}).get("html", "") or "")
+        if html_path:
+            html_candidate = _candidate_from_relative(
+                os.path.dirname(os.path.realpath(html_path)),
+                input_data.get("path_rel_to_html"),
+            )
+            if html_candidate:
+                candidates.append(html_candidate)
+        for candidate in candidates:
+            if os.path.splitext(candidate)[1].lower() not in self._ALLOWED_STREAM_EXTS:
+                continue
+            if not os.path.isfile(candidate):
+                continue
+            input_data["path"] = candidate
+            input_data["name"] = os.path.basename(candidate)
+            try:
+                input_data["size"] = os.path.getsize(candidate)
+            except Exception:
+                pass
+            if session_path:
+                try:
+                    _atomic_write_json(session_path, data)
+                except Exception:
+                    pass
+            return candidate
+        return None
 
     def cleanup_old_sessions(
         self, max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS
@@ -2041,16 +2110,34 @@ class ElSbobinatorApi:
                 return {"ok": True}
             return {"ok": False, "error": redact_secrets(e)}
 
-    def stream_media_file(self, file_path: str) -> dict:
+    def stream_media_file(self, file_path: str, session_dir: str | None = None) -> dict:
         """Avvia o riavvia un micro-server HTTP per inviare l'audio nativo a React via streaming byte-range."""
-        ext = os.path.splitext(str(file_path))[1].lower()
+        resolved_file_path = str(file_path or "").strip()
+        if session_dir and (
+            not resolved_file_path or not os.path.isfile(resolved_file_path)
+        ):
+            try:
+                abs_dir, session_path = self._resolve_retry_session(str(session_dir))
+                data = _load_json(session_path)
+                if isinstance(data, dict):
+                    fallback = self._resolve_completed_session_audio_path(
+                        data, abs_dir, session_path
+                    )
+                    if fallback:
+                        resolved_file_path = fallback
+            except Exception:
+                pass
+        ext = os.path.splitext(resolved_file_path)[1].lower()
         if ext not in self._ALLOWED_STREAM_EXTS:
             return {
                 "ok": False,
                 "error": "Tipo di file non supportato per lo streaming.",
             }
         try:
-            return {"ok": True, "url": LocalMediaServer.stream_url_for_file(file_path)}
+            return {
+                "ok": True,
+                "url": LocalMediaServer.stream_url_for_file(resolved_file_path),
+            }
         except Exception as e:
             return {"ok": False, "error": redact_secrets(e)}
 

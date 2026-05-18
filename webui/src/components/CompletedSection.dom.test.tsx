@@ -90,4 +90,18 @@ describe('CompletedSection', () => {
     fireEvent.change(screen.getByPlaceholderText('Cerca...'), { target: { value: 'xyz-nonexistent' } });
     expect(screen.getByText(/Nessun risultato per/)).toBeTruthy();
   });
+
+  it('passes folder indicators to completed cards by outputDir', () => {
+    const sessionFolderMap = new Map([
+      ['/sessions/s1', { id: 'folder-1', name: 'Corso A', color: '#4D96FF', session_dirs: ['/sessions/s1'] }],
+    ]);
+    render(
+      <CompletedSection
+        {...baseProps}
+        doneFiles={[makeFile({ outputDir: '/sessions/s1', outputHtml: '/sessions/s1/out.html' })]}
+        sessionFolderMap={sessionFolderMap}
+      />,
+    );
+    expect(screen.getByTitle('Raccolta: Corso A')).toBeTruthy();
+  });
 });

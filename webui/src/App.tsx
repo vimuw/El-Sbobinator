@@ -296,7 +296,7 @@ export default function App() {
     );
   }, [handleRetryFailedRevisionBlocks, normalizeSessionDir, showToast]);
 
-  const { preview, openPreview, closePreview, relinkPreviewAudio, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed });
+  const { preview, openPreview, closePreview, relinkPreviewAudio, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
 
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -1097,6 +1097,11 @@ export default function App() {
     const activeHtmlPaths = new Set(files.map(f => f.outputHtml).filter(Boolean));
     return archiveSessions.filter(s => !activeHtmlPaths.has(s.html_path));
   }, [archiveSessions, files]);
+  const completedSessionFolderMap = useMemo(() => {
+    const map = new Map<string, ArchiveFolder>();
+    for (const folder of folders) for (const dir of folder.session_dirs) map.set(normalizeSessionDir(dir), folder);
+    return map;
+  }, [folders, normalizeSessionDir]);
 
   return (
     <div className="app-shell min-h-screen font-sans flex flex-row" style={{ background: 'var(--bg-base)', color: 'var(--text-secondary)' }}>
@@ -1256,6 +1261,7 @@ export default function App() {
                   onOpenFile={openFile}
                   onClearAll={() => setConfirmAction({ type: 'clear-completed', count: doneFiles.length })}
                   onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
+                  sessionFolderMap={completedSessionFolderMap}
                 />
 
                 {showConsole && (

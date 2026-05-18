@@ -136,7 +136,7 @@ export type ProcessingAction =
   | { type: 'queue/add'; files: FileItem[] }
   | { type: 'queue/remove'; id: string }
   | { type: 'queue/reorder'; fromIndex: number; toIndex: number }
-  | { type: 'queue/update_source'; id: string; path?: string; name?: string; size?: number; duration?: number }
+  | { type: 'queue/update_source'; id?: string; sessionDir?: string; path?: string; name?: string; size?: number; duration?: number }
   | { type: 'queue/clear_completed' }
   | { type: 'queue/retry_failed' }
   | { type: 'queue/retry_one'; id: string }
@@ -189,7 +189,8 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         ...state,
         structuralVersion: state.structuralVersion + 1,
         files: state.files.map(file =>
-          file.id === action.id
+          (action.id ? file.id === action.id : false)
+          || (action.sessionDir ? normalizeSessionPath(file.outputDir) === normalizeSessionPath(action.sessionDir) : false)
             ? {
                 ...file,
                 path: action.path ?? file.path,

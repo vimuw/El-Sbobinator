@@ -17,6 +17,7 @@ function makeOptions(overrides: Partial<{
   appendConsole: (msg: string) => void;
   dispatch: Dispatch<ProcessingAction>;
   setArchiveSessions: Dispatch<React.SetStateAction<ArchiveSession[]>>;
+  onArchiveRefresh: () => void | Promise<void>;
 }> = {}) {
   return {
     appendConsole: vi.fn(),
@@ -154,14 +155,49 @@ describe('usePreview', () => {
   });
 
   it('openPreview loads audio when stream_media_file succeeds', async () => {
+    const stream_media_file = vi.fn().mockResolvedValue({ ok: true, url: 'blob:media' });
     setPywebview({
       read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<body>text</body>' }),
-      stream_media_file: vi.fn().mockResolvedValue({ ok: true, url: 'blob:media' }),
+      stream_media_file,
     });
     const { result } = renderHook(() => usePreview(makeOptions()));
     await act(async () => {
-      await result.current.openPreview('/file.html', 'test', '/audio.mp3', 'f1');
+      await result.current.openPreview('/file.html', 'test', '/audio.mp3', 'f1', '/session');
     });
     expect(result.current.preview.audioSrc).toBe('blob:media');
+    expect(stream_media_file).toHaveBeenCalledWith('/audio.mp3', '/session');
+  });
+
+  it('relinkPreviewAudio persists session relink, refreshes archive, and updates completed queue items', async () => {
+    const dispatch = vi.fn() as unknown as Dispatch<ProcessingAction>;
+    const setArchiveSessions = vi.fn() as unknown as Dispatch<React.SetStateAction<ArchiveSession[]>>;
+    const onArchiveRefresh = vi.fn();
+    const update_session_input_path = vi.fn().mockResolvedValue({ ok: true });
+    const stream_media_file = vi.fn().mockResolvedValue({ ok: true, url: 'blob:new-audio' });
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<body>text</body>' }),
+      ask_media_file: vi.fn().mockResolvedValue({ path: '/new/audio.mp3', name: 'audio.mp3', size: 2048, duration: 90 }),
+      update_session_input_path,
+      stream_media_file,
+    });
+    const { result } = renderHook(() => usePreview(makeOptions({ dispatch, setArchiveSessions, onArchiveRefresh })));
+    await act(async () => {
+      await result.current.openPreview('/session/out.html', 'test', '/old/audio.mp3', 'f1', '/session');
+    });
+    await act(async () => {
+      await result.current.relinkPreviewAudio();
+    });
+    expect(update_session_input_path).toHaveBeenCalledWith('/session', '/new/audio.mp3');
+    expect(onArchiveRefresh).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'queue/update_source',
+      id: 'f1',
+      sessionDir: '/session',
+      path: '/new/audio.mp3',
+      name: 'audio.mp3',
+      size: 2048,
+      duration: 90,
+    });
+    expect(stream_media_file).toHaveBeenLastCalledWith('/new/audio.mp3', '/session');
   });
 });

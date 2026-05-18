@@ -208,7 +208,7 @@ describe('CompletedFileCard', () => {
     );
     fireEvent.click(screen.getByLabelText('Altre opzioni'));
     fireEvent.click(screen.getByText('Modifica'));
-    expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione.mp3', undefined, 'f1');
+    expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione.mp3', undefined, 'f1', undefined);
   });
 
   it('calls onRemove when Rimuovi is clicked in kebab menu', () => {
@@ -235,7 +235,32 @@ describe('CompletedFileCard', () => {
       />,
     );
     fireEvent.click(screen.getByText('lezione.mp3'));
-    expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione.mp3', '/src/f.mp3', 'f1');
+    expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione.mp3', '/src/f.mp3', 'f1', undefined);
+  });
+
+  it('passes outputDir as sessionDir when previewing a completed file', () => {
+    const onPreview = vi.fn();
+    render(
+      <CompletedFileCard
+        file={makeFile({ status: 'done', outputHtml: '/out/file.html', outputDir: '/sessions/s1', path: '/src/f.mp3' })}
+        isNewest={false}
+        onRemove={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByText('lezione.mp3'));
+    expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione.mp3', '/src/f.mp3', 'f1', '/sessions/s1');
+  });
+
+  it('renders the collection indicator for completed files', () => {
+    render(
+      <CompletedFileCard
+        file={makeFile({ status: 'done', outputHtml: '/out/file.html' })}
+        isNewest={false}
+        onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
+        currentFolder={{ name: 'Corso A', color: '#4D96FF' }}
+      />,
+    );
+    expect(screen.getByTitle('Raccolta: Corso A')).toBeTruthy();
   });
 
   it('calls onOpenFile when Apri nel browser is clicked in kebab menu', () => {

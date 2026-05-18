@@ -2,7 +2,12 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle, Search } from 'lucide-react';
 import type { AppStatus, FileItem } from '../appState';
+import type { ArchiveFolder } from '../bridge';
 import { CompletedFileCard } from './QueueFileCard';
+
+function normalizeSessionPath(path?: string) {
+  return String(path || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+}
 
 interface CompletedSectionProps {
   doneFiles: FileItem[];
@@ -12,9 +17,10 @@ interface CompletedSectionProps {
   onOpenFile: (path: string) => void;
   onClearAll: () => void;
   onRetryFailedRevisionBlocks?: (sessionDir: string, fileId?: string) => Promise<void>;
+  sessionFolderMap?: Map<string, ArchiveFolder>;
 }
 
-export function CompletedSection({ doneFiles, appState, onRemove, onPreview, onOpenFile, onClearAll, onRetryFailedRevisionBlocks }: CompletedSectionProps) {
+export function CompletedSection({ doneFiles, appState, onRemove, onPreview, onOpenFile, onClearAll, onRetryFailedRevisionBlocks, sessionFolderMap }: CompletedSectionProps) {
   const [completedSearch, setCompletedSearch] = useState('');
 
   const filteredDoneFiles = completedSearch.trim()
@@ -79,6 +85,7 @@ export function CompletedSection({ doneFiles, appState, onRemove, onPreview, onO
                 onPreview={onPreview}
                 onOpenFile={onOpenFile}
                 onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
+                currentFolder={file.outputDir ? sessionFolderMap?.get(normalizeSessionPath(file.outputDir)) : undefined}
               />
             ))}
             {completedSearch.trim() && filteredDoneFiles.length === 0 && (

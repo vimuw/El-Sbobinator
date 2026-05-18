@@ -251,6 +251,16 @@ describe('processingReducer', () => {
     expect(state.files[0].size).toBe(200);
   });
 
+  it('queue/update_source can match completed files by sessionDir', () => {
+    const file = makeFile({ id: 'done1', outputDir: '/sessions/s1', path: '/old.mp3', name: 'old.mp3' });
+    const state = processingReducer(
+      { ...initialProcessingState, files: [file] },
+      { type: 'queue/update_source', sessionDir: '/sessions/s1', path: '/new.mp3', name: 'new.mp3' },
+    );
+    expect(state.files[0].path).toBe('/new.mp3');
+    expect(state.files[0].name).toBe('new.mp3');
+  });
+
   it('queue/retry_one resets only the targeted error file', () => {
     const files = [
       makeFile({ id: 'a', status: 'error', errorText: 'fail', progress: 0, phase: 0 }),

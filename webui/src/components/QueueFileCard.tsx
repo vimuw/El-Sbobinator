@@ -4,6 +4,7 @@ import { AlertCircle, AlertTriangle, CheckCircle, Clock, ExternalLink, FileAudio
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
+import type { ArchiveFolder } from '../bridge';
 import { errorLabel, formatDuration, formatRelativeTime, formatSize, isQuotaError, isResumableError, shortModelName } from '../utils';
 import { KebabMenu, type KebabMenuItem } from './KebabMenu';
 
@@ -13,7 +14,7 @@ interface QueueFileCardProps {
   currentPhase?: string;
   onRemove: (id: string) => void;
   onRetry: (id: string) => void;
-  onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string) => void;
+  onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string) => void;
   onOpenFile: (path: string) => void;
   onOpenSettings?: () => void;
   /** @deprecated kept for interface compatibility */
@@ -195,12 +196,13 @@ interface CompletedFileCardProps {
   file: FileItem;
   isNewest: boolean;
   onRemove: (id: string) => void;
-  onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string) => void;
+  onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string) => void;
   onOpenFile: (path: string) => void;
   onRetryFailedRevisionBlocks?: (sessionDir: string, fileId?: string) => Promise<void>;
+  currentFolder?: Pick<ArchiveFolder, 'name' | 'color'>;
 }
 
-function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFile, onRetryFailedRevisionBlocks }: CompletedFileCardProps) {
+function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFile, onRetryFailedRevisionBlocks, currentFolder }: CompletedFileCardProps) {
   const isClickable = Boolean(file.outputHtml);
   const [isRetryingBlocks, setIsRetryingBlocks] = React.useState(false);
   const failedBlockCount = file.revisionFailedBlocks?.length ?? 0;
@@ -225,7 +227,7 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
         opacity: { duration: 0.2, ease: 'easeOut' },
         y: { type: 'spring', stiffness: 380, damping: 30, mass: 0.8 },
       }}
-      onClick={isClickable ? () => onPreview(file.outputHtml!, file.name, file.path, file.id) : undefined}
+      onClick={isClickable ? () => onPreview(file.outputHtml!, file.name, file.path, file.id, file.outputDir) : undefined}
       className={`queue-card relative px-4 py-3 transition-colors group/card ${isClickable ? 'cursor-pointer' : ''}`}
       style={{
         border: `1px solid ${hasRevisionWarnings ? 'var(--warning-ring)' : 'var(--success-ring)'}`,
@@ -244,6 +246,16 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 min-w-0">
               <h4 className="text-sm font-semibold truncate tracking-tight" style={{ color: 'var(--text-primary)' }}>{file.name}</h4>
+              {currentFolder && (
+                <span
+                  className="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                  style={{ background: `${currentFolder.color}22`, color: currentFolder.color, border: `1px solid ${currentFolder.color}55` }}
+                  title={`Raccolta: ${currentFolder.name}`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: currentFolder.color }} />
+                  {currentFolder.name}
+                </span>
+              )}
               {isNewest && (
                 <span className="shrink-0 whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'var(--success-subtle)', color: 'var(--success-text)', border: '1px solid var(--success-ring)' }}>
                   Nuovo
@@ -331,7 +343,7 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
                 {
                   label: 'Modifica',
                   icon: <PenLine className="w-3.5 h-3.5" />,
-                  onClick: () => onPreview(file.outputHtml!, file.name, file.path, file.id),
+                  onClick: () => onPreview(file.outputHtml!, file.name, file.path, file.id, file.outputDir),
                 } as KebabMenuItem,
                 {
                   label: 'Apri nel browser',

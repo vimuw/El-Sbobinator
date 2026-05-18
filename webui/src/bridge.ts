@@ -148,7 +148,7 @@ export interface PywebviewApi {
   open_url?: (url: string) => Promise<{ ok: boolean; error?: string }>;
   read_html_content?: (path: string) => Promise<{ ok: boolean; content?: string; error?: string }>;
   save_html_content?: (path: string, content: string, generation?: number) => Promise<SaveHtmlResult>;
-  stream_media_file?: (path: string) => Promise<{ ok: boolean; url?: string; error?: string }>;
+  stream_media_file?: (path: string, sessionDir?: string) => Promise<{ ok: boolean; url?: string; error?: string }>;
   show_notification?: (title: string, message: string) => Promise<void>;
   validate_environment?: (
     apiKey?: string,
