@@ -79,6 +79,49 @@ type PendingArchiveReplacement = {
   sessions: ArchiveSession[];
 };
 
+type UpdateInstallStatus = UpdateDownloadProgressPayload['status'] | 'idle';
+type UpdateInstallState = {
+  version: string | null;
+  status: UpdateInstallStatus;
+  bytesDone: number;
+  bytesTotal: number;
+  error: string | null;
+};
+
+const UPDATE_INSTALL_IDLE: UpdateInstallState = {
+  version: null,
+  status: 'idle',
+  bytesDone: 0,
+  bytesTotal: 0,
+  error: null,
+};
+
+function formatUpdateInstallError(error?: string): string {
+  const raw = String(error || '').trim();
+  if (raw === 'uac_denied') {
+    return 'Installazione annullata: la richiesta UAC è stata rifiutata. L’app resta aperta; puoi riprovare o scaricare manualmente da GitHub.';
+  }
+  if (raw === 'permission_denied') {
+    return 'Permesso negato per /Applications: scarica il DMG da GitHub e trascina l’app in /Applications con Finder.';
+  }
+  if (/checksum|integrit/i.test(raw)) {
+    return raw || 'Verifica integrità fallita: scarica manualmente da GitHub.';
+  }
+  return raw || 'Aggiornamento fallito.';
+}
+
+function formatUpdateInstallStatus(state: UpdateInstallState): string {
+  if (state.status === 'downloading') {
+    const percent = state.bytesTotal > 0 ? ` ${Math.round((state.bytesDone / state.bytesTotal) * 100)}%` : '';
+    return `Download aggiornamento${percent}…`;
+  }
+  if (state.status === 'verifying') return 'Verifica integrità aggiornamento…';
+  if (state.status === 'installing') return 'Installazione aggiornamento…';
+  if (state.status === 'done') return 'Installer avviato. Segui le istruzioni per completare l’aggiornamento.';
+  if (state.status === 'error') return `Aggiornamento non riuscito: ${state.error ?? 'errore sconosciuto'}`;
+  return '';
+}
+
 export default function App() {
   const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone, stepMetrics }, dispatch] = useReducer(processingReducer, initialProcessingState);
 
@@ -278,6 +321,8 @@ export default function App() {
   const [batchCompleted, setBatchCompleted] = useState(0);
   const [completionFlash, setCompletionFlash] = useState(false);
   const [isRemovingInsecureKey, setIsRemovingInsecureKey] = useState(false);
+  const [updateInstallState, setUpdateInstallState] = useState<UpdateInstallState>(UPDATE_INSTALL_IDLE);
+  const updateInstallStateRef = useRef<UpdateInstallState>(UPDATE_INSTALL_IDLE);
 
   const filesRef = useRef(files);
   const appStateRef = useRef(appState);
@@ -287,7 +332,9 @@ export default function App() {
   const archiveSessionsRef = useRef<ArchiveSession[]>(archiveSessions);
   const pendingArchiveReplacementsRef = useRef<Map<string, PendingArchiveReplacement>>(new Map());
   const archiveReplacementCleanupInFlightRef = useRef<Set<string>>(new Set());
-  const downloadCompletionRef = useRef<{ resolve: () => void; reject: (e: Error) => void } | null>(null);
+  const downloadCompletionRef = useRef<{ version: string; resolve: () => void; reject: (e: Error) => void } | null>(null);
+  const updateInstallPromiseRef = useRef<Promise<void> | null>(null);
+  const updateInstallToastIdRef = useRef<string | null>(null);
 
   filesRef.current = files;
   appStateRef.current = appState;
@@ -362,6 +409,91 @@ export default function App() {
     );
   }, [isPeakHour, isPeakDismissed, showToast, dismissToast]);
 
+  const upsertUpdateInstallToast = useCallback((message: string, type: 'warning' | 'info', action?: ToastMessage['action']) => {
+    const existingId = updateInstallToastIdRef.current;
+    if (existingId) {
+      setToasts(prev => prev.map(toast => toast.id === existingId
+        ? { ...toast, message, type, persistent: true, action }
+        : toast,
+      ));
+      return existingId;
+    }
+    const id = showToast(message, type, {
+      persistent: true,
+      dedupeKey: 'update-install',
+      action,
+      onDismiss: () => {
+        updateInstallToastIdRef.current = null;
+        toastDedupeMapRef.current.delete('update-install');
+      },
+    });
+    updateInstallToastIdRef.current = id;
+    return id;
+  }, [showToast]);
+
+  const updateFallbackAction = useCallback((): ToastMessage['action'] => ({
+    label: 'Apri GitHub',
+    onAction: async () => { await window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL); },
+  }), []);
+
+  const applyUpdateInstallState = useCallback((next: UpdateInstallState) => {
+    updateInstallStateRef.current = next;
+    setUpdateInstallState(next);
+  }, []);
+
+  const installUpdate = useCallback(async (version: string) => {
+    if (updateInstallPromiseRef.current && downloadCompletionRef.current?.version === version) {
+      return updateInstallPromiseRef.current;
+    }
+    const api = window.pywebview?.api;
+    if (!api?.download_and_install_update) {
+      const message = 'Bridge aggiornamenti non disponibile.';
+      applyUpdateInstallState({ version, status: 'error', bytesDone: 0, bytesTotal: 0, error: message });
+      upsertUpdateInstallToast(`Aggiornamento non riuscito: ${message}`, 'warning', updateFallbackAction());
+      throw new Error(message);
+    }
+
+    applyUpdateInstallState({ version, status: 'downloading', bytesDone: 0, bytesTotal: 0, error: null });
+    upsertUpdateInstallToast('Download aggiornamento…', 'info');
+
+    const completion = new Promise<void>((resolve, reject) => {
+      downloadCompletionRef.current = { version, resolve, reject };
+    });
+    const trackedCompletion = completion.finally(() => {
+      updateInstallPromiseRef.current = null;
+    });
+    updateInstallPromiseRef.current = trackedCompletion;
+
+    let result: Awaited<ReturnType<NonNullable<PywebviewApi['download_and_install_update']>>>;
+    try {
+      result = await api.download_and_install_update(version);
+    } catch (error: unknown) {
+      const message = formatUpdateInstallError(getErrorMessage(error));
+      if (downloadCompletionRef.current?.version === version) downloadCompletionRef.current = null;
+      updateInstallPromiseRef.current = null;
+      appendConsole(`❌ Aggiornamento fallito: ${message}`);
+      applyUpdateInstallState({
+        version,
+        status: 'error',
+        bytesDone: updateInstallStateRef.current.version === version ? updateInstallStateRef.current.bytesDone : 0,
+        bytesTotal: updateInstallStateRef.current.version === version ? updateInstallStateRef.current.bytesTotal : 0,
+        error: message,
+      });
+      upsertUpdateInstallToast(`Aggiornamento non riuscito: ${message}`, 'warning', updateFallbackAction());
+      throw new Error(message);
+    }
+    if (!result?.ok) {
+      const message = formatUpdateInstallError(result?.error);
+      downloadCompletionRef.current = null;
+      updateInstallPromiseRef.current = null;
+      applyUpdateInstallState({ version, status: 'error', bytesDone: 0, bytesTotal: 0, error: message });
+      appendConsole(`❌ Aggiornamento fallito: ${message}`);
+      upsertUpdateInstallToast(`Aggiornamento non riuscito: ${message}`, 'warning', updateFallbackAction());
+      throw new Error(message);
+    }
+    return trackedCompletion;
+  }, [appendConsole, applyUpdateInstallState, updateFallbackAction, upsertUpdateInstallToast]);
+
   const updateToastShownVersionRef = useRef<string | null>(null);
   useEffect(() => {
     if (!updateAvailable) return;
@@ -375,35 +507,15 @@ export default function App() {
         action: {
           label: 'Aggiorna',
           loadingLabel: 'Download in corso…',
-          errorSuffix: 'si è aperta la pagina GitHub per scaricare manualmente.',
-          onAction: async () => {
-            const result = await window.pywebview?.api?.download_and_install_update?.(updateAvailable);
-            if (!result?.ok) {
-              window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL);
-              throw new Error(result?.error ?? 'Download fallito');
-            }
-            await new Promise<void>((resolve, reject) => {
-              downloadCompletionRef.current = { resolve, reject };
-            }).catch((e: Error) => {
-              if (e.message === 'dismissed') return;
-              if (e.message === 'uac_denied') return;
-              window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL);
-              throw new Error(
-                e.message === 'permission_denied'
-                  ? 'Permesso negato per /Applications — scarica il DMG da GitHub e trascinalo in /Applications con Finder.'
-                  : e.message,
-              );
-            });
-          },
+          errorSuffix: 'usa il pulsante “Apri GitHub” per scaricare manualmente.',
+          onAction: () => installUpdate(updateAvailable),
         },
         onDismiss: () => {
-          downloadCompletionRef.current?.reject(new Error('dismissed'));
-          downloadCompletionRef.current = null;
           dismissUpdate(updateAvailable);
         },
       }
     );
-  }, [updateAvailable, showToast, dismissUpdate]);
+  }, [updateAvailable, showToast, dismissUpdate, installUpdate]);
 
   const handleFoldersChange = useCallback(async (next: ArchiveFolder[]) => {
     setFolders(next);
@@ -927,14 +1039,30 @@ export default function App() {
     clearCompletionFlash: () => setCompletionFlash(false),
     onRevisionWarning: handleRevisionWarning,
     onDownloadProgress: useCallback((data: UpdateDownloadProgressPayload) => {
+      const currentDownload = downloadCompletionRef.current;
+      const version = currentDownload?.version ?? updateInstallStateRef.current.version ?? latestVersion;
+      const messageState: UpdateInstallState = {
+        version,
+        status: data.status,
+        bytesDone: data.bytes_done,
+        bytesTotal: data.bytes_total,
+        error: data.status === 'error' ? formatUpdateInstallError(data.error) : null,
+      };
+      applyUpdateInstallState(messageState);
       if (data.status === 'done') {
-        downloadCompletionRef.current?.resolve();
+        upsertUpdateInstallToast(formatUpdateInstallStatus(messageState), 'info');
+        currentDownload?.resolve();
         downloadCompletionRef.current = null;
       } else if (data.status === 'error') {
-        downloadCompletionRef.current?.reject(new Error(data.error ?? 'Errore sconosciuto'));
+        const message = messageState.error ?? 'Errore sconosciuto';
+        appendConsole(`❌ Aggiornamento fallito: ${message}`);
+        upsertUpdateInstallToast(formatUpdateInstallStatus(messageState), 'warning', updateFallbackAction());
+        currentDownload?.reject(new Error(message));
         downloadCompletionRef.current = null;
+      } else {
+        upsertUpdateInstallToast(formatUpdateInstallStatus(messageState), 'info');
       }
-    }, []),
+    }, [appendConsole, applyUpdateInstallState, latestVersion, updateFallbackAction, upsertUpdateInstallToast]),
   });
   useBodyScrollLock(isSettingsOpen || regeneratePrompt !== null || preview.content !== null || askNewKeyPrompt || confirmAction !== null || duplicatePrompt !== null || regenDirtyConfirm !== null);
 
@@ -1223,6 +1351,8 @@ export default function App() {
         isCheckingUpdate={isCheckingUpdate}
         hasChecked={hasChecked}
         checkFailed={checkFailed}
+        updateInstallState={updateInstallState}
+        onInstallUpdate={installUpdate}
         onSettingsSaved={refreshSettings}
       />
       <React.Suspense fallback={null}>

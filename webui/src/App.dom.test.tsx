@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import App from './App';
 import { useApiReady } from './hooks/useApiReady';
+import { useBridgeCallbacks } from './hooks/useBridgeCallbacks';
 import { useQueuePersistence } from './hooks/useQueuePersistence';
+import { useUpdateChecker } from './hooks/useUpdateChecker';
 
 vi.mock('motion/react', () => ({
   motion: new Proxy({}, {
@@ -48,9 +50,7 @@ const mockApiReadyWithKey = {
   apiKey: 'AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345',
 };
 
-vi.mock('./hooks/useUpdateChecker', () => ({
-  useUpdateChecker: () => ({ updateAvailable: null, latestVersion: null, isDismissed: false, isCheckingUpdate: false, checkForUpdates: vi.fn(), dismissUpdate: vi.fn() }),
-}));
+vi.mock('./hooks/useUpdateChecker');
 
 vi.mock('./hooks/useQueuePersistence', () => ({
   useQueuePersistence: vi.fn(),
@@ -112,6 +112,17 @@ beforeEach(() => {
   setElSbobinatorBridge();
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('no network')));
   vi.mocked(useApiReady).mockReturnValue(mockApiReadyDefault);
+  vi.mocked(useUpdateChecker).mockReturnValue({
+    updateAvailable: null,
+    latestVersion: null,
+    isDismissed: false,
+    isCheckingUpdate: false,
+    hasChecked: true,
+    checkFailed: false,
+    checkForUpdates: vi.fn(),
+    dismissUpdate: vi.fn(),
+  });
+  vi.mocked(useBridgeCallbacks).mockReturnValue(undefined);
 });
 
 afterEach(() => {
@@ -201,6 +212,226 @@ describe('App', () => {
 
     await act(async () => { render(<App />); });
     expect(screen.queryByText(/file di configurazione era corrotto/i)).toBeNull();
+  });
+
+  it('Settings install receives async checksum error and shows actionable fallback', async () => {
+    vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
+    vi.mocked(useUpdateChecker).mockReturnValue({
+      updateAvailable: null,
+      latestVersion: 'v2.0.0',
+      isDismissed: false,
+      isCheckingUpdate: false,
+      hasChecked: true,
+      checkFailed: false,
+      checkForUpdates: vi.fn(),
+      dismissUpdate: vi.fn(),
+    });
+    const downloadUpdate = vi.fn().mockResolvedValue({ ok: true, status: 'downloading' });
+    const openUrl = vi.fn().mockResolvedValue({ ok: true });
+    setPywebview({
+      get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
+      get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
+      download_and_install_update: downloadUpdate,
+      open_url: openUrl,
+    });
+
+    await act(async () => { render(<App />); });
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText(/Apri impostazioni/));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Installa aggiornamento'));
+    });
+
+    expect(downloadUpdate).toHaveBeenCalledWith('v2.0.0');
+    expect(await screen.findAllByText(/Download aggiornamento/i)).toHaveLength(2);
+    const bridgeOptions = vi.mocked(useBridgeCallbacks).mock.calls.at(-1)?.[0];
+    expect(bridgeOptions).toBeTruthy();
+    await act(async () => {
+      bridgeOptions?.onDownloadProgress?.({
+        status: 'error',
+        bytes_done: 10,
+        bytes_total: 10,
+        error: 'Verifica integrità fallita: il file scaricato non corrisponde al checksum atteso.',
+      });
+    });
+
+    expect(await screen.findAllByText(/Verifica integrità fallita/i)).toHaveLength(2);
+    expect(screen.getAllByText('Apri GitHub').length).toBeGreaterThan(0);
+    await act(async () => {
+      fireEvent.click(screen.getAllByText('Apri GitHub')[0]);
+    });
+    expect(openUrl).toHaveBeenCalledWith('https://github.com/vimuw/El-Sbobinator/releases/latest');
+  });
+
+  it('does not duplicate update install toast when progress arrives before first toast render', async () => {
+    vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
+    vi.mocked(useUpdateChecker).mockReturnValue({
+      updateAvailable: null,
+      latestVersion: 'v2.0.0',
+      isDismissed: false,
+      isCheckingUpdate: false,
+      hasChecked: true,
+      checkFailed: false,
+      checkForUpdates: vi.fn(),
+      dismissUpdate: vi.fn(),
+    });
+    const downloadUpdate = vi.fn().mockImplementation(() => {
+      const bridgeOptions = vi.mocked(useBridgeCallbacks).mock.calls.at(-1)?.[0];
+      bridgeOptions?.onDownloadProgress?.({
+        status: 'downloading',
+        bytes_done: 5,
+        bytes_total: 10,
+      });
+      return Promise.resolve({ ok: true, status: 'downloading' });
+    });
+    setPywebview({
+      get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
+      get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
+      download_and_install_update: downloadUpdate,
+    });
+
+    await act(async () => { render(<App />); });
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText(/Apri impostazioni/));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Installa aggiornamento'));
+    });
+
+    expect(downloadUpdate).toHaveBeenCalledWith('v2.0.0');
+    expect(await screen.findAllByText(/Download aggiornamento/i)).toHaveLength(2);
+  });
+
+  it('recreates update install toast after GitHub fallback action dismisses it', async () => {
+    vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
+    vi.mocked(useUpdateChecker).mockReturnValue({
+      updateAvailable: null,
+      latestVersion: 'v2.0.0',
+      isDismissed: false,
+      isCheckingUpdate: false,
+      hasChecked: true,
+      checkFailed: false,
+      checkForUpdates: vi.fn(),
+      dismissUpdate: vi.fn(),
+    });
+    const downloadUpdate = vi.fn().mockResolvedValue({ ok: true, status: 'downloading' });
+    const openUrl = vi.fn().mockResolvedValue({ ok: true });
+    setPywebview({
+      get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
+      get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
+      download_and_install_update: downloadUpdate,
+      open_url: openUrl,
+    });
+
+    await act(async () => { render(<App />); });
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText(/Apri impostazioni/));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Installa aggiornamento'));
+    });
+
+    const bridgeOptions = vi.mocked(useBridgeCallbacks).mock.calls.at(-1)?.[0];
+    expect(bridgeOptions).toBeTruthy();
+    await act(async () => {
+      bridgeOptions?.onDownloadProgress?.({
+        status: 'error',
+        bytes_done: 10,
+        bytes_total: 10,
+        error: 'Verifica integrità fallita: il file scaricato non corrisponde al checksum atteso.',
+      });
+    });
+    expect(await screen.findAllByText(/Verifica integrità fallita/i)).toHaveLength(2);
+
+    const githubActions = screen.getAllByText('Apri GitHub');
+    await act(async () => {
+      fireEvent.click(githubActions[githubActions.length - 1]);
+    });
+    expect(openUrl).toHaveBeenCalledWith('https://github.com/vimuw/El-Sbobinator/releases/latest');
+    expect(screen.getAllByText(/Verifica integrità fallita/i)).toHaveLength(1);
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Installa aggiornamento'));
+    });
+
+    expect(downloadUpdate).toHaveBeenCalledTimes(2);
+    expect(await screen.findAllByText(/Download aggiornamento/i)).toHaveLength(2);
+  });
+
+  it('Settings install success resolves and shows installer-started state', async () => {
+    vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
+    vi.mocked(useUpdateChecker).mockReturnValue({
+      updateAvailable: null,
+      latestVersion: 'v2.0.0',
+      isDismissed: false,
+      isCheckingUpdate: false,
+      hasChecked: true,
+      checkFailed: false,
+      checkForUpdates: vi.fn(),
+      dismissUpdate: vi.fn(),
+    });
+    const downloadUpdate = vi.fn().mockResolvedValue({ ok: true, status: 'downloading' });
+    setPywebview({
+      get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
+      get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
+      download_and_install_update: downloadUpdate,
+    });
+
+    await act(async () => { render(<App />); });
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText(/Apri impostazioni/));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Installa aggiornamento'));
+    });
+
+    expect(await screen.findAllByText(/Download aggiornamento/i)).toHaveLength(2);
+    const bridgeOptions = vi.mocked(useBridgeCallbacks).mock.calls.at(-1)?.[0];
+    expect(bridgeOptions).toBeTruthy();
+    await act(async () => {
+      bridgeOptions?.onDownloadProgress?.({ status: 'done', bytes_done: 10, bytes_total: 10 });
+    });
+
+    expect(await screen.findAllByText(/Installer avviato/i)).toHaveLength(2);
+  });
+
+  it('Settings install UAC denied leaves app open and explains the cancellation', async () => {
+    vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
+    vi.mocked(useUpdateChecker).mockReturnValue({
+      updateAvailable: null,
+      latestVersion: 'v2.0.0',
+      isDismissed: false,
+      isCheckingUpdate: false,
+      hasChecked: true,
+      checkFailed: false,
+      checkForUpdates: vi.fn(),
+      dismissUpdate: vi.fn(),
+    });
+    const downloadUpdate = vi.fn().mockResolvedValue({ ok: true, status: 'downloading' });
+    setPywebview({
+      get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
+      get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
+      download_and_install_update: downloadUpdate,
+    });
+
+    await act(async () => { render(<App />); });
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText(/Apri impostazioni/));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Installa aggiornamento'));
+    });
+
+    expect(await screen.findAllByText(/Download aggiornamento/i)).toHaveLength(2);
+    const bridgeOptions = vi.mocked(useBridgeCallbacks).mock.calls.at(-1)?.[0];
+    expect(bridgeOptions).toBeTruthy();
+    await act(async () => {
+      bridgeOptions?.onDownloadProgress?.({ status: 'error', bytes_done: 0, bytes_total: 0, error: 'uac_denied' });
+    });
+
+    expect(await screen.findAllByText(/richiesta UAC è stata rifiutata/i)).toHaveLength(2);
+    expect(screen.getByRole('heading', { name: /Impostazioni/ })).toBeTruthy();
   });
 });
 

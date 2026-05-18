@@ -42,6 +42,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
     setErrorText(null);
     try {
       await toast.action.onAction();
+      toast.onDismiss?.();
       onDismiss(toast.id);
     } catch (e) {
       setErrorText(e instanceof Error ? e.message : String(e));

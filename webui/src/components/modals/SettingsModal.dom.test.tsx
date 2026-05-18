@@ -405,6 +405,46 @@ describe('SettingsModal — version status display', () => {
     expect(screen.queryByText(/Sei aggiornato/)).toBeNull();
     expect(screen.queryByText(/non riuscita/i)).toBeNull();
   });
+
+  it('shows shared async install error with GitHub fallback action', () => {
+    const openUrl = vi.fn();
+    setPywebview({ open_url: openUrl });
+    render(
+      <SettingsModal
+        {...makeProps()}
+        latestVersion="v2.0.0"
+        updateInstallState={{
+          version: 'v2.0.0',
+          status: 'error',
+          bytesDone: 0,
+          bytesTotal: 0,
+          error: 'Verifica integrità fallita: il file scaricato non corrisponde al checksum atteso.',
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/Verifica integrità fallita/i)).toBeTruthy();
+    fireEvent.click(screen.getByText('Apri GitHub'));
+    expect(openUrl).toHaveBeenCalledWith('https://github.com/vimuw/El-Sbobinator/releases/latest');
+  });
+
+  it('shows shared async install success state', () => {
+    render(
+      <SettingsModal
+        {...makeProps()}
+        latestVersion="v2.0.0"
+        updateInstallState={{
+          version: 'v2.0.0',
+          status: 'done',
+          bytesDone: 10,
+          bytesTotal: 10,
+          error: null,
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/Installer avviato/i)).toBeTruthy();
+  });
 });
 
 describe('SettingsModal — validate environment', () => {

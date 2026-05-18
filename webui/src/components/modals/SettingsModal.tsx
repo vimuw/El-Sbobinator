@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { ConfirmActionModal } from './ConfirmActionModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { Activity, AlertCircle, AlertTriangle, ArrowDown, ArrowDownToLine, ArrowRight, ArrowUp, Bell, ChevronDown, Cpu, Eye, EyeOff, FlaskConical, FolderOpen, HardDrive, Loader2, RefreshCw, Settings, SlidersHorizontal, Tag, Trash2, X, Zap } from 'lucide-react';
-import type { ModelOption, ValidationResult } from '../../bridge';
+import type { ModelOption, UpdateDownloadProgressPayload, ValidationResult } from '../../bridge';
 import { formatSize, GEMINI_KEY_PATTERN } from '../../utils';
 import { APP_VERSION, GITHUB_RELEASES_URL } from '../../branding';
 
@@ -154,8 +154,18 @@ interface SettingsModalProps {
   isCheckingUpdate: boolean;
   hasChecked: boolean;
   checkFailed: boolean;
+  updateInstallState?: SettingsUpdateInstallState;
+  onInstallUpdate?: (version: string) => Promise<void>;
   onSettingsSaved?: () => Promise<unknown> | unknown;
 }
+
+type SettingsUpdateInstallState = {
+  version: string | null;
+  status: UpdateDownloadProgressPayload['status'] | 'idle';
+  bytesDone: number;
+  bytesTotal: number;
+  error: string | null;
+};
 
 type CleanupSummary = {
   removed: number;
@@ -169,47 +179,79 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function VersionUpdateRow({ latestVersion, appendConsole }: { latestVersion: string; appendConsole: (msg: string) => void }) {
-  const [isInstalling, setIsInstalling] = useState(false);
+function formatSettingsUpdateStatus(state?: SettingsUpdateInstallState): string | null {
+  if (!state) return null;
+  if (state.status === 'downloading') {
+    const percent = state.bytesTotal > 0 ? ` ${Math.round((state.bytesDone / state.bytesTotal) * 100)}%` : '';
+    return `Download aggiornamento${percent}…`;
+  }
+  if (state.status === 'verifying') return 'Verifica integrità aggiornamento…';
+  if (state.status === 'installing') return 'Installazione aggiornamento…';
+  if (state.status === 'done') return 'Installer avviato. Segui le istruzioni a schermo.';
+  if (state.status === 'error') return state.error ?? 'Aggiornamento non riuscito.';
+  return null;
+}
+
+function VersionUpdateRow({
+  latestVersion,
+  updateInstallState,
+  onInstallUpdate,
+}: {
+  latestVersion: string;
+  updateInstallState?: SettingsUpdateInstallState;
+  onInstallUpdate?: (version: string) => Promise<void>;
+}) {
+  const isInstalling = updateInstallState?.version === latestVersion
+    && ['downloading', 'verifying', 'installing'].includes(updateInstallState.status);
+  const isDone = updateInstallState?.version === latestVersion && updateInstallState.status === 'done';
+  const isError = updateInstallState?.version === latestVersion && updateInstallState.status === 'error';
+  const statusMessage = updateInstallState?.version === latestVersion
+    ? formatSettingsUpdateStatus(updateInstallState)
+    : null;
   const handleInstall = async () => {
-    if (isInstalling) return;
-    setIsInstalling(true);
+    if (isInstalling || !onInstallUpdate) return;
     try {
-      const result = await window.pywebview?.api?.download_and_install_update?.(latestVersion);
-      if (!result?.ok) {
-        if (result?.error === 'permission_denied') {
-          appendConsole('❌ Permesso negato per /Applications — scarica il DMG da GitHub e trascina l\'app in /Applications con Finder.');
-        } else {
-          appendConsole(`❌ Aggiornamento fallito: ${result?.error ?? 'errore sconosciuto'}`);
-        }
-        window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL);
-        setIsInstalling(false);
-      } else {
-        setTimeout(() => setIsInstalling(false), 3000);
-      }
-    } catch (e: unknown) {
-      appendConsole(`❌ Aggiornamento fallito: ${getErrorMessage(e)}`);
-      window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL);
-      setIsInstalling(false);
-    }
+      await onInstallUpdate(latestVersion);
+    } catch (_) {}
   };
   return (
-    <div className="flex items-center justify-between gap-3 pt-1" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-      <p className="text-sm flex items-center gap-1.5 min-w-0" style={{ color: 'var(--warning-text)' }}>
-        <Zap className="w-3.5 h-3.5 shrink-0" />
-        Nuova versione disponibile: <strong>{latestVersion}</strong>
-      </p>
-      <button
-        onClick={() => void handleInstall()}
-        disabled={isInstalling}
-        className="icon-button modal-icon-button shrink-0"
-        title={isInstalling ? 'Installazione in corso…' : 'Installa aggiornamento'}
-        aria-label={isInstalling ? 'Installazione in corso…' : 'Installa aggiornamento'}
-      >
-        {isInstalling
-          ? <Loader2 className="w-4 h-4 animate-spin" />
-          : <ArrowDownToLine className="w-4 h-4" />}
-      </button>
+    <div className="space-y-1.5 pt-1" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm flex items-center gap-1.5 min-w-0" style={{ color: 'var(--warning-text)' }}>
+          <Zap className="w-3.5 h-3.5 shrink-0" />
+          Nuova versione disponibile: <strong>{latestVersion}</strong>
+        </p>
+        <button
+          onClick={() => void handleInstall()}
+          disabled={isInstalling}
+          className="icon-button modal-icon-button shrink-0"
+          title={isInstalling ? 'Installazione in corso…' : 'Installa aggiornamento'}
+          aria-label={isInstalling ? 'Installazione in corso…' : 'Installa aggiornamento'}
+        >
+          {isInstalling
+            ? <Loader2 className="w-4 h-4 animate-spin" />
+            : <ArrowDownToLine className="w-4 h-4" />}
+        </button>
+      </div>
+      {statusMessage && (
+        <p
+          className="text-xs flex items-center gap-1.5"
+          style={{ color: isError ? 'var(--error-text)' : isDone ? 'var(--success-text)' : 'var(--text-muted)' }}
+        >
+          {isError ? <AlertCircle className="w-3.5 h-3.5 shrink-0" /> : null}
+          <span>{statusMessage}</span>
+          {isError && (
+            <button
+              type="button"
+              onClick={() => { void window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL); }}
+              className="underline"
+              style={{ background: 'none', border: 0, padding: 0, color: 'inherit', cursor: 'pointer' }}
+            >
+              Apri GitHub
+            </button>
+          )}
+        </p>
+      )}
     </div>
   );
 }
@@ -233,6 +275,8 @@ export function SettingsModal({
   isCheckingUpdate,
   hasChecked,
   checkFailed,
+  updateInstallState,
+  onInstallUpdate,
   onSettingsSaved,
 }: SettingsModalProps) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('notifications_enabled') !== 'false');
@@ -700,7 +744,11 @@ export function SettingsModal({
                     </div>
                   </div>
                   {latestVersion ? (
-                    <VersionUpdateRow latestVersion={latestVersion} appendConsole={appendConsole} />
+                    <VersionUpdateRow
+                      latestVersion={latestVersion}
+                      updateInstallState={updateInstallState}
+                      onInstallUpdate={onInstallUpdate}
+                    />
                   ) : hasChecked && !isCheckingUpdate && checkFailed ? (
                     <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--warning-text)' }}>
                       <AlertCircle className="w-3.5 h-3.5 shrink-0" />
