@@ -83,7 +83,7 @@ class _NoGenerateContentClient:
 
 class ValidationServiceTests(unittest.TestCase):
     @patch(
-        "el_sbobinator.services.validation_service.get_desktop_dir", return_value="."
+        "el_sbobinator.services.validation_service.get_session_root", return_value="."
     )
     @patch(
         "el_sbobinator.services.validation_service.resolve_ffmpeg",
@@ -111,11 +111,11 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertIn("gemini-2.5-flash-lite", details)
 
     @patch(
-        "el_sbobinator.services.validation_service.get_desktop_dir", return_value="."
-    )
-    @patch(
         "el_sbobinator.services.validation_service.resolve_ffmpeg",
         return_value="ffmpeg.exe",
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.get_session_root", return_value="."
     )
     @patch("google.genai.Client", _FallbackFailClient)
     def test_validate_environment_keeps_primary_ok_when_fallback_fails(self, *_mocks):
@@ -142,11 +142,11 @@ class ValidationServiceTests(unittest.TestCase):
         )
 
     @patch(
-        "el_sbobinator.services.validation_service.get_desktop_dir", return_value="."
-    )
-    @patch(
         "el_sbobinator.services.validation_service.resolve_ffmpeg",
         return_value="ffmpeg.exe",
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.get_session_root", return_value="."
     )
     @patch("google.genai.Client", _PrimaryFailClient)
     def test_validate_environment_reports_primary_model_failure_distinctly_from_key_error(
@@ -173,11 +173,11 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertIn("gemini-2.5-flash", api_check["details"])  # type: ignore[typeddict-item]
 
     @patch(
-        "el_sbobinator.services.validation_service.get_desktop_dir", return_value="."
-    )
-    @patch(
         "el_sbobinator.services.validation_service.resolve_ffmpeg",
         return_value="ffmpeg.exe",
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.get_session_root", return_value="."
     )
     @patch("google.genai.Client", _ClientCtorFail)
     def test_validate_environment_reports_client_creation_failure_without_unbound_state(
@@ -200,11 +200,11 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertNotIn("AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345", api_check["details"])  # type: ignore[typeddict-item]
 
     @patch(
-        "el_sbobinator.services.validation_service.get_desktop_dir", return_value="."
-    )
-    @patch(
         "el_sbobinator.services.validation_service.resolve_ffmpeg",
         return_value="ffmpeg.exe",
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.get_session_root", return_value="."
     )
     @patch("google.genai.Client", _NoGenerateContentClient)
     def test_validate_environment_rejects_models_without_generate_content(
@@ -225,11 +225,11 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertIn("generateContent", api_check["details"])  # type: ignore[typeddict-item]
 
     @patch(
-        "el_sbobinator.services.validation_service.get_desktop_dir", return_value="."
-    )
-    @patch(
         "el_sbobinator.services.validation_service.resolve_ffmpeg",
         return_value="ffmpeg.exe",
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.get_session_root", return_value="."
     )
     @patch("google.genai.Client", _MiddleFailClient)
     def test_validate_environment_continues_after_middle_fallback_failure(
@@ -261,6 +261,58 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertIn("[API_KEY_REDACTED]", middle_details)
         self.assertEqual(last_check["status"], "ok")
         self.assertEqual(last_details, "gemini-3-flash-preview")
+
+    @patch(
+        "el_sbobinator.services.validation_service.resolve_ffmpeg",
+        return_value="ffmpeg.exe",
+    )
+    def test_validate_environment_reports_session_output_root(self, *_mocks):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch(
+                "el_sbobinator.services.validation_service.get_session_root",
+                return_value=tmp,
+            ):
+                result = validate_environment(api_key=None, validate_api_key=False)
+
+        output_check = next(c for c in result["checks"] if c["id"] == "output")
+        self.assertTrue(result["ok"])
+        self.assertEqual(output_check["label"], "Cartella sessioni/output")
+        self.assertEqual(output_check["status"], "ok")
+        self.assertEqual(
+            output_check["message"], "Cartella sessioni/output scrivibile."
+        )
+        self.assertEqual(output_check["details"], tmp)
+
+    @patch(
+        "el_sbobinator.services.validation_service.resolve_ffmpeg",
+        return_value="ffmpeg.exe",
+    )
+    def test_validate_environment_errors_when_session_output_root_is_unwritable(
+        self, *_mocks
+    ):
+        session_root = os.path.join(tempfile.gettempdir(), "unwritable-session-root")
+        with (
+            patch(
+                "el_sbobinator.services.validation_service.get_session_root",
+                return_value=session_root,
+            ),
+            patch(
+                "el_sbobinator.services.validation_service._check_writable_dir",
+                side_effect=[(True, "Scrittura consentita."), (False, "no write")],
+            ),
+        ):
+            result = validate_environment(api_key=None, validate_api_key=False)
+
+        output_check = next(c for c in result["checks"] if c["id"] == "output")
+        self.assertFalse(result["ok"])
+        self.assertEqual(output_check["status"], "error")
+        self.assertEqual(
+            output_check["message"], "Cartella sessioni/output non scrivibile."
+        )
+        output_details = output_check.get("details", "")
+        self.assertIn(f"Percorso: {session_root}", output_details)
+        self.assertIn("Errore: no write", output_details)
+        self.assertIn("Rimedio:", output_details)
 
 
 class CheckWritableDirTests(unittest.TestCase):
@@ -299,13 +351,16 @@ class TestValidationKeyringCheck(unittest.TestCase):
         "el_sbobinator.services.validation_service.resolve_ffmpeg",
         return_value="ffmpeg",
     )
-    @patch(
-        "el_sbobinator.services.validation_service.get_desktop_dir", return_value="."
-    )
     def test_keyring_check_status_ok_when_keyring_accessible(self, *_mocks):
         mock_kr = MagicMock()
         mock_kr.get_password.return_value = None
-        with patch.dict(sys.modules, {"keyring": mock_kr}):
+        with (
+            patch(
+                "el_sbobinator.services.validation_service.get_session_root",
+                return_value=".",
+            ),
+            patch.dict(sys.modules, {"keyring": mock_kr}),
+        ):
             result = validate_environment(api_key=None, validate_api_key=False)
 
         keyring_check = next(
@@ -325,13 +380,16 @@ class TestValidationKeyringCheck(unittest.TestCase):
         "el_sbobinator.services.validation_service.resolve_ffmpeg",
         return_value="ffmpeg",
     )
-    @patch(
-        "el_sbobinator.services.validation_service.get_desktop_dir", return_value="."
-    )
     def test_keyring_check_status_warning_when_keyring_unavailable(self, *_mocks):
         mock_kr = MagicMock()
         mock_kr.get_password.side_effect = RuntimeError("no keyring backend")
-        with patch.dict(sys.modules, {"keyring": mock_kr}):
+        with (
+            patch(
+                "el_sbobinator.services.validation_service.get_session_root",
+                return_value=".",
+            ),
+            patch.dict(sys.modules, {"keyring": mock_kr}),
+        ):
             result = validate_environment(api_key=None, validate_api_key=False)
 
         keyring_check = next(
@@ -349,11 +407,12 @@ class TestValidationKeyringCheck(unittest.TestCase):
         "el_sbobinator.services.validation_service.resolve_ffmpeg",
         return_value="ffmpeg",
     )
-    @patch(
-        "el_sbobinator.services.validation_service.get_desktop_dir", return_value="."
-    )
     def test_keyring_check_absent_on_windows(self, *_mocks):
-        result = validate_environment(api_key=None, validate_api_key=False)
+        with patch(
+            "el_sbobinator.services.validation_service.get_session_root",
+            return_value=".",
+        ):
+            result = validate_environment(api_key=None, validate_api_key=False)
         check_ids = [c["id"] for c in result["checks"]]
         self.assertNotIn("keyring", check_ids)
 

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import os
 import platform
-import tempfile
 
 from google import genai
 
@@ -19,13 +18,9 @@ from el_sbobinator.core.model_registry import (
     sanitize_fallback_models,
     sanitize_model_name,
 )
-from el_sbobinator.core.shared import DEFAULT_MODEL
+from el_sbobinator.core.shared import DEFAULT_MODEL, get_session_root
 from el_sbobinator.services.audio_service import resolve_ffmpeg
-from el_sbobinator.services.config_service import (
-    CONFIG_FILE,
-    USER_HOME,
-    get_desktop_dir,
-)
+from el_sbobinator.services.config_service import CONFIG_FILE
 from el_sbobinator.utils.logging_utils import redact_secrets
 
 
@@ -102,17 +97,24 @@ def validate_environment(
         }
     )
 
-    output_dir = get_desktop_dir() or USER_HOME or tempfile.gettempdir()
-    ok_output, msg_output = _check_writable_dir(output_dir)
+    session_output_dir = get_session_root()
+    ok_output, msg_output = _check_writable_dir(session_output_dir)
     checks.append(
         {
             "id": "output",
-            "label": "Cartella output",
+            "label": "Cartella sessioni/output",
             "status": "ok" if ok_output else "error",
-            "message": "Cartella output disponibile."
+            "message": "Cartella sessioni/output scrivibile."
             if ok_output
-            else "Cartella output non scrivibile.",
-            "details": output_dir if ok_output else msg_output,
+            else "Cartella sessioni/output non scrivibile.",
+            "details": session_output_dir
+            if ok_output
+            else (
+                f"Percorso: {session_output_dir}\n"
+                f"Errore: {msg_output}\n"
+                "Rimedio: scegli una cartella sessioni scrivibile dalle impostazioni "
+                "o correggi i permessi della cartella."
+            ),
         }
     )
 
