@@ -245,6 +245,12 @@ class BuildDefaultPipelineSettingsTests(unittest.TestCase):
         ):
             self.assertIn(key, result)
 
+    def test_fallback_models_default_to_empty_when_not_configured(self):
+        result = build_default_pipeline_settings(
+            {"preferred_model": "gemini-2.5-flash"}
+        )
+        self.assertEqual(result["fallback_models"], [])
+
     def test_loads_from_system_config_when_none_passed(self):
         fake_cfg = {"preferred_model": "gemini-2.5-flash", "fallback_models": []}
         with patch(

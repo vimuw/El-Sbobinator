@@ -473,7 +473,7 @@ class ElSbobinatorApi:
                         )
                     except Exception:
                         pass
-                input_path = self._resolve_completed_session_audio_path(
+                input_path = self._find_candidate_audio_path(
                     data, session_dir, os.path.join(session_dir, "session.json")
                 ) or data.get("input", {}).get("path", "")
                 input_size = int(data.get("input", {}).get("size", 0) or 0)
@@ -814,9 +814,27 @@ class ElSbobinatorApi:
         except Exception as e:
             return {"ok": False, "error": redact_secrets(e)}
 
-    def _resolve_completed_session_audio_path(
-        self, data: dict, session_dir: str, session_path: str | None = None
+    def _find_candidate_audio_path(
+        self,
+        data: dict,
+        session_dir: str,
+        session_path: str | None = None,
+        *,
+        write_back: bool = True,
     ) -> str | None:
+        """Return the first on-disk candidate audio path without any extension guard.
+
+        Suitable for callers (e.g. ``get_completed_sessions``) that only need
+        to *locate* the file, regardless of whether its extension is streamable.
+
+        Side-effects (controlled by *write_back*):
+            When *write_back* is ``True`` (the default) **and** a relocated
+            candidate is found, ``data["input"]`` is mutated in-place **and**
+            ``session.json`` is rewritten atomically so that subsequent
+            look-ups are fast.  Pass ``write_back=False`` for a pure,
+            side-effect-free look-up; the caller's dict is never touched and
+            no file I/O is performed beyond the existence check.
+        """
         input_data = data.get("input", {})
         if not isinstance(input_data, dict):
             return None
@@ -838,23 +856,46 @@ class ElSbobinatorApi:
             if html_candidate:
                 candidates.append(html_candidate)
         for candidate in candidates:
-            if os.path.splitext(candidate)[1].lower() not in self._ALLOWED_STREAM_EXTS:
-                continue
+            # No extension guard here — accept any format that exists on disk.
             if not os.path.isfile(candidate):
                 continue
-            input_data["path"] = candidate
-            input_data["name"] = os.path.basename(candidate)
-            try:
-                input_data["size"] = os.path.getsize(candidate)
-            except Exception:
-                pass
-            if session_path:
+            if write_back:
+                input_data["path"] = candidate
+                input_data["name"] = os.path.basename(candidate)
                 try:
-                    _atomic_write_json(session_path, data)
+                    input_data["size"] = os.path.getsize(candidate)
                 except Exception:
                     pass
+                if session_path:
+                    try:
+                        _atomic_write_json(session_path, data)
+                    except Exception:
+                        pass
             return candidate
         return None
+
+    def _resolve_completed_session_audio_path(
+        self, data: dict, session_dir: str, session_path: str | None = None
+    ) -> str | None:
+        """Locate the audio path and return it only if it is streamable.
+
+        Delegates discovery to :meth:`_find_candidate_audio_path` (no ext
+        guard) and then applies ``_ALLOWED_STREAM_EXTS`` so that callers that
+        need a streamable file (``stream_media_file``) stay safe.
+
+        .. note::
+            ``get_completed_sessions`` should call
+            :meth:`_find_candidate_audio_path` directly so that sessions
+            recorded in formats like ``.mkv`` or ``.webm`` are still surfaced
+            in the archive list even when those extensions are not in
+            ``_ALLOWED_STREAM_EXTS``.
+        """
+        candidate = self._find_candidate_audio_path(data, session_dir, session_path)
+        if candidate is None:
+            return None
+        if os.path.splitext(candidate)[1].lower() not in self._ALLOWED_STREAM_EXTS:
+            return None
+        return candidate
 
     def cleanup_old_sessions(
         self, max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS
@@ -1194,6 +1235,14 @@ class ElSbobinatorApi:
         }
 
     _ALLOWED_DROP_EXTS: ClassVar[set[str]] = _ALLOWED_MEDIA_EXTS
+    # Deliberately the same set as _ALLOWED_MEDIA_EXTS for now — every format
+    # we accept for processing can also be streamed via stream_media_file.
+    # If you ever narrow this set (e.g. to exclude .mkv / .webm), be aware
+    # that _resolve_completed_session_audio_path uses _ALLOWED_STREAM_EXTS as
+    # its extension guard: audio-relink in get_completed_sessions will then
+    # silently return None for any format you remove, so the "replay" button
+    # will stop working for sessions recorded in those formats.
+    # See: _resolve_completed_session_audio_path vs _find_candidate_audio_path.
     _ALLOWED_STREAM_EXTS: ClassVar[set[str]] = _ALLOWED_MEDIA_EXTS
 
     def collect_dropped_files(self, names: list) -> dict:

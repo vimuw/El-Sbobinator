@@ -7,6 +7,8 @@ import type { AppStatus, FileItem } from '../appState';
 import type { ArchiveFolder } from '../bridge';
 import { errorLabel, formatDuration, formatRelativeTime, formatSize, isQuotaError, isResumableError, shortModelName } from '../utils';
 import { KebabMenu, type KebabMenuItem } from './KebabMenu';
+import { FolderIndicatorChip } from './FolderChip';
+
 
 interface QueueFileCardProps {
   file: FileItem;
@@ -247,14 +249,7 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
             <div className="flex items-center gap-2 min-w-0">
               <h4 className="text-sm font-semibold truncate tracking-tight" style={{ color: 'var(--text-primary)' }}>{file.name}</h4>
               {currentFolder && (
-                <span
-                  className="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                  style={{ background: `${currentFolder.color}22`, color: currentFolder.color, border: `1px solid ${currentFolder.color}55` }}
-                  title={`Raccolta: ${currentFolder.name}`}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: currentFolder.color }} />
-                  {currentFolder.name}
-                </span>
+                <FolderIndicatorChip folder={currentFolder} />
               )}
               {isNewest && (
                 <span className="shrink-0 whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'var(--success-subtle)', color: 'var(--success-text)', border: '1px solid var(--success-ring)' }}>

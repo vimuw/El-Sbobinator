@@ -1,5 +1,11 @@
 export const GEMINI_KEY_PATTERN = /^(AIza[0-9A-Za-z_-]{20,}|AQ\.[0-9A-Za-z_-]{20,})$/;
 
+/** Normalise a session directory path so that Windows backslashes, trailing
+ * slashes and letter-case differences are ignored when comparing paths. */
+export function normalizeSessionPath(path?: string): string {
+  return String(path || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+}
+
 const _ERROR_MAP: Record<string, string> = {
   phase1_degenerate_output: 'Trascrizione interrotta: testo non valido anche dopo il retry automatico.',
   quota_daily_limit_phase1: 'Quota API giornaliera esaurita — riprova domani, oppure aggiungi una chiave di riserva nelle impostazioni.',

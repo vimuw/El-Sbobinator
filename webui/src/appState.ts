@@ -1,3 +1,5 @@
+import { normalizeSessionPath } from './utils';
+
 export type FileItem = {
   id: string;
   name: string;
@@ -22,9 +24,7 @@ export type FileItem = {
   revisionFailedBlocks?: number[];
 };
 
-function normalizeSessionPath(path?: string): string {
-  return String(path || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
-}
+
 
 export function getPendingFiles(files: FileItem[]): FileItem[] {
   return files.filter(f => f.status !== 'done');

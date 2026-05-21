@@ -893,6 +893,13 @@ class TestPipelineSessionEdgeCases(unittest.TestCase):
                     "el_sbobinator.pipeline.pipeline_session.build_default_pipeline_settings",
                     return_value=defaults,
                 ),
+                # new_session() in session_store imports build_default_pipeline_settings
+                # at module level and calls it with no args when settings=None, so we must
+                # also patch the session_store reference to prevent a live load_config() call.
+                patch(
+                    "el_sbobinator.core.session_store.build_default_pipeline_settings",
+                    return_value=defaults,
+                ),
                 patch(
                     "el_sbobinator.core.session_store._session_dir_for_file",
                     return_value=session_dir,

@@ -144,15 +144,21 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
       const selectedFile = await window.pywebview.api.ask_media_file();
       if (!selectedFile?.path) return;
       let persistOk = true;
-      if (preview.sessionDir && window.pywebview?.api?.update_session_input_path) {
-        const saveRes = await window.pywebview.api.update_session_input_path(preview.sessionDir, selectedFile.path);
-        if (saveRes?.ok) {
-          setArchiveSessions(prev => prev.map(s =>
-            s.session_dir === preview.sessionDir ? { ...s, input_path: selectedFile.path } : s,
-          ));
-          await onArchiveRefresh?.();
-        } else {
+      if (preview.sessionDir) {
+        if (!window.pywebview?.api?.update_session_input_path) {
+          // The bridge is present but the persist endpoint is missing — treat as
+          // a failure so we never update in-memory state without a disk write.
           persistOk = false;
+        } else {
+          const saveRes = await window.pywebview.api.update_session_input_path(preview.sessionDir, selectedFile.path);
+          if (saveRes?.ok) {
+            setArchiveSessions(prev => prev.map(s =>
+              s.session_dir === preview.sessionDir ? { ...s, input_path: selectedFile.path } : s,
+            ));
+            await onArchiveRefresh?.();
+          } else {
+            persistOk = false;
+          }
         }
       }
       if (!persistOk) {

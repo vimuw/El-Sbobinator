@@ -21,6 +21,7 @@ class ModelOption(TypedDict):
 
 
 SUPPORTED_MODELS: tuple[str, ...] = (
+    "gemini-3.5-flash",
     "gemini-3-flash-preview",
     "gemini-3.1-flash-lite-preview",
     "gemini-2.5-flash",
@@ -28,12 +29,17 @@ SUPPORTED_MODELS: tuple[str, ...] = (
 )
 
 DEFAULT_MODEL = "gemini-2.5-flash"
-DEFAULT_FALLBACK_MODELS: tuple[str, ...] = (
-    "gemini-2.5-flash-lite",
-    "gemini-3.1-flash-lite-preview",
-)
+DEFAULT_FALLBACK_MODELS: tuple[str, ...] = ()
 
 MODEL_OPTIONS: tuple[ModelOption, ...] = (
+    {
+        "id": "gemini-3.5-flash",
+        "label": "Gemini 3.5 Flash",
+        "summary": "Nuovo modello Flash: disponibile come primario o fallback configurabile dall'utente.",
+        "default_chunk_minutes": 15,
+        "default_macro_char_limit": 22000,
+        "phase1_temperature": 0.35,
+    },
     {
         "id": "gemini-3-flash-preview",
         "label": "Gemini 3 Flash (Preview)",

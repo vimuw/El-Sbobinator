@@ -195,8 +195,10 @@ def initialize_session_context(
     session_paths = resolve_session_paths(input_path, session_dir_hint=session_dir_hint)
 
     if not resume_session and os.path.exists(session_paths.session_dir):
+        # SessionCollisionError is intentionally allowed to propagate: callers
+        # must decide how to handle an attempted overwrite of a completed session.
         try:
-            reset_session_dirs(session_paths)
+            reset_session_dirs(session_paths, allow_completed_destroy=False)
         except SessionCollisionError:
             raise
         except Exception:

@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from el_sbobinator.core.model_registry import (
+    DEFAULT_FALLBACK_MODELS,
     MODEL_OPTIONS,
     SUPPORTED_MODELS,
     build_model_state,
@@ -46,8 +47,14 @@ class SupportedModelsTests(unittest.TestCase):
     def test_gemini_31_flash_lite_preview_in_supported_models(self):
         self.assertIn("gemini-3.1-flash-lite-preview", SUPPORTED_MODELS)
 
+    def test_gemini_35_flash_in_supported_models(self):
+        self.assertIn("gemini-3.5-flash", SUPPORTED_MODELS)
+
     def test_gemini_15_flash_not_in_supported_models(self):
         self.assertNotIn("gemini-1.5-flash", SUPPORTED_MODELS)
+
+    def test_no_default_fallback_models(self):
+        self.assertEqual(DEFAULT_FALLBACK_MODELS, ())
 
     def test_current_fallbacks_accepted_by_sanitize_fallback_models(self):
         result = sanitize_fallback_models(

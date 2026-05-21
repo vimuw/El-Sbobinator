@@ -84,7 +84,7 @@ A second helper, `_session_dir_for_file(path)`, joins `SESSION_ROOT` with the fi
   },
   "settings": {
     "model": "gemini-2.5-flash",
-    "fallback_models": ["gemini-2.5-flash-lite", "gemini-3.1-flash-lite-preview"],
+    "fallback_models": [],
     "effective_model": "gemini-2.5-flash",
     "chunk_minutes": 15,
     "overlap_seconds": 30,

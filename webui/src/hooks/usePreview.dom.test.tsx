@@ -168,6 +168,43 @@ describe('usePreview', () => {
     expect(stream_media_file).toHaveBeenCalledWith('/audio.mp3', '/session');
   });
 
+  it('loadPreviewAudio: sessionDir present but sourcePath empty — still calls stream_media_file with empty string', async () => {
+    // Covers the branch where normalizedSource is '' but normalizedSessionDir is
+    // set. The backend receives ('', sessionDir) and is responsible for resolving
+    // the audio; the call must not be skipped.
+    const stream_media_file = vi.fn().mockResolvedValue({ ok: true, url: 'blob:session-audio' });
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<body>text</body>' }),
+      stream_media_file,
+    });
+    const { result } = renderHook(() => usePreview(makeOptions()));
+    await act(async () => {
+      // sourcePath is intentionally undefined — only sessionDir is provided
+      await result.current.openPreview('/session/out.html', 'test', undefined, 'f1', '/session');
+    });
+    expect(stream_media_file).toHaveBeenCalledWith('', '/session');
+    expect(result.current.preview.audioSrc).toBe('blob:session-audio');
+    expect(result.current.preview.audioRelinkNeeded).toBe(false);
+  });
+
+  it('loadPreviewAudio: sessionDir present, sourcePath empty, backend fails — sets audioRelinkNeeded', async () => {
+    // Regression guard: when the backend cannot resolve audio even with sessionDir
+    // (e.g. original recording was deleted), audioRelinkNeeded must be true so the
+    // UI can prompt the user to relink.
+    const stream_media_file = vi.fn().mockResolvedValue({ ok: false });
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<body>text</body>' }),
+      stream_media_file,
+    });
+    const { result } = renderHook(() => usePreview(makeOptions()));
+    await act(async () => {
+      await result.current.openPreview('/session/out.html', 'test', undefined, 'f1', '/session');
+    });
+    expect(stream_media_file).toHaveBeenCalledWith('', '/session');
+    expect(result.current.preview.audioSrc).toBeNull();
+    expect(result.current.preview.audioRelinkNeeded).toBe(true);
+  });
+
   it('relinkPreviewAudio persists session relink, refreshes archive, and updates completed queue items', async () => {
     const dispatch = vi.fn() as unknown as Dispatch<ProcessingAction>;
     const setArchiveSessions = vi.fn() as unknown as Dispatch<React.SetStateAction<ArchiveSession[]>>;
@@ -199,5 +236,32 @@ describe('usePreview', () => {
       duration: 90,
     });
     expect(stream_media_file).toHaveBeenLastCalledWith('/new/audio.mp3', '/session');
+  });
+
+  it('relinkPreviewAudio aborts when sessionDir is set but update_session_input_path is absent', async () => {
+    // Regression test: previously persistOk stayed true when the endpoint was
+    // missing, causing in-memory queue state to be updated without a disk write.
+    const dispatch = vi.fn() as unknown as Dispatch<ProcessingAction>;
+    const setArchiveSessions = vi.fn() as unknown as Dispatch<React.SetStateAction<ArchiveSession[]>>;
+    const appendConsole = vi.fn();
+    const stream_media_file = vi.fn().mockResolvedValue({ ok: true, url: 'blob:new-audio' });
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<body>text</body>' }),
+      ask_media_file: vi.fn().mockResolvedValue({ path: '/new/audio.mp3', name: 'audio.mp3', size: 2048, duration: 90 }),
+      // update_session_input_path intentionally absent
+      stream_media_file,
+    });
+    const { result } = renderHook(() => usePreview(makeOptions({ dispatch, setArchiveSessions, appendConsole })));
+    await act(async () => {
+      await result.current.openPreview('/session/out.html', 'test', '/old/audio.mp3', 'f1', '/session');
+    });
+    await act(async () => {
+      await result.current.relinkPreviewAudio();
+    });
+    // Must log the error rather than silently updating in-memory state
+    expect(appendConsole).toHaveBeenCalledWith(expect.stringContaining('Impossibile salvare'));
+    // Neither the queue nor the stream should have been touched
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(stream_media_file).toHaveBeenCalledTimes(1); // only the initial openPreview call
   });
 });

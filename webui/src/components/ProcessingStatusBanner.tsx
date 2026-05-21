@@ -201,6 +201,7 @@ function getProgressLabel(
   currentPhase: string,
   workDone: { chunks: number; macro: number },
   workTotals: { chunks: number; macro: number },
+  stepMetrics?: { chunks: StepMetricEntry | null; macro: StepMetricEntry | null },
 ): string | null {
   const phase = currentPhase.trim();
 
@@ -211,9 +212,23 @@ function getProgressLabel(
   }
 
   const macroInfo = parseCurrentIndex(phase, 'macro');
-  if (macroInfo) return `Sezione ${macroInfo.current} di ${macroInfo.total}`;
-  if (phase.startsWith('Fase 2/3') && workTotals.macro > 0) {
-    return `Sezione ${getActiveStepIndex(workDone.macro, workTotals.macro)} di ${workTotals.macro}`;
+  const macroCurrentNum = macroInfo
+    ? macroInfo.current
+    : getActiveStepIndex(workDone.macro, workTotals.macro);
+  const macroTotalNum = macroInfo ? macroInfo.total : workTotals.macro;
+
+  if (phase.startsWith('Fase 2/3') && macroTotalNum > 0) {
+    const base = `Sezione ${macroCurrentNum} di ${macroTotalNum}`;
+    // Append inline remaining estimate when macro stepMetrics are available
+    if (stepMetrics?.macro && workDone.macro < workTotals.macro) {
+      const remaining = workTotals.macro - workDone.macro;
+      const etaSecs = Math.round(remaining * stepMetrics.macro.avgSeconds);
+      if (etaSecs >= 10) {
+        const etaStr = etaSecs < 60 ? `${etaSecs}s` : `${Math.round(etaSecs / 60)}m`;
+        return `${base} — circa ${etaStr} rimanenti`;
+      }
+    }
+    return base;
   }
 
   return null;
@@ -235,9 +250,8 @@ function computeEta(
     done = workDone.chunks;
     total = workTotals.chunks;
   } else if (phase.startsWith('Fase 2/3') && stepMetrics.macro) {
-    metric = stepMetrics.macro;
-    done = workDone.macro;
-    total = workTotals.macro;
+    // ETA for Fase 2/3 is embedded inline in the progress label — skip separate chip
+    return null;
   }
   if (!metric || total <= 0 || done >= total) return null;
   const remaining = total - done;
@@ -348,7 +362,7 @@ export function ProcessingStatusBanner({
   const phaseForMeta = isWaiting ? lastNormalPhaseRef.current : currentPhase;
 
   const stepperState = getStepperState(phaseForMeta);
-  const progressLabel = getProgressLabel(phaseForMeta, workDone, workTotals);
+  const progressLabel = getProgressLabel(phaseForMeta, workDone, workTotals, stepMetrics);
 
   const [elapsedSecs, setElapsedSecs] = useState(0);
 
@@ -398,22 +412,10 @@ export function ProcessingStatusBanner({
   }
   const etaLabel = kind === 'normal' ? computeEta(stepMetrics, workDone, workTotals, phaseForMeta) : null;
 
-  const phase2Description: string | null = (() => {
-    if (!phaseForMeta.trim().startsWith('Fase 2/3') || kind !== 'normal') return null;
-    if (!progressLabel && !etaLabel) return null;
-    const parts: string[] = [];
-    if (progressLabel) parts.push(progressLabel);
-    if (etaLabel) {
-      const friendly = etaLabel.replace(/^~(\d+)m$/, '$1 min').replace(/^~(\d+)s$/, '$1s');
-      parts.push(`circa ${friendly} rimanenti`);
-    }
-    return parts.join(' — ');
-  })();
-
-  if (progressLabel && !phase2Description) {
+  if (progressLabel) {
     metaChips.push({ icon: <Layers className="w-3 h-3" />, label: progressLabel });
   }
-  if (etaLabel && !phase2Description) {
+  if (etaLabel) {
     metaChips.push({ icon: <Hourglass className="w-3 h-3" />, label: `ETA ${etaLabel}` });
   }
 
@@ -463,7 +465,7 @@ export function ProcessingStatusBanner({
                 {title}
               </h2>
               <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                {phase2Description ?? description}
+                {description}
               </p>
             </div>
           </motion.div>

@@ -4,10 +4,7 @@ import { CheckCircle, Search } from 'lucide-react';
 import type { AppStatus, FileItem } from '../appState';
 import type { ArchiveFolder } from '../bridge';
 import { CompletedFileCard } from './QueueFileCard';
-
-function normalizeSessionPath(path?: string) {
-  return String(path || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
-}
+import { normalizeSessionPath } from '../utils';
 
 interface CompletedSectionProps {
   doneFiles: FileItem[];

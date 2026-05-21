@@ -128,10 +128,12 @@ Source: `el_sbobinator/model_registry.py`.
 |---|---|---|---|
 | `gemini-2.5-flash` (default primary) | 15 | 22 000 | 0.35 |
 | `gemini-2.5-flash-lite` | 10 | 15 000 | 0.25 |
+| `gemini-3.5-flash` | 15 | 22 000 | 0.35 |
 | `gemini-3-flash-preview` | 15 | 22 000 | 0.35 |
 | `gemini-3.1-flash-lite-preview` | 5 | 7 500 | 0.35 |
 
 The `ModelState` dataclass tracks the ordered chain and the currently active model. `build_model_state(primary, fallbacks)` always resets `current` to the primary on resume — the previous run's `effective_model` is persisted for observability only.
+New sessions start with no fallback models unless the user explicitly adds them in settings.
 
 ## `last_error` reference
 
