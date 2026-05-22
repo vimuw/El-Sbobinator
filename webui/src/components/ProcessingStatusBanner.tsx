@@ -220,8 +220,8 @@ function getProgressLabel(
   if (phase.startsWith('Fase 2/3') && macroTotalNum > 0) {
     const base = `Sezione ${macroCurrentNum} di ${macroTotalNum}`;
     // Append inline remaining estimate when macro stepMetrics are available
-    if (stepMetrics?.macro && workDone.macro < workTotals.macro) {
-      const remaining = workTotals.macro - workDone.macro;
+    if (stepMetrics?.macro && workDone.macro < macroTotalNum) {
+      const remaining = macroTotalNum - workDone.macro;
       const etaSecs = Math.round(remaining * stepMetrics.macro.avgSeconds);
       if (etaSecs >= 10) {
         const etaStr = etaSecs < 60 ? `${etaSecs}s` : `${Math.round(etaSecs / 60)}m`;

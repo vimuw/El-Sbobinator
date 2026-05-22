@@ -1,7 +1,12 @@
 export const GEMINI_KEY_PATTERN = /^(AIza[0-9A-Za-z_-]{20,}|AQ\.[0-9A-Za-z_-]{20,})$/;
 
 /** Normalise a session directory path so that Windows backslashes, trailing
- * slashes and letter-case differences are ignored when comparing paths. */
+ * slashes and letter-case differences are ignored when comparing paths.
+ *
+ * NOTE: `.toLowerCase()` is applied unconditionally on every platform.
+ * This is safe for the current Windows-only target (NTFS is case-insensitive),
+ * but would need revisiting if the app is ported to a case-sensitive filesystem
+ * (Linux/macOS) where two paths that differ only in case are distinct. */
 export function normalizeSessionPath(path?: string): string {
   return String(path || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 }

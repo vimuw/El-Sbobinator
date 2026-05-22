@@ -350,6 +350,9 @@ class ElSbobinatorApi:
                 result["config_recovered_from"] = cfg["config_recovered_from"]
             return result
         except Exception:
+            # DEFAULT_FALLBACK_MODELS is intentionally an empty tuple — no built-in
+            # fallbacks are shipped; the user configures their own in Settings.
+            # The error-path list therefore evaluates to [] by design.
             return {
                 "api_key": "",
                 "fallback_keys": [],
@@ -889,8 +892,17 @@ class ElSbobinatorApi:
             recorded in formats like ``.mkv`` or ``.webm`` are still surfaced
             in the archive list even when those extensions are not in
             ``_ALLOWED_STREAM_EXTS``.
+
+        .. note::
+            ``write_back=False`` is intentional: a streaming request must not
+            rewrite ``session.json`` concurrently with ``get_completed_sessions``
+            readers (no per-session file lock exists — TOCTOU).  Audio relinks
+            are persisted exclusively through ``update_session_input_path``,
+            which is the correct, guarded path.
         """
-        candidate = self._find_candidate_audio_path(data, session_dir, session_path)
+        candidate = self._find_candidate_audio_path(
+            data, session_dir, session_path, write_back=False
+        )
         if candidate is None:
             return None
         if os.path.splitext(candidate)[1].lower() not in self._ALLOWED_STREAM_EXTS:
@@ -2176,6 +2188,11 @@ class ElSbobinatorApi:
                         resolved_file_path = fallback
             except Exception:
                 pass
+        if not resolved_file_path:
+            return {
+                "ok": False,
+                "error": "Nessun file audio trovato per questa sessione.",
+            }
         ext = os.path.splitext(resolved_file_path)[1].lower()
         if ext not in self._ALLOWED_STREAM_EXTS:
             return {

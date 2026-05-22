@@ -170,6 +170,9 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
       }
       setPreview(prev => ({ ...prev, sourcePath: selectedFile.path, audioRelinkNeeded: false }));
       const didLoad = await loadPreviewAudio(selectedFile.path, preview.sessionDir);
+      // NOTE: this log fires regardless of whether loadPreviewAudio returned true
+      // (i.e. the blob URL was actually created). Pre-existing behavior — left
+      // untouched intentionally; fix separately if audio-relink UX is revisited.
       appendConsole(`Audio ricollegato: ${selectedFile.name}`);
       return didLoad;
     } catch (error: unknown) {
