@@ -94,4 +94,29 @@ describe('useQueuePersistence — serialization contract', () => {
     expect(restored.completionStatus).toBe('completed_with_warnings');
     expect(restored.revisionFailedBlocks).toEqual([1]);
   });
+
+  it('resumeSession and allowCompletedDestroy are preserved through a JSON round-trip', () => {
+    const file = makeFile({
+      resumeSession: false,
+      allowCompletedDestroy: true,
+    });
+    const restored = roundTrip(file);
+    expect(restored.resumeSession).toBe(false);
+    expect(restored.allowCompletedDestroy).toBe(true);
+  });
+
+  it('resumeSession and allowCompletedDestroy missing or different values are deserialized correctly', () => {
+    const file1 = makeFile({
+      resumeSession: true,
+      allowCompletedDestroy: false,
+    });
+    const restored1 = roundTrip(file1);
+    expect(restored1.resumeSession).toBeUndefined();
+    expect(restored1.allowCompletedDestroy).toBeUndefined();
+
+    const file2 = makeFile({});
+    const restored2 = roundTrip(file2);
+    expect(restored2.resumeSession).toBeUndefined();
+    expect(restored2.allowCompletedDestroy).toBeUndefined();
+  });
 });

@@ -20,6 +20,8 @@ export function serializeQueueFile(file: FileItem): Record<string, unknown> {
     effectiveModel: file.effectiveModel,
     completionStatus: file.completionStatus,
     revisionFailedBlocks: file.revisionFailedBlocks,
+    resumeSession: file.resumeSession,
+    allowCompletedDestroy: file.allowCompletedDestroy,
   };
 }
 
@@ -44,6 +46,8 @@ export function deserializeQueueFile(file: Partial<FileItem>, index: number): Fi
     revisionFailedBlocks: Array.isArray(file.revisionFailedBlocks)
       ? file.revisionFailedBlocks.map(Number).filter(n => Number.isFinite(n) && n > 0)
       : [],
+    resumeSession: file.resumeSession === false ? false : undefined,
+    allowCompletedDestroy: file.allowCompletedDestroy ? true : undefined,
   };
 }
 

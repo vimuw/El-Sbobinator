@@ -1538,6 +1538,26 @@ class TestSessionCollisionGuard(unittest.TestCase):
             self.assertEqual(str(cm.exception), "session_collision")
             self.assertEqual(cm.exception.session_dir, session_dir)
 
+    def test_no_collision_when_allow_completed_destroy_true(self):
+        """allow_completed_destroy=True bypasses the SessionCollisionError when resume=False."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "lesson.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake audio")
+
+            session_dir = self._make_session_dir(tmpdir, stage="done", html_exists=True)
+            with (
+                patch(
+                    "el_sbobinator.core.session_store._session_dir_for_file",
+                    return_value=session_dir,
+                ),
+                patch("el_sbobinator.pipeline.pipeline_session.save_session_data"),
+            ):
+                ctx = initialize_session_context(
+                    input_path, resume_session=False, allow_completed_destroy=True
+                )
+            self.assertEqual(ctx.session["stage"], "phase1")
+
     def test_no_collision_when_resume_true(self):
         """resume_session=True must never trigger the collision guard."""
         with tempfile.TemporaryDirectory() as tmpdir:

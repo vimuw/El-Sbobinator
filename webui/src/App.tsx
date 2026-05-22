@@ -765,7 +765,7 @@ export default function App() {
           for (const s of archiveMatches) sessionDirsToHide.add(s.session_dir);
         }
         dispatch({ type: 'queue/remove', id: match.existingFile.id });
-        dispatch({ type: 'queue/add', files: [{ ...match.incoming, id: replacementId, resumeSession: false }] });
+        dispatch({ type: 'queue/add', files: [{ ...match.incoming, id: replacementId, resumeSession: false, allowCompletedDestroy: true }] });
       } else {
         pendingArchiveReplacementsRef.current.set(replacementId, {
           fileName: match.incoming.name,
@@ -773,7 +773,7 @@ export default function App() {
           sessions: match.sessions,
         });
         for (const s of match.sessions) sessionDirsToHide.add(s.session_dir);
-        dispatch({ type: 'queue/add', files: [{ ...match.incoming, id: replacementId, resumeSession: false }] });
+        dispatch({ type: 'queue/add', files: [{ ...match.incoming, id: replacementId, resumeSession: false, allowCompletedDestroy: true }] });
       }
     }
     if (sessionDirsToHide.size > 0) {
@@ -824,7 +824,7 @@ export default function App() {
       dispatch({ type: 'queue/update_source', id: file.id, path: nextPath, name: nextName, size: nextSize, duration: nextDuration });
       appendConsole(`Audio ricollegato: ${nextName}`);
     }
-    return [{ id: file.id, path: nextPath, name: nextName, size: nextSize, duration: nextDuration, resume_session: file.resumeSession }] as FileDescriptor[];
+    return [{ id: file.id, path: nextPath, name: nextName, size: nextSize, duration: nextDuration, resume_session: file.resumeSession, allow_completed_destroy: file.allowCompletedDestroy }] as FileDescriptor[];
   }, [appendConsole, dispatch]);
 
   const startProcessing = async (isContinuation: boolean = false, overrideLowDisk: boolean = false) => {

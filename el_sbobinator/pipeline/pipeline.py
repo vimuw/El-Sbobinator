@@ -68,7 +68,12 @@ _REGENERATE_PROMPT_TIMEOUT_ERROR = "regenerate_prompt_timeout"
 
 
 def _esegui_sbobinatura_impl(  # noqa: C901
-    input_path, api_key_value, app_instance, session_dir_hint=None, resume_session=False
+    input_path,
+    api_key_value,
+    app_instance,
+    session_dir_hint=None,
+    resume_session=False,
+    allow_completed_destroy=False,
 ):
     runtime = PipelineRuntime(app_instance)
     runtime.reset_temp_files()
@@ -139,6 +144,7 @@ def _esegui_sbobinatura_impl(  # noqa: C901
             input_path,
             session_dir_hint=session_dir_hint,
             resume_session=resume_session,
+            allow_completed_destroy=allow_completed_destroy,
         )
         session = session_ctx.session
         logger = get_logger(
@@ -703,7 +709,12 @@ def _esegui_sbobinatura_impl(  # noqa: C901
 
 
 def esegui_sbobinatura(
-    input_path, api_key_value, app_instance, session_dir_hint=None, resume_session=False
+    input_path,
+    api_key_value,
+    app_instance,
+    session_dir_hint=None,
+    resume_session=False,
+    allow_completed_destroy=False,
 ):
     # Wrapper stabile: mantiene la firma pubblica mentre l'implementazione evolve.
     return _esegui_sbobinatura_impl(
@@ -712,4 +723,5 @@ def esegui_sbobinatura(
         app_instance,
         session_dir_hint=session_dir_hint,
         resume_session=resume_session,
+        allow_completed_destroy=allow_completed_destroy,
     )

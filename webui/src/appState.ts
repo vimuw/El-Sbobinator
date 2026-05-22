@@ -19,6 +19,7 @@ export type FileItem = {
   primaryModel?: string;
   effectiveModel?: string;
   resumeSession?: boolean;
+  allowCompletedDestroy?: boolean;
   completionStatus?: 'completed' | 'completed_with_warnings';
   revisionFailedBlocks?: number[];
 };
@@ -42,6 +43,7 @@ export type FileDescriptor = {
   size: number;
   duration?: number;
   resume_session?: boolean;
+  allow_completed_destroy?: boolean;
 };
 
 export type AppStatus = 'idle' | 'processing' | 'canceling';

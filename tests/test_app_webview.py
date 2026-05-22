@@ -466,7 +466,7 @@ class AppWebviewTests(unittest.TestCase):
         def fake_emit(fn_name, data, batched=None):
             emitted.append((fn_name, data, batched))
 
-        def fake_pipeline_run(_path, _api_key, adapter, resume_session=True):
+        def fake_pipeline_run(_path, _api_key, adapter, resume_session=True, **kwargs):
             self.assertTrue(resume_session)
             adapter.set_run_result("cancelled", "Prompt di ripresa chiuso.")
 
@@ -525,7 +525,7 @@ class AppWebviewTests(unittest.TestCase):
         def fake_emit(fn_name, data, batched=None):
             emitted.append((fn_name, data, batched))
 
-        def fake_pipeline_run(_path, _api_key, adapter, resume_session=True):
+        def fake_pipeline_run(_path, _api_key, adapter, resume_session=True, **kwargs):
             api._cancel_event.set()
             adapter.set_run_result("failed", "regenerate_prompt_timeout")
 
@@ -686,7 +686,7 @@ class AppWebviewTests(unittest.TestCase):
         def fake_emit(fn_name, data, batched=None):
             emitted.append((fn_name, data, batched))
 
-        def fake_pipeline_run(_path, _api_key, adapter, resume_session=True):
+        def fake_pipeline_run(_path, _api_key, adapter, resume_session=True, **kwargs):
             adapter.set_run_result("failed", f"SDK failed api_key={secret}")
             adapter.set_run_error_detail(f"detail key={secret}")
 
@@ -788,7 +788,7 @@ class AppWebviewTests(unittest.TestCase):
         api = ElSbobinatorApi()
         observed_resume_values = []
 
-        def fake_pipeline_run(_path, _api_key, adapter, resume_session=True):
+        def fake_pipeline_run(_path, _api_key, adapter, resume_session=True, **kwargs):
             observed_resume_values.append(resume_session)
             adapter.set_run_result("completed", "")
             adapter.last_output_html = _path + ".html"
@@ -839,7 +839,7 @@ class AppWebviewTests(unittest.TestCase):
         def fake_emit(fn_name, data, batched=None):
             emitted.append((fn_name, data, batched))
 
-        def fake_pipeline_run(_path, _api_key, adapter, resume_session=True):
+        def fake_pipeline_run(_path, _api_key, adapter, resume_session=True, **kwargs):
             html_path = _path + ".html"
             with open(html_path, "w", encoding="utf-8") as handle:
                 handle.write("<html><body>ok</body></html>")
@@ -1025,7 +1025,7 @@ class AppWebviewTests(unittest.TestCase):
         api = ElSbobinatorApi()
         api._adapter.emit = MagicMock()
 
-        def fake_pipeline_run(_path, _api_key, adapter, resume_session=True):
+        def fake_pipeline_run(_path, _api_key, adapter, resume_session=True, **kwargs):
             adapter.set_run_result("failed", "test_done")
 
         mock_pipeline_run.side_effect = fake_pipeline_run
@@ -1090,7 +1090,9 @@ class AppWebviewTests(unittest.TestCase):
                 ) as mock_cleanup,
             ):
 
-                def fake_pipeline_run(_path, _api_key, adapter, resume_session=True):
+                def fake_pipeline_run(
+                    _path, _api_key, adapter, resume_session=True, **kwargs
+                ):
                     adapter.set_run_result("failed", "test_done")
 
                 mock_pipeline_run.side_effect = fake_pipeline_run

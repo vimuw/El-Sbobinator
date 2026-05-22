@@ -191,6 +191,7 @@ def initialize_session_context(
     input_path: str,
     session_dir_hint: str | None = None,
     resume_session: bool = False,
+    allow_completed_destroy: bool = False,
 ) -> PipelineSessionContext:
     session_paths = resolve_session_paths(input_path, session_dir_hint=session_dir_hint)
 
@@ -198,7 +199,9 @@ def initialize_session_context(
         # SessionCollisionError is intentionally allowed to propagate: callers
         # must decide how to handle an attempted overwrite of a completed session.
         try:
-            reset_session_dirs(session_paths, allow_completed_destroy=False)
+            reset_session_dirs(
+                session_paths, allow_completed_destroy=allow_completed_destroy
+            )
         except SessionCollisionError:
             raise
         except Exception:

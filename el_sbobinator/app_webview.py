@@ -1496,12 +1496,16 @@ class ElSbobinatorApi:
                         if "resume_session" in file_info
                         else resume_session
                     )
+                    file_allow_completed_destroy = bool(
+                        file_info.get("allow_completed_destroy", False)
+                    )
 
                     esegui_sbobinatura(
                         file_path,
                         active_api_key,
                         self._adapter,
                         resume_session=file_resume_session,
+                        allow_completed_destroy=file_allow_completed_destroy,
                     )
                     if self._adapter.effective_api_key:
                         active_api_key = self._adapter.effective_api_key

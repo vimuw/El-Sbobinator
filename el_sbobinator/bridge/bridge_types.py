@@ -17,6 +17,7 @@ class BridgeFileItem(TypedDict):
     size: NotRequired[int]
     duration: NotRequired[float]
     resume_session: NotRequired[bool]
+    allow_completed_destroy: NotRequired[bool]
 
 
 class LowDiskWarningPayload(TypedDict):
