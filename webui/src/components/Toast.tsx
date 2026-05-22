@@ -63,8 +63,10 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
         maxWidth: '18rem',
         width: 'max-content',
         paddingRight: '2.25rem',
-        background: 'var(--bg-elevated)',
-        border: `1px solid ${toast.type === 'warning' ? 'var(--error-ring)' : 'var(--border-strong)'}`,
+        background: toast.type === 'warning'
+          ? 'linear-gradient(var(--warning-subtle), var(--warning-subtle)), var(--bg-elevated)'
+          : 'var(--bg-elevated)',
+        border: `1px solid ${toast.type === 'warning' ? 'var(--warning-ring)' : 'var(--border-strong)'}`,
         color: 'var(--text-primary)',
       }}
     >
@@ -79,7 +81,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       </button>
       <div className="flex items-start gap-3">
         {toast.type === 'warning' ? (
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: 'var(--error-text)' }} />
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: 'var(--warning-text)' }} />
         ) : (
           <Info className="w-4 h-4 shrink-0 mt-0.5" style={{ color: 'var(--text-muted)' }} />
         )}

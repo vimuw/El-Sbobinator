@@ -11,7 +11,10 @@ export function RegenerateModal({ prompt, onAnswer, onDismiss }: RegenerateModal
   return (
     <AnimatePresence>
       {prompt && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <motion.div
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+        >
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -62,7 +65,7 @@ export function RegenerateModal({ prompt, onAnswer, onDismiss }: RegenerateModal
               </button>
             </div>
           </motion.div>
-        </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );
