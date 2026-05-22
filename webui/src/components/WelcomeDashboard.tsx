@@ -194,9 +194,9 @@ function StatCard({ icon, value, label, delay, iconIdleAnim }: StatCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
+      animate={{ opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 20, delay } }}
       whileTap={{ scale: 0.96 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 20, delay }}
+      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
       className="premium-panel stat-card p-4 flex flex-col items-center gap-2 text-center"
       style={{ cursor: 'default' }}
     >
