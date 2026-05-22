@@ -341,7 +341,7 @@ class AppWebviewTests(unittest.TestCase):
         self.assertEqual(result["removed"], 2)
         self.assertEqual(result["preserved_completed"], 5)
         self.assertEqual(result["missing_completed_html"], 1)
-        mock_cleanup.assert_called_once_with(14)
+        mock_cleanup.assert_called_once_with(14, dry_run=False)
 
     @patch("el_sbobinator.app_webview._cleanup_completed_sessions")
     def test_cleanup_completed_sessions_dry_run_counts_without_deleting(

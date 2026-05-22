@@ -274,15 +274,21 @@ describe('SettingsModal — session folder and cleanup', () => {
   });
 
   it('calls cleanup_old_sessions for incomplete cleanup and shows result', async () => {
-    const cleanupFn = vi.fn().mockResolvedValue({ ok: true, removed: 3, freed_bytes: 1024, preserved_completed: 2 });
+    const cleanupFn = vi.fn()
+      .mockResolvedValueOnce({ ok: true, removed: 0, candidates: 3, freed_bytes: 1024, preserved_completed: 2 })
+      .mockResolvedValueOnce({ ok: true, removed: 3, candidates: 3, freed_bytes: 1024, preserved_completed: 2 });
     setPywebview({ cleanup_old_sessions: cleanupFn });
     render(<SettingsModal {...makeProps()} />);
     await act(async () => {
       fireEvent.click(screen.getByText('Avanzati').closest('button')!);
     });
     await act(async () => {
-      fireEvent.click(screen.getByTitle(/Elimina solo elaborazioni incomplete/));
+      fireEvent.click(screen.getByTitle(/Conta ed elimina elaborazioni incomplete/));
     });
+    expect(await screen.findByText(/Sbobine interessate: 3/)).toBeTruthy();
+    expect(cleanupFn).toHaveBeenCalledTimes(1);
+    expect(cleanupFn).toHaveBeenCalledWith(30, true);
+
     await act(async () => {
       fireEvent.click(screen.getByText('Elimina incomplete'));
     });
@@ -290,7 +296,8 @@ describe('SettingsModal — session folder and cleanup', () => {
       expect(screen.getByText(/Rimoss/)).toBeTruthy(),
     );
     expect(screen.getByText(/sbobine completate preservate/)).toBeTruthy();
-    expect(cleanupFn).toHaveBeenCalledWith(14);
+    expect(cleanupFn).toHaveBeenCalledTimes(2);
+    expect(cleanupFn).toHaveBeenLastCalledWith(30, false);
   });
 
   it('counts completed notes before dangerous cleanup and deletes only after confirmation', async () => {
@@ -307,7 +314,7 @@ describe('SettingsModal — session folder and cleanup', () => {
     });
     expect(await screen.findByText(/Sbobine interessate: 4/)).toBeTruthy();
     expect(cleanupCompletedFn).toHaveBeenCalledTimes(1);
-    expect(cleanupCompletedFn).toHaveBeenCalledWith(14, true);
+    expect(cleanupCompletedFn).toHaveBeenCalledWith(30, true);
 
     await act(async () => {
       fireEvent.click(screen.getByText('Elimina sbobine completate'));
@@ -316,7 +323,7 @@ describe('SettingsModal — session folder and cleanup', () => {
       expect(screen.getByText(/Eliminate 4 sbobine completate/)).toBeTruthy(),
     );
     expect(cleanupCompletedFn).toHaveBeenCalledTimes(2);
-    expect(cleanupCompletedFn).toHaveBeenLastCalledWith(14, false);
+    expect(cleanupCompletedFn).toHaveBeenLastCalledWith(30, false);
   });
 });
 

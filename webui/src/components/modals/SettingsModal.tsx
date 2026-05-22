@@ -7,7 +7,7 @@ import type { ModelOption, UpdateDownloadProgressPayload, ValidationResult } fro
 import { formatSize, GEMINI_KEY_PATTERN } from '../../utils';
 import { APP_VERSION, GITHUB_RELEASES_URL } from '../../branding';
 
-const SESSION_CLEANUP_DAYS = 14;
+const SESSION_CLEANUP_DAYS = 30;
 
 interface CustomSelectOption {
   value: string;
@@ -285,6 +285,7 @@ export function SettingsModal({
   const [isLoadingSessionInfo, setIsLoadingSessionInfo] = useState(false);
   const [isCleaningSession, setIsCleaningSession] = useState(false);
   const [cleanupResult, setCleanupResult] = useState<CleanupSummary | null>(null);
+  const [cleanupPreview, setCleanupPreview] = useState<CleanupSummary | null>(null);
   const [isCleaningCompletedSessions, setIsCleaningCompletedSessions] = useState(false);
   const [completedCleanupPreview, setCompletedCleanupPreview] = useState<CleanupSummary | null>(null);
   const [completedCleanupResult, setCompletedCleanupResult] = useState<CleanupSummary | null>(null);
@@ -310,7 +311,25 @@ export function SettingsModal({
   }, [isOpen, checkForUpdates]);
 
   useEffect(() => {
-    if (!isOpen) { setIsAdvancedOpen(false); setIsSaving(false); isSavingRef.current = false; setIsMoveInProgress(false); setMoveProgress(null); setMoveError(null); setShowCompletedCleanupConfirm(false); setCompletedCleanupPreview(null); if (moveTimerRef.current) { clearTimeout(moveTimerRef.current); moveTimerRef.current = null; } return; }
+    if (!isOpen) {
+      setIsAdvancedOpen(false);
+      setIsSaving(false);
+      isSavingRef.current = false;
+      setIsMoveInProgress(false);
+      setMoveProgress(null);
+      setMoveError(null);
+      setShowCleanupConfirm(false);
+      setCleanupPreview(null);
+      setShowCompletedCleanupConfirm(false);
+      setCompletedCleanupPreview(null);
+      setCleanupResult(null);
+      setCompletedCleanupResult(null);
+      if (moveTimerRef.current) {
+        clearTimeout(moveTimerRef.current);
+        moveTimerRef.current = null;
+      }
+      return;
+    }
 
     setNotificationsEnabled(localStorage.getItem('notifications_enabled') !== 'false');
     setSaveError(null);
@@ -382,12 +401,37 @@ export function SettingsModal({
     void pollMoveStatus();
   };
 
+  const handleAskCleanup = async () => {
+    if (!window.pywebview?.api?.cleanup_old_sessions || isCleaningSession) return;
+    setIsCleaningSession(true);
+    setCleanupPreview(null);
+    try {
+      const res = await window.pywebview.api.cleanup_old_sessions(SESSION_CLEANUP_DAYS, true);
+      if (res?.ok) {
+        setCleanupPreview({
+          removed: res.removed ?? 0,
+          freed_bytes: res.freed_bytes ?? 0,
+          candidates: res.candidates ?? 0,
+          preserved_completed: res.preserved_completed ?? 0,
+          missing_completed_html: res.missing_completed_html ?? 0,
+        });
+        setShowCleanupConfirm(true);
+      } else {
+        appendConsole(`❌ Conteggio sbobine incomplete fallito: ${res?.error || 'errore sconosciuto'}`);
+      }
+    } catch (e: unknown) {
+      appendConsole(`❌ Conteggio sbobine incomplete fallito: ${getErrorMessage(e)}`);
+    }
+    setIsCleaningSession(false);
+  };
+
   const handleCleanupSessions = async () => {
     if (!window.pywebview?.api?.cleanup_old_sessions) return;
+    setShowCleanupConfirm(false);
     setIsCleaningSession(true);
     setCleanupResult(null);
     try {
-      const res = await window.pywebview.api.cleanup_old_sessions(SESSION_CLEANUP_DAYS);
+      const res = await window.pywebview.api.cleanup_old_sessions(SESSION_CLEANUP_DAYS, false);
       if (res?.ok) {
         setCleanupResult({
           removed: res.removed ?? 0,
@@ -884,114 +928,178 @@ export function SettingsModal({
 
                         {/* Sessioni salvate */}
                         <div className="pt-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                          <div className="flex items-center justify-between gap-3 mb-3">
+                          <div className="flex items-center gap-1.5 mb-3">
                             <h3 className="text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
                               <HardDrive className="w-3.5 h-3.5" />
                               Sessioni salvate
                             </h3>
-                            <button
-                              onClick={() => setShowCleanupConfirm(true)}
-                              disabled={isCleaningSession || isCleaningCompletedSessions || isLoadingSessionInfo}
-                              className="icon-button compact-icon-button disabled:opacity-50"
-                              title={`Elimina solo elaborazioni incomplete più vecchie di ${SESSION_CLEANUP_DAYS} giorni`}
-                              aria-label={`Elimina solo elaborazioni incomplete più vecchie di ${SESSION_CLEANUP_DAYS} giorni`}
-                            >
-                              {isCleaningSession ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                            </button>
                           </div>
-                          <div className="rounded-[10px] px-4 py-3 space-y-3" style={{ background: 'var(--card-queued-bg)', border: '1px solid var(--card-queued-border)' }}>
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={handleOpenSessionFolder}
-                                title="Apri cartella sessioni"
-                                className="icon-button modal-icon-button"
-                                style={{ width: 26, height: 26, borderRadius: 8 }}
-                              >
-                                <FolderOpen className="w-3.5 h-3.5" />
-                              </button>
-                              {sessionInfo !== null && (
-                                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                                  {sessionInfo.total_sessions} {sessionInfo.total_sessions === 1 ? 'sessione' : 'sessioni'}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs shrink-0" style={{ color: 'var(--text-muted)' }}>Cartella:</span>
-                              <span
-                                className="text-xs font-mono truncate flex-1"
-                                title={sessionInfo?.session_root ?? ''}
-                                style={{ color: 'var(--text-faint, var(--text-muted))', minWidth: 0 }}
-                              >
-                                {sessionInfo?.session_root || (isLoadingSessionInfo ? '…' : '—')}
-                              </span>
-                              {isMoveInProgress ? (
-                                <span className="text-xs shrink-0 flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                  {moveProgress && moveProgress.total > 0
-                                    ? `${moveProgress.moved}/${moveProgress.total}`
-                                    : 'Spostamento…'}
-                                </span>
-                              ) : (
-                                <button
-                                  onClick={() => void handleAskMoveFolder()}
-                                  disabled={isCleaningSession || isCleaningCompletedSessions || isLoadingSessionInfo || isMoveInProgress}
-                                  className="icon-button compact-icon-button shrink-0 disabled:opacity-50 flex items-center gap-1"
-                                  style={{ fontSize: '11px', padding: '2px 7px', height: 22, borderRadius: 6 }}
-                                  title="Sposta cartella sessioni"
-                                >
-                                  <ArrowRight className="w-3 h-3" />
-                                  Sposta…
-                                </button>
-                              )}
-                            </div>
-                            {moveError && (
-                              <p className="text-xs" style={{ color: 'var(--error-text)' }}>{moveError}</p>
-                            )}
-                            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                              Spazio occupato: <span style={{ color: 'var(--text-muted)' }}>{isLoadingSessionInfo ? 'Calcolo…' : sessionInfo !== null ? formatSize(sessionInfo.total_bytes) : '—'}</span>
-                            </p>
-                            {cleanupResult !== null && (
-                              <p className="text-xs" style={{ color: cleanupResult.removed > 0 ? 'var(--success-text)' : 'var(--text-muted)' }}>
-                                {cleanupResult.removed > 0
-                                  ? `Rimoss${cleanupResult.removed === 1 ? 'a' : 'e'} ${cleanupResult.removed} ${cleanupResult.removed === 1 ? 'elaborazione incompleta' : 'elaborazioni incomplete'}, liberati ${formatSize(cleanupResult.freed_bytes)}.`
-                                  : 'Nessuna elaborazione incompleta da eliminare.'}
-                              </p>
-                            )}
-                            {(cleanupResult?.preserved_completed ?? 0) > 0 && (
-                              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                                {cleanupResult?.preserved_completed} {cleanupResult?.preserved_completed === 1 ? 'sbobina completata preservata' : 'sbobine completate preservate'}.
-                              </p>
-                            )}
-                            {(cleanupResult?.missing_completed_html ?? 0) > 0 && (
-                              <p className="text-xs" style={{ color: 'var(--warning-text)' }}>
-                                {cleanupResult?.missing_completed_html} {cleanupResult?.missing_completed_html === 1 ? 'sessione completata senza HTML finale è stata trattata come incompleta' : 'sessioni completate senza HTML finale sono state trattate come incomplete'}.
-                              </p>
-                            )}
-                            <div className="flex items-center justify-between gap-3 rounded-[8px] px-3 py-2" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
-                              <div className="min-w-0">
-                                <p className="text-xs font-medium" style={{ color: 'var(--error-text)' }}>Elimina sbobine completate vecchie</p>
-                                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Azione separata e irreversibile: elimina anche le note finite.</p>
+                          <div className="rounded-[10px] px-4 py-3 space-y-4" style={{ background: 'var(--card-queued-bg)', border: '1px solid var(--card-queued-border)' }}>
+                            {/* Informazioni Cartella e Sessioni */}
+                            {/* Informazioni Cartella e Sessioni */}
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
+                                <FolderOpen className="w-4 h-4 shrink-0" />
+                                {sessionInfo !== null ? (
+                                  <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+                                    {sessionInfo.total_sessions} {sessionInfo.total_sessions === 1 ? 'sessione' : 'sessioni'}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+                                    {isLoadingSessionInfo ? 'Caricamento...' : 'Nessuna sessione'}
+                                  </span>
+                                )}
                               </div>
-                              <button
-                                onClick={() => void handleAskCompletedCleanup()}
-                                disabled={isCleaningSession || isCleaningCompletedSessions || isLoadingSessionInfo}
-                                className="icon-button compact-icon-button disabled:opacity-50 shrink-0"
-                                title={`Conta ed elimina sbobine completate più vecchie di ${SESSION_CLEANUP_DAYS} giorni`}
-                                aria-label={`Conta ed elimina sbobine completate più vecchie di ${SESSION_CLEANUP_DAYS} giorni`}
-                              >
-                                {isCleaningCompletedSessions ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                              </button>
+
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[11px]" style={{ color: 'var(--text-muted)', marginBottom: 2 }}>Percorso cartella:</p>
+                                  <p
+                                    onClick={handleOpenSessionFolder}
+                                    title="Apri cartella sessioni"
+                                    className="text-xs font-mono truncate cursor-pointer hover:underline"
+                                    style={{
+                                      color: 'var(--text-faint, var(--text-muted))',
+                                    }}
+                                    onMouseEnter={e => { (e.currentTarget as HTMLParagraphElement).style.color = 'var(--text-primary)'; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLParagraphElement).style.color = 'var(--text-faint, var(--text-muted))'; }}
+                                  >
+                                    {sessionInfo?.session_root || (isLoadingSessionInfo ? '…' : '—')}
+                                  </p>
+                                </div>
+                                <div className="shrink-0 pt-3">
+                                  {isMoveInProgress ? (
+                                    <span className="text-xs flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                      {moveProgress && moveProgress.total > 0
+                                        ? `${moveProgress.moved}/${moveProgress.total}`
+                                        : 'Spostamento…'}
+                                    </span>
+                                  ) : (
+                                    <button
+                                      onClick={() => void handleAskMoveFolder()}
+                                      disabled={isCleaningSession || isCleaningCompletedSessions || isLoadingSessionInfo || isMoveInProgress}
+                                      className="icon-button compact-icon-button disabled:opacity-50 flex items-center gap-1"
+                                      style={{ fontSize: '11px', padding: '2px 7px', height: 22, borderRadius: 6, width: 'auto' }}
+                                      title="Sposta cartella sessioni"
+                                    >
+                                      <ArrowRight className="w-3 h-3" />
+                                      Sposta…
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              {moveError && (
+                                <p className="text-xs" style={{ color: 'var(--error-text)' }}>{moveError}</p>
+                              )}
+
+                              <div className="text-xs pt-1" style={{ color: 'var(--text-muted)' }}>
+                                Spazio totale occupato:{" "}
+                                <span className="font-semibold ml-1" style={{ color: 'var(--text-primary)' }}>
+                                  {isLoadingSessionInfo ? 'Calcolo…' : sessionInfo !== null ? formatSize(sessionInfo.total_bytes) : '—'}
+                                </span>
+                              </div>
                             </div>
-                            {completedCleanupResult !== null && (
-                              <p className="text-xs" style={{ color: completedCleanupResult.removed > 0 ? 'var(--success-text)' : 'var(--text-muted)' }}>
-                                {completedCleanupResult.removed > 0
-                                  ? `Eliminat${completedCleanupResult.removed === 1 ? 'a' : 'e'} ${completedCleanupResult.removed} ${completedCleanupResult.removed === 1 ? 'sbobina completata' : 'sbobine completate'}, liberati ${formatSize(completedCleanupResult.freed_bytes)}.`
-                                  : 'Nessuna sbobina completata vecchia da eliminare.'}
-                              </p>
+
+                            {/* Separatore */}
+                            <div style={{ borderTop: '1px solid var(--border-subtle)', opacity: 0.6 }} />
+
+                            {/* Strumenti di Pulizia */}
+                            <div className="space-y-2.5">
+                              <h4 className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                                Strumenti di pulizia (più vecchie di {SESSION_CLEANUP_DAYS} giorni)
+                              </h4>
+
+                              {/* Pulizia Incomplete */}
+                              <div className="flex items-center justify-between gap-3 rounded-[8px] px-3 py-2" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>Pulizia elaborazioni incomplete</p>
+                                  <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)', lineHeight: '1.3' }}>
+                                    Rimuove solo le sessioni non terminate per liberare spazio. Le note completate non vengono toccate.
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={() => void handleAskCleanup()}
+                                  disabled={isCleaningSession || isCleaningCompletedSessions || isLoadingSessionInfo}
+                                  className="icon-button compact-icon-button disabled:opacity-50 shrink-0"
+                                  title={`Conta ed elimina elaborazioni incomplete più vecchie di ${SESSION_CLEANUP_DAYS} giorni`}
+                                  aria-label={`Conta ed elimina elaborazioni incomplete più vecchie di ${SESSION_CLEANUP_DAYS} giorni`}
+                                >
+                                  {isCleaningSession ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                </button>
+                              </div>
+
+                              {/* Pulizia Completate (Azione Irreversibile) */}
+                              <div
+                                className="flex items-center justify-between gap-3 rounded-[8px] px-3 py-2"
+                                style={{
+                                  background: 'var(--error-subtle)',
+                                  border: '1px solid var(--error-ring)',
+                                }}
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-medium" style={{ color: 'var(--error-text)' }}>Elimina sbobine completate vecchie</p>
+                                  <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)', lineHeight: '1.3' }}>
+                                    Azione separata e irreversibile: elimina anche le note finite.
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={() => void handleAskCompletedCleanup()}
+                                  disabled={isCleaningSession || isCleaningCompletedSessions || isLoadingSessionInfo}
+                                  className="icon-button compact-icon-button is-danger disabled:opacity-50 shrink-0"
+                                  style={{
+                                    borderColor: 'transparent',
+                                    background: 'transparent',
+                                  }}
+                                  onMouseEnter={e => {
+                                    const btn = e.currentTarget as HTMLButtonElement;
+                                    btn.style.borderColor = 'var(--error-ring)';
+                                    btn.style.background = 'var(--error-subtle)';
+                                  }}
+                                  onMouseLeave={e => {
+                                    const btn = e.currentTarget as HTMLButtonElement;
+                                    btn.style.borderColor = 'transparent';
+                                    btn.style.background = 'transparent';
+                                  }}
+                                  title={`Conta ed elimina sbobine completate più vecchie di ${SESSION_CLEANUP_DAYS} giorni`}
+                                  aria-label={`Conta ed elimina sbobine completate più vecchie di ${SESSION_CLEANUP_DAYS} giorni`}
+                                >
+                                  {isCleaningCompletedSessions ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Messaggi di feedback */}
+                            {(cleanupResult !== null || completedCleanupResult !== null) && (
+                              <div className="space-y-1.5 pt-1">
+                                {cleanupResult !== null && (
+                                  <>
+                                    <p className="text-xs" style={{ color: cleanupResult.removed > 0 ? 'var(--success-text)' : 'var(--text-muted)' }}>
+                                      {cleanupResult.removed > 0
+                                        ? `Rimoss${cleanupResult.removed === 1 ? 'a' : 'e'} ${cleanupResult.removed} ${cleanupResult.removed === 1 ? 'elaborazione incompleta' : 'elaborazioni incomplete'}, liberati ${formatSize(cleanupResult.freed_bytes)}.`
+                                        : 'Nessuna elaborazione incompleta da eliminare.'}
+                                    </p>
+                                    {(cleanupResult?.preserved_completed ?? 0) > 0 && (
+                                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                        {cleanupResult?.preserved_completed} {cleanupResult?.preserved_completed === 1 ? 'sbobina completata preservata' : 'sbobine completate preservate'}.
+                                      </p>
+                                    )}
+                                    {(cleanupResult?.missing_completed_html ?? 0) > 0 && (
+                                      <p className="text-xs" style={{ color: 'var(--warning-text)' }}>
+                                        {cleanupResult?.missing_completed_html} {cleanupResult?.missing_completed_html === 1 ? 'sessione completata senza HTML finale è stata trattata come incompleta' : 'sessioni completate senza HTML finale sono state trattate come incomplete'}.
+                                      </p>
+                                    )}
+                                  </>
+                                )}
+                                {completedCleanupResult !== null && (
+                                  <p className="text-xs" style={{ color: completedCleanupResult.removed > 0 ? 'var(--success-text)' : 'var(--text-muted)' }}>
+                                    {completedCleanupResult.removed > 0
+                                      ? `Eliminat${completedCleanupResult.removed === 1 ? 'a' : 'e'} ${completedCleanupResult.removed} ${completedCleanupResult.removed === 1 ? 'sbobina completata' : 'sbobine completate'}, liberati ${formatSize(completedCleanupResult.freed_bytes)}.`
+                                      : 'Nessuna sbobina completata vecchia da eliminare.'}
+                                  </p>
+                                )}
+                              </div>
                             )}
-                            <p className="text-xs" style={{ color: 'var(--text-faint, var(--text-muted))' }}>
-                              Ogni sessione conserva i dati di un'elaborazione. La pulizia normale elimina solo elaborazioni incomplete più vecchie di {SESSION_CLEANUP_DAYS} giorni e preserva le sbobine completate con HTML finale.
-                            </p>
                           </div>
                         </div>
 
@@ -1067,11 +1175,11 @@ export function SettingsModal({
     <ConfirmActionModal
       isOpen={showCleanupConfirm}
       title="Eliminare le elaborazioni incomplete vecchie?"
-      description={`Verranno eliminate definitivamente dal disco solo le elaborazioni incomplete più vecchie di ${SESSION_CLEANUP_DAYS} giorni. Le sbobine completate con HTML finale saranno preservate.`}
+      description={`Questa operazione elimina le elaborazioni incomplete più vecchie di ${SESSION_CLEANUP_DAYS} giorni. Sbobine interessate: ${cleanupPreview?.candidates ?? 0}. Spazio stimato: ${formatSize(cleanupPreview?.freed_bytes ?? 0)}. L'operazione è irreversibile.`}
       confirmLabel="Elimina incomplete"
       cancelLabel="Annulla"
       onClose={() => setShowCleanupConfirm(false)}
-      onConfirm={() => { setShowCleanupConfirm(false); void handleCleanupSessions(); }}
+      onConfirm={() => { void handleCleanupSessions(); }}
     />
     <ConfirmActionModal
       isOpen={showCompletedCleanupConfirm}

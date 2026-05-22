@@ -273,6 +273,7 @@ class ElSbobinatorApi:
         self._processing_thread: threading.Thread | None = None
         self._html_shell_cache: dict[str, tuple[str, str]] = {}
         self._resolved_path_cache: dict[str, str] = {}
+        self._resolved_cache_lock = threading.Lock()
         self._sessions_cache: dict | None = None
         self._sessions_cache_ts: float = 0.0
         self._sessions_cache_gen: int = 0
@@ -554,20 +555,21 @@ class ElSbobinatorApi:
         abs_dir = os.path.realpath(session_dir)
         prefix = abs_dir + os.sep
         evict_html_paths_under(prefix)
-        resolved_to_evict = [
-            key
-            for key, value in self._resolved_path_cache.items()
-            if value == abs_dir or str(value).startswith(prefix)
-        ]
-        for key in resolved_to_evict:
-            del self._resolved_path_cache[key]
-        shell_to_evict = [
-            key
-            for key in self._html_shell_cache
-            if key == abs_dir or str(key).startswith(prefix)
-        ]
-        for key in shell_to_evict:
-            del self._html_shell_cache[key]
+        with self._resolved_cache_lock:
+            resolved_to_evict = [
+                key
+                for key, value in self._resolved_path_cache.items()
+                if value == abs_dir or str(value).startswith(prefix)
+            ]
+            for key in resolved_to_evict:
+                del self._resolved_path_cache[key]
+            shell_to_evict = [
+                key
+                for key in self._html_shell_cache
+                if key == abs_dir or str(key).startswith(prefix)
+            ]
+            for key in shell_to_evict:
+                del self._html_shell_cache[key]
 
     def _resolve_retry_session(self, session_dir: str) -> tuple[str, str]:
         session_root = os.path.realpath(self._get_session_root())
@@ -910,11 +912,16 @@ class ElSbobinatorApi:
         return candidate
 
     def cleanup_old_sessions(
-        self, max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS
+        self,
+        max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS,
+        dry_run: bool = False,
     ) -> dict:
         """Delete incomplete session folders older than max_age_days days."""
         try:
-            result = cleanup_orphan_sessions(max(1, int(max_age_days)))
+            result = cleanup_orphan_sessions(
+                max(1, int(max_age_days)),
+                dry_run=bool(dry_run),
+            )
             if result["removed"] > 0:
                 with self._sessions_cache_lock:
                     self._sessions_cache = None
@@ -1711,7 +1718,8 @@ class ElSbobinatorApi:
         requested_real_path = real_path
         if not path_is_allowed or not os.path.isfile(real_path):
             _basename = os.path.basename(real_path)
-            cached_resolution = self._resolved_path_cache.get(requested_real_path)
+            with self._resolved_cache_lock:
+                cached_resolution = self._resolved_path_cache.get(requested_real_path)
             if cached_resolution and os.path.isfile(cached_resolution):
                 fallback = cached_resolution
             else:
@@ -1725,16 +1733,19 @@ class ElSbobinatorApi:
                         "ok": False,
                         "error": "Accesso negato: path fuori dai percorsi consentiti.",
                     }
-                self._resolved_path_cache[requested_real_path] = real_path
+                with self._resolved_cache_lock:
+                    self._resolved_path_cache[requested_real_path] = real_path
             else:
                 return {"ok": False, "error": "File non trovato."}
         else:
-            self._resolved_path_cache[requested_real_path] = real_path
+            with self._resolved_cache_lock:
+                self._resolved_path_cache[requested_real_path] = real_path
         try:
             content = read_html_file_content(real_path)
             shell = extract_html_shell(content)
             if shell is not None:
-                self._html_shell_cache[real_path] = shell
+                with self._resolved_cache_lock:
+                    self._html_shell_cache[real_path] = shell
             return {"ok": True, "content": content}
         except Exception as e:
             return {"ok": False, "error": redact_secrets(e)}
@@ -2114,7 +2125,8 @@ class ElSbobinatorApi:
             }
         if not path_is_allowed or not os.path.isfile(real_path):
             _basename = os.path.basename(real_path)
-            cached_resolution = self._resolved_path_cache.get(original_real_path)
+            with self._resolved_cache_lock:
+                cached_resolution = self._resolved_path_cache.get(original_real_path)
             if cached_resolution and os.path.isfile(cached_resolution):
                 fallback = cached_resolution
             else:
@@ -2128,13 +2140,15 @@ class ElSbobinatorApi:
                         "ok": False,
                         "error": "Accesso negato: path fuori dai percorsi consentiti.",
                     }
-                self._resolved_path_cache[original_real_path] = real_path
+                with self._resolved_cache_lock:
+                    self._resolved_path_cache[original_real_path] = real_path
             else:
                 return {"ok": False, "error": "File non trovato."}
         try:
-            shell = self._html_shell_cache.get(real_path) or self._html_shell_cache.get(
-                original_real_path
-            )
+            with self._resolved_cache_lock:
+                shell = self._html_shell_cache.get(
+                    real_path
+                ) or self._html_shell_cache.get(original_real_path)
             gen = int(generation) if generation is not None else None
             saved = save_html_body_content(
                 real_path, content, shell=shell, generation=gen
