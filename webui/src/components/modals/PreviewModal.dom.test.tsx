@@ -228,4 +228,49 @@ describe('PreviewModal', () => {
 
     expect(secondGeneration).toBeGreaterThan(firstGeneration);
   });
+
+  it('handles copy action, schedules a timeout to reset state, and clears it on unmount', async () => {
+    vi.useFakeTimers();
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: {
+        writeText: writeTextMock,
+      },
+      configurable: true,
+    });
+
+    const { unmount } = render(<PreviewModal {...baseProps} />);
+    const copyBtn = screen.getByTitle('Copia per Google Docs');
+    expect(copyBtn).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(copyBtn);
+    });
+
+    expect(screen.getByTitle('Copiato!')).toBeTruthy();
+
+    // Fast-forward 2 seconds
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(screen.queryByTitle('Copiato!')).toBeNull();
+    expect(screen.getByTitle('Copia per Google Docs')).toBeTruthy();
+
+    // Trigger copy again and unmount immediately to verify no state updates on unmounted component
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Copia per Google Docs'));
+    });
+    expect(screen.getByTitle('Copiato!')).toBeTruthy();
+
+    // Unmount
+    unmount();
+
+    // Fast-forward and verify no error/warning
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    vi.useRealTimers();
+  });
 });

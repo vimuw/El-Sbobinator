@@ -346,6 +346,7 @@ export function EditorFullPage({
                       initialPlaybackRate={previewInitAudio.playbackRate}
                       initialVolume={previewInitAudio.volume}
                       onStateChange={onAudioStateChange}
+                      onRelink={onRelink}
                     />
                   </Suspense>
                 ) : (

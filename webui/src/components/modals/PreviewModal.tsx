@@ -37,6 +37,7 @@ export function PreviewModal({
   const [relinkSuccess, setRelinkSuccess] = useState(false);
   const [isRelinking, setIsRelinking] = useState(false);
   const relinkTimerRef = useRef<number | null>(null);
+  const copiedTimerRef = useRef<number | null>(null);
   const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const getHtmlRef = useRef<(() => string) | null>(null);
   const isDirtyRef = useRef(false);
@@ -61,7 +62,10 @@ export function PreviewModal({
   }, [previewContent]);
 
   useEffect(() => {
-    return () => { if (relinkTimerRef.current) window.clearTimeout(relinkTimerRef.current); };
+    return () => {
+      if (relinkTimerRef.current) window.clearTimeout(relinkTimerRef.current);
+      if (copiedTimerRef.current) window.clearTimeout(copiedTimerRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -159,7 +163,8 @@ export function PreviewModal({
       await navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]);
     } catch (_) { navigator.clipboard.writeText(temp.textContent || temp.innerText || ''); }
     setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
+    if (copiedTimerRef.current) window.clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = window.setTimeout(() => setIsCopied(false), 2000);
   };
 
   const scrollToHeading = (heading: Heading) => {
@@ -265,6 +270,7 @@ export function PreviewModal({
                           initialPlaybackRate={previewInitAudio.playbackRate}
                           initialVolume={previewInitAudio.volume}
                           onStateChange={onAudioStateChange}
+                          onRelink={onRelink}
                         />
                       </Suspense>
                     ) : (
