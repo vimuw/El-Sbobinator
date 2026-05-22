@@ -541,9 +541,6 @@ def _process_phase1_transcription_impl(  # noqa: C901
                             success = True
                         runtime.progress(0.7 * chunk_idx / total_chunks)
                         _step_secs = max(0.0, time.monotonic() - float(chunk_step_t0))
-                        runtime.register_step_time(
-                            "chunks", _step_secs, done=chunk_idx, total=total_chunks
-                        )
                         record_step_metric(
                             session,
                             "chunks",

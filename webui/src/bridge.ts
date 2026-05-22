@@ -6,7 +6,6 @@ import type {
   ProcessDonePayload,
   ProcessingAction,
   SetCurrentFilePayload,
-  StepTimePayload,
   WorkDonePayload,
   WorkTotalsPayload,
 } from './appState';
@@ -117,7 +116,7 @@ export interface BridgeCallbacks {
   processDone: (data: ProcessDonePayload) => void;
   setWorkTotals: (data: WorkTotalsPayload) => void;
   updateWorkDone: (data: WorkDonePayload) => void;
-  registerStepTime: (data: StepTimePayload) => void;
+  registerStepTime: (...args: any[]) => void;
   setCurrentFile: (data: SetCurrentFilePayload) => void;
   fileDone: (data: FileDonePayload) => void;
   fileFailed: (data: FileFailedPayload) => void;
@@ -211,7 +210,7 @@ export function createBridge(options: {
     },
     setWorkTotals: data => dispatch({ type: 'bridge/set_work_totals', data }),
     updateWorkDone: data => dispatch({ type: 'bridge/update_work_done', data }),
-    registerStepTime: data => dispatch({ type: 'bridge/register_step_time', data }),
+    registerStepTime: () => {},
     setCurrentFile: data => { onBatchStart(); dispatch({ type: 'bridge/set_current_file', data }); },
     fileDone: data => {
       dispatch({ type: 'bridge/file_done', data });

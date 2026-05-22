@@ -14,12 +14,11 @@ import {
   Pause,
   Sparkles,
   Timer,
-  Hourglass,
   WifiOff,
   XCircle,
 } from 'lucide-react';
 import { shortModelName } from '../utils';
-import type { AppStatus, StepMetricEntry } from '../appState';
+import type { AppStatus } from '../appState';
 
 interface ProcessingStatusBannerProps {
   appState: AppStatus;
@@ -28,7 +27,6 @@ interface ProcessingStatusBannerProps {
   activeProgress: number;
   workDone: { chunks: number; macro: number };
   workTotals: { chunks: number; macro: number };
-  stepMetrics?: { chunks: StepMetricEntry | null; macro: StepMetricEntry | null };
   currentFileIndex: number;
   currentBatchTotal: number;
   currentFileName?: string;
@@ -201,7 +199,6 @@ function getProgressLabel(
   currentPhase: string,
   workDone: { chunks: number; macro: number },
   workTotals: { chunks: number; macro: number },
-  stepMetrics?: { chunks: StepMetricEntry | null; macro: StepMetricEntry | null },
 ): string | null {
   const phase = currentPhase.trim();
 
@@ -218,49 +215,13 @@ function getProgressLabel(
   const macroTotalNum = macroInfo ? macroInfo.total : workTotals.macro;
 
   if (phase.startsWith('Fase 2/3') && macroTotalNum > 0) {
-    const base = `Sezione ${macroCurrentNum} di ${macroTotalNum}`;
-    // Append inline remaining estimate when macro stepMetrics are available
-    if (stepMetrics?.macro && workDone.macro < macroTotalNum) {
-      const remaining = macroTotalNum - workDone.macro;
-      const etaSecs = Math.round(remaining * stepMetrics.macro.avgSeconds);
-      if (etaSecs >= 10) {
-        const etaStr = etaSecs < 60 ? `${etaSecs}s` : `${Math.round(etaSecs / 60)}m`;
-        return `${base} — circa ${etaStr} rimanenti`;
-      }
-    }
-    return base;
+    return `Sezione ${macroCurrentNum} di ${macroTotalNum}`;
   }
 
   return null;
 }
 
-function computeEta(
-  stepMetrics: { chunks: StepMetricEntry | null; macro: StepMetricEntry | null } | undefined,
-  workDone: { chunks: number; macro: number },
-  workTotals: { chunks: number; macro: number },
-  currentPhase: string,
-): string | null {
-  if (!stepMetrics) return null;
-  const phase = currentPhase.trim();
-  let metric: StepMetricEntry | null = null;
-  let done = 0;
-  let total = 0;
-  if (phase.startsWith('Fase 1/3') && stepMetrics.chunks) {
-    metric = stepMetrics.chunks;
-    done = workDone.chunks;
-    total = workTotals.chunks;
-  } else if (phase.startsWith('Fase 2/3') && stepMetrics.macro) {
-    // ETA for Fase 2/3 is embedded inline in the progress label — skip separate chip
-    return null;
-  }
-  if (!metric || total <= 0 || done >= total) return null;
-  const remaining = total - done;
-  const etaSecs = Math.round(remaining * metric.avgSeconds);
-  if (etaSecs < 10) return null;
-  if (etaSecs < 60) return `~${etaSecs}s`;
-  const mins = Math.round(etaSecs / 60);
-  return `~${mins}m`;
-}
+
 
 function formatElapsed(secs: number): string {
   if (secs < 60) return `Da ${secs}s`;
@@ -347,7 +308,6 @@ export function ProcessingStatusBanner({
   activeProgress,
   workDone,
   workTotals,
-  stepMetrics,
   currentFileIndex,
   currentBatchTotal,
   currentFileName,
@@ -362,7 +322,7 @@ export function ProcessingStatusBanner({
   const phaseForMeta = isWaiting ? lastNormalPhaseRef.current : currentPhase;
 
   const stepperState = getStepperState(phaseForMeta);
-  const progressLabel = getProgressLabel(phaseForMeta, workDone, workTotals, stepMetrics);
+  const progressLabel = getProgressLabel(phaseForMeta, workDone, workTotals);
 
   const [elapsedSecs, setElapsedSecs] = useState(0);
 
@@ -410,13 +370,8 @@ export function ProcessingStatusBanner({
   if (startedAt && elapsedSecs > 0 && kind !== 'success') {
     metaChips.push({ icon: <Timer className="w-3 h-3" />, label: formatElapsed(elapsedSecs) });
   }
-  const etaLabel = kind === 'normal' ? computeEta(stepMetrics, workDone, workTotals, phaseForMeta) : null;
-
   if (progressLabel) {
     metaChips.push({ icon: <Layers className="w-3 h-3" />, label: progressLabel });
-  }
-  if (etaLabel) {
-    metaChips.push({ icon: <Hourglass className="w-3 h-3" />, label: `ETA ${etaLabel}` });
   }
 
   return (

@@ -11,7 +11,6 @@ export type FileItem = {
   phaseText?: string;
   errorText?: string;
   errorDetail?: string;
-  eta?: string;
   path?: string;
   outputHtml?: string;
   outputDir?: string;
@@ -96,18 +95,6 @@ export type WorkDonePayload = {
   total?: number | null;
 };
 
-export type StepTimePayload = {
-  kind: 'chunks' | 'macro';
-  seconds: number;
-  done?: number | null;
-  total?: number | null;
-};
-
-export type StepMetricEntry = {
-  avgSeconds: number;
-  done: number;
-  total: number;
-};
 
 export type ProcessingState = {
   files: FileItem[];
@@ -125,10 +112,6 @@ export type ProcessingState = {
   workDone: {
     chunks: number;
     macro: number;
-  };
-  stepMetrics: {
-    chunks: StepMetricEntry | null;
-    macro: StepMetricEntry | null;
   };
 };
 
@@ -149,7 +132,6 @@ export type ProcessingAction =
   | { type: 'bridge/process_done'; data: ProcessDonePayload }
   | { type: 'bridge/set_work_totals'; data: WorkTotalsPayload }
   | { type: 'bridge/update_work_done'; data: WorkDonePayload }
-  | { type: 'bridge/register_step_time'; data: StepTimePayload }
   | { type: 'bridge/set_current_file'; data: SetCurrentFilePayload }
   | { type: 'bridge/file_done'; data: FileDonePayload }
   | { type: 'bridge/file_failed'; data: FileFailedPayload };
@@ -165,7 +147,6 @@ export const initialProcessingState: ProcessingState = {
   currentBatchTotal: 0,
   workTotals: { chunks: 0, macro: 0 },
   workDone: { chunks: 0, macro: 0 },
-  stepMetrics: { chunks: null, macro: null },
 };
 
 export function processingReducer(state: ProcessingState, action: ProcessingAction): ProcessingState {
@@ -273,7 +254,6 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         currentBatchTotal: 0,
         workTotals: action.data?.cancelled ? { chunks: 0, macro: 0 } : state.workTotals,
         workDone: action.data?.cancelled ? { chunks: 0, macro: 0 } : state.workDone,
-        stepMetrics: action.data?.cancelled ? { chunks: null, macro: null } : state.stepMetrics,
         files: action.data?.cancelled
           ? state.files.map(file =>
               file.status === 'processing'
@@ -302,21 +282,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         },
       };
     }
-    case 'bridge/register_step_time': {
-      const { kind, seconds, done, total } = action.data;
-      const prev = state.stepMetrics[kind];
-      const doneVal = done ?? (prev ? prev.done + 1 : 1);
-      const totalVal = total ?? (prev?.total ?? 0);
-      const prevAvg = prev?.avgSeconds ?? seconds;
-      const newAvg = prev ? 0.4 * seconds + 0.6 * prevAvg : seconds;
-      return {
-        ...state,
-        stepMetrics: {
-          ...state.stepMetrics,
-          [kind]: { avgSeconds: newAvg, done: doneVal, total: totalVal },
-        },
-      };
-    }
+
     case 'bridge/set_current_file':
       return {
         ...state,
@@ -327,7 +293,6 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         activeProgress: 0,
         currentFileIndex: action.data.index,
         currentBatchTotal: action.data.total,
-        stepMetrics: { chunks: null, macro: null },
         files: state.files.map(file =>
           file.id === action.data.id
             ? { ...file, status: 'processing', progress: 0, phase: 1, phaseText: undefined, errorText: undefined, errorDetail: undefined, startedAt: Date.now() }

@@ -16,7 +16,6 @@ import webview
 
 from el_sbobinator.bridge.bridge_dispatcher import _BridgeDispatcher
 from el_sbobinator.bridge.bridge_types import (
-    StepTimePayload,
     WorkDonePayload,
     WorkTotalsPayload,
 )
@@ -75,11 +74,6 @@ class PipelineAdapter:
         self.last_run_error: str | None = None
         self.last_run_error_detail: str | None = None
         self.effective_api_key: str | None = None
-
-        # For ETA
-        self._run_started_monotonic: float | None = None
-        self._eta_ema_seconds: float | None = None
-        self._step_times: dict = {}
 
         # Pending UI-answer callbacks (written by pipeline thread, read by UI thread)
         self._regenerate_callback = None
@@ -187,16 +181,7 @@ class PipelineAdapter:
         done: int | None = None,
         total: int | None = None,
     ):
-        # Store for internal ETA calculations and push to frontend
-        with self._lock:
-            self._step_times.setdefault(kind, []).append(seconds)
-        payload: StepTimePayload = {
-            "kind": cast(Literal["chunks", "macro"], kind),
-            "seconds": seconds,
-            "done": done,
-            "total": total,
-        }
-        self._emit_js("registerStepTime", payload, batched=True)
+        pass
 
     def ask_regenerate(
         self, filename: str, callback, mode: str = "resume", session_dir: str = ""

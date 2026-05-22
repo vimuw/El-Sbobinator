@@ -381,26 +381,6 @@ describe('processingReducer', () => {
     expect(state.files[0].errorText).toBe('Elaborazione non completata.');
   });
 
-  it('bridge/register_step_time initialises stepMetrics for first call', () => {
-    const state = processingReducer(
-      initialProcessingState,
-      { type: 'bridge/register_step_time', data: { kind: 'chunks', seconds: 5 } },
-    );
-    expect(state.stepMetrics.chunks?.avgSeconds).toBe(5);
-    expect(state.stepMetrics.chunks?.done).toBe(1);
-  });
-
-  it('bridge/register_step_time uses EMA on subsequent calls', () => {
-    const withPrev = {
-      ...initialProcessingState,
-      stepMetrics: { chunks: { avgSeconds: 10, done: 1, total: 5 }, macro: null },
-    };
-    const state = processingReducer(
-      withPrev,
-      { type: 'bridge/register_step_time', data: { kind: 'chunks', seconds: 4 } },
-    );
-    expect(state.stepMetrics.chunks?.avgSeconds).toBeCloseTo(0.4 * 4 + 0.6 * 10);
-  });
 
   it('bridge/file_done does not alter non-matching files', () => {
     const files = [makeFile({ id: 'target' }), makeFile({ id: 'other' })];

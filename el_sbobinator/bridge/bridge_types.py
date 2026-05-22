@@ -71,13 +71,6 @@ class WorkDonePayload(TypedDict, total=False):
     total: int | None
 
 
-class StepTimePayload(TypedDict, total=False):
-    kind: Literal["chunks", "macro"]
-    seconds: float
-    done: int | None
-    total: int | None
-
-
 class ValidationCheck(TypedDict):
     id: str
     label: str

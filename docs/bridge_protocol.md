@@ -49,7 +49,7 @@ Source: `_BridgeDispatcher` + `PipelineAdapter` in `el_sbobinator/app_webview.py
 | `updateModel` | yes | `string` | `PipelineAdapter.update_model` | Currently active Gemini model id. |
 | `setWorkTotals` | yes | `{chunks?, macro?}` — each `int \| null` | `PipelineAdapter.set_work_totals` | Total items per kind; used for the step counters and ETA. |
 | `updateWorkDone` | yes | `{kind: "chunks"\|"macro", done: int, total: int\|null}` | `PipelineAdapter.update_work_done` | Incremental counters per phase. |
-| `registerStepTime` | yes | `{kind, seconds, done?, total?}` | `PipelineAdapter.register_step_time` | Elapsed time for a single step; drives the EMA-based ETA. |
+| `registerStepTime` (Deprecated/Unused) | yes | `{kind, seconds, done?, total?}` | `PipelineAdapter.register_step_time` | [DEPRECATED/UNUSED] Formerly used to track elapsed time for a single step to drive the EMA-based ETA. |
 | `setCurrentFile` | no | `{index: int, id: string, total: int}` | Inside `ElSbobinatorApi.start_processing._run` | New file in the batch has started. |
 | `fileDone` | no | `{index, id, output_html, output_dir, primary_model?, effective_model?}` | `ElSbobinatorApi.start_processing._run` | File completed successfully. |
 | `fileFailed` | no | `{index, id, error, error_detail?}` | `ElSbobinatorApi.start_processing._run` | File failed; `error` may be a `last_error` key mapped via `utils.errorLabel`; `error_detail` carries optional session detail such as `api_key_prompt_timeout`. |
@@ -133,7 +133,7 @@ File: `el_sbobinator/pipeline_hooks.py`. The pipeline never touches `PipelineAda
 | `update_model(model)` | `update_model(model)` | `pipeline.py` (model fallback) |
 | `set_work_totals(chunks_total=None, macro_total=None)` | `set_work_totals(...)` | `phase1_service.py`, `revision_service.py` |
 | `update_work_done(kind, done, total=None)` | `update_work_done(...)` | `phase1_service.py`, `revision_service.py` |
-| `register_step_time(kind, seconds, done=None, total=None)` | `register_step_time(...)` | `phase1_service.py`, `revision_service.py` |
+| `register_step_time(kind, seconds, done=None, total=None)` (Deprecated/Unused) | `register_step_time(...)` | `phase1_service.py`, `revision_service.py` (calculations removed) |
 | `output_html(path, output_dir=None)` | `imposta_output_html(path, output_dir)` | `pipeline.py` (final export) |
 | `process_done()` | `processo_terminato()` | `pipeline.py` (finally block) |
 | `set_run_result(status, error=None)` | `set_run_result(...)` or `last_run_{status,error}` attributes | `pipeline.py` (finally block) |

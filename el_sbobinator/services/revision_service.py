@@ -212,9 +212,6 @@ def process_macro_revision_phase(  # noqa: C901
             success = True
             runtime.progress(0.7 + 0.2 * (revised_done / max(1, macro_total)))
             _macro_secs = max(0.0, time.monotonic() - float(step_t0))
-            runtime.register_step_time(
-                "macro", _macro_secs, done=revised_done, total=macro_total
-            )
             record_step_metric(
                 session, "macro", _macro_secs, done=revised_done, total=macro_total
             )
@@ -241,9 +238,6 @@ def process_macro_revision_phase(  # noqa: C901
             _atomic_write_text(raw_path, block_src + "\n")
             pending_retry.append((index, raw_path, rev_path))
             _macro_secs = max(0.0, time.monotonic() - float(step_t0))
-            runtime.register_step_time(
-                "macro", _macro_secs, done=revised_done, total=macro_total
-            )
             record_step_metric(
                 session, "macro", _macro_secs, done=revised_done, total=macro_total
             )
@@ -359,9 +353,6 @@ def process_macro_revision_phase(  # noqa: C901
                 )
                 save_session()
                 _macro_secs = max(0.0, time.monotonic() - float(step_t0))
-                runtime.register_step_time(
-                    "macro", _macro_secs, done=revised_done, total=macro_total
-                )
                 record_step_metric(
                     session, "macro", _macro_secs, done=revised_done, total=macro_total
                 )
@@ -407,9 +398,6 @@ def process_macro_revision_phase(  # noqa: C901
                 )
                 save_session()
                 _macro_secs = max(0.0, time.monotonic() - float(step_t0))
-                runtime.register_step_time(
-                    "macro", _macro_secs, done=revised_done, total=macro_total
-                )
                 record_step_metric(
                     session, "macro", _macro_secs, done=revised_done, total=macro_total
                 )
@@ -529,7 +517,6 @@ def retry_failed_revision_blocks(
             )
         except Exception:
             pass
-        step_t0 = time.monotonic()
         log.info(
             "Retry blocco non revisionato %d/%d.",
             index,
@@ -579,16 +566,6 @@ def retry_failed_revision_blocks(
             except Exception:
                 pass
             retried_blocks.append(index)
-            _macro_secs = max(0.0, time.monotonic() - float(step_t0))
-            try:
-                runtime.register_step_time(
-                    "macro",
-                    _macro_secs,
-                    done=max(0, macro_total - len(failed_blocks) + len(retried_blocks)),
-                    total=macro_total,
-                )
-            except Exception:
-                pass
             log.info(
                 "Blocco %d: revisione recuperata.",
                 index,

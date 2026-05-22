@@ -123,7 +123,7 @@ function formatUpdateInstallStatus(state: UpdateInstallState): string {
 }
 
 export default function App() {
-  const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone, stepMetrics }, dispatch] = useReducer(processingReducer, initialProcessingState);
+  const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone }, dispatch] = useReducer(processingReducer, initialProcessingState);
 
   const { consoleLogs, appendConsole } = useConsole();
   const { themeMode, setThemeMode } = useTheme();
@@ -1197,7 +1197,6 @@ export default function App() {
                             activeProgress={completionFlash ? 100 : activeProgress}
                             workTotals={workTotals}
                             workDone={workDone}
-                            stepMetrics={stepMetrics}
                             currentFileIndex={batchCompleted}
                             currentBatchTotal={batchTotal}
                             currentFileName={bannerFile?.name}
