@@ -526,3 +526,226 @@ describe('App ? low disk start warning', () => {
     expect(startProcessing.mock.calls[1][5]).toBe(true);
   });
 });
+
+describe('App — executeRetryFromArchive concurrency protection', () => {
+  beforeEach(() => {
+    vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
+  });
+
+  it('guards against concurrent retry triggers in executeRetryFromArchive', async () => {
+    const testSession = {
+      session_dir: 'C:\\sessions\\session-1',
+      name: 'Lezione test',
+      html_path: '', // Empty string to prevent filtering from Archive list
+      input_path: 'C:\\audio\\test-session.mp3',
+      input_size: 1000,
+      duration_sec: 120,
+      completed_at_iso: '2026-05-22T23:54:52+02:00',
+      effective_model: 'gemini-2.5-flash',
+      revision_failed_blocks: [1, 2],
+    };
+
+    const retryFailed = vi.fn().mockImplementation(() => new Promise(() => {}));
+
+    setPywebview({
+      get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [testSession] }),
+      get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
+      retry_failed_revision_blocks: retryFailed,
+    });
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    // Switch to Archive page (second sidebar button)
+    await act(async () => {
+      const navButtons = document.querySelectorAll('.sidebar-nav-item');
+      fireEvent.click(navButtons[1]);
+    });
+
+    // Verify session card is shown on Archive page
+    expect(await screen.findByText('Lezione test')).toBeTruthy();
+
+    // Click "Riprova revisione" button on the session card
+    await act(async () => {
+      fireEvent.click(screen.getByText('Riprova revisione'));
+    });
+
+    // Check that confirm modal is shown
+    expect(await screen.findByRole('heading', { name: 'Ripristinare e riprovare la revisione?' })).toBeTruthy();
+
+    // Click "Riprova revisione" in the confirm modal
+    await act(async () => {
+      const confirmButton = document.querySelector('.modal-action-button.is-danger');
+      if (confirmButton) fireEvent.click(confirmButton);
+    });
+
+    // Verify "Riprovo…" spinner/text is shown (meaning the file item was added and isRetryingBlocks is true)
+    expect(await screen.findByText('Riprovo…')).toBeTruthy();
+
+    // Now go back to Archive page to trigger second retry
+    await act(async () => {
+      const navButtons = document.querySelectorAll('.sidebar-nav-item');
+      fireEvent.click(navButtons[1]);
+    });
+
+    // Click "Riprova revisione" on the card again
+    await act(async () => {
+      fireEvent.click(screen.getByText('Riprova revisione'));
+    });
+
+    // Confirm dialog shown again
+    expect(await screen.findByRole('heading', { name: 'Ripristinare e riprovare la revisione?' })).toBeTruthy();
+
+    // Click "Riprova revisione" in the confirm modal again
+    await act(async () => {
+      const confirmButton = document.querySelector('.modal-action-button.is-danger');
+      if (confirmButton) fireEvent.click(confirmButton);
+    });
+
+    // This will call executeRetryFromArchive again while the first one is still running.
+    // Let's verify that the toast warning "Retry già in corso per questa sessione." is displayed!
+    expect(await screen.findByText('Retry già in corso per questa sessione.')).toBeTruthy();
+  });
+
+  it('displays the general failure toast when retry fails with general error', async () => {
+    const testSession = {
+      session_dir: 'C:\\sessions\\session-2',
+      name: 'Lezione errore generale',
+      html_path: '',
+      input_path: 'C:\\audio\\error-session.mp3',
+      input_size: 1000,
+      duration_sec: 120,
+      completed_at_iso: '2026-05-22T23:54:52+02:00',
+      effective_model: 'gemini-2.5-flash',
+      revision_failed_blocks: [1],
+    };
+
+    const retryFailed = vi.fn().mockResolvedValue({
+      ok: false,
+      error: 'API key mancante sul disco',
+    });
+
+    setPywebview({
+      get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [testSession] }),
+      get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
+      retry_failed_revision_blocks: retryFailed,
+    });
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    // Switch to Archive page (second sidebar button)
+    await act(async () => {
+      const navButtons = document.querySelectorAll('.sidebar-nav-item');
+      fireEvent.click(navButtons[1]);
+    });
+
+    // Verify session card is shown
+    expect(await screen.findByText('Lezione errore generale')).toBeTruthy();
+
+    // Click "Riprova revisione" button
+    await act(async () => {
+      fireEvent.click(screen.getByText('Riprova revisione'));
+    });
+
+    // Confirm dialog shown
+    expect(await screen.findByRole('heading', { name: 'Ripristinare e riprovare la revisione?' })).toBeTruthy();
+
+    // Click "Riprova revisione" in the confirm modal
+    await act(async () => {
+      const confirmButton = document.querySelector('.modal-action-button.is-danger');
+      if (confirmButton) fireEvent.click(confirmButton);
+    });
+
+    // Verify "API key mancante sul disco" toast is displayed!
+    expect(await screen.findByText('API key mancante sul disco')).toBeTruthy();
+  });
+
+  it('updates isRetryingBlocks and guards against concurrent retries when Toast "Riprova" is clicked', async () => {
+    const testSession = {
+      session_dir: 'C:\\sessions\\session-3',
+      name: 'Lezione avvisi toast',
+      html_path: '',
+      input_path: 'C:\\audio\\toast-session.mp3',
+      input_size: 1000,
+      duration_sec: 120,
+      completed_at_iso: '2026-05-22T23:54:52+02:00',
+      effective_model: 'gemini-2.5-flash',
+      revision_failed_blocks: [1, 2, 3],
+    };
+
+    const retryFailed = vi.fn().mockImplementation(() => new Promise(() => {}));
+
+    setPywebview({
+      get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [testSession] }),
+      get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
+      retry_failed_revision_blocks: retryFailed,
+    });
+
+    vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
+      React.useEffect(() => {
+        dispatch({
+          type: 'queue/add',
+          files: [{
+            id: 'file-toast-1',
+            name: 'Lezione avvisi toast',
+            size: 1000,
+            duration: 120,
+            path: 'C:\\audio\\toast-session.mp3',
+            status: 'done',
+            progress: 100,
+            phase: 3,
+            outputDir: 'C:\\sessions\\session-3',
+            outputHtml: 'C:\\sessions\\session-3\\toast-session.html',
+            completionStatus: 'completed_with_warnings',
+            revisionFailedBlocks: [1, 2, 3],
+          }],
+        });
+      }, [dispatch]);
+    });
+
+    let bridgeCallbacks: any = {};
+    vi.mocked(useBridgeCallbacks).mockImplementation((options) => {
+      bridgeCallbacks = {
+        onFileDone: (data: any) => options.onRevisionWarning?.(data),
+      };
+      return undefined;
+    });
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    // Verify file card is rendered in the queue
+    expect(await screen.findByText('Lezione avvisi toast')).toBeTruthy();
+
+    // Trigger the fileDone bridge event to show the warning toast
+    await act(async () => {
+      bridgeCallbacks.onFileDone?.({
+        index: 0,
+        id: 'file-toast-1',
+        output_html: 'C:\\sessions\\session-3\\toast-session.html',
+        output_dir: 'C:\\sessions\\session-3',
+        revision_failed_blocks: [1, 2, 3],
+        completion_status: 'completed_with_warnings',
+      });
+    });
+
+    // Check that warning toast is displayed
+    expect(await screen.findByText(/sezioni sono state incluse/i)).toBeTruthy();
+
+    // Click "Riprova" action button on the toast
+    await act(async () => {
+      const riprovaToastBtn = screen.getByText('Riprova');
+      fireEvent.click(riprovaToastBtn);
+    });
+
+    // The toast should show loading "Riprovo..."
+    expect(await screen.findByText('Riprovo...')).toBeTruthy();
+
+    // The queue card should now show loading/retrying spinner or disabled state
+    expect(await screen.findByText('Riprovo…')).toBeTruthy();
+  });
+});

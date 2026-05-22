@@ -22,6 +22,7 @@ export type FileItem = {
   allowCompletedDestroy?: boolean;
   completionStatus?: 'completed' | 'completed_with_warnings';
   revisionFailedBlocks?: number[];
+  isRetryingBlocks?: boolean;
 };
 
 
@@ -126,6 +127,7 @@ export type ProcessingAction =
   | { type: 'queue/retry_failed' }
   | { type: 'queue/retry_one'; id: string }
   | { type: 'queue/update_revision_failed_blocks'; fileId?: string; sessionDir: string; blocks: number[]; htmlPath?: string; effectiveModel?: string }
+  | { type: 'queue/set_retrying_blocks'; id: string; value: boolean }
   | { type: 'queue/clear_all' }
   | { type: 'app/set_status'; status: AppStatus }
   | { type: 'bridge/update_progress'; value: number }
@@ -224,6 +226,19 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
           completionStatus: action.blocks.length > 0 ? ('completed_with_warnings' as const) : ('completed' as const),
           outputHtml: action.htmlPath ?? file.outputHtml,
           effectiveModel: action.effectiveModel ?? file.effectiveModel,
+        };
+      });
+      if (!changed) return state;
+      return { ...state, structuralVersion: state.structuralVersion + 1, files };
+    }
+    case 'queue/set_retrying_blocks': {
+      let changed = false;
+      const files = state.files.map(file => {
+        if (file.id !== action.id) return file;
+        changed = true;
+        return {
+          ...file,
+          isRetryingBlocks: action.value,
         };
       });
       if (!changed) return state;

@@ -207,12 +207,13 @@ interface CompletedFileCardProps {
 function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFile, onRetryFailedRevisionBlocks, currentFolder }: CompletedFileCardProps) {
   const isClickable = Boolean(file.outputHtml);
   const [isRetryingBlocks, setIsRetryingBlocks] = React.useState(false);
+  const isRetrying = file.isRetryingBlocks || isRetryingBlocks;
   const failedBlockCount = file.revisionFailedBlocks?.length ?? 0;
   const hasRevisionWarnings = file.completionStatus === 'completed_with_warnings' || failedBlockCount > 0;
   const canRetryBlocks = failedBlockCount > 0 && Boolean(file.outputDir) && Boolean(onRetryFailedRevisionBlocks);
   const handleRetryBlocks = async (event: React.MouseEvent) => {
     event.stopPropagation();
-    if (!canRetryBlocks || !file.outputDir || isRetryingBlocks) return;
+    if (!canRetryBlocks || !file.outputDir || isRetrying) return;
     setIsRetryingBlocks(true);
     try {
       await onRetryFailedRevisionBlocks?.(file.outputDir, file.id);
@@ -300,13 +301,13 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
                     <button
                       type="button"
                       onClick={handleRetryBlocks}
-                      disabled={isRetryingBlocks}
+                      disabled={isRetrying}
                       className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full transition-opacity"
-                      style={{ color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', border: '1px solid var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
+                      style={{ color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', border: '1px solid var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetrying ? 0.65 : 1 }}
                       title="Riprova solo i blocchi inclusi senza revisione"
                     >
-                      <RotateCcw className={`w-2.5 h-2.5 ${isRetryingBlocks ? 'animate-spin' : ''}`} />
-                      {isRetryingBlocks ? 'Riprovo…' : 'Riprova revisione'}
+                      <RotateCcw className={`w-2.5 h-2.5 ${isRetrying ? 'animate-spin' : ''}`} />
+                      {isRetrying ? 'Riprovo…' : 'Riprova revisione'}
                     </button>
                   )}
                 </>

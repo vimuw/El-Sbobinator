@@ -71,7 +71,8 @@ type ConfirmActionState =
   | { type: 'clear-completed'; count: number }
   | { type: 'clear-all' }
   | { type: 'low-disk-warning'; warning: LowDiskWarning }
-  | { type: 'delete-archive-session'; sessionDir: string; name: string };
+  | { type: 'delete-archive-session'; sessionDir: string; name: string }
+  | { type: 'retry-archive-session'; session: ArchiveSession };
 
 type PendingArchiveReplacement = {
   fileName: string;
@@ -228,50 +229,72 @@ export default function App() {
 
   const handleRetryFailedRevisionBlocks = useCallback(async (sessionDir: string, _fileId?: string) => {
     if (!sessionDir) throw new Error('Sessione non disponibile.');
-    const res = await window.pywebview?.api?.retry_failed_revision_blocks?.(sessionDir);
-    if (!res?.ok) {
-      if (res?.conflict) {
-        showToast('La sbobina è stata modificata: retry annullato per evitare sovrascritture.', 'warning', { durationMs: 9000 });
-      } else if (res?.cancelled) {
-        showToast('Retry annullato.', 'info');
-      } else if (res?.quota_exhausted) {
-        showToast('Quota giornaliera esaurita: riprova domani.', 'warning', { durationMs: 9000 });
+    if (!_fileId) {
+      const session = archiveSessionsRef.current.find(s => normalizeSessionDir(s.session_dir) === normalizeSessionDir(sessionDir));
+      if (session) {
+        setConfirmAction({ type: 'retry-archive-session', session });
       }
-      throw new Error(res?.error ?? 'Retry non riuscito.');
+      return;
     }
-    const normalizedSessionDir = res.session_dir ?? sessionDir;
-    const remaining = Array.isArray(res.remaining_failed_blocks) ? res.remaining_failed_blocks : [];
-    dispatch({
-      type: 'queue/update_revision_failed_blocks',
-      fileId: _fileId,
-      sessionDir: normalizedSessionDir,
-      blocks: remaining,
-      htmlPath: res.html_path,
-      effectiveModel: res.effective_model,
-    });
-    setArchiveSessions(prev => prev.map(session =>
-      normalizeSessionDir(session.session_dir) === normalizeSessionDir(normalizedSessionDir)
-        ? {
-            ...session,
-            html_path: res.html_path ?? session.html_path,
-            effective_model: res.effective_model ?? session.effective_model,
-            completion_status: remaining.length > 0 ? 'completed_with_warnings' : 'completed',
-            revision_failed_blocks: remaining,
-          }
-        : session,
-    ));
-    if (remaining.length > 0) {
-      if (res.cancelled) {
-        showToast(`Retry annullato: ${remaining.length} ${remaining.length === 1 ? 'blocco resta' : 'blocchi restano'} non revisionato.`, 'warning');
-      } else if (res.quota_exhausted) {
-        showToast(`Quota giornaliera esaurita: ${remaining.length} ${remaining.length === 1 ? 'blocco resta' : 'blocchi restano'} non revisionato. Riprova domani.`, 'warning', { durationMs: 9000 });
+
+    const existing = filesRef.current.find(f => f.id === _fileId);
+    if (existing?.isRetryingBlocks) {
+      showToast('Retry già in corso per questa sessione.', 'warning');
+      return;
+    }
+
+    dispatch({ type: 'queue/set_retrying_blocks', id: _fileId, value: true });
+    try {
+      const res = await window.pywebview?.api?.retry_failed_revision_blocks?.(sessionDir);
+      if (!res?.ok) {
+        if (res?.conflict) {
+          showToast('La sbobina è stata modificata: retry annullato per evitare sovrascritture.', 'warning', { durationMs: 9000 });
+        } else if (res?.cancelled) {
+          showToast('Retry annullato.', 'info');
+        } else if (res?.quota_exhausted) {
+          showToast('Quota giornaliera esaurita: riprova domani.', 'warning', { durationMs: 9000 });
+        } else {
+          // Fallback for general errors (e.g. "API key mancante")
+          showToast(res?.error ?? 'Impossibile completare la revisione dei blocchi.', 'warning');
+        }
+        throw new Error(res?.error ?? 'Retry non riuscito.');
+      }
+      const normalizedSessionDir = res.session_dir ?? sessionDir;
+      const remaining = Array.isArray(res.remaining_failed_blocks) ? res.remaining_failed_blocks : [];
+      dispatch({
+        type: 'queue/update_revision_failed_blocks',
+        fileId: _fileId,
+        sessionDir: normalizedSessionDir,
+        blocks: remaining,
+        htmlPath: res.html_path,
+        effectiveModel: res.effective_model,
+      });
+      setArchiveSessions(prev => prev.map(session =>
+        normalizeSessionDir(session.session_dir) === normalizeSessionDir(normalizedSessionDir)
+          ? {
+              ...session,
+              html_path: res.html_path ?? session.html_path,
+              effective_model: res.effective_model ?? session.effective_model,
+              completion_status: remaining.length > 0 ? 'completed_with_warnings' : 'completed',
+              revision_failed_blocks: remaining,
+            }
+          : session,
+      ));
+      if (remaining.length > 0) {
+        if (res.cancelled) {
+          showToast(`Retry annullato: ${remaining.length} ${remaining.length === 1 ? 'blocco resta' : 'blocchi restano'} non revisionato.`, 'warning');
+        } else if (res.quota_exhausted) {
+          showToast(`Quota giornaliera esaurita: ${remaining.length} ${remaining.length === 1 ? 'blocco resta' : 'blocchi restano'} non revisionato. Riprova domani.`, 'warning', { durationMs: 9000 });
+        } else {
+          showToast(`${remaining.length} ${remaining.length === 1 ? 'blocco resta' : 'blocchi restano'} non revisionato. Puoi riprovare piu tardi.`, 'warning');
+        }
       } else {
-        showToast(`${remaining.length} ${remaining.length === 1 ? 'blocco resta' : 'blocchi restano'} non revisionato. Puoi riprovare piu tardi.`, 'warning');
+        showToast('Blocchi mancanti revisionati e HTML aggiornato.', 'info');
       }
-    } else {
-      showToast('Blocchi mancanti revisionati e HTML aggiornato.', 'info');
+      void refreshArchiveSessions();
+    } finally {
+      dispatch({ type: 'queue/set_retrying_blocks', id: _fileId, value: false });
     }
-    void refreshArchiveSessions();
   }, [normalizeSessionDir, refreshArchiveSessions, showToast]);
 
   const handleRevisionWarning = useCallback((data: FileDonePayload) => {
@@ -885,6 +908,53 @@ export default function App() {
     void refreshArchiveSessions();
   }, [refreshArchiveSessions]);
 
+  const executeRetryFromArchive = useCallback(async (session: ArchiveSession) => {
+    if (appStateRef.current !== 'idle') {
+      showToast('Elaborazione in corso: riprova al termine.', 'warning');
+      return;
+    }
+    const normDir = normalizeSessionDir(session.session_dir);
+    const existing = filesRef.current.find(f => normalizeSessionDir(f.outputDir) === normDir);
+
+    // Guard against concurrent retry triggers
+    if (existing?.isRetryingBlocks) {
+      showToast('Retry già in corso per questa sessione.', 'warning');
+      return;
+    }
+
+    setActivePage('queue');
+    const fileId = existing ? existing.id : `archive-${Date.now()}`;
+    if (!existing) {
+      const newFile: FileItem = {
+        id: fileId,
+        name: session.name,
+        size: session.input_size ?? 0,
+        duration: session.duration_sec ?? 0,
+        status: 'done',
+        progress: 100,
+        phase: 3,
+        path: session.input_path,
+        outputHtml: session.html_path,
+        outputDir: session.session_dir,
+        completedAt: session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : Date.now(),
+        effectiveModel: session.effective_model,
+        completionStatus: 'completed_with_warnings',
+        revisionFailedBlocks: session.revision_failed_blocks,
+        isRetryingBlocks: true,
+      };
+      dispatch({ type: 'queue/add', files: [newFile] });
+    } else {
+      dispatch({ type: 'queue/set_retrying_blocks', id: fileId, value: true });
+    }
+    try {
+      await handleRetryFailedRevisionBlocks(session.session_dir, fileId);
+    } catch (err) {
+      console.error('Archive retry error:', err);
+    } finally {
+      dispatch({ type: 'queue/set_retrying_blocks', id: fileId, value: false });
+    }
+  }, [handleRetryFailedRevisionBlocks, normalizeSessionDir, showToast]);
+
   const handleConfirmAction = useCallback(() => {
     if (!confirmAction) return;
     if (confirmAction.type === 'stop-processing') { void confirmStopProcessing(); return; }
@@ -926,8 +996,14 @@ export default function App() {
       });
       return;
     }
+    if (confirmAction.type === 'retry-archive-session') {
+      const { session } = confirmAction;
+      setConfirmAction(null);
+      void executeRetryFromArchive(session);
+      return;
+    }
     confirmClearCompleted();
-  }, [confirmAction, confirmClearCompleted, confirmStopProcessing, appendConsole, refreshArchiveSessions, setFolders]);
+  }, [confirmAction, confirmClearCompleted, confirmStopProcessing, appendConsole, refreshArchiveSessions, setFolders, executeRetryFromArchive]);
 
   const handleRegenerateAnswer = async (ans: boolean | null) => {
     const currentPrompt = regeneratePrompt;
@@ -1106,6 +1182,14 @@ export default function App() {
     }
     if (confirmAction.type === 'delete-archive-session') {
       return { title: 'Eliminare questa sbobina?', description: `"${confirmAction.name}" e tutti i suoi dati di sessione verranno eliminati definitivamente dal disco. L'operazione è irreversibile.`, confirmLabel: 'Elimina definitivamente', cancelLabel: 'Annulla' };
+    }
+    if (confirmAction.type === 'retry-archive-session') {
+      return {
+        title: 'Ripristinare e riprovare la revisione?',
+        description: `La sbobina "${confirmAction.session.name}" verrà spostata nella schermata principale per elaborare i blocchi non revisionati. Vuoi procedere?`,
+        confirmLabel: 'Riprova revisione',
+        cancelLabel: 'Annulla',
+      };
     }
     return { title: 'Pulire le sbobine completate?', description: confirmAction.count === 1 ? "La sbobina completata verrà spostata nell'archivio e rimossa dalla lista. Vuoi continuare?" : `Le ${confirmAction.count} sbobine completate verranno spostate nell'archivio e rimosse dalla lista. Vuoi continuare?`, confirmLabel: 'Conferma pulizia', cancelLabel: 'Mantieni nella lista' };
   }, [confirmAction]);

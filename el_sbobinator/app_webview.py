@@ -579,6 +579,27 @@ class ElSbobinatorApi:
             raise FileNotFoundError("Sessione non trovata.")
         return abs_dir, session_path
 
+    def _push_retry_completion_status(
+        self, remaining: list, cancelled: bool, quota_exhausted: bool
+    ) -> None:
+        if not remaining:
+            self._push_console(
+                "REVISIONE COMPLETATA CON SUCCESSO! ✅ Tutti i blocchi sono stati revisionati."
+            )
+        else:
+            if cancelled:
+                self._push_console(
+                    "REVISIONE INTERROTTA! ⚠ Operazione annullata dall'utente."
+                )
+            elif quota_exhausted:
+                self._push_console(
+                    "REVISIONE INTERROTTA! ⚠ Quota giornaliera API esaurita. Riprova domani."
+                )
+            else:
+                self._push_console(
+                    f"REVISIONE COMPLETATA CON AVVISI! ⚠ Rimangono {len(remaining)} blocchi non revisionati."
+                )
+
     def retry_failed_revision_blocks(self, session_dir: str) -> dict:
         """Retry only macro blocks that were included unrevised in a done session."""
         if self._adapter.is_running:
@@ -642,7 +663,7 @@ class ElSbobinatorApi:
                 return {
                     "ok": False,
                     "conflict": True,
-                    "error": "HTML modificato dall'utente: retry annullato per evitare sovrascrittura.",
+                    "error": "HTML modificato dall'utente: retry annullato per evitare sovrascritture.",
                     "session_dir": abs_dir,
                 }
             failed_blocks = session.get("revision_failed_blocks", [])
@@ -746,6 +767,12 @@ class ElSbobinatorApi:
             with self._sessions_cache_lock:
                 self._sessions_cache = None
                 self._sessions_cache_gen += 1
+
+            self._push_retry_completion_status(
+                remaining=remaining,
+                cancelled=cancelled,
+                quota_exhausted=quota_exhausted,
+            )
             return {
                 "ok": True,
                 "retried_blocks": retried_blocks,
