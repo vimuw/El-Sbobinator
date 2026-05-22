@@ -42,10 +42,12 @@ _MAX_RETRY_ATTEMPTS: int = (
 )
 _RETRY_SLEEP_SECONDS: float = 30.0  # Back-off pause between generic transient errors
 _MODEL_UNAVAILABLE_RETRY_DELAYS: tuple[float, ...] = (
-    3.0,
-    6.0,
+    5.0,
     15.0,
-)  # Progressive back-off before switching model on 503/UNAVAILABLE (4 total attempts)
+    30.0,
+    60.0,
+    120.0,
+)  # Progressive back-off before switching model on 503/UNAVAILABLE (6 total attempts)
 # Gemini enforces a per-minute request quota that resets after ~60 s; sleeping
 # 65 s adds a small buffer to ensure the window has fully elapsed before retry.
 _RATE_LIMIT_SLEEP_SECONDS: float = 65.0

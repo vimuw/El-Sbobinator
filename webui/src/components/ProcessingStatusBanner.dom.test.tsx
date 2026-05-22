@@ -8,7 +8,7 @@ describe('ProcessingStatusBanner', () => {
       <ProcessingStatusBanner
         appState="processing"
         currentPhase="Fase 2/3: revisione"
-        currentModel="gemini-2.5-flash-lite"
+        currentModel="gemini-3.1-flash-lite-preview"
         activeProgress={86}
         workDone={{ chunks: 8, macro: 0 }}
         workTotals={{ chunks: 11, macro: 11 }}
@@ -28,7 +28,7 @@ describe('ProcessingStatusBanner', () => {
       <ProcessingStatusBanner
         appState="processing"
         currentPhase="Fase 1/3: trascrizione (chunk 2/6)"
-        currentModel="gemini-2.5-flash-lite"
+        currentModel="gemini-3.1-flash-lite-preview"
         activeProgress={34}
         workDone={{ chunks: 1, macro: 0 }}
         workTotals={{ chunks: 6, macro: 3 }}

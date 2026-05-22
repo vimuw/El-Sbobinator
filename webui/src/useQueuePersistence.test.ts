@@ -76,10 +76,10 @@ describe('useQueuePersistence — serialization contract', () => {
   });
 
   it('primaryModel is preserved through a JSON round-trip', () => {
-    const file = makeFile({ status: 'done', progress: 100, phase: 3, primaryModel: 'gemini-2.5-flash', effectiveModel: 'gemini-2.5-flash-lite' });
+    const file = makeFile({ status: 'done', progress: 100, phase: 3, primaryModel: 'gemini-2.5-flash', effectiveModel: 'gemini-3.1-flash-lite-preview' });
     const restored = roundTrip(file);
     expect(restored.primaryModel).toBe('gemini-2.5-flash');
-    expect(restored.effectiveModel).toBe('gemini-2.5-flash-lite');
+    expect(restored.effectiveModel).toBe('gemini-3.1-flash-lite-preview');
   });
 
   it('primaryModel missing on legacy entries is restored as undefined', () => {

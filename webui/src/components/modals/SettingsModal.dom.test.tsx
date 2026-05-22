@@ -43,7 +43,7 @@ describe('SettingsModal — diagnostica chunk display', () => {
   it('shows default_chunk_minutes from availableModels registry for the primary model', async () => {
     const models = [
       { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash (Preview)', summary: '', default_chunk_minutes: 15 },
-      { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', summary: '', default_chunk_minutes: 10 },
+      { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite (Preview)', summary: '', default_chunk_minutes: 10 },
     ];
     const { rerender } = render(
       <SettingsModal {...makeProps()} availableModels={models} preferredModel="gemini-3-flash-preview" />,
@@ -53,7 +53,7 @@ describe('SettingsModal — diagnostica chunk display', () => {
     });
     expect(screen.getByText('15 min')).toBeDefined();
 
-    rerender(<SettingsModal {...makeProps()} availableModels={models} preferredModel="gemini-2.5-flash-lite" />);
+    rerender(<SettingsModal {...makeProps()} availableModels={models} preferredModel="gemini-3.1-flash-lite-preview" />);
     expect(screen.getByText('10 min')).toBeDefined();
   });
 });
@@ -324,27 +324,27 @@ describe('SettingsModal — fallback models list', () => {
   it('renders fallback model card when fallbackModels is populated', async () => {
     const models = [
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast and capable', default_chunk_minutes: 12 },
-      { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', summary: 'Lightweight', default_chunk_minutes: 10 },
+      { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite (Preview)', summary: 'Lightweight', default_chunk_minutes: 10 },
     ];
     render(
       <SettingsModal
         {...makeProps()}
         availableModels={models}
         preferredModel="gemini-2.5-flash"
-        fallbackModels={['gemini-2.5-flash-lite']}
+        fallbackModels={['gemini-3.1-flash-lite-preview']}
       />,
     );
     await act(async () => {
       fireEvent.click(screen.getByText('Avanzati').closest('button')!);
     });
-    expect(screen.getAllByText('Gemini 2.5 Flash-Lite').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Gemini 3.1 Flash Lite (Preview)').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Lightweight').length).toBeGreaterThan(0);
   });
 
   it('calls setFallbackModels when remove fallback button is clicked', async () => {
     const models = [
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast', default_chunk_minutes: 12 },
-      { id: 'gemini-2.5-flash-lite', label: 'Lite', summary: 'Light', default_chunk_minutes: 10 },
+      { id: 'gemini-3.1-flash-lite-preview', label: 'Lite', summary: 'Light', default_chunk_minutes: 10 },
     ];
     const setFallbackModels = vi.fn();
     render(
@@ -352,7 +352,7 @@ describe('SettingsModal — fallback models list', () => {
         {...makeProps()}
         availableModels={models}
         preferredModel="gemini-2.5-flash"
-        fallbackModels={['gemini-2.5-flash-lite']}
+        fallbackModels={['gemini-3.1-flash-lite-preview']}
         setFallbackModels={setFallbackModels}
       />,
     );
@@ -366,7 +366,7 @@ describe('SettingsModal — fallback models list', () => {
   it('calls setFallbackModels when move-down button clicked (with 2 fallbacks)', async () => {
     const models = [
       { id: 'gemini-2.5-flash', label: 'Flash', summary: 'F', default_chunk_minutes: 12 },
-      { id: 'gemini-2.5-flash-lite', label: 'Lite', summary: 'L', default_chunk_minutes: 10 },
+      { id: 'gemini-3.1-flash-lite-preview', label: 'Lite', summary: 'L', default_chunk_minutes: 10 },
       { id: 'gemini-2.5-pro', label: 'Pro', summary: 'P', default_chunk_minutes: 20 },
     ];
     const setFallbackModels = vi.fn();
@@ -375,7 +375,7 @@ describe('SettingsModal — fallback models list', () => {
         {...makeProps()}
         availableModels={models}
         preferredModel="gemini-2.5-flash"
-        fallbackModels={['gemini-2.5-flash-lite', 'gemini-2.5-pro']}
+        fallbackModels={['gemini-3.1-flash-lite-preview', 'gemini-2.5-pro']}
         setFallbackModels={setFallbackModels}
       />,
     );

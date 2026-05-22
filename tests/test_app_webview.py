@@ -132,14 +132,14 @@ class AppWebviewTests(unittest.TestCase):
     def test_update_model_subsequent_call_does_not_change_primary_model(self):
         adapter = PipelineAdapter(None, cancel_event=__import__("threading").Event())
         adapter.update_model("gemini-2.5-flash")
-        adapter.update_model("gemini-2.5-flash-lite")
+        adapter.update_model("gemini-3.1-flash-lite-preview")
         self.assertEqual(adapter.last_primary_model, "gemini-2.5-flash")
-        self.assertEqual(adapter.last_effective_model, "gemini-2.5-flash-lite")
+        self.assertEqual(adapter.last_effective_model, "gemini-3.1-flash-lite-preview")
 
     def test_reset_run_state_clears_primary_model(self):
         adapter = PipelineAdapter(None, cancel_event=__import__("threading").Event())
         adapter.update_model("gemini-2.5-flash")
-        adapter.update_model("gemini-2.5-flash-lite")
+        adapter.update_model("gemini-3.1-flash-lite-preview")
         adapter.reset_run_state()
         self.assertIsNone(adapter.last_primary_model)
         self.assertIsNone(adapter.last_effective_model)
@@ -147,7 +147,7 @@ class AppWebviewTests(unittest.TestCase):
     def test_primary_model_reset_allows_new_run_to_capture_new_primary(self):
         adapter = PipelineAdapter(None, cancel_event=__import__("threading").Event())
         adapter.update_model("gemini-2.5-flash")
-        adapter.update_model("gemini-2.5-flash-lite")
+        adapter.update_model("gemini-3.1-flash-lite-preview")
         adapter.reset_run_state()
         adapter.update_model("gemini-3-flash-preview")
         self.assertEqual(adapter.last_primary_model, "gemini-3-flash-preview")

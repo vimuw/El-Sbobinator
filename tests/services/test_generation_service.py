@@ -168,7 +168,7 @@ class RetryWithQuotaTests(unittest.TestCase):
         primary_client = object()
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-2.5-flash-lite"],
+            ["gemini-3.1-flash-lite-preview"],
             "gemini-2.5-flash",
         )
         switched = []
@@ -176,7 +176,7 @@ class RetryWithQuotaTests(unittest.TestCase):
         def fn(current_client):
             if (
                 current_client is primary_client
-                and model_state.current == "gemini-2.5-flash-lite"
+                and model_state.current == "gemini-3.1-flash-lite-preview"
             ):
                 return "ok"
             err = RuntimeError("503 Service Unavailable")
@@ -201,13 +201,15 @@ class RetryWithQuotaTests(unittest.TestCase):
 
         self.assertIs(client, primary_client)
         self.assertEqual(result, "ok")
-        self.assertEqual(model_state.current, "gemini-2.5-flash-lite")
-        self.assertEqual(switched, [("gemini-2.5-flash", "gemini-2.5-flash-lite")])
+        self.assertEqual(model_state.current, "gemini-3.1-flash-lite-preview")
+        self.assertEqual(
+            switched, [("gemini-2.5-flash", "gemini-3.1-flash-lite-preview")]
+        )
 
     def test_model_404_switches_immediately_without_sleep(self):
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-2.5-flash-lite"],
+            ["gemini-3.1-flash-lite-preview"],
             "gemini-2.5-flash",
         )
         switched = []
@@ -215,7 +217,7 @@ class RetryWithQuotaTests(unittest.TestCase):
 
         def fn(_client):
             call_models.append(model_state.current)
-            if model_state.current == "gemini-2.5-flash-lite":
+            if model_state.current == "gemini-3.1-flash-lite-preview":
                 return "ok"
             err = RuntimeError("404 NOT_FOUND model unsupported for generateContent")
             err.code = 404  # type: ignore[attr-defined]
@@ -242,13 +244,17 @@ class RetryWithQuotaTests(unittest.TestCase):
             )
 
         self.assertEqual(result, "ok")
-        self.assertEqual(call_models, ["gemini-2.5-flash", "gemini-2.5-flash-lite"])
-        self.assertEqual(switched, [("gemini-2.5-flash", "gemini-2.5-flash-lite")])
+        self.assertEqual(
+            call_models, ["gemini-2.5-flash", "gemini-3.1-flash-lite-preview"]
+        )
+        self.assertEqual(
+            switched, [("gemini-2.5-flash", "gemini-3.1-flash-lite-preview")]
+        )
 
     def test_degenerate_output_switches_model_without_consuming_attempts(self):
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-2.5-flash-lite"],
+            ["gemini-3.1-flash-lite-preview"],
             "gemini-2.5-flash",
         )
         switched = []
@@ -256,7 +262,7 @@ class RetryWithQuotaTests(unittest.TestCase):
 
         def fn(_client):
             call_models.append(model_state.current)
-            if model_state.current == "gemini-2.5-flash-lite":
+            if model_state.current == "gemini-3.1-flash-lite-preview":
                 return "ok"
             raise DegenerateOutputError("frase ripetuta 8 volte")
 
@@ -277,13 +283,17 @@ class RetryWithQuotaTests(unittest.TestCase):
         )
 
         self.assertEqual(result, "ok")
-        self.assertEqual(call_models, ["gemini-2.5-flash", "gemini-2.5-flash-lite"])
-        self.assertEqual(switched, [("gemini-2.5-flash", "gemini-2.5-flash-lite")])
+        self.assertEqual(
+            call_models, ["gemini-2.5-flash", "gemini-3.1-flash-lite-preview"]
+        )
+        self.assertEqual(
+            switched, [("gemini-2.5-flash", "gemini-3.1-flash-lite-preview")]
+        )
 
     def test_degenerate_output_exhausted_chain_re_raises_degenerate_error(self):
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-2.5-flash-lite"],
+            ["gemini-3.1-flash-lite-preview"],
             "gemini-2.5-flash",
         )
 
@@ -311,7 +321,7 @@ class RetryWithQuotaTests(unittest.TestCase):
     def test_plain_503_exhausted_chain_raises_clear_error(self):
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-2.5-flash-lite"],
+            ["gemini-3.1-flash-lite-preview"],
             "gemini-2.5-flash",
         )
 
@@ -340,7 +350,7 @@ class RetryWithQuotaTests(unittest.TestCase):
     def test_plain_503_retry_that_becomes_429_does_not_switch_model(self):
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-2.5-flash-lite"],
+            ["gemini-3.1-flash-lite-preview"],
             "gemini-2.5-flash",
         )
         call_count = 0
@@ -587,7 +597,7 @@ class RetryWithQuotaTests(unittest.TestCase):
     def test_503_phase_restored_after_switch_to_fallback(self):
         """503 retry 1/2 then retry 2/2 → switch model: each wait is followed by phase restore."""
         model_state = build_model_state(
-            "gemini-2.5-flash", ["gemini-2.5-flash-lite"], "gemini-2.5-flash"
+            "gemini-2.5-flash", ["gemini-3.1-flash-lite-preview"], "gemini-2.5-flash"
         )
         rt = _FakeRuntime()
 
@@ -669,7 +679,7 @@ class RetryWithQuotaTests(unittest.TestCase):
     def test_503_third_attempt_succeeds_without_model_switch(self):
         """503x2 (original + retry 1) -> success on retry 2: no model switch, 3 total calls."""
         model_state = build_model_state(
-            "gemini-2.5-flash", ["gemini-2.5-flash-lite"], "gemini-2.5-flash"
+            "gemini-2.5-flash", ["gemini-3.1-flash-lite-preview"], "gemini-2.5-flash"
         )
         switched = []
         call_count = [0]
@@ -710,7 +720,7 @@ class RetryWithQuotaTests(unittest.TestCase):
     def test_503_all_retries_exhausted_then_switches_model(self):
         """503x3 (original + retry 1 + retry 2) -> switch to fallback, which succeeds."""
         model_state = build_model_state(
-            "gemini-2.5-flash", ["gemini-2.5-flash-lite"], "gemini-2.5-flash"
+            "gemini-2.5-flash", ["gemini-3.1-flash-lite-preview"], "gemini-2.5-flash"
         )
         switched = []
         call_count = [0]
@@ -741,14 +751,16 @@ class RetryWithQuotaTests(unittest.TestCase):
 
         self.assertEqual(result, "ok")
         self.assertEqual(call_count[0], 4, "3 calls with flash + 1 with flash-lite")
-        self.assertEqual(model_state.current, "gemini-2.5-flash-lite")
-        self.assertEqual(switched, [("gemini-2.5-flash", "gemini-2.5-flash-lite")])
+        self.assertEqual(model_state.current, "gemini-3.1-flash-lite-preview")
+        self.assertEqual(
+            switched, [("gemini-2.5-flash", "gemini-3.1-flash-lite-preview")]
+        )
 
     def test_503_two_waits_phase_restore_interleaved(self):
         """With two retry delays the phase sequence must be:
         wait1 → restore → wait2 → restore (→ switch or success)."""
         model_state = build_model_state(
-            "gemini-2.5-flash", ["gemini-2.5-flash-lite"], "gemini-2.5-flash"
+            "gemini-2.5-flash", ["gemini-3.1-flash-lite-preview"], "gemini-2.5-flash"
         )
         rt = _FakeRuntime()
         call_count = [0]
@@ -792,7 +804,7 @@ class RetryWithQuotaTests(unittest.TestCase):
     def test_503_cancel_during_second_retry_sleep_returns_none_no_switch(self):
         """If cancel fires during the second 503 sleep, returns (client, None) without switching model."""
         model_state = build_model_state(
-            "gemini-2.5-flash", ["gemini-2.5-flash-lite"], "gemini-2.5-flash"
+            "gemini-2.5-flash", ["gemini-3.1-flash-lite-preview"], "gemini-2.5-flash"
         )
         switched = []
         sleep_call = [0]
@@ -842,7 +854,7 @@ class RetryWithQuotaTests(unittest.TestCase):
         not the original outer 503 that `sys.exc_info()` still holds."""
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-2.5-flash-lite"],
+            ["gemini-3.1-flash-lite-preview"],
             "gemini-2.5-flash",
         )
         call_count = [0]
@@ -890,7 +902,7 @@ class RetryWithQuotaTests(unittest.TestCase):
         with the fix, fallback gets a fresh budget and can retry once before succeeding."""
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-2.5-flash-lite"],
+            ["gemini-3.1-flash-lite-preview"],
             "gemini-2.5-flash",
         )
         primary_calls = [0]
@@ -935,7 +947,7 @@ class RetryWithQuotaTests(unittest.TestCase):
         Fallback must get a fresh budget and be able to retry before succeeding."""
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-2.5-flash-lite"],
+            ["gemini-3.1-flash-lite-preview"],
             "gemini-2.5-flash",
         )
         primary_calls = [0]
@@ -982,7 +994,7 @@ class RetryWithQuotaTests(unittest.TestCase):
         → model switch.  Fallback must get a fresh budget and be able to retry."""
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-2.5-flash-lite"],
+            ["gemini-3.1-flash-lite-preview"],
             "gemini-2.5-flash",
         )
         primary_calls = [0]
@@ -1028,7 +1040,9 @@ class QuotaModelFallbackTests(unittest.TestCase):
 
     def test_all_keys_exhausted_switches_to_fallback_model(self):
         """After all keys drained, cascade to fallback model and succeed."""
-        model_state = build_model_state("gemini-2.5-flash", ["gemini-2.5-flash-lite"])
+        model_state = build_model_state(
+            "gemini-2.5-flash", ["gemini-3.1-flash-lite-preview"]
+        )
         switched = []
 
         def fn(_client):
@@ -1042,8 +1056,10 @@ class QuotaModelFallbackTests(unittest.TestCase):
             on_model_switched=lambda old, new: switched.append((old, new)),
         )
         self.assertEqual(result, "ok")
-        self.assertEqual(model_state.current, "gemini-2.5-flash-lite")
-        self.assertEqual(switched, [("gemini-2.5-flash", "gemini-2.5-flash-lite")])
+        self.assertEqual(model_state.current, "gemini-3.1-flash-lite-preview")
+        self.assertEqual(
+            switched, [("gemini-2.5-flash", "gemini-3.1-flash-lite-preview")]
+        )
 
     def test_all_keys_exhausted_no_fallback_raises_quota_error(self):
         """No fallback model in chain → QuotaDailyLimitError (regression guard)."""
@@ -1101,7 +1117,7 @@ class AllModelsUnavailableErrorTests(unittest.TestCase):
         must raise AllModelsUnavailableError (not plain RuntimeError)."""
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-2.5-flash-lite"],
+            ["gemini-3.1-flash-lite-preview"],
             "gemini-2.5-flash",
         )
 
@@ -1129,7 +1145,7 @@ class AllModelsUnavailableErrorTests(unittest.TestCase):
         Must NOT raise AllModelsUnavailableError."""
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-2.5-flash-lite"],
+            ["gemini-3.1-flash-lite-preview"],
             "gemini-2.5-flash",
         )
 
@@ -1154,7 +1170,7 @@ class AllModelsUnavailableErrorTests(unittest.TestCase):
         )
 
         self.assertEqual(result, "ok")
-        self.assertEqual(model_state.current, "gemini-2.5-flash-lite")
+        self.assertEqual(model_state.current, "gemini-3.1-flash-lite-preview")
 
 
 class IsModelUnavailableTests(unittest.TestCase):
@@ -1205,7 +1221,6 @@ class Phase1TemperatureTests(unittest.TestCase):
         self._t = _phase1_temperature
 
     def test_lite_models_temperature(self):
-        self.assertEqual(self._t("gemini-2.5-flash-lite"), 0.25)
         self.assertEqual(self._t("gemini-3.1-flash-lite-preview"), 0.35)
 
     def test_non_lite_models_return_035(self):
@@ -1870,7 +1885,7 @@ class RetryWithQuotaEdgeTests(unittest.TestCase):
     def test_cancel_during_503_inner_retry_attempt(self):
         """Cancel fires inside the inner-retry callable (line 561 path), not just the outer catch."""
         model_state = build_model_state(
-            "gemini-2.5-flash", ["gemini-2.5-flash-lite"], "gemini-2.5-flash"
+            "gemini-2.5-flash", ["gemini-3.1-flash-lite-preview"], "gemini-2.5-flash"
         )
         cancel = threading.Event()
         call_count = [0]

@@ -39,7 +39,7 @@ class _DummyPreconvContext:
         self.session_dir = session_dir
         self.settings = PipelineSettings(
             model="gemini-2.5-flash",
-            fallback_models=["gemini-2.5-flash-lite"],
+            fallback_models=["gemini-3.1-flash-lite-preview"],
             effective_model="gemini-2.5-flash",
             chunk_minutes=15,
             overlap_seconds=30,
@@ -63,13 +63,13 @@ class _DummyRegenContext:
         self.session = {
             "settings": {
                 "model": "gemini-2.5-flash",
-                "fallback_models": ["gemini-2.5-flash-lite"],
+                "fallback_models": ["gemini-3.1-flash-lite-preview"],
                 "effective_model": "gemini-2.5-flash",
             }
         }
         self.settings = PipelineSettings(
             model="gemini-2.5-flash",
-            fallback_models=["gemini-2.5-flash-lite"],
+            fallback_models=["gemini-3.1-flash-lite-preview"],
             effective_model="gemini-2.5-flash",
             chunk_minutes=15,
             overlap_seconds=30,
@@ -96,9 +96,9 @@ class PipelineSessionHelpersTests(unittest.TestCase):
 
             context = _DummyRegenContext(input_path, os.path.join(tmpdir, "session"))
             fresh_settings = {
-                "model": "gemini-2.5-flash-lite",
+                "model": "gemini-3.1-flash-lite-preview",
                 "fallback_models": [],
-                "effective_model": "gemini-2.5-flash-lite",
+                "effective_model": "gemini-3.1-flash-lite-preview",
                 "chunk_minutes": 15,
                 "overlap_seconds": 30,
                 "macro_char_limit": 22000,
@@ -112,7 +112,7 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                 patch("el_sbobinator.pipeline.pipeline_session.reset_session_dirs"),
                 patch(
                     "el_sbobinator.pipeline.pipeline_session.load_config",
-                    return_value={"preferred_model": "gemini-2.5-flash-lite"},
+                    return_value={"preferred_model": "gemini-3.1-flash-lite-preview"},
                 ),
                 patch(
                     "el_sbobinator.pipeline.pipeline_session.build_default_pipeline_settings",
@@ -122,13 +122,16 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                 reset_for_regeneration(context)  # type: ignore[arg-type]
 
             self.assertEqual(
-                context.session["settings"]["model"], "gemini-2.5-flash-lite"
+                context.session["settings"]["model"], "gemini-3.1-flash-lite-preview"
             )
             self.assertEqual(
-                context.session["settings"]["effective_model"], "gemini-2.5-flash-lite"
+                context.session["settings"]["effective_model"],
+                "gemini-3.1-flash-lite-preview",
             )
-            self.assertEqual(context.settings.model, "gemini-2.5-flash-lite")
-            self.assertEqual(context.settings.effective_model, "gemini-2.5-flash-lite")
+            self.assertEqual(context.settings.model, "gemini-3.1-flash-lite-preview")
+            self.assertEqual(
+                context.settings.effective_model, "gemini-3.1-flash-lite-preview"
+            )
             self.assertEqual(context.save_calls, 1)
 
     def test_normalize_stage_falls_back_to_phase1(self):
@@ -479,7 +482,7 @@ class InitializeSessionContextTests(unittest.TestCase):
                 patch(
                     "el_sbobinator.pipeline.pipeline_session.load_config",
                     return_value={
-                        "preferred_model": "gemini-2.5-flash-lite",
+                        "preferred_model": "gemini-3.1-flash-lite-preview",
                         "fallback_models": [],
                     },
                 ),
@@ -490,9 +493,10 @@ class InitializeSessionContextTests(unittest.TestCase):
             ):
                 ctx = initialize_session_context(input_path, resume_session=True)
 
-            self.assertEqual(ctx.settings.model, "gemini-2.5-flash-lite")
+            self.assertEqual(ctx.settings.model, "gemini-3.1-flash-lite-preview")
             self.assertEqual(
-                ctx.session["settings"]["effective_model"], "gemini-2.5-flash-lite"
+                ctx.session["settings"]["effective_model"],
+                "gemini-3.1-flash-lite-preview",
             )
 
     def _make_session_file(self, tmpdir, model, chunk_minutes, chunks_done):
@@ -540,7 +544,10 @@ class InitializeSessionContextTests(unittest.TestCase):
     def test_chunk_minutes_resets_to_new_model_default_when_no_chunks_done(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path, session_dir = self._make_session_file(
-                tmpdir, model="gemini-2.5-flash-lite", chunk_minutes=10, chunks_done=0
+                tmpdir,
+                model="gemini-3.1-flash-lite-preview",
+                chunk_minutes=10,
+                chunks_done=0,
             )
             new_defaults = {
                 "model": "gemini-2.5-flash",
@@ -579,7 +586,10 @@ class InitializeSessionContextTests(unittest.TestCase):
     def test_chunk_minutes_preserved_when_model_changes_but_chunks_already_done(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path, session_dir = self._make_session_file(
-                tmpdir, model="gemini-2.5-flash-lite", chunk_minutes=10, chunks_done=3
+                tmpdir,
+                model="gemini-3.1-flash-lite-preview",
+                chunk_minutes=10,
+                chunks_done=3,
             )
             new_defaults = {
                 "model": "gemini-2.5-flash",
@@ -1250,9 +1260,9 @@ class TestPipelineSessionEdgeCases(unittest.TestCase):
             context = _DummyRegenContext(input_path, os.path.join(tmpdir, "session"))
             # Old session has model gemini-2.5-flash; new config will use flash-lite
             fresh_settings = {
-                "model": "gemini-2.5-flash-lite",
+                "model": "gemini-3.1-flash-lite-preview",
                 "fallback_models": [],
-                "effective_model": "gemini-2.5-flash-lite",
+                "effective_model": "gemini-3.1-flash-lite-preview",
                 "chunk_minutes": 15,
                 "overlap_seconds": 30,
                 "macro_char_limit": 22000,
@@ -1266,7 +1276,7 @@ class TestPipelineSessionEdgeCases(unittest.TestCase):
                 patch("el_sbobinator.pipeline.pipeline_session.reset_session_dirs"),
                 patch(
                     "el_sbobinator.pipeline.pipeline_session.load_config",
-                    return_value={"preferred_model": "gemini-2.5-flash-lite"},
+                    return_value={"preferred_model": "gemini-3.1-flash-lite-preview"},
                 ),
                 patch(
                     "el_sbobinator.pipeline.pipeline_session.build_default_pipeline_settings",
@@ -1275,8 +1285,10 @@ class TestPipelineSessionEdgeCases(unittest.TestCase):
             ):
                 reset_for_regeneration(context)  # type: ignore[arg-type]
 
-        self.assertEqual(context.session["settings"]["model"], "gemini-2.5-flash-lite")
-        self.assertEqual(context.settings.model, "gemini-2.5-flash-lite")
+        self.assertEqual(
+            context.session["settings"]["model"], "gemini-3.1-flash-lite-preview"
+        )
+        self.assertEqual(context.settings.model, "gemini-3.1-flash-lite-preview")
         self.assertEqual(context.save_calls, 1)
 
 

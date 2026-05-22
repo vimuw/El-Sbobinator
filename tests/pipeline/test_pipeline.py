@@ -49,7 +49,7 @@ class _FakeSessionContext:
         }
         self.settings = SimpleNamespace(
             model="gemini-test",
-            fallback_models=["gemini-2.5-flash-lite"],
+            fallback_models=["gemini-3-flash-preview"],
             effective_model="gemini-test",
             chunk_minutes=15,
             chunk_seconds=60,
@@ -152,7 +152,7 @@ class PipelineCancellationTests(unittest.TestCase):
             }
             session_ctx.settings = SimpleNamespace(
                 model="gemini-2.5-flash",
-                fallback_models=["gemini-2.5-flash-lite"],
+                fallback_models=["gemini-3-flash-preview"],
                 effective_model="gemini-2.5-flash",
                 chunk_minutes=15,
                 chunk_seconds=60,
@@ -180,8 +180,8 @@ class PipelineCancellationTests(unittest.TestCase):
                 }
                 context.settings = SimpleNamespace(
                     model="gemini-2.5-flash",
-                    fallback_models=["gemini-2.5-flash-lite"],
-                    effective_model="gemini-2.5-flash-lite",
+                    fallback_models=["gemini-3-flash-preview"],
+                    effective_model="gemini-3-flash-preview",
                     chunk_minutes=10,
                     chunk_seconds=60,
                     step_seconds=60,
@@ -258,7 +258,7 @@ class PipelineCancellationTests(unittest.TestCase):
                 thread.join(timeout=2)
 
         self.assertEqual(seen.get("current_model"), "gemini-2.5-flash")
-        self.assertIn("gemini-2.5-flash-lite", seen.get("chain", ()))
+        self.assertIn("gemini-3-flash-preview", seen.get("chain", ()))
 
     def test_api_key_prompt_timeout_saves_quota_detail(self):
         from el_sbobinator.services.generation_service import QuotaDailyLimitError
@@ -361,8 +361,8 @@ class PipelineCancellationTests(unittest.TestCase):
             session_ctx = _FakeSessionContext(os.path.join(tmpdir, "session"))
             session_ctx.settings = SimpleNamespace(
                 model="gemini-2.5-flash",
-                fallback_models=["gemini-2.5-flash-lite"],
-                effective_model="gemini-2.5-flash-lite",
+                fallback_models=["gemini-3-flash-preview"],
+                effective_model="gemini-3-flash-preview",
                 chunk_minutes=15,
                 chunk_seconds=60,
                 step_seconds=60,
@@ -432,7 +432,7 @@ class PipelineCancellationTests(unittest.TestCase):
                 esegui_sbobinatura(input_path, "fake-key", app, resume_session=True)
 
         self.assertEqual(seen.get("current_model"), "gemini-2.5-flash")
-        self.assertIn("gemini-2.5-flash-lite", seen.get("chain", ()))
+        self.assertIn("gemini-3-flash-preview", seen.get("chain", ()))
 
     def test_cancel_during_regenerate_prompt_exits_prompt_wait_immediately(self):
         app = _PromptBlockingApp()

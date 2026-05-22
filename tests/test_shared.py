@@ -173,12 +173,14 @@ class SharedCleanupTests(unittest.TestCase):
 
 
 class SharedPipelineDefaultsTests(unittest.TestCase):
-    def test_build_default_pipeline_settings_uses_10_minutes_for_flash_lite(self):
+    def test_build_default_pipeline_settings_uses_5_minutes_for_flash_lite_preview(
+        self,
+    ):
         settings = build_default_pipeline_settings(
-            {"preferred_model": "gemini-2.5-flash-lite", "fallback_models": []}
+            {"preferred_model": "gemini-3.1-flash-lite-preview", "fallback_models": []}
         )
-        self.assertEqual(settings["model"], "gemini-2.5-flash-lite")
-        self.assertEqual(settings["chunk_minutes"], 10)
+        self.assertEqual(settings["model"], "gemini-3.1-flash-lite-preview")
+        self.assertEqual(settings["chunk_minutes"], 5)
 
     def test_build_default_pipeline_settings_keeps_15_minutes_for_other_models(self):
         settings = build_default_pipeline_settings(
@@ -187,12 +189,14 @@ class SharedPipelineDefaultsTests(unittest.TestCase):
         self.assertEqual(settings["model"], "gemini-2.5-flash")
         self.assertEqual(settings["chunk_minutes"], 15)
 
-    def test_load_and_sanitize_settings_defaults_flash_lite_to_10_when_missing(self):
+    def test_load_and_sanitize_settings_defaults_flash_lite_preview_to_5_when_missing(
+        self,
+    ):
         session = {
             "settings": {
-                "model": "gemini-2.5-flash-lite",
+                "model": "gemini-3.1-flash-lite-preview",
                 "fallback_models": [],
-                "effective_model": "gemini-2.5-flash-lite",
+                "effective_model": "gemini-3.1-flash-lite-preview",
                 "audio": {"bitrate": "48k"},
             }
         }
@@ -200,17 +204,17 @@ class SharedPipelineDefaultsTests(unittest.TestCase):
         settings, changed = load_and_sanitize_settings(session)
 
         self.assertTrue(changed)
-        self.assertEqual(settings.chunk_minutes, 10)
-        self.assertEqual(session["settings"]["chunk_minutes"], 10)
+        self.assertEqual(settings.chunk_minutes, 5)
+        self.assertEqual(session["settings"]["chunk_minutes"], 5)
 
     def test_load_and_sanitize_settings_preserves_explicit_flash_lite_chunk_minutes(
         self,
     ):
         session = {
             "settings": {
-                "model": "gemini-2.5-flash-lite",
+                "model": "gemini-3.1-flash-lite-preview",
                 "fallback_models": [],
-                "effective_model": "gemini-2.5-flash-lite",
+                "effective_model": "gemini-3.1-flash-lite-preview",
                 "chunk_minutes": 15,
                 "overlap_seconds": 30,
                 "macro_char_limit": 15000,
