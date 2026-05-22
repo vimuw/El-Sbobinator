@@ -330,6 +330,7 @@ export default function App() {
   const duplicatePromptRef = useRef<DuplicatePrompt>(duplicatePrompt);
   const startProcessingRef = useRef<(isContinuation?: boolean, overrideLowDisk?: boolean) => Promise<boolean>>(() => Promise.resolve(false));
   const archiveSessionsRef = useRef<ArchiveSession[]>(archiveSessions);
+  const foldersRef = useRef(folders);
   const pendingArchiveReplacementsRef = useRef<Map<string, PendingArchiveReplacement>>(new Map());
   const archiveReplacementCleanupInFlightRef = useRef<Set<string>>(new Set());
   const downloadCompletionRef = useRef<{ version: string; resolve: () => void; reject: (e: Error) => void } | null>(null);
@@ -341,6 +342,7 @@ export default function App() {
   autoContinueRef.current = autoContinue;
   duplicatePromptRef.current = duplicatePrompt;
   archiveSessionsRef.current = archiveSessions;
+  foldersRef.current = folders;
 
   useEffect(() => {
     try { localStorage.setItem('auto_continue', String(autoContinue)); } catch (_) {}
@@ -641,6 +643,14 @@ export default function App() {
       if (deletedSessionDirs.length > 0) {
         const deletedSet = new Set(deletedSessionDirs);
         setArchiveSessions(prev => prev.filter(s => !deletedSet.has(s.session_dir)));
+        // Also strip deleted session dirs from folder associations so the
+        // re-elaborated file does not inherit the old folder tag.
+        const updated = foldersRef.current.map(folder => ({
+          ...folder,
+          session_dirs: folder.session_dirs.filter(d => !deletedSet.has(d)),
+        }));
+        setFolders(updated);
+        void window.pywebview?.api?.save_archive_folders?.(updated).catch(() => {});
       }
       if (deletedSessionDirs.length !== deletableSessions.length) {
         await refreshArchiveSessions();
@@ -649,7 +659,7 @@ export default function App() {
       pendingArchiveReplacementsRef.current.delete(fileId);
       archiveReplacementCleanupInFlightRef.current.delete(fileId);
     }
-  }, [appendConsole, refreshArchiveSessions]);
+  }, [appendConsole, refreshArchiveSessions, setFolders]);
 
   useEffect(() => {
     const currentFileIds = new Set(files.map(f => f.id));
@@ -901,6 +911,13 @@ export default function App() {
       window.pywebview?.api?.delete_session?.(sessionDir).then(res => {
         if (res?.ok) {
           setArchiveSessions(prev => prev.filter(s => s.session_dir !== sessionDir));
+          // Strip deleted session from folders and persist
+          const updated = foldersRef.current.map(folder => ({
+            ...folder,
+            session_dirs: folder.session_dirs.filter(d => d !== sessionDir),
+          }));
+          setFolders(updated);
+          void window.pywebview?.api?.save_archive_folders?.(updated).catch(() => {});
         } else {
           appendConsole(`❌ Errore eliminazione sessione: ${res?.error ?? 'errore sconosciuto'}`);
         }
@@ -910,7 +927,7 @@ export default function App() {
       return;
     }
     confirmClearCompleted();
-  }, [confirmAction, confirmClearCompleted, confirmStopProcessing, appendConsole, refreshArchiveSessions]);
+  }, [confirmAction, confirmClearCompleted, confirmStopProcessing, appendConsole, refreshArchiveSessions, setFolders]);
 
   const handleRegenerateAnswer = async (ans: boolean | null) => {
     const currentPrompt = regeneratePrompt;

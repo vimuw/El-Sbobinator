@@ -835,7 +835,7 @@ function DraggableSessionCard({
   return (
     <div
       onClick={() => onPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir)}
-      className="archive-session-card flex items-center justify-between gap-3 px-4 py-3 cursor-pointer"
+      className="archive-session-card flex items-center justify-between gap-3 px-4 py-3 cursor-pointer group/card"
       style={hasRevisionWarnings ? { borderColor: 'var(--warning-ring)', boxShadow: 'inset 3px 0 0 var(--warning-ring)', background: 'var(--warning-subtle)' } : undefined}
     >
       <div className="flex items-center gap-3 overflow-hidden flex-1">
@@ -858,28 +858,29 @@ function DraggableSessionCard({
               <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span style={{ color: 'var(--warning-text)', fontWeight: 600 }}>Completata con avvisi</span></>
             )}
             {failedBlockCount > 0 && (
-              <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}><AlertTriangle className="w-3 h-3" />{failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}</span></>
+              <>
+                <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}>
+                  <AlertTriangle className="w-3 h-3" />{failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}
+                </span>
+                {canRetryBlocks && (
+                  <button
+                    type="button"
+                    onClick={handleRetryBlocks}
+                    disabled={isRetryingBlocks}
+                    className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full transition-opacity"
+                    style={{ color: 'var(--warning-text)', border: '1px solid var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
+                    title="Riprova solo i blocchi inclusi senza revisione"
+                  >
+                    <RefreshCw className={`w-2.5 h-2.5 ${isRetryingBlocks ? 'animate-spin' : ''}`} />
+                    {isRetryingBlocks ? 'Riprovo…' : 'Riprova revisione'}
+                  </button>
+                )}
+              </>
             )}
           </div>
-          {canRetryBlocks && (
-            <div className="mt-2 flex flex-col gap-2 rounded-xl px-3 py-2" style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid var(--warning-ring)' }}>
-              <p className="text-xs font-medium" style={{ color: 'var(--warning-text)' }}>
-                Alcune sezioni sono nella nota senza revisione AI.
-              </p>
-              <button
-                type="button"
-                onClick={handleRetryBlocks}
-                disabled={isRetryingBlocks}
-                className="premium-button-secondary compact-button text-xs self-start"
-                style={{ color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isRetryingBlocks ? 'animate-spin' : ''}`} />
-                {isRetryingBlocks ? 'Riprovo...' : 'Riprova revisione AI'}
-              </button>
-            </div>
-          )}
           <div
-            className="mt-0.5 flex items-center gap-1 text-[11px] hover:underline"
+            className="mt-0.5 flex items-center gap-1 text-[11px] opacity-0 group-hover/card:opacity-100 transition-opacity hover:underline"
             style={{ color: 'var(--text-faint)', cursor: 'pointer' }}
             onClick={e => { e.stopPropagation(); onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path); }}
           >
@@ -999,7 +1000,7 @@ function SortableSessionCard({
       {...attributes}
       {...(!disabled ? listeners : {})}
       onClick={() => onPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir)}
-      className="archive-session-card flex items-center justify-between gap-3 px-4 py-3"
+      className="archive-session-card flex items-center justify-between gap-3 px-4 py-3 group/card"
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
@@ -1024,28 +1025,29 @@ function SortableSessionCard({
               <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span style={{ color: 'var(--warning-text)', fontWeight: 600 }}>Completata con avvisi</span></>
             )}
             {failedBlockCount > 0 && (
-              <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}><AlertTriangle className="w-3 h-3" />{failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}</span></>
+              <>
+                <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}>
+                  <AlertTriangle className="w-3 h-3" />{failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}
+                </span>
+                {canRetryBlocks && (
+                  <button
+                    type="button"
+                    onClick={handleRetryBlocks}
+                    disabled={isRetryingBlocks}
+                    className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full transition-opacity"
+                    style={{ color: 'var(--warning-text)', border: '1px solid var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
+                    title="Riprova solo i blocchi inclusi senza revisione"
+                  >
+                    <RefreshCw className={`w-2.5 h-2.5 ${isRetryingBlocks ? 'animate-spin' : ''}`} />
+                    {isRetryingBlocks ? 'Riprovo…' : 'Riprova revisione'}
+                  </button>
+                )}
+              </>
             )}
           </div>
-          {canRetryBlocks && (
-            <div className="mt-2 flex flex-col gap-2 rounded-xl px-3 py-2" style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid var(--warning-ring)' }}>
-              <p className="text-xs font-medium" style={{ color: 'var(--warning-text)' }}>
-                Alcune sezioni sono nella nota senza revisione AI.
-              </p>
-              <button
-                type="button"
-                onClick={handleRetryBlocks}
-                disabled={isRetryingBlocks}
-                className="premium-button-secondary compact-button text-xs self-start"
-                style={{ color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isRetryingBlocks ? 'animate-spin' : ''}`} />
-                {isRetryingBlocks ? 'Riprovo...' : 'Riprova revisione AI'}
-              </button>
-            </div>
-          )}
           <div
-            className="mt-0.5 flex items-center gap-1 text-[11px] hover:underline"
+            className="mt-0.5 flex items-center gap-1 text-[11px] opacity-0 group-hover/card:opacity-100 transition-opacity hover:underline"
             style={{ color: 'var(--text-faint)', cursor: 'pointer' }}
             onClick={e => { e.stopPropagation(); onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path); }}
           >

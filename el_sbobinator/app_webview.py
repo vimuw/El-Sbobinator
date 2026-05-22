@@ -564,9 +564,7 @@ class ElSbobinatorApi:
             for key in resolved_to_evict:
                 del self._resolved_path_cache[key]
             shell_to_evict = [
-                key
-                for key in self._html_shell_cache
-                if key == abs_dir or str(key).startswith(prefix)
+                key for key in self._html_shell_cache if str(key).startswith(prefix)
             ]
             for key in shell_to_evict:
                 del self._html_shell_cache[key]
@@ -1720,23 +1718,24 @@ class ElSbobinatorApi:
             _basename = os.path.basename(real_path)
             with self._resolved_cache_lock:
                 cached_resolution = self._resolved_path_cache.get(requested_real_path)
-            if cached_resolution and os.path.isfile(cached_resolution):
-                fallback = cached_resolution
-            else:
-                fallback = self._find_html_in_session_dirs(_basename)
-                if not fallback:
-                    fallback = self._rebuild_html_from_session(_basename)
-            if fallback and os.path.isfile(fallback):
-                real_path = fallback
-                if not any(_path_under_root(real_path, root) for root in allowed_roots):
-                    return {
-                        "ok": False,
-                        "error": "Accesso negato: path fuori dai percorsi consentiti.",
-                    }
-                with self._resolved_cache_lock:
+                if cached_resolution and os.path.isfile(cached_resolution):
+                    fallback = cached_resolution
+                else:
+                    fallback = self._find_html_in_session_dirs(_basename)
+                    if not fallback:
+                        fallback = self._rebuild_html_from_session(_basename)
+                if fallback and os.path.isfile(fallback):
+                    real_path = fallback
+                    if not any(
+                        _path_under_root(real_path, root) for root in allowed_roots
+                    ):
+                        return {
+                            "ok": False,
+                            "error": "Accesso negato: path fuori dai percorsi consentiti.",
+                        }
                     self._resolved_path_cache[requested_real_path] = real_path
-            else:
-                return {"ok": False, "error": "File non trovato."}
+                else:
+                    return {"ok": False, "error": "File non trovato."}
         else:
             with self._resolved_cache_lock:
                 self._resolved_path_cache[requested_real_path] = real_path
@@ -2127,23 +2126,24 @@ class ElSbobinatorApi:
             _basename = os.path.basename(real_path)
             with self._resolved_cache_lock:
                 cached_resolution = self._resolved_path_cache.get(original_real_path)
-            if cached_resolution and os.path.isfile(cached_resolution):
-                fallback = cached_resolution
-            else:
-                fallback = self._find_html_in_session_dirs(_basename)
-                if not fallback:
-                    fallback = self._rebuild_html_from_session(_basename)
-            if fallback and os.path.isfile(fallback):
-                real_path = fallback
-                if not any(_path_under_root(real_path, root) for root in allowed_roots):
-                    return {
-                        "ok": False,
-                        "error": "Accesso negato: path fuori dai percorsi consentiti.",
-                    }
-                with self._resolved_cache_lock:
+                if cached_resolution and os.path.isfile(cached_resolution):
+                    fallback = cached_resolution
+                else:
+                    fallback = self._find_html_in_session_dirs(_basename)
+                    if not fallback:
+                        fallback = self._rebuild_html_from_session(_basename)
+                if fallback and os.path.isfile(fallback):
+                    real_path = fallback
+                    if not any(
+                        _path_under_root(real_path, root) for root in allowed_roots
+                    ):
+                        return {
+                            "ok": False,
+                            "error": "Accesso negato: path fuori dai percorsi consentiti.",
+                        }
                     self._resolved_path_cache[original_real_path] = real_path
-            else:
-                return {"ok": False, "error": "File non trovato."}
+                else:
+                    return {"ok": False, "error": "File non trovato."}
         try:
             with self._resolved_cache_lock:
                 shell = self._html_shell_cache.get(

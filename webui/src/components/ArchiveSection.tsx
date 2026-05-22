@@ -126,7 +126,7 @@ export function ArchiveSection({ sessions, onPreview, onOpenFile, onDeleteSessio
                           exit={{ opacity: 0, y: -4, transition: { duration: 0.1 } }}
                           transition={{ duration: 0.18, ease: 'easeOut' }}
                           onClick={() => onPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir)}
-                          className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 cursor-pointer transition-colors bg-white/[0.02] hover:bg-white/[0.05]"
+                          className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 cursor-pointer transition-colors bg-white/[0.02] hover:bg-white/[0.05] group/card"
                           style={{ border: '1px solid var(--border-subtle)' }}
                         >
                           <div className="flex items-center gap-3 overflow-hidden flex-1">
@@ -140,7 +140,7 @@ export function ArchiveSection({ sessions, onPreview, onOpenFile, onDeleteSessio
                                 )}
                               </div>
                               <div
-                                className="mt-0.5 flex items-center gap-1 text-[11px] hover:underline"
+                                className="mt-0.5 flex items-center gap-1 text-[11px] opacity-0 group-hover/card:opacity-100 transition-opacity hover:underline"
                                 style={{ color: 'var(--text-faint)', cursor: 'pointer' }}
                                 onClick={(e) => { e.stopPropagation(); onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path); }}
                                 title={`Apri cartella: ${session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path}`}

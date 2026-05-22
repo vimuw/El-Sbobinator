@@ -1179,7 +1179,7 @@ export function SettingsModal({
       confirmLabel="Elimina incomplete"
       cancelLabel="Annulla"
       onClose={() => setShowCleanupConfirm(false)}
-      onConfirm={() => { void handleCleanupSessions(); }}
+      onConfirm={() => { setShowCleanupConfirm(false); void handleCleanupSessions(); }}
     />
     <ConfirmActionModal
       isOpen={showCompletedCleanupConfirm}
@@ -1188,7 +1188,7 @@ export function SettingsModal({
       confirmLabel="Elimina sbobine completate"
       cancelLabel="Annulla"
       onClose={() => setShowCompletedCleanupConfirm(false)}
-      onConfirm={() => { void handleCleanupCompletedSessions(); }}
+      onConfirm={() => { setShowCompletedCleanupConfirm(false); void handleCleanupCompletedSessions(); }}
     />
     <ConfirmActionModal
       isOpen={showMoveConfirm}

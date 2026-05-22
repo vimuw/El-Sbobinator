@@ -296,30 +296,25 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
                     <AlertTriangle className="w-3 h-3" />
                     {failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}
                   </span>
+                  {canRetryBlocks && (
+                    <button
+                      type="button"
+                      onClick={handleRetryBlocks}
+                      disabled={isRetryingBlocks}
+                      className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full transition-opacity"
+                      style={{ color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', border: '1px solid var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
+                      title="Riprova solo i blocchi inclusi senza revisione"
+                    >
+                      <RotateCcw className={`w-2.5 h-2.5 ${isRetryingBlocks ? 'animate-spin' : ''}`} />
+                      {isRetryingBlocks ? 'Riprovo…' : 'Riprova revisione'}
+                    </button>
+                  )}
                 </>
               )}
             </div>
-            {canRetryBlocks && (
-              <div className="mt-2 flex flex-col gap-2 rounded-xl px-3 py-2" style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid var(--warning-ring)' }}>
-                <p className="text-xs font-medium" style={{ color: 'var(--warning-text)' }}>
-                  Alcune sezioni sono nella nota senza revisione AI.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleRetryBlocks}
-                  disabled={isRetryingBlocks}
-                  className="premium-button-secondary compact-button text-xs self-start"
-                  style={{ color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
-                  title="Riprova solo i blocchi inclusi senza revisione"
-                >
-                  <RotateCcw className={`w-3.5 h-3.5 ${isRetryingBlocks ? 'animate-spin' : ''}`} />
-                  {isRetryingBlocks ? 'Riprovo...' : 'Riprova revisione AI'}
-                </button>
-              </div>
-            )}
             {file.outputHtml && (
               <div
-                className="mt-1 flex items-center gap-1 text-[11px] hover:underline"
+                className="mt-1 flex items-center gap-1 text-[11px] opacity-0 group-hover/card:opacity-100 transition-opacity hover:underline"
                 style={{ color: 'var(--text-faint)', cursor: 'pointer' }}
                 onClick={(e) => { e.stopPropagation(); onOpenFile(file.outputDir ?? file.outputHtml!); }}
                 title={`Apri cartella: ${file.outputDir ?? file.outputHtml}`}
