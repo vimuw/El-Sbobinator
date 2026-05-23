@@ -206,18 +206,19 @@ export function QueueSection({
                   </motion.div>
                 )}
                 {appState === 'processing' && (
-                  <motion.div key="processing" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex justify-end">
-                    <button onClick={onStop} className="premium-button-secondary compact-button is-danger px-5 py-2">
-                      <Square className="w-3.5 h-3.5 fill-current" /> Stop
+                  <motion.div key="processing" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                    <button onClick={onStop} className="premium-button is-danger w-full text-lg">
+                      <Square className="w-5 h-5 fill-current" />
+                      Interrompi elaborazione
                     </button>
                   </motion.div>
                 )}
                 {appState === 'canceling' && (
-                  <motion.div key="canceling" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex justify-end">
-                    <span className="text-sm flex items-center gap-1.5" style={{ color: 'var(--error-text)', opacity: 0.75, cursor: 'wait' }}>
-                      <Square className="w-3 h-3 fill-current" />
-                      Annullamento in corso
-                    </span>
+                  <motion.div key="canceling" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                    <button disabled className="premium-button is-danger w-full text-lg" style={{ opacity: 0.65, cursor: 'wait' }}>
+                      <Square className="w-5 h-5 fill-current animate-pulse" />
+                      Annullamento in corso...
+                    </button>
                   </motion.div>
                 )}
               </AnimatePresence>

@@ -159,6 +159,44 @@ export default function App() {
   const warnedRevisionSessionsRef = useRef<Set<string>>(new Set());
   const prevSessionDirsRef = useRef<Map<string, string>>(new Map());
 
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [regeneratePrompt, setRegeneratePrompt] = useState<{ filename: string; mode?: 'completed' | 'resume'; sessionDir?: string } | null>(null);
+  const [askNewKeyPrompt, setAskNewKeyPrompt] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<ConfirmActionState | null>(null);
+  const [duplicatePrompt, setDuplicatePrompt] = useState<DuplicatePrompt>(null);
+  const [regenDirtyConfirm, setRegenDirtyConfirm] = useState<{ filename: string } | null>(null);
+
+  const [activePage, setActivePage] = useState<ActivePage>('queue');
+  const [folders, setFolders] = useState<ArchiveFolder[]>([]);
+  const [isPeakHour, setIsPeakHour] = useState(() => { const h = new Date().getHours(); return h >= 15 && h < 20; });
+  const [isPeakDismissed, setIsPeakDismissed] = useState(() => {
+    const ts = localStorage.getItem('peakBannerDismissedUntil');
+    return ts ? Date.now() < Number(ts) : false;
+  });
+
+  const [isDragging, setIsDragging] = useState(false);
+  const [showConsole, setShowConsole] = useState(() => localStorage.getItem('show_console') === 'true');
+  const [autoContinue, setAutoContinue] = useState(() => localStorage.getItem('auto_continue') !== 'false');
+  const [batchTotal, setBatchTotal] = useState(0);
+  const [batchCompleted, setBatchCompleted] = useState(0);
+  const [completionFlash, setCompletionFlash] = useState(false);
+  const [isRemovingInsecureKey, setIsRemovingInsecureKey] = useState(false);
+  const [updateInstallState, setUpdateInstallState] = useState<UpdateInstallState>(UPDATE_INSTALL_IDLE);
+  const updateInstallStateRef = useRef<UpdateInstallState>(UPDATE_INSTALL_IDLE);
+
+  const filesRef = useRef(files);
+  const appStateRef = useRef(appState);
+  const autoContinueRef = useRef(autoContinue);
+  const duplicatePromptRef = useRef<DuplicatePrompt>(duplicatePrompt);
+  const startProcessingRef = useRef<(isContinuation?: boolean, overrideLowDisk?: boolean) => Promise<boolean>>(() => Promise.resolve(false));
+  const archiveSessionsRef = useRef<ArchiveSession[]>(archiveSessions);
+  const foldersRef = useRef(folders);
+  const pendingArchiveReplacementsRef = useRef<Map<string, PendingArchiveReplacement>>(new Map());
+  const archiveReplacementCleanupInFlightRef = useRef<Set<string>>(new Set());
+  const downloadCompletionRef = useRef<{ version: string; resolve: () => void; reject: (e: Error) => void } | null>(null);
+  const updateInstallPromiseRef = useRef<Promise<void> | null>(null);
+  const updateInstallToastIdRef = useRef<string | null>(null);
+
   const dismissToast = useCallback((id: string) => {
     const timer = toastTimersRef.current.get(id);
 
@@ -321,51 +359,14 @@ export default function App() {
 
   const { preview, openPreview, closePreview, relinkPreviewAudio, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
 
-
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [regeneratePrompt, setRegeneratePrompt] = useState<{ filename: string; mode?: 'completed' | 'resume'; sessionDir?: string } | null>(null);
-  const [askNewKeyPrompt, setAskNewKeyPrompt] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<ConfirmActionState | null>(null);
-  const [duplicatePrompt, setDuplicatePrompt] = useState<DuplicatePrompt>(null);
-  const [regenDirtyConfirm, setRegenDirtyConfirm] = useState<{ filename: string } | null>(null);
-
-  const [activePage, setActivePage] = useState<ActivePage>('queue');
-  const [folders, setFolders] = useState<ArchiveFolder[]>([]);
-  const [isPeakHour, setIsPeakHour] = useState(() => { const h = new Date().getHours(); return h >= 15 && h < 20; });
-  const [isPeakDismissed, setIsPeakDismissed] = useState(() => {
-    const ts = localStorage.getItem('peakBannerDismissedUntil');
-    return ts ? Date.now() < Number(ts) : false;
+  useEffect(() => {
+    filesRef.current = files;
+    appStateRef.current = appState;
+    autoContinueRef.current = autoContinue;
+    duplicatePromptRef.current = duplicatePrompt;
+    archiveSessionsRef.current = archiveSessions;
+    foldersRef.current = folders;
   });
-
-  const [isDragging, setIsDragging] = useState(false);
-  const [showConsole, setShowConsole] = useState(() => localStorage.getItem('show_console') === 'true');
-  const [autoContinue, setAutoContinue] = useState(() => localStorage.getItem('auto_continue') !== 'false');
-  const [batchTotal, setBatchTotal] = useState(0);
-  const [batchCompleted, setBatchCompleted] = useState(0);
-  const [completionFlash, setCompletionFlash] = useState(false);
-  const [isRemovingInsecureKey, setIsRemovingInsecureKey] = useState(false);
-  const [updateInstallState, setUpdateInstallState] = useState<UpdateInstallState>(UPDATE_INSTALL_IDLE);
-  const updateInstallStateRef = useRef<UpdateInstallState>(UPDATE_INSTALL_IDLE);
-
-  const filesRef = useRef(files);
-  const appStateRef = useRef(appState);
-  const autoContinueRef = useRef(autoContinue);
-  const duplicatePromptRef = useRef<DuplicatePrompt>(duplicatePrompt);
-  const startProcessingRef = useRef<(isContinuation?: boolean, overrideLowDisk?: boolean) => Promise<boolean>>(() => Promise.resolve(false));
-  const archiveSessionsRef = useRef<ArchiveSession[]>(archiveSessions);
-  const foldersRef = useRef(folders);
-  const pendingArchiveReplacementsRef = useRef<Map<string, PendingArchiveReplacement>>(new Map());
-  const archiveReplacementCleanupInFlightRef = useRef<Set<string>>(new Set());
-  const downloadCompletionRef = useRef<{ version: string; resolve: () => void; reject: (e: Error) => void } | null>(null);
-  const updateInstallPromiseRef = useRef<Promise<void> | null>(null);
-  const updateInstallToastIdRef = useRef<string | null>(null);
-
-  filesRef.current = files;
-  appStateRef.current = appState;
-  autoContinueRef.current = autoContinue;
-  duplicatePromptRef.current = duplicatePrompt;
-  archiveSessionsRef.current = archiveSessions;
-  foldersRef.current = folders;
 
   useEffect(() => {
     try { localStorage.setItem('auto_continue', String(autoContinue)); } catch (_) {}
@@ -817,9 +818,9 @@ export default function App() {
   const requestRemoveFile = useCallback((id: string) => {
     const targetFile = filesRef.current.find(file => file.id === id);
     if (!targetFile) return;
-    if (appState !== 'idle' && targetFile.status !== 'done') return;
+    if (appStateRef.current !== 'idle' && targetFile.status !== 'done') return;
     setConfirmAction({ type: 'remove-file', fileId: id, fileName: targetFile.name, isDone: targetFile.status === 'done' });
-  }, [appState]);
+  }, [setConfirmAction]);
 
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -896,17 +897,17 @@ export default function App() {
     dispatch({ type: 'app/set_status', status: 'canceling' });
     appendConsole('[!] Annullamento in corso, attendere prego...');
     if (window.pywebview?.api) await window.pywebview.api.stop_processing?.();
-  }, [appendConsole]);
+  }, [appendConsole, setConfirmAction]);
 
   const handleClearAll = useCallback(() => {
     setConfirmAction({ type: 'clear-all' });
-  }, []);
+  }, [setConfirmAction]);
 
   const confirmClearCompleted = useCallback(() => {
     setConfirmAction(null);
     dispatch({ type: 'queue/clear_completed' });
     void refreshArchiveSessions();
-  }, [refreshArchiveSessions]);
+  }, [refreshArchiveSessions, setConfirmAction]);
 
   const executeRetryFromArchive = useCallback(async (session: ArchiveSession) => {
     if (appStateRef.current !== 'idle') {
@@ -1003,7 +1004,7 @@ export default function App() {
       return;
     }
     confirmClearCompleted();
-  }, [confirmAction, confirmClearCompleted, confirmStopProcessing, appendConsole, refreshArchiveSessions, setFolders, executeRetryFromArchive]);
+  }, [confirmAction, confirmClearCompleted, confirmStopProcessing, appendConsole, refreshArchiveSessions, setFolders, executeRetryFromArchive, setConfirmAction]);
 
   const handleRegenerateAnswer = async (ans: boolean | null) => {
     const currentPrompt = regeneratePrompt;

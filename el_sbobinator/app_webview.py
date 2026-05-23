@@ -1495,132 +1495,145 @@ class ElSbobinatorApi:
                 for idx, file_info in enumerate(files):
                     if self._cancel_event.is_set():
                         break
-                    current_index = idx
-                    current_file_id = str(file_info.get("id", "") or "")
-                    self._adapter.reset_run_state(active_api_key)
-                    file_path = file_info.get("path", "")
-                    if not file_path or not os.path.exists(file_path):
-                        self._push_console(f"[!] File non trovato: {file_path}")
-                        ff_payload: FileFailedPayload = {
+                    try:
+                        current_index = idx
+                        current_file_id = str(file_info.get("id", "") or "")
+                        self._adapter.reset_run_state(active_api_key)
+                        file_path = file_info.get("path", "")
+                        if not file_path or not os.path.exists(file_path):
+                            self._push_console(f"[!] File non trovato: {file_path}")
+                            ff_payload: FileFailedPayload = {
+                                "index": idx,
+                                "id": file_info.get("id", ""),
+                                "error": "File non trovato.",
+                            }
+                            self._adapter.emit("fileFailed", ff_payload, batched=False)
+                            failed_count += 1
+                            current_index = None
+                            current_file_id = ""
+                            continue
+
+                        self._push_console(f"\n{'=' * 50}")
+                        self._push_console(
+                            f"  File {idx + 1}/{len(files)}: {os.path.basename(file_path)}"
+                        )
+                        self._push_console(f"{'=' * 50}")
+                        current_payload: SetCurrentFilePayload = {
                             "index": idx,
                             "id": file_info.get("id", ""),
-                            "error": "File non trovato.",
+                            "total": len(files),
                         }
-                        self._adapter.emit("fileFailed", ff_payload, batched=False)
-                        failed_count += 1
+                        self._adapter.emit(
+                            "setCurrentFile", current_payload, batched=False
+                        )
+                        file_resume_session = (
+                            bool(file_info.get("resume_session"))
+                            if "resume_session" in file_info
+                            else resume_session
+                        )
+                        file_allow_completed_destroy = bool(
+                            file_info.get("allow_completed_destroy", False)
+                        )
+
+                        esegui_sbobinatura(
+                            file_path,
+                            active_api_key,
+                            self._adapter,
+                            resume_session=file_resume_session,
+                            allow_completed_destroy=file_allow_completed_destroy,
+                        )
+                        if self._adapter.effective_api_key:
+                            active_api_key = self._adapter.effective_api_key
+
+                        last_run_status = self._adapter.last_run_status
+                        if (
+                            self._cancel_event.is_set()
+                            or last_run_status == "cancelled"
+                        ) and last_run_status != "failed":
+                            break
+
+                        if last_run_status in ("completed", "completed_with_warnings"):
+                            if self._adapter.last_output_html and os.path.exists(
+                                self._adapter.last_output_html
+                            ):
+                                revision_failed_blocks = list(
+                                    self._adapter.last_revision_failed_blocks or []
+                                )
+                                completion_status = (
+                                    "completed_with_warnings"
+                                    if last_run_status == "completed_with_warnings"
+                                    or revision_failed_blocks
+                                    else "completed"
+                                )
+                                fd_payload: FileDonePayload = {
+                                    "index": idx,
+                                    "id": file_info.get("id", ""),
+                                    "output_html": self._adapter.last_output_html,
+                                    "output_dir": self._adapter.last_output_dir or "",
+                                    "completion_status": completion_status,
+                                    "revision_failed_blocks": revision_failed_blocks,
+                                    "primary_model": self._adapter.last_primary_model
+                                    or "",
+                                    "effective_model": self._adapter.last_effective_model
+                                    or "",
+                                }
+                                self._adapter.emit(
+                                    "fileDone", fd_payload, batched=False
+                                )
+                                if completion_status == "completed_with_warnings":
+                                    completed_with_warnings_count += 1
+                                else:
+                                    completed_count += 1
+                            else:
+                                ff_payload2: FileFailedPayload = {
+                                    "index": idx,
+                                    "id": file_info.get("id", ""),
+                                    "error": "Output HTML non generato.",
+                                }
+                                self._adapter.emit(
+                                    "fileFailed", ff_payload2, batched=False
+                                )
+                                failed_count += 1
+                        else:
+                            error_detail = (
+                                getattr(self._adapter, "last_run_error_detail", None)
+                                or ""
+                            )
+                            error_message = (
+                                redact_secrets(self._adapter.last_run_error)
+                                or "Elaborazione non completata."
+                            )
+                            error_detail = redact_secrets(error_detail)
+                            ff_payload3: FileFailedPayload = {
+                                "index": idx,
+                                "id": file_info.get("id", ""),
+                                "error": error_message,
+                            }
+                            if error_detail:
+                                ff_payload3["error_detail"] = error_detail
+                            self._adapter.emit("fileFailed", ff_payload3, batched=False)
+                            failed_count += 1
+                            if ff_payload3["error"] in {
+                                "quota_daily_limit_phase1",
+                                "quota_daily_limit_phase2",
+                            }:
+                                quota_exhausted = True
+                                break
                         current_index = None
                         current_file_id = ""
-                        continue
-
-                    self._push_console(f"\n{'=' * 50}")
-                    self._push_console(
-                        f"  File {idx + 1}/{len(files)}: {os.path.basename(file_path)}"
-                    )
-                    self._push_console(f"{'=' * 50}")
-                    current_payload: SetCurrentFilePayload = {
-                        "index": idx,
-                        "id": file_info.get("id", ""),
-                        "total": len(files),
-                    }
-                    self._adapter.emit("setCurrentFile", current_payload, batched=False)
-                    file_resume_session = (
-                        bool(file_info.get("resume_session"))
-                        if "resume_session" in file_info
-                        else resume_session
-                    )
-                    file_allow_completed_destroy = bool(
-                        file_info.get("allow_completed_destroy", False)
-                    )
-
-                    esegui_sbobinatura(
-                        file_path,
-                        active_api_key,
-                        self._adapter,
-                        resume_session=file_resume_session,
-                        allow_completed_destroy=file_allow_completed_destroy,
-                    )
-                    if self._adapter.effective_api_key:
-                        active_api_key = self._adapter.effective_api_key
-
-                    last_run_status = self._adapter.last_run_status
-                    if (
-                        self._cancel_event.is_set() or last_run_status == "cancelled"
-                    ) and last_run_status != "failed":
-                        break
-
-                    if last_run_status in ("completed", "completed_with_warnings"):
-                        if self._adapter.last_output_html and os.path.exists(
-                            self._adapter.last_output_html
-                        ):
-                            revision_failed_blocks = list(
-                                self._adapter.last_revision_failed_blocks or []
-                            )
-                            completion_status = (
-                                "completed_with_warnings"
-                                if last_run_status == "completed_with_warnings"
-                                or revision_failed_blocks
-                                else "completed"
-                            )
-                            fd_payload: FileDonePayload = {
-                                "index": idx,
-                                "id": file_info.get("id", ""),
-                                "output_html": self._adapter.last_output_html,
-                                "output_dir": self._adapter.last_output_dir or "",
-                                "completion_status": completion_status,
-                                "revision_failed_blocks": revision_failed_blocks,
-                                "primary_model": self._adapter.last_primary_model or "",
-                                "effective_model": self._adapter.last_effective_model
-                                or "",
+                    except Exception as e:
+                        if current_index is not None:
+                            ff_payload4: FileFailedPayload = {
+                                "index": current_index,
+                                "id": current_file_id,
+                                "error": redact_secrets(e) or "Errore fatale.",
                             }
-                            self._adapter.emit("fileDone", fd_payload, batched=False)
-                            if completion_status == "completed_with_warnings":
-                                completed_with_warnings_count += 1
-                            else:
-                                completed_count += 1
-                        else:
-                            ff_payload2: FileFailedPayload = {
-                                "index": idx,
-                                "id": file_info.get("id", ""),
-                                "error": "Output HTML non generato.",
-                            }
-                            self._adapter.emit("fileFailed", ff_payload2, batched=False)
+                            self._adapter.emit("fileFailed", ff_payload4, batched=False)
                             failed_count += 1
-                    else:
-                        error_detail = (
-                            getattr(self._adapter, "last_run_error_detail", None) or ""
-                        )
-                        error_message = (
-                            redact_secrets(self._adapter.last_run_error)
-                            or "Elaborazione non completata."
-                        )
-                        error_detail = redact_secrets(error_detail)
-                        ff_payload3: FileFailedPayload = {
-                            "index": idx,
-                            "id": file_info.get("id", ""),
-                            "error": error_message,
-                        }
-                        if error_detail:
-                            ff_payload3["error_detail"] = error_detail
-                        self._adapter.emit("fileFailed", ff_payload3, batched=False)
-                        failed_count += 1
-                        if ff_payload3["error"] in {
-                            "quota_daily_limit_phase1",
-                            "quota_daily_limit_phase2",
-                        }:
-                            quota_exhausted = True
-                            break
-                    current_index = None
-                    current_file_id = ""
+                        self._push_console(f"[!] Errore su file {idx + 1}: {e}")
+                        current_index = None
+                        current_file_id = ""
             except Exception as e:
-                if current_index is not None:
-                    ff_payload4: FileFailedPayload = {
-                        "index": current_index,
-                        "id": current_file_id,
-                        "error": redact_secrets(e) or "Errore fatale.",
-                    }
-                    self._adapter.set_run_result("failed", redact_secrets(e))
-                    self._adapter.emit("fileFailed", ff_payload4, batched=False)
-                    failed_count += 1
                 self._push_console(f"[!] Errore fatale: {e}")
             finally:
                 self._adapter.is_running = False

@@ -101,7 +101,7 @@ describe('QueueSection', () => {
         appState="processing"
       />,
     );
-    expect(screen.getByText('Stop')).toBeTruthy();
+    expect(screen.getByText('Interrompi elaborazione')).toBeTruthy();
   });
 
   it('calls onStop when Stop button is clicked', () => {
@@ -114,7 +114,7 @@ describe('QueueSection', () => {
         onStop={onStop}
       />,
     );
-    fireEvent.click(screen.getByText('Stop'));
+    fireEvent.click(screen.getByText('Interrompi elaborazione'));
     expect(onStop).toHaveBeenCalledTimes(1);
   });
 
@@ -126,7 +126,7 @@ describe('QueueSection', () => {
         appState="canceling"
       />,
     );
-    expect(screen.getAllByText('Annullamento in corso').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Annullamento in corso...').length).toBeGreaterThan(0);
   });
 
   it('auto-continue toggle changes state and menu stays open', () => {

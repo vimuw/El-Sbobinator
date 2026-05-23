@@ -165,6 +165,22 @@ def cleanup_orphan_temp_chunks(max_age_seconds: int = 12 * 3600) -> int:
     now = time.time()
     removed = _cleanup_legacy_temp_chunks(tempfile.gettempdir(), now, max_age_seconds)
     removed += _cleanup_session_temp_chunks(now, max_age_seconds)
+
+    # Clean up orphaned Inno Setup executables from system Temp directory
+    try:
+        tmpdir = tempfile.gettempdir()
+        for name in os.listdir(tmpdir):
+            if name.startswith("El-Sbobinator-Setup-") and name.endswith(".exe"):
+                path = os.path.join(tmpdir, name)
+                if _is_old_enough(path, now, max_age_seconds):
+                    try:
+                        os.remove(path)
+                        removed += 1
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
     return removed
 
 

@@ -142,6 +142,18 @@ def _install_macos_dmg(tmp_path: str) -> dict | None:
         try:
             app_src = os.path.join(mount_point, "El Sbobinator.app")
             app_dst = "/Applications/El Sbobinator.app"
+            if os.path.exists(app_dst):
+                import shutil
+
+                try:
+                    shutil.rmtree(app_dst)
+                except Exception:
+                    subprocess.run(["rm", "-rf", app_dst], check=False, timeout=15)
+                if os.path.exists(app_dst):
+                    raise PermissionError(
+                        "Impossibile rimuovere la vecchia versione dell'applicazione in /Applications. "
+                        "Assicurati che El Sbobinator non sia in esecuzione e riprova."
+                    )
             try:
                 subprocess.run(
                     ["cp", "-R", app_src, app_dst],
