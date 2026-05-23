@@ -526,7 +526,7 @@ class TestLoadConfigFromRealFile(unittest.TestCase):
         self.assertEqual(result["api_key"], "decrypted-secret")
 
     def test_windows_sets_has_protected_key_when_dpapi_decrypt_fails(self) -> None:
-        """On Windows, if DPAPI returns empty string, has_protected_key is set True."""
+        """On Windows, if DPAPI returns empty string, has_protected_key is set False."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cfg_path = os.path.join(tmpdir, "config.json")
             payload = {"api_key": "", "api_key_protected": "FAKEBASE64=="}
@@ -550,7 +550,7 @@ class TestLoadConfigFromRealFile(unittest.TestCase):
             ):
                 result = cs.load_config()
 
-        self.assertTrue(result.get("has_protected_key"))
+        self.assertFalse(result.get("has_protected_key"))
         self.assertEqual(result["api_key"], "")
 
     def test_windows_marks_plaintext_api_key_as_insecure(self) -> None:
@@ -963,7 +963,7 @@ class TestLoadConfigMacOS(unittest.TestCase):
                 cs.load_config()
         mock_set.assert_called_once_with("plain-key-on-disk")
 
-    def test_macos_sets_has_protected_key_when_use_keyring_true_and_keyring_empty(
+    def test_macos_clears_has_protected_key_when_use_keyring_true_and_keyring_empty(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -991,7 +991,7 @@ class TestLoadConfigMacOS(unittest.TestCase):
                 ),
             ):
                 result = cs.load_config()
-        self.assertTrue(result.get("has_protected_key"))
+        self.assertFalse(result.get("has_protected_key"))
         self.assertEqual(result["api_key"], "")
 
     def test_macos_reads_fallback_keys_from_keyring(self) -> None:

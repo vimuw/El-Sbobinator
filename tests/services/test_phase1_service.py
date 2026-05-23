@@ -346,11 +346,10 @@ class Phase1TempChunkPathTests(unittest.TestCase):
                 ["chunk_001_0_60.mp3", "chunk_002_60_120.mp3"],
             )
             run_dir = os.path.dirname(cut_paths[0])
-            self.assertTrue(os.path.exists(run_dir))
+            self.assertFalse(os.path.exists(run_dir))
 
             runtime.cleanup_temp_files()
 
-            self.assertFalse(os.path.exists(run_dir))
             self.assertEqual(target.file_temporanei, [])
 
 

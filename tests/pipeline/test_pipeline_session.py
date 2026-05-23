@@ -436,7 +436,7 @@ class PipelineSessionHelpersTests(unittest.TestCase):
 
 
 class InitializeSessionContextTests(unittest.TestCase):
-    def test_resume_overrides_model_from_current_config(self):
+    def test_resume_preserves_model_from_session_config(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             import json
 
@@ -493,11 +493,71 @@ class InitializeSessionContextTests(unittest.TestCase):
             ):
                 ctx = initialize_session_context(input_path, resume_session=True)
 
-            self.assertEqual(ctx.settings.model, "gemini-3.1-flash-lite-preview")
+            self.assertEqual(ctx.settings.model, "gemini-2.5-flash")
             self.assertEqual(
                 ctx.session["settings"]["effective_model"],
-                "gemini-3.1-flash-lite-preview",
+                "gemini-2.5-flash",
             )
+
+    def test_resume_preserves_empty_fallback_models(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            import json
+
+            input_path = os.path.join(tmpdir, "lesson.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake")
+
+            session_dir = os.path.join(tmpdir, "session")
+            os.makedirs(os.path.join(session_dir, "phase1_chunks"), exist_ok=True)
+            os.makedirs(os.path.join(session_dir, "phase2_revised"), exist_ok=True)
+            session_data = {
+                "schema_version": 1,
+                "created_at": "2024-01-01 00:00:00",
+                "updated_at": "2024-01-01 00:00:00",
+                "stage": "phase1",
+                "input": {"path": input_path, "size": 4, "mtime": 0.0},
+                "settings": {
+                    "model": "gemini-2.5-flash",
+                    "fallback_models": [],
+                    "effective_model": "gemini-2.5-flash",
+                    "chunk_minutes": 15,
+                    "overlap_seconds": 30,
+                    "macro_char_limit": 22000,
+                    "preconvert_audio": True,
+                    "prefetch_next_chunk": True,
+                    "inline_audio_max_mb": 6.0,
+                    "audio": {"bitrate": "48k"},
+                },
+                "phase1": {
+                    "next_start_sec": 0,
+                    "chunks_done": 0,
+                    "memoria_precedente": "",
+                },
+                "phase2": {"macro_total": 0, "revised_done": 0},
+                "outputs": {},
+                "last_error": None,
+            }
+            session_path = os.path.join(session_dir, "session.json")
+            with open(session_path, "w", encoding="utf-8") as fh:
+                json.dump(session_data, fh)
+
+            with (
+                patch(
+                    "el_sbobinator.pipeline.pipeline_session.load_config",
+                    return_value={
+                        "preferred_model": "gemini-3.1-flash-lite-preview",
+                        "fallback_models": ["gemini-2.5-flash"],
+                    },
+                ),
+                patch(
+                    "el_sbobinator.core.session_store._session_dir_for_file",
+                    return_value=session_dir,
+                ),
+            ):
+                ctx = initialize_session_context(input_path, resume_session=True)
+
+            self.assertEqual(ctx.settings.fallback_models, [])
+            self.assertEqual(ctx.session["settings"]["fallback_models"], [])
 
     def _make_session_file(self, tmpdir, model, chunk_minutes, chunks_done):
         import json
@@ -541,7 +601,7 @@ class InitializeSessionContextTests(unittest.TestCase):
             json.dump(session_data, fh)
         return input_path, session_dir
 
-    def test_chunk_minutes_resets_to_new_model_default_when_no_chunks_done(self):
+    def test_chunk_minutes_and_model_preserved_when_no_chunks_done(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path, session_dir = self._make_session_file(
                 tmpdir,
@@ -580,10 +640,10 @@ class InitializeSessionContextTests(unittest.TestCase):
             ):
                 ctx = initialize_session_context(input_path, resume_session=True)
 
-            self.assertEqual(ctx.settings.model, "gemini-2.5-flash")
-            self.assertEqual(ctx.settings.chunk_minutes, 15)
+            self.assertEqual(ctx.settings.model, "gemini-3.1-flash-lite-preview")
+            self.assertEqual(ctx.settings.chunk_minutes, 10)
 
-    def test_chunk_minutes_preserved_when_model_changes_but_chunks_already_done(self):
+    def test_chunk_minutes_and_model_preserved_when_chunks_already_done(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path, session_dir = self._make_session_file(
                 tmpdir,
@@ -622,7 +682,7 @@ class InitializeSessionContextTests(unittest.TestCase):
             ):
                 ctx = initialize_session_context(input_path, resume_session=True)
 
-            self.assertEqual(ctx.settings.model, "gemini-2.5-flash")
+            self.assertEqual(ctx.settings.model, "gemini-3.1-flash-lite-preview")
             self.assertEqual(ctx.settings.chunk_minutes, 10)
 
 

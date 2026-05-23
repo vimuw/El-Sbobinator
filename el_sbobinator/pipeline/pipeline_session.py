@@ -232,17 +232,20 @@ def initialize_session_context(
             current_defaults = build_default_pipeline_settings(load_config())
             if not isinstance(session.get("settings"), dict):
                 session["settings"] = {}
-            old_model = session["settings"].get("model", "")
-            new_model = current_defaults["model"]
-            session["settings"]["model"] = new_model
-            session["settings"]["fallback_models"] = current_defaults["fallback_models"]
-            session["settings"]["effective_model"] = current_defaults["effective_model"]
-            if old_model != new_model:
-                chunks_done = int(session.get("phase1", {}).get("chunks_done", 0) or 0)
-                if chunks_done == 0:
-                    session["settings"]["chunk_minutes"] = current_defaults[
-                        "chunk_minutes"
-                    ]
+            # Preserve session-specific models if already configured
+            if "model" not in session["settings"] or not session["settings"]["model"]:
+                session["settings"]["model"] = current_defaults["model"]
+            if "fallback_models" not in session["settings"]:
+                session["settings"]["fallback_models"] = current_defaults[
+                    "fallback_models"
+                ]
+            if (
+                "effective_model" not in session["settings"]
+                or not session["settings"]["effective_model"]
+            ):
+                session["settings"]["effective_model"] = current_defaults[
+                    "effective_model"
+                ]
         except Exception:
             pass
 

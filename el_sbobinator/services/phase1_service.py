@@ -62,8 +62,10 @@ def _phase1_chunk_temp_path(
 
 
 def _cleanup_phase1_temp_run_dir(temp_run_dir: str) -> None:
+    import shutil
+
     try:
-        os.rmdir(temp_run_dir)
+        shutil.rmtree(temp_run_dir, ignore_errors=True)
     except Exception:
         pass
 

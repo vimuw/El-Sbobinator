@@ -404,6 +404,7 @@ def load_config() -> dict:  # noqa: C901
                         k = _keyring_get_api_key()
                         if k:
                             data["api_key"] = k
+                            data["has_protected_key"] = True
                         else:
                             # One-time migration: if plaintext exists on disk, move to keyring.
                             plain = str(data.get("api_key") or "").strip()
@@ -413,8 +414,8 @@ def load_config() -> dict:  # noqa: C901
                                         save_config(plain)
                                     except Exception:
                                         pass
-                            elif data.get("use_keyring"):
-                                data["has_protected_key"] = True
+                            if not data.get("api_key"):
+                                data["has_protected_key"] = False
                 except Exception:
                     pass
                 # Decrypt best-effort on Windows (do not expose protected value to callers).
@@ -433,8 +434,9 @@ def load_config() -> dict:  # noqa: C901
                                 dec = _dpapi_unprotect_text_windows(protected)
                                 if dec:
                                     data["api_key"] = dec
-                                else:
                                     data["has_protected_key"] = True
+                                else:
+                                    data["has_protected_key"] = False
                 except Exception:
                     pass
                 # Decrypt fallback keys on Windows.
