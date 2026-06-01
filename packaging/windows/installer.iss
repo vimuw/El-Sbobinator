@@ -18,7 +18,7 @@ DefaultGroupName=El Sbobinator
 SourceDir={#SourcePath}\..\..
 OutputDir=dist
 OutputBaseFilename=El-Sbobinator-Setup-v{#AppVersion}
-SetupIconFile=assets\icon.ico
+SetupIconFile={#SourcePath}\..\..\assets\icon.ico
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -50,6 +50,9 @@ Name: "{userdesktop}\El Sbobinator"; Filename: "{app}\El Sbobinator.exe"
 
 [Run]
 Filename: "{app}\El Sbobinator.exe"; Flags: nowait skipifsilent
+
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}"
 
 [Code]
 { ------------------------------------------------------------------ }

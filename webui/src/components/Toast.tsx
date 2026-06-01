@@ -60,8 +60,8 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       className="pointer-events-auto flex flex-col gap-1.5 px-4 py-3 rounded-2xl"
       style={{
         position: 'relative',
-        maxWidth: '18rem',
-        width: 'max-content',
+        maxWidth: '20rem',
+        width: '20rem',
         paddingRight: '2.25rem',
         background: toast.type === 'warning'
           ? 'linear-gradient(var(--warning-subtle), var(--warning-subtle)), var(--bg-elevated)'
