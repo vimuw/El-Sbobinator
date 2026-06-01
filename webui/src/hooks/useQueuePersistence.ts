@@ -92,5 +92,5 @@ export function useQueuePersistence(
     } catch (error) {
       appendConsole(`[ERRORE] Persistenza coda fallita: ${error}`);
     }
-  }, [structuralVersion]);
+  }, [structuralVersion, appendConsole]);
 }

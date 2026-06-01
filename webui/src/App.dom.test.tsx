@@ -6,6 +6,7 @@ import { useApiReady } from './hooks/useApiReady';
 import { useBridgeCallbacks } from './hooks/useBridgeCallbacks';
 import { useQueuePersistence } from './hooks/useQueuePersistence';
 import { useUpdateChecker } from './hooks/useUpdateChecker';
+import type { FileDonePayload } from './appState';
 
 vi.mock('motion/react', () => ({
   motion: new Proxy({}, {
@@ -706,10 +707,10 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       }, [dispatch]);
     });
 
-    let bridgeCallbacks: any = {};
+    let bridgeCallbacks: { onFileDone?: (data: FileDonePayload) => void } = {};
     vi.mocked(useBridgeCallbacks).mockImplementation((options) => {
       bridgeCallbacks = {
-        onFileDone: (data: any) => options.onRevisionWarning?.(data),
+        onFileDone: (data: FileDonePayload) => options.onRevisionWarning?.(data),
       };
       return undefined;
     });
