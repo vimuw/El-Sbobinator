@@ -70,12 +70,12 @@ Quando esce una nuova versione, l'app mostra direttamente nell'interfaccia un pu
 
 ---
 
-## � Come si usa passo passo?
+## 📖 Come si usa passo passo?
 
 1. **Inserisci la chiave:** Nelle impostazioni, incolla la tua Chiave API di Gemini. L'app la salverà in modo sicuro (tramite protezione del profilo su Windows o Portachiavi su macOS), così non dovrai rimetterla mai più. Puoi anche inserire chiavi extra e usare la funzione *Validazione ambiente* per controllare che tutto funzioni.
 2. **Carica l'audio:** Seleziona uno o più file audio o video trascinandoli nella finestra oppure cliccando per sfogliarli. Formati supportati: `.mp3`, `.m4a`, `.wav`, `.ogg`, `.flac`, `.aac`, `.mp4`, `.mkv`, `.webm` (funziona anche con le registrazioni schermo di Teams, Zoom, ecc.). L'app li aggiungerà alla **Coda di elaborazione** scartando in automatico eventuali duplicati.
 3. **Avvia:** Clicca sul pulsantone "Avvia sbobinatura". L'app ti mostrerà in tempo reale la fase corrente e il progresso. Ad esempio, se l'audio dura un'ora, farà circa 4 estrazioni da 15 minuti l'una.
-4. **Rifinisci nell'Editor:** A fine processo si potrai aprire la schermata di anteprima con un editor di testo completo. Puoi:
+4. **Rifinisci nell'Editor:** A fine processo potrai aprire la schermata di anteprima con un editor di testo completo. Puoi:
    - Leggere e modificare il testo liberamente
    - Applicare formattazione: **grassetto**, *corsivo*, sottolineato, elenchi, tabelle
    - Strutturare il documento con titoli (`H1`, `H2`, `H3`...)

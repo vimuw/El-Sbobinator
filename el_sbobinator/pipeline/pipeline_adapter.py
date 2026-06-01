@@ -63,6 +63,8 @@ class PipelineAdapter:
         self._lock = threading.Lock()
         self.file_temporanei: list[str] = []
         self._is_running = False
+        self._run_started_monotonic: float | None = None
+        self._step_times: dict[str, float] = {}
 
         # Output info (set by pipeline)
         self.last_output_html: str | None = None

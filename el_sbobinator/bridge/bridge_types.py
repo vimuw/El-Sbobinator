@@ -16,7 +16,7 @@ class BridgeFileItem(TypedDict):
     name: str
     size: NotRequired[int]
     duration: NotRequired[float]
-    resume_session: NotRequired[bool]
+    resume_session: NotRequired[bool | None]
     allow_completed_destroy: NotRequired[bool]
 
 

@@ -281,7 +281,7 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertEqual(
             output_check["message"], "Cartella sessioni/output scrivibile."
         )
-        self.assertEqual(output_check["details"], tmp)
+        self.assertEqual(output_check.get("details"), tmp)
 
     @patch(
         "el_sbobinator.services.validation_service.resolve_ffmpeg",
