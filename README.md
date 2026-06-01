@@ -10,8 +10,8 @@ L'intelligenza artificiale (basata sul modello Gemini 2.5 Flash) ascolterà la t
 L'obiettivo non è una trascrizione "grezza", ma una vera e propria dispensa leggibile!
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/bb6eaf42-7b03-4e54-ae51-0765fe8b0727" width="48%" alt="Schermata principale">
-  <img src="https://github.com/user-attachments/assets/f8117a13-14a4-483b-899f-56ea72122880" width="48%" alt="Editor anteprima">
+  <img width="1679" height="992" alt="image" src="https://github.com/user-attachments/assets/cec7f84f-3a3f-4cd5-9d7c-938abbd32159" />
+  <img width="1679" height="993" alt="image" src="https://github.com/user-attachments/assets/569c83b0-5244-4227-826e-95fc68991c80" />
 </p>
 
 ---
