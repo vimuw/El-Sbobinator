@@ -122,7 +122,14 @@ def _poll_then_destroy(proc: subprocess.Popen[bytes], emit_fn=None) -> None:
 
 
 def _install_macos_dmg(tmp_path: str) -> dict | None:
-    """Mount DMG, copy app to /Applications, detach. Returns error dict or None on success."""
+    """Mount DMG, spawn a detached script to copy app to /Applications, then return.
+
+    Verifies the DMG and permissions, then spawns an independent background script
+    that waits for the parent Python process to exit before replacing the app package,
+    removing quarantine flags, detaching the DMG, and opening the new version.
+    """
+    mount_point = None
+    detached_script_spawned = False
     try:
         result = subprocess.run(
             ["hdiutil", "attach", "-nobrowse", "-plist", tmp_path],
@@ -131,7 +138,6 @@ def _install_macos_dmg(tmp_path: str) -> dict | None:
             timeout=30,
         )
         plist = plistlib.loads(result.stdout)
-        mount_point = None
         for entity in plist.get("system-entities", []):
             mp = entity.get("mount-point")
             if mp:
@@ -139,50 +145,62 @@ def _install_macos_dmg(tmp_path: str) -> dict | None:
                 break
         if not mount_point:
             return {"ok": False, "error": "Impossibile montare il DMG."}
-        try:
-            app_src = os.path.join(mount_point, "El Sbobinator.app")
-            app_dst = "/Applications/El Sbobinator.app"
-            if os.path.exists(app_dst):
-                import shutil
 
-                try:
-                    shutil.rmtree(app_dst)
-                except Exception:
-                    subprocess.run(["rm", "-rf", app_dst], check=False, timeout=15)
-                if os.path.exists(app_dst):
-                    raise PermissionError(
-                        "Impossibile rimuovere la vecchia versione dell'applicazione in /Applications. "
-                        "Assicurati che El Sbobinator non sia in esecuzione e riprova."
-                    )
-            try:
-                subprocess.run(
-                    ["cp", "-R", app_src, app_dst],
-                    check=True,
-                    timeout=30,
-                    capture_output=True,
+        app_src = os.path.join(mount_point, "El Sbobinator.app")
+        app_dst = "/Applications/El Sbobinator.app"
+
+        if not os.path.exists(app_src):
+            return {"ok": False, "error": "Applicazione non trovata nel DMG."}
+
+        # Preemptive permission check
+        if os.path.exists(app_dst):
+            if not os.access(app_dst, os.W_OK):
+                raise PermissionError(
+                    "Permesso di scrittura negato per l'applicazione esistente."
                 )
-            except subprocess.CalledProcessError as cp_err:
-                stderr = (
-                    cp_err.stderr.decode("utf-8", errors="replace")
-                    if cp_err.stderr
-                    else ""
-                )
-                if "Permission denied" in stderr or "Operation not permitted" in stderr:
-                    raise PermissionError(stderr) from cp_err
-                raise
-            subprocess.run(
-                ["xattr", "-dr", "com.apple.quarantine", app_dst],
-                check=False,
-                timeout=30,
-            )
-        finally:
-            subprocess.run(["hdiutil", "detach", mount_point], check=False, timeout=30)
-        subprocess.Popen(["open", "/Applications/El Sbobinator.app"])
+        else:
+            if not os.access(os.path.dirname(app_dst), os.W_OK):
+                raise PermissionError("Permesso di scrittura negato per /Applications.")
+
+        # Detached background script that waits for this parent process to terminate
+        # before performing the update and clean up.
+        script = (
+            f"(\n"
+            f"  while kill -0 {os.getpid()} 2>/dev/null; do\n"
+            f"    sleep 0.2\n"
+            f"  done\n"
+            f'  rm -rf "{app_dst}"\n'
+            f'  cp -R "{app_src}" "{app_dst}"\n'
+            f'  xattr -dr com.apple.quarantine "{app_dst}" 2>/dev/null\n'
+            f'  hdiutil detach "{mount_point}" -force\n'
+            f'  rm -f "{tmp_path}"\n'
+            f'  open "{app_dst}"\n'
+            f") &"
+        )
+
+        subprocess.Popen(["bash", "-c", script], start_new_session=True)
+        detached_script_spawned = True
+
+    except subprocess.CalledProcessError as cp_err:
+        stderr = (
+            cp_err.stderr.decode("utf-8", errors="replace") if cp_err.stderr else ""
+        )
+        if "Permission denied" in stderr or "Operation not permitted" in stderr:
+            raise PermissionError(stderr) from cp_err
+        raise
+
     finally:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
+        # Only clean up locally if we didn't successfully hand off to the detached script
+        if not detached_script_spawned:
+            if mount_point:
+                subprocess.run(
+                    ["hdiutil", "detach", mount_point], check=False, timeout=30
+                )
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
     return None
 
 
