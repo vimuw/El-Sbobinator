@@ -542,8 +542,8 @@ class ElSbobinatorApi:
                 return {"ok": False, "error": "Percorso non valido"}
             if not os.path.isdir(abs_dir):
                 return {"ok": False, "error": "Cartella non trovata"}
-            shutil.rmtree(abs_dir)
             self._evict_deleted_session_caches(abs_dir)
+            shutil.rmtree(abs_dir)
             with self._sessions_cache_lock:
                 self._sessions_cache = None
                 self._sessions_cache_gen += 1

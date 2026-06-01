@@ -1924,17 +1924,17 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
             with open(html_path, "w") as fh:
                 fh.write("<html><body></body></html>")
 
-            api._resolved_path_cache["key1"] = html_path
-            api._resolved_path_cache["key2"] = session_dir
+            api._resolved_path_cache["key1"] = os.path.realpath(html_path)
+            api._resolved_path_cache["key2"] = os.path.realpath(session_dir)
             api._resolved_path_cache["key3"] = "/unrelated/path"
 
             with patch.object(api, "_get_session_root", return_value=session_root):
                 result = api.delete_session(session_dir)
 
-        self.assertTrue(result["ok"], result.get("error"))
-        self.assertNotIn("key1", api._resolved_path_cache)
-        self.assertNotIn("key2", api._resolved_path_cache)
-        self.assertIn("key3", api._resolved_path_cache)
+            self.assertTrue(result["ok"], result.get("error"))
+            self.assertNotIn("key1", api._resolved_path_cache)
+            self.assertNotIn("key2", api._resolved_path_cache)
+            self.assertIn("key3", api._resolved_path_cache)
 
     def test_download_and_install_update_uses_streaming_urlopen(self):
         import io
@@ -2871,9 +2871,9 @@ class TestStreamMediaFile(unittest.TestCase):
             ):
                 result = api.stream_media_file("/missing/lecture.mp3", session_dir)
 
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["url"], "http://127.0.0.1:8765/audio/rel")
-        mock_server.assert_called_once_with(audio_path)
+                self.assertTrue(result["ok"])
+                self.assertEqual(result["url"], "http://127.0.0.1:8765/audio/rel")
+                mock_server.assert_called_once_with(os.path.realpath(audio_path))
 
 
 class TestGetCompletedSessions(unittest.TestCase):
@@ -3029,9 +3029,13 @@ class TestGetCompletedSessions(unittest.TestCase):
             ) as fh:
                 updated = _json.load(fh)
 
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["sessions"][0]["input_path"], new_audio_path)
-        self.assertEqual(updated["input"]["path"], new_audio_path)
+            self.assertTrue(result["ok"])
+            self.assertEqual(
+                result["sessions"][0]["input_path"], _os.path.realpath(new_audio_path)
+            )
+            self.assertEqual(
+                updated["input"]["path"], _os.path.realpath(new_audio_path)
+            )
 
 
 class TestMoveSessionRoot(unittest.TestCase):
