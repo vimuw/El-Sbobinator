@@ -5,6 +5,7 @@ import ssl
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest.mock import MagicMock, call, mock_open, patch
 
@@ -15,11 +16,14 @@ from el_sbobinator.core.updater import (
     download_and_install_update,
 )
 
+_original_thread = threading.Thread
 
-class _SyncThread:
+
+class _SyncThread(_original_thread):
     """threading.Thread replacement that runs target() synchronously on start()."""
 
     def __init__(self, target=None, args=(), daemon=False, **kw):
+        _original_thread.__init__(self, daemon=daemon, **kw)
         self._target = target
         self._args = args
 
@@ -743,9 +747,11 @@ class TestWindowsInstallerLaunch(unittest.TestCase):
 
     def _sync_thread_cls(self):
         """Return a threading.Thread replacement that runs target() synchronously on start()."""
+        _original_thread = threading.Thread
 
-        class _SyncThread:
+        class _SyncThread(_original_thread):
             def __init__(self, target=None, args=(), daemon=False, **kw):
+                _original_thread.__init__(self, daemon=daemon, **kw)
                 self._target = target
                 self._args = args
 

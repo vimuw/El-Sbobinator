@@ -10,11 +10,14 @@ from unittest.mock import MagicMock, mock_open, patch
 
 from el_sbobinator.app_webview import ElSbobinatorApi, PipelineAdapter
 
+_original_thread = threading.Thread
 
-class _SyncThread:
+
+class _SyncThread(_original_thread):
     """threading.Thread replacement that runs target() synchronously on start()."""
 
     def __init__(self, target=None, args=(), daemon=False, **kw):
+        _original_thread.__init__(self, daemon=daemon, **kw)
         self._target = target
         self._args = args
 
