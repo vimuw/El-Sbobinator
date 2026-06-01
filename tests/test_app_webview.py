@@ -830,6 +830,54 @@ class AppWebviewTests(unittest.TestCase):
         self.assertEqual(observed_resume_values, [False])
 
     @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
+    def test_start_processing_with_none_resume_session_defaults_to_true(
+        self, mock_pipeline_run
+    ):
+        api = ElSbobinatorApi()
+        observed_resume_values = []
+
+        def fake_pipeline_run(_path, _api_key, adapter, resume_session=True, **kwargs):
+            observed_resume_values.append(resume_session)
+            adapter.set_run_result("completed", "")
+            adapter.last_output_html = _path + ".html"
+            adapter.last_output_dir = __import__("os").path.dirname(_path)
+
+        mock_pipeline_run.side_effect = fake_pipeline_run
+
+        with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            tmp.write(b"fake")
+            file_path = tmp.name
+
+        try:
+            result = api.start_processing(
+                [
+                    {
+                        "id": "file-1",
+                        "path": file_path,
+                        "name": "lesson.mp3",
+                        "size": 4,
+                        "duration": 1,
+                        "resume_session": None,
+                    }
+                ],
+                api_key="fake-key",
+                resume_session=True,
+            )
+
+            self.assertTrue(result["ok"])
+            self.assertIsNotNone(api._processing_thread)
+            assert api._processing_thread is not None
+            api._processing_thread.join(timeout=2)
+            self.assertFalse(api._processing_thread.is_alive())
+        finally:
+            try:
+                __import__("os").unlink(file_path)
+            except OSError:
+                pass
+
+        self.assertEqual(observed_resume_values, [True])
+
+    @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
     def test_completed_with_warnings_is_not_counted_as_full_success(
         self, mock_pipeline_run
     ):

@@ -1526,9 +1526,10 @@ class ElSbobinatorApi:
                         self._adapter.emit(
                             "setCurrentFile", current_payload, batched=False
                         )
+                        file_resume_override = file_info.get("resume_session")
                         file_resume_session = (
-                            bool(file_info.get("resume_session"))
-                            if "resume_session" in file_info
+                            bool(file_resume_override)
+                            if file_resume_override is not None
                             else resume_session
                         )
                         file_allow_completed_destroy = bool(

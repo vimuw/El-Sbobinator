@@ -858,7 +858,15 @@ export default function App() {
       dispatch({ type: 'queue/update_source', id: file.id, path: nextPath, name: nextName, size: nextSize, duration: nextDuration });
       appendConsole(`Audio ricollegato: ${nextName}`);
     }
-    return [{ id: file.id, path: nextPath, name: nextName, size: nextSize, duration: nextDuration, resume_session: file.resumeSession, allow_completed_destroy: file.allowCompletedDestroy }] as FileDescriptor[];
+    return [{
+      id: file.id,
+      path: nextPath,
+      name: nextName,
+      size: nextSize,
+      duration: nextDuration,
+      ...(file.resumeSession !== undefined ? { resume_session: file.resumeSession } : {}),
+      allow_completed_destroy: file.allowCompletedDestroy,
+    }] as FileDescriptor[];
   }, [appendConsole, dispatch]);
 
   const startProcessing = async (isContinuation: boolean = false, overrideLowDisk: boolean = false) => {
