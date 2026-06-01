@@ -1115,6 +1115,33 @@ class TestSaveConfigMacOS(unittest.TestCase):
         stored = json.loads(fk_calls[0].args[2])
         self.assertEqual(stored, ["fk-a", "fk-b"])
 
+    def test_macos_clears_fallback_keys_in_keyring_when_empty(self) -> None:
+        import sys
+
+        mock_kr = MagicMock()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".legacy",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Darwin",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service._keyring_set_api_key",
+                    return_value=True,
+                ),
+                patch.dict(sys.modules, {"keyring": mock_kr}),
+            ):
+                cs.save_config("my-key", fallback_keys=[])
+        mock_kr.delete_password.assert_called_once_with(
+            cs._KEYRING_SERVICE, "gemini_fallback_keys"
+        )
+
     def test_macos_preserves_use_keyring_flag_when_api_key_is_none(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             cfg_path = os.path.join(tmpdir, "config.json")

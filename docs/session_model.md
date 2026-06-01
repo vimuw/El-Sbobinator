@@ -4,7 +4,11 @@ El Sbobinator persists every run under a session directory so the pipeline can b
 
 ## Identity
 
-- **Root**: `SESSION_ROOT = <user_home>/.el_sbobinator_sessions/` (see `shared.SESSION_ROOT`). `<user_home>` is resolved by `config_service._resolve_user_home()`.
+- **Root**: `SESSION_ROOT` is the platform-specific default session-storage root directory (preventing unwanted cloud sync via OneDrive/iCloud, see `shared.SESSION_ROOT` and `shared._get_default_session_root`):
+  * **Windows**: `%LOCALAPPDATA%\El Sbobinator\sessions` (typically `C:\Users\<user>\AppData\Local\El Sbobinator\sessions`)
+  * **macOS**: `~/Library/Caches/El Sbobinator/sessions`
+  * **Linux / Legacy fallback**: `~/.el_sbobinator_sessions/`
+  *(Note: The auto-migration helper `migrate_legacy_session_root` automatically moves old session directories from `~/.el_sbobinator_sessions` to the platform-appropriate location on first run after upgrade).*
 - **Session directory**: `SESSION_ROOT/<fingerprint>/`, where `<fingerprint>` is produced by `shared._session_id_for_file(path)`.
 
 ### Fingerprint
@@ -39,7 +43,7 @@ A second helper, `_session_dir_for_file(path)`, joins `SESSION_ROOT` with the fi
 ## On-disk layout
 
 ```
-~/.el_sbobinator_sessions/<fingerprint>/
+<SESSION_ROOT>/<fingerprint>/
 ├── session.json                              # primary state (see schema below)
 ├── run.log                                   # structured per-run log (StructuredFormatter)
 ├── el_sbobinator_preconverted_mono16k.mp3    # optional; deleted on success

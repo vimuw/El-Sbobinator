@@ -705,6 +705,16 @@ def save_config(  # noqa: C901
                     data["fallback_keys"] = []
             except Exception:
                 pass
+        elif platform.system() != "Windows" and fallback_keys is not None:
+            try:
+                import keyring  # type: ignore
+
+                try:
+                    keyring.delete_password(_KEYRING_SERVICE, "gemini_fallback_keys")
+                except Exception:
+                    pass
+            except Exception:
+                pass
         # Preserve non-credential config keys (e.g. session_root) from the existing config.
         for _preserve_key in ("session_root",):
             if _preserve_key in current_cfg and _preserve_key not in data:

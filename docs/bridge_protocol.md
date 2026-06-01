@@ -58,6 +58,7 @@ Source: `_BridgeDispatcher` + `PipelineAdapter` in `el_sbobinator/app_webview.py
 | `askNewKey` | no | `{}` | `PipelineAdapter.ask_new_api_key` | Quota exhausted; ask the user for a new API key. |
 | `dismissNewKey` | no | `{}` | `PipelineAdapter.dismiss_new_api_key_prompt` | Close the new-key prompt after backend timeout without treating it as a user cancellation. |
 | `filesDropped` | no | `FileDescriptor[]` | `ElSbobinatorApi.collect_dropped_files` | New files dropped on the window; front-end adds them to the queue. |
+| `updateDownloadProgress` | no | `{status: string, bytes_done: number, bytes_total: number, error?: string}` | `updater.py` via auto-update process | Native download/installation progress during auto-updates. |
 | `appendConsole` | no | `string` | `_ConsoleTee` (wraps `sys.stdout`/`stderr`) | Forwarded stdout/stderr for the in-app terminal. |
 
 The TypeScript-side payload shapes are the same ones declared in `webui/src/appState.ts` (`WorkTotalsPayload`, `WorkDonePayload`, `StepTimePayload`, `SetCurrentFilePayload`, `FileDonePayload`, `FileFailedPayload`, `ProcessDonePayload`) and `webui/src/bridge.ts` (`BridgeCallbacks`). The Python-side counterparts are `TypedDict`s in `el_sbobinator/bridge_types.py`.
@@ -72,13 +73,22 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
 |---|---|---|---|
 | `load_settings()` | — | `{api_key, fallback_keys, preferred_model, fallback_models, available_models, has_protected_key, api_key_insecure, api_key_insecure_reason}` | `available_models` mirrors `MODEL_OPTIONS`; `api_key_insecure` warns when Windows DPAPI was unavailable and the key is plaintext on disk. |
 | `save_settings(api_key, fallback_keys, preferred_model, fallback_models)` | API key (nullable), list of strings, model id, list of ids | `{ok, error?}` | Writes via `config_service.save_config`. |
+| `save_theme_preference(theme)` | theme string (`"light"` \| `"dark"`) | `None` | Persists theme preference to disk. |
 | `validate_environment(api_key?, check_api_key?, preferred_model?, fallback_models?)` | `{ok, result?: ValidationResult, error?}` | Cached environment check. | |
-| `get_session_storage_info()` | — | `{ok, total_bytes, total_sessions, error?}` | Wraps `shared.get_session_storage_info` (30 s cache). |
-| `cleanup_old_sessions(max_age_days=14)` | — | `{ok, removed, freed_bytes, errors, error?}` | Wraps `shared.cleanup_orphan_sessions`. |
-| `get_completed_sessions(limit=20)` | — | `{ok, sessions: ArchiveSession[], error?}` | 5 s internal cache; filters for `stage == "done"`. |
+| `get_session_storage_info()` | — | `{ok, total_bytes, total_sessions, session_root, error?}` | Wraps `shared.get_session_storage_info` (30 s cache). |
+| `cleanup_old_sessions(max_age_days=14)` | — | `{ok, removed, freed_bytes, errors, candidates, preserved_completed, missing_completed_html, error?}` | Deletes incomplete session folders older than threshold. |
+| `cleanup_completed_sessions(max_age_days=14)` | — | `{ok, removed, freed_bytes, errors, candidates, preserved_completed, missing_completed_html, error?}` | Counts or deletes completed session folders older than threshold. |
+| `get_completed_sessions(limit=20)` | — | `{ok, sessions: ArchiveSession[], total, error?}` | 5 s internal cache; filters for `stage == "done"`. |
 | `delete_session(session_dir)` | absolute path under `SESSION_ROOT` | `{ok, error?}` | Path-traversal-checked. |
 | `update_session_input_path(session_dir, new_path)` | — | `{ok, error?}` | Relinks the audio path after the user moves the file. |
 | `open_session_folder()` | — | `{ok, error?}` | Opens `SESSION_ROOT` in the OS file manager. |
+| `ask_session_folder()` | — | `{ok, path?, cancelled?: bool, error?}` | Opens a folder-picker dialog and returns the selected path. |
+| `move_session_root(new_path)` | new absolute path | `{ok, started?, error?}` | Starts an asynchronous background move of all sessions to `new_path`. |
+| `get_session_move_status()` | — | `{status, moved?, total?, error?}` | Returns the current status of an ongoing or completed session move. |
+| `get_archive_folders()` | — | `{ok, folders: ArchiveFolder[], error?}` | Returns user-defined folder list for sorting sessions. |
+| `save_archive_folders(folders)` | folder list | `{ok, error?}` | Persists the folder list to folders.json. |
+| `search_sessions(query, limit=10)` | query string, limit | `{ok, results: SearchSessionResult[], error?}` | Searches plain-text content of every completed session HTML. |
+| `retry_failed_revision_blocks(session_dir)` | session directory path | `{ok, retried_blocks?, remaining_failed_blocks?, html_path?, session_dir?, effective_model?, completion_status?, cancelled?, quota_exhausted?, conflict?, error?}` | Retries unrevised macro blocks from a done session using current API key. |
 
 ### File intake
 
@@ -106,8 +116,7 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
 | `open_url(url)` | URL with an allowed prefix | `{ok, error?}` | Allowlist: `github.com`, `ko-fi.com`, Microsoft's WebView2 install link, `aistudio.google.com`. |
 | `read_html_content(path)` | path under Desktop or `SESSION_ROOT` | `{ok, content?, error?}` | Path-traversal-checked; also caches the outer `<html>…<body>` shell for the matching `save_html_content`. |
 | `save_html_content(path, content, generation?)` | — | `{ok, error?}` | `generation` is a monotonic counter used to drop stale autosaves. Only the body is written; the cached shell is preserved. |
-| `stream_media_file(path)` | audio/video path | `{ok, url?, error?}` | Starts a `LocalMediaServer` (Range-request capable) and returns a `http://127.0.0.1:<port>/stream.media?t=<ts>` URL. |
-| `export_docx(filename, docxHtml)` | target path, sanitized HTML | `{ok, error?}` | Uses `html2docx` to produce a `.docx` file. |
+| `stream_media_file(path, session_dir?)` | audio/video path, optional session dir | `{ok, url?, error?}` | Starts a `LocalMediaServer` (Range-request capable) and returns a `http://127.0.0.1:<port>/stream.media?t=<ts>` URL. |
 | `show_notification(title, message)` | — | `void` | Best-effort OS notification. |
 | `download_and_install_update(version)` | version string without `v` prefix? (`updater.py` handles both) | `{ok, error?}` | Downloads the GitHub release asset for the current OS, launches it, and schedules the webview to close. |
 
