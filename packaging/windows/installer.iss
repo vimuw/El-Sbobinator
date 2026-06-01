@@ -18,6 +18,7 @@ DefaultGroupName=El Sbobinator
 SourceDir={#SourcePath}\..\..
 OutputDir=dist
 OutputBaseFilename=El-Sbobinator-Setup-v{#AppVersion}
+SetupIconFile=assets\icon.ico
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -26,6 +27,15 @@ PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog commandline
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+
+; Frictionless / Zero-Click Wizard configuration
+DisableWelcomePage=yes
+DisableDirPage=yes
+DisableProgramGroupPage=yes
+DisableReadyPage=yes
+DisableFinishedPage=yes
+ShowLanguageDialog=no
+CloseApplications=force
 
 [Languages]
 Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"
@@ -36,16 +46,10 @@ Source: "dist\El Sbobinator\*"; DestDir: "{app}"; Flags: ignoreversion recursesu
 
 [Icons]
 Name: "{group}\El Sbobinator"; Filename: "{app}\El Sbobinator.exe"
-Name: "{userdesktop}\El Sbobinator"; Filename: "{app}\El Sbobinator.exe"; Tasks: desktopicon
-
-[Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+Name: "{userdesktop}\El Sbobinator"; Filename: "{app}\El Sbobinator.exe"
 
 [Run]
-Filename: "{app}\El Sbobinator.exe"; Description: "{cm:LaunchProgram,El Sbobinator}"; Flags: nowait postinstall skipifsilent
-
-[UninstallDelete]
-Type: filesandordirs; Name: "{app}"
+Filename: "{app}\El Sbobinator.exe"; Flags: nowait skipifsilent
 
 [Code]
 { ------------------------------------------------------------------ }

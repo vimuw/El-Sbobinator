@@ -21,7 +21,7 @@ import { type Heading, SearchHighlight, FontSize, extractHeadings } from '../edi
 import { MenuBar } from './EditorToolbar';
 import { FindReplacePanel } from './EditorFindReplace';
 import { WordCount } from './EditorWordCount';
-import { readFileAsDataUrl } from './EditorToolbarControls';
+import { readFileAsDataUrl } from '../utils';
 
 export type { Heading };
 
@@ -137,12 +137,16 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
     if (!activeEditor) return;
     const files = Array.from(inputFiles).filter(f => f.type.startsWith('image/'));
     if (!files.length) return;
-    for (const file of files) {
-      const src = await readFileAsDataUrl(file);
-      activeEditor.chain().focus().insertContent([
-        { type: 'floatingImage', attrs: { src, alt: file.name, title: file.name, width: 56 } },
-        { type: 'paragraph' },
-      ]).run();
+    try {
+      for (const file of files) {
+        const src = await readFileAsDataUrl(file);
+        activeEditor.chain().focus().insertContent([
+          { type: 'floatingImage', attrs: { src, alt: file.name, title: file.name, width: 56 } },
+          { type: 'paragraph' },
+        ]).run();
+      }
+    } catch (err) {
+      console.error("Errore durante la lettura dell'immagine:", err);
     }
   }, []);
 
