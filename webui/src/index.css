@@ -1735,6 +1735,10 @@ button {
   opacity: 0.85;
 }
 
+.editor-toc-open .editor-page {
+  min-width: 794px;
+}
+
 /* ── TOC inside gray area (left of paper) ──────── */
 .editor-page-outer {
   display: flex;
@@ -2573,15 +2577,13 @@ input[type="password"]::-ms-reveal {
 .editor-fullpage-back {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  width: 32px;
   height: 32px;
-  padding: 0 10px;
   border-radius: 8px;
   border: 1px solid var(--border-default);
   background: transparent;
   color: var(--text-secondary);
-  font-size: 0.8rem;
-  font-weight: 600;
   cursor: pointer;
   flex-shrink: 0;
   transition: background 140ms ease, color 140ms ease, border-color 140ms ease;

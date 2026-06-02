@@ -1,6 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, Copy, ExternalLink, FileText, X } from 'lucide-react';
+import { Check, Copy, ExternalLink, FileText, Loader2, X } from 'lucide-react';
 import type { Heading } from '../RichTextEditor';
 import type { SaveHtmlResult } from '../../bridge';
 import { nextHtmlAutosaveGeneration, seedHtmlAutosaveGeneration } from '../../autosaveGeneration';
@@ -205,16 +205,6 @@ export function PreviewModal({
                 <span className="truncate">Anteprima: {previewTitle}</span>
               </h3>
               <div className="flex gap-2 shrink-0 flex-wrap justify-end">
-                <span
-                  className="inline-flex h-[38px] items-center rounded-[14px] px-3 text-sm font-medium"
-                  style={{
-                    color: autosaveStatus === 'error' ? 'var(--error-text)' : autosaveStatus === 'saved' ? 'var(--success-text)' : 'var(--text-muted)',
-                    background: 'rgba(255,255,255,0.02)',
-                    border: '1px solid var(--border-default)',
-                  }}
-                >
-                  {autosaveStatus === 'saving' ? 'Salvataggio...' : autosaveStatus === 'saved' ? 'Salvato' : autosaveStatus === 'error' ? 'Errore salvataggio' : 'Salvataggio automatico'}
-                </span>
                 {htmlPath && (
                   <button
                     onClick={() => window.pywebview?.api?.open_file?.(htmlPath)}
@@ -234,6 +224,31 @@ export function PreviewModal({
                     {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   </button>
                 </div>
+                <span
+                  className="inline-flex h-[38px] items-center rounded-[14px] px-3 text-sm font-medium"
+                  style={{
+                    color: autosaveStatus === 'error' ? 'var(--error-text)' : autosaveStatus === 'saved' ? 'var(--success-text)' : 'var(--text-muted)',
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid',
+                    borderColor: autosaveStatus === 'error' ? 'var(--error-ring)' : autosaveStatus === 'saved' ? 'var(--success-ring)' : 'var(--border-default)',
+                  }}
+                >
+                  {autosaveStatus === 'saving' ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                      <span>Autosave</span>
+                    </>
+                  ) : autosaveStatus === 'saved' ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 mr-1.5" />
+                      <span>Salvato</span>
+                    </>
+                  ) : autosaveStatus === 'error' ? (
+                    <span>Errore salvataggio</span>
+                  ) : (
+                    <span>Autosave</span>
+                  )}
+                </span>
                 <button onClick={() => void flushAndClose()} className="icon-button modal-icon-button" title={autosaveStatus === 'error' ? 'Chiudi senza salvare' : undefined}>
                   <X className="w-5 h-5" />
                 </button>

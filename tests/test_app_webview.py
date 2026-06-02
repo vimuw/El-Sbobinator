@@ -29,14 +29,13 @@ class _SyncThread(_original_thread):
         pass
 
 
-class _StartupCleanupThread:
+class _StartupCleanupThread(_original_thread):
     instances: ClassVar[list["_StartupCleanupThread"]] = []
 
     def __init__(self, target=None, args=(), daemon=False, name=None, **kw):
+        _original_thread.__init__(self, daemon=daemon, name=name, **kw)
         self._target = target
         self._args = args
-        self.daemon = daemon
-        self.name = name
         self.started = False
         self.__class__.instances.append(self)
 
