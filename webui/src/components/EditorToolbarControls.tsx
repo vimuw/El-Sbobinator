@@ -44,8 +44,8 @@ const HEADING_OPTIONS = [
   { label: 'Titolo 5', value: 'h5' },
 ];
 
-// Matches CSS: h1=20px, h2=16px, h3=14px, h4=12px, h5=11px (same as HTML export)
-const HEADING_PX: Record<number, number> = { 1: 20, 2: 16, 3: 14, 4: 12, 5: 11 };
+// Matches CSS: h1=20pt, h2=16pt, h3=14pt, h4=11pt, h5=10pt (same as HTML export)
+const HEADING_PT: Record<number, number> = { 1: 20, 2: 16, 3: 14, 4: 11, 5: 10 };
 
 export const ColorPickerButton = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -259,11 +259,11 @@ export const FontSizeSelect = ({ editor }: { editor: TiptapEditor }) => {
 
     // 1. Explicit inline fontSize mark
     const fontSize = editor.getAttributes('textStyle').fontSize;
-    if (fontSize) return fontSize.replace('px', '');
+    if (fontSize) return fontSize.replace(/px|pt/, '');
 
     // 2. Heading level — static lookup matching CSS rem values, no DOM read
     for (let i = 1; i <= 5; i++) {
-      if (editor.isActive('heading', { level: i })) return String(HEADING_PX[i]);
+      if (editor.isActive('heading', { level: i })) return String(HEADING_PT[i]);
     }
 
     // 3. Body text has no explicit size (11pt ≈ 14.67px, not in the dropdown)
@@ -280,7 +280,7 @@ export const FontSizeSelect = ({ editor }: { editor: TiptapEditor }) => {
         value={currentSize}
         onChange={e => {
           if (e.target.value) {
-            editor.chain().focus().setMark('textStyle', { fontSize: `${e.target.value}px` }).run();
+            editor.chain().focus().setMark('textStyle', { fontSize: `${e.target.value}pt` }).run();
           } else {
             editor.chain().focus().setMark('textStyle', { fontSize: null }).run();
           }

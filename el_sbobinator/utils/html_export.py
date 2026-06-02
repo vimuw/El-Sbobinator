@@ -251,11 +251,11 @@ def build_html_document(title: str, markdown_text: str) -> str:
       padding: 48px 22px;
     }}
     h1, h2, h3, h4, h5 {{ line-height: 1.3; font-weight: 700; }}
-    h1 {{ font-size: 20px; margin: 0 0 0.9rem; }}
-    h2 {{ font-size: 16px; margin: 1.4rem 0 0.6rem; }}
-    h3 {{ font-size: 14px; margin: 1.15rem 0 0.45rem; }}
-    h4 {{ font-size: 12px; margin: 1rem 0 0.4rem; }}
-    h5 {{ font-size: 11px; margin: 0.95rem 0 0.35rem; }}
+    h1 {{ font-size: 20pt; margin: 0 0 0.9rem; }}
+    h2 {{ font-size: 16pt; margin: 1.4rem 0 0.6rem; }}
+    h3 {{ font-size: 14pt; margin: 1.15rem 0 0.45rem; }}
+    h4 {{ font-size: 11pt; margin: 1rem 0 0.4rem; }}
+    h5 {{ font-size: 10pt; margin: 0.95rem 0 0.35rem; }}
     p, li {{ margin: 0.55rem 0; }}
     ul, ol {{ padding-left: 1.25rem; }}
     strong {{ font-weight: 700; }}

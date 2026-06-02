@@ -1449,7 +1449,10 @@ export default function App() {
       />
       <SettingsModal
         isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
+        onClose={() => {
+          setIsSettingsOpen(false);
+          void refreshSettings();
+        }}
         apiKey={apiKey}
         setApiKey={setApiKey}
         hasProtectedKey={hasProtectedKey}

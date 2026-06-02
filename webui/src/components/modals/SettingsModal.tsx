@@ -82,7 +82,7 @@ function CustomSelect({ value, onChange, options, placeholder }: CustomSelectPro
         <button
           type="button"
           onClick={() => { onChange(''); setOpen(false); }}
-          className="w-full text-left px-4 py-1.5 text-xs"
+          className="w-full text-left px-4 py-1.5 text-sm"
           style={{ color: 'var(--text-muted)' }}
         >
           {placeholder}
@@ -101,7 +101,7 @@ function CustomSelect({ value, onChange, options, placeholder }: CustomSelectPro
           onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent-subtle)'; }}
           onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = opt.value === value ? 'var(--accent-subtle)' : ''; }}
         >
-          <span className="block text-xs">{opt.label}</span>
+          <span className="block text-sm">{opt.label}</span>
           {opt.description && (
             <span className="block text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{opt.description}</span>
           )}
@@ -117,7 +117,7 @@ function CustomSelect({ value, onChange, options, placeholder }: CustomSelectPro
         ref={buttonRef}
         type="button"
         onClick={toggleDropdown}
-        className="app-input text-xs flex items-center justify-between gap-2 cursor-pointer"
+        className="app-input text-sm flex items-center justify-between gap-2 cursor-pointer"
         style={{
           background: 'var(--bg-surface)',
           border: '1px solid var(--border-default)',
@@ -239,12 +239,12 @@ function VersionUpdateRow({
           <div className="space-y-1">
             <div className="flex items-center gap-1.5">
               <span
-                className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                className="text-xs font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
                 style={{ background: 'rgba(217, 119, 6, 0.15)', color: 'var(--warning-text)' }}
               >
                 Nuovo
               </span>
-              <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+              <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
                 Versione disponibile: <span style={{ color: 'var(--warning-text)' }}>v{latestVersion}</span>
               </span>
             </div>
@@ -257,7 +257,7 @@ function VersionUpdateRow({
               className="flex items-center gap-1.5 shrink-0"
               style={{
                 padding: '5px 10px',
-                fontSize: '11px',
+                fontSize: '12px',
                 borderRadius: '6px',
                 background: 'var(--warning-text)',
                 color: 'var(--bg-surface)',
@@ -275,7 +275,7 @@ function VersionUpdateRow({
 
         {isInstalling && (
           <div className="space-y-1.5 pt-1">
-            <div className="flex justify-between items-center text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            <div className="flex justify-between items-center text-xs" style={{ color: 'var(--text-muted)' }}>
               <span className="flex items-center gap-1.5 font-medium">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: 'var(--warning-text)' }} />
                 {statusMessage}
@@ -369,6 +369,15 @@ export function SettingsModal({
   const [pendingMovePath, setPendingMovePath] = useState<string | null>(null);
   const moveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isOpenRef = useRef(isOpen);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     isOpenRef.current = isOpen;
   }, [isOpen]);
@@ -415,7 +424,27 @@ export function SettingsModal({
       .then(res => { if (!aborted && res?.ok) setSessionInfo({ total_bytes: res.total_bytes ?? 0, total_sessions: res.total_sessions ?? 0, session_root: res.session_root ?? '' }); })
       .catch(() => {})
       .finally(() => { if (!aborted) setIsLoadingSessionInfo(false); });
-    return () => { aborted = true; };
+
+    if (window.pywebview?.api?.get_session_move_status) {
+      window.pywebview.api.get_session_move_status()
+        .then(res => {
+          if (!aborted && res && res.status === 'moving') {
+            setIsMoveInProgress(true);
+            setMoveProgress({ moved: res.moved ?? 0, total: res.total ?? 0 });
+            void pollMoveStatus();
+          }
+        })
+        .catch(() => {});
+    }
+
+    return () => {
+      aborted = true;
+      if (moveTimerRef.current) {
+        clearTimeout(moveTimerRef.current);
+        moveTimerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   const handleOpenSessionFolder = () => {
@@ -425,27 +454,36 @@ export function SettingsModal({
   async function pollMoveStatus() {
     try {
       const res = await window.pywebview?.api?.get_session_move_status?.();
-      if (!res || !isOpenRef.current) return;
+      if (!res || !isOpenRef.current || !isMountedRef.current) return;
       if (res.status === 'moving') {
+        if (!isMountedRef.current) return;
         setMoveProgress({ moved: res.moved ?? 0, total: res.total ?? 0 });
         moveTimerRef.current = setTimeout(() => void pollMoveStatus(), 500);
       } else if (res.status === 'done') {
+        if (!isMountedRef.current) return;
         setIsMoveInProgress(false);
         setMoveProgress(null);
         try {
           const info = await window.pywebview?.api?.get_session_storage_info?.();
-          if (info?.ok && isOpenRef.current) setSessionInfo({ total_bytes: info.total_bytes ?? 0, total_sessions: info.total_sessions ?? 0, session_root: info.session_root ?? '' });
+          if (info?.ok && isOpenRef.current && isMountedRef.current) setSessionInfo({ total_bytes: info.total_bytes ?? 0, total_sessions: info.total_sessions ?? 0, session_root: info.session_root ?? '' });
         } catch { /* non-critical refresh */ }
       } else if (res.status === 'error') {
+        if (!isMountedRef.current) return;
         setIsMoveInProgress(false);
         setMoveProgress(null);
         setMoveError(res.error ?? 'Errore sconosciuto');
       } else {
+        if (!isMountedRef.current) return;
         setIsMoveInProgress(false);
         setMoveProgress(null);
         setMoveError(`Stato imprevisto: ${String(res.status)}`);
       }
-    } catch { /* ignore polling errors */ }
+    } catch {
+      if (!isMountedRef.current) return;
+      setIsMoveInProgress(false);
+      setMoveProgress(null);
+      setMoveError('Errore di connessione API');
+    }
   }
 
   const handleAskMoveFolder = async () => {
@@ -478,6 +516,7 @@ export function SettingsModal({
     setCleanupPreview(null);
     try {
       const res = await window.pywebview.api.cleanup_old_sessions(SESSION_CLEANUP_DAYS, true);
+      if (!isMountedRef.current) return;
       if (res?.ok) {
         setCleanupPreview({
           removed: res.removed ?? 0,
@@ -491,9 +530,11 @@ export function SettingsModal({
         appendConsole(`❌ Conteggio sbobine incomplete fallito: ${res?.error || 'errore sconosciuto'}`);
       }
     } catch (e: unknown) {
+      if (!isMountedRef.current) return;
       appendConsole(`❌ Conteggio sbobine incomplete fallito: ${getErrorMessage(e)}`);
+    } finally {
+      if (isMountedRef.current) setIsCleaningSession(false);
     }
-    setIsCleaningSession(false);
   };
 
   const handleCleanupSessions = async () => {
@@ -503,6 +544,7 @@ export function SettingsModal({
     setCleanupResult(null);
     try {
       const res = await window.pywebview.api.cleanup_old_sessions(SESSION_CLEANUP_DAYS, false);
+      if (!isMountedRef.current) return;
       if (res?.ok) {
         setCleanupResult({
           removed: res.removed ?? 0,
@@ -514,16 +556,18 @@ export function SettingsModal({
         if (window.pywebview?.api?.get_session_storage_info) {
           try {
             const info = await window.pywebview.api.get_session_storage_info();
-            if (info?.ok) setSessionInfo({ total_bytes: info.total_bytes ?? 0, total_sessions: info.total_sessions ?? 0, session_root: info.session_root ?? '' });
+            if (info?.ok && isMountedRef.current) setSessionInfo({ total_bytes: info.total_bytes ?? 0, total_sessions: info.total_sessions ?? 0, session_root: info.session_root ?? '' });
           } catch {}
         }
       } else {
         appendConsole(`❌ Pulizia sessioni fallita: ${res?.error || 'errore sconosciuto'}`);
       }
     } catch (e: unknown) {
+      if (!isMountedRef.current) return;
       appendConsole(`❌ Pulizia sessioni fallita: ${getErrorMessage(e)}`);
+    } finally {
+      if (isMountedRef.current) setIsCleaningSession(false);
     }
-    setIsCleaningSession(false);
   };
 
   const handleAskCompletedCleanup = async () => {
@@ -532,6 +576,7 @@ export function SettingsModal({
     setCompletedCleanupPreview(null);
     try {
       const res = await window.pywebview.api.cleanup_completed_sessions(SESSION_CLEANUP_DAYS, true);
+      if (!isMountedRef.current) return;
       if (res?.ok) {
         setCompletedCleanupPreview({
           removed: res.removed ?? 0,
@@ -545,9 +590,11 @@ export function SettingsModal({
         appendConsole(`❌ Conteggio sbobine completate fallito: ${res?.error || 'errore sconosciuto'}`);
       }
     } catch (e: unknown) {
+      if (!isMountedRef.current) return;
       appendConsole(`❌ Conteggio sbobine completate fallito: ${getErrorMessage(e)}`);
+    } finally {
+      if (isMountedRef.current) setIsCleaningCompletedSessions(false);
     }
-    setIsCleaningCompletedSessions(false);
   };
 
   const handleCleanupCompletedSessions = async () => {
@@ -557,6 +604,7 @@ export function SettingsModal({
     setCompletedCleanupResult(null);
     try {
       const res = await window.pywebview.api.cleanup_completed_sessions(SESSION_CLEANUP_DAYS, false);
+      if (!isMountedRef.current) return;
       if (res?.ok) {
         setCompletedCleanupResult({
           removed: res.removed ?? 0,
@@ -568,16 +616,18 @@ export function SettingsModal({
         if (window.pywebview?.api?.get_session_storage_info) {
           try {
             const info = await window.pywebview.api.get_session_storage_info();
-            if (info?.ok) setSessionInfo({ total_bytes: info.total_bytes ?? 0, total_sessions: info.total_sessions ?? 0, session_root: info.session_root ?? '' });
+            if (info?.ok && isMountedRef.current) setSessionInfo({ total_bytes: info.total_bytes ?? 0, total_sessions: info.total_sessions ?? 0, session_root: info.session_root ?? '' });
           } catch {}
         }
       } else {
         appendConsole(`❌ Eliminazione sbobine completate fallita: ${res?.error || 'errore sconosciuto'}`);
       }
     } catch (e: unknown) {
+      if (!isMountedRef.current) return;
       appendConsole(`❌ Eliminazione sbobine completate fallita: ${getErrorMessage(e)}`);
+    } finally {
+      if (isMountedRef.current) setIsCleaningCompletedSessions(false);
     }
-    setIsCleaningCompletedSessions(false);
   };
 
   const runEnvironmentValidation = async () => {
@@ -590,6 +640,7 @@ export function SettingsModal({
         preferredModel,
         fallbackModels,
       );
+      if (!isMountedRef.current) return;
       if (!response?.ok || !response.result) {
         appendConsole(`❌ Validazione ambiente fallita: ${response?.error || 'errore sconosciuto'}`);
         setValidationResult(null);
@@ -598,10 +649,11 @@ export function SettingsModal({
       setValidationResult(response.result);
       appendConsole(response.result.summary);
     } catch (error: unknown) {
+      if (!isMountedRef.current) return;
       appendConsole(`❌ Validazione ambiente fallita: ${getErrorMessage(error)}`);
       setValidationResult(null);
     } finally {
-      setIsValidatingEnvironment(false);
+      if (isMountedRef.current) setIsValidatingEnvironment(false);
     }
   };
 
@@ -613,7 +665,7 @@ export function SettingsModal({
     try {
       if (!window.pywebview?.api?.save_settings) {
         const err = 'Bridge Python non disponibile — impostazioni non salvate.';
-        setSaveError(err);
+        if (isMountedRef.current) setSaveError(err);
         appendConsole(`❌ ${err}`);
         return;
       }
@@ -624,10 +676,11 @@ export function SettingsModal({
         result = await window.pywebview.api.save_settings(apiKeyPayload, keys, preferredModel, fallbackModels);
       } catch (e: unknown) {
         const err = `Errore salvataggio impostazioni: ${getErrorMessage(e)}`;
-        setSaveError(err);
+        if (isMountedRef.current) setSaveError(err);
         appendConsole(`❌ ${err}`);
         return;
       }
+      if (!isMountedRef.current) return;
       if (!result?.ok) {
         const err = `Errore salvataggio impostazioni: ${result?.error || 'errore sconosciuto'}`;
         setSaveError(err);
@@ -642,7 +695,7 @@ export function SettingsModal({
       onClose();
     } finally {
       isSavingRef.current = false;
-      setIsSaving(false);
+      if (isMountedRef.current) setIsSaving(false);
     }
   };
 
@@ -701,7 +754,7 @@ export function SettingsModal({
               {/* Sidebar Header - visible only on desktop */}
               <div className="hidden md:flex items-center gap-2 px-3 py-2.5 mb-3 border-b border-[var(--border-subtle)]">
                 <Settings className="w-5 h-5 text-[var(--accent-text)] shrink-0" />
-                <span role="heading" aria-level={2} className="font-bold text-sm tracking-wide uppercase text-[var(--text-primary)]">
+                <span role="heading" aria-level={2} className="font-bold text-base tracking-wide uppercase text-[var(--text-primary)]">
                   Impostazioni
                 </span>
               </div>
@@ -710,7 +763,7 @@ export function SettingsModal({
               <button
                 type="button"
                 onClick={() => setActiveTab('general')}
-                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-sm font-semibold tracking-wide transition-all ${
                   activeTab === 'general'
                     ? 'bg-[var(--accent-subtle)] text-[var(--accent-text)] border-l-4 md:border-l-4 border-b-2 md:border-b-0 border-[var(--accent-bg)]'
                     : 'text-[var(--text-secondary)] hover:bg-[var(--sidebar-active-bg)] hover:text-[var(--text-primary)] border-l-4 border-transparent'
@@ -727,7 +780,7 @@ export function SettingsModal({
                 onClick={() => {
                   setActiveTab('advanced');
                 }}
-                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-sm font-semibold tracking-wide transition-all ${
                   activeTab === 'advanced'
                     ? 'bg-[var(--accent-subtle)] text-[var(--accent-text)] border-l-4 md:border-l-4 border-b-2 md:border-b-0 border-[var(--accent-bg)]'
                     : 'text-[var(--text-secondary)] hover:bg-[var(--sidebar-active-bg)] hover:text-[var(--text-primary)] border-l-4 border-transparent'
@@ -760,7 +813,7 @@ export function SettingsModal({
                   <div className="space-y-8 animate-fade-in">
                     <div>
                       <h2 className="text-xl font-bold text-[var(--text-primary)]">Generale</h2>
-                      <p className="text-xs text-[var(--text-muted)] mt-1">
+                      <p className="text-sm text-[var(--text-muted)] mt-1">
                         Gestisci le tue chiavi API di Google Gemini, le notifiche di sistema e controlla gli aggiornamenti dell'applicazione.
                       </p>
                     </div>
@@ -777,7 +830,7 @@ export function SettingsModal({
                       {/* API Key Principal */}
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <label className="text-xs font-semibold text-[var(--text-primary)]">
+                          <label className="text-sm font-semibold text-[var(--text-primary)]">
                             Google Gemini API Key (Principale)
                           </label>
                           <button
@@ -794,14 +847,14 @@ export function SettingsModal({
                           value={apiKey}
                           onChange={e => setApiKey(e.target.value)}
                           placeholder="AIzaSy... oppure AQ..."
-                          className="app-input font-mono text-xs w-full p-2.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-input)] text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-ring)]"
+                          className="app-input font-mono text-sm w-full p-2.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-input)] text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-ring)]"
                         />
                         {apiKey.trim() && (
-                          <p className="text-xs" style={{ color: GEMINI_KEY_PATTERN.test(apiKey.trim()) ? 'var(--success-text)' : 'var(--warning-text)' }}>
+                          <p className="text-sm" style={{ color: GEMINI_KEY_PATTERN.test(apiKey.trim()) ? 'var(--success-text)' : 'var(--warning-text)' }}>
                             {GEMINI_KEY_PATTERN.test(apiKey.trim()) ? '✓ Formato valido' : '⚠ Formato non valido — le chiavi iniziano con AIzaSy... o AQ.'}
                           </p>
                         )}
-                        <div className="flex flex-col gap-1 mt-1 text-[11px] text-[var(--text-muted)]">
+                        <div className="flex flex-col gap-1 mt-1 text-xs text-[var(--text-muted)]">
                           <p className="flex items-start gap-1.5">
                             <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                             <span>Salvata in modo sicuro tramite DPAPI (Windows) o Keyring (Mac/Linux).</span>
@@ -820,7 +873,7 @@ export function SettingsModal({
                       {/* Fallback Keys */}
                       <div className="pt-2">
                         <div className="flex items-center justify-between mb-1.5">
-                          <label className="text-xs font-semibold text-[var(--text-primary)]">
+                          <label className="text-sm font-semibold text-[var(--text-primary)]">
                             API Keys di Riserva (Fallback)
                           </label>
                           <button
@@ -837,9 +890,9 @@ export function SettingsModal({
                           onChange={e => setFallbackKeys(e.target.value.split('\n'))}
                           placeholder="Inserisci una API Key per riga..."
                           rows={3}
-                          className={`app-textarea font-mono text-xs w-full p-2.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-input)] text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-ring)] resize-none ${!showApiKeys ? 'obscured-text' : ''}`}
+                          className={`app-textarea font-mono text-sm w-full p-2.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-input)] text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-ring)] resize-none ${!showApiKeys ? 'obscured-text' : ''}`}
                         />
-                        <p className="text-[11px] mt-1 text-[var(--text-muted)]">
+                        <p className="text-xs mt-1 text-[var(--text-muted)]">
                           Usate automaticamente in caso di esaurimento quota (errore 429).
                         </p>
                       </div>
@@ -851,10 +904,10 @@ export function SettingsModal({
                         <div className="flex items-start gap-3">
                           <Bell className="w-4 h-4 text-[var(--accent-text)] shrink-0 mt-0.5" />
                           <div className="space-y-0.5">
-                            <h3 className="text-xs font-semibold text-[var(--text-primary)]">
+                            <h3 className="text-sm font-semibold text-[var(--text-primary)]">
                               Notifiche di sistema
                             </h3>
-                            <p className="text-[11px] text-[var(--text-muted)]">
+                            <p className="text-xs text-[var(--text-muted)]">
                               Ricevi un avviso di Windows al completamento dell'elaborazione di ciascuna sbobina.
                             </p>
                           </div>
@@ -926,17 +979,17 @@ export function SettingsModal({
                       <div className="space-y-3">
                         <div className="flex items-center justify-between py-1">
                           <div className="space-y-0.5">
-                            <span className="text-xs font-semibold text-[var(--text-primary)]">
+                            <span className="text-sm font-semibold text-[var(--text-primary)]">
                               Versione installata
                             </span>
-                            <p className="text-[11px] text-[var(--text-muted)]">
+                            <p className="text-xs text-[var(--text-muted)]">
                               L'attuale versione in esecuzione dell'applicazione.
                             </p>
                           </div>
                           <a
                             href="#"
                             onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL); }}
-                            className="text-xs font-semibold px-2 py-0.5 rounded-md hover:opacity-85 transition-opacity"
+                            className="text-sm font-semibold px-2 py-0.5 rounded-md hover:opacity-85 transition-opacity"
                             style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', textDecoration: 'none' }}
                             title="Note di rilascio su GitHub"
                           >
@@ -950,13 +1003,13 @@ export function SettingsModal({
                             onInstallUpdate={onInstallUpdate}
                           />
                         ) : hasChecked && !isCheckingUpdate && checkFailed ? (
-                          <div className="flex items-center gap-1.5 text-[11px] pt-2 text-[var(--warning-text)]">
+                          <div className="flex items-center gap-1.5 text-xs pt-2 text-[var(--warning-text)]">
                             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                             <span>Verifica aggiornamenti non riuscita. Controlla la connessione.</span>
                           </div>
                         ) : (
                           hasChecked && !isCheckingUpdate && (
-                            <div className="flex items-center gap-1.5 text-[11px] pt-2 text-[var(--success-text)]">
+                            <div className="flex items-center gap-1.5 text-xs pt-2 text-[var(--success-text)]">
                               <Check className="w-3.5 h-3.5 shrink-0" />
                               <span>✓ Sei aggiornato</span>
                             </div>
@@ -971,7 +1024,7 @@ export function SettingsModal({
                   <div className="space-y-8 animate-fade-in">
                     <div>
                       <h2 className="text-xl font-bold text-[var(--text-primary)]">Opzioni Avanzate</h2>
-                      <p className="text-xs text-[var(--text-muted)] mt-1">
+                      <p className="text-sm text-[var(--text-muted)] mt-1">
                         Configura modelli Gemini di riserva, gestisci la memoria e le sessioni di sbobinatura ed esegui la diagnostica.
                       </p>
                     </div>
@@ -987,7 +1040,7 @@ export function SettingsModal({
 
                       <div className="space-y-4">
                         <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-[var(--text-primary)]">
+                          <label className="text-sm font-semibold text-[var(--text-primary)]">
                             Modello Primario
                           </label>
                           <CustomSelect
@@ -996,12 +1049,12 @@ export function SettingsModal({
                             options={availableModels.map(m => ({ value: m.id, label: m.label, description: m.summary }))}
                           />
                           {primaryModelSummary && (
-                            <p className="text-[11px] text-[var(--text-muted)] mt-1">{primaryModelSummary}</p>
+                            <p className="text-xs text-[var(--text-muted)] mt-1">{primaryModelSummary}</p>
                           )}
                         </div>
 
                         <div className="space-y-2 border-t border-[var(--border-subtle)] pt-4">
-                          <label className="text-xs font-semibold text-[var(--text-primary)]">
+                          <label className="text-sm font-semibold text-[var(--text-primary)]">
                             Fallback Modelli (in ordine di utilizzo)
                           </label>
                           <CustomSelect
@@ -1023,8 +1076,8 @@ export function SettingsModal({
                                     className="py-2.5 flex items-center justify-between gap-3 hover:bg-[var(--sidebar-active-bg)] transition-colors px-1"
                                   >
                                     <div className="min-w-0">
-                                      <p className="text-xs font-semibold text-[var(--text-primary)]">{model.label}</p>
-                                      <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{model.summary}</p>
+                                      <p className="text-sm font-semibold text-[var(--text-primary)]">{model.label}</p>
+                                      <p className="text-xs text-[var(--text-muted)] mt-0.5">{model.summary}</p>
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0">
                                       <button
@@ -1059,7 +1112,7 @@ export function SettingsModal({
                               })}
                             </div>
                           ) : (
-                            <p className="text-[11px] text-[var(--text-muted)] mt-1.5">
+                            <p className="text-xs text-[var(--text-muted)] mt-1.5">
                               Nessun fallback aggiuntivo configurato oltre al primario.
                             </p>
                           )}
@@ -1067,11 +1120,11 @@ export function SettingsModal({
 
                         <div className="rounded-lg p-3 flex items-start gap-2.5 bg-[var(--warning-subtle)] border border-[var(--warning-ring)] mt-3">
                           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-[var(--warning-text)]" />
-                          <p className="text-[11px] text-[var(--warning-text)] leading-relaxed">
+                          <p className="text-xs text-[var(--warning-text)] leading-relaxed">
                             Tutti i modelli Gemini Flash possono subire rallentamenti o errori 503 nella fascia <strong>15:00–20:00</strong> per traffico elevato sui server Google, con Gemini 3 Flash generalmente più colpito. <strong>Gemini 2.5 Flash</strong> è il più stabile, ma non è immune da problemi.
                           </p>
                         </div>
-                        <p className="text-[10px] text-[var(--text-muted)] leading-relaxed italic">
+                        <p className="text-xs text-[var(--text-muted)] leading-relaxed italic">
                           L'app cambia modello solo se il modello corrente risponde 503/UNAVAILABLE. Se passa a un fallback, resta su quello fino alla fine del job.
                         </p>
                       </div>
@@ -1090,11 +1143,11 @@ export function SettingsModal({
                         <div className="flex items-center gap-2 text-[var(--text-secondary)]">
                           <FolderOpen className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
                           {sessionInfo !== null ? (
-                            <span className="text-xs font-semibold text-[var(--text-primary)]">
+                            <span className="text-sm font-semibold text-[var(--text-primary)]">
                               {sessionInfo.total_sessions} {sessionInfo.total_sessions === 1 ? 'sessione' : 'sessioni'} rilevate
                             </span>
                           ) : (
-                            <span className="text-xs text-[var(--text-muted)]">
+                            <span className="text-sm text-[var(--text-muted)]">
                               {isLoadingSessionInfo ? 'Caricamento info...' : 'Nessuna sessione'}
                             </span>
                           )}
@@ -1102,13 +1155,13 @@ export function SettingsModal({
 
                         <div className="flex items-center justify-between gap-3 py-1">
                           <div className="min-w-0 flex-1 space-y-0.5">
-                            <span className="text-xs font-semibold text-[var(--text-primary)]">
+                            <span className="text-sm font-semibold text-[var(--text-primary)]">
                               Cartella dati sessioni
                             </span>
                             <p
                               onClick={handleOpenSessionFolder}
                               title="Apri cartella sessioni"
-                              className="text-[11px] font-mono truncate cursor-pointer hover:underline text-[var(--text-muted)] mt-0.5 block"
+                              className="text-xs font-mono truncate cursor-pointer hover:underline text-[var(--text-muted)] mt-0.5 block"
                               onMouseEnter={e => { (e.currentTarget as HTMLParagraphElement).style.color = 'var(--text-primary)'; }}
                               onMouseLeave={e => { (e.currentTarget as HTMLParagraphElement).style.color = 'var(--text-muted)'; }}
                             >
@@ -1117,7 +1170,7 @@ export function SettingsModal({
                           </div>
                           <div className="shrink-0 pl-2">
                             {isMoveInProgress ? (
-                              <span className="text-xs flex items-center gap-1.5 text-[var(--text-muted)]">
+                              <span className="text-sm flex items-center gap-1.5 text-[var(--text-muted)]">
                                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                 {moveProgress && moveProgress.total > 0
                                   ? `${moveProgress.moved}/${moveProgress.total}`
@@ -1128,7 +1181,7 @@ export function SettingsModal({
                                 onClick={() => void handleAskMoveFolder()}
                                 disabled={isCleaningSession || isCleaningCompletedSessions || isLoadingSessionInfo || isMoveInProgress}
                                 className="icon-button compact-icon-button disabled:opacity-50 flex items-center gap-1 hover:bg-[var(--sidebar-active-bg)] border border-[var(--border-default)]"
-                                style={{ fontSize: '11px', padding: '4px 8px', height: 26, borderRadius: 6, width: 'auto' }}
+                                style={{ fontSize: '12px', padding: '4px 8px', height: 26, borderRadius: 6, width: 'auto' }}
                                 title="Sposta cartella sessioni"
                               >
                                 <ArrowRight className="w-3.5 h-3.5" />
@@ -1138,15 +1191,15 @@ export function SettingsModal({
                           </div>
                         </div>
                         {moveError && (
-                          <p className="text-xs text-[var(--error-text)] font-medium">{moveError}</p>
+                          <p className="text-sm text-[var(--error-text)] font-medium">{moveError}</p>
                         )}
 
                         <div className="flex items-center justify-between py-1 border-t border-[var(--border-subtle)] pt-4">
                           <div className="space-y-0.5">
-                            <span className="text-xs font-semibold text-[var(--text-primary)]">Spazio occupato su disco</span>
-                            <p className="text-[11px] text-[var(--text-muted)]">Spazio totale utilizzato da tutte le sessioni rilevate.</p>
+                            <span className="text-sm font-semibold text-[var(--text-primary)]">Spazio occupato su disco</span>
+                            <p className="text-xs text-[var(--text-muted)]">Spazio totale utilizzato da tutte le sessioni rilevate.</p>
                           </div>
-                          <span className="text-xs font-bold text-[var(--text-primary)]">
+                          <span className="text-sm font-bold text-[var(--text-primary)]">
                             {isLoadingSessionInfo ? 'Calcolo…' : sessionInfo !== null ? formatSize(sessionInfo.total_bytes) : '—'}
                           </span>
                         </div>
@@ -1154,18 +1207,18 @@ export function SettingsModal({
 
                       {/* Cleaning Tools */}
                       <div className="border-t border-[var(--border-subtle)] pt-5 space-y-4">
-                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
                           Strumenti di pulizia (più vecchie di {SESSION_CLEANUP_DAYS} giorni)
                         </h4>
 
                         <div className="space-y-1">
                           {/* Incomplete Cleanup */}
-                          <div className="flex items-center justify-between gap-3 rounded-lg px-3.5 py-2.5 hover:bg-[var(--sidebar-active-bg)] transition-colors">
+                          <div className="flex items-center justify-between gap-3 rounded-lg px-3.5 py-2.5 transition-colors">
                             <div className="min-w-0 flex-1 space-y-0.5">
-                              <p className="text-xs font-semibold text-[var(--text-primary)]">
+                              <p className="text-sm font-semibold text-[var(--text-primary)]">
                                 Pulizia elaborazioni incomplete
                               </p>
-                              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                              <p className="text-xs text-[var(--text-muted)] leading-relaxed">
                                 Rimuove solo le sessioni temporanee/non terminate per liberare spazio. Le sbobine completate restano intatte.
                               </p>
                             </div>
@@ -1184,10 +1237,10 @@ export function SettingsModal({
                           {/* Completed Cleanup (Irreversible) */}
                           <div className="flex items-center justify-between gap-3 rounded-lg px-3.5 py-2.5 bg-[var(--error-subtle)] border border-[var(--error-ring)] transition-colors">
                             <div className="min-w-0 flex-1 space-y-0.5">
-                              <p className="text-xs font-semibold text-[var(--error-text)]">
+                              <p className="text-sm font-semibold text-[var(--error-text)]">
                                 Elimina sbobine completate vecchie
                               </p>
-                              <p className="text-[11px] text-[var(--error-text)] opacity-80 leading-relaxed">
+                              <p className="text-xs text-[var(--error-text)] opacity-80 leading-relaxed">
                                 Azione separata e irreversibile: elimina anche le sbobine completate con i relativi HTML finali.
                               </p>
                             </div>
@@ -1210,25 +1263,25 @@ export function SettingsModal({
                         <div className="space-y-1.5 bg-[var(--bg-panel)] rounded-lg p-3 border border-[var(--border-subtle)] mt-2">
                           {cleanupResult !== null && (
                             <>
-                              <p className="text-xs font-medium" style={{ color: cleanupResult.removed > 0 ? 'var(--success-text)' : 'var(--text-muted)' }}>
+                              <p className="text-sm font-medium" style={{ color: cleanupResult.removed > 0 ? 'var(--success-text)' : 'var(--text-muted)' }}>
                                 {cleanupResult.removed > 0
                                   ? `Rimossa ${cleanupResult.removed} elaborazione incompleta, liberati ${formatSize(cleanupResult.freed_bytes)}.`
                                   : 'Nessuna elaborazione incompleta da eliminare.'}
                               </p>
                               {(cleanupResult?.preserved_completed ?? 0) > 0 && (
-                                <p className="text-[11px] text-[var(--text-muted)]">
+                                <p className="text-xs text-[var(--text-muted)]">
                                   {cleanupResult?.preserved_completed} sbobine completate preservate.
                                 </p>
                               )}
                               {(cleanupResult?.missing_completed_html ?? 0) > 0 && (
-                                <p className="text-[11px] text-[var(--warning-text)]">
+                                <p className="text-xs text-[var(--warning-text)]">
                                   {cleanupResult?.missing_completed_html} sessioni completate senza HTML finale trattate come incomplete.
                                 </p>
                               )}
                             </>
                           )}
                           {completedCleanupResult !== null && (
-                            <p className="text-xs font-medium" style={{ color: completedCleanupResult.removed > 0 ? 'var(--success-text)' : 'var(--text-muted)' }}>
+                            <p className="text-sm font-medium" style={{ color: completedCleanupResult.removed > 0 ? 'var(--success-text)' : 'var(--text-muted)' }}>
                               {completedCleanupResult.removed > 0
                                 ? `Eliminate ${completedCleanupResult.removed} sbobine completate, liberati ${formatSize(completedCleanupResult.freed_bytes)}.`
                                 : 'Nessuna sbobina completata vecchia da eliminare.'}
@@ -1263,19 +1316,19 @@ export function SettingsModal({
 
                       <div className="space-y-4">
                         <ul className="space-y-2.5 py-1">
-                          <li className="flex justify-between text-xs text-[var(--text-secondary)] py-1 border-b border-[var(--border-subtle)] last:border-0">
+                          <li className="flex justify-between text-sm text-[var(--text-secondary)] py-1 border-b border-[var(--border-subtle)] last:border-0">
                             <span className="font-medium">Modello primario</span>
                             <span className="font-semibold text-[var(--text-primary)]">{preferredModel}</span>
                           </li>
-                          <li className="flex justify-between text-xs text-[var(--text-secondary)] py-1 border-b border-[var(--border-subtle)] last:border-0">
+                          <li className="flex justify-between text-sm text-[var(--text-secondary)] py-1 border-b border-[var(--border-subtle)] last:border-0">
                             <span className="font-medium">Fallback configurati</span>
                             <span className="font-semibold text-[var(--text-primary)]">{fallbackModels.join(' → ') || 'nessuno'}</span>
                           </li>
-                          <li className="flex justify-between text-xs text-[var(--text-secondary)] py-1 border-b border-[var(--border-subtle)] last:border-0">
+                          <li className="flex justify-between text-sm text-[var(--text-secondary)] py-1 border-b border-[var(--border-subtle)] last:border-0">
                             <span className="font-medium">Dimensione chunk audio</span>
                             <span className="font-semibold text-[var(--text-primary)]">{defaultChunkMinutes} min</span>
                           </li>
-                          <li className="flex justify-between text-xs text-[var(--text-secondary)] py-1 border-b border-[var(--border-subtle)] last:border-0">
+                          <li className="flex justify-between text-sm text-[var(--text-secondary)] py-1 border-b border-[var(--border-subtle)] last:border-0">
                             <span className="font-medium">Temperatura (Fase 1)</span>
                             <span className="font-semibold text-[var(--text-primary)]">{defaultTemperature}</span>
                           </li>
@@ -1283,7 +1336,7 @@ export function SettingsModal({
 
                         {validationResult && (
                           <div className="space-y-3 pt-3 border-t border-[var(--border-subtle)]">
-                            <p className="text-xs font-bold" style={{ color: validationResult.ok ? 'var(--success-text)' : 'var(--error-text)' }}>
+                            <p className="text-sm font-bold" style={{ color: validationResult.ok ? 'var(--success-text)' : 'var(--error-text)' }}>
                               {validationResult.summary}
                             </p>
                             {validationResult.checks.map(check => (
@@ -1292,9 +1345,9 @@ export function SettingsModal({
                                 className="rounded-lg p-3 bg-[var(--bg-panel)] border border-[var(--border-subtle)] space-y-1.5"
                               >
                                 <div className="flex items-center justify-between gap-3">
-                                  <span className="text-xs font-semibold text-[var(--text-primary)]">{check.label}</span>
+                                  <span className="text-sm font-semibold text-[var(--text-primary)]">{check.label}</span>
                                   <span
-                                    className="text-[10px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5"
+                                    className="text-xs font-bold uppercase tracking-wider rounded px-1.5 py-0.5"
                                     style={{
                                       color: check.status === 'ok' ? 'var(--success-text)' : check.status === 'warning' ? 'var(--warning-text)' : 'var(--error-text)',
                                       background: check.status === 'ok' ? 'var(--success-subtle)' : check.status === 'warning' ? 'var(--warning-subtle)' : 'var(--error-subtle)',
@@ -1303,9 +1356,9 @@ export function SettingsModal({
                                     {check.status}
                                   </span>
                                 </div>
-                                <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">{check.message}</p>
+                                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{check.message}</p>
                                 {check.details && (
-                                  <p className="text-[10px] font-mono break-all whitespace-pre-wrap text-[var(--text-muted)] bg-[var(--bg-input)] p-1.5 rounded mt-1 border border-[var(--border-subtle)]">
+                                  <p className="text-xs font-mono break-all whitespace-pre-wrap text-[var(--text-muted)] bg-[var(--bg-input)] p-1.5 rounded mt-1 border border-[var(--border-subtle)]">
                                     {check.details}
                                   </p>
                                 )}
@@ -1324,7 +1377,7 @@ export function SettingsModal({
               <div className="px-6 py-4 md:px-8 bg-[var(--bg-surface)] shrink-0 border-t border-[var(--border-subtle)] flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   {saveError && (
-                    <p className="text-xs text-[var(--error-text)] font-semibold truncate">
+                    <p className="text-sm text-[var(--error-text)] font-semibold truncate">
                       {saveError}
                     </p>
                   )}
@@ -1333,14 +1386,14 @@ export function SettingsModal({
                   <button
                     onClick={handleClose}
                     disabled={isSaving}
-                    className="modal-action-button text-xs px-4 py-2 hover:bg-[var(--sidebar-active-bg)] rounded-lg text-[var(--text-secondary)] font-semibold transition-all disabled:opacity-40"
+                    className="modal-action-button text-sm px-4 py-2 hover:bg-[var(--sidebar-active-bg)] rounded-lg text-[var(--text-secondary)] font-semibold transition-all disabled:opacity-40"
                   >
                     Annulla
                   </button>
                   <button
                     onClick={saveSettings}
                     disabled={isSaving}
-                    className="modal-action-button is-primary text-xs px-5 py-2.5 bg-[var(--btn-primary-bg)] hover:bg-[var(--btn-primary-hover)] text-white font-bold rounded-lg shadow-md transition-all disabled:opacity-40"
+                    className="modal-action-button is-primary text-sm px-5 py-2.5 bg-[var(--btn-primary-bg)] hover:bg-[var(--btn-primary-hover)] text-white font-bold rounded-lg shadow-md transition-all disabled:opacity-40"
                   >
                     {isSaving ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : 'Salva e Chiudi'}
                   </button>
