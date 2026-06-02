@@ -988,7 +988,6 @@ button {
 }
 
 .dropzone-card:hover {
-  transform: translateY(-1px);
   border-color: var(--border-strong);
   box-shadow: none;
 }
@@ -1318,10 +1317,7 @@ button {
   width: 100%;
   max-width: 794px;
   padding: 0;
-  box-shadow:
-    0 0 0 1px rgba(0,0,0,0.08),
-    0 2px 6px rgba(0,0,0,0.14),
-    0 8px 24px rgba(0,0,0,0.08);
+  box-shadow: 0 0 0 1px var(--border-subtle);
 }
 
 .editor-page .tiptap-editor {
@@ -1331,10 +1327,7 @@ button {
 
 :root[data-theme="dark"] .editor-page {
   background: #1e1e1e;
-  box-shadow:
-    0 0 0 1px rgba(255,255,255,0.04),
-    0 2px 8px rgba(0,0,0,0.5),
-    0 8px 32px rgba(0,0,0,0.4);
+  box-shadow: 0 0 0 1px var(--border-subtle);
 }
 
 @media (max-width: 640px) {

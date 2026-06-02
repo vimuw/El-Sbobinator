@@ -63,15 +63,9 @@ function QueueFileCardInner({
         }}
         className={`queue-card relative transition-colors ${file.status === 'processing' ? (isCanceling ? 'canceling-card' : 'processing-card') : ''} px-4 py-3`}
         style={{
-          border: `1px solid ${
-            file.status === 'processing'
-              ? isCanceling ? 'var(--error-ring)' : 'var(--processing-ring)'
-              : file.status === 'error'
-                ? 'var(--error-ring)'
-                : 'var(--card-queued-border)'
-          }`,
+          border: '1px solid var(--border-subtle)',
           boxShadow: (file.status === 'processing' || file.status === 'error')
-            ? `inset 3px 0 0 ${(isCanceling || file.status === 'error') ? 'var(--error-ring)' : 'var(--processing-ring)'}`
+            ? `inset 3px 0 0 ${(isCanceling || file.status === 'error') ? 'var(--error-bg)' : 'var(--processing-dot)'}`
             : 'none',
           background: file.status === 'error' ? 'var(--error-subtle)' : 'var(--card-queued-bg)',
         }}
@@ -233,8 +227,8 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
       onClick={isClickable ? () => onPreview(file.outputHtml!, file.name, file.path, file.id, file.outputDir) : undefined}
       className={`queue-card relative px-4 py-3 transition-colors group/card ${isClickable ? 'cursor-pointer' : ''}`}
       style={{
-        border: `1px solid ${hasRevisionWarnings ? 'var(--warning-ring)' : 'var(--success-ring)'}`,
-        boxShadow: `inset 3px 0 0 ${hasRevisionWarnings ? 'var(--warning-ring)' : 'var(--success-ring)'}${isNewest && !hasRevisionWarnings ? ', 0 0 0 2px rgba(22,163,74,0.08)' : ''}`,
+        border: '1px solid var(--border-subtle)',
+        boxShadow: `inset 3px 0 0 ${hasRevisionWarnings ? 'var(--warning-bg)' : 'var(--success-bg)'}${isNewest && !hasRevisionWarnings ? ', 0 0 0 2px rgba(22,163,74,0.08)' : ''}`,
         background: hasRevisionWarnings ? 'var(--warning-subtle)' : isNewest ? 'var(--success-subtle)' : 'var(--card-queued-bg)',
       }}
     >

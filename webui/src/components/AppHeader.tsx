@@ -53,7 +53,7 @@ export function AppHeader({
   return (
     <>
       <header className="sticky top-0 z-40 backdrop-blur-2xl" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--header-bg)' }}>
-        <div className="max-w-3xl mx-auto px-5 sm:px-6 min-h-[84px] flex items-center justify-between gap-4">
+        <div className="max-w-3xl mx-auto px-5 sm:px-6 min-h-[76px] flex items-center justify-between gap-4">
           <div className="flex items-center gap-1">
             <div style={{ position: 'relative', display: 'inline-block' }}>
               <img src="./icon.png" alt="El Sbobinator" className="app-logo" draggable={false} />
@@ -83,6 +83,7 @@ export function AppHeader({
               color: !apiReady ? (bridgeDelayed ? 'var(--error-text)' : 'var(--warning-text)') : !hasApiKey ? 'var(--text-secondary)' : !isApiKeyValid ? 'var(--warning-text)' : 'var(--success-text)',
               borderColor: !apiReady ? (bridgeDelayed ? 'var(--error-ring)' : 'var(--warning-ring)') : !hasApiKey ? 'var(--border-default)' : !isApiKeyValid ? 'var(--warning-ring)' : 'var(--success-ring)',
               background: !apiReady ? (bridgeDelayed ? 'var(--error-subtle)' : 'var(--warning-subtle)') : !hasApiKey ? 'rgba(255,255,255,0.02)' : !isApiKeyValid ? 'var(--warning-subtle)' : 'var(--success-subtle)',
+              boxShadow: 'none',
             }}>
               <span className={`inline-flex h-2.5 w-2.5 rounded-full ${appState === 'processing' ? 'animate-pulse' : ''}`} style={{ background: !apiReady ? (bridgeDelayed ? 'var(--error-bg)' : 'var(--warning-bg)') : !hasApiKey ? 'var(--text-faint)' : !isApiKeyValid ? 'var(--warning-bg)' : 'var(--success-bg)' }} />
               {!apiReady ? (bridgeDelayed ? 'Bridge in ritardo' : 'Bridge in avvio') : !hasApiKey ? 'Configura API' : !isApiKeyValid ? 'Chiave non valida' : 'API pronta'}

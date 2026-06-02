@@ -162,6 +162,19 @@ def _install_macos_dmg(tmp_path: str) -> dict | None:
                 "Permesso di scrittura negato per l'applicazione esistente."
             )
 
+        # Preemptive cleanup of stale tmp directory from prior failed updates
+        app_dst_tmp = app_dst + ".tmp"
+        if os.path.exists(app_dst_tmp):
+            try:
+                import shutil
+
+                if os.path.isdir(app_dst_tmp) and not os.path.islink(app_dst_tmp):
+                    shutil.rmtree(app_dst_tmp)
+                else:
+                    os.unlink(app_dst_tmp)
+            except Exception:
+                pass
+
         # Secure and robust shell escaping
         quoted_app_dst = shlex.quote(app_dst)
         quoted_app_dst_tmp = shlex.quote(app_dst + ".tmp")
@@ -190,7 +203,7 @@ def _install_macos_dmg(tmp_path: str) -> dict | None:
             f") &"
         )
 
-        subprocess.Popen(["bash", "-c", script], start_new_session=True)
+        subprocess.Popen(["/bin/bash", "-c", script], start_new_session=True)
         detached_script_spawned = True
 
     except subprocess.CalledProcessError as cp_err:

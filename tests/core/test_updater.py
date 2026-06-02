@@ -218,7 +218,7 @@ class UpdaterTests(unittest.TestCase):
         self.assertIn("hdiutil", call_names)
         self.assertEqual(len(popen_calls), 1)
         cmd, kwargs = popen_calls[0]
-        self.assertEqual(cmd[0], "bash")
+        self.assertEqual(cmd[0], "/bin/bash")
         self.assertEqual(cmd[1], "-c")
         self.assertIn("cp -R", cmd[2])
         self.assertTrue(kwargs.get("start_new_session"))
@@ -638,7 +638,7 @@ class TestMacOSDmgInstall(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(len(popen_calls), 1)
         cmd = popen_calls[0]
-        self.assertEqual(cmd[0], "bash")
+        self.assertEqual(cmd[0], "/bin/bash")
         self.assertEqual(cmd[1], "-c")
         script = cmd[2]
         self.assertIn("xattr -dr com.apple.quarantine", script)
