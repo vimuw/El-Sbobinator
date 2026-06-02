@@ -65,3 +65,23 @@ webui/.env.local
 .windsurf/
 .vscode/
 DESIGN.md
+
+# Additional IDEs, editors and system files
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
+*~
+.history/
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# NPM debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

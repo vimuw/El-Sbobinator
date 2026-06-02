@@ -128,6 +128,8 @@ def _install_macos_dmg(tmp_path: str) -> dict | None:
     that waits for the parent Python process to exit before replacing the app package,
     removing quarantine flags, detaching the DMG, and opening the new version.
     """
+    import shlex
+
     mount_point = None
     detached_script_spawned = False
     try:
@@ -153,28 +155,38 @@ def _install_macos_dmg(tmp_path: str) -> dict | None:
             return {"ok": False, "error": "Applicazione non trovata nel DMG."}
 
         # Preemptive permission check
-        if os.path.exists(app_dst):
-            if not os.access(app_dst, os.W_OK):
-                raise PermissionError(
-                    "Permesso di scrittura negato per l'applicazione esistente."
-                )
-        else:
-            if not os.access(os.path.dirname(app_dst), os.W_OK):
-                raise PermissionError("Permesso di scrittura negato per /Applications.")
+        if not os.access(os.path.dirname(app_dst), os.W_OK):
+            raise PermissionError("Permesso di scrittura negato per /Applications.")
+        if os.path.exists(app_dst) and not os.access(app_dst, os.W_OK):
+            raise PermissionError(
+                "Permesso di scrittura negato per l'applicazione esistente."
+            )
 
-        # Detached background script that waits for this parent process to terminate
-        # before performing the update and clean up.
+        # Secure and robust shell escaping
+        quoted_app_dst = shlex.quote(app_dst)
+        quoted_app_dst_tmp = shlex.quote(app_dst + ".tmp")
+        quoted_app_src = shlex.quote(app_src)
+        quoted_mount_point = shlex.quote(mount_point)
+        quoted_tmp_path = shlex.quote(tmp_path)
+
+        # Detached background script that waits for this parent process to terminate,
+        # performs a safe transactional-like copy, and cleans up DMG mounts.
         script = (
             f"(\n"
             f"  while kill -0 {os.getpid()} 2>/dev/null; do\n"
             f"    sleep 0.2\n"
             f"  done\n"
-            f'  rm -rf "{app_dst}"\n'
-            f'  cp -R "{app_src}" "{app_dst}"\n'
-            f'  xattr -dr com.apple.quarantine "{app_dst}" 2>/dev/null\n'
-            f'  hdiutil detach "{mount_point}" -force\n'
-            f'  rm -f "{tmp_path}"\n'
-            f'  open "{app_dst}"\n'
+            f"  rm -rf {quoted_app_dst_tmp}\n"
+            f"  if cp -R {quoted_app_src} {quoted_app_dst_tmp}; then\n"
+            f"    rm -rf {quoted_app_dst}\n"
+            f"    mv {quoted_app_dst_tmp} {quoted_app_dst}\n"
+            f"    xattr -dr com.apple.quarantine {quoted_app_dst} 2>/dev/null\n"
+            f"    open {quoted_app_dst}\n"
+            f"  else\n"
+            f"    rm -rf {quoted_app_dst_tmp}\n"
+            f"  fi\n"
+            f"  hdiutil detach {quoted_mount_point} -force\n"
+            f"  rm -f {quoted_tmp_path}\n"
             f") &"
         )
 

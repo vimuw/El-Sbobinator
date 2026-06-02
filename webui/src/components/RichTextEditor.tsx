@@ -137,16 +137,16 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
     if (!activeEditor) return;
     const files = Array.from(inputFiles).filter(f => f.type.startsWith('image/'));
     if (!files.length) return;
-    try {
-      for (const file of files) {
+    for (const file of files) {
+      try {
         const src = await readFileAsDataUrl(file);
         activeEditor.chain().focus().insertContent([
           { type: 'floatingImage', attrs: { src, alt: file.name, title: file.name, width: 56 } },
           { type: 'paragraph' },
         ]).run();
+      } catch (err) {
+        console.error(`Errore durante la lettura dell'immagine ${file.name}:`, err);
       }
-    } catch (err) {
-      console.error("Errore durante la lettura dell'immagine:", err);
     }
   }, []);
 
