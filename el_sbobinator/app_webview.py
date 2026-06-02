@@ -289,6 +289,7 @@ class ElSbobinatorApi:
         self._move_lock = threading.Lock()
         self._retry_active_count: int = 0
         self._pipeline_lifecycle_lock = threading.Lock()
+        self._cleanup_lock = threading.Lock()
         configure_logging()
         self._logger = get_logger("el_sbobinator.webview")
         # Initialise session root: apply persisted override or auto-migrate legacy path.
@@ -943,23 +944,24 @@ class ElSbobinatorApi:
     ) -> dict:
         """Delete incomplete session folders older than max_age_days days."""
         try:
-            result = cleanup_orphan_sessions(
-                max(1, int(max_age_days)),
-                dry_run=bool(dry_run),
-            )
-            if result["removed"] > 0:
-                with self._sessions_cache_lock:
-                    self._sessions_cache = None
-                    self._sessions_cache_gen += 1
-            return {
-                "ok": True,
-                "removed": result["removed"],
-                "freed_bytes": result["freed_bytes"],
-                "errors": result["errors"],
-                "candidates": result.get("candidates", result["removed"]),
-                "preserved_completed": result.get("preserved_completed", 0),
-                "missing_completed_html": result.get("missing_completed_html", 0),
-            }
+            with self._cleanup_lock:
+                result = cleanup_orphan_sessions(
+                    max(1, int(max_age_days)),
+                    dry_run=bool(dry_run),
+                )
+                if result["removed"] > 0:
+                    with self._sessions_cache_lock:
+                        self._sessions_cache = None
+                        self._sessions_cache_gen += 1
+                return {
+                    "ok": True,
+                    "removed": result["removed"],
+                    "freed_bytes": result["freed_bytes"],
+                    "errors": result["errors"],
+                    "candidates": result.get("candidates", result["removed"]),
+                    "preserved_completed": result.get("preserved_completed", 0),
+                    "missing_completed_html": result.get("missing_completed_html", 0),
+                }
         except Exception as e:
             return {
                 "ok": False,
@@ -979,27 +981,28 @@ class ElSbobinatorApi:
     ) -> dict:
         """Count or delete completed session folders older than max_age_days days."""
         try:
-            result = _cleanup_completed_sessions(
-                max(1, int(max_age_days)),
-                dry_run=bool(dry_run),
-            )
-            if result["removed"] > 0:
-                for deleted_dir in result.get("deleted_paths", []):
-                    self._evict_deleted_session_caches(str(deleted_dir))
-                with self._sessions_cache_lock:
-                    self._sessions_cache = None
-                    self._sessions_cache_gen += 1
-                with self._text_cache_lock:
-                    self._text_cache.clear()
-            return {
-                "ok": True,
-                "removed": result["removed"],
-                "freed_bytes": result["freed_bytes"],
-                "errors": result["errors"],
-                "candidates": result.get("candidates", result["removed"]),
-                "preserved_completed": result.get("preserved_completed", 0),
-                "missing_completed_html": result.get("missing_completed_html", 0),
-            }
+            with self._cleanup_lock:
+                result = _cleanup_completed_sessions(
+                    max(1, int(max_age_days)),
+                    dry_run=bool(dry_run),
+                )
+                if result["removed"] > 0:
+                    for deleted_dir in result.get("deleted_paths", []):
+                        self._evict_deleted_session_caches(str(deleted_dir))
+                    with self._sessions_cache_lock:
+                        self._sessions_cache = None
+                        self._sessions_cache_gen += 1
+                    with self._text_cache_lock:
+                        self._text_cache.clear()
+                return {
+                    "ok": True,
+                    "removed": result["removed"],
+                    "freed_bytes": result["freed_bytes"],
+                    "errors": result["errors"],
+                    "candidates": result.get("candidates", result["removed"]),
+                    "preserved_completed": result.get("preserved_completed", 0),
+                    "missing_completed_html": result.get("missing_completed_html", 0),
+                }
         except Exception as e:
             return {
                 "ok": False,

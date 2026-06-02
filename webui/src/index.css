@@ -82,7 +82,7 @@
   --glass-top-shimmer: rgba(255, 255, 255, 0.90);
 
   --header-bg: #ffffff;
-  --editor-chrome-bg: #dde2ed;
+  --editor-chrome-bg: #eeebe5;
 }
 
 :root[data-theme="dark"] {
@@ -299,7 +299,6 @@
 :root:not([data-theme="dark"]) .editor-select:hover,
 :root:not([data-theme="dark"]) .editor-select:focus {
   background: rgba(0, 0, 0, 0.07);
-  border-color: var(--border-default);
 }
 
 :root:not([data-theme="dark"]) .editor-button {
@@ -326,12 +325,12 @@
 }
 
 :root:not([data-theme="dark"]) .toc-left-sidebar {
-  background: #eaecf4;
+  background: var(--editor-chrome-bg);
   border-right-color: rgba(100, 116, 139, 0.22);
 }
 
 :root:not([data-theme="dark"]) .editor-toc-col .toc-left-sidebar {
-  background: #eaecf4;
+  background: var(--editor-chrome-bg);
 }
 
 :root:not([data-theme="dark"]) .toc-left-close:hover,
@@ -894,7 +893,6 @@ button {
 .player-control:hover {
   background: var(--accent-subtle);
   color: var(--text-primary);
-  border-color: var(--border-default);
 }
 
 .player-control:active {
@@ -904,7 +902,6 @@ button {
 .player-control.is-active {
   color: var(--text-primary);
   background: color-mix(in srgb, var(--accent-subtle) 80%, transparent);
-  border-color: var(--border-strong);
 }
 
 .player-speed-wrap {
@@ -949,7 +946,6 @@ button {
 .player-speed-select:focus {
   background: var(--accent-subtle);
   color: var(--text-primary);
-  border-color: var(--border-default);
   outline: none;
 }
 
@@ -1274,7 +1270,6 @@ button {
 .editor-select:focus {
   background: rgba(255, 255, 255, 0.04);
   color: var(--text-primary);
-  border-color: var(--border-default);
   outline: none;
 }
 
@@ -1316,6 +1311,7 @@ button {
   background: #ffffff;
   width: 100%;
   max-width: 794px;
+  min-width: 794px;
   padding: 0;
   box-shadow: 0 0 0 1px var(--border-subtle);
 }
@@ -1331,6 +1327,10 @@ button {
 }
 
 @media (max-width: 640px) {
+  .editor-page {
+    min-width: 0;
+  }
+
   .editor-page .tiptap-editor {
     padding: 40px 28px;
   }
@@ -1735,9 +1735,6 @@ button {
   opacity: 0.85;
 }
 
-.editor-toc-open .editor-page {
-  min-width: 794px;
-}
 
 /* ── TOC inside gray area (left of paper) ──────── */
 .editor-page-outer {
@@ -1781,8 +1778,8 @@ button {
   margin-left: 0;
   margin-top: 0;
   border-radius: 10px;
-  border: 1px solid var(--border-default);
-  background: var(--bg-elevated);
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--text-muted);
   display: flex;
   align-items: center;
@@ -1795,7 +1792,7 @@ button {
 .editor-toc-btn:hover {
   background: var(--accent-subtle);
   color: var(--text-primary);
-  border-color: var(--border-strong);
+  border-color: transparent;
 }
 
 .editor-toc-header {
@@ -1915,7 +1912,6 @@ button {
 
 .color-swatch:hover {
   transform: scale(1.15);
-  border-color: var(--border-default);
 }
 
 .color-swatch.is-selected {
@@ -2581,7 +2577,7 @@ input[type="password"]::-ms-reveal {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  border: 1px solid var(--border-default);
+  border: 1px solid transparent;
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
@@ -2592,7 +2588,7 @@ input[type="password"]::-ms-reveal {
 .editor-fullpage-back:hover {
   background: var(--accent-subtle);
   color: var(--text-primary);
-  border-color: var(--border-strong);
+  border-color: transparent;
 }
 
 .editor-fullpage-title {
@@ -2612,6 +2608,11 @@ input[type="password"]::-ms-reveal {
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+}
+
+.editor-fullpage-actions .icon-button {
+  width: 32px;
+  height: 32px;
 }
 
 .editor-autosave-badge {

@@ -277,24 +277,21 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
       const tocCol = container.querySelector('.editor-toc-col') as HTMLElement;
       if (!outer || !tocCol) return;
 
-      if (isTocOpen) {
-        const viewportWidth = container.clientWidth;
-        const contentWidth = outer.scrollWidth;
-        const leftColWidth = tocCol.offsetWidth;
+      const viewportWidth = container.clientWidth;
+      const contentWidth = outer.scrollWidth;
+      const leftColWidth = tocCol.offsetWidth;
 
-        if (contentWidth > viewportWidth) {
-          const idealScrollLeft = contentWidth / 2 - viewportWidth / 2;
-          // Limit scrollLeft to keep a comfortable 20px padding on the left edge of the paper
-          const maxScrollLeft = leftColWidth;
-          const targetScrollLeft = Math.max(0, Math.min(idealScrollLeft, maxScrollLeft));
+      if (isTocOpen && contentWidth > viewportWidth) {
+        const idealScrollLeft = contentWidth / 2 - viewportWidth / 2;
+        // Limit scrollLeft to keep a comfortable 20px padding on the left edge of the paper
+        const maxScrollLeft = leftColWidth;
+        const targetScrollLeft = Math.max(0, Math.min(idealScrollLeft, maxScrollLeft));
 
-          container.scrollTo({
-            left: targetScrollLeft,
-            behavior,
-          });
-        }
+        container.scrollTo({
+          left: targetScrollLeft,
+          behavior,
+        });
       } else {
-        // Reset scroll position when TOC is closed
         container.scrollTo({
           left: 0,
           behavior,
@@ -329,7 +326,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
       transitionActive = false;
       resizeObserver.disconnect();
     };
-  }, [isTocOpen]);
+  }, [isTocOpen, zoomLevel]);
 
   return (
     <div className={`editor-shell flex flex-1 min-h-0 w-full flex-col relative ${isTocOpen ? 'editor-toc-open' : ''}`} onContextMenu={handleContextMenu}>
