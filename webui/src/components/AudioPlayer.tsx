@@ -170,6 +170,8 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
 
   const handleLoadedMetadata = () => {
     if (!audioRef.current) return;
+    audioRef.current.playbackRate = playbackRate;
+    audioRef.current.volume = volume;
     if (isFinite(audioRef.current.duration)) {
       setDuration(audioRef.current.duration);
     }

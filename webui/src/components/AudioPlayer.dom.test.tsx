@@ -183,6 +183,20 @@ describe('AudioPlayer', () => {
     expect(audio.currentTime).toBe(30);
   });
 
+  it('loadedmetadata restores playbackRate and volume to the audio element', () => {
+    const { container } = render(<AudioPlayer src="/audio/test.mp3" initialPlaybackRate={2} initialVolume={0.8} />);
+    const audio = container.querySelector('audio') as HTMLAudioElement;
+
+    // Simulate browser load resetting properties or initial state
+    audio.playbackRate = 1;
+    audio.volume = 1;
+
+    fireEvent.loadedMetadata(audio);
+    expect(audio.playbackRate).toBe(2);
+    expect(audio.volume).toBe(0.8);
+  });
+
+
   it('calls onStateChange when audio timeupdate fires', () => {
     const onStateChange = vi.fn();
     const { container } = render(<AudioPlayer src="/audio/test.mp3" onStateChange={onStateChange} />);

@@ -1074,7 +1074,7 @@ export function SettingsModal({
                                 return (
                                   <div
                                     key={modelId}
-                                    className="py-2.5 flex items-center justify-between gap-3 hover:bg-[var(--sidebar-active-bg)] transition-colors px-1"
+                                    className="py-2.5 flex items-center justify-between gap-3 hover:bg-[var(--sidebar-active-bg)] transition-colors px-2 rounded-lg"
                                   >
                                     <div className="min-w-0">
                                       <p className="text-sm font-semibold text-[var(--text-primary)]">{model.label}</p>
