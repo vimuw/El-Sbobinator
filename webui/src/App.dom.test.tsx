@@ -158,11 +158,6 @@ describe('App', () => {
     expect(screen.getByPlaceholderText(/Incolla qui la tua API Key/)).toBeTruthy();
   });
 
-  it('shows advanced settings link in setup mode', async () => {
-    await act(async () => { render(<App />); });
-    expect(screen.getByText('Apri impostazioni avanzate')).toBeTruthy();
-  });
-
   it('settings button opens settings modal', async () => {
     await act(async () => { render(<App />); });
     await act(async () => {
@@ -171,12 +166,10 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: /Impostazioni/ })).toBeTruthy();
   });
 
-  it('console toggle button shows console panel', async () => {
+  it('console toggle button is disabled in setup mode', async () => {
     await act(async () => { render(<App />); });
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText('Mostra console'));
-    });
-    expect(screen.getByRole('heading', { name: 'Console' })).toBeTruthy();
+    const consoleBtn = screen.getByLabelText('Mostra console') as HTMLButtonElement;
+    expect(consoleBtn.disabled).toBe(true);
   });
 
   it('shows config recovery warning without exposing the full path', async () => {

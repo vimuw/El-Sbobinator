@@ -1373,7 +1373,7 @@ export default function App() {
                   sessionFolderMap={completedSessionFolderMap}
                 />
 
-                {showConsole && (
+                {showConsole && uiMode !== 'setup' && (
                   <ConsolePanel
                     consoleLogs={consoleLogs}
                     lastConsoleMessage={lastConsoleMessage}

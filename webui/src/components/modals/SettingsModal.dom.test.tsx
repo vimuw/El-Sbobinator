@@ -217,10 +217,11 @@ describe('SettingsModal — session info race condition', () => {
 });
 
 describe('SettingsModal — main-section interactions', () => {
-  it('toggles showApiKeys on show/hide button click', async () => {
+  it('toggles showPrimaryKey on show/hide button click without affecting fallback keys', async () => {
     render(<SettingsModal {...makeProps()} />);
     fireEvent.click(screen.getByTitle('Mostra chiave'));
     expect(screen.getByTitle('Nascondi chiave')).toBeTruthy();
+    expect(screen.getByTitle('Mostra chiavi')).toBeTruthy();
   });
 
   it('calls setApiKey when API key input changes', async () => {
@@ -246,10 +247,11 @@ describe('SettingsModal — main-section interactions', () => {
     expect(localStorage.getItem('notifications_enabled')).toBeTruthy();
   });
 
-  it('toggles fallback keys show/hide on Mostra chiavi click', async () => {
+  it('toggles showFallbackKeys on Mostra chiavi click without affecting primary key', async () => {
     render(<SettingsModal {...makeProps()} />);
     fireEvent.click(screen.getByTitle('Mostra chiavi'));
     expect(screen.getByTitle('Nascondi chiavi')).toBeTruthy();
+    expect(screen.getByTitle('Mostra chiave')).toBeTruthy();
   });
 
   it('calls open_url when aistudio link is clicked', async () => {

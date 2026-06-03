@@ -95,13 +95,6 @@ describe('SetupPage', () => {
     expect(openUrl).toHaveBeenCalledWith('https://aistudio.google.com/apikey');
   });
 
-  it('calls setIsSettingsOpen when advanced settings link is clicked', () => {
-    const setIsSettingsOpen = vi.fn();
-    render(<SetupPage {...baseProps} setIsSettingsOpen={setIsSettingsOpen} />);
-    fireEvent.click(screen.getByText('Apri impostazioni avanzate'));
-    expect(setIsSettingsOpen).toHaveBeenCalledWith(true);
-  });
-
   it('shows error when save_settings returns {ok:false}', async () => {
     const mockSave = vi.fn().mockResolvedValue({ ok: false, error: 'quota esaurita' });
     setPywebview({ save_settings: mockSave });

@@ -90,6 +90,15 @@ describe('AppHeader', () => {
     expect(setShowConsole).toHaveBeenCalledTimes(1);
   });
 
+  it('disables console button when API key is missing or invalid', () => {
+    const { rerender } = render(<AppHeader {...baseProps} hasApiKey={false} />);
+    const consoleBtn = screen.getByLabelText('Mostra console') as HTMLButtonElement;
+    expect(consoleBtn.disabled).toBe(true);
+
+    rerender(<AppHeader {...baseProps} isApiKeyValid={false} />);
+    expect(consoleBtn.disabled).toBe(true);
+  });
+
   it('calls setIsSettingsOpen when settings button is clicked', () => {
     const setIsSettingsOpen = vi.fn();
     render(<AppHeader {...baseProps} setIsSettingsOpen={setIsSettingsOpen} />);

@@ -348,7 +348,8 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<'general' | 'advanced'>('general');
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('notifications_enabled') !== 'false');
-  const [showApiKeys, setShowApiKeys] = useState(false);
+  const [showPrimaryKey, setShowPrimaryKey] = useState(false);
+  const [showFallbackKeys, setShowFallbackKeys] = useState(false);
   const [sessionInfo, setSessionInfo] = useState<{ total_bytes: number; total_sessions: number; session_root?: string } | null>(null);
   const [isLoadingSessionInfo, setIsLoadingSessionInfo] = useState(false);
   const [isCleaningSession, setIsCleaningSession] = useState(false);
@@ -834,16 +835,16 @@ export function SettingsModal({
                             Google Gemini API Key (Principale)
                           </label>
                           <button
-                            onClick={() => setShowApiKeys(!showApiKeys)}
+                            onClick={() => setShowPrimaryKey(!showPrimaryKey)}
                             className="opacity-50 hover:opacity-100 transition-opacity"
                             style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}
-                            title={showApiKeys ? 'Nascondi chiave' : 'Mostra chiave'}
+                            title={showPrimaryKey ? 'Nascondi chiave' : 'Mostra chiave'}
                           >
-                            {showApiKeys ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            {showPrimaryKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </button>
                         </div>
                         <input
-                          type={showApiKeys ? 'text' : 'password'}
+                          type={showPrimaryKey ? 'text' : 'password'}
                           value={apiKey}
                           onChange={e => setApiKey(e.target.value)}
                           placeholder="AIzaSy... oppure AQ..."
@@ -877,12 +878,12 @@ export function SettingsModal({
                             API Keys di Riserva (Fallback)
                           </label>
                           <button
-                            onClick={() => setShowApiKeys(!showApiKeys)}
+                            onClick={() => setShowFallbackKeys(!showFallbackKeys)}
                             className="opacity-50 hover:opacity-100 transition-opacity"
                             style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}
-                            title={showApiKeys ? 'Nascondi chiavi' : 'Mostra chiavi'}
+                            title={showFallbackKeys ? 'Nascondi chiavi' : 'Mostra chiavi'}
                           >
-                            {showApiKeys ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            {showFallbackKeys ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </button>
                         </div>
                         <textarea
@@ -890,7 +891,7 @@ export function SettingsModal({
                           onChange={e => setFallbackKeys(e.target.value.split('\n'))}
                           placeholder="Inserisci una API Key per riga..."
                           rows={3}
-                          className={`app-textarea font-mono text-sm w-full p-2.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-input)] text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-ring)] resize-none ${!showApiKeys ? 'obscured-text' : ''}`}
+                          className={`app-textarea font-mono text-sm w-full p-2.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-input)] text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-ring)] resize-none ${!showFallbackKeys ? 'obscured-text' : ''}`}
                         />
                         <p className="text-xs mt-1 text-[var(--text-muted)]">
                           Usate automaticamente in caso di esaurimento quota (errore 429).

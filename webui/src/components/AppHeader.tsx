@@ -102,9 +102,11 @@ export function AppHeader({
                 setShowConsole(next);
                 localStorage.setItem('show_console', String(next));
               }}
+              disabled={!hasApiKey || !isApiKeyValid}
               className={`icon-button icon-btn-console${showConsole ? ' icon-button--active' : ''}`}
-              title={showConsole ? 'Nascondi console' : 'Mostra console'}
+              title={(!hasApiKey || !isApiKeyValid) ? 'Console non disponibile' : (showConsole ? 'Nascondi console' : 'Mostra console')}
               aria-label={showConsole ? 'Nascondi console' : 'Mostra console'}
+              style={(!hasApiKey || !isApiKeyValid) ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
             >
               <Terminal className="w-5 h-5" />
             </button>
