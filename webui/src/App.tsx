@@ -1281,7 +1281,6 @@ export default function App() {
                 {uiMode === 'setup' ? (
                   <SetupPage
                     hasProtectedKey={hasProtectedKey}
-                    setIsSettingsOpen={setIsSettingsOpen}
                     onSaved={(key) => setApiKey(key)}
                     preferredModel={preferredModel}
                     fallbackKeys={fallbackKeys}

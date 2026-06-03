@@ -235,7 +235,7 @@ function VersionUpdateRow({
           border: '1px solid var(--warning-ring, rgba(217, 119, 6, 0.2))'
         }}
       >
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <div className="space-y-1">
             <div className="flex items-center gap-1.5">
               <span
@@ -848,7 +848,8 @@ export function SettingsModal({
                           value={apiKey}
                           onChange={e => setApiKey(e.target.value)}
                           placeholder="AIzaSy... oppure AQ..."
-                          className="app-input font-mono text-sm w-full p-2.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-input)] text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-ring)]"
+                          className="app-input font-mono text-sm w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-input)] text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-ring)]"
+                          style={{ padding: '0.45rem 0.75rem' }}
                         />
                         {apiKey.trim() && (
                           <p className="text-sm" style={{ color: GEMINI_KEY_PATTERN.test(apiKey.trim()) ? 'var(--success-text)' : 'var(--warning-text)' }}>
@@ -891,7 +892,8 @@ export function SettingsModal({
                           onChange={e => setFallbackKeys(e.target.value.split('\n'))}
                           placeholder="Inserisci una API Key per riga..."
                           rows={3}
-                          className={`app-textarea font-mono text-sm w-full p-2.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-input)] text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-ring)] resize-none ${!showFallbackKeys ? 'obscured-text' : ''}`}
+                          className={`app-textarea font-mono text-sm w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-input)] text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-ring)] resize-none ${!showFallbackKeys ? 'obscured-text' : ''}`}
+                          style={{ padding: '0.5rem 0.75rem', minHeight: '80px' }}
                         />
                         <p className="text-xs mt-1 text-[var(--text-muted)]">
                           Usate automaticamente in caso di esaurimento quota (errore 429).
@@ -1040,8 +1042,8 @@ export function SettingsModal({
                       </div>
 
                       <div className="space-y-4">
-                        <div className="space-y-1.5">
-                          <label className="text-sm font-semibold text-[var(--text-primary)]">
+                        <div className="space-y-2.5">
+                          <label className="block text-sm font-semibold text-[var(--text-primary)]">
                             Modello Primario
                           </label>
                           <CustomSelect
@@ -1054,8 +1056,8 @@ export function SettingsModal({
                           )}
                         </div>
 
-                        <div className="space-y-2 border-t border-[var(--border-subtle)] pt-4">
-                          <label className="text-sm font-semibold text-[var(--text-primary)]">
+                        <div className="space-y-2.5 border-t border-[var(--border-subtle)] pt-4">
+                          <label className="block text-sm font-semibold text-[var(--text-primary)]">
                             Fallback Modelli (in ordine di utilizzo)
                           </label>
                           <CustomSelect

@@ -4,7 +4,6 @@ import { SetupPage } from './SetupPage';
 
 const baseProps = {
   hasProtectedKey: false,
-  setIsSettingsOpen: vi.fn(),
   onSaved: vi.fn(),
   preferredModel: 'gemini-2.5-flash',
   fallbackKeys: [],

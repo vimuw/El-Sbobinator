@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { Eye, EyeOff, Key, Settings } from 'lucide-react';
+import { Eye, EyeOff, Key } from 'lucide-react';
 import { GEMINI_KEY_PATTERN } from '../utils';
 
 interface SetupPageProps {
   hasProtectedKey: boolean;
-  setIsSettingsOpen: (v: boolean) => void;
   onSaved: (key: string) => void;
   preferredModel: string;
   fallbackKeys: string[];
@@ -14,7 +13,6 @@ interface SetupPageProps {
 
 export function SetupPage({
   hasProtectedKey,
-  setIsSettingsOpen,
   onSaved,
   preferredModel,
   fallbackKeys,
