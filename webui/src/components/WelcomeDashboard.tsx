@@ -200,9 +200,6 @@ function StatCard({ icon, value, label, delay, iconIdleAnim }: StatCardProps) {
       className="premium-panel stat-card p-4 flex flex-col items-center gap-2 text-center"
       style={{
         cursor: 'default',
-        borderRadius: '8px',
-        border: '1px solid var(--border-subtle)',
-        boxShadow: 'none',
       }}
     >
       <div

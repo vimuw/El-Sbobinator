@@ -340,6 +340,7 @@ def _esegui_sbobinatura_impl(  # noqa: C901
                     settings.model,
                     settings.fallback_models,
                 )
+                runtime.update_model(model_state.current)
                 stage = "phase1"
                 log_model_selection("Modelli sessione dopo rigenerazione")
                 logger.info(

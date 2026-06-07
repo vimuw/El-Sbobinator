@@ -6,7 +6,7 @@ import { useApiReady } from './hooks/useApiReady';
 import { useBridgeCallbacks } from './hooks/useBridgeCallbacks';
 import { useQueuePersistence } from './hooks/useQueuePersistence';
 import { useUpdateChecker } from './hooks/useUpdateChecker';
-import type { FileDonePayload } from './appState';
+import type { FileDonePayload, ProcessingAction } from './appState';
 
 vi.mock('motion/react', () => ({
   motion: new Proxy({}, {
@@ -450,12 +450,49 @@ describe('App — ready-empty mode (valid API key, no files)', () => {
     expect(screen.getByText(/caffè/)).toBeTruthy();
   });
 
-  it('console panel shows when console toggle is clicked', async () => {
+  it('console toggle button is disabled when queue is empty', async () => {
     await act(async () => { render(<App />); });
+    const consoleBtn = screen.getByLabelText('Mostra console') as HTMLButtonElement;
+    expect(consoleBtn.disabled).toBe(true);
+  });
+
+  it('console toggle button is enabled and shows console panel when clicked if files are in queue, and closes/disables when queue becomes empty', async () => {
+    let localDispatch: React.Dispatch<ProcessingAction> | null = null;
+    vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
+      localDispatch = dispatch;
+      React.useEffect(() => {
+        dispatch({
+          type: 'queue/add',
+          files: [{
+            id: 'file-1',
+            name: 'lesson.mp3',
+            size: 123,
+            duration: 60,
+            path: 'C:\\Media\\lesson.mp3',
+            status: 'queued',
+            progress: 0,
+            phase: 0,
+          }],
+        });
+      }, [dispatch]);
+    });
+
+    await act(async () => { render(<App />); });
+    const consoleBtn = screen.getByLabelText('Mostra console') as HTMLButtonElement;
+    expect(consoleBtn.disabled).toBe(false);
+
     await act(async () => {
-      fireEvent.click(screen.getByLabelText('Mostra console'));
+      fireEvent.click(consoleBtn);
     });
     expect(screen.getByRole('heading', { name: 'Console' })).toBeTruthy();
+
+    await act(async () => {
+      localDispatch({ type: 'queue/remove', id: 'file-1' });
+    });
+
+    const consoleBtnAfter = screen.getByLabelText('Mostra console') as HTMLButtonElement;
+    expect(consoleBtnAfter.disabled).toBe(true);
+    expect(screen.queryByRole('heading', { name: 'Console' })).toBeNull();
   });
 });
 

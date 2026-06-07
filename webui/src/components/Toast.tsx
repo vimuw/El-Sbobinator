@@ -57,7 +57,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -8, scale: 0.96 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
-      className="pointer-events-auto flex flex-col gap-1.5 px-4 py-3 rounded-2xl"
+      className="pointer-events-auto flex flex-col gap-1.5 px-4 py-3 rounded-xl"
       style={{
         position: 'relative',
         maxWidth: '20rem',
@@ -114,7 +114,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
         </div>
       </div>
       {errorText && (
-        <div className="flex items-center gap-1.5 text-xs pl-7" style={{ color: 'var(--color-error, #ef4444)' }}>
+        <div className="flex items-center gap-1.5 text-xs pl-7" style={{ color: 'var(--error-text, #ef4444)' }}>
           <AlertTriangle className="w-3 h-3 shrink-0" />
           <span>{errorText}{toast.action?.errorSuffix ? ` — ${toast.action.errorSuffix}` : ''}</span>
         </div>

@@ -1,4 +1,9 @@
 @import "tailwindcss";
+@import "@fontsource/manrope/latin-400.css";
+@import "@fontsource/manrope/latin-500.css";
+@import "@fontsource/manrope/latin-600.css";
+@import "@fontsource/manrope/latin-700.css";
+@import "@fontsource/manrope/latin-800.css";
 @plugin "@tailwindcss/typography";
 
 /* ═══ DESIGN TOKENS / CSS VARIABLES ═══ */
@@ -208,7 +213,7 @@
 }
 
 :root:not([data-theme="dark"]) .dropzone-card {
-  background: #f7f4ef;
+  background: #ffffff;
   border-color: rgba(100, 116, 139, 0.34);
 }
 
@@ -260,6 +265,7 @@
   gap: 0.25rem;
   position: relative;
   text-decoration: none;
+  color: inherit;
   transition: transform 150ms ease, opacity 150ms ease;
 }
 
@@ -411,6 +417,11 @@ button {
 .app-shell {
   position: relative;
   isolation: isolate;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: row;
+  background: var(--bg-base);
+  color: var(--text-secondary);
 }
 
 
@@ -732,6 +743,13 @@ button {
 
 /* ═══ MODALS ═══ */
 
+.modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-overlay);
+  backdrop-filter: blur(10px);
+}
+
 .modal-action-button {
   display: inline-flex;
   align-items: center;
@@ -847,6 +865,12 @@ button {
   width: 36px;
   height: 36px;
   border-radius: 8px;
+}
+
+.mini-icon-button {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
 }
 
 .drag-handle-btn {
@@ -1027,7 +1051,7 @@ button {
   height: 52px;
   border-radius: 8px;
   border: 1.5px dashed var(--border-default);
-  background: transparent;
+  background: var(--glass-bg);
   transition:
     border-color 160ms ease,
     background 160ms ease,
@@ -1037,7 +1061,7 @@ button {
 .dropzone-compact:hover,
 .dropzone-compact:focus-visible {
   border-color: var(--border-strong);
-  background: color-mix(in srgb, var(--accent-subtle) 60%, transparent);
+  background: color-mix(in srgb, var(--accent-subtle) 60%, var(--glass-bg));
   outline: none;
 }
 
@@ -2314,7 +2338,24 @@ input[type="password"]::-ms-reveal {
 
 .folder-card {
   overflow: hidden;
+  border-radius: 12px;
   transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.folder-card-new {
+  border: 2px dashed var(--border-default);
+  background: transparent;
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.folder-card-new:hover {
+  border-color: var(--accent-bg);
+  background: var(--accent-subtle);
 }
 
 
@@ -2663,4 +2704,242 @@ input[type="password"]::-ms-reveal {
 .editor-zoom-display:hover {
   background: var(--accent-subtle);
   color: var(--text-primary);
+}
+
+/* ═══ UNIFIED DESIGN SYSTEM ALIGNMENTS ═══ */
+
+/* Modal Parts Layout & Borders */
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-subtle) !important;
+}
+
+.modal-body {
+  flex: 1 1 0%;
+  overflow-y: auto;
+  padding: 20px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.modal-footer {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  padding: 16px 20px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-subtle) !important;
+}
+
+.modal-footer.flex-col {
+  flex-direction: column;
+}
+
+/* Border utilities */
+.border-t-subtle {
+  border-top: 1px solid var(--border-subtle) !important;
+}
+
+.border-b-subtle {
+  border-bottom: 1px solid var(--border-subtle) !important;
+}
+
+/* Select Field Custom Styling */
+.select-dropdown {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border-default) !important;
+  box-shadow: var(--shadow-strong) !important;
+  border-radius: 12px !important;
+}
+
+.custom-select-trigger {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border-default) !important;
+  text-align: left;
+  padding: 0.35rem 0.75rem !important;
+}
+
+/* Alert & Notice Banners */
+.alert-card {
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.alert-card.is-warning {
+  background: var(--warning-subtle) !important;
+  border: 1px solid var(--warning-ring) !important;
+}
+
+.alert-card.is-error {
+  background: var(--error-subtle) !important;
+  border: 1px solid var(--error-ring) !important;
+  color: var(--error-text) !important;
+}
+
+.alert-card.is-success {
+  background: var(--success-subtle) !important;
+  border: 1px solid var(--success-ring) !important;
+  color: var(--success-text) !important;
+}
+
+.notice-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  font-size: 0.875rem;
+}
+
+.notice-banner.is-warning {
+  background: var(--warning-subtle) !important;
+  border: 1px solid var(--warning-ring) !important;
+  color: var(--warning-text) !important;
+}
+
+/* Earthy Warning Action Styles */
+.btn-warning-filled {
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+  background: var(--warning-text) !important;
+  color: var(--bg-surface) !important;
+  border: none !important;
+  cursor: pointer;
+  font-weight: 600;
+  box-shadow: 0 2px 6px var(--warning-ring) !important;
+  transition: transform 180ms ease, opacity 180ms ease, background 180ms ease;
+}
+
+.btn-warning-filled:hover {
+  transform: translateY(-1px);
+  background: var(--warning-bg) !important;
+}
+
+.btn-warning-filled:active {
+  transform: translateY(0);
+}
+
+.premium-button-secondary.is-warning {
+  color: var(--warning-text) !important;
+  border-color: var(--warning-ring) !important;
+  background: var(--warning-subtle) !important;
+}
+
+.premium-button-secondary.is-warning:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--warning-text) 14%, transparent) !important;
+}
+
+/* Badges */
+.premium-badge.is-success,
+.badge-success {
+  background: var(--success-subtle) !important;
+  color: var(--success-text) !important;
+  border: 1px solid var(--success-ring) !important;
+}
+
+.premium-badge.is-warning,
+.badge-warning {
+  background: var(--warning-subtle) !important;
+  color: var(--warning-text) !important;
+  border: 1px solid var(--warning-ring) !important;
+}
+
+/* Dropzone Components */
+.dropzone-icon-container {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-default) !important;
+  background: var(--bg-elevated) !important;
+  color: var(--text-muted) !important;
+  transition: background 200ms ease, color 200ms ease;
+}
+
+.dropzone-icon-container.is-dragging {
+  background: var(--accent-subtle) !important;
+  color: var(--accent-bg) !important;
+}
+
+.dropzone-browse-button {
+  margin-top: 16px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: var(--accent-subtle) !important;
+  color: var(--accent-text) !important;
+  border: 1px solid var(--accent-ring) !important;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.dropzone-browse-button:hover {
+  background: color-mix(in srgb, var(--accent-bg) 18%, transparent) !important;
+}
+
+/* Queue Card Status Modifiers */
+.queue-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.queue-card.is-queued {
+  background: var(--card-queued-bg) !important;
+}
+
+.queue-card.is-processing {
+  box-shadow: inset 3px 0 0 var(--processing-dot) !important;
+  background: var(--card-queued-bg) !important;
+}
+
+.queue-card.is-canceling {
+  box-shadow: inset 3px 0 0 var(--error-bg) !important;
+  background: var(--card-queued-bg) !important;
+}
+
+.queue-card.is-error {
+  box-shadow: inset 3px 0 0 var(--error-bg) !important;
+  background: var(--error-subtle) !important;
+}
+
+.queue-card.is-completed {
+  box-shadow: inset 3px 0 0 var(--success-bg) !important;
+  background: var(--card-queued-bg) !important;
+}
+
+.queue-card.is-completed.is-newest {
+  box-shadow: inset 3px 0 0 var(--success-bg), 0 0 0 2px rgba(22, 163, 74, 0.08) !important;
+  background: var(--success-subtle) !important;
+}
+
+.queue-card.is-completed.is-warning {
+  box-shadow: inset 3px 0 0 var(--warning-bg) !important;
+  background: var(--warning-subtle) !important;
+}
+
+/* App Footer Layout */
+.app-footer {
+  padding-top: 16px;
+  padding-bottom: 16px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-muted) !important;
+  font-size: 13px;
 }

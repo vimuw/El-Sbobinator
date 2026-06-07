@@ -268,7 +268,7 @@ export function ArchivePage({
       {total != null && total > sessions.length && onLoadAll && (
         <div
           className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl text-sm"
-          style={{ background: 'var(--accent-subtle)', color: 'var(--text-secondary)', border: '1px solid var(--accent-text)22' }}
+          style={{ background: 'var(--accent-subtle)', color: 'var(--text-secondary)', border: '1px solid var(--accent-ring, var(--border-default))' }}
         >
           <span style={{ color: 'var(--text-muted)' }}>
             Mostrate <strong style={{ color: 'var(--text-primary)' }}>{sessions.length}</strong> di <strong style={{ color: 'var(--text-primary)' }}>{total}</strong> sbobine
@@ -653,7 +653,6 @@ function FolderCardOverlay({
       className="folder-card"
       style={{
         border: `2px solid ${folder.color}90`,
-        borderRadius: 20,
         background: `${folder.color}26`,
         boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
         opacity: 0.95,
@@ -682,27 +681,7 @@ function NewFolderCard({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="folder-card cursor-pointer w-full text-left"
-      style={{
-        border: '2px dashed var(--border-default)',
-        borderRadius: 20,
-        background: 'transparent',
-        minHeight: 72,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        transition: 'border-color 0.15s, background 0.15s',
-      }}
-      onMouseEnter={e => {
-        (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent-text)';
-        (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent-subtle)';
-      }}
-      onMouseLeave={e => {
-        (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-default)';
-        (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-      }}
+      className="folder-card folder-card-new cursor-pointer w-full text-left"
     >
       <FolderPlus className="w-5 h-5" style={{ color: 'var(--accent-text)' }} />
       <span className="text-xs font-semibold" style={{ color: 'var(--accent-text)' }}>Nuova raccolta</span>
@@ -748,9 +727,7 @@ function FolderCard({
       className="folder-card"
       style={{
         border: `2px solid ${isHover ? `${folder.color}90` : `${folder.color}40`}`,
-        borderRadius: 20,
         background: `${folder.color}26`,
-        transition: 'border-color 0.15s, background 0.15s',
         cursor: 'pointer',
       }}
       onClick={onNavigate}

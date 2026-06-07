@@ -68,22 +68,14 @@ function CustomSelect({ value, onChange, options, placeholder }: CustomSelectPro
     <div
       ref={dropdownRef}
       onMouseDown={e => e.stopPropagation()}
-      style={{
-        ...dropdownStyle,
-        background: 'var(--bg-elevated)',
-        border: '1px solid var(--border-default)',
-        boxShadow: 'var(--shadow-strong)',
-        borderRadius: '14px',
-        overflow: 'auto',
-        maxHeight: '220px',
-      }}
+      className="select-dropdown overflow-auto max-h-[220px]"
+      style={dropdownStyle}
     >
       {placeholder && (
         <button
           type="button"
           onClick={() => { onChange(''); setOpen(false); }}
-          className="w-full text-left px-4 py-1.5 text-sm"
-          style={{ color: 'var(--text-muted)' }}
+          className="w-full text-left px-4 py-1.5 text-sm text-[var(--text-muted)]"
         >
           {placeholder}
         </button>
@@ -93,17 +85,15 @@ function CustomSelect({ value, onChange, options, placeholder }: CustomSelectPro
           key={opt.value}
           type="button"
           onClick={() => { onChange(opt.value); setOpen(false); }}
-          className={`w-full text-left px-4 transition-colors ${opt.description ? 'py-2' : 'py-1.5'}`}
-          style={{
-            color: opt.value === value ? 'var(--text-primary)' : 'var(--text-secondary)',
-            background: opt.value === value ? 'var(--accent-subtle)' : undefined,
-          }}
+          className={`w-full text-left px-4 transition-colors ${opt.description ? 'py-2' : 'py-1.5'} ${
+            opt.value === value ? 'text-[var(--text-primary)] bg-[var(--accent-subtle)]' : 'text-[var(--text-secondary)]'
+          }`}
           onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent-subtle)'; }}
           onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = opt.value === value ? 'var(--accent-subtle)' : ''; }}
         >
           <span className="block text-sm">{opt.label}</span>
           {opt.description && (
-            <span className="block text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{opt.description}</span>
+            <span className="block text-xs mt-0.5 text-[var(--text-muted)]">{opt.description}</span>
           )}
         </button>
       ))}
@@ -117,20 +107,14 @@ function CustomSelect({ value, onChange, options, placeholder }: CustomSelectPro
         ref={buttonRef}
         type="button"
         onClick={toggleDropdown}
-        className="app-input text-sm flex items-center justify-between gap-2 cursor-pointer"
-        style={{
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--border-default)',
-          color: selectedLabel ? 'var(--text-primary)' : 'var(--text-muted)',
-          textAlign: 'left',
-          padding: '0.35rem 0.75rem',
-        }}
+        className={`app-input custom-select-trigger text-sm flex items-center justify-between gap-2 cursor-pointer ${
+          selectedLabel ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'
+        }`}
       >
         <span className="truncate flex-1">{displayLabel}</span>
         <ChevronDown
-          className="w-4 h-4 shrink-0 transition-transform"
+          className="w-4 h-4 shrink-0 transition-transform text-[var(--text-muted)]"
           style={{
-            color: 'var(--text-muted)',
             transform: open ? 'rotate(180deg)' : undefined,
           }}
         />
@@ -227,25 +211,20 @@ function VersionUpdateRow({
   };
 
   return (
-    <div className="space-y-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+    <div className="space-y-3 pt-3 border-t-subtle">
       <div
-        className="rounded-lg p-3 space-y-3"
-        style={{
-          background: 'var(--warning-subtle, rgba(217, 119, 6, 0.05))',
-          border: '1px solid var(--warning-ring, rgba(217, 119, 6, 0.2))'
-        }}
+        className="alert-card is-warning rounded-lg p-3 space-y-3"
       >
         <div className="flex items-center justify-between gap-3">
           <div className="space-y-1">
             <div className="flex items-center gap-1.5">
               <span
-                className="text-xs font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
-                style={{ background: 'rgba(217, 119, 6, 0.15)', color: 'var(--warning-text)' }}
+                className="text-xs font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[color-mix(in_srgb,var(--warning-text)_15%,transparent)] text-[var(--warning-text)]"
               >
                 Nuovo
               </span>
-              <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                Versione disponibile: <span style={{ color: 'var(--warning-text)' }}>v{latestVersion}</span>
+              <span className="text-sm font-bold text-[var(--text-primary)]">
+                Versione disponibile: <span className="text-[var(--warning-text)]">v{latestVersion}</span>
               </span>
             </div>
           </div>
@@ -254,18 +233,7 @@ function VersionUpdateRow({
             <button
               onClick={() => void handleInstall()}
               aria-label="Installa aggiornamento"
-              className="flex items-center gap-1.5 shrink-0"
-              style={{
-                padding: '5px 10px',
-                fontSize: '12px',
-                borderRadius: '6px',
-                background: 'var(--warning-text)',
-                color: 'var(--bg-surface)',
-                border: 'none',
-                cursor: 'pointer',
-                fontWeight: 600,
-                boxShadow: '0 2px 6px rgba(217, 119, 6, 0.2)'
-              }}
+              className="flex items-center gap-1.5 shrink-0 btn-warning-filled"
             >
               <ArrowDownToLine className="w-3.5 h-3.5" />
               Aggiorna ora
@@ -275,17 +243,16 @@ function VersionUpdateRow({
 
         {isInstalling && (
           <div className="space-y-1.5 pt-1">
-            <div className="flex justify-between items-center text-xs" style={{ color: 'var(--text-muted)' }}>
+            <div className="flex justify-between items-center text-xs text-[var(--text-muted)]">
               <span className="flex items-center gap-1.5 font-medium">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: 'var(--warning-text)' }} />
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--warning-text)]" />
                 {statusMessage}
               </span>
               {progressPercent > 0 && <span className="font-semibold">{progressPercent}%</span>}
             </div>
-            <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-input)' }}>
+            <div className="w-full h-1.5 rounded-full overflow-hidden bg-[var(--bg-input)]">
               <motion.div
-                className="h-full rounded-full"
-                style={{ background: 'var(--warning-text)' }}
+                className="h-full rounded-full bg-[var(--warning-text)]"
                 initial={{ width: 0 }}
                 animate={{ width: `${progressPercent || 10}%` }}
                 transition={{ ease: 'easeOut', duration: 0.3 }}
@@ -296,12 +263,7 @@ function VersionUpdateRow({
 
         {(isDone || isError) && statusMessage && (
           <div
-            className="rounded-md p-2 flex items-start gap-1.5 text-xs mt-1"
-            style={{
-              background: isError ? 'var(--error-subtle)' : 'var(--success-subtle)',
-              border: `1px solid ${isError ? 'var(--error-ring)' : 'var(--success-ring)'}`,
-              color: isError ? 'var(--error-text)' : 'var(--success-text)'
-            }}
+            className={`rounded-md p-2 flex items-start gap-1.5 text-xs mt-1 alert-card ${isError ? 'is-error' : 'is-success'}`}
           >
             {isError ? <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> : <CheckCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
             <div className="flex-1 min-w-0">
@@ -739,8 +701,7 @@ export function SettingsModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={handleClose}
-            className="absolute inset-0"
-            style={{ background: 'var(--bg-overlay)', backdropFilter: 'blur(10px)' }}
+            className="modal-overlay absolute inset-0"
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.98 }}
@@ -968,8 +929,7 @@ export function SettingsModal({
                         <button
                           onClick={() => checkForUpdates(true)}
                           disabled={isCheckingUpdate}
-                          className="icon-button modal-icon-button disabled:opacity-40 hover:bg-[var(--sidebar-active-bg)] rounded-lg p-1 transition-all"
-                          style={{ width: 26, height: 26 }}
+                          className="icon-button mini-icon-button disabled:opacity-40 hover:bg-[var(--sidebar-active-bg)] p-1"
                           title="Controlla aggiornamenti"
                           aria-label="Controlla aggiornamenti"
                         >
@@ -1086,8 +1046,7 @@ export function SettingsModal({
                                       <button
                                         onClick={() => moveFallbackModel(index, -1)}
                                         disabled={index === 0}
-                                        className="icon-button modal-icon-button disabled:opacity-40 p-1 hover:bg-[var(--sidebar-active-bg)] rounded"
-                                        style={{ width: 26, height: 26 }}
+                                        className="icon-button mini-icon-button disabled:opacity-40 p-1 hover:bg-[var(--sidebar-active-bg)]"
                                         title="Sposta su"
                                       >
                                         <ArrowUp className="w-4 h-4 text-[var(--text-secondary)] animate-none" />
@@ -1095,16 +1054,14 @@ export function SettingsModal({
                                       <button
                                         onClick={() => moveFallbackModel(index, 1)}
                                         disabled={index === fallbackModels.length - 1}
-                                        className="icon-button modal-icon-button disabled:opacity-40 p-1 hover:bg-[var(--sidebar-active-bg)] rounded"
-                                        style={{ width: 26, height: 26 }}
+                                        className="icon-button mini-icon-button disabled:opacity-40 p-1 hover:bg-[var(--sidebar-active-bg)]"
                                         title="Sposta giù"
                                       >
                                         <ArrowDown className="w-4 h-4 text-[var(--text-secondary)] animate-none" />
                                       </button>
                                       <button
                                         onClick={() => removeFallbackModel(modelId)}
-                                        className="icon-button modal-icon-button p-1 hover:bg-[var(--error-subtle)] rounded animate-none"
-                                        style={{ width: 26, height: 26 }}
+                                        className="icon-button mini-icon-button p-1 hover:bg-[var(--error-subtle)] animate-none"
                                         title="Rimuovi fallback"
                                       >
                                         <X className="w-4 h-4 text-[var(--error-text)]" />
@@ -1229,7 +1186,6 @@ export function SettingsModal({
                               onClick={() => void handleAskCleanup()}
                               disabled={isCleaningSession || isCleaningCompletedSessions || isLoadingSessionInfo}
                               className="icon-button compact-icon-button disabled:opacity-50 shrink-0 hover:bg-[var(--sidebar-active-bg)] border border-[var(--border-default)]"
-                              style={{ width: 32, height: 32, borderRadius: 6 }}
                               title={`Conta ed elimina elaborazioni incomplete più vecchie di ${SESSION_CLEANUP_DAYS} giorni`}
                               aria-label={`Conta ed elimina elaborazioni incomplete più vecchie di ${SESSION_CLEANUP_DAYS} giorni`}
                             >
@@ -1251,7 +1207,6 @@ export function SettingsModal({
                               onClick={() => void handleAskCompletedCleanup()}
                               disabled={isCleaningSession || isCleaningCompletedSessions || isLoadingSessionInfo}
                               className="icon-button compact-icon-button is-danger disabled:opacity-50 shrink-0 hover:bg-[var(--error-ring)]"
-                              style={{ width: 32, height: 32, borderRadius: 6, borderColor: 'transparent', background: 'transparent' }}
                               title={`Conta ed elimina sbobine completate più vecchie di ${SESSION_CLEANUP_DAYS} giorni`}
                               aria-label={`Conta ed elimina sbobine completate più vecchie di ${SESSION_CLEANUP_DAYS} giorni`}
                             >
@@ -1306,8 +1261,7 @@ export function SettingsModal({
                         <button
                           onClick={runEnvironmentValidation}
                           disabled={isValidatingEnvironment}
-                          className="icon-button compact-icon-button disabled:opacity-50 hover:bg-[var(--sidebar-active-bg)] border border-[var(--border-default)]"
-                          style={{ width: 26, height: 26, borderRadius: 6 }}
+                          className="icon-button mini-icon-button disabled:opacity-50 hover:bg-[var(--sidebar-active-bg)] border border-[var(--border-default)]"
                           title="Verifica ambiente"
                           aria-label="Verifica ambiente"
                         >

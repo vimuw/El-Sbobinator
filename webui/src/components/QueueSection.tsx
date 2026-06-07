@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, useEffect, type Dispatch, type SetStateAction } from 'react';
 import { DndContext, closestCenter, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { motion, AnimatePresence } from 'motion/react';
 import { FileAudio, MoreVertical, Play, Square, Trash2 } from 'lucide-react';
 import type { AppStatus, FileItem } from '../appState';
@@ -28,13 +29,14 @@ interface QueueSectionProps {
   onStart: () => void;
   onStop: () => void;
   onOpenSettings?: () => void;
+  currentModel?: string;
 }
 
 export function QueueSection({
   pendingFiles, appState, autoContinue, setAutoContinue, preferredModel,
   queuedCount, canStart, hasApiKey, isApiKeyValid, currentPhase,
   dndSensors, onDragEnd, onRemove, onClearAll, onRetry, onPreview, onOpenFile,
-  onStart, onStop, onOpenSettings,
+  onStart, onStop, onOpenSettings, currentModel,
 }: QueueSectionProps) {
   const sortableIds = useMemo(() => pendingFiles.map(f => f.id), [pendingFiles]);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -84,9 +86,11 @@ export function QueueSection({
               {pendingFiles.length > 0 && (
                 <>
                   <span className="status-pill shrink-0">{pendingFiles.length}</span>
-                  {preferredModel && (
+                  {((appState === 'processing' || appState === 'canceling') && currentModel) ? (
+                    <span className="status-pill shrink-0 whitespace-nowrap">{shortModelName(currentModel)}</span>
+                  ) : preferredModel ? (
                     <span className="status-pill shrink-0 whitespace-nowrap">{shortModelName(preferredModel)}</span>
-                  )}
+                  ) : null}
                 </>
               )}
             </div>
@@ -108,7 +112,7 @@ export function QueueSection({
                     minWidth: '200px', zIndex: 50,
                     background: 'var(--bg-elevated)',
                     border: '1px solid var(--border-subtle)',
-                    borderRadius: '10px',
+                    borderRadius: '12px',
                     boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
                     padding: '4px',
                   }}
@@ -120,7 +124,7 @@ export function QueueSection({
                     title="Avvia automaticamente il file successivo al termine di ogni sbobinatura"
                     style={{
                       display: 'flex', alignItems: 'center', gap: '10px',
-                      width: '100%', padding: '8px 12px', borderRadius: '7px',
+                      width: '100%', padding: '8px 12px', borderRadius: '8px',
                       border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '14px',
                       background: autoContinue ? 'var(--success-subtle)' : 'transparent',
                       color: autoContinue ? 'var(--success-text)' : 'var(--text-primary)',
@@ -139,7 +143,7 @@ export function QueueSection({
                       onClick={() => { onClearAll(); setMenuOpen(false); }}
                       style={{
                         display: 'flex', alignItems: 'center', gap: '10px',
-                        width: '100%', padding: '8px 12px', borderRadius: '7px',
+                        width: '100%', padding: '8px 12px', borderRadius: '8px',
                         border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '14px',
                         background: 'transparent', color: 'var(--error-text)',
                       }}
@@ -155,7 +159,13 @@ export function QueueSection({
             </div>
           </div>
 
-          <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={onDragEnd} autoScroll={false}>
+           <DndContext
+            sensors={dndSensors}
+            collisionDetection={closestCenter}
+            onDragEnd={onDragEnd}
+            autoScroll={false}
+            modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+          >
             <div
               ref={scrollRef}
               style={{
@@ -163,7 +173,7 @@ export function QueueSection({
                 overflowY: isOverflowing ? 'auto' : 'hidden',
                 overflowX: 'hidden',
                 scrollbarWidth: 'thin',
-                scrollbarColor: 'var(--border-default) transparent',
+                scrollbarColor: 'var(--border-strong) transparent',
                 padding: '4px 8px',
               }}
             >
@@ -183,6 +193,7 @@ export function QueueSection({
                       onPreview={onPreview}
                       onOpenFile={onOpenFile}
                       onOpenSettings={onOpenSettings}
+                      showDragHandle={pendingFiles.length >= 2}
                     />
                   );
                 })}

@@ -58,12 +58,7 @@ export function SetupPage({
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="relative overflow-hidden rounded-xl px-6 py-8 sm:px-8 sm:py-10 flex flex-col items-center gap-6 w-full max-w-lg mx-auto"
-      style={{
-        background: 'var(--bg-surface)',
-        border: '1px solid var(--border-subtle)',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03)',
-      }}
+      className="premium-panel-strong relative overflow-hidden px-6 py-8 sm:px-8 sm:py-10 flex flex-col items-center gap-6 w-full max-w-lg mx-auto"
     >
       <div className="flex flex-col items-center gap-3 text-center">
         <motion.div
@@ -132,7 +127,7 @@ export function SetupPage({
                       : 'var(--border-default)'
                 }`,
                 color: 'var(--text-primary)',
-                borderRadius: '6px',
+                borderRadius: '8px',
                 padding: '0.75rem 0.85rem',
               }}
             />
@@ -176,12 +171,6 @@ export function SetupPage({
           disabled={!GEMINI_KEY_PATTERN.test(setupKeyInput.trim()) || setupKeySaving}
           onClick={handleSetupSave}
           className="premium-button w-full mt-2"
-          style={{
-            cursor: !GEMINI_KEY_PATTERN.test(setupKeyInput.trim()) || setupKeySaving ? 'not-allowed' : 'pointer',
-            opacity: !GEMINI_KEY_PATTERN.test(setupKeyInput.trim()) ? 0.5 : 1,
-            borderRadius: '6px',
-            padding: '0.8rem 1rem',
-          }}
         >
           <Key className="w-4 h-4" />
           {setupKeySaving ? 'Salvataggio…' : 'Salva e inizia'}

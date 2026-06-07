@@ -232,7 +232,7 @@ export function AppHeader({
                 </div>
               </div>
               {updateError && (
-                <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-error, #ef4444)' }}>
+                <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--error-text, #ef4444)' }}>
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                   <span>{updateError}{updateError?.startsWith('Permesso') ? '' : ' — si è aperta la pagina GitHub per scaricare manualmente.'}</span>
                 </div>

@@ -21,6 +21,7 @@ interface NavSidebarProps {
   setShowConsole: (v: boolean) => void;
   setIsSettingsOpen: (v: boolean) => void;
   hasPendingUpdate: boolean;
+  consoleDisabled: boolean;
 }
 
 export function NavSidebar({
@@ -30,6 +31,7 @@ export function NavSidebar({
   showConsole, setShowConsole,
   setIsSettingsOpen,
   hasPendingUpdate,
+  consoleDisabled,
 }: NavSidebarProps) {
   const [hovered, setHovered] = useState(false);
   const collapsed = !hovered;
@@ -153,7 +155,7 @@ export function NavSidebar({
             setShowConsole(next);
             localStorage.setItem('show_console', String(next));
           }}
-          disabled={!hasApiKey || !isApiKeyValid}
+          disabled={!hasApiKey || !isApiKeyValid || consoleDisabled}
         />
         <UtilityButton
           icon={

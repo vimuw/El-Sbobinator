@@ -65,6 +65,20 @@ describe('QueueSection', () => {
     expect(screen.queryByText(/Modello:/)).toBeNull();
   });
 
+  it('shows currentModel instead of preferredModel when processing', () => {
+    render(
+      <QueueSection
+        {...baseProps}
+        pendingFiles={[makeFile({ status: 'processing' })]}
+        appState="processing"
+        preferredModel="gemini-3.5-flash"
+        currentModel="gemini-2.5-flash"
+      />,
+    );
+    expect(screen.getByText('2.5-flash')).toBeTruthy();
+    expect(screen.queryByText('3.5-flash')).toBeNull();
+  });
+
   it('shows start button when idle with canStart', () => {
     render(<QueueSection {...baseProps} pendingFiles={[makeFile()]} />);
     expect(screen.getByText(/Avvia sbobinatura/)).toBeTruthy();

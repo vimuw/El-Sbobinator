@@ -466,8 +466,8 @@ class InitializeSessionContextTests(unittest.TestCase):
                     "audio": {"bitrate": "48k"},
                 },
                 "phase1": {
-                    "next_start_sec": 0,
-                    "chunks_done": 0,
+                    "next_start_sec": 30,
+                    "chunks_done": 1,
                     "memoria_precedente": "",
                 },
                 "phase2": {"macro_total": 0, "revised_done": 0},
@@ -529,8 +529,8 @@ class InitializeSessionContextTests(unittest.TestCase):
                     "audio": {"bitrate": "48k"},
                 },
                 "phase1": {
-                    "next_start_sec": 0,
-                    "chunks_done": 0,
+                    "next_start_sec": 30,
+                    "chunks_done": 1,
                     "memoria_precedente": "",
                 },
                 "phase2": {"macro_total": 0, "revised_done": 0},
@@ -601,7 +601,7 @@ class InitializeSessionContextTests(unittest.TestCase):
             json.dump(session_data, fh)
         return input_path, session_dir
 
-    def test_chunk_minutes_and_model_preserved_when_no_chunks_done(self):
+    def test_chunk_minutes_and_model_updated_when_no_chunks_done(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path, session_dir = self._make_session_file(
                 tmpdir,
@@ -640,8 +640,8 @@ class InitializeSessionContextTests(unittest.TestCase):
             ):
                 ctx = initialize_session_context(input_path, resume_session=True)
 
-            self.assertEqual(ctx.settings.model, "gemini-3.1-flash-lite-preview")
-            self.assertEqual(ctx.settings.chunk_minutes, 10)
+            self.assertEqual(ctx.settings.model, "gemini-2.5-flash")
+            self.assertEqual(ctx.settings.chunk_minutes, 15)
 
     def test_chunk_minutes_and_model_preserved_when_chunks_already_done(self):
         with tempfile.TemporaryDirectory() as tmpdir:

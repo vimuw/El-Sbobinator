@@ -572,6 +572,14 @@ export default function App() {
     () => files.find(f => f.status === 'processing') ?? (completionFlash ? doneFiles[0] : undefined),
     [files, completionFlash, doneFiles],
   );
+  const isConsoleDisabled = !hasApiKey || !isApiKeyValid || !(pendingFiles.length > 0 || doneFiles.length > 0 || showProcessingBanner);
+
+  useEffect(() => {
+    if (isConsoleDisabled && showConsole) {
+      setShowConsole(false);
+      localStorage.setItem('show_console', 'false');
+    }
+  }, [isConsoleDisabled, showConsole]);
 
   useEffect(() => {
     if (!apiReady) return;
@@ -1214,7 +1222,7 @@ export default function App() {
   }, [folders, normalizeSessionDir]);
 
   return (
-    <div className="app-shell min-h-screen font-sans flex flex-row" style={{ background: 'var(--bg-base)', color: 'var(--text-secondary)' }}>
+    <div className="app-shell min-h-screen font-sans flex flex-row bg-[var(--bg-base)] text-[var(--text-secondary)]">
       <NavSidebar
         activePage={activePage}
         setActivePage={setActivePage}
@@ -1229,6 +1237,7 @@ export default function App() {
         setShowConsole={setShowConsole}
         setIsSettingsOpen={setIsSettingsOpen}
         hasPendingUpdate={updateAvailable !== null}
+        consoleDisabled={isConsoleDisabled}
       />
 
       <div className="flex flex-col flex-1 min-w-0 min-h-screen">
@@ -1251,10 +1260,9 @@ export default function App() {
                     initial={{ opacity: 0, y: -8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.18, ease: 'easeOut' }}
-                    className="w-full rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                    style={{ background: 'var(--warning-subtle)', border: '1px solid var(--warning-ring)' }}
+                    className="w-full alert-card is-warning px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                   >
-                    <div className="flex items-start gap-3 text-sm leading-relaxed" style={{ color: 'var(--warning-text)' }}>
+                    <div className="flex items-start gap-3 text-sm leading-relaxed text-[var(--warning-text)]">
                       <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                       <span>
                         La tua chiave API è salvata in chiaro su disco perché la protezione Windows (DPAPI) non è disponibile. Motivo: {apiKeyInsecureReasonLabel} Cancella e reinserisci la chiave, oppure conservala in un password manager.
@@ -1264,14 +1272,7 @@ export default function App() {
                       type="button"
                       onClick={() => void handleRemoveInsecureApiKey()}
                       disabled={isRemovingInsecureKey}
-                      className="shrink-0 inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition-opacity"
-                      style={{
-                        color: 'var(--warning-text)',
-                        border: '1px solid var(--warning-ring)',
-                        background: 'transparent',
-                        cursor: isRemovingInsecureKey ? 'default' : 'pointer',
-                        opacity: isRemovingInsecureKey ? 0.6 : 1,
-                      }}
+                      className="shrink-0 premium-button-secondary compact-button is-warning flex items-center justify-center gap-2"
                     >
                       <Trash2 className="w-4 h-4" />
                       {isRemovingInsecureKey ? 'Rimozione...' : 'Rimuovi chiave'}
@@ -1333,44 +1334,49 @@ export default function App() {
                   </>
                 )}
 
-                <QueueSection
-                  pendingFiles={pendingFiles}
-                  appState={appState}
-                  autoContinue={autoContinue}
-                  setAutoContinue={setAutoContinue}
-                  preferredModel={preferredModel}
-                  queuedCount={queuedCount}
-                  canStart={canStart}
-                  hasApiKey={hasApiKey}
-                  isApiKeyValid={isApiKeyValid}
-                  currentPhase={currentPhase}
-                  dndSensors={dndSensors}
-                  onDragEnd={handleDragEnd}
-                  onRemove={requestRemoveFile}
-                  onClearAll={handleClearAll}
-                  onRetry={(id) => dispatch({ type: 'queue/retry_one', id })}
-                  onPreview={openPreview}
-                  onOpenFile={openFile}
-                  onStart={() => void startProcessing()}
-                  onStop={() => setConfirmAction({ type: 'stop-processing' })}
-                  onOpenSettings={() => setIsSettingsOpen(true)}
-                />
+                {uiMode !== 'setup' && (
+                  <>
+                    <QueueSection
+                      pendingFiles={pendingFiles}
+                      appState={appState}
+                      autoContinue={autoContinue}
+                      setAutoContinue={setAutoContinue}
+                      preferredModel={preferredModel}
+                      currentModel={currentModel}
+                      queuedCount={queuedCount}
+                      canStart={canStart}
+                      hasApiKey={hasApiKey}
+                      isApiKeyValid={isApiKeyValid}
+                      currentPhase={currentPhase}
+                      dndSensors={dndSensors}
+                      onDragEnd={handleDragEnd}
+                      onRemove={requestRemoveFile}
+                      onClearAll={handleClearAll}
+                      onRetry={(id) => dispatch({ type: 'queue/retry_one', id })}
+                      onPreview={openPreview}
+                      onOpenFile={openFile}
+                      onStart={() => void startProcessing()}
+                      onStop={() => setConfirmAction({ type: 'stop-processing' })}
+                      onOpenSettings={() => setIsSettingsOpen(true)}
+                    />
 
-                <CompletedSection
-                  doneFiles={doneFiles}
-                  appState={appState}
-                  onRemove={(id) => {
-                    const f = filesRef.current.find(f => f.id === id);
-                    if (!f) return;
-                    if (appState !== 'idle' && f.status !== 'done') return;
-                    setConfirmAction({ type: 'remove-file', fileId: id, fileName: f.name, isDone: true });
-                  }}
-                  onPreview={openPreview}
-                  onOpenFile={openFile}
-                  onClearAll={() => setConfirmAction({ type: 'clear-completed', count: doneFiles.length })}
-                  onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
-                  sessionFolderMap={completedSessionFolderMap}
-                />
+                    <CompletedSection
+                      doneFiles={doneFiles}
+                      appState={appState}
+                      onRemove={(id) => {
+                        const f = filesRef.current.find(f => f.id === id);
+                        if (!f) return;
+                        if (appState !== 'idle' && f.status !== 'done') return;
+                        setConfirmAction({ type: 'remove-file', fileId: id, fileName: f.name, isDone: true });
+                      }}
+                      onPreview={openPreview}
+                      onOpenFile={openFile}
+                      onClearAll={() => setConfirmAction({ type: 'clear-completed', count: doneFiles.length })}
+                      onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
+                      sessionFolderMap={completedSessionFolderMap}
+                    />
+                  </>
+                )}
 
                 {showConsole && uiMode !== 'setup' && (
                   <ConsolePanel
@@ -1406,12 +1412,12 @@ export default function App() {
             </motion.main>
           )}
         </AnimatePresence>
-        <footer className="py-4 text-center flex items-center justify-center gap-2" style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-          <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link" style={{ color: 'inherit' }}>
+        <footer className="app-footer">
+          <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link">
             <Github className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
           </a>
           <span>·</span>
-          <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }} className="footer-link" style={{ color: 'inherit' }}>
+          <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }} className="footer-link">
             ☕ Offrimi un caffè su Ko-fi!
           </a>
         </footer>

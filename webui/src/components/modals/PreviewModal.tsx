@@ -184,13 +184,16 @@ export function PreviewModal({
     <AnimatePresence>
       {previewContent !== null && (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={() => void flushAndClose()}
           className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
-          style={{ background: 'var(--bg-overlay)', backdropFilter: 'blur(10px)' }}
         >
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="modal-overlay absolute inset-0"
+          />
           <motion.div
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }}
@@ -199,9 +202,9 @@ export function PreviewModal({
             className="modal-card w-full max-h-[88vh] flex flex-col overflow-hidden"
             style={{ maxWidth: isTocOpen ? '1400px' : '1100px', transition: 'max-width 0.25s ease' }}
           >
-            <div className="px-4 py-4 sm:px-5 flex items-center justify-between gap-3 border-b shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
-              <h3 className="font-semibold text-lg flex items-center gap-2 truncate min-w-0" style={{ color: 'var(--text-primary)' }}>
-                <FileText className="w-5 h-5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+            <div className="px-4 py-4 sm:px-5 flex items-center justify-between gap-3 shrink-0 modal-header">
+              <h3 className="font-semibold text-lg flex items-center gap-2 truncate min-w-0 text-[var(--text-primary)]">
+                <FileText className="w-5 h-5 shrink-0 text-[var(--text-muted)]" />
                 <span className="truncate">Anteprima: {previewTitle}</span>
               </h3>
               <div className="flex gap-2 shrink-0 flex-wrap justify-end">
@@ -217,15 +220,14 @@ export function PreviewModal({
                 <div className="relative">
                   <button
                     onClick={handleCopy}
-                    className="icon-button modal-icon-button"
-                    style={isCopied ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : {}}
+                    className={`icon-button modal-icon-button ${isCopied ? 'border-[var(--success-ring)] text-[var(--success-text)]' : ''}`}
                     title={isCopied ? 'Copiato!' : 'Copia per Google Docs'}
                   >
                     {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   </button>
                 </div>
                 <span
-                  className="inline-flex h-[38px] items-center rounded-[14px] px-3 text-sm font-medium"
+                  className="inline-flex h-[38px] items-center rounded-full px-3.5 text-sm font-medium"
                   style={{
                     color: autosaveStatus === 'error' ? 'var(--error-text)' : autosaveStatus === 'saved' ? 'var(--success-text)' : 'var(--text-muted)',
                     background: 'rgba(255,255,255,0.02)',
@@ -276,7 +278,7 @@ export function PreviewModal({
                 </div>
 
                 {(audioSrc || audioRelinkNeeded) && (
-                  <div className="shrink-0 border-t px-4 sm:px-5" style={{ borderColor: 'var(--border-subtle)' }}>
+                  <div className="shrink-0 px-4 sm:px-5 modal-footer">
                     {audioSrc ? (
                       <Suspense fallback={<div className="p-4 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento player...</div>}>
                         <LazyAudioPlayer
@@ -312,8 +314,7 @@ export function PreviewModal({
                             }
                           }}
                           disabled={isRelinking}
-                          className="modal-action-button shrink-0"
-                          style={relinkSuccess ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : {}}
+                          className={`modal-action-button shrink-0 ${relinkSuccess ? 'border-[var(--success-ring)] text-[var(--success-text)]' : ''}`}
                         >
                           {relinkSuccess ? <><Check className="w-3.5 h-3.5" /> Ricollegato</> : isRelinking ? 'Selezione...' : 'Ricollega audio'}
                         </button>
