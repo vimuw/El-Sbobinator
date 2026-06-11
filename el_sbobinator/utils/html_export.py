@@ -9,14 +9,6 @@ from __future__ import annotations
 import html as _html
 import re
 
-import markdown
-
-try:
-    import nh3 as _nh3
-except ImportError:  # pragma: no cover
-    _nh3 = None  # type: ignore[assignment]
-
-
 _ALLOWED_TAGS: frozenset[str] = frozenset(
     {
         "p",
@@ -75,6 +67,11 @@ _ALLOWED_URL_SCHEMES: frozenset[str] = frozenset({"http", "https", "mailto", "da
 def sanitize_html_basic(html: str) -> str:
     # Sanitizzazione tramite allowlist (nh3/ammonia) — blocca tag/attributi non permessi
     # e schemi URL pericolosi (javascript:, vbscript:). data: è permesso per src img inline.
+    try:
+        import nh3 as _nh3
+    except ImportError:  # pragma: no cover
+        _nh3 = None  # type: ignore[assignment]
+
     if _nh3 is None:  # pragma: no cover
         raise ImportError(
             "nh3 is required for HTML sanitization. Install it with: pip install nh3"
@@ -207,6 +204,8 @@ def normalize_heading_levels(md: str) -> str:
 
 
 def build_html_document(title: str, markdown_text: str) -> str:
+    import markdown
+
     normalized_markdown = normalize_heading_levels(markdown_text or "")
     html_body = markdown.markdown(
         normalized_markdown, extensions=["extra", "sane_lists"], output_format="html"

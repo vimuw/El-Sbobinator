@@ -2,7 +2,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { readFileSync } from 'node:fs';
 import path from 'path';
-import {defineConfig} from 'vite';
+import { defineConfig } from 'vite';
 
 const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')) as { version: string };
 
@@ -17,6 +17,9 @@ export default defineConfig({
       '@': path.resolve(__dirname, '.'),
     },
   },
+  esbuild: {
+    drop: ['console', 'debugger'],
+  },
   build: {
     target: 'esnext',
     rollupOptions: {
@@ -25,9 +28,13 @@ export default defineConfig({
         chunkFileNames: 'assets/[name].js',
         assetFileNames: 'assets/[name][extname]',
         manualChunks(id) {
-          if (id.includes('@tiptap')) return 'tiptap';
-          if (id.includes('motion')) return 'motion';
-          if (id.includes('lucide')) return 'lucide';
+          if (id.includes('node_modules')) {
+            if (id.includes('@tiptap') || id.includes('prosemirror')) return 'tiptap';
+            if (id.includes('motion')) return 'motion';
+            if (id.includes('lucide')) return 'lucide';
+            if (id.includes('@dnd-kit')) return 'dnd-kit';
+            if (id.includes('react') || id.includes('scheduler')) return 'react-vendor';
+          }
         },
       },
     },

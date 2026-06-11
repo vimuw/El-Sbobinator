@@ -37,7 +37,7 @@ class _StartupCleanupThread(_original_thread):
         self._target = target
         self._args = args
         self.started = False
-        self.__class__.instances.append(self)
+        _StartupCleanupThread.instances.append(self)
 
     def start(self):
         self.started = True
@@ -1046,7 +1046,7 @@ class AppWebviewTests(unittest.TestCase):
                     return_value=paths,
                 ),
                 patch(
-                    "el_sbobinator.app_webview.estimate_disk_space",
+                    "el_sbobinator.pipeline.pipeline_session.estimate_disk_space",
                     side_effect=fake_estimate_disk_space,
                 ),
             ):

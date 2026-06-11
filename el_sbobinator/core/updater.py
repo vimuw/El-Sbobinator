@@ -190,7 +190,7 @@ def _install_macos_dmg(tmp_path: str) -> dict | None:
             f"    sleep 0.2\n"
             f"  done\n"
             f"  rm -rf {quoted_app_dst_tmp}\n"
-            f"  if cp -R {quoted_app_src} {quoted_app_dst_tmp}; then\n"
+            f"  if cp -a {quoted_app_src} {quoted_app_dst_tmp}; then\n"
             f"    rm -rf {quoted_app_dst}\n"
             f"    mv {quoted_app_dst_tmp} {quoted_app_dst}\n"
             f"    xattr -dr com.apple.quarantine {quoted_app_dst} 2>/dev/null\n"
@@ -312,9 +312,11 @@ def _download_and_install_background(
 
             _Thread(target=_delayed_destroy, daemon=True).start()
     except PermissionError:
+        _try_unlink(tmp_path)
         _emit("error", error="permission_denied")
         return
     except Exception as e:
+        _try_unlink(tmp_path)
         _emit("error", error=f"Installazione fallita: {e}")
         return
 

@@ -85,3 +85,11 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# Agent scratchpads and temporary workspace files
+.agents/
+progress.md
+ORIGINAL_REQUEST.md
+
+# Developer local scratch tools
+tools/resize_icon.py

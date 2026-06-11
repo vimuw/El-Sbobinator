@@ -8,8 +8,6 @@ import os
 import sys
 import threading
 
-from el_sbobinator.utils.html_export import sanitize_html_basic
-
 _HTML_CACHE_MAX = 200  # FIFO cap for write-lock entries
 _HTML_GEN_MAX = (
     500  # separate FIFO cap for generation guards; larger to outlive lock evictions
@@ -130,6 +128,8 @@ def save_html_body_content(
     is provided and an equal-or-newer generation has already been committed."""
     if not path or not os.path.exists(path):
         raise FileNotFoundError("File originale non trovato.")
+
+    from el_sbobinator.utils.html_export import sanitize_html_basic
 
     body_inner = sanitize_html_basic(str(content or ""))
 

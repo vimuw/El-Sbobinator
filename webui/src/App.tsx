@@ -17,20 +17,20 @@ import { usePreview } from './hooks/usePreview';
 import { ProcessingStatusBanner } from './components/ProcessingStatusBanner';
 import { RegenerateModal } from './components/modals/RegenerateModal';
 import { NewKeyModal } from './components/modals/NewKeyModal';
-import { SettingsModal } from './components/modals/SettingsModal';
 import { ConfirmActionModal } from './components/modals/ConfirmActionModal';
 import { DuplicateFileModal, type AlreadyProcessedMatch, type DuplicatePrompt } from './components/modals/DuplicateFileModal';
 import { buildArchiveLookup, filterArchiveSessionsByInputPath, getArchiveMatchesForFile } from './duplicateDetection';
 import { NavSidebar, type ActivePage } from './components/NavSidebar';
 import { Toaster, type ToastMessage } from './components/Toast';
-import { SetupPage } from './components/SetupPage';
 import { DropZone } from './components/DropZone';
 import { WelcomeDashboard } from './components/WelcomeDashboard';
 import { QueueSection } from './components/QueueSection';
 import { CompletedSection } from './components/CompletedSection';
-import { ArchivePage } from './components/ArchivePage';
 import { ConsolePanel } from './components/ConsolePanel';
 const EditorFullPage = React.lazy(() => import('./components/EditorFullPage').then(m => ({ default: m.EditorFullPage })));
+const SettingsModal = React.lazy(() => import('./components/modals/SettingsModal').then(m => ({ default: m.SettingsModal })));
+const SetupPage = React.lazy(() => import('./components/SetupPage').then(m => ({ default: m.SetupPage })));
+const ArchivePage = React.lazy(() => import('./components/ArchivePage').then(m => ({ default: m.ArchivePage })));
 
 declare global {
   interface Window {
@@ -1280,13 +1280,15 @@ export default function App() {
                   </motion.div>
                 )}
                 {uiMode === 'setup' ? (
-                  <SetupPage
-                    hasProtectedKey={hasProtectedKey}
-                    onSaved={(key) => setApiKey(key)}
-                    preferredModel={preferredModel}
-                    fallbackKeys={fallbackKeys}
-                    fallbackModels={fallbackModels}
-                  />
+                  <React.Suspense fallback={null}>
+                    <SetupPage
+                      hasProtectedKey={hasProtectedKey}
+                      onSaved={(key) => setApiKey(key)}
+                      preferredModel={preferredModel}
+                      fallbackKeys={fallbackKeys}
+                      fallbackModels={fallbackModels}
+                    />
+                  </React.Suspense>
                 ) : (
                   <>
                     {!(pendingFiles.length > 0 || doneFiles.length > 0 || showProcessingBanner) && (
@@ -1396,18 +1398,20 @@ export default function App() {
               transition={{ duration: 0.15, ease: 'easeOut' }}
             >
               <div className="my-auto px-5 sm:px-6 py-8 flex flex-col">
-                <ArchivePage
-                  sessions={archiveFiltered}
-                  total={archiveTotal - (archiveSessions.length - archiveFiltered.length)}
-                  folders={folders}
-                  onFoldersChange={handleFoldersChange}
-                  onPreview={openPreview}
-                  onOpenFile={openFile}
-                  onDeleteSession={(sessionDir, name) => setConfirmAction({ type: 'delete-archive-session', sessionDir, name })}
-                  onRefresh={refreshArchiveSessions}
-                  onLoadAll={handleLoadAll}
-                  onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
-                />
+                <React.Suspense fallback={null}>
+                  <ArchivePage
+                    sessions={archiveFiltered}
+                    total={archiveTotal - (archiveSessions.length - archiveFiltered.length)}
+                    folders={folders}
+                    onFoldersChange={handleFoldersChange}
+                    onPreview={openPreview}
+                    onOpenFile={openFile}
+                    onDeleteSession={(sessionDir, name) => setConfirmAction({ type: 'delete-archive-session', sessionDir, name })}
+                    onRefresh={refreshArchiveSessions}
+                    onLoadAll={handleLoadAll}
+                    onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
+                  />
+                </React.Suspense>
               </div>
             </motion.main>
           )}
@@ -1452,32 +1456,34 @@ export default function App() {
         onClose={() => void handleRegenDirtyCancel()}
         onConfirm={() => void handleRegenDirtyConfirm()}
       />
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => {
-          setIsSettingsOpen(false);
-          void refreshSettings();
-        }}
-        apiKey={apiKey}
-        setApiKey={setApiKey}
-        hasProtectedKey={hasProtectedKey}
-        fallbackKeys={fallbackKeys}
-        setFallbackKeys={setFallbackKeys}
-        preferredModel={preferredModel}
-        setPreferredModel={setPreferredModel}
-        fallbackModels={fallbackModels}
-        setFallbackModels={setFallbackModels}
-        availableModels={availableModels}
-        appendConsole={appendConsole}
-        latestVersion={latestVersion}
-        checkForUpdates={checkForUpdates}
-        isCheckingUpdate={isCheckingUpdate}
-        hasChecked={hasChecked}
-        checkFailed={checkFailed}
-        updateInstallState={updateInstallState}
-        onInstallUpdate={installUpdate}
-        onSettingsSaved={refreshSettings}
-      />
+      <React.Suspense fallback={null}>
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => {
+            setIsSettingsOpen(false);
+            void refreshSettings();
+          }}
+          apiKey={apiKey}
+          setApiKey={setApiKey}
+          hasProtectedKey={hasProtectedKey}
+          fallbackKeys={fallbackKeys}
+          setFallbackKeys={setFallbackKeys}
+          preferredModel={preferredModel}
+          setPreferredModel={setPreferredModel}
+          fallbackModels={fallbackModels}
+          setFallbackModels={setFallbackModels}
+          availableModels={availableModels}
+          appendConsole={appendConsole}
+          latestVersion={latestVersion}
+          checkForUpdates={checkForUpdates}
+          isCheckingUpdate={isCheckingUpdate}
+          hasChecked={hasChecked}
+          checkFailed={checkFailed}
+          updateInstallState={updateInstallState}
+          onInstallUpdate={installUpdate}
+          onSettingsSaved={refreshSettings}
+        />
+      </React.Suspense>
       <React.Suspense fallback={null}>
         <EditorFullPage
           previewContent={preview.content}

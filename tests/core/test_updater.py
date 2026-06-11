@@ -220,7 +220,7 @@ class UpdaterTests(unittest.TestCase):
         cmd, kwargs = popen_calls[0]
         self.assertEqual(cmd[0], "/bin/bash")
         self.assertEqual(cmd[1], "-c")
-        self.assertIn("cp -R", cmd[2])
+        self.assertIn("cp -a", cmd[2])
         self.assertTrue(kwargs.get("start_new_session"))
 
     # ------------------------------------------------------------------

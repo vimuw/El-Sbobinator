@@ -57,11 +57,7 @@ from el_sbobinator.core.shared import (
 from el_sbobinator.core.shared import (
     cleanup_completed_sessions as _cleanup_completed_sessions,
 )
-from el_sbobinator.core.updater import (
-    download_and_install_update as _download_and_install_update,
-)
 from el_sbobinator.pipeline.pipeline_adapter import PipelineAdapter, _drain_dnd_paths
-from el_sbobinator.pipeline.pipeline_session import estimate_disk_space, normalize_stage
 from el_sbobinator.pipeline.pipeline_settings import (
     build_default_pipeline_settings,
     load_and_sanitize_settings,
@@ -72,12 +68,6 @@ from el_sbobinator.services.config_service import (
     load_config,
     save_config,
     save_session_root_to_config,
-)
-from el_sbobinator.services.folders_service import (
-    get_folders as _get_archive_folders,
-)
-from el_sbobinator.services.folders_service import (
-    save_folders as _save_archive_folders,
 )
 from el_sbobinator.utils.file_ops import (
     evict_html_paths_under,
@@ -1132,6 +1122,10 @@ class ElSbobinatorApi:
     def get_archive_folders(self) -> dict:
         """Return the user-defined archive folders."""
         try:
+            from el_sbobinator.services.folders_service import (
+                get_folders as _get_archive_folders,
+            )
+
             folders = _get_archive_folders()
             return {"ok": True, "folders": folders}
         except Exception as e:
@@ -1142,6 +1136,10 @@ class ElSbobinatorApi:
         try:
             if not isinstance(folders, list):
                 return {"ok": False, "error": "folders must be a list"}
+            from el_sbobinator.services.folders_service import (
+                save_folders as _save_archive_folders,
+            )
+
             _save_archive_folders(folders)
             return {"ok": True}
         except Exception as e:
@@ -1319,6 +1317,11 @@ class ElSbobinatorApi:
     def _low_disk_warning_for_files(
         self, files: list[BridgeFileItem]
     ) -> LowDiskWarningPayload | None:
+        from el_sbobinator.pipeline.pipeline_session import (
+            estimate_disk_space,
+            normalize_stage,
+        )
+
         try:
             cfg = load_config()
             defaults = build_default_pipeline_settings(cfg)
@@ -2271,6 +2274,10 @@ class ElSbobinatorApi:
 
     def download_and_install_update(self, version: str) -> dict:
         """Download the correct installer for this OS, launch it, then quit the app."""
+        from el_sbobinator.core.updater import (
+            download_and_install_update as _download_and_install_update,
+        )
+
         return _download_and_install_update(version, emit_fn=self._adapter.emit)
 
     # ---- Console push helper ----
