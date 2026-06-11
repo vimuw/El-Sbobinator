@@ -160,6 +160,15 @@ export default function App() {
   const prevSessionDirsRef = useRef<Map<string, string>>(new Map());
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [hasOpenedSettings, setHasOpenedSettings] = useState(false);
+  const shouldRenderSettings = isSettingsOpen || hasOpenedSettings;
+
+  useEffect(() => {
+    if (isSettingsOpen) {
+      setHasOpenedSettings(true);
+    }
+  }, [isSettingsOpen]);
+
   const [regeneratePrompt, setRegeneratePrompt] = useState<{ filename: string; mode?: 'completed' | 'resume'; sessionDir?: string } | null>(null);
   const [askNewKeyPrompt, setAskNewKeyPrompt] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ConfirmActionState | null>(null);
@@ -358,6 +367,15 @@ export default function App() {
   }, [handleRetryFailedRevisionBlocks, normalizeSessionDir, showToast]);
 
   const { preview, openPreview, closePreview, relinkPreviewAudio, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
+
+  const [hasOpenedPreview, setHasOpenedPreview] = useState(false);
+  const shouldRenderPreview = preview.content !== null || hasOpenedPreview;
+
+  useEffect(() => {
+    if (preview.content !== null) {
+      setHasOpenedPreview(true);
+    }
+  }, [preview.content]);
 
   useEffect(() => {
     filesRef.current = files;
@@ -1020,7 +1038,7 @@ export default function App() {
       return;
     }
     confirmClearCompleted();
-  }, [confirmAction, confirmClearCompleted, confirmStopProcessing, appendConsole, refreshArchiveSessions, setFolders, executeRetryFromArchive, setConfirmAction]);
+  }, [confirmAction, confirmClearCompleted, confirmStopProcessing, appendConsole, refreshArchiveSessions, executeRetryFromArchive]);
 
   const handleRegenerateAnswer = async (ans: boolean | null) => {
     const currentPrompt = regeneratePrompt;
@@ -1456,50 +1474,54 @@ export default function App() {
         onClose={() => void handleRegenDirtyCancel()}
         onConfirm={() => void handleRegenDirtyConfirm()}
       />
-      <React.Suspense fallback={null}>
-        <SettingsModal
-          isOpen={isSettingsOpen}
-          onClose={() => {
-            setIsSettingsOpen(false);
-            void refreshSettings();
-          }}
-          apiKey={apiKey}
-          setApiKey={setApiKey}
-          hasProtectedKey={hasProtectedKey}
-          fallbackKeys={fallbackKeys}
-          setFallbackKeys={setFallbackKeys}
-          preferredModel={preferredModel}
-          setPreferredModel={setPreferredModel}
-          fallbackModels={fallbackModels}
-          setFallbackModels={setFallbackModels}
-          availableModels={availableModels}
-          appendConsole={appendConsole}
-          latestVersion={latestVersion}
-          checkForUpdates={checkForUpdates}
-          isCheckingUpdate={isCheckingUpdate}
-          hasChecked={hasChecked}
-          checkFailed={checkFailed}
-          updateInstallState={updateInstallState}
-          onInstallUpdate={installUpdate}
-          onSettingsSaved={refreshSettings}
-        />
-      </React.Suspense>
-      <React.Suspense fallback={null}>
-        <EditorFullPage
-          previewContent={preview.content}
-          previewTitle={preview.title}
-          htmlPath={preview.path}
-          onClose={closePreview}
-          audioSrc={preview.audioSrc}
-          audioRelinkNeeded={preview.audioRelinkNeeded}
-          onRelink={relinkPreviewAudio}
-          previewInitAudio={preview.initAudio}
-          previewInitScrollTop={preview.initScrollTop}
-          initialSearchTerm={preview.initialSearchTerm}
-          onAudioStateChange={handleAudioStateChange}
-          onScrollTopChange={handleScrollTopChange}
-        />
-      </React.Suspense>
+      {shouldRenderSettings && (
+        <React.Suspense fallback={null}>
+          <SettingsModal
+            isOpen={isSettingsOpen}
+            onClose={() => {
+              setIsSettingsOpen(false);
+              void refreshSettings();
+            }}
+            apiKey={apiKey}
+            setApiKey={setApiKey}
+            hasProtectedKey={hasProtectedKey}
+            fallbackKeys={fallbackKeys}
+            setFallbackKeys={setFallbackKeys}
+            preferredModel={preferredModel}
+            setPreferredModel={setPreferredModel}
+            fallbackModels={fallbackModels}
+            setFallbackModels={setFallbackModels}
+            availableModels={availableModels}
+            appendConsole={appendConsole}
+            latestVersion={latestVersion}
+            checkForUpdates={checkForUpdates}
+            isCheckingUpdate={isCheckingUpdate}
+            hasChecked={hasChecked}
+            checkFailed={checkFailed}
+            updateInstallState={updateInstallState}
+            onInstallUpdate={installUpdate}
+            onSettingsSaved={refreshSettings}
+          />
+        </React.Suspense>
+      )}
+      {shouldRenderPreview && (
+        <React.Suspense fallback={null}>
+          <EditorFullPage
+            previewContent={preview.content}
+            previewTitle={preview.title}
+            htmlPath={preview.path}
+            onClose={closePreview}
+            audioSrc={preview.audioSrc}
+            audioRelinkNeeded={preview.audioRelinkNeeded}
+            onRelink={relinkPreviewAudio}
+            previewInitAudio={preview.initAudio}
+            previewInitScrollTop={preview.initScrollTop}
+            initialSearchTerm={preview.initialSearchTerm}
+            onAudioStateChange={handleAudioStateChange}
+            onScrollTopChange={handleScrollTopChange}
+          />
+        </React.Suspense>
+      )}
       <Toaster toasts={toasts} onDismiss={dismissToast} />
     </div>
   );

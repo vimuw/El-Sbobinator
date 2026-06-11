@@ -140,7 +140,7 @@ describe('App', () => {
 
   it('renders in setup mode when no API key is set', async () => {
     await act(async () => { render(<App />); });
-    expect(screen.getByText('Configura la tua API Key')).toBeTruthy();
+    expect(await screen.findByText('Configura la tua API Key')).toBeTruthy();
   });
 
   it('renders footer with GitHub link', async () => {
@@ -155,7 +155,7 @@ describe('App', () => {
 
   it('shows API key input in setup mode', async () => {
     await act(async () => { render(<App />); });
-    expect(screen.getByPlaceholderText(/Incolla qui la tua API Key/)).toBeTruthy();
+    expect(await screen.findByPlaceholderText(/Incolla qui la tua API Key/)).toBeTruthy();
   });
 
   it('settings button opens settings modal', async () => {
@@ -163,7 +163,7 @@ describe('App', () => {
     await act(async () => {
       fireEvent.click(screen.getByLabelText('Apri impostazioni'));
     });
-    expect(screen.getByRole('heading', { name: /Impostazioni/ })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: /Impostazioni/ })).toBeTruthy();
   });
 
   it('console toggle button is disabled in setup mode', async () => {
