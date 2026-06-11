@@ -87,16 +87,15 @@ Quando esce una nuova versione, l'app mostra direttamente nell'interfaccia un pu
 5. **Esporta:** Una volta perfetto, usa il tasto **"Copia testo"** per copiare il documento con tutta la formattazione intatta (titoli, grassetti, elenchi) e incollalo direttamente su **Google Docs** o **Word** — il risultato sarà già ben strutturato, senza bisogno di riformattare nulla. Per ottenere un **PDF**, usa la funzione di stampa del browser (`Ctrl+P` → "Salva come PDF") direttamente dall'Editor. Per sicurezza, una copia `.html` viene sempre salvata in automatico sul tuo Desktop.
 
 ---
+## ❓ FAQ - Domande Frequenti
 
-## ⚡ Quanto è veloce?
+### ⚡ Quanto è veloce?
 
 Molto più di quanto immagini. Anche una registrazione di **3 ore di lezione** viene elaborata in circa **10-12 minuti**.
 
 Il tempo dipende principalmente dalla velocità di risposta delle API di Google, non dalla potenza del tuo PC. Durante l'elaborazione l'app mostra un'ETA aggiornata in tempo reale così sai sempre quanto manca.
 
----
-
-## 💾 Autosalvataggio e Ripresa (Niente panico!)
+### 💾 Autosalvataggio e Ripresa (Niente panico!)
 El Sbobinator 🤠 salva automaticamente i progressi mentre lavora e le modifiche che fai nell'editor di anteprima.
 
 Se chiudi l'app per sbaglio, se il PC si spegne, o se finisci la quota giornaliera dell'API, **non perdi quasi nulla**.
@@ -104,18 +103,13 @@ Quando riaprirai l'app e ricaricherai lo stesso file audio, El Sbobinator 🤠 t
 
 I dati di sessione (blocchi di testo già elaborati, progressi parziali, audio pre-convertito) vengono salvati in una cartella locale sul tuo computer, **fuori dalle cartelle sincronizzate** dal cloud (OneDrive o iCloud): su Windows in `%LOCALAPPDATA%\El Sbobinator\sessions`, su macOS in `~/Library/Caches/El Sbobinator/sessions`. Le sessioni usano **~0.5–2 GB per lezione** durante l'elaborazione. La cartella può crescere nel tempo: nelle **Impostazioni** trovi il tasto **"Pulisci sessioni vecchie"** per eliminare automaticamente i dati più vecchi di 14 giorni, e il tasto **"Sposta…"** per spostare la cartella in un'altra posizione.
 
----
-
-## 🎯 Cosa aspettarsi dai risultati (Disclaimer sull'AI)
+### 🎯 Cosa aspettarsi dai risultati (Disclaimer sull'AI)
 È importante ricordare che l'intelligenza artificiale **non è perfetta**. La sbobina finale potrebbe contenere qualche parola tecnica interpretata male o qualche piccola ripetizione residua.
 
 Il vero vantaggio è che l'app **farà il 90% del lavoro sporco e pesante al posto tuo**. A te basterà dare una rapida rilettura per sistemare quelle due o tre imperfezioni, risparmiando comunque ore e ore di digitazione manuale!
 
 Ricorda la regola d'oro dell'AI: **la qualità del risultato dipende dalla qualità dell'audio di partenza**. Se l'audio è incomprensibile per un umano, lo sarà anche per Gemini.
 
----
-
-## ❓ FAQ - Domande Frequenti
 
 ### È sicuro? Il mio antivirus lo segnala come minaccia!
 Assolutamente sì, è sicuro al 100%. Il codice sorgente dell'applicazione è completamente pubblico e verificabile da chiunque su GitHub. Se il tuo antivirus o Windows Defender blocca l'app, si tratta di un **falso positivo**.
