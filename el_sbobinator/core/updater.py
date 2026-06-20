@@ -89,7 +89,9 @@ def _launch_windows_installer(tmp_path: str) -> subprocess.Popen[bytes]:
     return proc
 
 
-def _poll_then_destroy(proc: subprocess.Popen[bytes], emit_fn=None) -> None:
+def _poll_then_destroy(
+    proc: subprocess.Popen[bytes], emit_fn=None, tmp_path: str = ""
+) -> None:
     """Poll the installer process; destroy the app window only once it is confirmed alive.
 
     Prevents the window from closing when the user denies UAC (installer exits immediately).
@@ -106,6 +108,8 @@ def _poll_then_destroy(proc: subprocess.Popen[bytes], emit_fn=None) -> None:
                     emit_fn("error", error="uac_denied")
                 except Exception:
                     pass
+            if tmp_path:
+                _try_unlink(tmp_path)
             return  # installer exited quickly — UAC denied or launch failure; leave app open
     if emit_fn is not None:
         try:
@@ -292,7 +296,11 @@ def _download_and_install_background(
     try:
         if sys.platform == "win32":
             proc = _launch_windows_installer(tmp_path)
-            _Thread(target=_poll_then_destroy, args=(proc, _emit), daemon=True).start()
+            _Thread(
+                target=_poll_then_destroy,
+                args=(proc, _emit, tmp_path),
+                daemon=True,
+            ).start()
             return  # done/error emitted by _poll_then_destroy once UAC outcome is known
         else:
             err = _install_macos_dmg(tmp_path)

@@ -905,6 +905,22 @@ class TestPollThenDestroy(unittest.TestCase):
 
         fake_window.destroy.assert_not_called()
 
+    def test_unlink_called_when_process_exits_on_first_poll_with_tmp_path(self):
+        """_try_unlink is called with tmp_path when the installer exits immediately."""
+        fake_proc = MagicMock()
+        fake_proc.poll.return_value = 1  # exits on first check
+
+        fake_webview = MagicMock()
+        fake_webview.windows = [MagicMock()]
+
+        with (
+            patch("el_sbobinator.core.updater.time.sleep"),
+            patch.dict("sys.modules", {"webview": fake_webview}),
+            patch("el_sbobinator.core.updater._try_unlink") as mock_unlink,
+        ):
+            _poll_then_destroy(fake_proc, tmp_path="/tmp/fake_setup.exe")
+            mock_unlink.assert_called_once_with("/tmp/fake_setup.exe")
+
     def test_destroy_not_called_when_process_exits_mid_window(self):
         """destroy() is NOT called when the installer exits before the confirmation threshold."""
         fake_proc = MagicMock()

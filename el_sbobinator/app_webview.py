@@ -164,7 +164,11 @@ def _path_under_root(path: str, root: str) -> bool:
     """
     nc_path = os.path.normcase(path)
     nc_root = os.path.normcase(root)
-    return nc_path == nc_root or nc_path.startswith(nc_root + os.sep)
+    if nc_path == nc_root:
+        return True
+    if not nc_root.endswith(os.sep):
+        nc_root += os.sep
+    return nc_path.startswith(nc_root)
 
 
 def _retry_zero_retried_response(
@@ -1716,12 +1720,25 @@ class ElSbobinatorApi:
 
     def open_file(self, path: str) -> dict:
         """Open a local file/folder with the system default handler."""
-        if isinstance(path, str) and (
-            path.startswith("http://") or path.startswith("https://")
-        ):
+        if not isinstance(path, str):
+            return {"ok": False, "error": "Path non valido: deve essere una stringa."}
+        if path.lower().startswith(("http://", "https://")):
             return {"ok": False, "error": "Usa open_url per aprire URL."}
         try:
-            open_path_with_default_app(path)
+            real_path = os.path.realpath(path)
+            allowed_roots = [
+                os.path.realpath(get_desktop_dir()),  # Desktop / OneDrive Desktop
+                os.path.realpath(self._get_session_root()),  # Session storage
+            ]
+            path_is_allowed = any(
+                _path_under_root(real_path, root) for root in allowed_roots
+            )
+            if not path_is_allowed:
+                return {
+                    "ok": False,
+                    "error": "Accesso negato: path fuori dai percorsi consentiti.",
+                }
+            open_path_with_default_app(real_path)
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": redact_secrets(e)}

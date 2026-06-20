@@ -1987,6 +1987,7 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
                     side_effect=_SyncThread,
                 ),
                 patch("el_sbobinator.core.updater.time.sleep"),
+                patch("el_sbobinator.core.updater._try_unlink"),
                 patch.dict("sys.modules", {"webview": MagicMock(windows=[])}),
             ):
                 api.download_and_install_update("v1.2.3")
@@ -3652,6 +3653,119 @@ class TestRetryStartProcessingGuard(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("in corso", result["error"])
         self.assertNotIn("Retry", result["error"])
+
+    def test_open_file_rejects_url(self):
+        api = ElSbobinatorApi()
+        result = api.open_file("https://example.com")
+        self.assertFalse(result["ok"])
+        self.assertIn("URL", result["error"])
+
+    def test_open_file_rejects_url_case_insensitive(self):
+        api = ElSbobinatorApi()
+        result = api.open_file("HTTPS://example.com")
+        self.assertFalse(result["ok"])
+        self.assertIn("URL", result["error"])
+
+    def test_open_file_rejects_non_string(self):
+        api = ElSbobinatorApi()
+        result = api.open_file(None)  # type: ignore[arg-type]
+        self.assertFalse(result["ok"])
+        self.assertIn("deve essere una stringa", result["error"])
+
+    def test_open_file_rejects_path_outside_allowed_roots(self):
+        api = ElSbobinatorApi()
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            session_root = os.path.join(td, "sessions")
+            desktop_dir = os.path.join(td, "desktop")
+            os.makedirs(session_root)
+            os.makedirs(desktop_dir)
+
+            outside_file = os.path.join(td, "hacked.html")
+            with open(outside_file, "w") as fh:
+                fh.write("test")
+
+            with (
+                patch.object(api, "_get_session_root", return_value=session_root),
+                patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+            ):
+                result = api.open_file(outside_file)
+                self.assertFalse(result["ok"])
+                self.assertIn("fuori dai percorsi consentiti", result["error"])
+
+    def test_open_file_accepts_path_inside_allowed_roots(self):
+        api = ElSbobinatorApi()
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            session_root = os.path.join(td, "sessions")
+            desktop_dir = os.path.join(td, "desktop")
+            os.makedirs(session_root)
+            os.makedirs(desktop_dir)
+
+            inside_file = os.path.join(session_root, "session_output.html")
+            with open(inside_file, "w") as fh:
+                fh.write("test")
+
+            with (
+                patch.object(api, "_get_session_root", return_value=session_root),
+                patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                patch(
+                    "el_sbobinator.app_webview.open_path_with_default_app"
+                ) as mock_open,
+            ):
+                result = api.open_file(inside_file)
+                self.assertTrue(result["ok"])
+                mock_open.assert_called_once_with(os.path.realpath(inside_file))
+
+    def test_path_under_root_with_drive_root(self):
+        from el_sbobinator.app_webview import _path_under_root
+
+        # Test case: root is a Windows-style drive root or POSIX root (ending in slash/backslash)
+        root = "C:\\" if os.name == "nt" else "/"
+        allowed_file = "C:\\file.txt" if os.name == "nt" else "/file.txt"
+        nested_file = "C:\\dir\\file.txt" if os.name == "nt" else "/dir/file.txt"
+        disallowed_file = "D:\\file.txt" if os.name == "nt" else "../file.txt"
+
+        self.assertTrue(_path_under_root(allowed_file, root))
+        self.assertTrue(_path_under_root(nested_file, root))
+        self.assertTrue(_path_under_root(root, root))
+        if os.name == "nt":
+            self.assertFalse(_path_under_root(disallowed_file, root))
+
+    def test_path_under_root_with_normal_paths(self):
+        from el_sbobinator.app_webview import _path_under_root
+
+        root = "C:\\Users\\Desktop" if os.name == "nt" else "/home/user/desktop"
+        allowed_file = (
+            "C:\\Users\\Desktop\\file.txt"
+            if os.name == "nt"
+            else "/home/user/desktop/file.txt"
+        )
+        nested_file = (
+            "C:\\Users\\Desktop\\dir\\file.txt"
+            if os.name == "nt"
+            else "/home/user/desktop/dir/file.txt"
+        )
+        disallowed_file_sibling = (
+            "C:\\Users\\DesktopNot" if os.name == "nt" else "/home/user/desktopnot"
+        )
+        disallowed_file_outside = (
+            "C:\\Users\\file.txt" if os.name == "nt" else "/home/user/file.txt"
+        )
+
+        self.assertTrue(_path_under_root(allowed_file, root))
+        self.assertTrue(_path_under_root(nested_file, root))
+        self.assertTrue(_path_under_root(root, root))
+        self.assertFalse(_path_under_root(disallowed_file_sibling, root))
+        self.assertFalse(_path_under_root(disallowed_file_outside, root))
 
 
 if __name__ == "__main__":
