@@ -5,7 +5,7 @@
 
 Un'applicazione gratuita e open-source che trasforma le registrazioni audio delle tue lezioni in vere e proprie **sbobine** dettagliate, ordinate e pronte da studiare.
 
-L'intelligenza artificiale (basata sul modello Gemini 2.5 Flash) ascolterà la tua registrazione e scriverà una dispensa eliminando i difetti tipici del parlato (es. ripetizioni, retorica, esitazioni) e strutturando il discorso con paragrafi chiari, elenchi puntati a dizionario e definizioni in grassetto.
+L'intelligenza artificiale (basata di default sul modello consigliato **Gemini 2.5 Flash**, con pieno supporto per il nuovo **Gemini 3.5 Flash** e per modelli di riserva/anteprima come **Gemini 3** e **Gemini 3.1 Flash Lite**) ascolterà la tua registrazione e scriverà una dispensa eliminando i difetti tipici del parlato (es. ripetizioni, retorica, esitazioni) e strutturando il discorso con paragrafi chiari, elenchi puntati a dizionario e definizioni in grassetto.
 
 L'obiettivo non è una trascrizione "grezza", ma una vera e propria dispensa leggibile!
 
@@ -61,7 +61,7 @@ Quando esce una nuova versione, l'app mostra direttamente nell'interfaccia un pu
 |---|---|---|
 | **Versione minima** | Windows 10 (64-bit) | macOS 11 Big Sur |
 | **Connessione internet** | ✅ Richiesta durante l'elaborazione | ✅ Richiesta durante l'elaborazione |
-| **Spazio su disco** | ~50 MB (app) + ~0.5–2 GB per lezione durante l'elaborazione | ~50 MB (app) + ~0.5–2 GB per lezione durante l'elaborazione |
+| **Spazio su disco** | ~60 MB (installer) / ~140–160 MB (installata) + ~0.5–2 GB per lezione durante l'elaborazione | ~60 MB (installer) / ~140–160 MB (installata) + ~0.5–2 GB per lezione durante l'elaborazione |
 | **RAM consigliata** | 4 GB | 4 GB |
 
 > ⚠️ Il PC deve rimanere **acceso e connesso a internet** per tutta la durata dell'elaborazione. L'AI gira sui server di Google, non sul tuo processore: la potenza del tuo PC non influisce sulla velocità.
@@ -72,7 +72,7 @@ Quando esce una nuova versione, l'app mostra direttamente nell'interfaccia un pu
 
 ## 📖 Come si usa passo passo?
 
-1. **Inserisci la chiave:** Nelle impostazioni, incolla la tua Chiave API di Gemini. L'app la salverà in modo sicuro (tramite protezione del profilo su Windows o Portachiavi su macOS), così non dovrai rimetterla mai più. Puoi anche inserire chiavi extra e usare la funzione *Validazione ambiente* per controllare che tutto funzioni.
+1. **Inserisci la chiave:** Nelle impostazioni, incolla la tua Chiave API di Gemini. L'app la salverà in modo sicuro (tramite protezione del profilo su Windows o Portachiavi su macOS), così non dovrai rimetterla mai più. Puoi configurare il **modello primario preferito**, impostare una **catena di modelli di riserva (fallback)** e inserire **chiavi API aggiuntive (di riserva)**. In questo modo, se una chiave esaurisce la sua quota o un modello risponde con un errore temporaneo, El Sbobinator eseguirà la rotazione automatica e trasparente delle risorse per completare il lavoro senza interruzioni. Puoi usare la funzione *Validazione ambiente* per verificare lo stato di tutte le chiavi inserite.
 2. **Carica l'audio:** Seleziona uno o più file audio o video trascinandoli nella finestra oppure cliccando per sfogliarli. Formati supportati: `.mp3`, `.m4a`, `.wav`, `.ogg`, `.flac`, `.aac`, `.mp4`, `.mkv`, `.webm` (funziona anche con le registrazioni schermo di Teams, Zoom, ecc.). L'app li aggiungerà alla **Coda di elaborazione** scartando in automatico eventuali duplicati.
 3. **Avvia:** Clicca sul pulsantone "Avvia sbobinatura". L'app ti mostrerà in tempo reale la fase corrente e il progresso. Ad esempio, se l'audio dura un'ora, farà circa 4 estrazioni da 15 minuti l'una.
 4. **Rifinisci nell'Editor:** A fine processo potrai aprire la schermata di anteprima con un editor di testo completo. Puoi:
@@ -80,11 +80,16 @@ Quando esce una nuova versione, l'app mostra direttamente nell'interfaccia un pu
    - Applicare formattazione: **grassetto**, *corsivo*, sottolineato, elenchi, tabelle
    - Strutturare il documento con titoli (`H1`, `H2`, `H3`...)
    - Usare **Trova & Sostituisci** per correggere in blocco termini tecnici sbagliati
-   - Riascoltare l'audio originale col **player integrato**
+   - Riascoltare l'audio originale col **player integrato** (che memorizza volume e velocità di riproduzione preferiti)
+   - Ricollegare l'audio originale tramite il tasto **"Ricollega audio"** nel caso in cui sia stato spostato sul PC
    - Inserire immagini nel documento
+   - Regolare le dimensioni del testo tramite i controlli di **Zoom** o attivare la modalità a schermo intero
 
-   Se l'audio originale è stato spostato sul PC, usa il tasto **"Ricollega audio"** per ricollegarlo.
-5. **Esporta:** Una volta perfetto, usa il tasto **"Copia testo"** per copiare il documento con tutta la formattazione intatta (titoli, grassetti, elenchi) e incollalo direttamente su **Google Docs** o **Word** — il risultato sarà già ben strutturato, senza bisogno di riformattare nulla. Per ottenere un **PDF**, usa la funzione di stampa del browser (`Ctrl+P` → "Salva come PDF") direttamente dall'Editor. Per sicurezza, una copia `.html` viene sempre salvata in automatico sul tuo Desktop.
+5. **Gestisci nell'Archivio:** Accedendo alla scheda **Archivio** dalla barra laterale, puoi visualizzare tutte le lezioni elaborate in precedenza. L'archivio ti permette di:
+   - Organizzare le lezioni in **cartelle personalizzate**
+   - Eseguire una **ricerca full-text istantanea** su tutti i testi e i titoli delle sbobine per trovare velocemente argomenti specifici
+   - Aprire ed eliminare le sessioni passate per liberare spazio su disco
+6. **Esporta:** Una volta perfetto, usa il tasto **"Copia testo"** per copiare il documento con tutta la formattazione intatta (titoli, grassetti, elenchi) e incollalo direttamente su **Google Docs** o **Word** — il risultato sarà già ben strutturato, senza bisogno di riformattare nulla. Per ottenere un **PDF**, usa la funzione di stampa del browser (`Ctrl+P` → "Salva come PDF") direttamente dall'Editor. Per sicurezza, una copia `.html` viene sempre salvata in automatico sul tuo Desktop.
 
 ---
 ## ❓ FAQ - Domande Frequenti
@@ -93,7 +98,7 @@ Quando esce una nuova versione, l'app mostra direttamente nell'interfaccia un pu
 
 Molto più di quanto immagini. Anche una registrazione di **3 ore di lezione** viene elaborata in circa **10-12 minuti**.
 
-Il tempo dipende principalmente dalla velocità di risposta delle API di Google, non dalla potenza del tuo PC. Durante l'elaborazione l'app mostra un'ETA aggiornata in tempo reale così sai sempre quanto manca.
+Il tempo dipende principalmente dalla velocità di risposta delle API di Google, non dalla potenza del tuo PC. Durante l'elaborazione l'app mostra lo stato di avanzamento in tempo reale (fase corrente, blocco in elaborazione e tempo trascorso) così sai sempre a che punto è il processo.
 
 ### 💾 Autosalvataggio e Ripresa (Niente panico!)
 El Sbobinator 🤠 salva automaticamente i progressi mentre lavora e le modifiche che fai nell'editor di anteprima.
@@ -124,9 +129,12 @@ Molto probabilmente sul tuo computer manca **Microsoft Edge WebView2 Runtime**, 
 Puoi installarlo ufficialmente e gratuitamente da qui: 👉 [Scarica WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703). Dopo l'installazione, chiudi e riapri l'app.
 
 ### Quali sono i limiti giornalieri dell'API?
+
 L'intelligenza artificiale di Google non è illimitata: le quote gratuite dipendono dal tuo account e possono cambiare. In generale, più l'audio è lungo, più richieste servono.
+
 **Se finisci i token (Errore: LIMITE GIORNALIERO RAGGIUNTO):**
-L'app si metterà in pausa e ti aprirà un popup. Puoi incollare una nuova chiave API e riprendere subito, oppure premere "Annulla", far chiudere l'app salvando i progressi, e aspettare il reset dei token (che avviene ogni giorno alle 9:00 di mattina circa in Italia).
+- **Se hai configurato delle chiavi di riserva (fallback keys):** l'app le utilizzerà e le ruoterà in modo del tutto trasparente e automatico, continuando il lavoro.
+- **Se non ci sono chiavi di riserva attive o sono tutte esaurite:** l'app si metterà in pausa e mostrerà un popup. Potrai incollare una nuova chiave API per riprendere subito, oppure premere "Annulla" per chiudere salvando i progressi e riprendere in seguito (ad esempio dopo il reset giornaliero di Google, che di solito avviene intorno alle 9:00 di mattina in Italia).
 
 ---
 
@@ -205,9 +213,9 @@ python scripts/build_release.py build --target macos --ui webui --install-deps -
 
 Per i dettagli di architettura, pipeline, formato sessione e contratto del bridge vedi:
 
-- [`docs/architecture.md`](docs/architecture.md) — mappa dei moduli Python/React e flusso a runtime.
-- [`docs/pipeline.md`](docs/pipeline.md) — fasi della pipeline, catena di fallback e valori di `last_error`.
-- [`docs/session_model.md`](docs/session_model.md) — layout su disco delle sessioni e schema `session.json`.
-- [`docs/bridge_protocol.md`](docs/bridge_protocol.md) — eventi Python→JS e API JS→Python.
+- [docs/architecture.md](docs/architecture.md) — mappa dei moduli Python/React e flusso a runtime.
+- [docs/pipeline.md](docs/pipeline.md) — fasi della pipeline, catena di fallback e valori di `last_error`.
+- [docs/session_model.md](docs/session_model.md) — layout su disco delle sessioni e schema `session.json`.
+- [docs/bridge_protocol.md](docs/bridge_protocol.md) — eventi Python→JS e API JS→Python.
 
 </details>

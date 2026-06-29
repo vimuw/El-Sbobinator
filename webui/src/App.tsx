@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { AlertTriangle, Github, Trash2 } from 'lucide-react';
+import { AlertTriangle, Github, Loader2, Trash2 } from 'lucide-react';
 import { GITHUB_RELEASES_URL, GITHUB_URL, KOFI_URL } from './branding';
 import { type ArchiveFolder, type ArchiveSession, type ElSbobinatorBridge, type LowDiskWarning, type PywebviewApi, type UpdateDownloadProgressPayload } from './bridge';
 import { getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type FileDescriptor, type FileDonePayload, type FileItem, type ProcessDonePayload } from './appState';
@@ -64,7 +64,7 @@ function isSupportedMediaPath(path: string): boolean {
   return Boolean(match && SUPPORTED_MEDIA_EXTENSIONS.has(match[0]));
 }
 
-type UiMode = 'setup' | 'ready-empty' | 'ready-with-files' | 'processing' | 'canceling';
+type UiMode = 'loading' | 'setup' | 'ready-empty' | 'ready-with-files' | 'processing' | 'canceling';
 type ConfirmActionState =
   | { type: 'stop-processing' }
   | { type: 'remove-file'; fileId: string; fileName: string; isDone: boolean }
@@ -579,6 +579,7 @@ export default function App() {
   const isApiKeyValid = GEMINI_KEY_PATTERN.test(apiKey.trim());
   const canStart = queuedCount > 0 && hasApiKey && isApiKeyValid;
   const uiMode: UiMode =
+    !apiReady ? 'loading' :
     appState === 'canceling' ? 'canceling' :
     appState === 'processing' ? 'processing' :
     (!hasApiKey || !isApiKeyValid) ? 'setup' :
@@ -1297,7 +1298,33 @@ export default function App() {
                     </button>
                   </motion.div>
                 )}
-                {uiMode === 'setup' ? (
+                {uiMode === 'loading' ? (
+                  <motion.div
+                    key="connecting-loader"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, ease: 'easeOut' }}
+                    className="premium-panel-strong py-12 px-6 flex flex-col items-center justify-center gap-4 text-center max-w-md mx-auto w-full"
+                  >
+                    <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent-text)' }} />
+                    <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
+                      Connessione in corso...
+                    </h3>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      Inizializzazione dell'applicazione e caricamento delle impostazioni.
+                    </p>
+                    {bridgeDelayed && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="alert-card is-error p-3 rounded-lg text-xs leading-relaxed max-w-sm mt-2 text-[var(--error-text)]"
+                      >
+                        Il motore dell'applicazione sta impiegando più tempo del previsto.
+                        Verifica se l'app è bloccata o prova a riavviare.
+                      </motion.div>
+                    )}
+                  </motion.div>
+                ) : uiMode === 'setup' ? (
                   <React.Suspense fallback={null}>
                     <SetupPage
                       hasProtectedKey={hasProtectedKey}
@@ -1354,7 +1381,7 @@ export default function App() {
                   </>
                 )}
 
-                {uiMode !== 'setup' && (
+                {uiMode !== 'setup' && uiMode !== 'loading' && (
                   <>
                     <QueueSection
                       pendingFiles={pendingFiles}
@@ -1398,7 +1425,7 @@ export default function App() {
                   </>
                 )}
 
-                {showConsole && uiMode !== 'setup' && (
+                {showConsole && uiMode !== 'setup' && uiMode !== 'loading' && (
                   <ConsolePanel
                     consoleLogs={consoleLogs}
                     lastConsoleMessage={lastConsoleMessage}

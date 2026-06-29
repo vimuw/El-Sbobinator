@@ -25,7 +25,7 @@ vi.mock('motion/react', () => ({
 vi.mock('./hooks/useApiReady');
 
 const mockApiReadyDefault = {
-  apiReady: false,
+  apiReady: true,
   bridgeDelayed: false,
   apiKey: '',
   setApiKey: vi.fn(),
@@ -141,6 +141,25 @@ describe('App', () => {
   it('renders in setup mode when no API key is set', async () => {
     await act(async () => { render(<App />); });
     expect(await screen.findByText('Configura la tua API Key')).toBeTruthy();
+  });
+
+  it('renders loading connection screen when API is not ready', async () => {
+    vi.mocked(useApiReady).mockReturnValue({
+      ...mockApiReadyDefault,
+      apiReady: false,
+    });
+    await act(async () => { render(<App />); });
+    expect(await screen.findByText('Connessione in corso...')).toBeTruthy();
+  });
+
+  it('renders warning when API bridge is delayed', async () => {
+    vi.mocked(useApiReady).mockReturnValue({
+      ...mockApiReadyDefault,
+      apiReady: false,
+      bridgeDelayed: true,
+    });
+    await act(async () => { render(<App />); });
+    expect(await screen.findByText(/Il motore dell'applicazione/)).toBeTruthy();
   });
 
   it('renders footer with GitHub link', async () => {

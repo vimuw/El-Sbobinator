@@ -167,6 +167,19 @@ CONFIG_FILE = _get_config_file_path(USER_HOME)
 THEME_PREF_FILE = os.path.join(os.path.dirname(CONFIG_FILE), "theme_pref.txt")
 LEGACY_CONFIG_FILE = os.path.join(USER_HOME, ".el_sbobinator_config.json")
 
+# In testing environment, isolate from actual user configuration to prevent data loss or key overwrites.
+import sys
+
+if "pytest" in sys.modules or os.environ.get("EL_SBOBINATOR_TESTING") == "1":
+    import tempfile
+
+    _test_temp_dir = tempfile.gettempdir()
+    CONFIG_FILE = os.path.join(_test_temp_dir, "el_sbobinator_test_config.json")
+    THEME_PREF_FILE = os.path.join(_test_temp_dir, "el_sbobinator_test_theme_pref.txt")
+    LEGACY_CONFIG_FILE = os.path.join(
+        _test_temp_dir, "el_sbobinator_test_legacy_config.json"
+    )
+
 
 @functools.lru_cache(maxsize=1)
 def _dpapi_make_blob_class(ctypes_mod, wintypes_mod):
@@ -193,10 +206,6 @@ def _dpapi_protect_text_windows(text: str) -> str:
 
         DATA_BLOB = _dpapi_make_blob_class(ctypes, wintypes)  # type: ignore[arg-type]
 
-        def _bytes_to_blob(data: bytes) -> DATA_BLOB:  # type: ignore[valid-type]
-            buf = ctypes.create_string_buffer(data)
-            return DATA_BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte)))
-
         crypt32 = ctypes.windll.crypt32  # type: ignore[attr-defined]
         kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
 
@@ -217,7 +226,8 @@ def _dpapi_protect_text_windows(text: str) -> str:
         plain = (text or "").encode("utf-8", errors="strict")
         if not plain:
             return ""
-        in_blob = _bytes_to_blob(plain)
+        buf = ctypes.create_string_buffer(plain)
+        in_blob = DATA_BLOB(len(plain), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte)))
         out_blob = DATA_BLOB()
         CRYPTPROTECT_UI_FORBIDDEN = 0x1
         ok = crypt32.CryptProtectData(
@@ -270,10 +280,6 @@ def _dpapi_unprotect_text_windows_once(b64: str) -> str:
 
         DATA_BLOB = _dpapi_make_blob_class(ctypes, wintypes)  # type: ignore[arg-type]
 
-        def _bytes_to_blob(data: bytes) -> DATA_BLOB:  # type: ignore[valid-type]
-            buf = ctypes.create_string_buffer(data)
-            return DATA_BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte)))
-
         crypt32 = ctypes.windll.crypt32  # type: ignore[attr-defined]
         kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
 
@@ -296,7 +302,8 @@ def _dpapi_unprotect_text_windows_once(b64: str) -> str:
         )
         if not raw:
             return ""
-        in_blob = _bytes_to_blob(raw)
+        buf = ctypes.create_string_buffer(raw)
+        in_blob = DATA_BLOB(len(raw), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte)))
         out_blob = DATA_BLOB()
         desc = wintypes.LPWSTR()
         CRYPTPROTECT_UI_FORBIDDEN = 0x1
