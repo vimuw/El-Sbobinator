@@ -167,19 +167,6 @@ CONFIG_FILE = _get_config_file_path(USER_HOME)
 THEME_PREF_FILE = os.path.join(os.path.dirname(CONFIG_FILE), "theme_pref.txt")
 LEGACY_CONFIG_FILE = os.path.join(USER_HOME, ".el_sbobinator_config.json")
 
-# In testing environment, isolate from actual user configuration to prevent data loss or key overwrites.
-import sys
-
-if "pytest" in sys.modules or os.environ.get("EL_SBOBINATOR_TESTING") == "1":
-    import tempfile
-
-    _test_temp_dir = tempfile.gettempdir()
-    CONFIG_FILE = os.path.join(_test_temp_dir, "el_sbobinator_test_config.json")
-    THEME_PREF_FILE = os.path.join(_test_temp_dir, "el_sbobinator_test_theme_pref.txt")
-    LEGACY_CONFIG_FILE = os.path.join(
-        _test_temp_dir, "el_sbobinator_test_legacy_config.json"
-    )
-
 
 @functools.lru_cache(maxsize=1)
 def _dpapi_make_blob_class(ctypes_mod, wintypes_mod):
