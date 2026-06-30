@@ -2240,17 +2240,6 @@ class ElSbobinatorApi:
             )
             return {"ok": True}
         except Exception as e:
-            # Fallback a legacy OS script
-            if sys.platform == "darwin":
-                import shlex
-                import subprocess
-
-                script = (
-                    f"display notification {shlex.quote(str(message or ''))}"
-                    f" with title {shlex.quote(str(title or ''))}"
-                )
-                subprocess.Popen(["osascript", "-e", script])
-                return {"ok": True}
             return {"ok": False, "error": redact_secrets(e)}
 
     def stream_media_file(self, file_path: str, session_dir: str | None = None) -> dict:
