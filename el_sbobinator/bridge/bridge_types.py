@@ -16,14 +16,25 @@ class BridgeFileItem(TypedDict):
     name: str
     size: NotRequired[int]
     duration: NotRequired[float]
-    resume_session: NotRequired[bool]
+    resume_session: NotRequired[bool | None]
+    allow_completed_destroy: NotRequired[bool]
+
+
+class LowDiskWarningPayload(TypedDict):
+    needed_bytes: int
+    free_bytes: int
+    location: str
+    kind: str
+    file_name: NotRequired[str]
 
 
 class ProcessDonePayload(TypedDict, total=False):
     cancelled: bool
     completed: int
+    completed_with_warnings: int
     failed: int
     total: int
+    quota_exhausted: NotRequired[bool]
 
 
 class SetCurrentFilePayload(TypedDict):
@@ -38,6 +49,8 @@ class FileDonePayload(TypedDict):
     output_html: str
     output_dir: str
     effective_model: str
+    completion_status: NotRequired[Literal["completed", "completed_with_warnings"]]
+    revision_failed_blocks: NotRequired[list[int]]
     primary_model: NotRequired[str]
 
 
@@ -45,6 +58,7 @@ class FileFailedPayload(TypedDict):
     index: int
     id: str
     error: str
+    error_detail: NotRequired[str]
 
 
 class WorkTotalsPayload(TypedDict, total=False):
@@ -55,13 +69,6 @@ class WorkTotalsPayload(TypedDict, total=False):
 class WorkDonePayload(TypedDict, total=False):
     kind: Literal["chunks", "macro"]
     done: int
-    total: int | None
-
-
-class StepTimePayload(TypedDict, total=False):
-    kind: Literal["chunks", "macro"]
-    seconds: float
-    done: int | None
     total: int | None
 
 
@@ -77,3 +84,10 @@ class ValidationResult(TypedDict):
     ok: bool
     summary: str
     checks: list[ValidationCheck]
+
+
+class UpdateDownloadProgressPayload(TypedDict):
+    status: Literal["downloading", "verifying", "installing", "done", "error"]
+    bytes_done: int
+    bytes_total: int
+    error: NotRequired[str]

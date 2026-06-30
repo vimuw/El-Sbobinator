@@ -33,29 +33,29 @@ describe('CompletedSection', () => {
   it('renders heading and file count when files are present', () => {
     render(<CompletedSection {...baseProps} doneFiles={[makeFile()]} />);
     expect(screen.getByText('Sbobine completate')).toBeTruthy();
-    expect(screen.getByText('1 sbobina')).toBeTruthy();
+    expect(screen.getByText('1 complete')).toBeTruthy();
   });
 
-  it('uses plural "sbobine" for multiple files', () => {
+  it('uses plural count for multiple files', () => {
     const files = [makeFile({ id: 'f1' }), makeFile({ id: 'f2' })];
     render(<CompletedSection {...baseProps} doneFiles={files} />);
-    expect(screen.getByText('2 sbobine')).toBeTruthy();
+    expect(screen.getByText('2 complete')).toBeTruthy();
   });
 
   it('renders "Pulisci tutto" button when appState is idle', () => {
     render(<CompletedSection {...baseProps} doneFiles={[makeFile()]} appState="idle" />);
-    expect(screen.getByText('Pulisci tutto')).toBeTruthy();
+    expect(screen.getByLabelText('Pulisci tutto')).toBeTruthy();
   });
 
   it('renders "Pulisci tutto" during processing too', () => {
     render(<CompletedSection {...baseProps} doneFiles={[makeFile()]} appState="processing" />);
-    expect(screen.getByText('Pulisci tutto')).toBeTruthy();
+    expect(screen.getByLabelText('Pulisci tutto')).toBeTruthy();
   });
 
   it('calls onClearAll when Pulisci tutto is clicked', () => {
     const onClearAll = vi.fn();
     render(<CompletedSection {...baseProps} doneFiles={[makeFile()]} onClearAll={onClearAll} />);
-    fireEvent.click(screen.getByText('Pulisci tutto'));
+    fireEvent.click(screen.getByLabelText('Pulisci tutto'));
     expect(onClearAll).toHaveBeenCalledTimes(1);
   });
 
@@ -89,5 +89,19 @@ describe('CompletedSection', () => {
     render(<CompletedSection {...baseProps} doneFiles={files} />);
     fireEvent.change(screen.getByPlaceholderText('Cerca...'), { target: { value: 'xyz-nonexistent' } });
     expect(screen.getByText(/Nessun risultato per/)).toBeTruthy();
+  });
+
+  it('passes folder indicators to completed cards by outputDir', () => {
+    const sessionFolderMap = new Map([
+      ['/sessions/s1', { id: 'folder-1', name: 'Corso A', color: '#4D96FF', session_dirs: ['/sessions/s1'] }],
+    ]);
+    render(
+      <CompletedSection
+        {...baseProps}
+        doneFiles={[makeFile({ outputDir: '/sessions/s1', outputHtml: '/sessions/s1/out.html' })]}
+        sessionFolderMap={sessionFolderMap}
+      />,
+    );
+    expect(screen.getByTitle('Raccolta: Corso A')).toBeTruthy();
   });
 });

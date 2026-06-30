@@ -8,18 +8,70 @@ import os
 import sys
 import threading
 
-from el_sbobinator.utils.html_export import sanitize_html_basic
-
-_html_write_locks: dict[str, threading.Lock] = {}
+_HTML_CACHE_MAX = 200  # FIFO cap for write-lock entries
+_HTML_GEN_MAX = (
+    500  # separate FIFO cap for generation guards; larger to outlive lock evictions
+)
+_html_write_locks: dict[str, tuple[threading.Lock, int]] = {}
 _html_last_gen: dict[str, int] = {}
 _html_write_locks_meta = threading.Lock()
 
 
-def _html_write_lock(path: str) -> threading.Lock:
+class HTMLWriteLock:
+    def __init__(self, path: str, lock: threading.Lock):
+        self.path = path
+        self.lock = lock
+
+    def __enter__(self) -> HTMLWriteLock:
+        self.lock.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        try:
+            self.lock.release()
+        finally:
+            with _html_write_locks_meta:
+                if self.path in _html_write_locks:
+                    lock_obj, ref_count = _html_write_locks[self.path]
+                    if lock_obj is self.lock:
+                        if ref_count <= 1:
+                            _html_write_locks[self.path] = (lock_obj, 0)
+                        else:
+                            _html_write_locks[self.path] = (lock_obj, ref_count - 1)
+
+
+def _html_write_lock(path: str) -> HTMLWriteLock:
     with _html_write_locks_meta:
         if path not in _html_write_locks:
-            _html_write_locks[path] = threading.Lock()
-        return _html_write_locks[path]
+            # FIFO-like eviction of the first unused entry if at capacity
+            if len(_html_write_locks) >= _HTML_CACHE_MAX:
+                for oldest in list(_html_write_locks.keys()):
+                    lock_obj, ref_count = _html_write_locks[oldest]
+                    if ref_count == 0:
+                        del _html_write_locks[oldest]
+                        _html_last_gen.pop(oldest, None)
+                        break
+            _html_write_locks[path] = (threading.Lock(), 0)
+        lock_obj, ref_count = _html_write_locks[path]
+        _html_write_locks[path] = (lock_obj, ref_count + 1)
+        return HTMLWriteLock(path, lock_obj)
+
+
+def evict_html_paths_under(prefix: str) -> None:
+    """Remove all lock/generation entries for paths under *prefix*.
+
+    Called by delete_session so that stale entries are not left behind
+    after a session folder is removed from disk.
+    """
+    with _html_write_locks_meta:
+        all_keys = set(_html_write_locks) | set(_html_last_gen)
+        to_evict = [k for k in all_keys if k.startswith(prefix)]
+        for k in to_evict:
+            if k in _html_write_locks:
+                lock_obj, ref_count = _html_write_locks[k]
+                if ref_count == 0:
+                    _html_write_locks.pop(k, None)
+            _html_last_gen.pop(k, None)
 
 
 _ALLOWED_OPEN_EXTENSIONS: frozenset[str] = frozenset(
@@ -108,12 +160,15 @@ def save_html_body_content(
     if not path or not os.path.exists(path):
         raise FileNotFoundError("File originale non trovato.")
 
+    from el_sbobinator.utils.html_export import sanitize_html_basic
+
     body_inner = sanitize_html_basic(str(content or ""))
 
     tmp_path = path + ".tmp"
     with _html_write_lock(path):
-        if generation is not None and generation <= _html_last_gen.get(path, 0):
-            return False
+        with _html_write_locks_meta:
+            if generation is not None and generation <= _html_last_gen.get(path, 0):
+                return False
         if shell is not None:
             open_tag, close_tag = shell
         else:
@@ -136,5 +191,13 @@ def save_html_body_content(
             handle.write(updated_html)
         os.replace(tmp_path, path)
         if generation is not None:
-            _html_last_gen[path] = generation
+            with _html_write_locks_meta:
+                _html_last_gen.pop(path, None)
+                _html_last_gen[path] = generation
+                # Best-effort FIFO eviction so _html_last_gen stays bounded independently of the lock dict.
+                if len(_html_last_gen) > _HTML_GEN_MAX:
+                    try:
+                        _html_last_gen.pop(next(iter(_html_last_gen)))
+                    except (StopIteration, KeyError):
+                        pass
     return True

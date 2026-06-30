@@ -1,8 +1,10 @@
+import json
 import os
 import unittest
 from unittest.mock import patch
 
 from el_sbobinator.core.session_store import (
+    SessionCollisionError,
     clone_session_settings,
     new_session,
     resolve_session_paths,
@@ -15,7 +17,7 @@ class SessionStoreTests(unittest.TestCase):
             "el_sbobinator.core.session_store.build_default_pipeline_settings",
             return_value={
                 "model": "gemini-2.5-flash",
-                "fallback_models": ["gemini-2.5-flash-lite"],
+                "fallback_models": ["gemini-3.1-flash-lite-preview"],
                 "effective_model": "gemini-2.5-flash",
                 "chunk_minutes": 15,
                 "overlap_seconds": 30,
@@ -33,7 +35,7 @@ class SessionStoreTests(unittest.TestCase):
         self.assertEqual(session["settings"]["model"], "gemini-2.5-flash")
         self.assertEqual(session["settings"]["effective_model"], "gemini-2.5-flash")
         self.assertEqual(
-            session["settings"]["fallback_models"], ["gemini-2.5-flash-lite"]
+            session["settings"]["fallback_models"], ["gemini-3.1-flash-lite-preview"]
         )
         self.assertEqual(session["settings"]["audio"]["bitrate"], "48k")
 
@@ -99,6 +101,62 @@ class EnsureSessionDirsTests(unittest.TestCase):
                 os.path.isdir(paths.phase1_chunks_dir), "Dir should exist again"
             )
 
+    def test_reset_session_dirs_refuses_completed_session_with_html(self):
+        import tempfile
+
+        from el_sbobinator.core.session_store import SessionPaths, reset_session_dirs
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir = os.path.join(tmpdir, "session")
+            paths = SessionPaths(
+                session_dir=session_dir,
+                session_path=os.path.join(session_dir, "session.json"),
+                phase1_chunks_dir=os.path.join(session_dir, "phase1_chunks"),
+                phase2_revised_dir=os.path.join(session_dir, "phase2_revised"),
+                macro_path=os.path.join(session_dir, "macro.json"),
+            )
+            os.makedirs(paths.phase1_chunks_dir, exist_ok=True)
+            html_path = os.path.join(session_dir, "output.html")
+            sentinel = os.path.join(paths.phase1_chunks_dir, "chunk_000.md")
+            with open(html_path, "w", encoding="utf-8") as fh:
+                fh.write("<html></html>")
+            with open(sentinel, "w", encoding="utf-8") as fh:
+                fh.write("keep me")
+            with open(paths.session_path, "w", encoding="utf-8") as fh:
+                json.dump({"stage": "done", "outputs": {"html": html_path}}, fh)
+
+            with self.assertRaises(SessionCollisionError):
+                reset_session_dirs(paths)
+
+            self.assertTrue(os.path.exists(html_path))
+            self.assertTrue(os.path.exists(sentinel))
+
+    def test_reset_session_dirs_allows_explicit_completed_destroy(self):
+        import tempfile
+
+        from el_sbobinator.core.session_store import SessionPaths, reset_session_dirs
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir = os.path.join(tmpdir, "session")
+            paths = SessionPaths(
+                session_dir=session_dir,
+                session_path=os.path.join(session_dir, "session.json"),
+                phase1_chunks_dir=os.path.join(session_dir, "phase1_chunks"),
+                phase2_revised_dir=os.path.join(session_dir, "phase2_revised"),
+                macro_path=os.path.join(session_dir, "macro.json"),
+            )
+            os.makedirs(paths.phase1_chunks_dir, exist_ok=True)
+            html_path = os.path.join(session_dir, "output.html")
+            with open(html_path, "w", encoding="utf-8") as fh:
+                fh.write("<html></html>")
+            with open(paths.session_path, "w", encoding="utf-8") as fh:
+                json.dump({"stage": "done", "outputs": {"html": html_path}}, fh)
+
+            reset_session_dirs(paths, allow_completed_destroy=True)
+
+            self.assertFalse(os.path.exists(html_path))
+            self.assertTrue(os.path.isdir(paths.phase1_chunks_dir))
+
 
 class SaveLoadSessionTests(unittest.TestCase):
     def test_save_load_round_trip_and_sets_updated_at(self):
@@ -149,6 +207,56 @@ class ResolveSessionPathsHintTests(unittest.TestCase):
             paths = resolve_session_paths("lesson.mp3", session_dir_hint=hint_dir)
 
         self.assertTrue(paths.session_dir.endswith("my_session"))
+
+
+class TestMigrateSession(unittest.TestCase):
+    def test_pre_versioned_session_migrated_to_v1(self):
+        from el_sbobinator.core.session_store import migrate_session
+
+        session = {"stage": "phase2", "settings": {"model": "x"}}
+        result, changed = migrate_session(session)
+        self.assertTrue(changed)
+        self.assertEqual(result["schema_version"], 1)
+        self.assertIn("phase1", result)
+        self.assertIn("phase2", result)
+        self.assertIn("outputs", result)
+        self.assertIn("last_error", result)
+        self.assertEqual(result["stage"], "phase2")
+
+    def test_current_version_is_no_op(self):
+        from el_sbobinator.core.session_store import migrate_session
+
+        session = {
+            "schema_version": 1,
+            "stage": "boundary",
+            "phase1": {"chunks_done": 3},
+            "phase2": {"macro_total": 5},
+            "outputs": {"html": "out.html"},
+            "last_error": None,
+        }
+        result, changed = migrate_session(session)
+        self.assertFalse(changed)
+        self.assertEqual(result["schema_version"], 1)
+        self.assertEqual(result["phase1"]["chunks_done"], 3)
+        self.assertEqual(result["outputs"]["html"], "out.html")
+
+    def test_missing_schema_version_treated_as_pre_versioned(self):
+        from el_sbobinator.core.session_store import migrate_session
+
+        session = {"stage": "done", "outputs": {"html": "path.html"}}
+        result, changed = migrate_session(session)
+        self.assertTrue(changed)
+        self.assertEqual(result["schema_version"], 1)
+        self.assertEqual(result["outputs"]["html"], "path.html")
+
+    def test_migration_is_idempotent(self):
+        from el_sbobinator.core.session_store import migrate_session
+
+        session = {"stage": "phase1"}
+        result, _ = migrate_session(session)
+        result2, changed2 = migrate_session(result)
+        self.assertFalse(changed2)
+        self.assertEqual(result2["schema_version"], 1)
 
 
 if __name__ == "__main__":

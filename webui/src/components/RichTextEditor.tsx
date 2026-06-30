@@ -21,7 +21,7 @@ import { type Heading, SearchHighlight, FontSize, extractHeadings } from '../edi
 import { MenuBar } from './EditorToolbar';
 import { FindReplacePanel } from './EditorFindReplace';
 import { WordCount } from './EditorWordCount';
-import { readFileAsDataUrl } from './EditorToolbarControls';
+import { readFileAsDataUrl } from '../utils';
 
 export type { Heading };
 
@@ -30,17 +30,20 @@ interface RichTextEditorProps {
   onChange?: (html: string) => void;
   onEditorReady?: (getHtml: () => string) => void;
   initialScrollTop?: number;
+  initialSearchTerm?: string;
   onScrollTopChange?: (scrollTop: number) => void;
   onHeadingsChange?: (headings: Heading[]) => void;
   isTocOpen?: boolean;
   onTocToggle?: () => void;
   tocHeadings?: Heading[];
   onScrollToHeading?: (heading: Heading) => void;
+  zoomLevel?: number;
+  onZoomChange?: (level: number) => void;
 }
 
-export function RichTextEditor({ initialContent, onChange, onEditorReady, initialScrollTop, onScrollTopChange, onHeadingsChange, isTocOpen = false, onTocToggle, tocHeadings = [], onScrollToHeading }: RichTextEditorProps) {
+export function RichTextEditor({ initialContent, onChange, onEditorReady, initialScrollTop, initialSearchTerm, onScrollTopChange, onHeadingsChange, isTocOpen = false, onTocToggle, tocHeadings = [], onScrollToHeading, zoomLevel, onZoomChange }: RichTextEditorProps) {
   const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number } | null>(null);
-  const [findMode, setFindMode] = useState<null | 'find' | 'replace'>(null);
+  const [findMode, setFindMode] = useState<null | 'find' | 'replace'>(initialSearchTerm ? 'find' : null);
   const [findFocusTrigger, setFindFocusTrigger] = useState(0);
   const findModeRef = useRef<null | 'find' | 'replace'>(null);
   useEffect(() => { findModeRef.current = findMode; }, [findMode]);
@@ -135,11 +138,15 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
     const files = Array.from(inputFiles).filter(f => f.type.startsWith('image/'));
     if (!files.length) return;
     for (const file of files) {
-      const src = await readFileAsDataUrl(file);
-      activeEditor.chain().focus().insertContent([
-        { type: 'floatingImage', attrs: { src, alt: file.name, title: file.name, width: 56 } },
-        { type: 'paragraph' },
-      ]).run();
+      try {
+        const src = await readFileAsDataUrl(file);
+        activeEditor.chain().focus().insertContent([
+          { type: 'floatingImage', attrs: { src, alt: file.name, title: file.name, width: 56 } },
+          { type: 'paragraph' },
+        ]).run();
+      } catch (err) {
+        console.error(`Errore durante la lettura dell'immagine ${file.name}:`, err);
+      }
     }
   }, []);
 
@@ -260,20 +267,84 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
     });
   }, [editor, initialScrollTop]);
 
+  // Center paper in viewport and handle off-screen TOC scrolling
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const adjustScroll = (behavior: ScrollBehavior = 'auto') => {
+      const outer = container.querySelector('.editor-page-outer') as HTMLElement;
+      const tocCol = container.querySelector('.editor-toc-col') as HTMLElement;
+      if (!outer || !tocCol) return;
+
+      const viewportWidth = container.clientWidth;
+      const contentWidth = outer.scrollWidth;
+      const leftColWidth = tocCol.offsetWidth;
+
+      if (isTocOpen && contentWidth > viewportWidth) {
+        const idealScrollLeft = contentWidth / 2 - viewportWidth / 2;
+        // Limit scrollLeft to keep a comfortable 20px padding on the left edge of the paper
+        const maxScrollLeft = leftColWidth;
+        const targetScrollLeft = Math.max(0, Math.min(idealScrollLeft, maxScrollLeft));
+
+        container.scrollTo({
+          left: targetScrollLeft,
+          behavior,
+        });
+      } else {
+        container.scrollTo({
+          left: 0,
+          behavior,
+        });
+      }
+    };
+
+    // Initial positioning
+    adjustScroll('auto');
+
+    // Poll during the width transitions to match the 0.25s CSS animation dynamically
+    let transitionActive = true;
+    const start = Date.now();
+    const duration = 300;
+
+    const poll = () => {
+      if (!transitionActive) return;
+      adjustScroll('auto');
+      if (Date.now() - start < duration) {
+        requestAnimationFrame(poll);
+      }
+    };
+    requestAnimationFrame(poll);
+
+    // Responsive adjustment on container resize or split screen activation
+    const resizeObserver = new ResizeObserver(() => {
+      adjustScroll('auto');
+    });
+    resizeObserver.observe(container);
+
+    return () => {
+      transitionActive = false;
+      resizeObserver.disconnect();
+    };
+  }, [isTocOpen, zoomLevel]);
+
   return (
-    <div className="editor-shell flex flex-1 min-h-0 w-full flex-col relative" onContextMenu={handleContextMenu}>
+    <div className={`editor-shell flex flex-1 min-h-0 w-full flex-col relative ${isTocOpen ? 'editor-toc-open' : ''}`} onContextMenu={handleContextMenu}>
       <MenuBar
         editor={editor}
         onInsertImages={insertImageFiles}
         showFindReplace={findMode !== null}
         onToggleFindReplace={() => setFindMode(p => p ? null : 'find')}
+        zoomLevel={zoomLevel}
+        onZoomChange={onZoomChange}
       />
       {findMode && editor && (
-        <FindReplacePanel editor={editor} onClose={() => setFindMode(null)} initialMode={findMode} focusTrigger={findFocusTrigger} />
+        <FindReplacePanel editor={editor} onClose={() => setFindMode(null)} initialMode={findMode} focusTrigger={findFocusTrigger} initialFindText={initialSearchTerm} />
       )}
       <div
         ref={scrollContainerRef}
         className="editor-page-container flex-1 overflow-y-auto"
+        style={{ overflowX: 'auto' }}
         onScroll={() => {
           if (scrollContainerRef.current) {
             onScrollTopChangeRef.current?.(scrollContainerRef.current.scrollTop);
@@ -319,7 +390,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
           </div>
           {/* White paper — centering wrapper takes all remaining space */}
           <div className="editor-page-center">
-            <div className="editor-page">
+            <div className="editor-page" style={zoomLevel !== undefined ? { zoom: zoomLevel / 100 } : undefined}>
               <EditorContent editor={editor} />
             </div>
           </div>

@@ -8,7 +8,7 @@ describe('ProcessingStatusBanner', () => {
       <ProcessingStatusBanner
         appState="processing"
         currentPhase="Fase 2/3: revisione"
-        currentModel="gemini-2.5-flash-lite"
+        currentModel="gemini-3.1-flash-lite-preview"
         activeProgress={86}
         workDone={{ chunks: 8, macro: 0 }}
         workTotals={{ chunks: 11, macro: 11 }}
@@ -28,7 +28,7 @@ describe('ProcessingStatusBanner', () => {
       <ProcessingStatusBanner
         appState="processing"
         currentPhase="Fase 1/3: trascrizione (chunk 2/6)"
-        currentModel="gemini-2.5-flash-lite"
+        currentModel="gemini-3.1-flash-lite-preview"
         activeProgress={34}
         workDone={{ chunks: 1, macro: 0 }}
         workTotals={{ chunks: 6, macro: 3 }}
@@ -61,11 +61,11 @@ describe('ProcessingStatusBanner', () => {
     expect(screen.getByText('File 2 di 3')).toBeTruthy();
   });
 
-  it('shows wait banner for Modello non disponibile phase', () => {
+  it('shows wait banner for Server Gemini occupato phase', () => {
     render(
       <ProcessingStatusBanner
         appState="processing"
-        currentPhase="Modello non disponibile: riprovando tra 3s"
+        currentPhase="Server Gemini occupato — ritento tra 3s"
         currentModel="gemini-2.5-flash"
         activeProgress={30}
         workDone={{ chunks: 2, macro: 0 }}
@@ -197,4 +197,5 @@ describe('ProcessingStatusBanner', () => {
     );
     expect(screen.getByText(/\d+h \d+m/)).toBeTruthy();
   });
+
 });

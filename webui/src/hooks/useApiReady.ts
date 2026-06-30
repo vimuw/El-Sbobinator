@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
-import type { ModelOption } from '../bridge';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ModelOption, SettingsPayload } from '../bridge';
 
 export function useApiReady(appendConsole: (msg: string) => void) {
   const [apiReady, setApiReady] = useState(false);
   const [bridgeDelayed, setBridgeDelayed] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [hasProtectedKey, setHasProtectedKey] = useState(false);
+  const [apiKeyInsecure, setApiKeyInsecure] = useState(false);
+  const [apiKeyInsecureReason, setApiKeyInsecureReason] = useState('');
+  const [configRecoveredFrom, setConfigRecoveredFrom] = useState('');
   const [fallbackKeys, setFallbackKeys] = useState<string[]>([]);
   const [preferredModel, setPreferredModel] = useState('gemini-2.5-flash');
   const [fallbackModels, setFallbackModels] = useState<string[]>([]);
@@ -24,6 +27,26 @@ export function useApiReady(appendConsole: (msg: string) => void) {
     if (apiKey) setHasProtectedKey(false);
   }, [apiKey]);
 
+  const applySettings = useCallback((cfg: SettingsPayload | undefined) => {
+    const nextApiKey = String(cfg?.api_key ?? '');
+    setApiKey(nextApiKey);
+    setHasProtectedKey(Boolean(cfg?.has_protected_key) && !nextApiKey);
+    setApiKeyInsecure(Boolean(cfg?.api_key_insecure));
+    setApiKeyInsecureReason(String(cfg?.api_key_insecure_reason ?? ''));
+    setConfigRecoveredFrom(String(cfg?.config_recovered_from ?? ''));
+    setFallbackKeys(Array.isArray(cfg?.fallback_keys) ? cfg.fallback_keys : []);
+    setPreferredModel(cfg?.preferred_model || 'gemini-2.5-flash');
+    setFallbackModels(Array.isArray(cfg?.fallback_models) ? cfg.fallback_models : []);
+    setAvailableModels(Array.isArray(cfg?.available_models) ? cfg.available_models : []);
+  }, []);
+
+  const refreshSettings = useCallback(async () => {
+    if (!window.pywebview?.api?.load_settings) return false;
+    const cfg = await window.pywebview.api.load_settings();
+    applySettings(cfg);
+    return true;
+  }, [applySettings]);
+
   useEffect(() => {
     let alive = true;
 
@@ -40,12 +63,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
         setBridgeDelayed(false);
         setApiReady(true);
         appendConsoleRef.current('Connesso a Python.');
-        if (cfg?.api_key) setApiKey(cfg.api_key);
-        if (cfg?.has_protected_key && !cfg.api_key) setHasProtectedKey(true);
-        if (cfg?.fallback_keys?.length) setFallbackKeys(cfg.fallback_keys);
-        if (cfg?.preferred_model) setPreferredModel(cfg.preferred_model);
-        if (cfg?.fallback_models?.length) setFallbackModels(cfg.fallback_models);
-        if (cfg?.available_models?.length) setAvailableModels(cfg.available_models);
+        applySettings(cfg);
       } catch (e) {
         console.error('Load settings failed:', e);
         if (!alive) return;
@@ -86,7 +104,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
       clearTimeout(delayedWarning);
       if (retryTimerRef.current !== null) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
     };
-  }, []);
+  }, [applySettings]);
 
   return {
     apiReady,
@@ -94,6 +112,11 @@ export function useApiReady(appendConsole: (msg: string) => void) {
     apiKey,
     setApiKey,
     hasProtectedKey,
+    apiKeyInsecure,
+    setApiKeyInsecure,
+    apiKeyInsecureReason,
+    setApiKeyInsecureReason,
+    configRecoveredFrom,
     fallbackKeys,
     setFallbackKeys,
     preferredModel,
@@ -101,5 +124,6 @@ export function useApiReady(appendConsole: (msg: string) => void) {
     fallbackModels,
     setFallbackModels,
     availableModels,
+    refreshSettings,
   };
 }

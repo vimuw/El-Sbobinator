@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 import warnings
 from html import escape
+from typing import Any
 
 import webview
 
@@ -201,7 +203,44 @@ def build_missing_webview2_html() -> str:
       li {{
         font-size: 13.5px;
         line-height: 1.75;
-        margin: 2px 0;
+        margin: 4px 0;
+      }}
+      .status-box {{
+        margin-top: 20px;
+        padding: 10px 15px;
+        background: #fffbe6;
+        border: 1px solid #ffe58f;
+        border-radius: 6px;
+        font-size: 13.0px;
+        color: #d46b08;
+      }}
+      @keyframes status-pulse {{
+        0% {{
+          opacity: 0.4;
+          transform: scale(0.9);
+        }}
+        50% {{
+          opacity: 1;
+          transform: scale(1.1);
+        }}
+        100% {{
+          opacity: 0.4;
+          transform: scale(0.9);
+        }}
+      }}
+      .status-dot {{
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        background-color: #faad14;
+        border-radius: 50%;
+        margin-right: 8px;
+        vertical-align: middle;
+        animation: status-pulse 1.8s infinite ease-in-out;
+      }}
+      .status-msg {{
+        vertical-align: middle;
+        font-weight: 600;
       }}
     </style>
   </head>
@@ -222,11 +261,29 @@ def build_missing_webview2_html() -> str:
       </div>
       <hr />
       <ol>
-        <li>Chiudi El Sbobinator.</li>
-        <li>Installa WebView2 Runtime.</li>
-        <li>Riapri l&apos;app.</li>
+        <li>Clicca su <strong>Scarica WebView2 Runtime</strong> per scaricare l&apos;installer.</li>
+        <li>Avvia il file scaricato e completa l&apos;installazione.</li>
+        <li>El Sbobinator rileverà il completamento e si riavvierà automaticamente!</li>
       </ol>
+      <div id="status-box" class="status-box">
+        <span id="status-dot" class="status-dot"></span>
+        <span id="status-msg" class="status-msg">Verifica dello stato di WebView2 in corso...</span>
+      </div>
     </div>
+    <script>
+      setTimeout(function() {{
+        var box = document.getElementById('status-box');
+        var dot = document.getElementById('status-dot');
+        var msg = document.getElementById('status-msg');
+        if (box && dot && msg) {{
+          box.style.background = '#fffbe6';
+          box.style.borderColor = '#ffe58f';
+          box.style.color = '#d46b08';
+          dot.style.backgroundColor = '#faad14';
+          msg.innerHTML = 'In attesa dell&apos;installazione di WebView2...';
+        }}
+      }}, 500);
+    </script>
   </body>
 </html>
 """
@@ -283,32 +340,15 @@ def _boot_bg_color() -> str:
     return "#f3f4f6"  # light (default)
 
 
-def main():
-    from el_sbobinator.app_webview import ElSbobinatorApi
+def _clear_webview2_cache(storage_dir: str, dist_path: str) -> None:
+    """Auto cache-bust: clear WebView2 HTTP caches when a new build/version is detected.
 
-    api = ElSbobinatorApi()
-
-    # Intercept stdout/stderr to forward to React console
-    sys.stdout = _ConsoleTee(sys.__stdout__, api)
-    sys.stderr = _ConsoleTee(sys.__stderr__, api)
-
-    dist_path = get_dist_path()
-    webview2_available = has_webview2_runtime()
-
-    # Storage path for WebView2 profile cache (avoids re-init freeze)
-    storage_dir = os.path.join(
-        os.environ.get("LOCALAPPDATA", os.path.expanduser("~")),
-        "El Sbobinator",
-        "webview_cache",
-    )
-    os.makedirs(storage_dir, exist_ok=True)
-
-    # Auto cache-bust: clear WebView2 HTTP caches when a new build/version is detected.
-    # In onefile PyInstaller mode the extracted files get a new mtime on every launch
-    # (new _MEI temp folder), so we use the EXE's own mtime instead — stable until the
-    # user installs a new version.
-    # IMPORTANT: only delete Cache dirs, NOT the full EBWebView profile — doing so would
-    # destroy localStorage (queue, editor sessions) on every restart.
+    In onefile PyInstaller mode the extracted files get a new mtime on every launch
+    (new _MEI temp folder), so we use the EXE's own mtime instead — stable until the
+    user installs a new version.
+    IMPORTANT: only delete Cache dirs, NOT the full EBWebView profile — doing so would
+    destroy localStorage (queue, editor sessions) on every restart.
+    """
     try:
         import shutil
 
@@ -344,20 +384,108 @@ def main():
     except Exception:
         pass
 
-    # Center the window on screen
-    win_w, win_h = 900, 820
-    try:
-        if sys.platform == "win32":
+
+def _get_window_position(win_w: int, win_h: int) -> dict[str, Any]:
+    """Center the window on screen (Windows only; other platforms let pywebview center by default)."""
+    center_x: int | None = None
+    center_y: int | None = None
+    if sys.platform == "win32":
+        try:
             import ctypes
 
             scr_w = ctypes.windll.user32.GetSystemMetrics(0)
             scr_h = ctypes.windll.user32.GetSystemMetrics(1)
-        else:
-            scr_w, scr_h = 1920, 1080
-        center_x = max(0, (scr_w - win_w) // 2)
-        center_y = max(0, (scr_h - win_h) // 2)
-    except Exception:
-        center_x, center_y = 100, 50
+            center_x = max(0, (scr_w - win_w) // 2)
+            center_y = max(0, (scr_h - win_h) // 2)
+        except Exception:
+            center_x, center_y = 100, 50
+
+    if center_x is not None and center_y is not None:
+        return {"x": center_x, "y": center_y}
+    return {}
+
+
+def _start_webview2_monitor(window, stop_event: threading.Event) -> None:
+    """Start a background thread to poll for WebView2 installation when missing."""
+
+    def _check_webview2_installation():
+        import os
+        import subprocess
+        import sys
+
+        while not stop_event.is_set():
+            if stop_event.wait(1.5):
+                break
+
+            if has_webview2_runtime():
+                print("[*] WebView2 Runtime rilevato! Eseguo il riavvio...")
+                js_code = """
+                var box = document.getElementById('status-box');
+                var dot = document.getElementById('status-dot');
+                var msg = document.getElementById('status-msg');
+                if (box && dot && msg) {
+                    box.style.background = '#f6ffed';
+                    box.style.borderColor = '#b7eb8f';
+                    box.style.color = '#389e0d';
+                    dot.style.backgroundColor = '#52c41a';
+                    msg.innerHTML = 'Rilevato! Riavvio dell\\'app in corso...';
+                }
+                """
+                try:
+                    window.evaluate_js(js_code)
+                except Exception:
+                    pass
+
+                stop_event.wait(2.0)
+                if stop_event.is_set():
+                    return
+
+                if getattr(sys, "frozen", False):
+                    args = [sys.executable, *sys.argv[1:]]
+                else:
+                    args = [sys.executable, *sys.argv] if sys.argv else [sys.executable]
+
+                try:
+                    subprocess.Popen(args)
+                except Exception as e:
+                    print(f"[!] Errore nel riavvio automatico: {e}")
+
+                try:
+                    window.destroy()
+                except Exception:
+                    pass
+                os._exit(0)
+
+    t = threading.Thread(target=_check_webview2_installation, daemon=True)
+    t.start()
+
+
+def main():
+    from el_sbobinator.app_webview import ElSbobinatorApi
+
+    api = ElSbobinatorApi()
+
+    # Intercept stdout/stderr to forward to React console
+    sys.stdout = _ConsoleTee(sys.__stdout__, api)
+    sys.stderr = _ConsoleTee(sys.__stderr__, api)
+
+    dist_path = get_dist_path()
+    webview2_available = has_webview2_runtime()
+
+    # Storage path for WebView2 profile cache (avoids re-init freeze)
+    storage_dir = os.path.join(
+        os.environ.get("LOCALAPPDATA", os.path.expanduser("~")),
+        "El Sbobinator",
+        "webview_cache",
+    )
+    os.makedirs(storage_dir, exist_ok=True)
+
+    _clear_webview2_cache(storage_dir, dist_path)
+
+    win_w, win_h = 900, 820
+    _pos_kwargs = _get_window_position(win_w, win_h)
+
+    stop_event: threading.Event | None = None
 
     if webview2_available:
         window = webview.create_window(
@@ -366,8 +494,7 @@ def main():
             js_api=api,
             width=win_w,
             height=win_h,
-            x=center_x,
-            y=center_y,
+            **_pos_kwargs,
             min_size=(750, 620),
             background_color=_boot_bg_color(),
         )
@@ -380,14 +507,19 @@ def main():
             html=build_missing_webview2_html(),
             width=win_w,
             height=win_h,
-            x=center_x,
-            y=center_y,
+            **_pos_kwargs,
             min_size=(750, 620),
             background_color=_boot_bg_color(),
         )
+
+        stop_event = threading.Event()
+        _start_webview2_monitor(window, stop_event)
+
     api.set_window(window)
 
     def _on_closing():
+        if stop_event is not None:
+            stop_event.set()
         LocalMediaServer.shutdown_all()
 
     window.events.closing += _on_closing
@@ -402,6 +534,7 @@ def main():
     webview.start(
         private_mode=False,
         storage_path=storage_dir,
+        debug=False,
     )
 
 

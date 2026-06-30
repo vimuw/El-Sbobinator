@@ -3,10 +3,18 @@ import type { ArchiveSession } from './bridge';
 
 type ArchiveLookup = {
   byPath: Map<string, ArchiveSession[]>;
+  byMeta: Map<string, ArchiveSession[]>;
 };
 
 function normalizeKey(value?: string): string {
   return String(value ?? '').trim().toLowerCase();
+}
+
+function archiveMetaKey(session: ArchiveSession): string | null {
+  const size = Number(session.input_size ?? 0);
+  const dur = Math.round(Number(session.duration_sec ?? 0));
+  if (size <= 0 || dur <= 0) return null;
+  return `${normalizeKey(session.name)}::${size}::${dur}`;
 }
 
 export function filterArchiveSessionsByInputPath(
@@ -31,25 +39,44 @@ export function filterArchiveSessionsByInputPath(
 
 export function buildArchiveLookup(archiveSessions: ArchiveSession[]): ArchiveLookup {
   const byPath = new Map<string, ArchiveSession[]>();
+  const byMeta = new Map<string, ArchiveSession[]>();
 
   for (const session of archiveSessions) {
     const normalizedPath = normalizeKey(session.input_path);
-    if (!normalizedPath) continue;
+    if (normalizedPath) {
+      const pathBucket = byPath.get(normalizedPath);
+      if (pathBucket) pathBucket.push(session);
+      else byPath.set(normalizedPath, [session]);
+    }
 
-    const pathBucket = byPath.get(normalizedPath);
-    if (pathBucket) pathBucket.push(session);
-    else byPath.set(normalizedPath, [session]);
+    const mk = archiveMetaKey(session);
+    if (mk) {
+      const metaBucket = byMeta.get(mk);
+      if (metaBucket) metaBucket.push(session);
+      else byMeta.set(mk, [session]);
+    }
   }
 
-  return { byPath };
+  return { byPath, byMeta };
 }
 
 export function getArchiveMatchesForFile(
-  file: Pick<FileItem, 'name' | 'path'>,
+  file: Pick<FileItem, 'name' | 'path' | 'size' | 'duration'>,
   archiveLookup: ArchiveLookup,
 ): ArchiveSession[] {
   const normalizedPath = normalizeKey(file.path);
-  return normalizedPath
-    ? filterArchiveSessionsByInputPath(normalizedPath, archiveLookup.byPath.get(normalizedPath) ?? [])
-    : [];
+  if (normalizedPath) {
+    const pathMatches = filterArchiveSessionsByInputPath(normalizedPath, archiveLookup.byPath.get(normalizedPath) ?? []);
+    if (pathMatches.length > 0) return pathMatches;
+  }
+
+  const size = Number(file.size ?? 0);
+  const dur = Math.round(Number(file.duration ?? 0));
+  if (size > 0 && dur > 0) {
+    const mk = `${normalizeKey(file.name)}::${size}::${dur}`;
+    const metaMatches = archiveLookup.byMeta.get(mk);
+    if (metaMatches && metaMatches.length > 0) return metaMatches;
+  }
+
+  return [];
 }

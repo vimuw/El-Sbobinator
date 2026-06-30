@@ -43,7 +43,7 @@ describe('SettingsModal — diagnostica chunk display', () => {
   it('shows default_chunk_minutes from availableModels registry for the primary model', async () => {
     const models = [
       { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash (Preview)', summary: '', default_chunk_minutes: 15 },
-      { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', summary: '', default_chunk_minutes: 10 },
+      { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite (Preview)', summary: '', default_chunk_minutes: 10 },
     ];
     const { rerender } = render(
       <SettingsModal {...makeProps()} availableModels={models} preferredModel="gemini-3-flash-preview" />,
@@ -53,7 +53,7 @@ describe('SettingsModal — diagnostica chunk display', () => {
     });
     expect(screen.getByText('15 min')).toBeDefined();
 
-    rerender(<SettingsModal {...makeProps()} availableModels={models} preferredModel="gemini-2.5-flash-lite" />);
+    rerender(<SettingsModal {...makeProps()} availableModels={models} preferredModel="gemini-3.1-flash-lite-preview" />);
     expect(screen.getByText('10 min')).toBeDefined();
   });
 });
@@ -105,6 +105,23 @@ describe('SettingsModal — save behavior', () => {
 
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/non disponibile/i)).toBeNull();
+  });
+
+  it('successful save: refreshes settings before closing', async () => {
+    const mockSave = vi.fn().mockResolvedValue({ ok: true });
+    setPywebview({ save_settings: mockSave });
+    const onClose = vi.fn();
+    const onSettingsSaved = vi.fn().mockResolvedValue(undefined);
+
+    render(<SettingsModal {...makeProps()} onClose={onClose} onSettingsSaved={onSettingsSaved} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Salva e Chiudi'));
+    });
+
+    expect(onSettingsSaved).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onSettingsSaved.mock.invocationCallOrder[0]).toBeLessThan(onClose.mock.invocationCallOrder[0]);
   });
 
   it('double-click: save_settings called only once, onClose called only once', async () => {
@@ -200,10 +217,11 @@ describe('SettingsModal — session info race condition', () => {
 });
 
 describe('SettingsModal — main-section interactions', () => {
-  it('toggles showApiKeys on show/hide button click', async () => {
+  it('toggles showPrimaryKey on show/hide button click without affecting fallback keys', async () => {
     render(<SettingsModal {...makeProps()} />);
     fireEvent.click(screen.getByTitle('Mostra chiave'));
     expect(screen.getByTitle('Nascondi chiave')).toBeTruthy();
+    expect(screen.getByTitle('Mostra chiavi')).toBeTruthy();
   });
 
   it('calls setApiKey when API key input changes', async () => {
@@ -229,10 +247,11 @@ describe('SettingsModal — main-section interactions', () => {
     expect(localStorage.getItem('notifications_enabled')).toBeTruthy();
   });
 
-  it('toggles fallback keys show/hide on Mostra chiavi click', async () => {
+  it('toggles showFallbackKeys on Mostra chiavi click without affecting primary key', async () => {
     render(<SettingsModal {...makeProps()} />);
     fireEvent.click(screen.getByTitle('Mostra chiavi'));
     expect(screen.getByTitle('Nascondi chiavi')).toBeTruthy();
+    expect(screen.getByTitle('Mostra chiave')).toBeTruthy();
   });
 
   it('calls open_url when aistudio link is clicked', async () => {
@@ -256,19 +275,57 @@ describe('SettingsModal — session folder and cleanup', () => {
     expect(openFolder).toHaveBeenCalledTimes(1);
   });
 
-  it('calls cleanup_old_sessions when Pulisci button clicked and shows result', async () => {
-    const cleanupFn = vi.fn().mockResolvedValue({ ok: true, removed: 3, freed_bytes: 1024 });
+  it('calls cleanup_old_sessions for incomplete cleanup and shows result', async () => {
+    const cleanupFn = vi.fn()
+      .mockResolvedValueOnce({ ok: true, removed: 0, candidates: 3, freed_bytes: 1024, preserved_completed: 2 })
+      .mockResolvedValueOnce({ ok: true, removed: 3, candidates: 3, freed_bytes: 1024, preserved_completed: 2 });
     setPywebview({ cleanup_old_sessions: cleanupFn });
     render(<SettingsModal {...makeProps()} />);
     await act(async () => {
       fireEvent.click(screen.getByText('Avanzati').closest('button')!);
     });
     await act(async () => {
-      fireEvent.click(screen.getByText(/Pulisci/));
+      fireEvent.click(screen.getByTitle(/Conta ed elimina elaborazioni incomplete/));
+    });
+    expect(await screen.findByText(/Sbobine interessate: 3/)).toBeTruthy();
+    expect(cleanupFn).toHaveBeenCalledTimes(1);
+    expect(cleanupFn).toHaveBeenCalledWith(30, true);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Elimina incomplete'));
     });
     await vi.waitFor(() =>
       expect(screen.getByText(/Rimoss/)).toBeTruthy(),
     );
+    expect(screen.getByText(/sbobine completate preservate/)).toBeTruthy();
+    expect(cleanupFn).toHaveBeenCalledTimes(2);
+    expect(cleanupFn).toHaveBeenLastCalledWith(30, false);
+  });
+
+  it('counts completed notes before dangerous cleanup and deletes only after confirmation', async () => {
+    const cleanupCompletedFn = vi.fn()
+      .mockResolvedValueOnce({ ok: true, removed: 0, candidates: 4, freed_bytes: 2048 })
+      .mockResolvedValueOnce({ ok: true, removed: 4, candidates: 4, freed_bytes: 2048 });
+    setPywebview({ cleanup_completed_sessions: cleanupCompletedFn });
+    render(<SettingsModal {...makeProps()} />);
+    await act(async () => {
+      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTitle(/Conta ed elimina sbobine completate/));
+    });
+    expect(await screen.findByText(/Sbobine interessate: 4/)).toBeTruthy();
+    expect(cleanupCompletedFn).toHaveBeenCalledTimes(1);
+    expect(cleanupCompletedFn).toHaveBeenCalledWith(30, true);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Elimina sbobine completate'));
+    });
+    await vi.waitFor(() =>
+      expect(screen.getByText(/Eliminate 4 sbobine completate/)).toBeTruthy(),
+    );
+    expect(cleanupCompletedFn).toHaveBeenCalledTimes(2);
+    expect(cleanupCompletedFn).toHaveBeenLastCalledWith(30, false);
   });
 });
 
@@ -276,27 +333,27 @@ describe('SettingsModal — fallback models list', () => {
   it('renders fallback model card when fallbackModels is populated', async () => {
     const models = [
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast and capable', default_chunk_minutes: 12 },
-      { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', summary: 'Lightweight', default_chunk_minutes: 10 },
+      { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite (Preview)', summary: 'Lightweight', default_chunk_minutes: 10 },
     ];
     render(
       <SettingsModal
         {...makeProps()}
         availableModels={models}
         preferredModel="gemini-2.5-flash"
-        fallbackModels={['gemini-2.5-flash-lite']}
+        fallbackModels={['gemini-3.1-flash-lite-preview']}
       />,
     );
     await act(async () => {
       fireEvent.click(screen.getByText('Avanzati').closest('button')!);
     });
-    expect(screen.getAllByText('Gemini 2.5 Flash-Lite').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Gemini 3.1 Flash Lite (Preview)').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Lightweight').length).toBeGreaterThan(0);
   });
 
   it('calls setFallbackModels when remove fallback button is clicked', async () => {
     const models = [
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast', default_chunk_minutes: 12 },
-      { id: 'gemini-2.5-flash-lite', label: 'Lite', summary: 'Light', default_chunk_minutes: 10 },
+      { id: 'gemini-3.1-flash-lite-preview', label: 'Lite', summary: 'Light', default_chunk_minutes: 10 },
     ];
     const setFallbackModels = vi.fn();
     render(
@@ -304,7 +361,7 @@ describe('SettingsModal — fallback models list', () => {
         {...makeProps()}
         availableModels={models}
         preferredModel="gemini-2.5-flash"
-        fallbackModels={['gemini-2.5-flash-lite']}
+        fallbackModels={['gemini-3.1-flash-lite-preview']}
         setFallbackModels={setFallbackModels}
       />,
     );
@@ -318,7 +375,7 @@ describe('SettingsModal — fallback models list', () => {
   it('calls setFallbackModels when move-down button clicked (with 2 fallbacks)', async () => {
     const models = [
       { id: 'gemini-2.5-flash', label: 'Flash', summary: 'F', default_chunk_minutes: 12 },
-      { id: 'gemini-2.5-flash-lite', label: 'Lite', summary: 'L', default_chunk_minutes: 10 },
+      { id: 'gemini-3.1-flash-lite-preview', label: 'Lite', summary: 'L', default_chunk_minutes: 10 },
       { id: 'gemini-2.5-pro', label: 'Pro', summary: 'P', default_chunk_minutes: 20 },
     ];
     const setFallbackModels = vi.fn();
@@ -327,7 +384,7 @@ describe('SettingsModal — fallback models list', () => {
         {...makeProps()}
         availableModels={models}
         preferredModel="gemini-2.5-flash"
-        fallbackModels={['gemini-2.5-flash-lite', 'gemini-2.5-pro']}
+        fallbackModels={['gemini-3.1-flash-lite-preview', 'gemini-2.5-pro']}
         setFallbackModels={setFallbackModels}
       />,
     );
@@ -356,6 +413,46 @@ describe('SettingsModal — version status display', () => {
     render(<SettingsModal {...makeProps()} checkFailed={false} latestVersion={null} hasChecked={true} isCheckingUpdate={true} />);
     expect(screen.queryByText(/Sei aggiornato/)).toBeNull();
     expect(screen.queryByText(/non riuscita/i)).toBeNull();
+  });
+
+  it('shows shared async install error with GitHub fallback action', () => {
+    const openUrl = vi.fn();
+    setPywebview({ open_url: openUrl });
+    render(
+      <SettingsModal
+        {...makeProps()}
+        latestVersion="v2.0.0"
+        updateInstallState={{
+          version: 'v2.0.0',
+          status: 'error',
+          bytesDone: 0,
+          bytesTotal: 0,
+          error: 'Verifica integrità fallita: il file scaricato non corrisponde al checksum atteso.',
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/Verifica integrità fallita/i)).toBeTruthy();
+    fireEvent.click(screen.getByText('Apri GitHub'));
+    expect(openUrl).toHaveBeenCalledWith('https://github.com/vimuw/El-Sbobinator/releases/latest');
+  });
+
+  it('shows shared async install success state', () => {
+    render(
+      <SettingsModal
+        {...makeProps()}
+        latestVersion="v2.0.0"
+        updateInstallState={{
+          version: 'v2.0.0',
+          status: 'done',
+          bytesDone: 10,
+          bytesTotal: 10,
+          error: null,
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/Installer avviato/i)).toBeTruthy();
   });
 });
 
@@ -386,7 +483,7 @@ describe('SettingsModal — validate environment', () => {
       fireEvent.click(screen.getByText('Avanzati').closest('button')!);
     });
     await act(async () => {
-      fireEvent.click(screen.getByText('Verifica ambiente'));
+      fireEvent.click(screen.getByTitle('Verifica ambiente'));
     });
     await vi.waitFor(() => expect(screen.getByText('Ambiente OK')).toBeTruthy());
     expect(screen.getByText('ffmpeg')).toBeTruthy();

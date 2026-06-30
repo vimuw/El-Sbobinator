@@ -17,6 +17,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   checks:
     name: Lint and Test
@@ -79,6 +82,37 @@ jobs:
 
       - name: Run Checks
         run: python scripts/build_release.py check --skip-webui
+
+  audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install pip-audit
+        run: pip install pip-audit==2.9.0
+
+      - name: Audit Python dependencies
+        continue-on-error: true
+        run: pip-audit -r requirements/requirements.lock
+
+      - name: Audit npm dependencies
+        continue-on-error: true
+        working-directory: webui
+        run: npm audit --audit-level=high --omit=dev --package-lock-only
 
   build:
     needs: [checks, checks-windows]
@@ -161,14 +195,18 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: dist/El-Sbobinator-Setup-v*.exe
+          path: |
+            dist/El-Sbobinator-Setup-v*.exe
+            dist/El-Sbobinator-Setup-v*.exe.sha256
 
       - name: Upload Build Artifacts (macOS)
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: dist/El-Sbobinator-v*.dmg
+          path: |
+            dist/El-Sbobinator-v*.dmg
+            dist/El-Sbobinator-v*.dmg.sha256
 
   release:
     name: Create GitHub Release
@@ -185,7 +223,9 @@ jobs:
         run: |
           mkdir release_assets
           find output_files -name "El-Sbobinator-Setup-v*.exe" -exec mv {} release_assets/ \; || echo "Win build not found"
+          find output_files -name "El-Sbobinator-Setup-v*.exe.sha256" -exec mv {} release_assets/ \; || echo "Win checksum not found"
           find output_files -name "El-Sbobinator-v*.dmg" -exec mv {} release_assets/ \; || echo "Mac build not found"
+          find output_files -name "El-Sbobinator-v*.dmg.sha256" -exec mv {} release_assets/ \; || echo "Mac checksum not found"
 
       - name: Publish Release to GitHub
         uses: softprops/action-gh-release@v2

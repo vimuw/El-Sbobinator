@@ -1,11 +1,8 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AlertTriangle, Loader2, Moon, Settings, Sun, Terminal, X, Zap } from 'lucide-react';
 import type { AppStatus } from '../appState';
 import { GITHUB_RELEASES_URL } from '../branding';
-
-const CONFETTI_COLORS = ['#FF6B6B', '#FFD93D', '#6BCB77', '#4D96FF', '#FF922B', '#CC5DE8', '#FF8FAB'];
-type ConfettiParticle = { id: number; color: string; angle: number; distance: number; size: number; round: boolean };
 
 interface AppHeaderProps {
   apiReady: boolean;
@@ -35,10 +32,6 @@ export function AppHeader({
     const ts = localStorage.getItem('peakBannerDismissedUntil');
     return ts ? Date.now() < Number(ts) : false;
   });
-  const [confettiParticles, setConfettiParticles] = useState<ConfettiParticle[]>([]);
-  const confettiIdRef = useRef(0);
-  const lastConfettiRef = useRef(0);
-
   useEffect(() => {
     const check = () => {
       const h = new Date().getHours();
@@ -55,59 +48,15 @@ export function AppHeader({
     }
   }, [isPeakHour]);
 
-  const fireConfetti = useCallback(() => {
-    const now = Date.now();
-    if (now - lastConfettiRef.current < 350) return;
-    lastConfettiRef.current = now;
-    const particles: ConfettiParticle[] = Array.from({ length: 14 }, () => ({
-      id: confettiIdRef.current++,
-      color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
-      angle: Math.random() * 360,
-      distance: 28 + Math.random() * 34,
-      size: 3 + Math.floor(Math.random() * 4),
-      round: Math.random() > 0.45,
-    }));
-    setConfettiParticles(prev => [...prev, ...particles]);
-    setTimeout(() => {
-      setConfettiParticles(prev => prev.filter(p => !particles.some(pp => pp.id === p.id)));
-    }, 850);
-  }, []);
-
   const titleGradient = { background: 'linear-gradient(90deg, var(--gradient-title-from), var(--gradient-title-to))', WebkitBackgroundClip: 'text' as const, WebkitTextFillColor: 'transparent' };
 
   return (
     <>
       <header className="sticky top-0 z-40 backdrop-blur-2xl" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--header-bg)' }}>
-        <div className="max-w-3xl mx-auto px-5 sm:px-6 min-h-[84px] flex items-center justify-between gap-4">
+        <div className="max-w-3xl mx-auto px-5 sm:px-6 min-h-[76px] flex items-center justify-between gap-4">
           <div className="flex items-center gap-1">
-            <div style={{ position: 'relative', display: 'inline-block' }} onMouseEnter={fireConfetti}>
+            <div style={{ position: 'relative', display: 'inline-block' }}>
               <img src="./icon.png" alt="El Sbobinator" className="app-logo" draggable={false} />
-              {confettiParticles.map(p => {
-                const rad = (p.angle * Math.PI) / 180;
-                const tx = Math.cos(rad) * p.distance;
-                const ty = Math.sin(rad) * p.distance - 8;
-                return (
-                  <motion.span
-                    key={p.id}
-                    initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
-                    animate={{ x: tx, y: ty, opacity: 0, scale: 0.4 }}
-                    transition={{ duration: 0.7, ease: 'easeOut' }}
-                    style={{
-                      position: 'absolute',
-                      top: '50%',
-                      left: '50%',
-                      marginLeft: -p.size / 2,
-                      marginTop: -p.size / 2,
-                      width: p.size,
-                      height: p.size,
-                      borderRadius: p.round ? '50%' : '2px',
-                      background: p.color,
-                      pointerEvents: 'none',
-                      zIndex: 50,
-                    }}
-                  />
-                );
-              })}
             </div>
             <h1 className="brand-mark text-[1.45rem] sm:text-[1.75rem] font-semibold flex items-baseline tracking-tight leading-none overflow-visible py-1">
               <span style={titleGradient}>El&nbsp;</span>
@@ -134,6 +83,7 @@ export function AppHeader({
               color: !apiReady ? (bridgeDelayed ? 'var(--error-text)' : 'var(--warning-text)') : !hasApiKey ? 'var(--text-secondary)' : !isApiKeyValid ? 'var(--warning-text)' : 'var(--success-text)',
               borderColor: !apiReady ? (bridgeDelayed ? 'var(--error-ring)' : 'var(--warning-ring)') : !hasApiKey ? 'var(--border-default)' : !isApiKeyValid ? 'var(--warning-ring)' : 'var(--success-ring)',
               background: !apiReady ? (bridgeDelayed ? 'var(--error-subtle)' : 'var(--warning-subtle)') : !hasApiKey ? 'rgba(255,255,255,0.02)' : !isApiKeyValid ? 'var(--warning-subtle)' : 'var(--success-subtle)',
+              boxShadow: 'none',
             }}>
               <span className={`inline-flex h-2.5 w-2.5 rounded-full ${appState === 'processing' ? 'animate-pulse' : ''}`} style={{ background: !apiReady ? (bridgeDelayed ? 'var(--error-bg)' : 'var(--warning-bg)') : !hasApiKey ? 'var(--text-faint)' : !isApiKeyValid ? 'var(--warning-bg)' : 'var(--success-bg)' }} />
               {!apiReady ? (bridgeDelayed ? 'Bridge in ritardo' : 'Bridge in avvio') : !hasApiKey ? 'Configura API' : !isApiKeyValid ? 'Chiave non valida' : 'API pronta'}
@@ -152,9 +102,11 @@ export function AppHeader({
                 setShowConsole(next);
                 localStorage.setItem('show_console', String(next));
               }}
+              disabled={!hasApiKey || !isApiKeyValid}
               className={`icon-button icon-btn-console${showConsole ? ' icon-button--active' : ''}`}
-              title={showConsole ? 'Nascondi console' : 'Mostra console'}
+              title={(!hasApiKey || !isApiKeyValid) ? 'Console non disponibile' : (showConsole ? 'Nascondi console' : 'Mostra console')}
               aria-label={showConsole ? 'Nascondi console' : 'Mostra console'}
+              style={(!hasApiKey || !isApiKeyValid) ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
             >
               <Terminal className="w-5 h-5" />
             </button>
@@ -246,7 +198,11 @@ export function AppHeader({
                       try {
                         const result = await window.pywebview?.api?.download_and_install_update?.(updateAvailable!);
                         if (!result?.ok) {
-                          setUpdateError(result?.error ?? 'Download fallito');
+                          setUpdateError(
+                            result?.error === 'permission_denied'
+                              ? 'Permesso negato per /Applications — scarica il DMG da GitHub e trascina l\'app in /Applications con Finder.'
+                              : (result?.error ?? 'Download fallito')
+                          );
                           setIsUpdating(false);
                           window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL);
                         } else {
@@ -276,9 +232,9 @@ export function AppHeader({
                 </div>
               </div>
               {updateError && (
-                <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-error, #ef4444)' }}>
+                <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--error-text, #ef4444)' }}>
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                  <span>{updateError} — si è aperta la pagina GitHub per scaricare manualmente.</span>
+                  <span>{updateError}{updateError?.startsWith('Permesso') ? '' : ' — si è aperta la pagina GitHub per scaricare manualmente.'}</span>
                 </div>
               )}
             </div>

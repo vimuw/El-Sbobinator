@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Keyboard, Pause, Play, RotateCcw, SkipBack, SkipForward, Volume2 } from 'lucide-react';
+import { Keyboard, Link, Pause, Play, RotateCcw, SkipBack, SkipForward, Volume2 } from 'lucide-react';
 
 interface AudioPlayerProps {
   src: string;
@@ -7,6 +7,7 @@ interface AudioPlayerProps {
   initialPlaybackRate?: number;
   initialVolume?: number;
   onStateChange?: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
+  onRelink?: () => Promise<boolean | undefined>;
 }
 
 const PLAYBACK_RATES = [1, 1.25, 1.5, 1.75, 2, 2.5, 3];
@@ -26,7 +27,7 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
   return role !== null && INTERACTIVE_ARIA_ROLES.has(role);
 };
 
-export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolume, onStateChange }: AudioPlayerProps) {
+export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolume, onStateChange, onRelink }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -34,6 +35,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
   const [playbackRate, setPlaybackRate] = useState(initialPlaybackRate ?? 1);
   const [volume, setVolume] = useState(initialVolume ?? 1);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [isRelinking, setIsRelinking] = useState(false);
   const shortcutsRef = useRef<HTMLDivElement>(null);
   const pendingInitialTimeRef = useRef<number | null>(initialTime ?? null);
   const playbackRateRef = useRef(initialPlaybackRate ?? 1);
@@ -168,6 +170,8 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
 
   const handleLoadedMetadata = () => {
     if (!audioRef.current) return;
+    audioRef.current.playbackRate = playbackRate;
+    audioRef.current.volume = volume;
     if (isFinite(audioRef.current.duration)) {
       setDuration(audioRef.current.duration);
     }
@@ -198,6 +202,18 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
     const min = Math.floor(time / 60);
     const sec = Math.floor(time % 60);
     return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+  };
+
+  const handleRelink = async () => {
+    if (isRelinking) return;
+    setIsRelinking(true);
+    try {
+      await onRelink?.();
+    } catch (e) {
+      console.error('Failed to relink audio:', e);
+    } finally {
+      setIsRelinking(false);
+    }
   };
 
   return (
@@ -317,6 +333,18 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
             </div>
           )}
         </div>
+        {onRelink && (
+          <button
+            type="button"
+            onClick={handleRelink}
+            disabled={isRelinking}
+            className="player-control"
+            aria-label="Cambia audio collegato"
+            title="Cambia audio collegato"
+          >
+            <Link className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
     </div>
   );

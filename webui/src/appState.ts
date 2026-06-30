@@ -1,3 +1,5 @@
+import { normalizeSessionPath } from './utils';
+
 export type FileItem = {
   id: string;
   name: string;
@@ -8,7 +10,7 @@ export type FileItem = {
   phase: number;
   phaseText?: string;
   errorText?: string;
-  eta?: string;
+  errorDetail?: string;
   path?: string;
   outputHtml?: string;
   outputDir?: string;
@@ -17,7 +19,13 @@ export type FileItem = {
   primaryModel?: string;
   effectiveModel?: string;
   resumeSession?: boolean;
+  allowCompletedDestroy?: boolean;
+  completionStatus?: 'completed' | 'completed_with_warnings';
+  revisionFailedBlocks?: number[];
+  isRetryingBlocks?: boolean;
 };
+
+
 
 export function getPendingFiles(files: FileItem[]): FileItem[] {
   return files.filter(f => f.status !== 'done');
@@ -36,6 +44,7 @@ export type FileDescriptor = {
   size: number;
   duration?: number;
   resume_session?: boolean;
+  allow_completed_destroy?: boolean;
 };
 
 export type AppStatus = 'idle' | 'processing' | 'canceling';
@@ -43,13 +52,15 @@ export type AppStatus = 'idle' | 'processing' | 'canceling';
 export type ProcessDonePayload = {
   cancelled?: boolean;
   completed?: number;
+  completed_with_warnings?: number;
   failed?: number;
   total?: number;
+  quota_exhausted?: boolean;
 };
 
 export function isSuccessfulProcessDone(data?: ProcessDonePayload | null): boolean {
   if (!data || data.cancelled) return false;
-  return Number(data.completed ?? 0) > 0 && Number(data.failed ?? 0) === 0;
+  return Number(data.completed ?? 0) > 0 && Number(data.completed_with_warnings ?? 0) === 0 && Number(data.failed ?? 0) === 0;
 }
 
 export type SetCurrentFilePayload = {
@@ -65,12 +76,15 @@ export type FileDonePayload = {
   output_dir: string;
   primary_model?: string;
   effective_model?: string;
+  completion_status?: 'completed' | 'completed_with_warnings';
+  revision_failed_blocks?: number[];
 };
 
 export type FileFailedPayload = {
   index: number;
   id: string;
   error: string;
+  error_detail?: string;
 };
 
 export type WorkTotalsPayload = {
@@ -84,18 +98,6 @@ export type WorkDonePayload = {
   total?: number | null;
 };
 
-export type StepTimePayload = {
-  kind: 'chunks' | 'macro';
-  seconds: number;
-  done?: number | null;
-  total?: number | null;
-};
-
-export type StepMetricEntry = {
-  avgSeconds: number;
-  done: number;
-  total: number;
-};
 
 export type ProcessingState = {
   files: FileItem[];
@@ -114,20 +116,18 @@ export type ProcessingState = {
     chunks: number;
     macro: number;
   };
-  stepMetrics: {
-    chunks: StepMetricEntry | null;
-    macro: StepMetricEntry | null;
-  };
 };
 
 export type ProcessingAction =
   | { type: 'queue/add'; files: FileItem[] }
   | { type: 'queue/remove'; id: string }
   | { type: 'queue/reorder'; fromIndex: number; toIndex: number }
-  | { type: 'queue/update_source'; id: string; path?: string; name?: string; size?: number; duration?: number }
+  | { type: 'queue/update_source'; id?: string; sessionDir?: string; path?: string; name?: string; size?: number; duration?: number }
   | { type: 'queue/clear_completed' }
   | { type: 'queue/retry_failed' }
   | { type: 'queue/retry_one'; id: string }
+  | { type: 'queue/update_revision_failed_blocks'; fileId?: string; sessionDir: string; blocks: number[]; htmlPath?: string; effectiveModel?: string }
+  | { type: 'queue/set_retrying_blocks'; id: string; value: boolean }
   | { type: 'queue/clear_all' }
   | { type: 'app/set_status'; status: AppStatus }
   | { type: 'bridge/update_progress'; value: number }
@@ -136,7 +136,6 @@ export type ProcessingAction =
   | { type: 'bridge/process_done'; data: ProcessDonePayload }
   | { type: 'bridge/set_work_totals'; data: WorkTotalsPayload }
   | { type: 'bridge/update_work_done'; data: WorkDonePayload }
-  | { type: 'bridge/register_step_time'; data: StepTimePayload }
   | { type: 'bridge/set_current_file'; data: SetCurrentFilePayload }
   | { type: 'bridge/file_done'; data: FileDonePayload }
   | { type: 'bridge/file_failed'; data: FileFailedPayload };
@@ -152,7 +151,6 @@ export const initialProcessingState: ProcessingState = {
   currentBatchTotal: 0,
   workTotals: { chunks: 0, macro: 0 },
   workDone: { chunks: 0, macro: 0 },
-  stepMetrics: { chunks: null, macro: null },
 };
 
 export function processingReducer(state: ProcessingState, action: ProcessingAction): ProcessingState {
@@ -176,7 +174,8 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         ...state,
         structuralVersion: state.structuralVersion + 1,
         files: state.files.map(file =>
-          file.id === action.id
+          (action.id ? file.id === action.id : false)
+          || (action.sessionDir ? normalizeSessionPath(file.outputDir) === normalizeSessionPath(action.sessionDir) : false)
             ? {
                 ...file,
                 path: action.path ?? file.path,
@@ -195,7 +194,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         structuralVersion: state.structuralVersion + 1,
         files: state.files.map(file =>
           file.status === 'error'
-            ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorText: undefined }
+            ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorText: undefined, errorDetail: undefined }
             : file,
         ),
       };
@@ -205,12 +204,48 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         structuralVersion: state.structuralVersion + 1,
         files: state.files.map(file =>
           file.id === action.id && file.status === 'error'
-            ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorText: undefined }
+            ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorDetail: undefined, errorText: undefined }
             : file,
         ),
       };
+    case 'queue/update_revision_failed_blocks': {
+      const targetDir = normalizeSessionPath(action.sessionDir);
+      const hasFileIdMatch = action.fileId
+        ? state.files.some(file => file.id === action.fileId)
+        : false;
+      let changed = false;
+      const files = state.files.map(file => {
+        const matches = hasFileIdMatch
+          ? file.id === action.fileId
+          : normalizeSessionPath(file.outputDir) === targetDir;
+        if (!matches) return file;
+        changed = true;
+        return {
+          ...file,
+          revisionFailedBlocks: action.blocks,
+          completionStatus: action.blocks.length > 0 ? ('completed_with_warnings' as const) : ('completed' as const),
+          outputHtml: action.htmlPath ?? file.outputHtml,
+          effectiveModel: action.effectiveModel ?? file.effectiveModel,
+        };
+      });
+      if (!changed) return state;
+      return { ...state, structuralVersion: state.structuralVersion + 1, files };
+    }
+    case 'queue/set_retrying_blocks': {
+      let changed = false;
+      const files = state.files.map(file => {
+        if (file.id !== action.id) return file;
+        changed = true;
+        return {
+          ...file,
+          isRetryingBlocks: action.value,
+        };
+      });
+      if (!changed) return state;
+      return { ...state, structuralVersion: state.structuralVersion + 1, files };
+    }
     case 'queue/clear_all':
-      return { ...state, structuralVersion: state.structuralVersion + 1, files: [] };
+      return { ...state, structuralVersion: state.structuralVersion + 1, files: state.files.filter(file => file.status === 'done') };
     case 'app/set_status':
       return { ...state, appState: action.status };
     case 'bridge/update_progress': {
@@ -236,11 +271,10 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         currentBatchTotal: 0,
         workTotals: action.data?.cancelled ? { chunks: 0, macro: 0 } : state.workTotals,
         workDone: action.data?.cancelled ? { chunks: 0, macro: 0 } : state.workDone,
-        stepMetrics: action.data?.cancelled ? { chunks: null, macro: null } : state.stepMetrics,
         files: action.data?.cancelled
           ? state.files.map(file =>
               file.status === 'processing'
-                ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined }
+                ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorText: undefined, errorDetail: undefined }
                 : file,
             )
           : state.files,
@@ -265,21 +299,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         },
       };
     }
-    case 'bridge/register_step_time': {
-      const { kind, seconds, done, total } = action.data;
-      const prev = state.stepMetrics[kind];
-      const doneVal = done ?? (prev ? prev.done + 1 : 1);
-      const totalVal = total ?? (prev?.total ?? 0);
-      const prevAvg = prev?.avgSeconds ?? seconds;
-      const newAvg = prev ? 0.4 * seconds + 0.6 * prevAvg : seconds;
-      return {
-        ...state,
-        stepMetrics: {
-          ...state.stepMetrics,
-          [kind]: { avgSeconds: newAvg, done: doneVal, total: totalVal },
-        },
-      };
-    }
+
     case 'bridge/set_current_file':
       return {
         ...state,
@@ -290,10 +310,9 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         activeProgress: 0,
         currentFileIndex: action.data.index,
         currentBatchTotal: action.data.total,
-        stepMetrics: { chunks: null, macro: null },
         files: state.files.map(file =>
           file.id === action.data.id
-            ? { ...file, status: 'processing', progress: 0, phase: 1, phaseText: undefined, errorText: undefined, startedAt: Date.now() }
+            ? { ...file, status: 'processing', progress: 0, phase: 1, phaseText: undefined, errorText: undefined, errorDetail: undefined, startedAt: Date.now() }
             : file,
         ),
       };
@@ -313,9 +332,12 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
                 outputDir: action.data.output_dir,
                 phaseText: undefined,
                 errorText: undefined,
+                errorDetail: undefined,
                 completedAt: Date.now(),
                 primaryModel: action.data.primary_model || undefined,
                 effectiveModel: action.data.effective_model || undefined,
+                completionStatus: action.data.completion_status || (Array.isArray(action.data.revision_failed_blocks) && action.data.revision_failed_blocks.length > 0 ? 'completed_with_warnings' : 'completed'),
+                revisionFailedBlocks: Array.isArray(action.data.revision_failed_blocks) ? action.data.revision_failed_blocks : [],
               }
             : file,
         ),
@@ -333,6 +355,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
                 phase: 0,
                 phaseText: 'Errore',
                 errorText: action.data.error || 'Elaborazione non completata.',
+                errorDetail: action.data.error_detail || undefined,
               }
             : file,
         ),
