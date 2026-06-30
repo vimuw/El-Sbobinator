@@ -17,6 +17,7 @@ from typing import Any
 import webview
 
 from el_sbobinator.core.media_server import LocalMediaServer
+from el_sbobinator.utils.logging_utils import redact_secrets
 
 # Suppress benign requests warning about chardet/charset_normalizer failing to import
 warnings.filterwarnings(
@@ -44,9 +45,9 @@ class _ConsoleTee:
             except Exception:
                 pass
         if text and text.strip():
-            line = text.rstrip()
+            line = redact_secrets(text.rstrip())
             if len(line) > _MAX_CONSOLE_LINE_LEN:
-                line = line[:_MAX_CONSOLE_LINE_LEN] + "… [troncato]"
+                line = line[:_MAX_CONSOLE_LINE_LEN] + "\u2026 [troncato]"
             self._api._push_console(line)
 
     def flush(self):
