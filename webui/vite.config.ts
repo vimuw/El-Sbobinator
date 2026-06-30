@@ -18,6 +18,7 @@ export default defineConfig({
     },
   },
   esbuild: {
+    // @ts-expect-error - Vite 8 esbuild options are stricter
     drop: ['console', 'debugger'],
   },
   build: {
