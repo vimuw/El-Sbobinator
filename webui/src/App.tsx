@@ -1103,6 +1103,7 @@ export default function App() {
   const handleDragLeave = useCallback(() => setIsDragging(false), []);
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(false);
     if (appStateRef.current !== 'idle') return;
     try {

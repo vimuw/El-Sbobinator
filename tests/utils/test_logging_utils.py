@@ -75,6 +75,12 @@ class RedactSecretsTests(unittest.TestCase):
         self.assertNotIn(aq_key, result)
         self.assertIn("[API_KEY_REDACTED]", result)
 
+    def test_handles_falsy_values_correctly(self):
+        self.assertEqual(redact_secrets(0), "0")
+        self.assertEqual(redact_secrets(False), "False")
+        self.assertEqual(redact_secrets(None), "")
+        self.assertEqual(redact_secrets(""), "")
+
 
 class ConfigureLoggingTests(unittest.TestCase):
     def setUp(self):

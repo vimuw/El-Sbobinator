@@ -28,7 +28,7 @@ _SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
 
 
 def redact_secrets(value: object, max_len: int | None = None) -> str:
-    text = str(value or "")
+    text = str(value) if value is not None else ""
     for pattern in _SECRET_PATTERNS:
         if pattern.groups >= 2:
             text = pattern.sub(
