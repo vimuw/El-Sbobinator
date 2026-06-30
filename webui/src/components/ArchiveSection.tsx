@@ -93,20 +93,19 @@ export function ArchiveSection({ sessions, onPreview, onOpenFile, onDeleteSessio
                 className="overflow-hidden"
               >
                 <div className="px-5 sm:px-6 pt-4 pb-2 flex items-center gap-2">
-                  <div className="relative flex-1 flex items-center">
-                    <Search className="absolute left-2.5 w-3.5 h-3.5 pointer-events-none" style={{ color: 'var(--text-faint)' }} />
+                  <div className="notion-search-wrap">
+                    <Search className="notion-search-icon w-3.5 h-3.5" />
                     <input
                       type="text"
                       value={archiveSearch}
                       onChange={e => setArchiveSearch(e.target.value)}
                       placeholder="Cerca per nome..."
-                      className="premium-button-secondary compact-button text-xs pr-3 py-1.5 rounded-[13px] outline-none w-full"
-                      style={{ borderColor: 'var(--border-default)', background: 'rgba(255,255,255,0.03)', color: 'var(--text-primary)', paddingLeft: '2rem' }}
+                      className="notion-search-input"
                     />
                   </div>
                   <button
                     onClick={() => setArchiveSort(s => s === 'newest' ? 'oldest' : 'newest')}
-                    className="premium-button-secondary compact-button text-xs px-2.5 py-1.5 rounded-[13px] flex items-center gap-1 shrink-0"
+                    className="premium-button-secondary compact-button text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 shrink-0"
                     style={{ color: 'var(--text-muted)', borderColor: 'var(--border-default)' }}
                     title={archiveSort === 'newest' ? 'Ordinate: più recenti prima' : 'Ordinate: più vecchie prima'}
                   >

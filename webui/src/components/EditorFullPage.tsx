@@ -1,6 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Check, Copy, ExternalLink, FileText } from 'lucide-react';
+import { ArrowLeft, Check, Copy, ExternalLink, FileText, Loader2 } from 'lucide-react';
 import type { Heading } from './RichTextEditor';
 import type { SaveHtmlResult } from '../bridge';
 import { nextHtmlAutosaveGeneration, seedHtmlAutosaveGeneration } from '../autosaveGeneration';
@@ -258,15 +258,7 @@ export function EditorFullPage({
     els[occurrencesBefore]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const autosaveBadgeColor =
-    autosaveStatus === 'error' ? 'var(--error-text)'
-    : autosaveStatus === 'saved' ? 'var(--success-text)'
-    : 'var(--text-muted)';
-  const autosaveBadgeText =
-    autosaveStatus === 'saving' ? 'Salvataggio...'
-    : autosaveStatus === 'saved' ? 'Salvato'
-    : autosaveStatus === 'error' ? 'Errore salvataggio'
-    : 'Salvataggio automatico';
+
 
   return (
     <AnimatePresence>
@@ -283,9 +275,9 @@ export function EditorFullPage({
               className="editor-fullpage-back"
               onClick={() => void flushAndClose()}
               title={autosaveStatus === 'error' ? 'Chiudi senza salvare' : 'Torna indietro'}
+              aria-label={autosaveStatus === 'error' ? 'Chiudi senza salvare' : 'Torna indietro'}
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>Indietro</span>
             </button>
 
             <div className="editor-fullpage-title">
@@ -294,9 +286,6 @@ export function EditorFullPage({
             </div>
 
             <div className="editor-fullpage-actions">
-              <span className="editor-autosave-badge" style={{ color: autosaveBadgeColor }}>
-                {autosaveBadgeText}
-              </span>
               {htmlPath && (
                 <button
                   onClick={() => window.pywebview?.api?.open_file?.(htmlPath)}
@@ -314,6 +303,35 @@ export function EditorFullPage({
               >
                 {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
               </button>
+              <span
+                className="editor-autosave-badge"
+                style={{
+                  color:
+                    autosaveStatus === 'error' ? 'var(--error-text)'
+                    : autosaveStatus === 'saved' ? 'var(--success-text)'
+                    : 'var(--text-muted)',
+                  borderColor:
+                    autosaveStatus === 'error' ? 'var(--error-ring)'
+                    : autosaveStatus === 'saved' ? 'var(--success-ring)'
+                    : 'var(--border-subtle)',
+                }}
+              >
+                {autosaveStatus === 'saving' ? (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin mr-1.5" />
+                    <span>Autosave</span>
+                  </>
+                ) : autosaveStatus === 'saved' ? (
+                  <>
+                    <Check className="w-3 h-3 mr-1.5" />
+                    <span>Salvato</span>
+                  </>
+                ) : autosaveStatus === 'error' ? (
+                  <span>Errore salvataggio</span>
+                ) : (
+                  <span>Autosave</span>
+                )}
+              </span>
             </div>
           </div>
 

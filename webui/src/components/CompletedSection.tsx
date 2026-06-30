@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle, Search } from 'lucide-react';
+import { CheckCircle, Search, Trash2 } from 'lucide-react';
 import type { AppStatus, FileItem } from '../appState';
 import type { ArchiveFolder } from '../bridge';
 import { CompletedFileCard } from './QueueFileCard';
@@ -48,25 +48,26 @@ export function CompletedSection({ doneFiles, appState, onRemove, onPreview, onO
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {doneFiles.length >= 5 && (
-                <div className="relative flex items-center">
-                  <Search className="absolute left-2.5 w-3.5 h-3.5 pointer-events-none" style={{ color: 'var(--text-faint)' }} />
+                <div className="notion-search-wrap" style={{ width: '140px' }}>
+                  <Search className="notion-search-icon w-3.5 h-3.5" />
                   <input
                     type="text"
                     value={completedSearch}
                     onChange={e => setCompletedSearch(e.target.value)}
                     placeholder="Cerca..."
-                    className="premium-button-secondary compact-button text-xs pl-7 pr-3 py-1.5 rounded-[13px] outline-none"
-                    style={{ borderColor: 'var(--border-default)', background: 'rgba(255,255,255,0.03)', color: 'var(--text-primary)', width: '140px' }}
+                    className="notion-search-input"
                   />
                 </div>
               )}
               {(appState === 'idle' || appState === 'processing') && (
                 <button
                   onClick={onClearAll}
-                  className="premium-button-secondary compact-button text-xs"
-                  style={{ color: 'var(--text-muted)', borderColor: 'var(--border-default)' }}
+                  className="icon-button compact-icon-button"
+                  style={{ color: 'var(--text-muted)' }}
+                  title="Pulisci tutto"
+                  aria-label="Pulisci tutto"
                 >
-                  Pulisci tutto
+                  <Trash2 className="w-4 h-4" />
                 </button>
               )}
             </div>

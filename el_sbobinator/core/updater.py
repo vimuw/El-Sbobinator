@@ -89,7 +89,9 @@ def _launch_windows_installer(tmp_path: str) -> subprocess.Popen[bytes]:
     return proc
 
 
-def _poll_then_destroy(proc: subprocess.Popen[bytes], emit_fn=None) -> None:
+def _poll_then_destroy(
+    proc: subprocess.Popen[bytes], emit_fn=None, tmp_path: str = ""
+) -> None:
     """Poll the installer process; destroy the app window only once it is confirmed alive.
 
     Prevents the window from closing when the user denies UAC (installer exits immediately).
@@ -106,6 +108,8 @@ def _poll_then_destroy(proc: subprocess.Popen[bytes], emit_fn=None) -> None:
                     emit_fn("error", error="uac_denied")
                 except Exception:
                     pass
+            if tmp_path:
+                _try_unlink(tmp_path)
             return  # installer exited quickly — UAC denied or launch failure; leave app open
     if emit_fn is not None:
         try:
@@ -122,7 +126,16 @@ def _poll_then_destroy(proc: subprocess.Popen[bytes], emit_fn=None) -> None:
 
 
 def _install_macos_dmg(tmp_path: str) -> dict | None:
-    """Mount DMG, copy app to /Applications, detach. Returns error dict or None on success."""
+    """Mount DMG, spawn a detached script to copy app to /Applications, then return.
+
+    Verifies the DMG and permissions, then spawns an independent background script
+    that waits for the parent Python process to exit before replacing the app package,
+    removing quarantine flags, detaching the DMG, and opening the new version.
+    """
+    import shlex
+
+    mount_point = None
+    detached_script_spawned = False
     try:
         result = subprocess.run(
             ["hdiutil", "attach", "-nobrowse", "-plist", tmp_path],
@@ -131,7 +144,6 @@ def _install_macos_dmg(tmp_path: str) -> dict | None:
             timeout=30,
         )
         plist = plistlib.loads(result.stdout)
-        mount_point = None
         for entity in plist.get("system-entities", []):
             mp = entity.get("mount-point")
             if mp:
@@ -139,50 +151,85 @@ def _install_macos_dmg(tmp_path: str) -> dict | None:
                 break
         if not mount_point:
             return {"ok": False, "error": "Impossibile montare il DMG."}
-        try:
-            app_src = os.path.join(mount_point, "El Sbobinator.app")
-            app_dst = "/Applications/El Sbobinator.app"
-            if os.path.exists(app_dst):
+
+        app_src = os.path.join(mount_point, "El Sbobinator.app")
+        app_dst = "/Applications/El Sbobinator.app"
+
+        if not os.path.exists(app_src):
+            return {"ok": False, "error": "Applicazione non trovata nel DMG."}
+
+        # Preemptive permission check
+        if not os.access(os.path.dirname(app_dst), os.W_OK):
+            raise PermissionError("Permesso di scrittura negato per /Applications.")
+        if os.path.exists(app_dst) and not os.access(app_dst, os.W_OK):
+            raise PermissionError(
+                "Permesso di scrittura negato per l'applicazione esistente."
+            )
+
+        # Preemptive cleanup of stale tmp directory from prior failed updates
+        app_dst_tmp = app_dst + ".tmp"
+        if os.path.exists(app_dst_tmp):
+            try:
                 import shutil
 
-                try:
-                    shutil.rmtree(app_dst)
-                except Exception:
-                    subprocess.run(["rm", "-rf", app_dst], check=False, timeout=15)
-                if os.path.exists(app_dst):
-                    raise PermissionError(
-                        "Impossibile rimuovere la vecchia versione dell'applicazione in /Applications. "
-                        "Assicurati che El Sbobinator non sia in esecuzione e riprova."
-                    )
-            try:
-                subprocess.run(
-                    ["cp", "-R", app_src, app_dst],
-                    check=True,
-                    timeout=30,
-                    capture_output=True,
-                )
-            except subprocess.CalledProcessError as cp_err:
-                stderr = (
-                    cp_err.stderr.decode("utf-8", errors="replace")
-                    if cp_err.stderr
-                    else ""
-                )
-                if "Permission denied" in stderr or "Operation not permitted" in stderr:
-                    raise PermissionError(stderr) from cp_err
-                raise
-            subprocess.run(
-                ["xattr", "-dr", "com.apple.quarantine", app_dst],
-                check=False,
-                timeout=30,
-            )
-        finally:
-            subprocess.run(["hdiutil", "detach", mount_point], check=False, timeout=30)
-        subprocess.Popen(["open", "/Applications/El Sbobinator.app"])
+                if os.path.isdir(app_dst_tmp) and not os.path.islink(app_dst_tmp):
+                    shutil.rmtree(app_dst_tmp)
+                else:
+                    os.unlink(app_dst_tmp)
+            except Exception:
+                pass
+
+        # Secure and robust shell escaping
+        quoted_app_dst = shlex.quote(app_dst)
+        quoted_app_dst_tmp = shlex.quote(app_dst + ".tmp")
+        quoted_app_src = shlex.quote(app_src)
+        quoted_mount_point = shlex.quote(mount_point)
+        quoted_tmp_path = shlex.quote(tmp_path)
+
+        # Detached background script that waits for this parent process to terminate,
+        # performs a safe transactional-like copy, and cleans up DMG mounts.
+        script = (
+            f"(\n"
+            f"  while kill -0 {os.getpid()} 2>/dev/null; do\n"
+            f"    sleep 0.2\n"
+            f"  done\n"
+            f"  rm -rf {quoted_app_dst_tmp}\n"
+            f"  if cp -a {quoted_app_src} {quoted_app_dst_tmp}; then\n"
+            f"    rm -rf {quoted_app_dst}\n"
+            f"    mv {quoted_app_dst_tmp} {quoted_app_dst}\n"
+            f"    xattr -dr com.apple.quarantine {quoted_app_dst} 2>/dev/null\n"
+            f"    open {quoted_app_dst}\n"
+            f"  else\n"
+            f"    rm -rf {quoted_app_dst_tmp}\n"
+            f"  fi\n"
+            f"  hdiutil detach {quoted_mount_point} -force\n"
+            f"  rm -f {quoted_tmp_path}\n"
+            f") &"
+        )
+
+        subprocess.Popen(["/bin/bash", "-c", script], start_new_session=True)
+        detached_script_spawned = True
+
+    except subprocess.CalledProcessError as cp_err:
+        stderr = (
+            cp_err.stderr.decode("utf-8", errors="replace") if cp_err.stderr else ""
+        )
+        if "Permission denied" in stderr or "Operation not permitted" in stderr:
+            raise PermissionError(stderr) from cp_err
+        raise
+
     finally:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
+        # Only clean up locally if we didn't successfully hand off to the detached script
+        if not detached_script_spawned:
+            if mount_point:
+                subprocess.run(
+                    ["hdiutil", "detach", mount_point], check=False, timeout=30
+                )
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
     return None
 
 
@@ -249,7 +296,11 @@ def _download_and_install_background(
     try:
         if sys.platform == "win32":
             proc = _launch_windows_installer(tmp_path)
-            _Thread(target=_poll_then_destroy, args=(proc, _emit), daemon=True).start()
+            _Thread(
+                target=_poll_then_destroy,
+                args=(proc, _emit, tmp_path),
+                daemon=True,
+            ).start()
             return  # done/error emitted by _poll_then_destroy once UAC outcome is known
         else:
             err = _install_macos_dmg(tmp_path)
@@ -269,9 +320,11 @@ def _download_and_install_background(
 
             _Thread(target=_delayed_destroy, daemon=True).start()
     except PermissionError:
+        _try_unlink(tmp_path)
         _emit("error", error="permission_denied")
         return
     except Exception as e:
+        _try_unlink(tmp_path)
         _emit("error", error=f"Installazione fallita: {e}")
         return
 

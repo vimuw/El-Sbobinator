@@ -193,10 +193,6 @@ def _dpapi_protect_text_windows(text: str) -> str:
 
         DATA_BLOB = _dpapi_make_blob_class(ctypes, wintypes)  # type: ignore[arg-type]
 
-        def _bytes_to_blob(data: bytes) -> DATA_BLOB:  # type: ignore[valid-type]
-            buf = ctypes.create_string_buffer(data)
-            return DATA_BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte)))
-
         crypt32 = ctypes.windll.crypt32  # type: ignore[attr-defined]
         kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
 
@@ -217,7 +213,8 @@ def _dpapi_protect_text_windows(text: str) -> str:
         plain = (text or "").encode("utf-8", errors="strict")
         if not plain:
             return ""
-        in_blob = _bytes_to_blob(plain)
+        buf = ctypes.create_string_buffer(plain)
+        in_blob = DATA_BLOB(len(plain), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte)))
         out_blob = DATA_BLOB()
         CRYPTPROTECT_UI_FORBIDDEN = 0x1
         ok = crypt32.CryptProtectData(
@@ -270,10 +267,6 @@ def _dpapi_unprotect_text_windows_once(b64: str) -> str:
 
         DATA_BLOB = _dpapi_make_blob_class(ctypes, wintypes)  # type: ignore[arg-type]
 
-        def _bytes_to_blob(data: bytes) -> DATA_BLOB:  # type: ignore[valid-type]
-            buf = ctypes.create_string_buffer(data)
-            return DATA_BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte)))
-
         crypt32 = ctypes.windll.crypt32  # type: ignore[attr-defined]
         kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
 
@@ -296,7 +289,8 @@ def _dpapi_unprotect_text_windows_once(b64: str) -> str:
         )
         if not raw:
             return ""
-        in_blob = _bytes_to_blob(raw)
+        buf = ctypes.create_string_buffer(raw)
+        in_blob = DATA_BLOB(len(raw), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte)))
         out_blob = DATA_BLOB()
         desc = wintypes.LPWSTR()
         CRYPTPROTECT_UI_FORBIDDEN = 0x1

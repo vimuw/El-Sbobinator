@@ -44,8 +44,7 @@ export function NewKeyModal({ isOpen, onClose }: NewKeyModalProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={handleClose}
-            className="absolute inset-0"
-            style={{ background: 'var(--bg-overlay)', backdropFilter: 'blur(10px)' }}
+            className="modal-overlay absolute inset-0"
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.98 }}
@@ -53,10 +52,10 @@ export function NewKeyModal({ isOpen, onClose }: NewKeyModalProps) {
             exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14, ease: 'easeIn' } }}
             className="modal-card relative w-full max-w-md max-h-[86vh] overflow-hidden flex flex-col"
           >
-            <div className="flex items-center justify-between gap-3 px-5 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+            <div className="modal-header">
               <div className="flex items-center gap-3 min-w-0">
-                <Key className="w-5 h-5 shrink-0" style={{ color: 'var(--warning-text)' }} />
-                <h2 className="text-lg font-semibold truncate" style={{ color: 'var(--text-primary)' }}>Esaurimento quota</h2>
+                <Key className="w-5 h-5 shrink-0 text-[var(--warning-text)]" />
+                <h2 className="text-lg font-semibold truncate text-[var(--text-primary)]">Esaurimento quota</h2>
               </div>
               <button
                 onClick={handleClose}
@@ -66,7 +65,7 @@ export function NewKeyModal({ isOpen, onClose }: NewKeyModalProps) {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4 text-sm" style={{ color: 'var(--text-secondary)' }}>
+            <div className="modal-body space-y-4">
               <p>
                 La quota del tuo account Google per le API Gemini sembra esaurita (o temporaneamente limitata).
               </p>
@@ -80,11 +79,9 @@ export function NewKeyModal({ isOpen, onClose }: NewKeyModalProps) {
                   onChange={(e) => setNewKeyInput(e.target.value)}
                   placeholder="Incolla qui la nuova API Key..."
                   className="app-input font-mono text-sm"
-                  style={{ background: 'var(--bg-input)', color: 'var(--text-primary)' }}
                 />
                 <p
-                  className="text-xs"
-                  style={{ color: newKeyInput.trim().length === 0 || isReplacementKeyValid ? 'var(--text-muted)' : 'var(--error-text)' }}
+                  className={`text-xs ${newKeyInput.trim().length === 0 || isReplacementKeyValid ? 'text-[var(--text-muted)]' : 'text-[var(--error-text)]'}`}
                 >
                   {newKeyInput.trim().length === 0
                     ? 'Inserisci una chiave Gemini valida per continuare.'
@@ -94,7 +91,7 @@ export function NewKeyModal({ isOpen, onClose }: NewKeyModalProps) {
                 </p>
               </div>
             </div>
-            <div className="px-5 py-4 flex flex-col gap-3 shrink-0" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+            <div className="modal-footer flex-col">
               <button
                 onClick={handleSubmit}
                 className="modal-action-button is-primary w-full"

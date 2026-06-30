@@ -6,6 +6,7 @@ import { useApiReady } from './hooks/useApiReady';
 import { useBridgeCallbacks } from './hooks/useBridgeCallbacks';
 import { useQueuePersistence } from './hooks/useQueuePersistence';
 import { useUpdateChecker } from './hooks/useUpdateChecker';
+import type { FileDonePayload, ProcessingAction } from './appState';
 
 vi.mock('motion/react', () => ({
   motion: new Proxy({}, {
@@ -24,7 +25,7 @@ vi.mock('motion/react', () => ({
 vi.mock('./hooks/useApiReady');
 
 const mockApiReadyDefault = {
-  apiReady: false,
+  apiReady: true,
   bridgeDelayed: false,
   apiKey: '',
   setApiKey: vi.fn(),
@@ -139,7 +140,26 @@ describe('App', () => {
 
   it('renders in setup mode when no API key is set', async () => {
     await act(async () => { render(<App />); });
-    expect(screen.getByText('Configura la tua API Key')).toBeTruthy();
+    expect(await screen.findByText('Configura la tua API Key')).toBeTruthy();
+  });
+
+  it('renders loading connection screen when API is not ready', async () => {
+    vi.mocked(useApiReady).mockReturnValue({
+      ...mockApiReadyDefault,
+      apiReady: false,
+    });
+    await act(async () => { render(<App />); });
+    expect(await screen.findByText('Connessione in corso...')).toBeTruthy();
+  });
+
+  it('renders warning when API bridge is delayed', async () => {
+    vi.mocked(useApiReady).mockReturnValue({
+      ...mockApiReadyDefault,
+      apiReady: false,
+      bridgeDelayed: true,
+    });
+    await act(async () => { render(<App />); });
+    expect(await screen.findByText(/Il motore dell'applicazione/)).toBeTruthy();
   });
 
   it('renders footer with GitHub link', async () => {
@@ -154,12 +174,7 @@ describe('App', () => {
 
   it('shows API key input in setup mode', async () => {
     await act(async () => { render(<App />); });
-    expect(screen.getByPlaceholderText(/Incolla qui la tua API Key/)).toBeTruthy();
-  });
-
-  it('shows advanced settings link in setup mode', async () => {
-    await act(async () => { render(<App />); });
-    expect(screen.getByText('Apri impostazioni avanzate')).toBeTruthy();
+    expect(await screen.findByPlaceholderText(/Incolla qui la tua API Key/)).toBeTruthy();
   });
 
   it('settings button opens settings modal', async () => {
@@ -167,15 +182,13 @@ describe('App', () => {
     await act(async () => {
       fireEvent.click(screen.getByLabelText('Apri impostazioni'));
     });
-    expect(screen.getByRole('heading', { name: /Impostazioni/ })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: /Impostazioni/ })).toBeTruthy();
   });
 
-  it('console toggle button shows console panel', async () => {
+  it('console toggle button is disabled in setup mode', async () => {
     await act(async () => { render(<App />); });
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText('Mostra console'));
-    });
-    expect(screen.getByRole('heading', { name: 'Console' })).toBeTruthy();
+    const consoleBtn = screen.getByLabelText('Mostra console') as HTMLButtonElement;
+    expect(consoleBtn.disabled).toBe(true);
   });
 
   it('shows config recovery warning without exposing the full path', async () => {
@@ -456,12 +469,49 @@ describe('App — ready-empty mode (valid API key, no files)', () => {
     expect(screen.getByText(/caffè/)).toBeTruthy();
   });
 
-  it('console panel shows when console toggle is clicked', async () => {
+  it('console toggle button is disabled when queue is empty', async () => {
     await act(async () => { render(<App />); });
+    const consoleBtn = screen.getByLabelText('Mostra console') as HTMLButtonElement;
+    expect(consoleBtn.disabled).toBe(true);
+  });
+
+  it('console toggle button is enabled and shows console panel when clicked if files are in queue, and closes/disables when queue becomes empty', async () => {
+    let localDispatch: React.Dispatch<ProcessingAction> | null = null;
+    vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
+      localDispatch = dispatch;
+      React.useEffect(() => {
+        dispatch({
+          type: 'queue/add',
+          files: [{
+            id: 'file-1',
+            name: 'lesson.mp3',
+            size: 123,
+            duration: 60,
+            path: 'C:\\Media\\lesson.mp3',
+            status: 'queued',
+            progress: 0,
+            phase: 0,
+          }],
+        });
+      }, [dispatch]);
+    });
+
+    await act(async () => { render(<App />); });
+    const consoleBtn = screen.getByLabelText('Mostra console') as HTMLButtonElement;
+    expect(consoleBtn.disabled).toBe(false);
+
     await act(async () => {
-      fireEvent.click(screen.getByLabelText('Mostra console'));
+      fireEvent.click(consoleBtn);
     });
     expect(screen.getByRole('heading', { name: 'Console' })).toBeTruthy();
+
+    await act(async () => {
+      localDispatch({ type: 'queue/remove', id: 'file-1' });
+    });
+
+    const consoleBtnAfter = screen.getByLabelText('Mostra console') as HTMLButtonElement;
+    expect(consoleBtnAfter.disabled).toBe(true);
+    expect(screen.queryByRole('heading', { name: 'Console' })).toBeNull();
   });
 });
 
@@ -706,10 +756,10 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       }, [dispatch]);
     });
 
-    let bridgeCallbacks: any = {};
+    let bridgeCallbacks: { onFileDone?: (data: FileDonePayload) => void } = {};
     vi.mocked(useBridgeCallbacks).mockImplementation((options) => {
       bridgeCallbacks = {
-        onFileDone: (data: any) => options.onRevisionWarning?.(data),
+        onFileDone: (data: FileDonePayload) => options.onRevisionWarning?.(data),
       };
       return undefined;
     });

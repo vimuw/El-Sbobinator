@@ -241,6 +241,29 @@ def pyinstaller_command(target: str, ui: str) -> list[str]:
             str(WEBVIEW_ENTRYPOINT),
         ]
     )
+    # Exclude unused standard and external libraries to minimize package size
+    for module in [
+        "tkinter",
+        "PyQt5",
+        "PyQt6",
+        "PySide2",
+        "PySide6",
+        "wx",
+        "sqlite3",
+        "numpy",
+        "botocore",
+        "boto3",
+        "grpc",
+        "lxml",
+        "Pythonwin",
+        "gevent",
+        "aiohttp",
+        "pygments",
+        "rich",
+        "distutils",
+        "unittest",
+    ]:
+        command.extend(["--exclude-module", module])
     return command
 
 
@@ -275,7 +298,7 @@ def write_sha256(artifact: Path) -> Path:
     return checksum_path
 
 
-def _find_iscc() -> str:
+def _find_iscc() -> str | None:
     in_path = shutil.which("ISCC") or shutil.which("ISCC.exe")
     if in_path:
         return in_path
@@ -285,12 +308,18 @@ def _find_iscc() -> str:
     ]:
         if Path(candidate).exists():
             return candidate
-    return "ISCC.exe"
+    return None
 
 
 def run_inno_setup(version: str) -> None:
     iss_script = PACKAGING_DIR / "windows" / "installer.iss"
-    run([_find_iscc(), f"/DAppVersion={version}", str(iss_script)], cwd=ROOT)
+    iscc = _find_iscc()
+    if iscc is None:
+        print(
+            "WARNING: Inno Setup (ISCC.exe) not found. Skipping installer generation."
+        )
+        return
+    run([iscc, f"/DAppVersion={version}", str(iss_script)], cwd=ROOT)
     installer = ROOT / "dist" / f"El-Sbobinator-Setup-v{version}.exe"
     if not installer.exists() or installer.stat().st_size <= 0:
         raise FileNotFoundError(f"Installer mancante o vuoto: {installer}")

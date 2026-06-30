@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { ChevronDown, Link2, Link2Off } from 'lucide-react';
 
-export const COLOR_PALETTE: string[][] = [
+const COLOR_PALETTE: string[][] = [
   ['#000000', '#434343', '#666666', '#999999', '#b7b7b7', '#cccccc', '#d9d9d9', '#ffffff'],
   ['#ff0000', '#ff4500', '#ff9900', '#ffff00', '#00ff00', '#00ffff', '#4a86e8', '#9900ff'],
   ['#f4cccc', '#fce5cd', '#fff2cc', '#d9ead3', '#c9daf8', '#cfe2f3', '#d9d2e9', '#ead1dc'],
@@ -13,7 +13,7 @@ export const COLOR_PALETTE: string[][] = [
   ['#990000', '#b45f06', '#bf9000', '#38761d', '#1155cc', '#0b5394', '#20124d', '#4c1130'],
 ];
 
-export const HIGHLIGHT_COLORS = [
+const HIGHLIGHT_COLORS = [
   { label: 'Giallo', color: '#fef08a' },
   { label: 'Verde', color: '#bbf7d0' },
   { label: 'Azzurro', color: '#bae6fd' },
@@ -44,16 +44,8 @@ const HEADING_OPTIONS = [
   { label: 'Titolo 5', value: 'h5' },
 ];
 
-// Matches CSS: h1=20px, h2=16px, h3=14px, h4=12px, h5=11px (same as HTML export)
-const HEADING_PX: Record<number, number> = { 1: 20, 2: 16, 3: 14, 4: 12, 5: 11 };
-
-export const readFileAsDataUrl = (file: File) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(reader.error || new Error('Lettura immagine fallita.'));
-    reader.readAsDataURL(file);
-  });
+// Matches CSS: h1=20pt, h2=16pt, h3=14pt, h4=11pt, h5=10pt (same as HTML export)
+const HEADING_PT: Record<number, number> = { 1: 20, 2: 16, 3: 14, 4: 11, 5: 10 };
 
 export const ColorPickerButton = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -267,11 +259,11 @@ export const FontSizeSelect = ({ editor }: { editor: TiptapEditor }) => {
 
     // 1. Explicit inline fontSize mark
     const fontSize = editor.getAttributes('textStyle').fontSize;
-    if (fontSize) return fontSize.replace('px', '');
+    if (fontSize) return fontSize.replace(/px|pt/, '');
 
     // 2. Heading level — static lookup matching CSS rem values, no DOM read
     for (let i = 1; i <= 5; i++) {
-      if (editor.isActive('heading', { level: i })) return String(HEADING_PX[i]);
+      if (editor.isActive('heading', { level: i })) return String(HEADING_PT[i]);
     }
 
     // 3. Body text has no explicit size (11pt ≈ 14.67px, not in the dropdown)
@@ -288,7 +280,7 @@ export const FontSizeSelect = ({ editor }: { editor: TiptapEditor }) => {
         value={currentSize}
         onChange={e => {
           if (e.target.value) {
-            editor.chain().focus().setMark('textStyle', { fontSize: `${e.target.value}px` }).run();
+            editor.chain().focus().setMark('textStyle', { fontSize: `${e.target.value}pt` }).run();
           } else {
             editor.chain().focus().setMark('textStyle', { fontSize: null }).run();
           }

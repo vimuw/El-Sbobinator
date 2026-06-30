@@ -85,7 +85,7 @@ describe('PreviewModal', () => {
 
   it('shows autosave idle status by default', () => {
     render(<PreviewModal {...baseProps} />);
-    expect(screen.getByText('Salvataggio automatico')).toBeTruthy();
+    expect(screen.getByText('Autosave')).toBeTruthy();
   });
 
   it('calls onClose when X button is clicked', async () => {
@@ -125,7 +125,7 @@ describe('PreviewModal', () => {
   it('resets state when previewContent changes', () => {
     const { rerender } = render(<PreviewModal {...baseProps} />);
     rerender(<PreviewModal {...baseProps} previewContent="<p>Updated</p>" />);
-    expect(screen.getByText('Salvataggio automatico')).toBeTruthy();
+    expect(screen.getByText('Autosave')).toBeTruthy();
   });
 
   it('calls onRelink when "Ricollega audio" is clicked', async () => {

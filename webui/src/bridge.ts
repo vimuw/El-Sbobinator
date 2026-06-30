@@ -116,7 +116,7 @@ export interface BridgeCallbacks {
   processDone: (data: ProcessDonePayload) => void;
   setWorkTotals: (data: WorkTotalsPayload) => void;
   updateWorkDone: (data: WorkDonePayload) => void;
-  registerStepTime: (...args: any[]) => void;
+  registerStepTime: (...args: unknown[]) => void;
   setCurrentFile: (data: SetCurrentFilePayload) => void;
   fileDone: (data: FileDonePayload) => void;
   fileFailed: (data: FileFailedPayload) => void;

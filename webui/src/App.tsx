@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { AlertTriangle, Github, Trash2 } from 'lucide-react';
+import { AlertTriangle, Github, Loader2, Trash2 } from 'lucide-react';
 import { GITHUB_RELEASES_URL, GITHUB_URL, KOFI_URL } from './branding';
 import { type ArchiveFolder, type ArchiveSession, type ElSbobinatorBridge, type LowDiskWarning, type PywebviewApi, type UpdateDownloadProgressPayload } from './bridge';
 import { getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type FileDescriptor, type FileDonePayload, type FileItem, type ProcessDonePayload } from './appState';
@@ -17,20 +17,20 @@ import { usePreview } from './hooks/usePreview';
 import { ProcessingStatusBanner } from './components/ProcessingStatusBanner';
 import { RegenerateModal } from './components/modals/RegenerateModal';
 import { NewKeyModal } from './components/modals/NewKeyModal';
-import { SettingsModal } from './components/modals/SettingsModal';
 import { ConfirmActionModal } from './components/modals/ConfirmActionModal';
 import { DuplicateFileModal, type AlreadyProcessedMatch, type DuplicatePrompt } from './components/modals/DuplicateFileModal';
 import { buildArchiveLookup, filterArchiveSessionsByInputPath, getArchiveMatchesForFile } from './duplicateDetection';
 import { NavSidebar, type ActivePage } from './components/NavSidebar';
 import { Toaster, type ToastMessage } from './components/Toast';
-import { SetupPage } from './components/SetupPage';
 import { DropZone } from './components/DropZone';
 import { WelcomeDashboard } from './components/WelcomeDashboard';
 import { QueueSection } from './components/QueueSection';
 import { CompletedSection } from './components/CompletedSection';
-import { ArchivePage } from './components/ArchivePage';
 import { ConsolePanel } from './components/ConsolePanel';
 const EditorFullPage = React.lazy(() => import('./components/EditorFullPage').then(m => ({ default: m.EditorFullPage })));
+const SettingsModal = React.lazy(() => import('./components/modals/SettingsModal').then(m => ({ default: m.SettingsModal })));
+const SetupPage = React.lazy(() => import('./components/SetupPage').then(m => ({ default: m.SetupPage })));
+const ArchivePage = React.lazy(() => import('./components/ArchivePage').then(m => ({ default: m.ArchivePage })));
 
 declare global {
   interface Window {
@@ -64,7 +64,7 @@ function isSupportedMediaPath(path: string): boolean {
   return Boolean(match && SUPPORTED_MEDIA_EXTENSIONS.has(match[0]));
 }
 
-type UiMode = 'setup' | 'ready-empty' | 'ready-with-files' | 'processing' | 'canceling';
+type UiMode = 'loading' | 'setup' | 'ready-empty' | 'ready-with-files' | 'processing' | 'canceling';
 type ConfirmActionState =
   | { type: 'stop-processing' }
   | { type: 'remove-file'; fileId: string; fileName: string; isDone: boolean }
@@ -160,6 +160,15 @@ export default function App() {
   const prevSessionDirsRef = useRef<Map<string, string>>(new Map());
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [hasOpenedSettings, setHasOpenedSettings] = useState(false);
+  const shouldRenderSettings = isSettingsOpen || hasOpenedSettings;
+
+  useEffect(() => {
+    if (isSettingsOpen) {
+      setHasOpenedSettings(true);
+    }
+  }, [isSettingsOpen]);
+
   const [regeneratePrompt, setRegeneratePrompt] = useState<{ filename: string; mode?: 'completed' | 'resume'; sessionDir?: string } | null>(null);
   const [askNewKeyPrompt, setAskNewKeyPrompt] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ConfirmActionState | null>(null);
@@ -358,6 +367,15 @@ export default function App() {
   }, [handleRetryFailedRevisionBlocks, normalizeSessionDir, showToast]);
 
   const { preview, openPreview, closePreview, relinkPreviewAudio, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
+
+  const [hasOpenedPreview, setHasOpenedPreview] = useState(false);
+  const shouldRenderPreview = preview.content !== null || hasOpenedPreview;
+
+  useEffect(() => {
+    if (preview.content !== null) {
+      setHasOpenedPreview(true);
+    }
+  }, [preview.content]);
 
   useEffect(() => {
     filesRef.current = files;
@@ -561,6 +579,7 @@ export default function App() {
   const isApiKeyValid = GEMINI_KEY_PATTERN.test(apiKey.trim());
   const canStart = queuedCount > 0 && hasApiKey && isApiKeyValid;
   const uiMode: UiMode =
+    !apiReady ? 'loading' :
     appState === 'canceling' ? 'canceling' :
     appState === 'processing' ? 'processing' :
     (!hasApiKey || !isApiKeyValid) ? 'setup' :
@@ -572,6 +591,14 @@ export default function App() {
     () => files.find(f => f.status === 'processing') ?? (completionFlash ? doneFiles[0] : undefined),
     [files, completionFlash, doneFiles],
   );
+  const isConsoleDisabled = !hasApiKey || !isApiKeyValid || !(pendingFiles.length > 0 || doneFiles.length > 0 || showProcessingBanner);
+
+  useEffect(() => {
+    if (isConsoleDisabled && showConsole) {
+      setShowConsole(false);
+      localStorage.setItem('show_console', 'false');
+    }
+  }, [isConsoleDisabled, showConsole]);
 
   useEffect(() => {
     if (!apiReady) return;
@@ -1012,7 +1039,7 @@ export default function App() {
       return;
     }
     confirmClearCompleted();
-  }, [confirmAction, confirmClearCompleted, confirmStopProcessing, appendConsole, refreshArchiveSessions, setFolders, executeRetryFromArchive, setConfirmAction]);
+  }, [confirmAction, confirmClearCompleted, confirmStopProcessing, appendConsole, refreshArchiveSessions, executeRetryFromArchive]);
 
   const handleRegenerateAnswer = async (ans: boolean | null) => {
     const currentPrompt = regeneratePrompt;
@@ -1214,7 +1241,7 @@ export default function App() {
   }, [folders, normalizeSessionDir]);
 
   return (
-    <div className="app-shell min-h-screen font-sans flex flex-row" style={{ background: 'var(--bg-base)', color: 'var(--text-secondary)' }}>
+    <div className="app-shell min-h-screen font-sans flex flex-row bg-[var(--bg-base)] text-[var(--text-secondary)]">
       <NavSidebar
         activePage={activePage}
         setActivePage={setActivePage}
@@ -1229,6 +1256,7 @@ export default function App() {
         setShowConsole={setShowConsole}
         setIsSettingsOpen={setIsSettingsOpen}
         hasPendingUpdate={updateAvailable !== null}
+        consoleDisabled={isConsoleDisabled}
       />
 
       <div className="flex flex-col flex-1 min-w-0 min-h-screen">
@@ -1251,10 +1279,9 @@ export default function App() {
                     initial={{ opacity: 0, y: -8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.18, ease: 'easeOut' }}
-                    className="w-full rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                    style={{ background: 'var(--warning-subtle)', border: '1px solid var(--warning-ring)' }}
+                    className="w-full alert-card is-warning px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                   >
-                    <div className="flex items-start gap-3 text-sm leading-relaxed" style={{ color: 'var(--warning-text)' }}>
+                    <div className="flex items-start gap-3 text-sm leading-relaxed text-[var(--warning-text)]">
                       <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                       <span>
                         La tua chiave API è salvata in chiaro su disco perché la protezione Windows (DPAPI) non è disponibile. Motivo: {apiKeyInsecureReasonLabel} Cancella e reinserisci la chiave, oppure conservala in un password manager.
@@ -1264,29 +1291,49 @@ export default function App() {
                       type="button"
                       onClick={() => void handleRemoveInsecureApiKey()}
                       disabled={isRemovingInsecureKey}
-                      className="shrink-0 inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition-opacity"
-                      style={{
-                        color: 'var(--warning-text)',
-                        border: '1px solid var(--warning-ring)',
-                        background: 'transparent',
-                        cursor: isRemovingInsecureKey ? 'default' : 'pointer',
-                        opacity: isRemovingInsecureKey ? 0.6 : 1,
-                      }}
+                      className="shrink-0 premium-button-secondary compact-button is-warning flex items-center justify-center gap-2"
                     >
                       <Trash2 className="w-4 h-4" />
                       {isRemovingInsecureKey ? 'Rimozione...' : 'Rimuovi chiave'}
                     </button>
                   </motion.div>
                 )}
-                {uiMode === 'setup' ? (
-                  <SetupPage
-                    hasProtectedKey={hasProtectedKey}
-                    setIsSettingsOpen={setIsSettingsOpen}
-                    onSaved={(key) => setApiKey(key)}
-                    preferredModel={preferredModel}
-                    fallbackKeys={fallbackKeys}
-                    fallbackModels={fallbackModels}
-                  />
+                {uiMode === 'loading' ? (
+                  <motion.div
+                    key="connecting-loader"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, ease: 'easeOut' }}
+                    className="premium-panel-strong py-12 px-6 flex flex-col items-center justify-center gap-4 text-center max-w-md mx-auto w-full"
+                  >
+                    <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent-text)' }} />
+                    <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
+                      Connessione in corso...
+                    </h3>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      Inizializzazione dell'applicazione e caricamento delle impostazioni.
+                    </p>
+                    {bridgeDelayed && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="alert-card is-error p-3 rounded-lg text-xs leading-relaxed max-w-sm mt-2 text-[var(--error-text)]"
+                      >
+                        Il motore dell'applicazione sta impiegando più tempo del previsto.
+                        Verifica se l'app è bloccata o prova a riavviare.
+                      </motion.div>
+                    )}
+                  </motion.div>
+                ) : uiMode === 'setup' ? (
+                  <React.Suspense fallback={null}>
+                    <SetupPage
+                      hasProtectedKey={hasProtectedKey}
+                      onSaved={(key) => setApiKey(key)}
+                      preferredModel={preferredModel}
+                      fallbackKeys={fallbackKeys}
+                      fallbackModels={fallbackModels}
+                    />
+                  </React.Suspense>
                 ) : (
                   <>
                     {!(pendingFiles.length > 0 || doneFiles.length > 0 || showProcessingBanner) && (
@@ -1334,46 +1381,51 @@ export default function App() {
                   </>
                 )}
 
-                <QueueSection
-                  pendingFiles={pendingFiles}
-                  appState={appState}
-                  autoContinue={autoContinue}
-                  setAutoContinue={setAutoContinue}
-                  preferredModel={preferredModel}
-                  queuedCount={queuedCount}
-                  canStart={canStart}
-                  hasApiKey={hasApiKey}
-                  isApiKeyValid={isApiKeyValid}
-                  currentPhase={currentPhase}
-                  dndSensors={dndSensors}
-                  onDragEnd={handleDragEnd}
-                  onRemove={requestRemoveFile}
-                  onClearAll={handleClearAll}
-                  onRetry={(id) => dispatch({ type: 'queue/retry_one', id })}
-                  onPreview={openPreview}
-                  onOpenFile={openFile}
-                  onStart={() => void startProcessing()}
-                  onStop={() => setConfirmAction({ type: 'stop-processing' })}
-                  onOpenSettings={() => setIsSettingsOpen(true)}
-                />
+                {uiMode !== 'setup' && uiMode !== 'loading' && (
+                  <>
+                    <QueueSection
+                      pendingFiles={pendingFiles}
+                      appState={appState}
+                      autoContinue={autoContinue}
+                      setAutoContinue={setAutoContinue}
+                      preferredModel={preferredModel}
+                      currentModel={currentModel}
+                      queuedCount={queuedCount}
+                      canStart={canStart}
+                      hasApiKey={hasApiKey}
+                      isApiKeyValid={isApiKeyValid}
+                      currentPhase={currentPhase}
+                      dndSensors={dndSensors}
+                      onDragEnd={handleDragEnd}
+                      onRemove={requestRemoveFile}
+                      onClearAll={handleClearAll}
+                      onRetry={(id) => dispatch({ type: 'queue/retry_one', id })}
+                      onPreview={openPreview}
+                      onOpenFile={openFile}
+                      onStart={() => void startProcessing()}
+                      onStop={() => setConfirmAction({ type: 'stop-processing' })}
+                      onOpenSettings={() => setIsSettingsOpen(true)}
+                    />
 
-                <CompletedSection
-                  doneFiles={doneFiles}
-                  appState={appState}
-                  onRemove={(id) => {
-                    const f = filesRef.current.find(f => f.id === id);
-                    if (!f) return;
-                    if (appState !== 'idle' && f.status !== 'done') return;
-                    setConfirmAction({ type: 'remove-file', fileId: id, fileName: f.name, isDone: true });
-                  }}
-                  onPreview={openPreview}
-                  onOpenFile={openFile}
-                  onClearAll={() => setConfirmAction({ type: 'clear-completed', count: doneFiles.length })}
-                  onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
-                  sessionFolderMap={completedSessionFolderMap}
-                />
+                    <CompletedSection
+                      doneFiles={doneFiles}
+                      appState={appState}
+                      onRemove={(id) => {
+                        const f = filesRef.current.find(f => f.id === id);
+                        if (!f) return;
+                        if (appState !== 'idle' && f.status !== 'done') return;
+                        setConfirmAction({ type: 'remove-file', fileId: id, fileName: f.name, isDone: true });
+                      }}
+                      onPreview={openPreview}
+                      onOpenFile={openFile}
+                      onClearAll={() => setConfirmAction({ type: 'clear-completed', count: doneFiles.length })}
+                      onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
+                      sessionFolderMap={completedSessionFolderMap}
+                    />
+                  </>
+                )}
 
-                {showConsole && (
+                {showConsole && uiMode !== 'setup' && uiMode !== 'loading' && (
                   <ConsolePanel
                     consoleLogs={consoleLogs}
                     lastConsoleMessage={lastConsoleMessage}
@@ -1391,28 +1443,30 @@ export default function App() {
               transition={{ duration: 0.15, ease: 'easeOut' }}
             >
               <div className="my-auto px-5 sm:px-6 py-8 flex flex-col">
-                <ArchivePage
-                  sessions={archiveFiltered}
-                  total={archiveTotal - (archiveSessions.length - archiveFiltered.length)}
-                  folders={folders}
-                  onFoldersChange={handleFoldersChange}
-                  onPreview={openPreview}
-                  onOpenFile={openFile}
-                  onDeleteSession={(sessionDir, name) => setConfirmAction({ type: 'delete-archive-session', sessionDir, name })}
-                  onRefresh={refreshArchiveSessions}
-                  onLoadAll={handleLoadAll}
-                  onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
-                />
+                <React.Suspense fallback={null}>
+                  <ArchivePage
+                    sessions={archiveFiltered}
+                    total={archiveTotal - (archiveSessions.length - archiveFiltered.length)}
+                    folders={folders}
+                    onFoldersChange={handleFoldersChange}
+                    onPreview={openPreview}
+                    onOpenFile={openFile}
+                    onDeleteSession={(sessionDir, name) => setConfirmAction({ type: 'delete-archive-session', sessionDir, name })}
+                    onRefresh={refreshArchiveSessions}
+                    onLoadAll={handleLoadAll}
+                    onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
+                  />
+                </React.Suspense>
               </div>
             </motion.main>
           )}
         </AnimatePresence>
-        <footer className="py-4 text-center flex items-center justify-center gap-2" style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-          <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link" style={{ color: 'inherit' }}>
+        <footer className="app-footer">
+          <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link">
             <Github className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
           </a>
           <span>·</span>
-          <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }} className="footer-link" style={{ color: 'inherit' }}>
+          <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }} className="footer-link">
             ☕ Offrimi un caffè su Ko-fi!
           </a>
         </footer>
@@ -1447,45 +1501,54 @@ export default function App() {
         onClose={() => void handleRegenDirtyCancel()}
         onConfirm={() => void handleRegenDirtyConfirm()}
       />
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        apiKey={apiKey}
-        setApiKey={setApiKey}
-        hasProtectedKey={hasProtectedKey}
-        fallbackKeys={fallbackKeys}
-        setFallbackKeys={setFallbackKeys}
-        preferredModel={preferredModel}
-        setPreferredModel={setPreferredModel}
-        fallbackModels={fallbackModels}
-        setFallbackModels={setFallbackModels}
-        availableModels={availableModels}
-        appendConsole={appendConsole}
-        latestVersion={latestVersion}
-        checkForUpdates={checkForUpdates}
-        isCheckingUpdate={isCheckingUpdate}
-        hasChecked={hasChecked}
-        checkFailed={checkFailed}
-        updateInstallState={updateInstallState}
-        onInstallUpdate={installUpdate}
-        onSettingsSaved={refreshSettings}
-      />
-      <React.Suspense fallback={null}>
-        <EditorFullPage
-          previewContent={preview.content}
-          previewTitle={preview.title}
-          htmlPath={preview.path}
-          onClose={closePreview}
-          audioSrc={preview.audioSrc}
-          audioRelinkNeeded={preview.audioRelinkNeeded}
-          onRelink={relinkPreviewAudio}
-          previewInitAudio={preview.initAudio}
-          previewInitScrollTop={preview.initScrollTop}
-          initialSearchTerm={preview.initialSearchTerm}
-          onAudioStateChange={handleAudioStateChange}
-          onScrollTopChange={handleScrollTopChange}
-        />
-      </React.Suspense>
+      {shouldRenderSettings && (
+        <React.Suspense fallback={null}>
+          <SettingsModal
+            isOpen={isSettingsOpen}
+            onClose={() => {
+              setIsSettingsOpen(false);
+              void refreshSettings();
+            }}
+            apiKey={apiKey}
+            setApiKey={setApiKey}
+            hasProtectedKey={hasProtectedKey}
+            fallbackKeys={fallbackKeys}
+            setFallbackKeys={setFallbackKeys}
+            preferredModel={preferredModel}
+            setPreferredModel={setPreferredModel}
+            fallbackModels={fallbackModels}
+            setFallbackModels={setFallbackModels}
+            availableModels={availableModels}
+            appendConsole={appendConsole}
+            latestVersion={latestVersion}
+            checkForUpdates={checkForUpdates}
+            isCheckingUpdate={isCheckingUpdate}
+            hasChecked={hasChecked}
+            checkFailed={checkFailed}
+            updateInstallState={updateInstallState}
+            onInstallUpdate={installUpdate}
+            onSettingsSaved={refreshSettings}
+          />
+        </React.Suspense>
+      )}
+      {shouldRenderPreview && (
+        <React.Suspense fallback={null}>
+          <EditorFullPage
+            previewContent={preview.content}
+            previewTitle={preview.title}
+            htmlPath={preview.path}
+            onClose={closePreview}
+            audioSrc={preview.audioSrc}
+            audioRelinkNeeded={preview.audioRelinkNeeded}
+            onRelink={relinkPreviewAudio}
+            previewInitAudio={preview.initAudio}
+            previewInitScrollTop={preview.initScrollTop}
+            initialSearchTerm={preview.initialSearchTerm}
+            onAudioStateChange={handleAudioStateChange}
+            onScrollTopChange={handleScrollTopChange}
+          />
+        </React.Suspense>
+      )}
       <Toaster toasts={toasts} onDismiss={dismissToast} />
     </div>
   );

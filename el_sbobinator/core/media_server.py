@@ -51,7 +51,10 @@ class LocalMediaServer:
             class MediaHandler(http.server.BaseHTTPRequestHandler):
                 def end_headers(self):
                     origin = self.headers.get("Origin", "")
-                    if re.match(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$", origin):
+                    # In production (pywebview), Origin is typically empty or a file:// URL.
+                    # In dev mode (Vite), it's http://localhost:3000.
+                    # Only allow the specific dev server origin, not arbitrary localhost ports.
+                    if origin in ("http://localhost:3000", "http://127.0.0.1:3000"):
                         self.send_header("Access-Control-Allow-Origin", origin)
                     super().end_headers()
 

@@ -232,20 +232,42 @@ def initialize_session_context(
             current_defaults = build_default_pipeline_settings(load_config())
             if not isinstance(session.get("settings"), dict):
                 session["settings"] = {}
-            # Preserve session-specific models if already configured
-            if "model" not in session["settings"] or not session["settings"]["model"]:
+            # If this is a resume of an empty/cancelled session with no chunks transcribed yet,
+            # update its model settings to match the user's current configuration preferences.
+            # This ensures that changing preferred model after a cancel/immediate stop is honored.
+            is_phase1 = str(session.get("stage", "phase1")).strip().lower() == "phase1"
+            phase1_state = session.get("phase1") or {}
+            chunks_done = int(phase1_state.get("chunks_done", 0) or 0)
+            if is_phase1 and chunks_done == 0:
                 session["settings"]["model"] = current_defaults["model"]
-            if "fallback_models" not in session["settings"]:
                 session["settings"]["fallback_models"] = current_defaults[
                     "fallback_models"
                 ]
-            if (
-                "effective_model" not in session["settings"]
-                or not session["settings"]["effective_model"]
-            ):
                 session["settings"]["effective_model"] = current_defaults[
                     "effective_model"
                 ]
+                session["settings"]["chunk_minutes"] = current_defaults["chunk_minutes"]
+                session["settings"]["macro_char_limit"] = current_defaults[
+                    "macro_char_limit"
+                ]
+            else:
+                # Preserve session-specific models if already configured
+                if (
+                    "model" not in session["settings"]
+                    or not session["settings"]["model"]
+                ):
+                    session["settings"]["model"] = current_defaults["model"]
+                if "fallback_models" not in session["settings"]:
+                    session["settings"]["fallback_models"] = current_defaults[
+                        "fallback_models"
+                    ]
+                if (
+                    "effective_model" not in session["settings"]
+                    or not session["settings"]["effective_model"]
+                ):
+                    session["settings"]["effective_model"] = current_defaults[
+                        "effective_model"
+                    ]
         except Exception:
             pass
 
