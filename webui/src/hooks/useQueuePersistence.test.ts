@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { FileItem } from './appState';
-import { deserializeQueueFile, serializeQueueFile } from './hooks/useQueuePersistence';
+import type { FileItem } from '../appState';
+import { deserializeQueueFile, serializeQueueFile } from './useQueuePersistence';
 
 function roundTrip(file: FileItem): FileItem {
   return deserializeQueueFile(JSON.parse(JSON.stringify(serializeQueueFile(file))), 0);

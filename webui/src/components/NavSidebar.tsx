@@ -21,6 +21,7 @@ interface NavSidebarProps {
   setShowConsole: (v: boolean) => void;
   setIsSettingsOpen: (v: boolean) => void;
   hasPendingUpdate: boolean;
+  consoleDisabled: boolean;
 }
 
 export function NavSidebar({
@@ -30,6 +31,7 @@ export function NavSidebar({
   showConsole, setShowConsole,
   setIsSettingsOpen,
   hasPendingUpdate,
+  consoleDisabled,
 }: NavSidebarProps) {
   const [hovered, setHovered] = useState(false);
   const collapsed = !hovered;
@@ -153,6 +155,7 @@ export function NavSidebar({
             setShowConsole(next);
             localStorage.setItem('show_console', String(next));
           }}
+          disabled={!hasApiKey || !isApiKeyValid || consoleDisabled}
         />
         <UtilityButton
           icon={
@@ -229,6 +232,7 @@ function NavItem({
           padding: '0 10px',
           height: 32,
           justifyContent: 'flex-start',
+          boxShadow: 'none',
         }}
       >
         <span className="shrink-0 inline-flex items-center" style={{ position: 'relative', color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>
@@ -261,7 +265,7 @@ function NavItem({
 }
 
 function UtilityButton({
-  icon, label, ariaLabel, active, onClick, collapsed,
+  icon, label, ariaLabel, active, onClick, collapsed, disabled,
 }: {
   icon: ReactNode;
   label: string;
@@ -269,25 +273,28 @@ function UtilityButton({
   active: boolean;
   onClick: () => void;
   collapsed: boolean;
+  disabled?: boolean;
 }) {
   return (
-    <SidebarTooltip label={label} disabled={!collapsed}>
+    <SidebarTooltip label={disabled ? 'Console non disponibile' : label} disabled={!collapsed}>
       <button
         onClick={onClick}
         aria-label={ariaLabel}
+        disabled={disabled}
         className="sidebar-nav-item w-full flex items-center rounded-md text-xs font-medium text-left"
         style={{
           background: active ? 'var(--sidebar-active-bg)' : 'transparent',
-          color: active ? 'var(--sidebar-active-text)' : 'var(--text-secondary)',
+          color: disabled ? 'var(--text-muted)' : (active ? 'var(--sidebar-active-text)' : 'var(--text-secondary)'),
           border: 'none',
-          cursor: 'pointer',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.4 : 1,
           gap: collapsed ? 0 : 8,
           padding: '0 10px',
           height: 30,
           justifyContent: 'flex-start',
         }}
       >
-        <span className="shrink-0 inline-flex items-center" style={{ color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>{icon}</span>
+        <span className="shrink-0 inline-flex items-center" style={{ color: disabled ? 'var(--text-muted)' : (active ? 'var(--sidebar-active-text)' : 'var(--text-muted)'), lineHeight: 0 }}>{icon}</span>
         <AnimatePresence initial={false}>
           {!collapsed && (
             <motion.span

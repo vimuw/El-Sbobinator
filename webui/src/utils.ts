@@ -100,3 +100,11 @@ export const formatDuration = (seconds: number, fallback = ''): string => {
   if (m > 0) return `${m}m ${s.toString().padStart(2, '0')}s`;
   return `${s}s`;
 };
+
+export const readFileAsDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('Lettura immagine fallita.'));
+    reader.readAsDataURL(file);
+  });

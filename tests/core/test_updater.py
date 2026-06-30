@@ -5,6 +5,7 @@ import ssl
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest.mock import MagicMock, call, mock_open, patch
 
@@ -15,11 +16,14 @@ from el_sbobinator.core.updater import (
     download_and_install_update,
 )
 
+_original_thread = threading.Thread
 
-class _SyncThread:
+
+class _SyncThread(_original_thread):
     """threading.Thread replacement that runs target() synchronously on start()."""
 
     def __init__(self, target=None, args=(), daemon=False, **kw):
+        _original_thread.__init__(self, daemon=daemon, **kw)
         self._target = target
         self._args = args
 
@@ -175,6 +179,12 @@ class UpdaterTests(unittest.TestCase):
             call_names.append(cmd[0])
             return fake_proc
 
+        popen_calls = []
+
+        def _fake_popen(cmd, **kwargs):
+            popen_calls.append((cmd, kwargs))
+            return MagicMock()
+
         with (
             patch.object(sys, "platform", "darwin"),
             patch(
@@ -188,7 +198,7 @@ class UpdaterTests(unittest.TestCase):
             patch("builtins.open", mock_open()),
             patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
             patch("subprocess.run", side_effect=_fake_run),
-            patch("subprocess.Popen"),
+            patch("subprocess.Popen", side_effect=_fake_popen),
             patch(
                 "el_sbobinator.core.updater._Thread",
                 side_effect=_SyncThread,
@@ -196,6 +206,8 @@ class UpdaterTests(unittest.TestCase):
             patch("el_sbobinator.core.updater.time.sleep"),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
             patch("os.unlink"),
+            patch("os.path.exists", return_value=True),
+            patch("os.access", return_value=True),
             patch.dict("sys.modules", {"webview": MagicMock(windows=[])}),
         ):
             mock_tmp.return_value.__enter__.return_value.name = "/tmp/app.dmg"
@@ -204,7 +216,12 @@ class UpdaterTests(unittest.TestCase):
 
         self.assertTrue(result["ok"])
         self.assertIn("hdiutil", call_names)
-        self.assertIn("cp", call_names)
+        self.assertEqual(len(popen_calls), 1)
+        cmd, kwargs = popen_calls[0]
+        self.assertEqual(cmd[0], "/bin/bash")
+        self.assertEqual(cmd[1], "-c")
+        self.assertIn("cp -a", cmd[2])
+        self.assertTrue(kwargs.get("start_new_session"))
 
     # ------------------------------------------------------------------
     # macOS — no mount point
@@ -225,13 +242,6 @@ class UpdaterTests(unittest.TestCase):
         attach_proc.stdout = fake_plist
         attach_proc.returncode = 0
 
-        def _fake_run(cmd, **kwargs):
-            if cmd[0] == "cp":
-                err = subprocess.CalledProcessError(1, cmd)
-                err.stderr = b"cp: /Applications/El Sbobinator.app: Permission denied"
-                raise err
-            return attach_proc
-
         events: list[dict] = []
 
         def _emit(evt: str, payload: dict) -> None:
@@ -249,7 +259,7 @@ class UpdaterTests(unittest.TestCase):
             ),
             patch("builtins.open", mock_open()),
             patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
-            patch("subprocess.run", side_effect=_fake_run),
+            patch("subprocess.run", return_value=attach_proc),
             patch("subprocess.Popen"),
             patch(
                 "el_sbobinator.core.updater._Thread",
@@ -257,6 +267,8 @@ class UpdaterTests(unittest.TestCase):
             ),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
             patch("os.unlink"),
+            patch("os.path.exists", return_value=True),
+            patch("os.access", return_value=False),  # Simulate permission denied
         ):
             mock_tmp.return_value.__enter__.return_value.name = "/tmp/app.dmg"
             mock_tmp.return_value.__exit__.return_value = False
@@ -578,7 +590,7 @@ class TestMacOSDmgInstall(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_macos_xattr_and_open_called_in_happy_path(self):
-        """On a successful DMG install xattr (quarantine removal) and Popen(['open',...]) must be called."""
+        """On a successful DMG install the spawned Popen bash script must contain xattr and open."""
         import plistlib
 
         fake_plist = plistlib.dumps(
@@ -589,16 +601,10 @@ class TestMacOSDmgInstall(unittest.TestCase):
         run_proc.stdout = fake_plist
         run_proc.returncode = 0
 
-        run_cmds: list[list[str]] = []
-
-        def _fake_run(cmd, **kwargs):
-            run_cmds.append(list(cmd))
-            return run_proc
-
-        popen_cmds: list[list[str]] = []
+        popen_calls: list[list[str]] = []
 
         def _fake_popen(cmd, **kwargs):
-            popen_cmds.append(list(cmd))
+            popen_calls.append(list(cmd))
 
         with (
             patch.object(sys, "platform", "darwin"),
@@ -612,7 +618,7 @@ class TestMacOSDmgInstall(unittest.TestCase):
             ),
             patch("builtins.open", mock_open()),
             patch("el_sbobinator.core.updater._verify_sha256", return_value=None),
-            patch("subprocess.run", side_effect=_fake_run),
+            patch("subprocess.run", return_value=run_proc),
             patch("subprocess.Popen", side_effect=_fake_popen),
             patch(
                 "el_sbobinator.core.updater._Thread",
@@ -621,6 +627,8 @@ class TestMacOSDmgInstall(unittest.TestCase):
             patch("el_sbobinator.core.updater.time.sleep"),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
             patch("os.unlink"),
+            patch("os.path.exists", return_value=True),
+            patch("os.access", return_value=True),
             patch.dict("sys.modules", {"webview": MagicMock(windows=[])}),
         ):
             mock_tmp.return_value.__enter__.return_value.name = "/tmp/app.dmg"
@@ -628,20 +636,20 @@ class TestMacOSDmgInstall(unittest.TestCase):
             result = download_and_install_update("1.5.0")
 
         self.assertTrue(result["ok"])
-        xattr_cmds = [c for c in run_cmds if c and c[0] == "xattr"]
-        self.assertEqual(len(xattr_cmds), 1, "xattr must be called exactly once")
-        self.assertIn("com.apple.quarantine", xattr_cmds[0])
-        self.assertEqual(
-            len(popen_cmds), 1, "Popen must be called once (to launch the app)"
-        )
-        self.assertEqual(popen_cmds[0][0], "open")
+        self.assertEqual(len(popen_calls), 1)
+        cmd = popen_calls[0]
+        self.assertEqual(cmd[0], "/bin/bash")
+        self.assertEqual(cmd[1], "-c")
+        script = cmd[2]
+        self.assertIn("xattr -dr com.apple.quarantine", script)
+        self.assertIn("open ", script)
 
     # ------------------------------------------------------------------
     # hdiutil detach called in finally even when cp fails (non-permission)
     # ------------------------------------------------------------------
 
-    def test_macos_hdiutil_detach_called_when_cp_raises_non_permission_error(self):
-        """hdiutil detach must be called in the finally block even when cp -R raises a non-permission error."""
+    def test_macos_hdiutil_detach_called_when_app_src_missing(self):
+        """hdiutil detach must be called in the finally block if the source application is missing in the DMG."""
         import plistlib
 
         fake_plist = plistlib.dumps(
@@ -655,10 +663,6 @@ class TestMacOSDmgInstall(unittest.TestCase):
         detach_calls: list[list[str]] = []
 
         def _fake_run(cmd, **kwargs):
-            if cmd[0] == "cp":
-                err = subprocess.CalledProcessError(1, cmd)
-                err.stderr = b"cp: I/O error (not permission)"
-                raise err
             if cmd[0] == "hdiutil" and len(cmd) > 1 and cmd[1] == "detach":
                 detach_calls.append(list(cmd))
             return attach_proc
@@ -688,6 +692,8 @@ class TestMacOSDmgInstall(unittest.TestCase):
             ),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
             patch("os.unlink"),
+            # Make exists return False to simulate missing app_src
+            patch("os.path.exists", return_value=False),
         ):
             mock_tmp.return_value.__enter__.return_value.name = "/tmp/app.dmg"
             mock_tmp.return_value.__exit__.return_value = False
@@ -696,8 +702,12 @@ class TestMacOSDmgInstall(unittest.TestCase):
         self.assertTrue(result["ok"])
         error_events = [e for e in events if e.get("status") == "error"]
         self.assertTrue(len(error_events) > 0)
-        self.assertIn("Installazione fallita", error_events[0].get("error", ""))
-        self.assertEqual(len(detach_calls), 1, "hdiutil detach must always be called")
+        self.assertIn("non trovata nel DMG", error_events[0].get("error", ""))
+        self.assertEqual(
+            len(detach_calls),
+            1,
+            "hdiutil detach must always be called when installation fails before spawn",
+        )
         self.assertIn("/Volumes/ElSbobinator", detach_calls[0])
 
     # ------------------------------------------------------------------
@@ -743,9 +753,11 @@ class TestWindowsInstallerLaunch(unittest.TestCase):
 
     def _sync_thread_cls(self):
         """Return a threading.Thread replacement that runs target() synchronously on start()."""
+        _original_thread = threading.Thread
 
-        class _SyncThread:
+        class _SyncThread(_original_thread):
             def __init__(self, target=None, args=(), daemon=False, **kw):
+                _original_thread.__init__(self, daemon=daemon, **kw)
                 self._target = target
                 self._args = args
 
@@ -892,6 +904,22 @@ class TestPollThenDestroy(unittest.TestCase):
             _poll_then_destroy(fake_proc)
 
         fake_window.destroy.assert_not_called()
+
+    def test_unlink_called_when_process_exits_on_first_poll_with_tmp_path(self):
+        """_try_unlink is called with tmp_path when the installer exits immediately."""
+        fake_proc = MagicMock()
+        fake_proc.poll.return_value = 1  # exits on first check
+
+        fake_webview = MagicMock()
+        fake_webview.windows = [MagicMock()]
+
+        with (
+            patch("el_sbobinator.core.updater.time.sleep"),
+            patch.dict("sys.modules", {"webview": fake_webview}),
+            patch("el_sbobinator.core.updater._try_unlink") as mock_unlink,
+        ):
+            _poll_then_destroy(fake_proc, tmp_path="/tmp/fake_setup.exe")
+            mock_unlink.assert_called_once_with("/tmp/fake_setup.exe")
 
     def test_destroy_not_called_when_process_exits_mid_window(self):
         """destroy() is NOT called when the installer exits before the confirmation threshold."""

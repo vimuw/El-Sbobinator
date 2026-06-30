@@ -122,7 +122,7 @@ export function KebabMenu({ items, align = 'right', buttonClassName }: KebabMenu
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left bg-transparent transition-colors"
                     style={{
                       border: 'none',
-                      borderRadius: 7,
+                      borderRadius: 8,
                       cursor: item.disabled ? 'default' : 'pointer',
                       color: item.danger ? 'var(--error-text)' : 'var(--text-primary)',
                       opacity: item.disabled ? 0.4 : 1,

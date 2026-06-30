@@ -173,7 +173,7 @@ function AnimatedStatIcon({ children, idleAnim, delay }: AnimatedStatIconProps) 
         <motion.div
           initial={{ scale: 0, opacity: 0, rotate: -20 }}
           animate={controls}
-          style={{ color: 'var(--text-muted)', display: 'inline-flex' }}
+          style={{ color: 'inherit', display: 'inline-flex' }}
         >
           {children}
         </motion.div>
@@ -195,15 +195,25 @@ function StatCard({ icon, value, label, delay, iconIdleAnim }: StatCardProps) {
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 20, delay } }}
-      whileTap={{ scale: 0.96 }}
+      whileTap={{ scale: 0.98 }}
       transition={{ type: 'spring', stiffness: 300, damping: 20 }}
       className="premium-panel stat-card p-4 flex flex-col items-center gap-2 text-center"
-      style={{ cursor: 'default' }}
+      style={{
+        cursor: 'default',
+      }}
     >
-      <AnimatedStatIcon idleAnim={iconIdleAnim} delay={delay}>
-        {icon}
-      </AnimatedStatIcon>
-      <span className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>{value}</span>
+      <div
+        className="w-10 h-10 rounded-full flex items-center justify-center transition-colors"
+        style={{
+          background: 'var(--sidebar-active-bg)',
+          color: 'var(--sidebar-active-text)',
+        }}
+      >
+        <AnimatedStatIcon idleAnim={iconIdleAnim} delay={delay}>
+          {icon}
+        </AnimatedStatIcon>
+      </div>
+      <span className="text-2xl font-bold tracking-tight mt-1" style={{ color: 'var(--text-primary)' }}>{value}</span>
       <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</span>
     </motion.div>
   );

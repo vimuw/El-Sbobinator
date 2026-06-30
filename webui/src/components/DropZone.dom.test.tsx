@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { DropZone } from './DropZone';
 
@@ -29,5 +29,26 @@ describe('DropZone', () => {
   it('does not apply is-dragging class when isDragging is false', () => {
     const { container } = render(<DropZone {...baseProps} />);
     expect(container.querySelector('.is-dragging')).toBeNull();
+  });
+
+  it('renders compact mode with correct text and supports keyboard Enter', () => {
+    const onClick = vi.fn();
+    render(<DropZone {...baseProps} compact onClick={onClick} />);
+    const compactDropZone = screen.getByRole('button');
+    expect(compactDropZone).toBeTruthy();
+    expect(screen.getByText('Trascina file o clicca per aggiungere')).toBeTruthy();
+
+    // trigger onKeyDown other key
+    fireEvent.keyDown(compactDropZone, { key: 'Escape' });
+    expect(onClick).not.toHaveBeenCalled();
+
+    // trigger onKeyDown Enter
+    fireEvent.keyDown(compactDropZone, { key: 'Enter' });
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders compact mode in dragging state', () => {
+    render(<DropZone {...baseProps} compact isDragging />);
+    expect(screen.getByText('Rilascia qui per aggiungere')).toBeTruthy();
   });
 });

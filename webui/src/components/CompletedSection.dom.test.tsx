@@ -44,18 +44,18 @@ describe('CompletedSection', () => {
 
   it('renders "Pulisci tutto" button when appState is idle', () => {
     render(<CompletedSection {...baseProps} doneFiles={[makeFile()]} appState="idle" />);
-    expect(screen.getByText('Pulisci tutto')).toBeTruthy();
+    expect(screen.getByLabelText('Pulisci tutto')).toBeTruthy();
   });
 
   it('renders "Pulisci tutto" during processing too', () => {
     render(<CompletedSection {...baseProps} doneFiles={[makeFile()]} appState="processing" />);
-    expect(screen.getByText('Pulisci tutto')).toBeTruthy();
+    expect(screen.getByLabelText('Pulisci tutto')).toBeTruthy();
   });
 
   it('calls onClearAll when Pulisci tutto is clicked', () => {
     const onClearAll = vi.fn();
     render(<CompletedSection {...baseProps} doneFiles={[makeFile()]} onClearAll={onClearAll} />);
-    fireEvent.click(screen.getByText('Pulisci tutto'));
+    fireEvent.click(screen.getByLabelText('Pulisci tutto'));
     expect(onClearAll).toHaveBeenCalledTimes(1);
   });
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { errorLabel, formatDuration, formatRelativeTime, formatSize, isQuotaError, isResumableError, shortModelName } from './utils';
+import { errorLabel, formatDuration, formatRelativeTime, formatSize, isQuotaError, isResumableError, readFileAsDataUrl, shortModelName } from './utils';
 
 describe('isQuotaError', () => {
   it('returns false for undefined', () => {
@@ -201,5 +201,48 @@ describe('shortModelName', () => {
 
   it('returns original for non-gemini model', () => {
     expect(shortModelName('claude-3')).toBe('claude-3');
+  });
+});
+
+describe('readFileAsDataUrl', () => {
+  it('resolves on success', async () => {
+    const mockResult = 'data:image/png;base64,abc';
+    const originalFileReader = (globalThis as any).FileReader;
+
+    (globalThis as any).FileReader = class {
+      result = mockResult;
+      onload: any = null;
+      readAsDataURL() {
+        if (this.onload) this.onload();
+      }
+    };
+
+    try {
+      const file = new Blob([]) as File;
+      const res = await readFileAsDataUrl(file);
+      expect(res).toBe(mockResult);
+    } finally {
+      (globalThis as any).FileReader = originalFileReader;
+    }
+  });
+
+  it('rejects on error', async () => {
+    const mockError = new Error('read error');
+    const originalFileReader = (globalThis as any).FileReader;
+
+    (globalThis as any).FileReader = class {
+      error = mockError;
+      onerror: any = null;
+      readAsDataURL() {
+        if (this.onerror) this.onerror();
+      }
+    };
+
+    try {
+      const file = new Blob([]) as File;
+      await expect(readFileAsDataUrl(file)).rejects.toThrow('read error');
+    } finally {
+      (globalThis as any).FileReader = originalFileReader;
+    }
   });
 });

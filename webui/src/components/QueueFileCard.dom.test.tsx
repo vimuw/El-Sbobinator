@@ -47,6 +47,23 @@ describe('QueueFileCard', () => {
     expect(screen.getByLabelText('Trascina per riordinare')).toBeTruthy();
   });
 
+  it('hides drag handle when showDragHandle is false', () => {
+    render(
+      <QueueWrapper>
+        <QueueFileCard
+          file={makeFile()}
+          appState="idle"
+          onRemove={vi.fn()}
+          onRetry={vi.fn()}
+          onPreview={vi.fn()}
+          onOpenFile={vi.fn()}
+          showDragHandle={false}
+        />
+      </QueueWrapper>,
+    );
+    expect(screen.queryByLabelText('Trascina per riordinare')).toBeNull();
+  });
+
   it('shows remove button when idle', () => {
     const onRemove = vi.fn();
     render(

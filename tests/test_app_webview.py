@@ -10,11 +10,14 @@ from unittest.mock import MagicMock, mock_open, patch
 
 from el_sbobinator.app_webview import ElSbobinatorApi, PipelineAdapter
 
+_original_thread = threading.Thread
 
-class _SyncThread:
+
+class _SyncThread(_original_thread):
     """threading.Thread replacement that runs target() synchronously on start()."""
 
     def __init__(self, target=None, args=(), daemon=False, **kw):
+        _original_thread.__init__(self, daemon=daemon, **kw)
         self._target = target
         self._args = args
 
@@ -26,16 +29,15 @@ class _SyncThread:
         pass
 
 
-class _StartupCleanupThread:
+class _StartupCleanupThread(_original_thread):
     instances: ClassVar[list["_StartupCleanupThread"]] = []
 
     def __init__(self, target=None, args=(), daemon=False, name=None, **kw):
+        _original_thread.__init__(self, daemon=daemon, name=name, **kw)
         self._target = target
         self._args = args
-        self.daemon = daemon
-        self.name = name
         self.started = False
-        self.__class__.instances.append(self)
+        _StartupCleanupThread.instances.append(self)
 
     def start(self):
         self.started = True
@@ -1044,7 +1046,7 @@ class AppWebviewTests(unittest.TestCase):
                     return_value=paths,
                 ),
                 patch(
-                    "el_sbobinator.app_webview.estimate_disk_space",
+                    "el_sbobinator.pipeline.pipeline_session.estimate_disk_space",
                     side_effect=fake_estimate_disk_space,
                 ),
             ):
@@ -1921,17 +1923,17 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
             with open(html_path, "w") as fh:
                 fh.write("<html><body></body></html>")
 
-            api._resolved_path_cache["key1"] = html_path
-            api._resolved_path_cache["key2"] = session_dir
+            api._resolved_path_cache["key1"] = os.path.realpath(html_path)
+            api._resolved_path_cache["key2"] = os.path.realpath(session_dir)
             api._resolved_path_cache["key3"] = "/unrelated/path"
 
             with patch.object(api, "_get_session_root", return_value=session_root):
                 result = api.delete_session(session_dir)
 
-        self.assertTrue(result["ok"], result.get("error"))
-        self.assertNotIn("key1", api._resolved_path_cache)
-        self.assertNotIn("key2", api._resolved_path_cache)
-        self.assertIn("key3", api._resolved_path_cache)
+            self.assertTrue(result["ok"], result.get("error"))
+            self.assertNotIn("key1", api._resolved_path_cache)
+            self.assertNotIn("key2", api._resolved_path_cache)
+            self.assertIn("key3", api._resolved_path_cache)
 
     def test_download_and_install_update_uses_streaming_urlopen(self):
         import io
@@ -1985,6 +1987,7 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
                     side_effect=_SyncThread,
                 ),
                 patch("el_sbobinator.core.updater.time.sleep"),
+                patch("el_sbobinator.core.updater._try_unlink"),
                 patch.dict("sys.modules", {"webview": MagicMock(windows=[])}),
             ):
                 api.download_and_install_update("v1.2.3")
@@ -2868,9 +2871,9 @@ class TestStreamMediaFile(unittest.TestCase):
             ):
                 result = api.stream_media_file("/missing/lecture.mp3", session_dir)
 
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["url"], "http://127.0.0.1:8765/audio/rel")
-        mock_server.assert_called_once_with(audio_path)
+                self.assertTrue(result["ok"])
+                self.assertEqual(result["url"], "http://127.0.0.1:8765/audio/rel")
+                mock_server.assert_called_once_with(os.path.realpath(audio_path))
 
 
 class TestGetCompletedSessions(unittest.TestCase):
@@ -3026,9 +3029,13 @@ class TestGetCompletedSessions(unittest.TestCase):
             ) as fh:
                 updated = _json.load(fh)
 
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["sessions"][0]["input_path"], new_audio_path)
-        self.assertEqual(updated["input"]["path"], new_audio_path)
+            self.assertTrue(result["ok"])
+            self.assertEqual(
+                result["sessions"][0]["input_path"], _os.path.realpath(new_audio_path)
+            )
+            self.assertEqual(
+                updated["input"]["path"], _os.path.realpath(new_audio_path)
+            )
 
 
 class TestMoveSessionRoot(unittest.TestCase):
@@ -3166,8 +3173,8 @@ class TestMoveSessionRoot(unittest.TestCase):
 class TestShowNotification(unittest.TestCase):
     """show_notification — Darwin osascript fallback and cross-platform error path."""
 
-    def test_darwin_osascript_popen_called_when_plyer_fails(self):
-        """On darwin, if plyer raises, subprocess.Popen(['osascript', ...]) must be called."""
+    def test_darwin_plyer_failure_returns_error_dict_and_no_osascript_spawned(self):
+        """On darwin, if plyer raises, do NOT call subprocess.Popen to invoke osascript, and return ok=False."""
         import sys
         from unittest.mock import MagicMock
 
@@ -3195,12 +3202,9 @@ class TestShowNotification(unittest.TestCase):
         ):
             result = api.show_notification("Titolo", "Messaggio di test")
 
-        self.assertTrue(result["ok"])
-        self.assertEqual(len(popen_calls), 1)
-        self.assertEqual(popen_calls[0][0], "osascript")
-        joined = " ".join(popen_calls[0])
-        self.assertIn("Messaggio di test", joined)
-        self.assertIn("Titolo", joined)
+        self.assertFalse(result["ok"])
+        self.assertEqual(len(popen_calls), 0)
+        self.assertIn("plyer unavailable", result["error"])
 
     def test_non_darwin_plyer_failure_returns_error_dict(self):
         """On non-darwin platforms, if plyer raises, return ok=False with error string."""
@@ -3646,6 +3650,119 @@ class TestRetryStartProcessingGuard(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("in corso", result["error"])
         self.assertNotIn("Retry", result["error"])
+
+    def test_open_file_rejects_url(self):
+        api = ElSbobinatorApi()
+        result = api.open_file("https://example.com")
+        self.assertFalse(result["ok"])
+        self.assertIn("URL", result["error"])
+
+    def test_open_file_rejects_url_case_insensitive(self):
+        api = ElSbobinatorApi()
+        result = api.open_file("HTTPS://example.com")
+        self.assertFalse(result["ok"])
+        self.assertIn("URL", result["error"])
+
+    def test_open_file_rejects_non_string(self):
+        api = ElSbobinatorApi()
+        result = api.open_file(None)  # type: ignore[arg-type]
+        self.assertFalse(result["ok"])
+        self.assertIn("deve essere una stringa", result["error"])
+
+    def test_open_file_rejects_path_outside_allowed_roots(self):
+        api = ElSbobinatorApi()
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            session_root = os.path.join(td, "sessions")
+            desktop_dir = os.path.join(td, "desktop")
+            os.makedirs(session_root)
+            os.makedirs(desktop_dir)
+
+            outside_file = os.path.join(td, "hacked.html")
+            with open(outside_file, "w") as fh:
+                fh.write("test")
+
+            with (
+                patch.object(api, "_get_session_root", return_value=session_root),
+                patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+            ):
+                result = api.open_file(outside_file)
+                self.assertFalse(result["ok"])
+                self.assertIn("fuori dai percorsi consentiti", result["error"])
+
+    def test_open_file_accepts_path_inside_allowed_roots(self):
+        api = ElSbobinatorApi()
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            session_root = os.path.join(td, "sessions")
+            desktop_dir = os.path.join(td, "desktop")
+            os.makedirs(session_root)
+            os.makedirs(desktop_dir)
+
+            inside_file = os.path.join(session_root, "session_output.html")
+            with open(inside_file, "w") as fh:
+                fh.write("test")
+
+            with (
+                patch.object(api, "_get_session_root", return_value=session_root),
+                patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                patch(
+                    "el_sbobinator.app_webview.open_path_with_default_app"
+                ) as mock_open,
+            ):
+                result = api.open_file(inside_file)
+                self.assertTrue(result["ok"])
+                mock_open.assert_called_once_with(os.path.realpath(inside_file))
+
+    def test_path_under_root_with_drive_root(self):
+        from el_sbobinator.app_webview import _path_under_root
+
+        # Test case: root is a Windows-style drive root or POSIX root (ending in slash/backslash)
+        root = "C:\\" if os.name == "nt" else "/"
+        allowed_file = "C:\\file.txt" if os.name == "nt" else "/file.txt"
+        nested_file = "C:\\dir\\file.txt" if os.name == "nt" else "/dir/file.txt"
+        disallowed_file = "D:\\file.txt" if os.name == "nt" else "../file.txt"
+
+        self.assertTrue(_path_under_root(allowed_file, root))
+        self.assertTrue(_path_under_root(nested_file, root))
+        self.assertTrue(_path_under_root(root, root))
+        if os.name == "nt":
+            self.assertFalse(_path_under_root(disallowed_file, root))
+
+    def test_path_under_root_with_normal_paths(self):
+        from el_sbobinator.app_webview import _path_under_root
+
+        root = "C:\\Users\\Desktop" if os.name == "nt" else "/home/user/desktop"
+        allowed_file = (
+            "C:\\Users\\Desktop\\file.txt"
+            if os.name == "nt"
+            else "/home/user/desktop/file.txt"
+        )
+        nested_file = (
+            "C:\\Users\\Desktop\\dir\\file.txt"
+            if os.name == "nt"
+            else "/home/user/desktop/dir/file.txt"
+        )
+        disallowed_file_sibling = (
+            "C:\\Users\\DesktopNot" if os.name == "nt" else "/home/user/desktopnot"
+        )
+        disallowed_file_outside = (
+            "C:\\Users\\file.txt" if os.name == "nt" else "/home/user/file.txt"
+        )
+
+        self.assertTrue(_path_under_root(allowed_file, root))
+        self.assertTrue(_path_under_root(nested_file, root))
+        self.assertTrue(_path_under_root(root, root))
+        self.assertFalse(_path_under_root(disallowed_file_sibling, root))
+        self.assertFalse(_path_under_root(disallowed_file_outside, root))
 
 
 if __name__ == "__main__":

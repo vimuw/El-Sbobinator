@@ -4,7 +4,6 @@ import { SetupPage } from './SetupPage';
 
 const baseProps = {
   hasProtectedKey: false,
-  setIsSettingsOpen: vi.fn(),
   onSaved: vi.fn(),
   preferredModel: 'gemini-2.5-flash',
   fallbackKeys: [],
@@ -93,13 +92,6 @@ describe('SetupPage', () => {
     render(<SetupPage {...baseProps} />);
     fireEvent.click(screen.getByText('aistudio.google.com/apikey'));
     expect(openUrl).toHaveBeenCalledWith('https://aistudio.google.com/apikey');
-  });
-
-  it('calls setIsSettingsOpen when advanced settings link is clicked', () => {
-    const setIsSettingsOpen = vi.fn();
-    render(<SetupPage {...baseProps} setIsSettingsOpen={setIsSettingsOpen} />);
-    fireEvent.click(screen.getByText('Apri impostazioni avanzate'));
-    expect(setIsSettingsOpen).toHaveBeenCalledWith(true);
   });
 
   it('shows error when save_settings returns {ok:false}', async () => {

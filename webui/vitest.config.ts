@@ -18,6 +18,8 @@ export default defineConfig({
         'src/components/EditorToolbar.tsx',
         'src/components/EditorToolbarControls.tsx',
         'src/components/EditorWordCount.tsx',
+        'src/components/ArchivePage.tsx',
+        'src/components/EditorFullPage.tsx',
       ],
       thresholds: {
         lines: 70,

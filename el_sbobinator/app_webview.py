@@ -57,11 +57,7 @@ from el_sbobinator.core.shared import (
 from el_sbobinator.core.shared import (
     cleanup_completed_sessions as _cleanup_completed_sessions,
 )
-from el_sbobinator.core.updater import (
-    download_and_install_update as _download_and_install_update,
-)
 from el_sbobinator.pipeline.pipeline_adapter import PipelineAdapter, _drain_dnd_paths
-from el_sbobinator.pipeline.pipeline_session import estimate_disk_space, normalize_stage
 from el_sbobinator.pipeline.pipeline_settings import (
     build_default_pipeline_settings,
     load_and_sanitize_settings,
@@ -72,12 +68,6 @@ from el_sbobinator.services.config_service import (
     load_config,
     save_config,
     save_session_root_to_config,
-)
-from el_sbobinator.services.folders_service import (
-    get_folders as _get_archive_folders,
-)
-from el_sbobinator.services.folders_service import (
-    save_folders as _save_archive_folders,
 )
 from el_sbobinator.utils.file_ops import (
     evict_html_paths_under,
@@ -174,7 +164,11 @@ def _path_under_root(path: str, root: str) -> bool:
     """
     nc_path = os.path.normcase(path)
     nc_root = os.path.normcase(root)
-    return nc_path == nc_root or nc_path.startswith(nc_root + os.sep)
+    if nc_path == nc_root:
+        return True
+    if not nc_root.endswith(os.sep):
+        nc_root += os.sep
+    return nc_path.startswith(nc_root)
 
 
 def _retry_zero_retried_response(
@@ -289,6 +283,7 @@ class ElSbobinatorApi:
         self._move_lock = threading.Lock()
         self._retry_active_count: int = 0
         self._pipeline_lifecycle_lock = threading.Lock()
+        self._cleanup_lock = threading.Lock()
         configure_logging()
         self._logger = get_logger("el_sbobinator.webview")
         # Initialise session root: apply persisted override or auto-migrate legacy path.
@@ -542,8 +537,8 @@ class ElSbobinatorApi:
                 return {"ok": False, "error": "Percorso non valido"}
             if not os.path.isdir(abs_dir):
                 return {"ok": False, "error": "Cartella non trovata"}
-            shutil.rmtree(abs_dir)
             self._evict_deleted_session_caches(abs_dir)
+            shutil.rmtree(abs_dir)
             with self._sessions_cache_lock:
                 self._sessions_cache = None
                 self._sessions_cache_gen += 1
@@ -943,23 +938,24 @@ class ElSbobinatorApi:
     ) -> dict:
         """Delete incomplete session folders older than max_age_days days."""
         try:
-            result = cleanup_orphan_sessions(
-                max(1, int(max_age_days)),
-                dry_run=bool(dry_run),
-            )
-            if result["removed"] > 0:
-                with self._sessions_cache_lock:
-                    self._sessions_cache = None
-                    self._sessions_cache_gen += 1
-            return {
-                "ok": True,
-                "removed": result["removed"],
-                "freed_bytes": result["freed_bytes"],
-                "errors": result["errors"],
-                "candidates": result.get("candidates", result["removed"]),
-                "preserved_completed": result.get("preserved_completed", 0),
-                "missing_completed_html": result.get("missing_completed_html", 0),
-            }
+            with self._cleanup_lock:
+                result = cleanup_orphan_sessions(
+                    max(1, int(max_age_days)),
+                    dry_run=bool(dry_run),
+                )
+                if result["removed"] > 0:
+                    with self._sessions_cache_lock:
+                        self._sessions_cache = None
+                        self._sessions_cache_gen += 1
+                return {
+                    "ok": True,
+                    "removed": result["removed"],
+                    "freed_bytes": result["freed_bytes"],
+                    "errors": result["errors"],
+                    "candidates": result.get("candidates", result["removed"]),
+                    "preserved_completed": result.get("preserved_completed", 0),
+                    "missing_completed_html": result.get("missing_completed_html", 0),
+                }
         except Exception as e:
             return {
                 "ok": False,
@@ -979,27 +975,28 @@ class ElSbobinatorApi:
     ) -> dict:
         """Count or delete completed session folders older than max_age_days days."""
         try:
-            result = _cleanup_completed_sessions(
-                max(1, int(max_age_days)),
-                dry_run=bool(dry_run),
-            )
-            if result["removed"] > 0:
-                for deleted_dir in result.get("deleted_paths", []):
-                    self._evict_deleted_session_caches(str(deleted_dir))
-                with self._sessions_cache_lock:
-                    self._sessions_cache = None
-                    self._sessions_cache_gen += 1
-                with self._text_cache_lock:
-                    self._text_cache.clear()
-            return {
-                "ok": True,
-                "removed": result["removed"],
-                "freed_bytes": result["freed_bytes"],
-                "errors": result["errors"],
-                "candidates": result.get("candidates", result["removed"]),
-                "preserved_completed": result.get("preserved_completed", 0),
-                "missing_completed_html": result.get("missing_completed_html", 0),
-            }
+            with self._cleanup_lock:
+                result = _cleanup_completed_sessions(
+                    max(1, int(max_age_days)),
+                    dry_run=bool(dry_run),
+                )
+                if result["removed"] > 0:
+                    for deleted_dir in result.get("deleted_paths", []):
+                        self._evict_deleted_session_caches(str(deleted_dir))
+                    with self._sessions_cache_lock:
+                        self._sessions_cache = None
+                        self._sessions_cache_gen += 1
+                    with self._text_cache_lock:
+                        self._text_cache.clear()
+                return {
+                    "ok": True,
+                    "removed": result["removed"],
+                    "freed_bytes": result["freed_bytes"],
+                    "errors": result["errors"],
+                    "candidates": result.get("candidates", result["removed"]),
+                    "preserved_completed": result.get("preserved_completed", 0),
+                    "missing_completed_html": result.get("missing_completed_html", 0),
+                }
         except Exception as e:
             return {
                 "ok": False,
@@ -1129,6 +1126,10 @@ class ElSbobinatorApi:
     def get_archive_folders(self) -> dict:
         """Return the user-defined archive folders."""
         try:
+            from el_sbobinator.services.folders_service import (
+                get_folders as _get_archive_folders,
+            )
+
             folders = _get_archive_folders()
             return {"ok": True, "folders": folders}
         except Exception as e:
@@ -1139,6 +1140,10 @@ class ElSbobinatorApi:
         try:
             if not isinstance(folders, list):
                 return {"ok": False, "error": "folders must be a list"}
+            from el_sbobinator.services.folders_service import (
+                save_folders as _save_archive_folders,
+            )
+
             _save_archive_folders(folders)
             return {"ok": True}
         except Exception as e:
@@ -1316,6 +1321,11 @@ class ElSbobinatorApi:
     def _low_disk_warning_for_files(
         self, files: list[BridgeFileItem]
     ) -> LowDiskWarningPayload | None:
+        from el_sbobinator.pipeline.pipeline_session import (
+            estimate_disk_space,
+            normalize_stage,
+        )
+
         try:
             cfg = load_config()
             defaults = build_default_pipeline_settings(cfg)
@@ -1710,12 +1720,25 @@ class ElSbobinatorApi:
 
     def open_file(self, path: str) -> dict:
         """Open a local file/folder with the system default handler."""
-        if isinstance(path, str) and (
-            path.startswith("http://") or path.startswith("https://")
-        ):
+        if not isinstance(path, str):
+            return {"ok": False, "error": "Path non valido: deve essere una stringa."}
+        if path.lower().startswith(("http://", "https://")):
             return {"ok": False, "error": "Usa open_url per aprire URL."}
         try:
-            open_path_with_default_app(path)
+            real_path = os.path.realpath(path)
+            allowed_roots = [
+                os.path.realpath(get_desktop_dir()),  # Desktop / OneDrive Desktop
+                os.path.realpath(self._get_session_root()),  # Session storage
+            ]
+            path_is_allowed = any(
+                _path_under_root(real_path, root) for root in allowed_roots
+            )
+            if not path_is_allowed:
+                return {
+                    "ok": False,
+                    "error": "Accesso negato: path fuori dai percorsi consentiti.",
+                }
+            open_path_with_default_app(real_path)
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": redact_secrets(e)}
@@ -2217,17 +2240,6 @@ class ElSbobinatorApi:
             )
             return {"ok": True}
         except Exception as e:
-            # Fallback a legacy OS script
-            if sys.platform == "darwin":
-                import shlex
-                import subprocess
-
-                script = (
-                    f"display notification {shlex.quote(str(message or ''))}"
-                    f" with title {shlex.quote(str(title or ''))}"
-                )
-                subprocess.Popen(["osascript", "-e", script])
-                return {"ok": True}
             return {"ok": False, "error": redact_secrets(e)}
 
     def stream_media_file(self, file_path: str, session_dir: str | None = None) -> dict:
@@ -2268,6 +2280,10 @@ class ElSbobinatorApi:
 
     def download_and_install_update(self, version: str) -> dict:
         """Download the correct installer for this OS, launch it, then quit the app."""
+        from el_sbobinator.core.updater import (
+            download_and_install_update as _download_and_install_update,
+        )
+
         return _download_and_install_update(version, emit_fn=self._adapter.emit)
 
     # ---- Console push helper ----
