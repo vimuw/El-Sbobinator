@@ -207,11 +207,11 @@ describe('shortModelName', () => {
 describe('readFileAsDataUrl', () => {
   it('resolves on success', async () => {
     const mockResult = 'data:image/png;base64,abc';
-    const originalFileReader = (globalThis as any).FileReader;
+    const originalFileReader = (globalThis as unknown as { FileReader: unknown }).FileReader;
 
-    (globalThis as any).FileReader = class {
+    (globalThis as unknown as { FileReader: unknown }).FileReader = class {
       result = mockResult;
-      onload: any = null;
+      onload: (() => void) | null = null;
       readAsDataURL() {
         if (this.onload) this.onload();
       }
@@ -222,17 +222,17 @@ describe('readFileAsDataUrl', () => {
       const res = await readFileAsDataUrl(file);
       expect(res).toBe(mockResult);
     } finally {
-      (globalThis as any).FileReader = originalFileReader;
+      (globalThis as unknown as { FileReader: unknown }).FileReader = originalFileReader;
     }
   });
 
   it('rejects on error', async () => {
     const mockError = new Error('read error');
-    const originalFileReader = (globalThis as any).FileReader;
+    const originalFileReader = (globalThis as unknown as { FileReader: unknown }).FileReader;
 
-    (globalThis as any).FileReader = class {
+    (globalThis as unknown as { FileReader: unknown }).FileReader = class {
       error = mockError;
-      onerror: any = null;
+      onerror: (() => void) | null = null;
       readAsDataURL() {
         if (this.onerror) this.onerror();
       }
@@ -242,7 +242,7 @@ describe('readFileAsDataUrl', () => {
       const file = new Blob([]) as File;
       await expect(readFileAsDataUrl(file)).rejects.toThrow('read error');
     } finally {
-      (globalThis as any).FileReader = originalFileReader;
+      (globalThis as unknown as { FileReader: unknown }).FileReader = originalFileReader;
     }
   });
 });

@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTheme } from './useTheme';
+import type { PywebviewApi } from '../bridge';
 
 const THEME_KEY = 'el-sbobinator.theme.v1';
 
@@ -73,7 +74,7 @@ describe('useTheme', () => {
       if (originalMatchMedia) {
         window.matchMedia = originalMatchMedia;
       } else {
-        delete (window as any).matchMedia;
+        delete (window as Partial<Window>).matchMedia;
       }
     }
   });
@@ -89,7 +90,7 @@ describe('useTheme', () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
       dispatchEvent: vi.fn(),
-    }) as any);
+    }) as unknown as MediaQueryList);
 
     try {
       const { result } = renderHook(() => useTheme());
@@ -110,7 +111,7 @@ describe('useTheme', () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
       dispatchEvent: vi.fn(),
-    }) as any);
+    }) as unknown as MediaQueryList);
 
     try {
       const { result } = renderHook(() => useTheme());
@@ -130,7 +131,7 @@ describe('useTheme', () => {
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
       matches: false,
       media: query,
-    }) as any);
+    }) as unknown as MediaQueryList);
 
     try {
       const { result } = renderHook(() => useTheme());
@@ -160,10 +161,10 @@ describe('useTheme', () => {
 
   it('calls pywebview API if available', async () => {
     const saveThemeMock = vi.fn();
-    const originalPyWebview = (window as any).pywebview;
-    (window as any).pywebview = {
+    const originalPyWebview = window.pywebview;
+    window.pywebview = {
       api: {
-        save_theme_preference: saveThemeMock,
+        save_theme_preference: saveThemeMock as unknown as PywebviewApi["save_theme_preference"],
       },
     };
 
@@ -174,7 +175,7 @@ describe('useTheme', () => {
       });
       expect(saveThemeMock).toHaveBeenCalledWith('light');
     } finally {
-      (window as any).pywebview = originalPyWebview;
+      window.pywebview = originalPyWebview;
     }
   });
 });
