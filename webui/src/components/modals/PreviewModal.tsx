@@ -1,11 +1,15 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, Copy, ExternalLink, FileText, X } from 'lucide-react';
-import type { Heading } from '../../RichTextEditor';
+import { Check, Copy, ExternalLink, FileText, Loader2, X } from 'lucide-react';
+import type { Heading } from '../RichTextEditor';
+import type { SaveHtmlResult } from '../../bridge';
+import { nextHtmlAutosaveGeneration, seedHtmlAutosaveGeneration } from '../../autosaveGeneration';
 import { normalizePreviewHtmlContent } from '../../previewHtml';
 
-const LazyAudioPlayer = React.lazy(() => import('../../AudioPlayer').then(module => ({ default: module.AudioPlayer })));
-const LazyRichTextEditor = React.lazy(() => import('../../RichTextEditor').then(module => ({ default: module.RichTextEditor })));
+const LazyAudioPlayer = React.lazy(() => import('../AudioPlayer').then(module => ({ default: module.AudioPlayer })));
+const LazyRichTextEditor = React.lazy(() => import('../RichTextEditor').then(module => ({ default: module.RichTextEditor })));
+
+const isSaveCommitted = (res: SaveHtmlResult) => res.ok && res.saved !== false;
 
 interface PreviewModalProps {
   previewContent: string | null;
@@ -33,15 +37,20 @@ export function PreviewModal({
   const [relinkSuccess, setRelinkSuccess] = useState(false);
   const [isRelinking, setIsRelinking] = useState(false);
   const relinkTimerRef = useRef<number | null>(null);
+  const copiedTimerRef = useRef<number | null>(null);
   const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const getHtmlRef = useRef<(() => string) | null>(null);
   const isDirtyRef = useRef(false);
   const lastPersistedRef = useRef(previewContent ?? '');
   const autosaveTimerRef = useRef<number | null>(null);
-  const autosaveGenRef = useRef(0);
+  const [autosaveGenSeed] = useState(() => seedHtmlAutosaveGeneration(htmlPath));
+  const autosaveGenRef = useRef(autosaveGenSeed);
   const saveErrorOnCloseRef = useRef(false);
   const htmlPathRef = useRef(htmlPath);
-  useEffect(() => { htmlPathRef.current = htmlPath; }, [htmlPath]);
+  useEffect(() => {
+    htmlPathRef.current = htmlPath;
+    autosaveGenRef.current = seedHtmlAutosaveGeneration(htmlPath);
+  }, [htmlPath]);
   useEffect(() => {
     lastPersistedRef.current = previewContent ?? '';
     isDirtyRef.current = false;
@@ -53,7 +62,10 @@ export function PreviewModal({
   }, [previewContent]);
 
   useEffect(() => {
-    return () => { if (relinkTimerRef.current) window.clearTimeout(relinkTimerRef.current); };
+    return () => {
+      if (relinkTimerRef.current) window.clearTimeout(relinkTimerRef.current);
+      if (copiedTimerRef.current) window.clearTimeout(copiedTimerRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -64,7 +76,9 @@ export function PreviewModal({
       const path = htmlPathRef.current;
       const snap = getHtmlRef.current?.() ?? '';
       if (path && snap && snap !== lastPersistedRef.current) {
-        void window.pywebview?.api?.save_html_content(path, snap, ++autosaveGenRefAtCleanup.current);
+        const gen = nextHtmlAutosaveGeneration(path);
+        autosaveGenRefAtCleanup.current = gen;
+        void window.pywebview?.api?.save_html_content(path, snap, gen);
       }
     };
   }, []); // empty deps: runs cleanup only on unmount
@@ -91,8 +105,10 @@ export function PreviewModal({
       if (path && snap && snap !== lastPersistedRef.current && window.pywebview?.api?.save_html_content) {
         setAutosaveStatus('saving');
         try {
-          const res = await window.pywebview.api.save_html_content(path, snap, ++autosaveGenRef.current);
-          if (res.ok) { lastPersistedRef.current = snap; isDirtyRef.current = false; }
+          const gen = nextHtmlAutosaveGeneration(path);
+          autosaveGenRef.current = gen;
+          const res = await window.pywebview.api.save_html_content(path, snap, gen);
+          if (isSaveCommitted(res)) { lastPersistedRef.current = snap; isDirtyRef.current = false; }
           else { saveErrorOnCloseRef.current = true; setAutosaveStatus('error'); return; }
         } catch { saveErrorOnCloseRef.current = true; setAutosaveStatus('error'); return; }
       }
@@ -113,7 +129,8 @@ export function PreviewModal({
     saveErrorOnCloseRef.current = false;
     if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
     const savedForPath = htmlPath;
-    const gen = ++autosaveGenRef.current;
+    const gen = nextHtmlAutosaveGeneration(savedForPath);
+    autosaveGenRef.current = gen;
     autosaveTimerRef.current = window.setTimeout(async () => {
       if (!isDirtyRef.current || !window.pywebview?.api?.save_html_content) return;
       const snap = getHtmlRef.current?.() ?? '';
@@ -123,7 +140,7 @@ export function PreviewModal({
         const res = await window.pywebview.api.save_html_content(savedForPath, snap, gen);
         if (htmlPathRef.current !== savedForPath) return;
         if (gen !== autosaveGenRef.current) return;
-        if (res.ok) { lastPersistedRef.current = snap; isDirtyRef.current = false; setAutosaveStatus('saved'); }
+        if (isSaveCommitted(res)) { lastPersistedRef.current = snap; isDirtyRef.current = false; setAutosaveStatus('saved'); }
         else setAutosaveStatus('error');
       } catch { setAutosaveStatus('error'); }
     }, 700);
@@ -146,7 +163,8 @@ export function PreviewModal({
       await navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]);
     } catch (_) { navigator.clipboard.writeText(temp.textContent || temp.innerText || ''); }
     setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
+    if (copiedTimerRef.current) window.clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = window.setTimeout(() => setIsCopied(false), 2000);
   };
 
   const scrollToHeading = (heading: Heading) => {
@@ -166,42 +184,34 @@ export function PreviewModal({
     <AnimatePresence>
       {previewContent !== null && (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={() => void flushAndClose()}
           className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
-          style={{ background: 'var(--bg-overlay)', backdropFilter: 'blur(10px)' }}
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="modal-overlay absolute inset-0"
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }}
+            exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14, ease: 'easeIn' } }}
             onClick={event => event.stopPropagation()}
             className="modal-card w-full max-h-[88vh] flex flex-col overflow-hidden"
             style={{ maxWidth: isTocOpen ? '1400px' : '1100px', transition: 'max-width 0.25s ease' }}
           >
-            <div className="px-4 py-4 sm:px-5 flex items-center justify-between gap-3 border-b shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
-              <h3 className="font-semibold text-lg flex items-center gap-2 truncate min-w-0" style={{ color: 'var(--text-primary)' }}>
-                <FileText className="w-5 h-5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+            <div className="px-4 py-4 sm:px-5 flex items-center justify-between gap-3 shrink-0 modal-header">
+              <h3 className="font-semibold text-lg flex items-center gap-2 truncate min-w-0 text-[var(--text-primary)]">
+                <FileText className="w-5 h-5 shrink-0 text-[var(--text-muted)]" />
                 <span className="truncate">Anteprima: {previewTitle}</span>
               </h3>
               <div className="flex gap-2 shrink-0 flex-wrap justify-end">
-                <span
-                  className="inline-flex h-[38px] items-center rounded-[14px] px-3 text-sm font-medium"
-                  style={{
-                    color: autosaveStatus === 'error' ? 'var(--error-text)' : autosaveStatus === 'saved' ? 'var(--success-text)' : 'var(--text-muted)',
-                    background: 'rgba(255,255,255,0.02)',
-                    border: '1px solid var(--border-default)',
-                  }}
-                >
-                  {autosaveStatus === 'saving' ? 'Salvataggio...' : autosaveStatus === 'saved' ? 'Salvato' : autosaveStatus === 'error' ? 'Errore salvataggio' : 'Salvataggio automatico'}
-                </span>
                 {htmlPath && (
                   <button
                     onClick={() => window.pywebview?.api?.open_file?.(htmlPath)}
                     className="icon-button modal-icon-button"
-                    style={{ color: 'var(--text-muted)' }}
                     title="Apri file HTML"
                   >
                     <ExternalLink className="w-4 h-4" />
@@ -210,14 +220,38 @@ export function PreviewModal({
                 <div className="relative">
                   <button
                     onClick={handleCopy}
-                    className="icon-button modal-icon-button"
-                    style={isCopied ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : { color: 'var(--text-muted)' }}
+                    className={`icon-button modal-icon-button ${isCopied ? 'border-[var(--success-ring)] text-[var(--success-text)]' : ''}`}
                     title={isCopied ? 'Copiato!' : 'Copia per Google Docs'}
                   >
                     {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   </button>
                 </div>
-                <button onClick={() => void flushAndClose()} className="icon-button modal-icon-button" style={{ color: 'var(--text-muted)' }} title={autosaveStatus === 'error' ? 'Chiudi senza salvare' : undefined}>
+                <span
+                  className="inline-flex h-[38px] items-center rounded-full px-3.5 text-sm font-medium"
+                  style={{
+                    color: autosaveStatus === 'error' ? 'var(--error-text)' : autosaveStatus === 'saved' ? 'var(--success-text)' : 'var(--text-muted)',
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid',
+                    borderColor: autosaveStatus === 'error' ? 'var(--error-ring)' : autosaveStatus === 'saved' ? 'var(--success-ring)' : 'var(--border-default)',
+                  }}
+                >
+                  {autosaveStatus === 'saving' ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                      <span>Autosave</span>
+                    </>
+                  ) : autosaveStatus === 'saved' ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 mr-1.5" />
+                      <span>Salvato</span>
+                    </>
+                  ) : autosaveStatus === 'error' ? (
+                    <span>Errore salvataggio</span>
+                  ) : (
+                    <span>Autosave</span>
+                  )}
+                </span>
+                <button onClick={() => void flushAndClose()} className="icon-button modal-icon-button" title={autosaveStatus === 'error' ? 'Chiudi senza salvare' : undefined}>
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -244,7 +278,7 @@ export function PreviewModal({
                 </div>
 
                 {(audioSrc || audioRelinkNeeded) && (
-                  <div className="shrink-0 border-t px-4 sm:px-5" style={{ borderColor: 'var(--border-subtle)' }}>
+                  <div className="shrink-0 px-4 sm:px-5 modal-footer">
                     {audioSrc ? (
                       <Suspense fallback={<div className="p-4 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento player...</div>}>
                         <LazyAudioPlayer
@@ -253,6 +287,7 @@ export function PreviewModal({
                           initialPlaybackRate={previewInitAudio.playbackRate}
                           initialVolume={previewInitAudio.volume}
                           onStateChange={onAudioStateChange}
+                          onRelink={onRelink}
                         />
                       </Suspense>
                     ) : (
@@ -260,7 +295,7 @@ export function PreviewModal({
                         <div className="min-w-0">
                           <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Audio non trovato</p>
                           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                            Il file originale e stato spostato. Selezionalo di nuovo per riattivare il player.
+                            Il file originale è stato spostato. Selezionalo di nuovo per riattivare il player.
                           </p>
                         </div>
                         <button
@@ -279,8 +314,7 @@ export function PreviewModal({
                             }
                           }}
                           disabled={isRelinking}
-                          className="modal-action-button shrink-0"
-                          style={relinkSuccess ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : {}}
+                          className={`modal-action-button shrink-0 ${relinkSuccess ? 'border-[var(--success-ring)] text-[var(--success-text)]' : ''}`}
                         >
                           {relinkSuccess ? <><Check className="w-3.5 h-3.5" /> Ricollegato</> : isRelinking ? 'Selezione...' : 'Ricollega audio'}
                         </button>

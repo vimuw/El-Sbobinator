@@ -3,7 +3,14 @@ import { APP_VERSION, GITHUB_API_RELEASES_URL } from '../branding';
 
 const UPDATE_DISMISSED_KEY = 'el-sbobinator.dismissed-update.v1';
 const UPDATE_LAST_CHECK_KEY = 'el-sbobinator.last-update-check.v1';
+const UPDATE_LATEST_CACHE_KEY = 'el-sbobinator.latest-release-cache.v1';
 const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
+const UPDATE_CACHE_VALID_MS = 24 * 60 * 60 * 1000;
+
+type LatestReleaseCache = {
+  version: string;
+  checkedAt: number;
+};
 
 const compareVersions = (a: string, b: string): number => {
   const parse = (v: string) => v.replace(/^v/, '').split('.').map(p => parseInt(p, 10) || 0);
@@ -12,12 +19,67 @@ const compareVersions = (a: string, b: string): number => {
   return aMaj !== bMaj ? aMaj - bMaj : aMin !== bMin ? aMin - bMin : aPatch - bPatch;
 };
 
+const readCachedLatest = (): LatestReleaseCache | null => {
+  try {
+    const raw = window.localStorage.getItem(UPDATE_LATEST_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<LatestReleaseCache>;
+    const version = typeof parsed.version === 'string' ? parsed.version : '';
+    const checkedAt = typeof parsed.checkedAt === 'number' ? parsed.checkedAt : 0;
+    if (!version || !checkedAt) return null;
+    if (Date.now() - checkedAt > UPDATE_CACHE_VALID_MS) return null;
+    return { version, checkedAt };
+  } catch (_) {
+    return null;
+  }
+};
+
+const writeCachedLatest = (version: string) => {
+  try {
+    window.localStorage.setItem(
+      UPDATE_LATEST_CACHE_KEY,
+      JSON.stringify({ version, checkedAt: Date.now() }),
+    );
+  } catch (_) {}
+};
+
 export function useUpdateChecker() {
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
+  const [isDismissed, setIsDismissed] = useState(false);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [hasChecked, setHasChecked] = useState(false);
+  const [checkFailed, setCheckFailed] = useState(false);
   const isCheckingRef = useRef(false);
+
+  const applyLatestVersion = useCallback((latest: string | null): boolean => {
+    if (!latest) {
+      setLatestVersion(null);
+      setUpdateAvailable(null);
+      setIsDismissed(false);
+      return false;
+    }
+    setUpdateAvailable(null);
+    if (compareVersions(latest, APP_VERSION) > 0) {
+      setLatestVersion(latest);
+      try {
+        const dismissed = window.localStorage.getItem(UPDATE_DISMISSED_KEY);
+        if (dismissed !== latest) {
+          setUpdateAvailable(latest);
+          setIsDismissed(false);
+        } else {
+          setIsDismissed(true);
+        }
+      } catch (_) {
+        setUpdateAvailable(latest);
+        setIsDismissed(false);
+      }
+    } else {
+      setLatestVersion(null);
+      setIsDismissed(false);
+    }
+    return true;
+  }, []);
 
   const checkForUpdates = useCallback((force: boolean = false) => {
     if (isCheckingRef.current) return;
@@ -30,37 +92,48 @@ export function useUpdateChecker() {
     isCheckingRef.current = true;
     if (force) setIsCheckingUpdate(true);
     fetch(GITHUB_API_RELEASES_URL)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then(data => {
         try { window.localStorage.setItem(UPDATE_LAST_CHECK_KEY, String(Date.now())); } catch (_) {}
         const latest: string = data?.tag_name;
-        if (!latest) return;
-        if (compareVersions(latest, APP_VERSION) > 0) {
-          setLatestVersion(latest);
-          try {
-            const dismissed = window.localStorage.getItem(UPDATE_DISMISSED_KEY);
-            if (dismissed !== latest) setUpdateAvailable(latest);
-          } catch (_) {
-            setUpdateAvailable(latest);
-          }
+        if (!latest) {
+          setLatestVersion(null);
+          setUpdateAvailable(null);
+          setIsDismissed(false);
+          setCheckFailed(false);
+          return;
         }
+        writeCachedLatest(latest);
+        applyLatestVersion(latest);
+        setCheckFailed(false);
       })
-      .catch(() => {})
+      .catch(() => {
+        const cached = readCachedLatest();
+        if (cached && applyLatestVersion(cached.version)) {
+          setCheckFailed(false);
+          return;
+        }
+        setCheckFailed(true);
+      })
       .finally(() => {
         isCheckingRef.current = false;
         if (force) setIsCheckingUpdate(false);
         setHasChecked(true);
       });
-  }, []);
+  }, [applyLatestVersion]);
 
   useEffect(() => {
     checkForUpdates(false);
   }, [checkForUpdates]);
 
-  const dismissUpdate = (version: string) => {
+  const dismissUpdate = useCallback((version: string) => {
     try { window.localStorage.setItem(UPDATE_DISMISSED_KEY, version); } catch (_) {}
     setUpdateAvailable(null);
-  };
+    setIsDismissed(true);
+  }, []);
 
-  return { updateAvailable, latestVersion, isCheckingUpdate, hasChecked, checkForUpdates, dismissUpdate };
+  return { updateAvailable, latestVersion, isDismissed, isCheckingUpdate, hasChecked, checkFailed, checkForUpdates, dismissUpdate };
 }

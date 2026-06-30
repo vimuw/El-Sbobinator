@@ -3,6 +3,8 @@ import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PreviewModal } from './PreviewModal';
 
+const editorMockState = vi.hoisted(() => ({ html: '<p>editor content</p>' }));
+
 vi.mock('motion/react', () => ({
   motion: new Proxy({}, {
     get: (_: unknown, tag: string) => {
@@ -15,14 +17,22 @@ vi.mock('motion/react', () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
 }));
 
-vi.mock('../../RichTextEditor', () => ({
-  RichTextEditor: ({ onEditorReady }: { onEditorReady?: (getHtml: () => string) => void }) => {
-    if (onEditorReady) onEditorReady(() => '<p>editor content</p>');
-    return React.createElement('div', { 'data-testid': 'rich-text-editor' }, 'Editor');
+vi.mock('../RichTextEditor', () => ({
+  RichTextEditor: ({
+    onEditorReady,
+    onChange,
+  }: {
+    onEditorReady?: (getHtml: () => string) => void;
+    onChange?: () => void;
+  }) => {
+    React.useEffect(() => {
+      onEditorReady?.(() => editorMockState.html);
+    }, [onEditorReady]);
+    return React.createElement('div', { 'data-testid': 'rich-text-editor', onClick: () => onChange?.() }, 'Editor');
   },
 }));
 
-vi.mock('../../AudioPlayer', () => ({
+vi.mock('../AudioPlayer', () => ({
   AudioPlayer: () => React.createElement('div', { 'data-testid': 'audio-player' }, 'Player'),
 }));
 
@@ -48,7 +58,10 @@ function setPywebview(api: Record<string, unknown> | undefined) {
   });
 }
 
-beforeEach(() => setPywebview(undefined));
+beforeEach(() => {
+  editorMockState.html = '<p>editor content</p>';
+  setPywebview(undefined);
+});
 afterEach(() => {
   vi.clearAllMocks();
   setPywebview(undefined);
@@ -72,7 +85,7 @@ describe('PreviewModal', () => {
 
   it('shows autosave idle status by default', () => {
     render(<PreviewModal {...baseProps} />);
-    expect(screen.getByText('Salvataggio automatico')).toBeTruthy();
+    expect(screen.getByText('Autosave')).toBeTruthy();
   });
 
   it('calls onClose when X button is clicked', async () => {
@@ -112,7 +125,7 @@ describe('PreviewModal', () => {
   it('resets state when previewContent changes', () => {
     const { rerender } = render(<PreviewModal {...baseProps} />);
     rerender(<PreviewModal {...baseProps} previewContent="<p>Updated</p>" />);
-    expect(screen.getByText('Salvataggio automatico')).toBeTruthy();
+    expect(screen.getByText('Autosave')).toBeTruthy();
   });
 
   it('calls onRelink when "Ricollega audio" is clicked', async () => {
@@ -151,5 +164,113 @@ describe('PreviewModal', () => {
       fireEvent.click(screen.getByTitle('Apri file HTML'));
     });
     expect(openFile).toHaveBeenCalledWith('/sessions/out.html');
+  });
+
+  it('does not close when final autosave is skipped by the backend', async () => {
+    const onClose = vi.fn();
+    const saveHtmlContent = vi.fn().mockResolvedValue({ ok: false, saved: false, error: 'stale' });
+    setPywebview({ save_html_content: saveHtmlContent });
+    render(<PreviewModal {...baseProps} onClose={onClose} />);
+    await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
+    editorMockState.html = '<p>changed content</p>';
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('rich-text-editor'));
+    });
+    const btns = screen.getAllByRole('button');
+    const closeBtn = btns[btns.length - 1];
+    await act(async () => {
+      fireEvent.click(closeBtn);
+      await Promise.resolve();
+    });
+
+    expect(saveHtmlContent).toHaveBeenCalledWith('/sessions/out.html', '<p>changed content</p>', expect.any(Number));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByText('Errore salvataggio')).toBeTruthy();
+  });
+
+  it('keeps autosave generations monotonic when the same document is reopened', async () => {
+    const onClose = vi.fn();
+    const saveHtmlContent = vi.fn().mockResolvedValue({ ok: true, saved: true });
+    const htmlPath = '/sessions/reopened-preview-modal.html';
+    setPywebview({ save_html_content: saveHtmlContent });
+
+    const firstRender = render(<PreviewModal {...baseProps} htmlPath={htmlPath} onClose={onClose} />);
+    await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
+    editorMockState.html = '<p>first edit</p>';
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('rich-text-editor'));
+    });
+    let btns = screen.getAllByRole('button');
+    await act(async () => {
+      fireEvent.click(btns[btns.length - 1]);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    const firstGeneration = saveHtmlContent.mock.calls[0][2] as number;
+    firstRender.unmount();
+
+    onClose.mockClear();
+    editorMockState.html = '<p>second edit</p>';
+    const secondRender = render(<PreviewModal {...baseProps} htmlPath={htmlPath} onClose={onClose} />);
+    await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('rich-text-editor'));
+    });
+    btns = screen.getAllByRole('button');
+    await act(async () => {
+      fireEvent.click(btns[btns.length - 1]);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    const secondGeneration = saveHtmlContent.mock.calls[1][2] as number;
+    secondRender.unmount();
+
+    expect(secondGeneration).toBeGreaterThan(firstGeneration);
+  });
+
+  it('handles copy action, schedules a timeout to reset state, and clears it on unmount', async () => {
+    vi.useFakeTimers();
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: {
+        writeText: writeTextMock,
+      },
+      configurable: true,
+    });
+
+    const { unmount } = render(<PreviewModal {...baseProps} />);
+    const copyBtn = screen.getByTitle('Copia per Google Docs');
+    expect(copyBtn).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(copyBtn);
+    });
+
+    expect(screen.getByTitle('Copiato!')).toBeTruthy();
+
+    // Fast-forward 2 seconds
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(screen.queryByTitle('Copiato!')).toBeNull();
+    expect(screen.getByTitle('Copia per Google Docs')).toBeTruthy();
+
+    // Trigger copy again and unmount immediately to verify no state updates on unmounted component
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Copia per Google Docs'));
+    });
+    expect(screen.getByTitle('Copiato!')).toBeTruthy();
+
+    // Unmount
+    unmount();
+
+    // Fast-forward and verify no error/warning
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    vi.useRealTimers();
   });
 });

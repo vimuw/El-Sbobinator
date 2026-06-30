@@ -24,6 +24,7 @@ El Sbobinator is a Windows/macOS desktop application that turns audio lectures i
 |---|---|---|
 | `app_webview.py` | pywebview entrypoint, JS API, `PipelineAdapter`, `_BridgeDispatcher`, WebView2 runtime detection, cache-bust on update | `main`, `ElSbobinatorApi`, `PipelineAdapter`, `_BridgeDispatcher` |
 | `app.py` | Legacy compatibility shim — delegates to `app_webview.main` | `main`, `ElSbobinatorApp` |
+| `bridge_dispatcher.py` | Buffered event emitter flushing events via `evaluate_js` with collapsing/batching | `_BridgeDispatcher` |
 | `bridge_types.py` | `TypedDict` payload shapes shared with the frontend (`WorkTotalsPayload`, `FileDonePayload`, `ValidationResult`, …) | — |
 | `pipeline.py` | Pipeline orchestrator — probes duration, runs phases 1/2/3, exports HTML | `esegui_sbobinatura`, `_esegui_sbobinatura_impl` |
 | `pipeline_hooks.py` | Duck-typed indirection between pipeline code and whatever UI is attached | `PipelineRuntime` |
@@ -37,13 +38,15 @@ El Sbobinator is a Windows/macOS desktop application that turns audio lectures i
 | `session_store.py` | On-disk session layout: `SessionPaths`, `new_session`, `load_session`, `save_session`, `resolve_session_paths`, `reset_session_dirs` | — |
 | `shared.py` | Fingerprint-based session IDs, `SESSION_ROOT`, atomic-write helpers, orphan-session cleanup, session-storage info cache | `_session_id_for_file`, `_session_dir_for_file`, `_atomic_write_json`, `_atomic_write_text`, `cleanup_orphan_sessions`, `get_session_storage_info` |
 | `config_service.py` | OS-aware config file paths, DPAPI (Windows) and keyring (macOS/Linux) helpers, desktop path resolution, filename sanitization | `load_config`, `save_config`, `get_desktop_dir`, `safe_output_basename` |
+| `folders_service.py` | Archive folder storage/management persisted in folders.json | `get_folders`, `save_folders` |
+| `search_service.py` | Full-text search snippet generation and match counting | `extract_text_from_html`, `count_matches`, `find_snippets` |
 | `validation_service.py` | Environment checks used by the WebUI "Validate environment" action and by the release smoke test | `validate_environment` |
 | `audio_service.py` | Thin facade over `ffmpeg_utils` (`resolve_ffmpeg`, `probe_media_duration`, `preconvert_media_to_mp3`, `cut_audio_chunk_to_mp3`) | — |
 | `ffmpeg_utils.py` | FFmpeg subprocess helpers: cancellable runner, duration probe, mono-16 kHz MP3 pre-conversion, chunk cut (stream-copy or reencode) | `get_ffmpeg_exe`, `probe_duration_seconds`, `preconvert_to_mono16k_mp3`, `cut_chunk_to_mp3` |
 | `dedup_utils.py` | Conservative pre-AI cleanup for macro blocks (exact + near-adjacent duplicates) | `local_macro_cleanup` |
 | `export_service.py` | Final assembly: load `rev_NNN.md` files, build title + markdown, write final HTML | `export_final_html_document`, `load_revised_blocks`, `resolve_output_html_path` |
 | `html_export.py` | Markdown → HTML with `markdown` + `nh3` sanitizer, list/heading normalization, CSP-locked document template | `build_html_document`, `sanitize_html_basic`, `normalize_inline_star_lists`, `normalize_heading_levels` |
-| `file_ops.py` | FS helpers used by the pywebview bridge: `open_path_with_default_app`, HTML body save with generation-counter concurrency guard, `.docx` export via `html2docx` | `open_path_with_default_app`, `read_html_content`, `save_html_body_content`, `extract_html_shell`, `export_doc_html` |
+| `file_ops.py` | FS helpers used by the pywebview bridge: open_path_with_default_app, HTML body save with generation-counter concurrency guard | `open_path_with_default_app`, `read_html_content`, `save_html_body_content`, `extract_html_shell` |
 | `media_server.py` | Tiny local HTTP server with Range support so the React audio player can stream session audio | `LocalMediaServer` |
 | `logging_utils.py` | Structured logger with session-scoped context (`run_id`, `session_dir`, `stage`, `input_file`) + per-session file handler | `get_logger`, `configure_logging`, `attach_file_handler`, `detach_file_handler` |
 | `updater.py` | Auto-update: downloads the OS-specific release asset from GitHub and launches it (Windows installer / macOS DMG) | `download_and_install_update` |
@@ -56,8 +59,8 @@ El Sbobinator is a Windows/macOS desktop application that turns audio lectures i
 | `App.tsx` | Top-level app shell: queue, drag-and-drop, processing banner, modal wiring, confetti |
 | `appState.ts` | `processingReducer` + `ProcessingState`/`ProcessingAction` types (single source of truth for queue + progress state) |
 | `bridge.ts` | `PywebviewApi` interface (JS → Python) and `BridgeCallbacks` (Python → JS) with `createBridge` factory |
-| `RichTextEditor.tsx` | TipTap editor with TOC, search-highlight, find-and-replace, font-size, word-count |
-| `AudioPlayer.tsx` | Editor audio player: waveform-free controls, bookmarking, persistent time/volume |
+| `RichTextEditor.tsx` | TipTap editor inside page shell |
+| `AudioPlayer.tsx` | Editor audio player with range scruber control and bookmarks |
 | `FloatingImage.tsx` | Resize/align/layout affordances for editor-embedded images |
 | `previewHtml.ts` | Normalize preview HTML before loading into the editor |
 | `editorSessions.ts` | Per-file editor-session persistence (scroll, audio position) via `localStorage` |
@@ -65,8 +68,22 @@ El Sbobinator is a Windows/macOS desktop application that turns audio lectures i
 | `branding.ts` | Constants for GitHub/Ko-fi/releases URLs |
 | `utils.ts` | `errorLabel` mapping (Python `last_error` → Italian UI string), formatters |
 | `index.css` | Tailwind v4 base + custom rules (including editor + TOC) |
+| `components/AppHeader.tsx` | Sticky app header showing status, API state, theme toggle, and settings controls |
+| `components/ArchivePage.tsx` | Main archive search dashboard, layout structure, search logic |
+| `components/ArchiveSection.tsx` / `components/CompletedSection.tsx` | Archive listing layout sections and session cards |
+| `components/ConsolePanel.tsx` | Embedded expandable system output/log console panel |
+| `components/DropZone.tsx` | Drag and drop files intake zone with SVG marching ants animation |
+| `components/EditorFindReplace.tsx` | Advanced find/replace popup bar inside the text editor |
+| `components/EditorFullPage.tsx` | Fullscreen modal page hosting TipTap editor, TOC, sidebar, and player |
+| `components/EditorToolbar.tsx` / `components/EditorToolbarControls.tsx` | Standard document styling controls and formatting actions |
+| `components/EditorWordCount.tsx` | Statistics panel tracking words, characters, and read time |
+| `components/FolderChip.tsx` / `components/KebabMenu.tsx` / `components/Toast.tsx` | Micro-components for folder tags, action triggers, and brief toast alerts |
+| `components/NavSidebar.tsx` | Main lateral navigation bar switching between Queue, Archivio, and Setup pages |
 | `components/ProcessingStatusBanner.tsx` | Top-of-screen banner while a batch is running (ETA, phase, model badge) |
 | `components/QueueFileCard.tsx` | Queue item card (pending + completed variants) |
+| `components/QueueSection.tsx` | Queue container holding intake dropzone and queue lists |
+| `components/SetupPage.tsx` | Step-by-step walkthrough settings wizard on first run |
+| `components/WelcomeDashboard.tsx` | Warm entrance dashboard when queue is empty |
 | `components/modals/*.tsx` | `SettingsModal`, `PreviewModal`, `RegenerateModal`, `NewKeyModal`, `DuplicateFileModal`, `ConfirmActionModal` |
 | `hooks/useApiReady.ts` | Polls `window.pywebview.api` until ready, then binds the bridge |
 | `hooks/useBridgeCallbacks.ts` | Wires `BridgeCallbacks` onto `window.elSbobinatorBridge` |
@@ -75,6 +92,7 @@ El Sbobinator is a Windows/macOS desktop application that turns audio lectures i
 | `hooks/useTheme.ts` | Light/dark theme toggle |
 | `hooks/useUpdateChecker.ts` | Polls GitHub releases for update notifications |
 | `hooks/useBodyScrollLock.ts` | Scroll-lock when a modal is open |
+| `hooks/usePreview.ts` | Complete preview session management (loading, scroll position, audio sync, audio relinking) |
 
 ## Runtime flow
 

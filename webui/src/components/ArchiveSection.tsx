@@ -93,20 +93,19 @@ export function ArchiveSection({ sessions, onPreview, onOpenFile, onDeleteSessio
                 className="overflow-hidden"
               >
                 <div className="px-5 sm:px-6 pt-4 pb-2 flex items-center gap-2">
-                  <div className="relative flex-1 flex items-center">
-                    <Search className="absolute left-2.5 w-3.5 h-3.5 pointer-events-none" style={{ color: 'var(--text-faint)' }} />
+                  <div className="notion-search-wrap">
+                    <Search className="notion-search-icon w-3.5 h-3.5" />
                     <input
                       type="text"
                       value={archiveSearch}
                       onChange={e => setArchiveSearch(e.target.value)}
                       placeholder="Cerca per nome..."
-                      className="premium-button-secondary compact-button text-xs pr-3 py-1.5 rounded-[13px] outline-none w-full"
-                      style={{ borderColor: 'var(--border-default)', background: 'rgba(255,255,255,0.03)', color: 'var(--text-primary)', paddingLeft: '2rem' }}
+                      className="notion-search-input"
                     />
                   </div>
                   <button
                     onClick={() => setArchiveSort(s => s === 'newest' ? 'oldest' : 'newest')}
-                    className="premium-button-secondary compact-button text-xs px-2.5 py-1.5 rounded-[13px] flex items-center gap-1 shrink-0"
+                    className="premium-button-secondary compact-button text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 shrink-0"
                     style={{ color: 'var(--text-muted)', borderColor: 'var(--border-default)' }}
                     title={archiveSort === 'newest' ? 'Ordinate: più recenti prima' : 'Ordinate: più vecchie prima'}
                   >
@@ -126,7 +125,7 @@ export function ArchiveSection({ sessions, onPreview, onOpenFile, onDeleteSessio
                           exit={{ opacity: 0, y: -4, transition: { duration: 0.1 } }}
                           transition={{ duration: 0.18, ease: 'easeOut' }}
                           onClick={() => onPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir)}
-                          className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 cursor-pointer transition-colors bg-white/[0.02] hover:bg-white/[0.05]"
+                          className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 cursor-pointer transition-colors bg-white/[0.02] hover:bg-white/[0.05] group/card"
                           style={{ border: '1px solid var(--border-subtle)' }}
                         >
                           <div className="flex items-center gap-3 overflow-hidden flex-1">
@@ -140,7 +139,7 @@ export function ArchiveSection({ sessions, onPreview, onOpenFile, onDeleteSessio
                                 )}
                               </div>
                               <div
-                                className="mt-0.5 flex items-center gap-1 text-[11px] hover:underline"
+                                className="mt-0.5 flex items-center gap-1 text-[11px] opacity-0 group-hover/card:opacity-100 transition-opacity hover:underline"
                                 style={{ color: 'var(--text-faint)', cursor: 'pointer' }}
                                 onClick={(e) => { e.stopPropagation(); onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path); }}
                                 title={`Apri cartella: ${session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path}`}

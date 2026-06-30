@@ -11,6 +11,7 @@ This is the single entrypoint used by local scripts and CI for:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import shutil
 import subprocess
@@ -240,6 +241,29 @@ def pyinstaller_command(target: str, ui: str) -> list[str]:
             str(WEBVIEW_ENTRYPOINT),
         ]
     )
+    # Exclude unused standard and external libraries to minimize package size
+    for module in [
+        "tkinter",
+        "PyQt5",
+        "PyQt6",
+        "PySide2",
+        "PySide6",
+        "wx",
+        "sqlite3",
+        "numpy",
+        "botocore",
+        "boto3",
+        "grpc",
+        "lxml",
+        "Pythonwin",
+        "gevent",
+        "aiohttp",
+        "pygments",
+        "rich",
+        "distutils",
+        "unittest",
+    ]:
+        command.extend(["--exclude-module", module])
     return command
 
 
@@ -263,7 +287,18 @@ def run_postbuild_smoke(target: str) -> None:
     run([sys.executable, "scripts/smoke_test.py"], cwd=ROOT)
 
 
-def _find_iscc() -> str:
+def write_sha256(artifact: Path) -> Path:
+    h = hashlib.sha256()
+    with artifact.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            h.update(chunk)
+    digest = h.hexdigest()
+    checksum_path = artifact.with_suffix(artifact.suffix + ".sha256")
+    checksum_path.write_text(f"{digest}  {artifact.name}\n", encoding="utf-8")
+    return checksum_path
+
+
+def _find_iscc() -> str | None:
     in_path = shutil.which("ISCC") or shutil.which("ISCC.exe")
     if in_path:
         return in_path
@@ -273,15 +308,22 @@ def _find_iscc() -> str:
     ]:
         if Path(candidate).exists():
             return candidate
-    return "ISCC.exe"
+    return None
 
 
 def run_inno_setup(version: str) -> None:
     iss_script = PACKAGING_DIR / "windows" / "installer.iss"
-    run([_find_iscc(), f"/DAppVersion={version}", str(iss_script)], cwd=ROOT)
+    iscc = _find_iscc()
+    if iscc is None:
+        print(
+            "WARNING: Inno Setup (ISCC.exe) not found. Skipping installer generation."
+        )
+        return
+    run([iscc, f"/DAppVersion={version}", str(iss_script)], cwd=ROOT)
     installer = ROOT / "dist" / f"El-Sbobinator-Setup-v{version}.exe"
     if not installer.exists() or installer.stat().st_size <= 0:
         raise FileNotFoundError(f"Installer mancante o vuoto: {installer}")
+    write_sha256(installer)
 
 
 def run_create_dmg(version: str) -> None:
@@ -310,6 +352,7 @@ def run_create_dmg(version: str) -> None:
     )
     if not dmg_path.exists() or dmg_path.stat().st_size <= 0:
         raise FileNotFoundError(f"DMG mancante o vuoto: {dmg_path}")
+    write_sha256(dmg_path)
 
 
 def command_deps(args: argparse.Namespace) -> None:

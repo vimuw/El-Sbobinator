@@ -18,9 +18,13 @@ from collections.abc import Callable
 from google import genai
 from google.genai import types
 
-from el_sbobinator.logging_utils import get_logger
-from el_sbobinator.model_registry import MODEL_OPTIONS, ModelState, next_model_in_chain
+from el_sbobinator.core.model_registry import (
+    MODEL_OPTIONS,
+    ModelState,
+    next_model_in_chain,
+)
 from el_sbobinator.services.config_service import load_config
+from el_sbobinator.utils.logging_utils import get_logger, redact_secrets
 
 # ---------------------------------------------------------------------------
 # Module-level constants
@@ -38,13 +42,16 @@ _MAX_RETRY_ATTEMPTS: int = (
 )
 _RETRY_SLEEP_SECONDS: float = 30.0  # Back-off pause between generic transient errors
 _MODEL_UNAVAILABLE_RETRY_DELAYS: tuple[float, ...] = (
-    3.0,
-    6.0,
+    5.0,
     15.0,
-)  # Progressive back-off before switching model on 503/UNAVAILABLE (4 total attempts)
+    30.0,
+    60.0,
+    120.0,
+)  # Progressive back-off before switching model on 503/UNAVAILABLE (6 total attempts)
 # Gemini enforces a per-minute request quota that resets after ~60 s; sleeping
 # 65 s adds a small buffer to ensure the window has fully elapsed before retry.
 _RATE_LIMIT_SLEEP_SECONDS: float = 65.0
+_NEW_API_KEY_TIMEOUT_SECONDS: float = 600.0
 
 
 def _error_text(exc: Exception) -> str:
@@ -187,6 +194,60 @@ def _is_model_not_found(error_text: str, error_code: int | None) -> bool:
     return any(marker in error_text for marker in markers)
 
 
+def _is_invalid_key_probe_failure(error_text: str, error_code: int | None) -> bool:
+    if error_code in (401, 403):
+        return True
+    markers = (
+        "api key not valid",
+        "api_key_invalid",
+        "invalid api key",
+        "invalid_api_key",
+        "malformed api key",
+        "unauthenticated",
+        "permission_denied",
+        "permission denied",
+        "forbidden",
+        "access denied",
+        "does not have permission",
+        "not authorized",
+        "unauthorized",
+    )
+    return any(marker in error_text for marker in markers)
+
+
+def _is_transient_key_probe_failure(
+    error_text: str, error_code: int | None, exc: Exception
+) -> bool:
+    if isinstance(exc, TimeoutError | ConnectionError):
+        return True
+    if error_code in (408, 429, 500, 502, 503, 504):
+        if _is_daily_or_key_exhausted(error_text, error_code):
+            return False
+        return True
+    markers = (
+        "timeout",
+        "timed out",
+        "connection",
+        "network",
+        "temporary",
+        "temporarily",
+        "service unavailable",
+        "backend error",
+        "overloaded",
+        "try again",
+        "retry-after",
+        "retry after",
+        "rate limit",
+        "too many requests",
+        "per minute",
+        "per-minute",
+        "rpm",
+    )
+    if any(marker in error_text for marker in markers):
+        return not _is_daily_or_key_exhausted(error_text, error_code)
+    return False
+
+
 def current_model_name(model_state: ModelState | None, default_model: str) -> str:
     if model_state is None:
         return str(default_model or "").strip()
@@ -245,13 +306,16 @@ def try_rotate_key(
     cancelled: Callable[[], bool] | None = None,
 ):
     log = logger or get_logger("el_sbobinator.generation")
-    while fallback_keys:
+    pass_limit = len([str(item).strip() for item in fallback_keys if str(item).strip()])
+    checked = 0
+    while fallback_keys and checked < pass_limit:
         if cancelled is not None and cancelled():
             return current_client, False, None
         key = fallback_keys[0].strip()
         if not key:
             fallback_keys.pop(0)
             continue
+        checked += 1
         try:
             new_client = genai.Client(api_key=key)
             new_client.models.get(model=model_name)
@@ -265,11 +329,34 @@ def try_rotate_key(
             print(f"   [OK] Chiave di riserva valida! ({len(fallback_keys)} rimanenti)")
             return new_client, True, key
         except Exception as err:
+            error = _error_text(err)
+            error_code = _error_code(err)
+            safe_err = redact_secrets(err)
+            if _is_transient_key_probe_failure(error, error_code, err):
+                fallback_keys.append(fallback_keys.pop(0))
+                log.warning(
+                    "Validazione chiave di fallback temporaneamente non riuscita.",
+                    extra={"stage": "key_rotation"},
+                )
+                print(
+                    "   [!] Validazione temporanea fallita per chiave di riserva: "
+                    f"{safe_err}"
+                )
+                continue
             fallback_keys.pop(0)
-            log.warning(
-                "Chiave di fallback non valida.", extra={"stage": "key_rotation"}
-            )
-            print(f"   [!] Chiave di riserva non valida: {err}")
+            if _is_invalid_key_probe_failure(
+                error, error_code
+            ) or _is_daily_or_key_exhausted(error, error_code):
+                log.warning(
+                    "Chiave di fallback non utilizzabile.",
+                    extra={"stage": "key_rotation"},
+                )
+                print(f"   [!] Chiave di riserva non utilizzabile: {safe_err}")
+            else:
+                log.warning(
+                    "Chiave di fallback non valida.", extra={"stage": "key_rotation"}
+                )
+                print(f"   [!] Chiave di riserva non valida: {safe_err}")
     return current_client, False, None
 
 
@@ -320,10 +407,21 @@ def make_inline_audio_part(path_str: str, max_bytes: int | None = None):
         return None
 
 
-def request_new_api_key(runtime, cancelled: Callable[[], bool]):
+def request_new_api_key(
+    runtime,
+    cancelled: Callable[[], bool],
+    *,
+    timeout_seconds: float | None = _NEW_API_KEY_TIMEOUT_SECONDS,
+    on_timeout: Callable[[], None] | None = None,
+):
     print("   [In attesa di una nuova chiave API dall'utente nel popup...]")
     event = threading.Event()
     result = {"new_key": None}
+    deadline = (
+        time.monotonic() + float(timeout_seconds)
+        if timeout_seconds is not None and float(timeout_seconds) >= 0
+        else None
+    )
 
     def handler(response):
         result["new_key"] = response.get("key", None)
@@ -336,7 +434,20 @@ def request_new_api_key(runtime, cancelled: Callable[[], bool]):
     while not event.is_set():
         if cancelled():
             return None
-        event.wait(0.2)
+        wait_seconds = 0.2
+        if deadline is not None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                try:
+                    runtime.dismiss_new_api_key_prompt()
+                except Exception:
+                    pass
+                if on_timeout is not None:
+                    on_timeout()
+                print("   [!] Attesa nuova API Key scaduta.")
+                return None
+            wait_seconds = min(wait_seconds, remaining)
+        event.wait(wait_seconds)
     return result["new_key"]
 
 
@@ -543,9 +654,7 @@ def retry_with_quota(  # noqa: C901
                         f"      [Modello {current_model} temporaneamente indisponibile."
                         f" Riprovo tra {int(_wait)}s... (retry {_retry_idx}/{_total})]"
                     )
-                    runtime.phase(
-                        f"Modello non disponibile: attesa {int(_wait)}s... (retry {_retry_idx}/{_total})"
-                    )
+                    runtime.phase(f"Server Gemini occupato — ritento tra {int(_wait)}s")
                     if not sleep_with_cancel(cancelled, _wait):
                         print("   [*] Operazione annullata dall'utente.")
                         return client, None
@@ -640,7 +749,9 @@ def retry_with_quota(  # noqa: C901
                         print("   [OK] Nuova API Key valida! Ripresa automatica...")
                         continue
                     except Exception as err:
-                        print(f"   [!] Chiave non valida fornita: {err}")
+                        print(
+                            f"   [!] Chiave non valida fornita: {redact_secrets(err)}"
+                        )
 
                 if model_state is not None:
                     _switch_to_next_model(
@@ -663,7 +774,9 @@ def retry_with_quota(  # noqa: C901
             attempts += 1
             if attempts >= max_attempts:
                 raise
-            print(f"      [Errore: {exc}. Riprovo in {int(retry_sleep_seconds)}s...]")
+            print(
+                f"      [Errore: {redact_secrets(exc)}. Riprovo in {int(retry_sleep_seconds)}s...]"
+            )
             if not sleep_with_cancel(cancelled, retry_sleep_seconds):
                 print("   [*] Operazione annullata dall'utente.")
                 return client, None

@@ -47,6 +47,23 @@ describe('QueueFileCard', () => {
     expect(screen.getByLabelText('Trascina per riordinare')).toBeTruthy();
   });
 
+  it('hides drag handle when showDragHandle is false', () => {
+    render(
+      <QueueWrapper>
+        <QueueFileCard
+          file={makeFile()}
+          appState="idle"
+          onRemove={vi.fn()}
+          onRetry={vi.fn()}
+          onPreview={vi.fn()}
+          onOpenFile={vi.fn()}
+          showDragHandle={false}
+        />
+      </QueueWrapper>,
+    );
+    expect(screen.queryByLabelText('Trascina per riordinare')).toBeNull();
+  });
+
   it('shows remove button when idle', () => {
     const onRemove = vi.fn();
     render(
@@ -85,7 +102,7 @@ describe('QueueFileCard', () => {
     expect(screen.getByText('Annullamento in corso')).toBeTruthy();
   });
 
-  it('shows retry button for error status when idle', () => {
+  it('shows Riprendi CTA for resumable error (quota) when idle', () => {
     const onRetry = vi.fn();
     render(
       <QueueWrapper>
@@ -96,8 +113,59 @@ describe('QueueFileCard', () => {
         />
       </QueueWrapper>,
     );
+    expect(screen.getByText('Riprendi')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Riprendi'));
+    expect(onRetry).toHaveBeenCalledWith('f1');
+  });
+
+  it('shows Riprendi CTA for regenerate prompt timeout when idle', () => {
+    const onRetry = vi.fn();
+    render(
+      <QueueWrapper>
+        <QueueFileCard
+          file={makeFile({ status: 'error', errorText: 'regenerate_prompt_timeout' })}
+          appState="idle"
+          onRemove={vi.fn()} onRetry={onRetry} onPreview={vi.fn()} onOpenFile={vi.fn()}
+        />
+      </QueueWrapper>,
+    );
+    expect(screen.getByText(/Nessuna scelta/)).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Riprendi'));
+    expect(onRetry).toHaveBeenCalledWith('f1');
+  });
+
+  it('shows Riprendi CTA for chunk_failed error when idle', () => {
+    const onRetry = vi.fn();
+    render(
+      <QueueWrapper>
+        <QueueFileCard
+          file={makeFile({ status: 'error', errorText: 'phase1_chunk_failed_3', errorDetail: 'FFmpeg error: disk full' })}
+          appState="idle"
+          onRemove={vi.fn()} onRetry={onRetry} onPreview={vi.fn()} onOpenFile={vi.fn()}
+        />
+      </QueueWrapper>,
+    );
+    expect(screen.getByText(/FFmpeg error: disk full/)).toBeTruthy();
+    expect(screen.getByText('Riprendi')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Riprendi'));
+    expect(onRetry).toHaveBeenCalledWith('f1');
+    expect(screen.queryByLabelText('Riprova')).toBeNull();
+  });
+
+  it('shows Riprova icon button for non-resumable error when idle', () => {
+    const onRetry = vi.fn();
+    render(
+      <QueueWrapper>
+        <QueueFileCard
+          file={makeFile({ status: 'error', errorText: 'html_export_failed' })}
+          appState="idle"
+          onRemove={vi.fn()} onRetry={onRetry} onPreview={vi.fn()} onOpenFile={vi.fn()}
+        />
+      </QueueWrapper>,
+    );
     fireEvent.click(screen.getByLabelText('Riprova'));
     expect(onRetry).toHaveBeenCalledWith('f1');
+    expect(screen.queryByLabelText('Riprendi')).toBeNull();
   });
 
   it('calls onRemove when trash button is clicked', () => {
@@ -135,7 +203,7 @@ describe('CompletedFileCard', () => {
     expect(screen.getByText('Nuovo')).toBeTruthy();
   });
 
-  it('shows Modifica and remove buttons when outputHtml is set', () => {
+  it('shows kebab menu button when outputHtml is set', () => {
     render(
       <CompletedFileCard
         file={makeFile({ status: 'done', outputHtml: '/out/file.html' })}
@@ -143,11 +211,10 @@ describe('CompletedFileCard', () => {
         onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
       />,
     );
-    expect(screen.getByLabelText('Apri editor')).toBeTruthy();
-    expect(screen.getByLabelText('Rimuovi')).toBeTruthy();
+    expect(screen.getByLabelText('Altre opzioni')).toBeTruthy();
   });
 
-  it('calls onPreview when Modifica is clicked', () => {
+  it('calls onPreview when Modifica is clicked in kebab menu', () => {
     const onPreview = vi.fn();
     render(
       <CompletedFileCard
@@ -156,11 +223,12 @@ describe('CompletedFileCard', () => {
         onRemove={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByLabelText('Apri editor'));
-    expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione.mp3', undefined, 'f1');
+    fireEvent.click(screen.getByLabelText('Altre opzioni'));
+    fireEvent.click(screen.getByText('Modifica'));
+    expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione.mp3', undefined, 'f1', undefined);
   });
 
-  it('calls onRemove when remove button is clicked', () => {
+  it('calls onRemove when Rimuovi is clicked in kebab menu', () => {
     const onRemove = vi.fn();
     render(
       <CompletedFileCard
@@ -169,7 +237,8 @@ describe('CompletedFileCard', () => {
         onRemove={onRemove} onPreview={vi.fn()} onOpenFile={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByLabelText('Rimuovi'));
+    fireEvent.click(screen.getByLabelText('Altre opzioni'));
+    fireEvent.click(screen.getByText('Rimuovi'));
     expect(onRemove).toHaveBeenCalledWith('f1');
   });
 
@@ -183,10 +252,35 @@ describe('CompletedFileCard', () => {
       />,
     );
     fireEvent.click(screen.getByText('lezione.mp3'));
-    expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione.mp3', '/src/f.mp3', 'f1');
+    expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione.mp3', '/src/f.mp3', 'f1', undefined);
   });
 
-  it('calls onOpenFile when open-in-browser button clicked', () => {
+  it('passes outputDir as sessionDir when previewing a completed file', () => {
+    const onPreview = vi.fn();
+    render(
+      <CompletedFileCard
+        file={makeFile({ status: 'done', outputHtml: '/out/file.html', outputDir: '/sessions/s1', path: '/src/f.mp3' })}
+        isNewest={false}
+        onRemove={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByText('lezione.mp3'));
+    expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione.mp3', '/src/f.mp3', 'f1', '/sessions/s1');
+  });
+
+  it('renders the collection indicator for completed files', () => {
+    render(
+      <CompletedFileCard
+        file={makeFile({ status: 'done', outputHtml: '/out/file.html' })}
+        isNewest={false}
+        onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
+        currentFolder={{ name: 'Corso A', color: '#4D96FF' }}
+      />,
+    );
+    expect(screen.getByTitle('Raccolta: Corso A')).toBeTruthy();
+  });
+
+  it('calls onOpenFile when Apri nel browser is clicked in kebab menu', () => {
     const onOpenFile = vi.fn();
     render(
       <CompletedFileCard
@@ -195,7 +289,8 @@ describe('CompletedFileCard', () => {
         onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={onOpenFile}
       />,
     );
-    fireEvent.click(screen.getByLabelText('Apri nel browser'));
+    fireEvent.click(screen.getByLabelText('Altre opzioni'));
+    fireEvent.click(screen.getByText('Apri nel browser'));
     expect(onOpenFile).toHaveBeenCalledWith('/out/file.html');
   });
 

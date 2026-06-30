@@ -49,6 +49,8 @@ describe('getPendingFiles / getDoneFiles selectors', () => {
 
   it('isSuccessfulProcessDone only returns true for all-success completions', () => {
     expect(isSuccessfulProcessDone({ completed: 1, failed: 0, total: 1 })).toBe(true);
+    expect(isSuccessfulProcessDone({ completed: 0, completed_with_warnings: 1, failed: 0, total: 1 })).toBe(false);
+    expect(isSuccessfulProcessDone({ completed: 1, completed_with_warnings: 1, failed: 0, total: 2 })).toBe(false);
     expect(isSuccessfulProcessDone({ completed: 0, failed: 1, total: 1 })).toBe(false);
     expect(isSuccessfulProcessDone({ completed: 1, failed: 1, total: 2 })).toBe(false);
     expect(isSuccessfulProcessDone({ cancelled: true, completed: 1, failed: 0, total: 1 })).toBe(false);
@@ -84,6 +86,26 @@ describe('processingReducer', () => {
     });
     expect(state.files[0].status).toBe('done');
     expect(state.files[0].outputHtml).toBe('out.html');
+  });
+
+  it('bridge/file_done records completed_with_warnings status', () => {
+    const file = makeFile({ id: 'abc' });
+    const state = processingReducer(
+      { ...initialProcessingState, files: [file] },
+      {
+        type: 'bridge/file_done',
+        data: {
+          id: 'abc',
+          index: 0,
+          output_html: 'out.html',
+          output_dir: 'dir',
+          completion_status: 'completed_with_warnings',
+          revision_failed_blocks: [2],
+        },
+      },
+    );
+    expect(state.files[0].completionStatus).toBe('completed_with_warnings');
+    expect(state.files[0].revisionFailedBlocks).toEqual([2]);
   });
 
   it('resets error files to queued on retry_failed', () => {
@@ -122,6 +144,54 @@ describe('processingReducer', () => {
     expect(typeof completedAt).toBe('number');
     expect(completedAt!).toBeGreaterThanOrEqual(before);
     expect(completedAt!).toBeLessThanOrEqual(after);
+  });
+
+  it('queue/update_revision_failed_blocks matches by fileId first', () => {
+    const files = [
+      makeFile({ id: 'target', status: 'done', outputDir: 'C:/sessions/new', revisionFailedBlocks: [1, 2] }),
+      makeFile({ id: 'other', status: 'done', outputDir: 'C:/sessions/old', revisionFailedBlocks: [3] }),
+    ];
+    const state = { ...initialProcessingState, structuralVersion: 2, files };
+    const next = processingReducer(state, {
+      type: 'queue/update_revision_failed_blocks',
+      fileId: 'target',
+      sessionDir: 'C:/sessions/old',
+      blocks: [],
+      htmlPath: 'out.html',
+      effectiveModel: 'gemini-test',
+    });
+
+    expect(next.structuralVersion).toBe(3);
+    expect(next.files[0].revisionFailedBlocks).toEqual([]);
+    expect(next.files[0].outputHtml).toBe('out.html');
+    expect(next.files[0].effectiveModel).toBe('gemini-test');
+    expect(next.files[1].revisionFailedBlocks).toEqual([3]);
+  });
+
+  it('queue/update_revision_failed_blocks falls back to normalized outputDir when fileId is missing', () => {
+    const file = makeFile({ id: 'target', status: 'done', outputDir: 'C:\\Sessions\\Done\\', revisionFailedBlocks: [1] });
+    const state = { ...initialProcessingState, structuralVersion: 5, files: [file] };
+    const next = processingReducer(state, {
+      type: 'queue/update_revision_failed_blocks',
+      sessionDir: 'c:/sessions/done',
+      blocks: [],
+    });
+
+    expect(next.structuralVersion).toBe(6);
+    expect(next.files[0].revisionFailedBlocks).toEqual([]);
+  });
+
+  it('queue/update_revision_failed_blocks leaves state unchanged when no file matches', () => {
+    const file = makeFile({ id: 'target', status: 'done', outputDir: 'C:/sessions/done', revisionFailedBlocks: [1] });
+    const state = { ...initialProcessingState, structuralVersion: 5, files: [file] };
+    const next = processingReducer(state, {
+      type: 'queue/update_revision_failed_blocks',
+      fileId: 'missing',
+      sessionDir: 'C:/sessions/missing',
+      blocks: [],
+    });
+
+    expect(next).toBe(state);
   });
 
   it('queue/clear_completed removes only done files, leaving queued and error intact', () => {
@@ -181,6 +251,16 @@ describe('processingReducer', () => {
     expect(state.files[0].size).toBe(200);
   });
 
+  it('queue/update_source can match completed files by sessionDir', () => {
+    const file = makeFile({ id: 'done1', outputDir: '/sessions/s1', path: '/old.mp3', name: 'old.mp3' });
+    const state = processingReducer(
+      { ...initialProcessingState, files: [file] },
+      { type: 'queue/update_source', sessionDir: '/sessions/s1', path: '/new.mp3', name: 'new.mp3' },
+    );
+    expect(state.files[0].path).toBe('/new.mp3');
+    expect(state.files[0].name).toBe('new.mp3');
+  });
+
   it('queue/retry_one resets only the targeted error file', () => {
     const files = [
       makeFile({ id: 'a', status: 'error', errorText: 'fail', progress: 0, phase: 0 }),
@@ -195,12 +275,23 @@ describe('processingReducer', () => {
     expect(state.files[1].status).toBe('error');
   });
 
-  it('queue/clear_all empties file list', () => {
+  it('queue/clear_all removes non-done files', () => {
     const state = processingReducer(
       { ...initialProcessingState, files: [makeFile()] },
       { type: 'queue/clear_all' },
     );
     expect(state.files).toEqual([]);
+  });
+
+  it('queue/clear_all preserves done files', () => {
+    const done = makeFile({ id: 'd1', status: 'done', progress: 100, phase: 3, completedAt: 1000 });
+    const queued = makeFile({ id: 'q1', status: 'queued' });
+    const error = makeFile({ id: 'e1', status: 'error', errorText: 'fail' });
+    const state = processingReducer(
+      { ...initialProcessingState, files: [done, queued, error] },
+      { type: 'queue/clear_all' },
+    );
+    expect(state.files).toEqual([done]);
   });
 
   it('app/set_status changes appState', () => {
@@ -290,26 +381,6 @@ describe('processingReducer', () => {
     expect(state.files[0].errorText).toBe('Elaborazione non completata.');
   });
 
-  it('bridge/register_step_time initialises stepMetrics for first call', () => {
-    const state = processingReducer(
-      initialProcessingState,
-      { type: 'bridge/register_step_time', data: { kind: 'chunks', seconds: 5 } },
-    );
-    expect(state.stepMetrics.chunks?.avgSeconds).toBe(5);
-    expect(state.stepMetrics.chunks?.done).toBe(1);
-  });
-
-  it('bridge/register_step_time uses EMA on subsequent calls', () => {
-    const withPrev = {
-      ...initialProcessingState,
-      stepMetrics: { chunks: { avgSeconds: 10, done: 1, total: 5 }, macro: null },
-    };
-    const state = processingReducer(
-      withPrev,
-      { type: 'bridge/register_step_time', data: { kind: 'chunks', seconds: 4 } },
-    );
-    expect(state.stepMetrics.chunks?.avgSeconds).toBeCloseTo(0.4 * 4 + 0.6 * 10);
-  });
 
   it('bridge/file_done does not alter non-matching files', () => {
     const files = [makeFile({ id: 'target' }), makeFile({ id: 'other' })];
@@ -357,11 +428,23 @@ describe('processingReducer', () => {
     const file = makeFile({ id: 'err1', status: 'processing' });
     const state = processingReducer(
       { ...initialProcessingState, files: [file] },
-      { type: 'bridge/file_failed', data: { id: 'err1', index: 0, error: 'quota_daily_limit_phase1' } },
+      { type: 'bridge/file_failed', data: { id: 'err1', index: 0, error: 'quota_daily_limit_phase1', error_detail: 'api_key_prompt_timeout' } },
     );
     expect(state.files[0].status).toBe('error');
     expect(state.files[0].errorText).toBe('quota_daily_limit_phase1');
+    expect(state.files[0].errorDetail).toBe('api_key_prompt_timeout');
     expect(state.files[0].progress).toBe(0);
+  });
+
+  it('queue/retry_one clears errorDetail', () => {
+    const file = makeFile({ id: 'err1', status: 'error', errorText: 'quota_daily_limit_phase1', errorDetail: 'api_key_prompt_timeout' });
+    const state = processingReducer(
+      { ...initialProcessingState, files: [file] },
+      { type: 'queue/retry_one', id: 'err1' },
+    );
+    expect(state.files[0].status).toBe('queued');
+    expect(state.files[0].errorText).toBeUndefined();
+    expect(state.files[0].errorDetail).toBeUndefined();
   });
 
   it('resets processing files to queued on cancelled batch completion', () => {

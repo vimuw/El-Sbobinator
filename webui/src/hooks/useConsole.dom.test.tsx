@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { useConsole } from './useConsole';
 
 describe('useConsole', () => {
@@ -39,5 +39,26 @@ describe('useConsole', () => {
       await new Promise(r => requestAnimationFrame(r));
     });
     expect(result.current.consoleLogs.length).toBeLessThanOrEqual(300);
+  });
+
+  it('cleans up RAF on unmount', () => {
+    const cancelSpy = vi.spyOn(window, 'cancelAnimationFrame');
+    const { result, unmount } = renderHook(() => useConsole());
+
+    act(() => {
+      result.current.appendConsole('unmount test');
+    });
+
+    unmount();
+    expect(cancelSpy).toHaveBeenCalled();
+    cancelSpy.mockRestore();
+  });
+
+  it('cleans up RAF on unmount even when no RAF is scheduled', () => {
+    const cancelSpy = vi.spyOn(window, 'cancelAnimationFrame');
+    const { unmount } = renderHook(() => useConsole());
+    unmount();
+    expect(cancelSpy).not.toHaveBeenCalled();
+    cancelSpy.mockRestore();
   });
 });

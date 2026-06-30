@@ -1,7 +1,7 @@
 import { type Dispatch, useEffect, useLayoutEffect, useRef } from 'react';
 import type React from 'react';
-import { createBridge, type ElSbobinatorBridge } from '../bridge';
-import type { AppStatus, FileDescriptor, FileItem, ProcessDonePayload, ProcessingAction } from '../appState';
+import { createBridge, type ElSbobinatorBridge, type UpdateDownloadProgressPayload } from '../bridge';
+import type { AppStatus, FileDescriptor, FileDonePayload, FileItem, ProcessDonePayload, ProcessingAction } from '../appState';
 import { shortModelName } from '../utils';
 
 export function useBridgeCallbacks(options: {
@@ -10,14 +10,16 @@ export function useBridgeCallbacks(options: {
   filesRef: React.RefObject<FileItem[]>;
   appStateRef: React.RefObject<AppStatus>;
   enqueueUniqueFiles: (files: FileItem[]) => void;
-  setRegeneratePrompt: (data: { filename: string; mode?: 'completed' | 'resume' } | null) => void;
+  setRegeneratePrompt: (data: { filename: string; mode?: 'completed' | 'resume'; sessionDir?: string } | null) => void;
   setAskNewKeyPrompt: (open: boolean) => void;
   autoContinueRef: React.RefObject<boolean>;
-  startProcessingRef: React.RefObject<(isContinuation?: boolean) => Promise<boolean>>;
+  startProcessingRef: React.RefObject<(isContinuation?: boolean, overrideLowDisk?: boolean) => Promise<boolean>>;
   onFileContinued: () => void;
   onBatchReset: () => void;
   onBatchFullyDone: (data: ProcessDonePayload) => void;
   clearCompletionFlash: () => void;
+  onRevisionWarning?: (data: FileDonePayload) => void;
+  onDownloadProgress?: (data: UpdateDownloadProgressPayload) => void;
 }) {
   const {
     dispatch,
@@ -40,6 +42,8 @@ export function useBridgeCallbacks(options: {
   const onBatchResetRef = useRef(options.onBatchReset);
   const onBatchFullyDoneRef = useRef(options.onBatchFullyDone);
   const clearCompletionFlashRef = useRef(options.clearCompletionFlash);
+  const onRevisionWarningRef = useRef(options.onRevisionWarning);
+  const onDownloadProgressRef = useRef(options.onDownloadProgress);
 
   useLayoutEffect(() => {
     dispatchRef.current = dispatch;
@@ -51,6 +55,8 @@ export function useBridgeCallbacks(options: {
     onBatchResetRef.current = options.onBatchReset;
     onBatchFullyDoneRef.current = options.onBatchFullyDone;
     clearCompletionFlashRef.current = options.clearCompletionFlash;
+    onRevisionWarningRef.current = options.onRevisionWarning;
+    onDownloadProgressRef.current = options.onDownloadProgress;
   });
 
   useEffect(() => {
@@ -73,11 +79,16 @@ export function useBridgeCallbacks(options: {
         enqueueUniqueFilesRef.current(filesToAdd);
       },
       onBatchStart: () => { clearCompletionFlashRef.current(); },
+      onDownloadProgress: data => { onDownloadProgressRef.current?.(data); },
       onAskNewKey: () => {
         setAskNewKeyPromptRef.current(true);
       },
+      onDismissNewKey: () => {
+        setAskNewKeyPromptRef.current(false);
+      },
       onBatchDone: data => {
-        if (!data.cancelled && autoContinueRef.current) {
+        setRegeneratePromptRef.current(null);
+        if (!data.cancelled && !data.quota_exhausted && autoContinueRef.current) {
           const hasQueued = filesRef.current?.some(f => f.status === 'queued');
           if (hasQueued) {
             setTimeout(() => {
@@ -95,6 +106,7 @@ export function useBridgeCallbacks(options: {
         onBatchFullyDoneRef.current(data);
       },
       onFileDone: data => {
+        onRevisionWarningRef.current?.(data);
         if (localStorage.getItem('notifications_enabled') === 'false') return;
         const currentFile = filesRef.current?.find(file => file.id === data.id);
         if (currentFile && window.pywebview?.api?.show_notification && !document.hasFocus()) {
