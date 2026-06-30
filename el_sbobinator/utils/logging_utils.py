@@ -6,21 +6,49 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
 from typing import IO
 
 LOGGER_NAME = "el_sbobinator"
 _CONTEXT_KEYS = ("run_id", "session_dir", "stage", "input_file")
+_SECRET_REPLACEMENT = "[API_KEY_REDACTED]"
+_SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\bAIza[0-9A-Za-z_-]{20,}\b"),
+    re.compile(r"\bAQ\.[0-9A-Za-z_-]{20,}\b"),
+    re.compile(
+        r"(?i)\b((?:api[_-]?key|key|x-goog-api-key)\s*[:=]\s*)"
+        r"([0-9A-Za-z._~+/=-]{8,})"
+    ),
+    re.compile(
+        r"(?i)([?&](?:api[_-]?key|key|x-goog-api-key)=)"
+        r"([^&#\s]{8,})"
+    ),
+)
+
+
+def redact_secrets(value: object, max_len: int | None = None) -> str:
+    text = str(value or "")
+    for pattern in _SECRET_PATTERNS:
+        if pattern.groups >= 2:
+            text = pattern.sub(
+                lambda match: f"{match.group(1)}{_SECRET_REPLACEMENT}", text
+            )
+        else:
+            text = pattern.sub(_SECRET_REPLACEMENT, text)
+    if max_len is not None:
+        return text[:max_len]
+    return text
 
 
 class StructuredFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        base = super().format(record)
+        base = redact_secrets(super().format(record))
         context_bits: list[str] = []
         for key in _CONTEXT_KEYS:
             value = getattr(record, key, None)
             if value:
-                context_bits.append(f"{key}={value}")
+                context_bits.append(f"{key}={redact_secrets(value)}")
         if context_bits:
             return f"{base} [{' '.join(context_bits)}]"
         return base

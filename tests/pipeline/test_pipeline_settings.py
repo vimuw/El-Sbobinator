@@ -176,7 +176,7 @@ class LoadAndSanitizeSettingsTests(unittest.TestCase):
         session = self._base_session(
             model="gemini-2.5-flash",
             fallback_models=[],
-            effective_model="gemini-2.5-flash-lite",
+            effective_model="gemini-3.1-flash-lite-preview",
         )
         settings, _ = load_and_sanitize_settings(session)
         self.assertEqual(settings.effective_model, "gemini-2.5-flash")
@@ -184,16 +184,16 @@ class LoadAndSanitizeSettingsTests(unittest.TestCase):
     def test_effective_model_kept_when_in_fallbacks(self):
         session = self._base_session(
             model="gemini-2.5-flash",
-            fallback_models=["gemini-2.5-flash-lite"],
-            effective_model="gemini-2.5-flash-lite",
+            fallback_models=["gemini-3.1-flash-lite-preview"],
+            effective_model="gemini-3.1-flash-lite-preview",
         )
         settings, _ = load_and_sanitize_settings(session)
-        self.assertEqual(settings.effective_model, "gemini-2.5-flash-lite")
+        self.assertEqual(settings.effective_model, "gemini-3.1-flash-lite-preview")
 
-    def test_macro_22000_clamped_down_for_flash_lite(self):
+    def test_macro_22000_clamped_down_for_flash_lite_preview(self):
         session = self._base_session(
-            model="gemini-2.5-flash-lite",
-            effective_model="gemini-2.5-flash-lite",
+            model="gemini-3.1-flash-lite-preview",
+            effective_model="gemini-3.1-flash-lite-preview",
             macro_char_limit=22000,
         )
         settings, _ = load_and_sanitize_settings(session)
@@ -244,6 +244,12 @@ class BuildDefaultPipelineSettingsTests(unittest.TestCase):
             "audio",
         ):
             self.assertIn(key, result)
+
+    def test_fallback_models_default_to_empty_when_not_configured(self):
+        result = build_default_pipeline_settings(
+            {"preferred_model": "gemini-2.5-flash"}
+        )
+        self.assertEqual(result["fallback_models"], [])
 
     def test_loads_from_system_config_when_none_passed(self):
         fake_cfg = {"preferred_model": "gemini-2.5-flash", "fallback_models": []}

@@ -1,10 +1,14 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { AlertCircle, CheckCircle, Clock, ExternalLink, FileAudio, FolderOpen, GripVertical, PenLine, RotateCcw, Trash2, XCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle, Clock, ExternalLink, FileAudio, FolderOpen, GripVertical, PenLine, RotateCcw, Settings, Trash2, XCircle } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
-import { errorLabel, formatDuration, formatRelativeTime, formatSize, shortModelName } from '../utils';
+import type { ArchiveFolder } from '../bridge';
+import { errorLabel, formatDuration, formatRelativeTime, formatSize, isQuotaError, isResumableError, shortModelName } from '../utils';
+import { KebabMenu, type KebabMenuItem } from './KebabMenu';
+import { FolderIndicatorChip } from './FolderChip';
+
 
 interface QueueFileCardProps {
   file: FileItem;
@@ -12,9 +16,10 @@ interface QueueFileCardProps {
   currentPhase?: string;
   onRemove: (id: string) => void;
   onRetry: (id: string) => void;
-  onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string) => void;
+  onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string) => void;
   onOpenFile: (path: string) => void;
-  /** @deprecated kept for interface compatibility */
+  onOpenSettings?: () => void;
+  showDragHandle?: boolean;
 }
 
 function abbreviatePath(path: string): string {
@@ -29,16 +34,19 @@ function QueueFileCardInner({
   onRetry,
   onPreview: _onPreview,
   onOpenFile: _onOpenFile,
+  onOpenSettings,
+  showDragHandle = true,
 }: QueueFileCardProps) {
   const isCanceling = appState === 'canceling' && file.status === 'processing';
-  const isDraggable = file.status === 'queued' && appState === 'idle';
+  const isDraggable = file.status === 'queued' && appState === 'idle' && showDragHandle;
+  const isPhase1ChunkFailure = Boolean(file.errorText?.startsWith('phase1_chunk_failed_'));
   const { attributes, listeners, setNodeRef, transform, transition: dndTransition, isDragging } = useSortable({
     id: file.id,
     disabled: !isDraggable,
   });
 
   const sortableStyle: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
+    transform: CSS.Transform.toString(transform ? { ...transform, x: 0 } : null),
     transition: dndTransition ?? undefined,
     zIndex: isDragging ? 50 : undefined,
     position: 'relative',
@@ -47,30 +55,20 @@ function QueueFileCardInner({
   return (
     <div ref={setNodeRef} style={sortableStyle} {...attributes}>
       <motion.div
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: isDragging ? 0.4 : 1, y: 0 }}
         exit={{ opacity: 0, transition: { duration: 0.11, ease: 'easeIn' } }}
         transition={{
-          opacity: { duration: 0.2, ease: 'easeOut' },
-          y: { type: 'spring', stiffness: 380, damping: 30, mass: 0.8 },
+          opacity: { duration: 0.18, ease: 'easeOut' },
+          y: { type: 'spring', stiffness: 400, damping: 32, mass: 0.7 },
         }}
-        className={`queue-card relative transition-colors ${file.status === 'processing' ? (isCanceling ? 'canceling-card px-5 py-4' : 'processing-card px-5 py-4') : file.status === 'queued' ? 'p-4' : 'p-5'}`}
-        style={{
-          border: `1px solid ${
-            file.status === 'processing'
-              ? isCanceling ? 'var(--error-ring)' : 'var(--processing-ring)'
-              : file.status === 'error'
-                ? 'var(--error-ring)'
-                : 'var(--card-queued-border)'
-          }`,
-          background: file.status === 'processing'
-            ? isCanceling
-              ? 'linear-gradient(180deg, rgba(255,255,255,0.02), var(--error-subtle))'
-              : 'linear-gradient(180deg, rgba(255,255,255,0.02), var(--processing-bg))'
+        className={`queue-card relative transition-colors px-4 py-3 ${
+          file.status === 'processing'
+            ? isCanceling ? 'is-canceling' : 'is-processing'
             : file.status === 'error'
-              ? 'var(--error-subtle)'
-              : 'rgba(255,255,255,0.03)',
-        }}
+              ? 'is-error'
+              : 'is-queued'
+        }`}
       >
         <div className="relative z-10 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 overflow-hidden flex-1">
@@ -87,19 +85,13 @@ function QueueFileCardInner({
               </div>
             )}
             <div
-              className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl"
-              style={{
-                background: file.status === 'processing'
-                  ? isCanceling ? 'var(--error-subtle)' : 'var(--processing-bg)'
+              className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-lg ${
+                file.status === 'processing'
+                  ? isCanceling ? 'text-[var(--error-text)]' : 'text-[var(--processing-text)]'
                   : file.status === 'error'
-                    ? 'var(--error-subtle)'
-                    : 'rgba(255,255,255,0.03)',
-                color: file.status === 'processing'
-                  ? isCanceling ? 'var(--error-text)' : 'var(--processing-text)'
-                  : file.status === 'error'
-                    ? 'var(--error-text)'
-                    : 'var(--text-muted)',
-              }}
+                    ? 'text-[var(--error-text)]'
+                    : 'text-[var(--text-muted)]'
+              }`}
             >
               {file.status === 'processing'
                 ? isCanceling
@@ -110,19 +102,19 @@ function QueueFileCardInner({
                   : <FileAudio className="w-5 h-5" />}
             </div>
             <div className="min-w-0 flex-1">
-              <h4 className="text-base font-semibold truncate tracking-tight" style={{ color: 'var(--text-primary)' }}>{file.name}</h4>
-              <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+              <h4 className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{file.name}</h4>
+              <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-[var(--text-muted)]">
                 <span>{formatSize(file.size)}</span>
                 {file.duration > 0 && (
                   <>
-                    <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
+                    <span className="w-1 h-1 rounded-full bg-[var(--border-default)]" />
                     <span>{formatDuration(file.duration)}</span>
                   </>
                 )}
                 {file.status === 'error' && (
                   <>
-                    <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
-                    <span title={file.errorText} style={{ color: 'var(--error-text)' }}>{errorLabel(file.errorText)}</span>
+                    <span className="w-1 h-1 rounded-full bg-[var(--border-default)]" />
+                    <span title={file.errorDetail || file.errorText} className="text-[var(--error-text)]">{errorLabel(file.errorText, file.errorDetail)}</span>
                   </>
                 )}
               </div>
@@ -133,7 +125,7 @@ function QueueFileCardInner({
                   transition={{ layout: { duration: 0.2, ease: [0.22, 1, 0.36, 1] } }}
                 >
                   <span className={`helper-chip processing-chip-compact ${isCanceling ? 'canceling-chip' : 'processing-chip'}`}>
-                    <span className="inline-flex h-2 w-2 rounded-full animate-pulse" style={{ background: isCanceling ? 'var(--error-text)' : 'var(--processing-dot)' }} />
+                    <span className={`inline-flex h-2 w-2 rounded-full animate-pulse ${isCanceling ? 'bg-[var(--error-text)]' : 'bg-[var(--processing-dot)]'}`} />
                     {isCanceling ? 'Annullamento in corso' : 'In elaborazione'}
                   </span>
                 </motion.div>
@@ -142,22 +134,43 @@ function QueueFileCardInner({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {appState === 'idle' && file.status === 'error' && (
+            {appState === 'idle' && file.status === 'error' && onOpenSettings && isQuotaError(file.errorText) && (
               <button
-                onClick={() => onRetry(file.id)}
-                className="icon-button compact-icon-button"
-                style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}
-                title="Riprova"
-                aria-label="Riprova"
+                onClick={onOpenSettings}
+                className="premium-button-secondary compact-button"
+                title="Aggiungi una chiave API di riserva per evitare interruzioni"
+                aria-label="Chiavi di riserva"
               >
-                <RotateCcw className="w-4 h-4" />
+                <Settings className="w-3.5 h-3.5" />
+                Chiavi di riserva
               </button>
+            )}
+            {appState === 'idle' && file.status === 'error' && (
+              isResumableError(file.errorText) || isPhase1ChunkFailure ? (
+                <button
+                  onClick={() => onRetry(file.id)}
+                  className="premium-button compact-button"
+                  title={isPhase1ChunkFailure ? 'I blocchi precedenti sono salvati: riprendi dal blocco fallito' : 'Il progresso è salvato: riprendi da dove è rimasto'}
+                  aria-label="Riprendi"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Riprendi
+                </button>
+              ) : (
+                <button
+                  onClick={() => onRetry(file.id)}
+                  className="icon-button compact-icon-button is-danger"
+                  title="Riprova"
+                  aria-label="Riprova"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+              )
             )}
             {appState === 'idle' && (
               <button
                 onClick={() => onRemove(file.id)}
-                className="icon-button compact-icon-button"
-                style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}
+                className="icon-button compact-icon-button is-danger"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -176,12 +189,29 @@ interface CompletedFileCardProps {
   file: FileItem;
   isNewest: boolean;
   onRemove: (id: string) => void;
-  onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string) => void;
+  onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string) => void;
   onOpenFile: (path: string) => void;
+  onRetryFailedRevisionBlocks?: (sessionDir: string, fileId?: string) => Promise<void>;
+  currentFolder?: Pick<ArchiveFolder, 'name' | 'color'>;
 }
 
-function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFile }: CompletedFileCardProps) {
+function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFile, onRetryFailedRevisionBlocks, currentFolder }: CompletedFileCardProps) {
   const isClickable = Boolean(file.outputHtml);
+  const [isRetryingBlocks, setIsRetryingBlocks] = React.useState(false);
+  const isRetrying = file.isRetryingBlocks || isRetryingBlocks;
+  const failedBlockCount = file.revisionFailedBlocks?.length ?? 0;
+  const hasRevisionWarnings = file.completionStatus === 'completed_with_warnings' || failedBlockCount > 0;
+  const canRetryBlocks = failedBlockCount > 0 && Boolean(file.outputDir) && Boolean(onRetryFailedRevisionBlocks);
+  const handleRetryBlocks = async (event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (!canRetryBlocks || !file.outputDir || isRetrying) return;
+    setIsRetryingBlocks(true);
+    try {
+      await onRetryFailedRevisionBlocks?.(file.outputDir, file.id);
+    } finally {
+      setIsRetryingBlocks(false);
+    }
+  };
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -191,49 +221,51 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
         opacity: { duration: 0.2, ease: 'easeOut' },
         y: { type: 'spring', stiffness: 380, damping: 30, mass: 0.8 },
       }}
-      onClick={isClickable ? () => onPreview(file.outputHtml!, file.name, file.path, file.id) : undefined}
-      className={`queue-card relative p-5 transition-colors group/card ${isClickable ? 'cursor-pointer' : ''}`}
-      style={{
-        border: '1px solid var(--success-ring)',
-        background: isNewest ? 'rgba(22,163,74,0.04)' : 'rgba(255,255,255,0.03)',
-        boxShadow: isNewest ? '0 0 0 2px rgba(22,163,74,0.10)' : undefined,
-      }}
+      onClick={isClickable ? () => onPreview(file.outputHtml!, file.name, file.path, file.id, file.outputDir) : undefined}
+      className={`queue-card relative px-4 py-3 transition-colors group/card ${isClickable ? 'cursor-pointer' : ''} is-completed ${
+        hasRevisionWarnings
+          ? 'is-warning'
+          : isNewest
+            ? 'is-newest'
+            : ''
+      }`}
     >
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 overflow-hidden flex-1">
           <div
-            className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl"
-            style={{ background: 'var(--success-subtle)', color: 'var(--success-text)' }}
+            className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-lg ${hasRevisionWarnings ? 'text-[var(--warning-text)]' : 'text-[var(--success-text)]'}`}
           >
-            <CheckCircle className="w-5 h-5" />
+            {hasRevisionWarnings ? <AlertTriangle className="w-4.5 h-4.5" /> : <CheckCircle className="w-4.5 h-4.5" />}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 min-w-0">
-              <h4 className="text-base font-semibold truncate tracking-tight" style={{ color: 'var(--text-primary)' }}>{file.name}</h4>
+              <h4 className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{file.name}</h4>
+              {currentFolder && (
+                <FolderIndicatorChip folder={currentFolder} />
+              )}
               {isNewest && (
-                <span className="shrink-0 whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'var(--success-subtle)', color: 'var(--success-text)', border: '1px solid var(--success-ring)' }}>
+                <span className="shrink-0 whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full badge-success">
                   Nuovo
                 </span>
               )}
             </div>
-            <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+            <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-[var(--text-muted)]">
               <span>{formatSize(file.size)}</span>
               {file.duration > 0 && (
                 <>
-                  <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
+                  <span className="w-1 h-1 rounded-full bg-[var(--border-default)]" />
                   <span>{formatDuration(file.duration)}</span>
                 </>
               )}
               {(file.primaryModel || file.effectiveModel) && (
                 <>
-                  <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
+                  <span className="w-1 h-1 rounded-full bg-[var(--border-default)]" />
                   <span title={file.primaryModel || file.effectiveModel}>
                     {shortModelName(file.primaryModel || file.effectiveModel!)}
                   </span>
                   {file.primaryModel && file.effectiveModel && file.primaryModel !== file.effectiveModel && (
                     <span
-                      className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
-                      style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}
+                      className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full badge-warning"
                       title={`Fallback usato: ${shortModelName(file.effectiveModel)}`}
                     >
                       fallback
@@ -241,15 +273,38 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
                   )}
                 </>
               )}
-              <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
-              <span style={{ color: 'var(--success-text)' }}>
-                {file.completedAt ? formatRelativeTime(file.completedAt) : 'Completato'}
+              <span className="w-1 h-1 rounded-full bg-[var(--border-default)]" />
+              <span className={hasRevisionWarnings ? 'text-[var(--warning-text)]' : 'text-[var(--success-text)]'}>
+                {hasRevisionWarnings ? 'Completata con avvisi' : file.completedAt ? formatRelativeTime(file.completedAt) : 'Completato'}
               </span>
+              {failedBlockCount > 0 && (
+                <>
+                  <span className="w-1 h-1 rounded-full bg-[var(--border-default)]" />
+                  <span
+                    className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full badge-warning"
+                  >
+                    <AlertTriangle className="w-3 h-3" />
+                    {failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}
+                  </span>
+                  {canRetryBlocks && (
+                    <button
+                      type="button"
+                      onClick={handleRetryBlocks}
+                      disabled={isRetrying}
+                      className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full transition-opacity premium-button-secondary compact-button is-warning"
+                      style={{ opacity: isRetrying ? 0.65 : 1 }}
+                      title="Riprova solo i blocchi inclusi senza revisione"
+                    >
+                      <RotateCcw className={`w-2.5 h-2.5 ${isRetrying ? 'animate-spin' : ''}`} />
+                      {isRetrying ? 'Riprovo…' : 'Riprova revisione'}
+                    </button>
+                  )}
+                </>
+              )}
             </div>
             {file.outputHtml && (
               <div
-                className="mt-1 flex items-center gap-1 text-[11px] hover:underline"
-                style={{ color: 'var(--text-faint)', cursor: 'pointer' }}
+                className="mt-1 flex items-center gap-1 text-[11px] text-[var(--text-faint)] cursor-pointer opacity-0 group-hover/card:opacity-100 transition-opacity hover:underline"
                 onClick={(e) => { e.stopPropagation(); onOpenFile(file.outputDir ?? file.outputHtml!); }}
                 title={`Apri cartella: ${file.outputDir ?? file.outputHtml}`}
               >
@@ -260,39 +315,29 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
           </div>
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
-          {file.outputHtml && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onPreview(file.outputHtml!, file.name, file.path, file.id); }}
-              className="icon-button"
-              style={{ color: 'var(--success-text)', borderColor: 'var(--success-ring)', background: 'var(--success-subtle)', paddingInline: '10px', gap: '5px', height: '34px', borderRadius: '10px', width: 'auto' }}
-              title="Apri editor"
-              aria-label="Apri editor"
-            >
-              <PenLine className="w-3.5 h-3.5 shrink-0" />
-              <span className="text-xs font-medium">Modifica</span>
-            </button>
-          )}
-          {file.outputHtml && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onOpenFile(file.outputHtml!); }}
-              className="icon-button compact-icon-button"
-              style={{ color: 'var(--text-muted)' }}
-              title="Apri nel browser"
-              aria-label="Apri nel browser"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-            </button>
-          )}
-          <button
-              onClick={(e) => { e.stopPropagation(); onRemove(file.id); }}
-              className="icon-button compact-icon-button"
-              style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}
-              title="Rimuovi"
-              aria-label="Rimuovi"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+        <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+          <KebabMenu
+            items={[
+              ...( file.outputHtml ? [
+                {
+                  label: 'Modifica',
+                  icon: <PenLine className="w-3.5 h-3.5" />,
+                  onClick: () => onPreview(file.outputHtml!, file.name, file.path, file.id, file.outputDir),
+                } as KebabMenuItem,
+                {
+                  label: 'Apri nel browser',
+                  icon: <ExternalLink className="w-3.5 h-3.5" />,
+                  onClick: () => onOpenFile(file.outputHtml!),
+                } as KebabMenuItem,
+              ] : []),
+              {
+                label: 'Rimuovi',
+                icon: <Trash2 className="w-3.5 h-3.5" />,
+                danger: true,
+                onClick: () => onRemove(file.id),
+              },
+            ]}
+          />
         </div>
       </div>
     </motion.div>

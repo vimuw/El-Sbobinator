@@ -8,11 +8,13 @@ export const FindReplacePanel = ({
   onClose,
   initialMode,
   focusTrigger,
+  initialFindText,
 }: {
   editor: TiptapEditor;
   onClose: () => void;
   initialMode: 'find' | 'replace';
   focusTrigger?: number;
+  initialFindText?: string;
 }) => {
   const [expanded, setExpanded] = useState(initialMode === 'replace');
   const [findText, setFindText] = useState('');
@@ -23,21 +25,7 @@ export const FindReplacePanel = ({
   const matchesRef = useRef<{ from: number; to: number }[]>([]);
   const currentMatchRef = useRef(0);
   const findInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    findInputRef.current?.focus({ preventScroll: true });
-    return () => { editor.commands.setSearchTerm('', -1, false); };
-  }, [editor]);
-
-  useEffect(() => {
-    if (focusTrigger !== undefined && focusTrigger > 0) {
-      findInputRef.current?.focus({ preventScroll: true });
-    }
-  }, [focusTrigger]);
-
-  useEffect(() => {
-    if (initialMode === 'replace') setExpanded(true);
-  }, [initialMode]);
+  const initializedRef = useRef(false);
 
   const buildMatches = useCallback((text: string, caseFlag: boolean) => {
     if (!editor || !text) return [];
@@ -54,6 +42,39 @@ export const FindReplacePanel = ({
     });
     return results;
   }, [editor]);
+
+  useEffect(() => {
+    findInputRef.current?.focus({ preventScroll: true });
+    if (initialFindText && !initializedRef.current) {
+      initializedRef.current = true;
+      setFindText(initialFindText);
+      requestAnimationFrame(() => {
+        const matches = buildMatches(initialFindText, false);
+        matchesRef.current = matches;
+        setMatchCount(matches.length);
+        editor.commands.setSearchTerm(initialFindText, 0, false);
+        if (matches.length > 0) {
+          currentMatchRef.current = 1;
+          setCurrentMatch(1);
+          requestAnimationFrame(() => {
+            const activeEl = editor.view.dom.querySelector('.search-highlight-active');
+            if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          });
+        }
+      });
+    }
+    return () => { editor.commands.setSearchTerm('', -1, false); };
+  }, [editor, buildMatches, initialFindText]);
+
+  useEffect(() => {
+    if (focusTrigger !== undefined && focusTrigger > 0) {
+      findInputRef.current?.focus({ preventScroll: true });
+    }
+  }, [focusTrigger]);
+
+  useEffect(() => {
+    if (initialMode === 'replace') setExpanded(true);
+  }, [initialMode]);
 
   const updateSearch = useCallback((text: string, curIdx = -1, caseFlag = matchCase) => {
     const matches = buildMatches(text, caseFlag);

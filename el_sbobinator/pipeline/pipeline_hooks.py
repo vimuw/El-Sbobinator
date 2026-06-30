@@ -21,6 +21,8 @@ class PipelineRuntime:
             self.target.last_run_status = "idle"
         if not hasattr(self.target, "last_run_error"):
             self.target.last_run_error = None
+        if not hasattr(self.target, "last_run_error_detail"):
+            self.target.last_run_error_detail = None
         if not hasattr(self.target, "effective_api_key"):
             self.target.effective_api_key = None
 
@@ -57,6 +59,9 @@ class PipelineRuntime:
     def phase(self, text: str) -> None:
         self._safe_call("aggiorna_fase", text)
 
+    def console_error(self, msg: str) -> None:
+        self._safe_call("emit", "appendConsole", msg, batched=False)
+
     def output_html(self, path: str, output_dir: str | None = None) -> None:
         self._safe_call("imposta_output_html", path, output_dir=output_dir)
 
@@ -92,6 +97,15 @@ class PipelineRuntime:
         except Exception:
             pass
 
+    def set_run_error_detail(self, detail: str | None = None) -> None:
+        try:
+            if hasattr(self.target, "set_run_error_detail"):
+                self.target.set_run_error_detail(detail)
+            else:
+                self.target.last_run_error_detail = detail
+        except Exception:
+            pass
+
     def update_model(self, model: str) -> None:
         self._safe_call("update_model", model)
 
@@ -106,13 +120,17 @@ class PipelineRuntime:
             pass
 
     def ask_regenerate(
-        self, filename: str, callback: Callable, mode: str = "resume"
+        self,
+        filename: str,
+        callback: Callable,
+        mode: str = "resume",
+        session_dir: str = "",
     ) -> bool:
         method = getattr(self.target, "ask_regenerate", None)
         if not method:
             return False
         try:
-            method(filename, callback, mode)
+            method(filename, callback, mode, session_dir=session_dir)
             return True
         except Exception:
             return False
@@ -126,6 +144,17 @@ class PipelineRuntime:
             return True
         except Exception:
             return False
+
+    def dismiss_new_api_key_prompt(self) -> None:
+        self._safe_call("dismiss_new_api_key_prompt")
+
+    def dismiss_regenerate_prompt(self) -> None:
+        try:
+            method = getattr(self.target, "dismiss_regenerate_prompt", None)
+            if method:
+                method()
+        except Exception:
+            pass
 
     def ask_confirmation(self, title: str, message: str) -> bool | None:
         try:
@@ -143,10 +172,21 @@ class PipelineRuntime:
         self.target.file_temporanei.append(path)
 
     def cleanup_temp_files(self) -> None:
+        parent_dirs = []
         for path in list(getattr(self.target, "file_temporanei", [])):
             try:
+                parent_dirs.append(os.path.dirname(os.path.abspath(path)))
                 if os.path.exists(path):
                     os.remove(path)
+            except Exception:
+                pass
+        for parent_dir in dict.fromkeys(parent_dirs):
+            try:
+                if (
+                    os.path.basename(parent_dir).startswith("run_")
+                    and os.path.basename(os.path.dirname(parent_dir)) == "temp_chunks"
+                ):
+                    os.rmdir(parent_dir)
             except Exception:
                 pass
         self.target.file_temporanei = []

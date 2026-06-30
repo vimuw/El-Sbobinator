@@ -3,6 +3,7 @@ import tempfile
 import unittest
 
 from el_sbobinator.services.export_service import (
+    REVISION_WARNING_TEXT,
     export_final_html_document,
     resolve_output_html_path,
 )
@@ -43,6 +44,37 @@ class ExportServiceTests(unittest.TestCase):
             )
 
             self.assertTrue(os.path.exists(html_path))
+
+    def test_export_final_html_document_includes_warning_banner_for_failed_revisions(
+        self,
+    ):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            revised_dir = os.path.join(tmpdir, "revised")
+            os.makedirs(revised_dir, exist_ok=True)
+            with open(
+                os.path.join(revised_dir, "rev_001.md"), "w", encoding="utf-8"
+            ) as handle:
+                handle.write("Corpo non completamente revisionato")
+
+            def read_text(path: str) -> str:
+                with open(path, encoding="utf-8") as handle:
+                    return handle.read()
+
+            _, html_path = export_final_html_document(
+                input_path="lesson.mp3",
+                phase2_revised_dir=revised_dir,
+                fallback_body="fallback",
+                read_text=read_text,
+                output_dir=tmpdir,
+                fallback_output_dir=tmpdir,
+                safe_output_basename=lambda value: value,
+                revision_failed_blocks=[1],
+            )
+
+            with open(html_path, encoding="utf-8") as handle:
+                html = handle.read()
+            self.assertIn(REVISION_WARNING_TEXT, html)
+            self.assertIn("revision-warning-banner", html)
 
 
 class LoadRevisedBlocksTests(unittest.TestCase):

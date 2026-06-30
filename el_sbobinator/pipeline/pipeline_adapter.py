@@ -16,10 +16,10 @@ import webview
 
 from el_sbobinator.bridge.bridge_dispatcher import _BridgeDispatcher
 from el_sbobinator.bridge.bridge_types import (
-    StepTimePayload,
     WorkDonePayload,
     WorkTotalsPayload,
 )
+from el_sbobinator.utils.logging_utils import redact_secrets
 
 # ---------------------------------------------------------------------------
 # DnD helper
@@ -63,20 +63,19 @@ class PipelineAdapter:
         self._lock = threading.Lock()
         self.file_temporanei: list[str] = []
         self._is_running = False
+        self._run_started_monotonic: float | None = None
+        self._step_times: dict[str, float] = {}
 
         # Output info (set by pipeline)
         self.last_output_html: str | None = None
         self.last_output_dir: str | None = None
         self.last_primary_model: str | None = None
         self.last_effective_model: str | None = None
+        self.last_revision_failed_blocks: list[int] = []
         self.last_run_status: str = "idle"
         self.last_run_error: str | None = None
+        self.last_run_error_detail: str | None = None
         self.effective_api_key: str | None = None
-
-        # For ETA
-        self._run_started_monotonic: float | None = None
-        self._eta_ema_seconds: float | None = None
-        self._step_times: dict = {}
 
         # Pending UI-answer callbacks (written by pipeline thread, read by UI thread)
         self._regenerate_callback = None
@@ -146,13 +145,18 @@ class PipelineAdapter:
         self.last_output_dir = None
         self.last_primary_model = None
         self.last_effective_model = None
+        self.last_revision_failed_blocks = []
         self.last_run_status = "failed"
         self.last_run_error = None
+        self.last_run_error_detail = None
         self.effective_api_key = str(api_key or "").strip() or None
 
     def set_run_result(self, status: str, error: str | None = None):
         self.last_run_status = str(status or "failed").strip() or "failed"
-        self.last_run_error = str(error).strip() if error else None
+        self.last_run_error = redact_secrets(error).strip() if error else None
+
+    def set_run_error_detail(self, detail: str | None = None):
+        self.last_run_error_detail = redact_secrets(detail).strip() if detail else None
 
     def set_effective_api_key(self, api_key: str | None):
         self.effective_api_key = str(api_key or "").strip() or None
@@ -179,22 +183,17 @@ class PipelineAdapter:
         done: int | None = None,
         total: int | None = None,
     ):
-        # Store for internal ETA calculations and push to frontend
-        with self._lock:
-            self._step_times.setdefault(kind, []).append(seconds)
-        payload: StepTimePayload = {
-            "kind": cast(Literal["chunks", "macro"], kind),
-            "seconds": seconds,
-            "done": done,
-            "total": total,
-        }
-        self._emit_js("registerStepTime", payload, batched=True)
+        pass
 
-    def ask_regenerate(self, filename: str, callback, mode: str = "resume"):
+    def ask_regenerate(
+        self, filename: str, callback, mode: str = "resume", session_dir: str = ""
+    ):
         with self._lock:
             self._regenerate_callback = callback
         self._emit_js(
-            "askRegenerate", {"filename": filename, "mode": mode}, batched=False
+            "askRegenerate",
+            {"filename": filename, "mode": mode, "sessionDir": session_dir},
+            batched=False,
         )
 
     def ask_new_api_key(self, callback):
@@ -202,14 +201,24 @@ class PipelineAdapter:
             self._new_key_callback = callback
         self._emit_js("askNewKey", {}, batched=False)
 
+    def dismiss_new_api_key_prompt(self):
+        with self._lock:
+            self._new_key_callback = None
+        self._emit_js("dismissNewKey", {}, batched=False)
+
+    def dismiss_regenerate_prompt(self):
+        with self._lock:
+            self._regenerate_callback = None
+
     def answer_regenerate(self, regenerate: bool | None):
         with self._lock:
             cb = self._regenerate_callback
             self._regenerate_callback = None
+        if not cb:
+            return
         if regenerate is None:
             self.cancel_event.set()
-        if cb:
-            cb({"regenerate": regenerate})
+        cb({"regenerate": regenerate})
 
     def answer_new_key(self, key: str):
         with self._lock:

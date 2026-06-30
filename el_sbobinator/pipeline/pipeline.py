@@ -17,14 +17,18 @@ from google import genai
 
 from el_sbobinator.core.model_registry import build_model_state
 from el_sbobinator.core.prompts import PROMPT_REVISIONE, PROMPT_SISTEMA
-from el_sbobinator.core.session_store import _update_session
+from el_sbobinator.core.session_store import _update_session, mark_html_exported
 from el_sbobinator.core.shared import (
+    PRECONVERTED_AUDIO_FINAL,
     _atomic_write_json,
     _load_json,
     invalidate_session_storage_cache,
 )
 from el_sbobinator.pipeline.pipeline_hooks import PipelineRuntime
 from el_sbobinator.pipeline.pipeline_session import (
+    AutosaveFailedError,
+    SaveSessionGuard,
+    check_disk_space,
     ensure_preconverted_audio,
     initialize_session_context,
     list_phase1_chunks,
@@ -58,12 +62,18 @@ from el_sbobinator.utils.logging_utils import (
 )
 
 # Maximum seconds to wait for a user response in the "regenerate?" dialog before
-# falling back to "don't regenerate" so the pipeline is never blocked indefinitely.
+# pausing with a visible, resumable error so the pipeline never chooses silently.
 _REGENERATE_DIALOG_TIMEOUT_SECONDS: int = 120
+_REGENERATE_PROMPT_TIMEOUT_ERROR = "regenerate_prompt_timeout"
 
 
 def _esegui_sbobinatura_impl(  # noqa: C901
-    input_path, api_key_value, app_instance, session_dir_hint=None, resume_session=False
+    input_path,
+    api_key_value,
+    app_instance,
+    session_dir_hint=None,
+    resume_session=False,
+    allow_completed_destroy=False,
 ):
     runtime = PipelineRuntime(app_instance)
     runtime.reset_temp_files()
@@ -78,6 +88,7 @@ def _esegui_sbobinatura_impl(  # noqa: C901
     session = None
     session_ctx = None
     client = None
+    regenerate_prompt_timeout_terminal = False
     try:
         if not api_key_value or api_key_value.strip() == "":
             runtime.set_run_result("failed", "api_key_mancante")
@@ -90,7 +101,41 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         runtime.set_effective_api_key(api_key_value.strip())
 
         def request_fallback_key():
-            return generation_service.request_new_api_key(runtime, runtime.cancelled)
+            prompt_timed_out = False
+
+            def _on_timeout() -> None:
+                nonlocal prompt_timed_out
+                prompt_timed_out = True
+
+            key = generation_service.request_new_api_key(
+                runtime,
+                runtime.cancelled,
+                on_timeout=_on_timeout,
+            )
+            if not key or not key.strip():
+                if prompt_timed_out:
+                    error_key = "quota_daily_limit_phase1"
+                    if isinstance(session, dict):
+                        stage_name = str(session.get("stage") or "").lower()
+                        if stage_name == "phase2":
+                            error_key = "quota_daily_limit_phase2"
+                        session["last_error"] = error_key
+                        session["last_error_detail"] = "api_key_prompt_timeout"
+                        try:
+                            save_session()
+                        except Exception:
+                            pass
+                    runtime.console_error(
+                        "Attesa chiave API scaduta. Sessione salvata - riprendi quando vuoi."
+                    )
+                    runtime.set_run_error_detail("api_key_prompt_timeout")
+                    raise generation_service.QuotaDailyLimitError(
+                        "api_key_prompt_timeout"
+                    )
+                _ce = runtime.cancel_event
+                if _ce is not None:
+                    _ce.set()
+            return key
 
         # ------------------------------
         # SESSIONE (AUTOSAVE / RIPRESA)
@@ -99,6 +144,7 @@ def _esegui_sbobinatura_impl(  # noqa: C901
             input_path,
             session_dir_hint=session_dir_hint,
             resume_session=resume_session,
+            allow_completed_destroy=allow_completed_destroy,
         )
         session = session_ctx.session
         logger = get_logger(
@@ -114,8 +160,14 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         phase2_revised_dir = session_ctx.phase2_revised_dir
         macro_path = session_ctx.macro_path
 
-        def save_session():
-            return session_ctx.save()
+        def _on_autosave_fatal(msg: str) -> None:
+            print(msg)
+            runtime.console_error(msg)
+            if isinstance(session, dict):
+                session["last_error"] = "autosave_failed"
+                session["last_error_detail"] = None
+
+        save_session = SaveSessionGuard(session_ctx.save, _on_autosave_fatal)
 
         def on_model_switched(previous_model: str, new_model: str):
             assert session is not None
@@ -197,36 +249,59 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         if stage != previous_stage:
             save_session()
 
+        _next_start_sec = int(
+            (session.get("phase1") or {}).get("next_start_sec", 0) or 0
+        )
+        check_disk_space(
+            session_ctx.session_dir,
+            total_duration_sec,
+            settings,
+            stage,
+            _next_start_sec,
+        )
+
         existing_chunks = list_phase1_chunks(phase1_chunks_dir)
         has_progress = phase1_has_progress(session, stage, existing_chunks)
 
         if has_progress and resume_session:
 
             def ask_should_regenerate():
+                nonlocal regenerate_prompt_timeout_terminal
                 if callable(getattr(app_instance, "ask_regenerate", None)):
                     event = threading.Event()
-                    outcome = {"rigenera": False}
+                    rigenera = False
+                    answered_at = None
 
                     def on_answer(payload):
+                        nonlocal answered_at, rigenera
+                        answered_at = time.monotonic()
                         val = payload.get("regenerate", False)
                         if val is None and cancel_event is not None:
                             cancel_event.set()
-                        outcome["rigenera"] = False if val is None else val
+                        rigenera = False if val is None else val
                         event.set()
 
                     regenerate_mode = "completed" if stage == "done" else "resume"
                     if runtime.ask_regenerate(
-                        os.path.basename(input_path), on_answer, regenerate_mode
+                        os.path.basename(input_path),
+                        on_answer,
+                        regenerate_mode,
+                        session_dir=str(session_ctx.session_dir),
                     ):
                         deadline = time.monotonic() + _REGENERATE_DIALOG_TIMEOUT_SECONDS
-                        while not event.is_set():
-                            if runtime.cancelled():
-                                return False
+                        while True:
+                            if event.is_set() and (
+                                answered_at is None or answered_at <= deadline
+                            ):
+                                return rigenera
                             remaining = deadline - time.monotonic()
                             if remaining <= 0:
-                                return False  # timeout fallback: don't regenerate
+                                regenerate_prompt_timeout_terminal = True
+                                runtime.dismiss_regenerate_prompt()
+                                return "timeout"
+                            if runtime.cancelled():
+                                return False
                             event.wait(min(0.2, remaining))
-                        return outcome["rigenera"]
 
                 ans = runtime.ask_confirmation(
                     "File gia' completato",
@@ -242,6 +317,15 @@ def _esegui_sbobinatura_impl(  # noqa: C901
 
             _is_regen = ask_should_regenerate()
             print(f"[*] Risposta Rigenerare dal JS: {_is_regen}")
+            if _is_regen == "timeout":
+                session["last_error"] = _REGENERATE_PROMPT_TIMEOUT_ERROR
+                session["last_error_detail"] = None
+                save_session()
+                runtime.console_error(
+                    "Risposta non ricevuta entro 120 secondi. Sessione salvata - riprendi quando vuoi."
+                )
+                runtime.set_run_result("failed", _REGENERATE_PROMPT_TIMEOUT_ERROR)
+                return
             if _is_regen:
                 print(
                     f"[*] L'utente ha scelto di rigenerare il file {os.path.basename(input_path)}. Pulizia sessione precedente..."
@@ -256,6 +340,7 @@ def _esegui_sbobinatura_impl(  # noqa: C901
                     settings.model,
                     settings.fallback_models,
                 )
+                runtime.update_model(model_state.current)
                 stage = "phase1"
                 log_model_selection("Modelli sessione dopo rigenerazione")
                 logger.info(
@@ -273,7 +358,19 @@ def _esegui_sbobinatura_impl(  # noqa: C901
                         f"[*] File gia' completato, l'utente ha scelto di usare la versione pronta."
                     )
                     runtime.output_html(str(existing_html))
-                    runtime.set_run_result("completed")
+                    try:
+                        app_instance.last_revision_failed_blocks = [
+                            int(idx)
+                            for idx in (session.get("revision_failed_blocks") or [])
+                        ]
+                    except Exception:
+                        pass
+                    _completion_status = (
+                        "completed_with_warnings"
+                        if getattr(app_instance, "last_revision_failed_blocks", [])
+                        else "completed"
+                    )
+                    runtime.set_run_result(_completion_status)
                     return
 
         # ------------------------------------------
@@ -360,7 +457,10 @@ def _esegui_sbobinatura_impl(  # noqa: C901
 
         # Se la fase 1 e' terminata senza interruzioni, passa alla fase 2
         if stage == "phase1":
-            _update_session(session, {"stage": "phase2", "last_error": None})
+            _update_session(
+                session,
+                {"stage": "phase2", "last_error": None, "last_error_detail": None},
+            )
             save_session()
 
         # ==========================================
@@ -436,7 +536,20 @@ def _esegui_sbobinatura_impl(  # noqa: C901
 
         current_stage = str(session.get("stage", "phase1")).strip().lower()
         if current_stage in ("phase2", "boundary"):
-            _update_session(session, {"stage": "done", "last_error": None})
+            _revision_failed_blocks = [
+                int(idx) for idx in (session.get("revision_failed_blocks") or [])
+            ]
+            _update_session(
+                session,
+                {
+                    "stage": "done",
+                    "completion_status": "completed_with_warnings"
+                    if _revision_failed_blocks
+                    else "completed",
+                    "last_error": None,
+                    "last_error_detail": None,
+                },
+            )
             save_session()
 
         # ==========================================
@@ -454,10 +567,14 @@ def _esegui_sbobinatura_impl(  # noqa: C901
                 output_dir=session_html_dir,
                 fallback_output_dir=session_html_dir,
                 safe_output_basename=safe_output_basename,
+                revision_failed_blocks=[
+                    int(idx) for idx in (session.get("revision_failed_blocks") or [])
+                ],
             )
         except Exception as e:
             print(f"[!] Errore salvataggio HTML: {e}")
             session["last_error"] = "html_export_failed"
+            session["last_error_detail"] = None
             save_session()
             return
 
@@ -466,6 +583,7 @@ def _esegui_sbobinatura_impl(  # noqa: C901
                 "[!] Errore salvataggio HTML: file finale non trovato dopo la scrittura."
             )
             session["last_error"] = "html_export_missing"
+            session["last_error_detail"] = None
             save_session()
             return
 
@@ -476,6 +594,7 @@ def _esegui_sbobinatura_impl(  # noqa: C901
                     "outputs": {**session.get("outputs", {}), "html": html_path},
                 },
             )
+            mark_html_exported(session)
             save_session()
         except Exception:
             pass
@@ -493,22 +612,62 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         print(f"Tempo totale: {minutes}m {seconds}s")
         print(f"File salvato in: {session_html_dir}")
         runtime.phase("Fase: completato")
-        runtime.set_run_result("completed")
+        try:
+            app_instance.last_revision_failed_blocks = [
+                int(idx) for idx in (session.get("revision_failed_blocks") or [])
+            ]
+        except Exception:
+            pass
+        _completion_status = (
+            "completed_with_warnings"
+            if getattr(app_instance, "last_revision_failed_blocks", [])
+            else "completed"
+        )
+        runtime.set_run_result(_completion_status)
         logger.info("Pipeline completata con successo.", extra={"stage": "done"})
 
         # Pulizia: rimuovi il file preconvertito (grande) se presente. I progressi testuali restano nella sessione.
+        # Nota: preconv_used_path è None nei resume da phase2/done, quindi si usa il path noto direttamente.
         try:
-            if preconv_used_path and os.path.exists(preconv_used_path):
-                os.remove(preconv_used_path)
+            preconv_final_path = os.path.join(
+                session_ctx.session_dir, PRECONVERTED_AUDIO_FINAL
+            )
+            if os.path.exists(preconv_final_path):
+                os.remove(preconv_final_path)
                 invalidate_session_storage_cache()
         except Exception:
             pass
 
+    except AutosaveFailedError:
+        runtime.set_run_result("failed", "autosave_failed")
+        logger.warning(
+            "Autosalvataggio fallito ripetutamente: elaborazione interrotta.",
+            extra={"stage": "autosave_fatal"},
+        )
     except Exception as e:
         runtime.set_run_result("failed", str(e))
         logger.exception("Errore imprevisto nella pipeline.", extra={"stage": "fatal"})
         print(f"\n[X] ERRORE IMPREVISTO DURANTE L'ESECUZIONE:\n{e}")
     finally:
+        # Safety-net: remove the preconverted audio whenever the session is done,
+        # covering all exit paths (early return on resume-done, exception after
+        # stage is set, or app killed between the happy-path cleanup and here).
+        if session_ctx is not None:
+            try:
+                _final_stage = (
+                    str(session.get("stage", "") if isinstance(session, dict) else "")
+                    .strip()
+                    .lower()
+                )
+                if _final_stage == "done":
+                    _preconv = os.path.join(
+                        session_ctx.session_dir, PRECONVERTED_AUDIO_FINAL
+                    )
+                    if os.path.exists(_preconv):
+                        os.remove(_preconv)
+                        invalidate_session_storage_cache()
+            except Exception:
+                pass
         runtime.set_effective_api_key(
             extract_client_api_key(locals().get("client"))
             or getattr(app_instance, "effective_api_key", None)
@@ -516,8 +675,10 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         runtime.cleanup_temp_files()
         if (
             runtime.cancelled()
-            or getattr(app_instance, "last_run_status", None) == "cancelled"
-        ):
+            and not regenerate_prompt_timeout_terminal
+            and getattr(app_instance, "last_run_error", None)
+            != _REGENERATE_PROMPT_TIMEOUT_ERROR
+        ) or getattr(app_instance, "last_run_status", None) == "cancelled":
             runtime.phase("Fase: annullato")
             runtime.set_run_result(
                 "cancelled",
@@ -525,7 +686,17 @@ def _esegui_sbobinatura_impl(  # noqa: C901
             )
         else:
             runtime.progress(1.0)
-            if getattr(app_instance, "last_run_status", None) != "completed":
+            if getattr(app_instance, "last_run_status", None) in {
+                "completed",
+                "completed_with_warnings",
+            }:
+                runtime.set_run_error_detail(None)
+            else:
+                runtime.set_run_error_detail(
+                    session.get("last_error_detail")
+                    if isinstance(session, dict)
+                    else None
+                )
                 runtime.set_run_result(
                     "failed",
                     getattr(app_instance, "last_run_error", None)
@@ -539,7 +710,12 @@ def _esegui_sbobinatura_impl(  # noqa: C901
 
 
 def esegui_sbobinatura(
-    input_path, api_key_value, app_instance, session_dir_hint=None, resume_session=False
+    input_path,
+    api_key_value,
+    app_instance,
+    session_dir_hint=None,
+    resume_session=False,
+    allow_completed_destroy=False,
 ):
     # Wrapper stabile: mantiene la firma pubblica mentre l'implementazione evolve.
     return _esegui_sbobinatura_impl(
@@ -548,4 +724,5 @@ def esegui_sbobinatura(
         app_instance,
         session_dir_hint=session_dir_hint,
         resume_session=resume_session,
+        allow_completed_destroy=allow_completed_destroy,
     )

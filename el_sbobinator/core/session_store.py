@@ -14,7 +14,6 @@ import tempfile
 from dataclasses import dataclass
 
 from el_sbobinator.core.shared import (
-    SESSION_ROOT,
     SESSION_SCHEMA_VERSION,
     _atomic_write_json,
     _file_fingerprint,
@@ -22,8 +21,24 @@ from el_sbobinator.core.shared import (
     _now_iso,
     _safe_mkdir,
     _session_dir_for_file,
+    get_session_root,
 )
 from el_sbobinator.pipeline.pipeline_settings import build_default_pipeline_settings
+
+
+class SessionCollisionError(Exception):
+    """Raised when initialize_session_context would silently destroy a completed session.
+
+    Occurs when resume_session=False and the computed session directory already
+    contains a finished sbobina (stage=='done' + existing HTML output).  This
+    protects against the fingerprint-collision scenario where two different
+    recordings resolve to the same session ID and the newer file would wipe the
+    older completed work without any user confirmation.
+    """
+
+    def __init__(self, session_dir: str) -> None:
+        self.session_dir = session_dir
+        super().__init__("session_collision")
 
 
 @dataclass(frozen=True)
@@ -39,7 +54,7 @@ def resolve_session_paths(
     input_path: str, session_dir_hint: str | None = None
 ) -> SessionPaths:
     try:
-        _safe_mkdir(SESSION_ROOT)
+        _safe_mkdir(get_session_root())
     except Exception:
         pass
 
@@ -69,7 +84,27 @@ def ensure_session_dirs(paths: SessionPaths) -> None:
     _safe_mkdir(paths.phase2_revised_dir)
 
 
-def reset_session_dirs(paths: SessionPaths) -> None:
+def _completed_html_output_exists(paths: SessionPaths) -> bool:
+    try:
+        session = load_session(paths.session_path)
+        if str(session.get("stage", "")).strip().lower() != "done":
+            return False
+        outputs = session.get("outputs", {})
+        html_path = str(outputs.get("html", "") if isinstance(outputs, dict) else "")
+        return bool(html_path and os.path.exists(html_path))
+    except Exception:
+        return False
+
+
+def reset_session_dirs(
+    paths: SessionPaths, *, allow_completed_destroy: bool = False
+) -> None:
+    if (
+        not allow_completed_destroy
+        and os.path.exists(paths.session_dir)
+        and _completed_html_output_exists(paths)
+    ):
+        raise SessionCollisionError(paths.session_dir)
     if os.path.exists(paths.session_dir):
         import shutil
 
@@ -93,6 +128,10 @@ def _update_session(session: dict, updates: dict) -> dict:
     return snapshot
 
 
+def mark_html_exported(session: dict) -> dict:
+    return _update_session(session, {"user_edited": False})
+
+
 def new_session(input_path: str, settings: dict | None = None) -> dict:
     try:
         fp = _file_fingerprint(input_path)
@@ -110,7 +149,43 @@ def new_session(input_path: str, settings: dict | None = None) -> dict:
         "phase2": {"macro_total": 0, "revised_done": 0},
         "outputs": {},
         "last_error": None,
+        "last_error_detail": None,
     }
+
+
+def migrate_session(session: dict) -> tuple[dict, bool]:
+    """Apply pending schema migrations in-place and return (session, was_changed).
+
+    Migrations run sequentially so a session at any older version is always
+    brought up to SESSION_SCHEMA_VERSION.  Callers own the deep-copy if needed.
+
+    Adding a new migration: bump SESSION_SCHEMA_VERSION in shared.py and add an
+    ``if version < N:`` block here that transforms/defaults the new fields.
+    """
+    try:
+        version = int(session.get("schema_version", 0) or 0)
+    except (ValueError, TypeError):
+        version = 0
+    changed = False
+
+    if version < 1:
+        # v0 (pre-versioning) → v1: fill in all required top-level keys.
+        session.setdefault("stage", "phase1")
+        session.setdefault("phase1", {})
+        session.setdefault("phase2", {})
+        session.setdefault("outputs", {})
+        session.setdefault("last_error", None)
+        session.setdefault("last_error_detail", None)
+        session["schema_version"] = 1
+        changed = True
+
+    # Future migrations go here:
+    # if version < 2:
+    #     session.setdefault("new_field", default_value)
+    #     session["schema_version"] = 2
+    #     changed = True
+
+    return session, changed
 
 
 def clone_session_settings(session: dict) -> dict:

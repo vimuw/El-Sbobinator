@@ -11,6 +11,7 @@ from el_sbobinator.utils.logging_utils import (
     configure_logging,
     detach_file_handler,
     get_logger,
+    redact_secrets,
 )
 
 
@@ -48,6 +49,31 @@ class StructuredFormatterTests(unittest.TestCase):
         record = self._make_record("hello", run_id="", session_dir=None)
         result = fmt.format(record)
         self.assertNotIn("[", result)
+
+    def test_redacts_secrets_from_message_and_context(self):
+        fmt = StructuredFormatter("%(message)s", "%H:%M:%S")
+        key = "AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345"
+        record = self._make_record(
+            f"failed with key={key}",
+            input_file=f"https://example.test/?key={key}",
+        )
+        result = fmt.format(record)
+        self.assertNotIn(key, result)
+        self.assertIn("[API_KEY_REDACTED]", result)
+
+
+class RedactSecretsTests(unittest.TestCase):
+    def test_redacts_gemini_aq_and_query_string_keys(self):
+        gemini_key = "AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345"
+        aq_key = "AQ.abcdefghijklmnopqrstuvwxyz0123456789"
+        text = (
+            f"Authorization failed for {gemini_key}; backup={aq_key}; "
+            f"https://example.test/path?key={gemini_key}&x=1"
+        )
+        result = redact_secrets(text)
+        self.assertNotIn(gemini_key, result)
+        self.assertNotIn(aq_key, result)
+        self.assertIn("[API_KEY_REDACTED]", result)
 
 
 class ConfigureLoggingTests(unittest.TestCase):

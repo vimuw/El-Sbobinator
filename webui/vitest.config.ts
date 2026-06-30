@@ -18,6 +18,8 @@ export default defineConfig({
         'src/components/EditorToolbar.tsx',
         'src/components/EditorToolbarControls.tsx',
         'src/components/EditorWordCount.tsx',
+        'src/components/ArchivePage.tsx',
+        'src/components/EditorFullPage.tsx',
       ],
       thresholds: {
         lines: 70,
@@ -43,6 +45,7 @@ export default defineConfig({
           globals: true,
           environment: 'jsdom',
           include: ['src/**/*.dom.test.{ts,tsx}'],
+          setupFiles: ['src/test-setup.ts'],
         },
       },
     ],

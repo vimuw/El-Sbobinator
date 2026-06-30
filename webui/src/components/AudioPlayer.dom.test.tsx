@@ -183,6 +183,20 @@ describe('AudioPlayer', () => {
     expect(audio.currentTime).toBe(30);
   });
 
+  it('loadedmetadata restores playbackRate and volume to the audio element', () => {
+    const { container } = render(<AudioPlayer src="/audio/test.mp3" initialPlaybackRate={2} initialVolume={0.8} />);
+    const audio = container.querySelector('audio') as HTMLAudioElement;
+
+    // Simulate browser load resetting properties or initial state
+    audio.playbackRate = 1;
+    audio.volume = 1;
+
+    fireEvent.loadedMetadata(audio);
+    expect(audio.playbackRate).toBe(2);
+    expect(audio.volume).toBe(0.8);
+  });
+
+
   it('calls onStateChange when audio timeupdate fires', () => {
     const onStateChange = vi.fn();
     const { container } = render(<AudioPlayer src="/audio/test.mp3" onStateChange={onStateChange} />);
@@ -219,5 +233,101 @@ describe('AudioPlayer', () => {
     fireEvent.click(screen.getByLabelText('Scorciatoie da tastiera'));
     expect(screen.getByText('Pausa / Riprendi')).toBeTruthy();
     fireEvent.pointerDown(document.body);
+  });
+
+  it('calls onRelink when relink button is clicked', () => {
+    const onRelink = vi.fn();
+    render(<AudioPlayer src="/audio/test.mp3" onRelink={onRelink} />);
+    fireEvent.click(screen.getByLabelText('Cambia audio collegato'));
+    expect(onRelink).toHaveBeenCalledTimes(1);
+  });
+
+  it('guards against concurrent onRelink clicks', async () => {
+    let resolveRelink!: (value: unknown) => void;
+    const onRelinkPromise = new Promise((resolve) => {
+      resolveRelink = resolve;
+    });
+    const onRelink = vi.fn().mockImplementation(() => onRelinkPromise);
+    render(<AudioPlayer src="/audio/test.mp3" onRelink={onRelink} />);
+
+    const button = screen.getByLabelText('Cambia audio collegato') as HTMLButtonElement;
+
+    // First click initiates the relink process
+    fireEvent.click(button);
+    expect(onRelink).toHaveBeenCalledTimes(1);
+    expect(button.disabled).toBe(true);
+
+    // Subsequent clicks should be guarded and ignored
+    fireEvent.click(button);
+    expect(onRelink).toHaveBeenCalledTimes(1);
+
+    // Resolve the first relink action
+    resolveRelink(true);
+    await onRelinkPromise;
+
+    // After resolving, state should reset and the button should be enabled again
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(button.disabled).toBe(false);
+  });
+
+  it('guards against concurrent onRelink clicks even when the button disabled state is bypassed', async () => {
+    let resolveRelink!: (value: unknown) => void;
+    const onRelinkPromise = new Promise((resolve) => {
+      resolveRelink = resolve;
+    });
+    const onRelink = vi.fn().mockImplementation(() => onRelinkPromise);
+    render(<AudioPlayer src="/audio/test.mp3" onRelink={onRelink} />);
+
+    const button = screen.getByLabelText('Cambia audio collegato') as HTMLButtonElement;
+
+    // First click initiates the relink process
+    fireEvent.click(button);
+    expect(onRelink).toHaveBeenCalledTimes(1);
+    expect(button.disabled).toBe(true);
+
+    // Bypass disabled state by removing the disabled attribute manually
+    button.removeAttribute('disabled');
+    expect(button.disabled).toBe(false);
+
+    // Subsequent clicks should still be ignored by the internal handler guard
+    fireEvent.click(button);
+    expect(onRelink).toHaveBeenCalledTimes(1);
+
+    // Resolve the first relink action
+    resolveRelink(true);
+    await onRelinkPromise;
+
+    // Wait for state update to complete
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(button.disabled).toBe(false);
+  });
+
+  it('resets isRelinking state when onRelink throws an error / rejects', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let rejectRelink!: (reason: unknown) => void;
+    const onRelinkPromise = new Promise((_, reject) => {
+      rejectRelink = reject;
+    });
+    const onRelink = vi.fn().mockImplementation(() => onRelinkPromise);
+    render(<AudioPlayer src="/audio/test.mp3" onRelink={onRelink} />);
+
+    const button = screen.getByLabelText('Cambia audio collegato') as HTMLButtonElement;
+
+    // First click initiates the relink process
+    fireEvent.click(button);
+    expect(onRelink).toHaveBeenCalledTimes(1);
+    expect(button.disabled).toBe(true);
+
+    // Reject the relink action to simulate an error
+    rejectRelink(new Error('Relink failed'));
+
+    // We catch the rejection to avoid unhandled rejection warnings in test
+    await onRelinkPromise.catch(() => {});
+
+    // Wait for the state update in finally block to complete
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(button.disabled).toBe(false);
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
   });
 });

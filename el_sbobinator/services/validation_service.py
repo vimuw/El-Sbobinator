@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import os
 import platform
-import tempfile
 
 from google import genai
 
@@ -19,13 +18,10 @@ from el_sbobinator.core.model_registry import (
     sanitize_fallback_models,
     sanitize_model_name,
 )
-from el_sbobinator.core.shared import DEFAULT_MODEL
+from el_sbobinator.core.shared import DEFAULT_MODEL, get_session_root
 from el_sbobinator.services.audio_service import resolve_ffmpeg
-from el_sbobinator.services.config_service import (
-    CONFIG_FILE,
-    USER_HOME,
-    get_desktop_dir,
-)
+from el_sbobinator.services.config_service import CONFIG_FILE
+from el_sbobinator.utils.logging_utils import redact_secrets
 
 
 def _check_writable_dir(path: str) -> tuple[bool, str]:
@@ -35,7 +31,7 @@ def _check_writable_dir(path: str) -> tuple[bool, str]:
         with open(probe_name, "w", encoding="utf-8") as handle:
             handle.write("ok")
     except Exception as exc:
-        return False, str(exc)
+        return False, redact_secrets(exc)
     try:
         os.remove(probe_name)
     except Exception:
@@ -83,7 +79,7 @@ def validate_environment(
                 "label": "FFmpeg",
                 "status": "error",
                 "message": "FFmpeg non trovato o non utilizzabile.",
-                "details": str(exc),
+                "details": redact_secrets(exc),
             }
         )
 
@@ -101,17 +97,24 @@ def validate_environment(
         }
     )
 
-    output_dir = get_desktop_dir() or USER_HOME or tempfile.gettempdir()
-    ok_output, msg_output = _check_writable_dir(output_dir)
+    session_output_dir = get_session_root()
+    ok_output, msg_output = _check_writable_dir(session_output_dir)
     checks.append(
         {
             "id": "output",
-            "label": "Cartella output",
+            "label": "Cartella sessioni/output",
             "status": "ok" if ok_output else "error",
-            "message": "Cartella output disponibile."
+            "message": "Cartella sessioni/output scrivibile."
             if ok_output
-            else "Cartella output non scrivibile.",
-            "details": output_dir if ok_output else msg_output,
+            else "Cartella sessioni/output non scrivibile.",
+            "details": session_output_dir
+            if ok_output
+            else (
+                f"Percorso: {session_output_dir}\n"
+                f"Errore: {msg_output}\n"
+                "Rimedio: scegli una cartella sessioni scrivibile dalle impostazioni "
+                "o correggi i permessi della cartella."
+            ),
         }
     )
 
@@ -143,7 +146,7 @@ def validate_environment(
                         "label": "API Key Gemini",
                         "status": "error",
                         "message": "API key non valida o modello primario non accessibile.",
-                        "details": str(exc),
+                        "details": redact_secrets(exc),
                     }
                 )
             else:
@@ -182,7 +185,7 @@ def validate_environment(
                                     if idx == 0
                                     else f"Modello fallback {idx} non accessibile con questa chiave."
                                 ),
-                                "details": f"{model_name}: {exc}",
+                                "details": redact_secrets(f"{model_name}: {exc}"),
                             }
                         )
 
@@ -195,7 +198,7 @@ def validate_environment(
             keyring.get_password("__el_sbobinator_probe__", "__probe__")
             keyring_ok = True
         except Exception as exc:
-            keyring_detail = str(exc)
+            keyring_detail = redact_secrets(exc)
         checks.append(
             {
                 "id": "keyring",

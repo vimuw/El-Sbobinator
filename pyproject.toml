@@ -54,9 +54,9 @@ omit = [
     "*/__init__.py",
     "el_sbobinator/app.py",
     "el_sbobinator/webview_entry.py",
-    "el_sbobinator/services/config_service.py",
 ]
 
 [tool.coverage.report]
 show_missing = true
 skip_covered = false
+fail_under = 85

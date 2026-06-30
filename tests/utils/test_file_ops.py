@@ -6,8 +6,12 @@ import time
 import unittest
 from unittest.mock import MagicMock, patch
 
+import el_sbobinator.utils.file_ops as _fo
 from el_sbobinator.utils.file_ops import (
+    _HTML_CACHE_MAX,
     _html_last_gen,
+    _html_write_locks,
+    evict_html_paths_under,
     extract_html_shell,
     open_path_with_default_app,
     read_html_content,
@@ -243,6 +247,145 @@ class SaveHtmlBodyContentWithoutShellTests(unittest.TestCase):
             self.assertIn("<html", final)
             self.assertIn("</body>", final)
             self.assertIn("<p>thread-", final)
+
+
+class HtmlCacheEvictionTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        with _fo._html_write_locks_meta:
+            _fo._html_write_locks.clear()
+            _fo._html_last_gen.clear()
+
+    def tearDown(self):
+        self._tmp.cleanup()
+        with _fo._html_write_locks_meta:
+            _fo._html_write_locks.clear()
+            _fo._html_last_gen.clear()
+
+    def _make_html(self, name: str) -> str:
+        path = os.path.join(self._tmp.name, name)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("<html><body><p>x</p></body></html>")
+        return path
+
+    def test_cap_evicts_oldest_when_full(self):
+        """Filling the dict beyond _HTML_CACHE_MAX evicts the oldest entry from
+        both _html_write_locks and _html_last_gen (shared FIFO eviction)."""
+        paths = [self._make_html(f"doc_{i}.html") for i in range(_HTML_CACHE_MAX + 1)]
+        for p in paths:
+            _write(p, "<p>x</p>", generation=1)
+
+        self.assertNotIn(paths[0], _html_write_locks)  # lock evicted
+        self.assertNotIn(paths[0], _html_last_gen)  # generation evicted too
+        self.assertIn(paths[-1], _html_write_locks)
+        self.assertEqual(len(_html_write_locks), _HTML_CACHE_MAX)
+
+    def test_lock_not_evicted_while_in_use(self):
+        """A lock that is currently in use (ref_count > 0) must not be evicted
+        even if the cache capacity is exceeded."""
+        path_in_use = self._make_html("in_use.html")
+        lock_ctx = _fo._html_write_lock(path_in_use)
+        self.assertIn(path_in_use, _fo._html_write_locks)
+        self.assertEqual(_fo._html_write_locks[path_in_use][1], 1)
+
+        # Fill cache with fillers to trigger eviction
+        fillers = [self._make_html(f"filler_{i}.html") for i in range(_HTML_CACHE_MAX)]
+        for p in fillers:
+            _write(p, "<p>x</p>", generation=1)
+
+        # path_in_use must NOT be evicted because ref_count was 1
+        self.assertIn(path_in_use, _fo._html_write_locks)
+
+        # Exit the context
+        with lock_ctx:
+            pass
+
+        # Now path_in_use has ref_count = 0, so writing another file will evict it
+        extra_path = self._make_html("extra.html")
+        _write(extra_path, "<p>x</p>", generation=1)
+        self.assertNotIn(path_in_use, _fo._html_write_locks)
+
+    def test_generation_guard_reset_after_fifo_eviction(self):
+        """After FIFO eviction both the lock and the generation entry are removed.
+        The gen guard resets to 0 for that path, so any write with gen>=1 succeeds.
+        This is the accepted trade-off of shared eviction (keeps both dicts bounded)."""
+        first = self._make_html("evict_me.html")
+        _write(first, "<p>initial</p>", generation=10)
+        self.assertEqual(_html_last_gen.get(first), 10)
+
+        fillers = [self._make_html(f"filler_{i}.html") for i in range(_HTML_CACHE_MAX)]
+        for p in fillers:
+            _write(p, "<p>x</p>", generation=1)
+
+        # *first* has been evicted from both dicts.
+        self.assertNotIn(first, _html_write_locks)
+        self.assertNotIn(first, _html_last_gen)
+
+        # Re-inserting *first*: gen guard was reset, so a formerly-stale gen=5 write
+        # now succeeds (accepted behaviour after eviction).
+        stale_result = _write(first, "<p>stale</p>", generation=5)
+        self.assertTrue(stale_result)
+        self.assertIn("stale", _read(first))
+
+        # A newer gen=11 write must also succeed.
+        newer_result = _write(first, "<p>newer</p>", generation=11)
+        self.assertTrue(newer_result)
+        self.assertIn("newer", _read(first))
+
+    def test_evict_html_paths_under_removes_prefixed_leaves_others(self):
+        """evict_html_paths_under clears paths under a prefix from both dicts,
+        leaving unrelated paths untouched."""
+        sub = os.path.join(self._tmp.name, "session_abc")
+        os.makedirs(sub, exist_ok=True)
+        p1 = os.path.join(sub, "output.html")
+        p2 = os.path.join(sub, "output2.html")
+        p_other = self._make_html("other.html")
+        for p in (p1, p2):
+            with open(p, "w", encoding="utf-8") as f:
+                f.write("<html><body><p>x</p></body></html>")
+            _write(p, "<p>x</p>", generation=1)
+        _write(p_other, "<p>y</p>", generation=1)
+
+        evict_html_paths_under(sub + os.sep)
+
+        self.assertNotIn(p1, _html_write_locks)
+        self.assertNotIn(p1, _html_last_gen)
+        self.assertNotIn(p2, _html_write_locks)
+        self.assertNotIn(p2, _html_last_gen)
+        self.assertIn(p_other, _html_write_locks)
+        self.assertIn(p_other, _html_last_gen)
+
+    def test_lock_exit_ignored_if_recreated_lock_differs(self):
+        """If a path's lock is evicted (or deleted) and subsequently recreated
+        with a new Lock object, exiting the old lock context manager should NOT
+        corrupt/decrement the reference count of the new Lock object."""
+        path = self._make_html("recreated.html")
+        old_lock_ctx = _fo._html_write_lock(path)
+        self.assertIn(path, _fo._html_write_locks)
+        old_lock_obj = _fo._html_write_locks[path][0]
+
+        # Simulate eviction/deletion of the path from the locks dict
+        with _fo._html_write_locks_meta:
+            del _fo._html_write_locks[path]
+
+        # Re-create a new lock for the same path
+        new_lock_ctx = _fo._html_write_lock(path)
+        self.assertIn(path, _fo._html_write_locks)
+        new_lock_obj = _fo._html_write_locks[path][0]
+        self.assertNotEqual(old_lock_obj, new_lock_obj)
+        self.assertEqual(_fo._html_write_locks[path][1], 1)
+
+        # Exit the OLD lock context. This should be a no-op on the new lock object.
+        with old_lock_ctx:
+            pass
+
+        # The new lock's reference count must remain 1
+        self.assertEqual(_fo._html_write_locks[path][1], 1)
+
+        # Cleanup: exit new lock context
+        with new_lock_ctx:
+            pass
+        self.assertEqual(_fo._html_write_locks[path][1], 0)
 
 
 class OpenPathWithDefaultAppTests(unittest.TestCase):

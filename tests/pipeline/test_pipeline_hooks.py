@@ -13,6 +13,7 @@ class _DummyTarget:
         self.events = []
         self.last_run_status = "idle"
         self.last_run_error = None
+        self.last_run_error_detail = None
         self.effective_api_key = None
 
     def winfo_exists(self):
@@ -76,6 +77,24 @@ class PipelineRuntimeTests(unittest.TestCase):
 
         self.assertFalse(os.path.exists(path))
         self.assertEqual(target.file_temporanei, [])
+
+    def test_runtime_removes_empty_phase1_temp_run_dir_after_cleaning_files(self):
+        target = _DummyTarget()
+        runtime = PipelineRuntime(target)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = os.path.join(tmpdir, "session", "temp_chunks", "run_test")
+            os.makedirs(run_dir)
+            chunk_path = os.path.join(run_dir, "chunk_001_0_60.mp3")
+            with open(chunk_path, "wb") as handle:
+                handle.write(b"x")
+            runtime.track_temp_file(chunk_path)
+
+            runtime.cleanup_temp_files()
+
+            self.assertFalse(os.path.exists(chunk_path))
+            self.assertFalse(os.path.exists(run_dir))
+            self.assertEqual(target.file_temporanei, [])
 
 
 class PipelineRuntimeCancelledTests(unittest.TestCase):
@@ -175,14 +194,18 @@ class PipelineRuntimeAskRegenerateTests(unittest.TestCase):
 
     def test_ask_regenerate_calls_method_and_returns_true(self):
         class _RegTarget(_DummyTarget):
-            def ask_regenerate(self, filename, callback, mode="resume"):
-                self.events.append(("ask_regenerate", filename, mode))
+            def ask_regenerate(self, filename, callback, mode="resume", session_dir=""):
+                self.events.append(("ask_regenerate", filename, mode, session_dir))
 
         target = _RegTarget()
         runtime = PipelineRuntime(target)
-        result = runtime.ask_regenerate("audio.mp3", lambda: None, mode="restart")
+        result = runtime.ask_regenerate(
+            "audio.mp3", lambda: None, mode="restart", session_dir="/sessions/abc"
+        )
         self.assertTrue(result)
-        self.assertIn(("ask_regenerate", "audio.mp3", "restart"), target.events)
+        self.assertIn(
+            ("ask_regenerate", "audio.mp3", "restart", "/sessions/abc"), target.events
+        )
 
     def test_ask_regenerate_returns_false_on_exception(self):
         class _BrokenTarget(_DummyTarget):
@@ -281,6 +304,22 @@ class PipelineRuntimeMiscTests(unittest.TestCase):
         self.assertEqual(target.last_run_status, "failed")
         self.assertEqual(target.last_run_error, "some error")
 
+    def test_set_run_error_detail_fallback_when_no_method(self):
+        target = _DummyTarget()
+        runtime = PipelineRuntime(target)
+        runtime.set_run_error_detail("detail")
+        self.assertEqual(target.last_run_error_detail, "detail")
+
+    def test_dismiss_new_api_key_prompt_forwarded(self):
+        class _DismissTarget(_DummyTarget):
+            def dismiss_new_api_key_prompt(self):
+                self.events.append(("dismiss_new_api_key_prompt",))
+
+        target = _DismissTarget()
+        runtime = PipelineRuntime(target)
+        runtime.dismiss_new_api_key_prompt()
+        self.assertIn(("dismiss_new_api_key_prompt",), target.events)
+
     def test_set_effective_api_key_none_strips_to_none(self):
         target = _DummyTarget()
         runtime = PipelineRuntime(target)
@@ -314,6 +353,7 @@ class PipelineRuntimeMiscTests(unittest.TestCase):
         self.assertEqual(target.file_temporanei, [])  # type: ignore[attr-defined]
         self.assertEqual(target.last_run_status, "idle")  # type: ignore[attr-defined]
         self.assertIsNone(target.last_run_error)  # type: ignore[attr-defined]
+        self.assertIsNone(target.last_run_error_detail)  # type: ignore[attr-defined]
         self.assertIsNone(target.effective_api_key)  # type: ignore[attr-defined]
 
 
