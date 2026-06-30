@@ -28,6 +28,16 @@ class _FakeClient:
 
 
 class WorkflowEndToEndTests(unittest.TestCase):
+    def setUp(self):
+        self._probe_media_duration_patch = patch(
+            "el_sbobinator.services.audio_service.probe_media_duration",
+            return_value=(60.0, None),
+        )
+        self._probe_media_duration_patch.start()
+
+    def tearDown(self):
+        self._probe_media_duration_patch.stop()
+
     def test_start_processing_emits_file_done_and_process_done(self):
         api = ElSbobinatorApi()
         window = _FakeWindow()
@@ -265,6 +275,111 @@ class WorkflowEndToEndTests(unittest.TestCase):
         self.assertTrue(first["ok"])
         self.assertFalse(second["ok"])
         self.assertIn("in corso", second["error"])
+
+    def test_user_declines_key_stops_batch(self):
+        """Regression: when user clicks 'No' on the new-key modal, the batch must
+        stop immediately — not continue to the next file in the queue."""
+        api = ElSbobinatorApi()
+        window = _FakeWindow()
+        api.set_window(window)  # type: ignore[arg-type]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            files = []
+            for i in range(2):
+                input_path = os.path.join(tmpdir, f"input_{i}.mp3")
+                with open(input_path, "wb") as handle:
+                    handle.write(b"fake")
+                files.append(
+                    {
+                        "id": f"file-{i}",
+                        "path": input_path,
+                        "name": f"input_{i}.mp3",
+                        "size": 4,
+                        "duration": 1.0,
+                    }
+                )
+
+            call_count = {"n": 0}
+
+            def fake_pipeline(file_path, api_key, adapter, **kwargs):
+                call_count["n"] += 1
+                adapter.set_run_result("failed", "quota_daily_limit_phase1")
+                # Real flow: request_fallback_key() sets cancel_event → pipeline
+                # finally block detects runtime.cancelled() and overwrites
+                # last_run_status to "cancelled".  Mirror that here so the fake
+                # accurately represents the post-fix causal chain.
+                adapter.cancel_event.set()
+                adapter.set_run_result("cancelled", "cancelled")
+
+            with (
+                patch("google.genai.Client", _FakeClient),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.esegui_sbobinatura",
+                    side_effect=fake_pipeline,
+                ),
+            ):
+                result = api.start_processing(files, "fake-key", resume_session=False)  # type: ignore[arg-type]
+                self.assertTrue(result["ok"])
+                assert api._processing_thread is not None
+                api._processing_thread.join(timeout=5)
+                api._adapter._dispatcher.flush()
+
+        self.assertEqual(
+            call_count["n"],
+            1,
+            "Batch must stop after first file when user declines key",
+        )
+        joined = "\n".join(window.calls)
+        self.assertIn('"cancelled": true', joined)
+
+    def test_api_key_prompt_timeout_stops_batch_as_failed_quota(self):
+        api = ElSbobinatorApi()
+        window = _FakeWindow()
+        api.set_window(window)  # type: ignore[arg-type]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            files = []
+            for i in range(2):
+                input_path = os.path.join(tmpdir, f"input_{i}.mp3")
+                with open(input_path, "wb") as handle:
+                    handle.write(b"fake")
+                files.append(
+                    {
+                        "id": f"file-{i}",
+                        "path": input_path,
+                        "name": f"input_{i}.mp3",
+                        "size": 4,
+                        "duration": 1.0,
+                    }
+                )
+
+            call_count = {"n": 0}
+
+            def fake_pipeline(file_path, api_key, adapter, **kwargs):
+                call_count["n"] += 1
+                adapter.set_run_error_detail("api_key_prompt_timeout")
+                adapter.set_run_result("failed", "quota_daily_limit_phase1")
+
+            with (
+                patch("google.genai.Client", _FakeClient),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.esegui_sbobinatura",
+                    side_effect=fake_pipeline,
+                ),
+            ):
+                result = api.start_processing(files, "fake-key", resume_session=False)  # type: ignore[arg-type]
+                self.assertTrue(result["ok"])
+                assert api._processing_thread is not None
+                api._processing_thread.join(timeout=5)
+                api._adapter._dispatcher.flush()
+
+        self.assertEqual(call_count["n"], 1)
+        joined = "\n".join(window.calls)
+        self.assertIn("fileFailed", joined)
+        self.assertIn('"error": "quota_daily_limit_phase1"', joined)
+        self.assertIn('"error_detail": "api_key_prompt_timeout"', joined)
+        self.assertIn('"cancelled": false', joined)
+        self.assertIn('"quota_exhausted": true', joined)
 
 
 if __name__ == "__main__":

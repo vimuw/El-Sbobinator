@@ -11,9 +11,9 @@ from collections.abc import Callable
 
 from google.genai import types
 
-from el_sbobinator.dedup_utils import local_macro_cleanup
-from el_sbobinator.logging_utils import get_logger
-from el_sbobinator.model_registry import ModelState
+from el_sbobinator.core.model_registry import ModelState
+from el_sbobinator.core.session_store import _update_session
+from el_sbobinator.core.shared import _atomic_write_text
 from el_sbobinator.pipeline.pipeline_session import record_step_metric
 from el_sbobinator.services.generation_service import (
     QuotaDailyLimitError,
@@ -22,8 +22,26 @@ from el_sbobinator.services.generation_service import (
     retry_with_quota,
     sleep_with_cancel,
 )
-from el_sbobinator.session_store import _update_session
-from el_sbobinator.shared import _atomic_write_text
+from el_sbobinator.utils.dedup_utils import local_macro_cleanup
+from el_sbobinator.utils.logging_utils import get_logger
+
+
+def _normalize_block_indexes(value) -> list[int]:
+    indexes: list[int] = []
+    seen: set[int] = set()
+    if not isinstance(value, list | tuple | set):
+        return indexes
+    for item in value:
+        try:
+            idx = int(item)
+        except (TypeError, ValueError):
+            continue
+        if idx <= 0 or idx in seen:
+            continue
+        seen.add(idx)
+        indexes.append(idx)
+    indexes.sort()
+    return indexes
 
 
 def build_macro_blocks(text: str, macro_char_limit: int) -> list[str]:
@@ -116,6 +134,7 @@ def process_macro_revision_phase(  # noqa: C901
                             "revised_done": int(revised_done),
                         },
                         "last_error": None,
+                        "last_error_detail": None,
                     },
                 )
                 save_session()
@@ -143,8 +162,11 @@ def process_macro_revision_phase(  # noqa: C901
         def _call(current_client):
             response = current_client.models.generate_content(
                 model=current_model_name(model_state, model_name),
-                contents=[block_for_ai, prompt_revisione],  # noqa: B023
-                config=types.GenerateContentConfig(temperature=0.1),
+                contents=[block_for_ai],  # noqa: B023
+                config=types.GenerateContentConfig(
+                    system_instruction=prompt_revisione,
+                    temperature=0.1,
+                ),
             )
             current_text = extract_response_text(response)
             if not current_text:
@@ -182,6 +204,7 @@ def process_macro_revision_phase(  # noqa: C901
                         "revised_done": int(revised_done),
                     },
                     "last_error": None,
+                    "last_error_detail": None,
                 },
             )
             save_session()
@@ -189,15 +212,14 @@ def process_macro_revision_phase(  # noqa: C901
             success = True
             runtime.progress(0.7 + 0.2 * (revised_done / max(1, macro_total)))
             _macro_secs = max(0.0, time.monotonic() - float(step_t0))
-            runtime.register_step_time(
-                "macro", _macro_secs, done=revised_done, total=macro_total
-            )
             record_step_metric(
                 session, "macro", _macro_secs, done=revised_done, total=macro_total
             )
         except QuotaDailyLimitError:
             print("   Interruzione: progressi salvati. Potrai riprendere più tardi.")
             session["last_error"] = "quota_daily_limit_phase2"
+            if session.get("last_error_detail") != "api_key_prompt_timeout":
+                session["last_error_detail"] = None
             save_session()
             return client, revised_text
         except Exception as exc:
@@ -216,9 +238,6 @@ def process_macro_revision_phase(  # noqa: C901
             _atomic_write_text(raw_path, block_src + "\n")
             pending_retry.append((index, raw_path, rev_path))
             _macro_secs = max(0.0, time.monotonic() - float(step_t0))
-            runtime.register_step_time(
-                "macro", _macro_secs, done=revised_done, total=macro_total
-            )
             record_step_metric(
                 session, "macro", _macro_secs, done=revised_done, total=macro_total
             )
@@ -229,6 +248,7 @@ def process_macro_revision_phase(  # noqa: C901
             return client, revised_text
 
     # ---- RETRY PASS: second attempt on provisionally-failed blocks ----
+    failed_blocks: list[int] = []
     if pending_retry:
         print(
             f"\n[*] Retry pass: {len(pending_retry)} blocco/i senza revisione. Riprovo..."
@@ -237,8 +257,6 @@ def process_macro_revision_phase(  # noqa: C901
             session, {"revision_pending_blocks": [idx for idx, _, _ in pending_retry]}
         )
         save_session()
-
-        failed_blocks: list[int] = []
 
         for index, raw_path, rev_path in pending_retry:
             if cancelled():
@@ -285,8 +303,11 @@ def process_macro_revision_phase(  # noqa: C901
             def _call_retry(current_client, _block=block_for_ai_retry):
                 response = current_client.models.generate_content(
                     model=current_model_name(model_state, model_name),
-                    contents=[_block, prompt_revisione],
-                    config=types.GenerateContentConfig(temperature=0.1),
+                    contents=[_block],
+                    config=types.GenerateContentConfig(
+                        system_instruction=prompt_revisione,
+                        temperature=0.1,
+                    ),
                 )
                 current_text = extract_response_text(response)
                 if not current_text:
@@ -327,13 +348,11 @@ def process_macro_revision_phase(  # noqa: C901
                             "revised_done": int(revised_done),
                         },
                         "last_error": None,
+                        "last_error_detail": None,
                     },
                 )
                 save_session()
                 _macro_secs = max(0.0, time.monotonic() - float(step_t0))
-                runtime.register_step_time(
-                    "macro", _macro_secs, done=revised_done, total=macro_total
-                )
                 record_step_metric(
                     session, "macro", _macro_secs, done=revised_done, total=macro_total
                 )
@@ -342,6 +361,8 @@ def process_macro_revision_phase(  # noqa: C901
                     "   Interruzione: quota giornaliera raggiunta durante retry pass."
                 )
                 session["last_error"] = "quota_daily_limit_phase2"
+                if session.get("last_error_detail") != "api_key_prompt_timeout":
+                    session["last_error_detail"] = None
                 save_session()
                 return client, revised_text
             except Exception as exc:
@@ -358,13 +379,11 @@ def process_macro_revision_phase(  # noqa: C901
                     f"   [!!] Blocco {index}: revisione definitivamente fallita. Incluso non revisionato."
                 )
                 try:
-                    os.rename(raw_path, rev_path)
+                    with open(raw_path, encoding="utf-8") as _fh:
+                        _raw_content = _fh.read().rstrip("\n")
+                    _atomic_write_text(rev_path, _raw_content + "\n")
                 except Exception:
                     _atomic_write_text(rev_path, block_src + "\n")
-                    try:
-                        os.remove(raw_path)
-                    except Exception:
-                        pass
                 revised_done += 1
                 failed_blocks.append(index)
                 _update_session(
@@ -379,24 +398,29 @@ def process_macro_revision_phase(  # noqa: C901
                 )
                 save_session()
                 _macro_secs = max(0.0, time.monotonic() - float(step_t0))
-                runtime.register_step_time(
-                    "macro", _macro_secs, done=revised_done, total=macro_total
-                )
                 record_step_metric(
                     session, "macro", _macro_secs, done=revised_done, total=macro_total
                 )
 
             runtime.progress(0.7 + 0.2 * (revised_done / max(1, macro_total)))
 
-        session_update: dict = {"revision_pending_blocks": []}
-        if failed_blocks:
-            session_update["revision_failed_blocks"] = failed_blocks
-        _update_session(session, session_update)
-        save_session()
         if failed_blocks:
             print(
                 f"\n[!!] ATTENZIONE: i seguenti blocchi sono stati inclusi non revisionati: {failed_blocks}"
             )
+
+    session_update: dict = {
+        "revision_pending_blocks": [],
+        "revision_failed_blocks": failed_blocks,
+        "completion_status": "completed_with_warnings"
+        if failed_blocks
+        else "completed",
+    }
+    if not failed_blocks:
+        session_update["last_error"] = None
+        session_update["last_error_detail"] = None
+    _update_session(session, session_update)
+    save_session()
 
     # Rebuild revised_text from all final .md files (authoritative source of truth)
     revised_text = ""
@@ -412,3 +436,176 @@ def process_macro_revision_phase(  # noqa: C901
                 pass
 
     return client, revised_text
+
+
+def retry_failed_revision_blocks(
+    *,
+    client,
+    model_name: str,
+    model_state: ModelState | None = None,
+    phase2_revised_dir: str,
+    session: dict,
+    save_session: Callable[[], bool],
+    runtime,
+    cancelled: Callable[[], bool],
+    fallback_keys: list[str],
+    request_fallback_key: Callable[[], str | None],
+    prompt_revisione: str,
+    on_model_switched=None,
+    logger=None,
+) -> tuple[object, dict]:
+    """Retry only blocks previously shipped as unrevised raw markdown.
+
+    The normal pipeline deliberately keeps ``rev_NNN.raw.md`` for failed blocks
+    after this fix. For older sessions that only have ``rev_NNN.md``, we fall
+    back to that file so users still have a recovery path.
+    """
+
+    log = logger or get_logger("el_sbobinator.revision_retry", stage="phase2")
+    failed_blocks = _normalize_block_indexes(session.get("revision_failed_blocks"))
+    if not failed_blocks:
+        return client, {
+            "retried_blocks": [],
+            "failed_blocks": [],
+            "cancelled": False,
+            "quota_exhausted": False,
+        }
+
+    try:
+        macro_total = int(session.get("phase2", {}).get("macro_total", 0) or 0)
+    except (TypeError, ValueError):
+        macro_total = 0
+    macro_total = max(macro_total, max(failed_blocks))
+
+    retried_blocks: list[int] = []
+    remaining_blocks: list[int] = []
+    was_cancelled = False
+    quota_exhausted = False
+
+    try:
+        runtime.set_work_totals(macro_total=macro_total)
+    except Exception:
+        pass
+
+    for position, index in enumerate(failed_blocks, 1):
+        if cancelled():
+            was_cancelled = True
+            remaining_blocks.extend(failed_blocks[position - 1 :])
+            break
+
+        raw_path = os.path.join(phase2_revised_dir, f"rev_{index:03}.raw.md")
+        rev_path = os.path.join(phase2_revised_dir, f"rev_{index:03}.md")
+        source_path = raw_path if os.path.exists(raw_path) else rev_path
+        try:
+            with open(source_path, encoding="utf-8") as _fh:
+                block_src = _fh.read().rstrip("\n")
+        except Exception:
+            block_src = ""
+
+        if not block_src.strip():
+            remaining_blocks.append(index)
+            continue
+
+        block_local, _removed_exact, _removed_adj, _near_adj, _ = local_macro_cleanup(
+            block_src
+        )
+        block_for_ai_retry = (block_local or block_src).strip()
+
+        try:
+            runtime.phase(
+                f"Fase 2/3: retry blocchi mancanti ({position}/{len(failed_blocks)})"
+            )
+        except Exception:
+            pass
+        log.info(
+            "Retry blocco non revisionato %d/%d.",
+            index,
+            macro_total,
+            extra={"stage": "phase2_retry_failed_blocks"},
+        )
+
+        def _call_retry(current_client, _block=block_for_ai_retry):
+            response = current_client.models.generate_content(
+                model=current_model_name(model_state, model_name),
+                contents=[_block],
+                config=types.GenerateContentConfig(
+                    system_instruction=prompt_revisione,
+                    temperature=0.1,
+                ),
+            )
+            current_text = extract_response_text(response)
+            if not current_text:
+                raise RuntimeError("Risposta vuota dal modello in revisione.")
+            return current_text
+
+        try:
+            client, current_text = retry_with_quota(
+                _call_retry,
+                client=client,
+                fallback_keys=fallback_keys,
+                model_name=model_name,
+                model_state=model_state,
+                cancelled=cancelled,
+                runtime=runtime,
+                request_fallback_key=request_fallback_key,
+                retry_sleep_seconds=20.0,
+                on_model_switched=on_model_switched,
+                logger=log,
+                resume_phase_text=f"Fase 2/3: retry blocchi mancanti ({position}/{len(failed_blocks)})",
+            )
+            if current_text is None:
+                if cancelled():
+                    was_cancelled = True
+                remaining_blocks.append(index)
+                remaining_blocks.extend(failed_blocks[position:])
+                break
+            _atomic_write_text(rev_path, current_text + "\n")
+            try:
+                if os.path.exists(raw_path):
+                    os.remove(raw_path)
+            except Exception:
+                pass
+            retried_blocks.append(index)
+            log.info(
+                "Blocco %d: revisione recuperata.",
+                index,
+                extra={"stage": "phase2_retry_failed_blocks"},
+            )
+        except QuotaDailyLimitError:
+            quota_exhausted = True
+            session["last_error"] = "quota_daily_limit_phase2"
+            if session.get("last_error_detail") != "api_key_prompt_timeout":
+                session["last_error_detail"] = None
+            remaining_blocks.append(index)
+            remaining_blocks.extend(failed_blocks[position:])
+            save_session()
+            break
+        except Exception as exc:
+            log.warning(
+                "Retry manuale blocco %d/%d fallito: %s",
+                index,
+                macro_total,
+                exc,
+                extra={"stage": "phase2_retry_failed_blocks"},
+            )
+            remaining_blocks.append(index)
+
+    session_update = {
+        "revision_failed_blocks": remaining_blocks,
+        "revision_pending_blocks": [],
+        "completion_status": "completed_with_warnings"
+        if remaining_blocks
+        else "completed",
+    }
+    if not remaining_blocks:
+        session_update["last_error"] = None
+        session_update["last_error_detail"] = None
+    _update_session(session, session_update)
+    save_session()
+
+    return client, {
+        "retried_blocks": retried_blocks,
+        "failed_blocks": remaining_blocks,
+        "cancelled": was_cancelled,
+        "quota_exhausted": quota_exhausted,
+    }

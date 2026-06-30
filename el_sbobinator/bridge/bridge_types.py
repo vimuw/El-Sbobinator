@@ -1,0 +1,93 @@
+"""
+Shared Python-side types for the PyWebView bridge.
+
+Keeping these payload shapes in one place makes the backend/frontend contract
+clearer and reduces silent drift when the React app evolves.
+"""
+
+from __future__ import annotations
+
+from typing import Literal, NotRequired, TypedDict
+
+
+class BridgeFileItem(TypedDict):
+    id: str
+    path: str
+    name: str
+    size: NotRequired[int]
+    duration: NotRequired[float]
+    resume_session: NotRequired[bool | None]
+    allow_completed_destroy: NotRequired[bool]
+
+
+class LowDiskWarningPayload(TypedDict):
+    needed_bytes: int
+    free_bytes: int
+    location: str
+    kind: str
+    file_name: NotRequired[str]
+
+
+class ProcessDonePayload(TypedDict, total=False):
+    cancelled: bool
+    completed: int
+    completed_with_warnings: int
+    failed: int
+    total: int
+    quota_exhausted: NotRequired[bool]
+
+
+class SetCurrentFilePayload(TypedDict):
+    index: int
+    id: str
+    total: int
+
+
+class FileDonePayload(TypedDict):
+    index: int
+    id: str
+    output_html: str
+    output_dir: str
+    effective_model: str
+    completion_status: NotRequired[Literal["completed", "completed_with_warnings"]]
+    revision_failed_blocks: NotRequired[list[int]]
+    primary_model: NotRequired[str]
+
+
+class FileFailedPayload(TypedDict):
+    index: int
+    id: str
+    error: str
+    error_detail: NotRequired[str]
+
+
+class WorkTotalsPayload(TypedDict, total=False):
+    chunks: int | None
+    macro: int | None
+
+
+class WorkDonePayload(TypedDict, total=False):
+    kind: Literal["chunks", "macro"]
+    done: int
+    total: int | None
+
+
+class ValidationCheck(TypedDict):
+    id: str
+    label: str
+    status: Literal["ok", "warning", "error"]
+    message: str
+    details: NotRequired[str]
+
+
+class ValidationResult(TypedDict):
+    ok: bool
+    summary: str
+    checks: list[ValidationCheck]
+
+
+class UpdateDownloadProgressPayload(TypedDict):
+    status: Literal["downloading", "verifying", "installing", "done", "error"]
+    bytes_done: int
+    bytes_total: int
+    error: NotRequired[str]

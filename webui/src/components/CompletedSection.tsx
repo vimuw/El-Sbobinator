@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle, Search } from 'lucide-react';
+import { CheckCircle, Search, Trash2 } from 'lucide-react';
 import type { AppStatus, FileItem } from '../appState';
+import type { ArchiveFolder } from '../bridge';
 import { CompletedFileCard } from './QueueFileCard';
+import { normalizeSessionPath } from '../utils';
 
 interface CompletedSectionProps {
   doneFiles: FileItem[];
@@ -11,24 +13,27 @@ interface CompletedSectionProps {
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string) => void;
   onOpenFile: (path: string) => void;
   onClearAll: () => void;
+  onRetryFailedRevisionBlocks?: (sessionDir: string, fileId?: string) => Promise<void>;
+  sessionFolderMap?: Map<string, ArchiveFolder>;
 }
 
-export function CompletedSection({ doneFiles, appState, onRemove, onPreview, onOpenFile, onClearAll }: CompletedSectionProps) {
+export function CompletedSection({ doneFiles, appState, onRemove, onPreview, onOpenFile, onClearAll, onRetryFailedRevisionBlocks, sessionFolderMap }: CompletedSectionProps) {
   const [completedSearch, setCompletedSearch] = useState('');
 
   const filteredDoneFiles = completedSearch.trim()
     ? doneFiles.filter(f => f.name.toLowerCase().includes(completedSearch.toLowerCase()))
     : doneFiles;
+  const warningCount = doneFiles.filter(f => f.completionStatus === 'completed_with_warnings' || (f.revisionFailedBlocks?.length ?? 0) > 0).length;
+  const fullyCompletedCount = doneFiles.length - warningCount;
 
   return (
-    <AnimatePresence>
+    <>
       {doneFiles.length > 0 && (
         <motion.div
           key="completed-section"
-          initial={{ opacity: 0, y: 12 }}
+          initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8, transition: { duration: 0.15 } }}
-          transition={{ duration: 0.22, ease: 'easeOut' }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
           className="premium-panel p-5 sm:p-6 space-y-4"
         >
           <div className="flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--border-subtle)' }}>
@@ -38,30 +43,31 @@ export function CompletedSection({ doneFiles, appState, onRemove, onPreview, onO
                 Sbobine completate
               </h2>
               <span className="status-pill self-start sm:self-auto shrink-0 whitespace-nowrap" style={{ color: 'var(--success-text)', borderColor: 'var(--success-ring)', background: 'rgba(255,255,255,0.03)' }}>
-                {doneFiles.length} {doneFiles.length === 1 ? 'sbobina' : 'sbobine'}
+                {fullyCompletedCount} complete{warningCount > 0 ? ` · ${warningCount} con avvisi` : ''}
               </span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {doneFiles.length >= 5 && (
-                <div className="relative flex items-center">
-                  <Search className="absolute left-2.5 w-3.5 h-3.5 pointer-events-none" style={{ color: 'var(--text-faint)' }} />
+                <div className="notion-search-wrap" style={{ width: '140px' }}>
+                  <Search className="notion-search-icon w-3.5 h-3.5" />
                   <input
                     type="text"
                     value={completedSearch}
                     onChange={e => setCompletedSearch(e.target.value)}
                     placeholder="Cerca..."
-                    className="premium-button-secondary compact-button text-xs pl-7 pr-3 py-1.5 rounded-[13px] outline-none"
-                    style={{ borderColor: 'var(--border-default)', background: 'rgba(255,255,255,0.03)', color: 'var(--text-primary)', width: '140px' }}
+                    className="notion-search-input"
                   />
                 </div>
               )}
               {(appState === 'idle' || appState === 'processing') && (
                 <button
                   onClick={onClearAll}
-                  className="premium-button-secondary compact-button text-xs"
-                  style={{ color: 'var(--text-muted)', borderColor: 'var(--border-default)' }}
+                  className="icon-button compact-icon-button"
+                  style={{ color: 'var(--text-muted)' }}
+                  title="Pulisci tutto"
+                  aria-label="Pulisci tutto"
                 >
-                  Pulisci tutto
+                  <Trash2 className="w-4 h-4" />
                 </button>
               )}
             </div>
@@ -76,6 +82,8 @@ export function CompletedSection({ doneFiles, appState, onRemove, onPreview, onO
                 onRemove={onRemove}
                 onPreview={onPreview}
                 onOpenFile={onOpenFile}
+                onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
+                currentFolder={file.outputDir ? sessionFolderMap?.get(normalizeSessionPath(file.outputDir)) : undefined}
               />
             ))}
             {completedSearch.trim() && filteredDoneFiles.length === 0 && (
@@ -93,6 +101,6 @@ export function CompletedSection({ doneFiles, appState, onRemove, onPreview, onO
           </AnimatePresence>
         </motion.div>
       )}
-    </AnimatePresence>
+    </>
   );
 }

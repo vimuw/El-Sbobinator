@@ -22,19 +22,21 @@ export function DuplicateFileModal({ prompt, onDismiss, onAddAgain }: DuplicateF
   return (
     <AnimatePresence>
       {prompt && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <motion.div
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+        >
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onDismiss}
-            className="absolute inset-0"
-            style={{ background: 'var(--bg-overlay)', backdropFilter: 'blur(10px)' }}
+            className="modal-overlay absolute inset-0"
           />
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }}
+            exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14, ease: 'easeIn' } }}
             className="modal-card relative w-full max-w-md max-h-[86vh] overflow-hidden flex flex-col"
           >
             {prompt.kind === 'in-queue' ? (
@@ -48,7 +50,7 @@ export function DuplicateFileModal({ prompt, onDismiss, onAddAgain }: DuplicateF
               />
             )}
           </motion.div>
-        </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );
@@ -58,39 +60,38 @@ function InQueueVariant({ filenames, onDismiss }: { filenames: string[]; onDismi
   const count = filenames.length;
   return (
     <>
-      <div className="flex items-center justify-between gap-3 px-5 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+      <div className="modal-header">
         <div className="flex items-center gap-3 min-w-0">
-          <Info className="w-5 h-5 shrink-0" style={{ color: 'var(--text-muted)' }} />
-          <h2 className="text-lg font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+          <Info className="w-5 h-5 shrink-0 text-[var(--text-muted)]" />
+          <h2 className="text-lg font-semibold truncate text-[var(--text-primary)]">
             {count === 1 ? '1 file gia in coda' : `${count} file gia in coda`}
           </h2>
         </div>
         <button
           onClick={onDismiss}
           className="icon-button modal-icon-button"
-          style={{ color: 'var(--text-muted)' }}
           aria-label="Chiudi finestra"
         >
           <X className="w-4 h-4" />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto px-5 py-5 space-y-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
+      <div className="modal-body space-y-3">
         {count === 1 ? (
           <p>
-            <strong style={{ color: 'var(--text-primary)' }}>{filenames[0]}</strong> e gia presente in coda e non e stato aggiunto di nuovo.
+            <strong className="text-[var(--text-primary)]">{filenames[0]}</strong> e gia presente in coda e non e stato aggiunto di nuovo.
           </p>
         ) : (
           <>
             <p>{count} file sono gia presenti in coda e non sono stati aggiunti di nuovo:</p>
             <ul className="space-y-1 pl-1">
               {filenames.map(name => (
-                <li key={name} className="truncate" style={{ color: 'var(--text-primary)' }}>- {name}</li>
+                <li key={name} className="truncate text-[var(--text-primary)]">- {name}</li>
               ))}
             </ul>
           </>
         )}
       </div>
-      <div className="px-5 py-4 flex gap-3 shrink-0" style={{ background: 'var(--bg-elevated)', borderTop: '1px solid var(--border-subtle)' }}>
+      <div className="modal-footer">
         <button onClick={onDismiss} className="modal-action-button flex-1">
           Chiudi
         </button>
@@ -129,27 +130,26 @@ function AlreadyProcessedVariant({
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 px-5 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+      <div className="modal-header">
         <div className="flex items-center gap-3 min-w-0">
-          <AlertCircle className="w-5 h-5 shrink-0" style={{ color: 'var(--warning-text)' }} />
-          <h2 className="text-lg font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+          <AlertCircle className="w-5 h-5 shrink-0 text-[var(--warning-text)]" />
+          <h2 className="text-lg font-semibold truncate text-[var(--text-primary)]">
             {subtitle}
           </h2>
         </div>
         <button
           onClick={onDismiss}
           className="icon-button modal-icon-button"
-          style={{ color: 'var(--text-muted)' }}
           aria-label="Chiudi finestra"
         >
           <X className="w-4 h-4" />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto px-5 py-5 space-y-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
+      <div className="modal-body space-y-3">
         {count === 1 ? (
           <>
             <p>
-              <strong style={{ color: 'var(--text-primary)' }}>{matches[0].incoming.name}</strong> risulta gia{' '}
+              <strong className="text-[var(--text-primary)]">{matches[0].incoming.name}</strong> risulta gia{' '}
               {singleArchiveMatch
                 ? singleArchiveMatch.sessions.length === 1
                   ? 'elaborato in una sessione precedente'
@@ -169,29 +169,29 @@ function AlreadyProcessedVariant({
             )}
             <ul className="space-y-1 pl-1">
               {matches.map(match => (
-                <li key={match.incoming.id} className="truncate" style={{ color: 'var(--text-primary)' }}>- {match.incoming.name}</li>
+                <li key={match.incoming.id} className="truncate text-[var(--text-primary)]">- {match.incoming.name}</li>
               ))}
             </ul>
           </>
         )}
         {alsoInQueue && alsoInQueue.length > 0 && (
-          <div className="pt-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-            <p style={{ color: 'var(--text-muted)' }}>
+          <div className="pt-2 border-t-subtle">
+            <p className="text-[var(--text-muted)]">
               {alsoInQueue.length === 1
-                ? <><strong style={{ color: 'var(--text-secondary)' }}>{alsoInQueue[0]}</strong> era gia in coda e non e stato aggiunto di nuovo.</>
+                ? <><strong className="text-[var(--text-secondary)]">{alsoInQueue[0]}</strong> era gia in coda e non e stato aggiunto di nuovo.</>
                 : <>{alsoInQueue.length} file erano gia in coda e non sono stati aggiunti di nuovo:</>}
             </p>
             {alsoInQueue.length > 1 && (
               <ul className="space-y-1 pl-1 mt-1">
                 {alsoInQueue.map(name => (
-                  <li key={name} className="truncate" style={{ color: 'var(--text-muted)' }}>- {name}</li>
+                  <li key={name} className="truncate text-[var(--text-muted)]">- {name}</li>
                 ))}
               </ul>
             )}
           </div>
         )}
       </div>
-      <div className="px-5 py-4 flex gap-3 shrink-0" style={{ background: 'var(--bg-elevated)', borderTop: '1px solid var(--border-subtle)' }}>
+      <div className="modal-footer">
         <button onClick={onDismiss} className="modal-action-button flex-1">
           Tieni la versione pronta
         </button>

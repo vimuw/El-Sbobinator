@@ -142,6 +142,56 @@ describe('useBridgeCallbacks auto-continue', () => {
     expect(onBatchReset).toHaveBeenCalledTimes(1);
     expect(onBatchFullyDone).not.toHaveBeenCalled();
   });
+
+  it('does not auto-continue when processDone marks quota exhaustion', async () => {
+    const startProcessing = vi.fn<(isContinuation?: boolean) => Promise<boolean>>().mockResolvedValue(true);
+    const onBatchFullyDone = vi.fn<(data: ProcessDonePayload) => void>();
+    const queuedFiles: FileItem[] = [{
+      id: 'queued-1',
+      name: 'next.mp3',
+      size: 1,
+      duration: 1,
+      path: 'C:\\audio\\next.mp3',
+      status: 'queued',
+      progress: 0,
+      phase: 0,
+    }];
+
+    renderHook(() => {
+      const filesRef = useRef<FileItem[]>(queuedFiles);
+      const appStateRef = useRef<AppStatus>('idle');
+      const autoContinueRef = useRef(true);
+      const startProcessingRef = useRef<(isContinuation?: boolean) => Promise<boolean>>(startProcessing);
+
+      useBridgeCallbacks({
+        dispatch: vi.fn(),
+        appendConsole: vi.fn(),
+        filesRef,
+        appStateRef,
+        enqueueUniqueFiles: vi.fn(),
+        setRegeneratePrompt: vi.fn(),
+        setAskNewKeyPrompt: vi.fn(),
+        autoContinueRef,
+        startProcessingRef,
+        onFileContinued: vi.fn(),
+        onBatchReset: vi.fn(),
+        onBatchFullyDone,
+        clearCompletionFlash: vi.fn(),
+      });
+    });
+
+    const payload = { completed: 0, failed: 1, total: 2, quota_exhausted: true };
+    act(() => {
+      window.elSbobinatorBridge?.processDone(payload);
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    expect(startProcessing).not.toHaveBeenCalled();
+    expect(onBatchFullyDone).toHaveBeenCalledWith(payload);
+  });
 });
 
 function makeMinimalHook(overrides: Partial<Parameters<typeof useBridgeCallbacks>[0]> = {}) {
@@ -204,6 +254,14 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     expect(setAskNewKeyPrompt).toHaveBeenCalledWith(true);
   });
 
+  it('dismissNewKey callback clears askNewKeyPrompt', () => {
+    const setAskNewKeyPrompt = vi.fn();
+    const opts = makeMinimalHook({ setAskNewKeyPrompt });
+    renderHook(() => { useBridgeCallbacks(opts); });
+    act(() => { window.elSbobinatorBridge?.dismissNewKey(); });
+    expect(setAskNewKeyPrompt).toHaveBeenCalledWith(false);
+  });
+
   it('filesDropped calls enqueueUniqueFiles when appState is idle', () => {
     const enqueueUniqueFiles = vi.fn();
     const opts = makeMinimalHook({ enqueueUniqueFiles });
@@ -243,5 +301,13 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     act(() => { window.elSbobinatorBridge?.processDone(payload); });
     await act(async () => { await vi.advanceTimersByTimeAsync(100); });
     expect(onBatchFullyDone).toHaveBeenCalledWith(payload);
+  });
+
+  it('processDone clears any regenerate prompt left open by a backend timeout', () => {
+    const setRegeneratePrompt = vi.fn();
+    const opts = makeMinimalHook({ setRegeneratePrompt });
+    renderHook(() => { useBridgeCallbacks(opts); });
+    act(() => { window.elSbobinatorBridge?.processDone({ completed: 0, failed: 1, total: 1 }); });
+    expect(setRegeneratePrompt).toHaveBeenCalledWith(null);
   });
 });

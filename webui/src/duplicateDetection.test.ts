@@ -11,6 +11,7 @@ function makeArchiveSession(overrides: Partial<ArchiveSession> = {}): ArchiveSes
     html_path: '/archive/lesson.html',
     effective_model: 'gemini',
     input_path: '/archive/lesson.mp3',
+    input_size: undefined,
     session_dir: '/sessions/one',
     ...overrides,
   };
@@ -97,6 +98,59 @@ describe('duplicateDetection', () => {
 
     const matches = getArchiveMatchesForFile(
       makeFile({ path: undefined }),
+      buildArchiveLookup(archiveSessions),
+    );
+
+    expect(matches).toEqual([]);
+  });
+
+  it('matches a moved file via meta key (name + size + duration) when path differs', () => {
+    const archiveSessions = [
+      makeArchiveSession({
+        name: 'lesson.mp3',
+        input_path: 'C:/old-folder/lesson.mp3',
+        input_size: 1024,
+        duration_sec: 60,
+        session_dir: '/sessions/moved',
+      }),
+    ];
+
+    const matches = getArchiveMatchesForFile(
+      makeFile({ path: 'D:/new-folder/lesson.mp3', size: 1024, duration: 60 }),
+      buildArchiveLookup(archiveSessions),
+    );
+
+    expect(matches.map(s => s.session_dir)).toEqual(['/sessions/moved']);
+  });
+
+  it('does not match via meta when duration_sec or input_size is missing from the session', () => {
+    const archiveSessions = [
+      makeArchiveSession({
+        input_path: 'C:/old-folder/lesson.mp3',
+        session_dir: '/sessions/no-meta',
+      }),
+    ];
+
+    const matches = getArchiveMatchesForFile(
+      makeFile({ path: 'D:/new-folder/lesson.mp3', size: 1024, duration: 60 }),
+      buildArchiveLookup(archiveSessions),
+    );
+
+    expect(matches).toEqual([]);
+  });
+
+  it('does not match via meta when the incoming file has no duration', () => {
+    const archiveSessions = [
+      makeArchiveSession({
+        input_path: 'C:/old-folder/lesson.mp3',
+        input_size: 1024,
+        duration_sec: 60,
+        session_dir: '/sessions/present',
+      }),
+    ];
+
+    const matches = getArchiveMatchesForFile(
+      makeFile({ path: 'D:/new-folder/lesson.mp3', size: 1024, duration: 0 }),
       buildArchiveLookup(archiveSessions),
     );
 

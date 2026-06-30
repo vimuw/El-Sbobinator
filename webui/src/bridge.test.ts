@@ -14,6 +14,7 @@ describe('createBridge', () => {
     const appendConsole = vi.fn();
     const onRegenerate = vi.fn();
     const onAskNewKey = vi.fn();
+    const onDismissNewKey = vi.fn();
     const onBatchDone = vi.fn();
     const onFileDone = vi.fn();
 
@@ -22,6 +23,7 @@ describe('createBridge', () => {
       appendConsole,
       onRegenerate,
       onAskNewKey,
+      onDismissNewKey,
       onBatchDone,
       onFileDone,
       onFilesDropped: vi.fn(),
@@ -60,11 +62,13 @@ describe('createBridge', () => {
   it('routes prompts to their handlers', () => {
     const onRegenerate = vi.fn();
     const onAskNewKey = vi.fn();
+    const onDismissNewKey = vi.fn();
     const bridge = createBridge({
       dispatch: vi.fn(),
       appendConsole: vi.fn(),
       onRegenerate,
       onAskNewKey,
+      onDismissNewKey,
       onBatchDone: vi.fn(),
       onFileDone: vi.fn(),
       onFilesDropped: vi.fn(),
@@ -73,9 +77,11 @@ describe('createBridge', () => {
 
     bridge.askRegenerate({ filename: 'lesson.mp3' });
     bridge.askNewKey();
+    bridge.dismissNewKey();
 
     expect(onRegenerate).toHaveBeenCalledWith({ filename: 'lesson.mp3' });
     expect(onAskNewKey).toHaveBeenCalledTimes(1);
+    expect(onDismissNewKey).toHaveBeenCalledTimes(1);
   });
 
   it('calls onBatchStart on updatePhase and setCurrentFile (clears completionFlash)', () => {
@@ -85,6 +91,7 @@ describe('createBridge', () => {
       appendConsole: vi.fn(),
       onRegenerate: vi.fn(),
       onAskNewKey: vi.fn(),
+      onDismissNewKey: vi.fn(),
       onBatchDone: vi.fn(),
       onFileDone: vi.fn(),
       onFilesDropped: vi.fn(),
@@ -109,6 +116,7 @@ describe('createBridge', () => {
       appendConsole: vi.fn(),
       onRegenerate: vi.fn(),
       onAskNewKey: vi.fn(),
+      onDismissNewKey: vi.fn(),
       onBatchDone,
       onFileDone: vi.fn(),
       onFilesDropped: vi.fn(),

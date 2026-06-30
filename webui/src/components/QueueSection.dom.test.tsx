@@ -29,6 +29,7 @@ const baseProps = {
   dndSensors: [],
   onDragEnd: vi.fn(),
   onRemove: vi.fn(),
+  onClearAll: vi.fn(),
   onRetry: vi.fn(),
   onPreview: vi.fn(),
   onOpenFile: vi.fn(),
@@ -49,18 +50,33 @@ describe('QueueSection', () => {
 
   it('shows file count pill', () => {
     render(<QueueSection {...baseProps} pendingFiles={[makeFile()]} />);
-    expect(screen.getByText('1 elemento')).toBeTruthy();
+    expect(screen.getByText('1')).toBeTruthy();
   });
 
-  it('shows plural "elementi" for multiple files', () => {
+  it('shows count for multiple files', () => {
     const files = [makeFile({ id: 'f1' }), makeFile({ id: 'f2' })];
     render(<QueueSection {...baseProps} pendingFiles={files} queuedCount={2} />);
-    expect(screen.getByText('2 elementi')).toBeTruthy();
+    expect(screen.getByText('2')).toBeTruthy();
   });
 
-  it('shows model pill', () => {
+  it('shows model pill without "Modello:" prefix', () => {
     render(<QueueSection {...baseProps} pendingFiles={[makeFile()]} />);
-    expect(screen.getByText(/Modello:/)).toBeTruthy();
+    expect(screen.getByText('2.5-flash')).toBeTruthy();
+    expect(screen.queryByText(/Modello:/)).toBeNull();
+  });
+
+  it('shows currentModel instead of preferredModel when processing', () => {
+    render(
+      <QueueSection
+        {...baseProps}
+        pendingFiles={[makeFile({ status: 'processing' })]}
+        appState="processing"
+        preferredModel="gemini-3.5-flash"
+        currentModel="gemini-2.5-flash"
+      />,
+    );
+    expect(screen.getByText('2.5-flash')).toBeTruthy();
+    expect(screen.queryByText('3.5-flash')).toBeNull();
   });
 
   it('shows start button when idle with canStart', () => {
@@ -99,7 +115,7 @@ describe('QueueSection', () => {
         appState="processing"
       />,
     );
-    expect(screen.getByText('Stop')).toBeTruthy();
+    expect(screen.getByText('Interrompi elaborazione')).toBeTruthy();
   });
 
   it('calls onStop when Stop button is clicked', () => {
@@ -112,7 +128,7 @@ describe('QueueSection', () => {
         onStop={onStop}
       />,
     );
-    fireEvent.click(screen.getByText('Stop'));
+    fireEvent.click(screen.getByText('Interrompi elaborazione'));
     expect(onStop).toHaveBeenCalledTimes(1);
   });
 
@@ -124,14 +140,48 @@ describe('QueueSection', () => {
         appState="canceling"
       />,
     );
-    expect(screen.getAllByText('Annullamento in corso').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Annullamento in corso...').length).toBeGreaterThan(0);
   });
 
-  it('auto-continue toggle changes state', () => {
+  it('auto-continue toggle changes state and menu stays open', () => {
     const setAutoContinue = vi.fn();
     render(<QueueSection {...baseProps} pendingFiles={[makeFile()]} setAutoContinue={setAutoContinue} />);
-    const toggle = screen.getByRole('switch');
-    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole('button', { name: 'Opzioni coda' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Coda automatica' }));
     expect(setAutoContinue).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('menuitem', { name: 'Coda automatica' })).toBeTruthy();
+  });
+
+  it('renders all files when more than 5 exist (no pagination button)', () => {
+    const files = Array.from({ length: 7 }, (_, i) => makeFile({ id: `f${i}`, name: `file${i}.mp3` }));
+    render(<QueueSection {...baseProps} pendingFiles={files} queuedCount={7} />);
+    expect(screen.getByText('file6.mp3')).toBeTruthy();
+    expect(screen.queryByText(/Mostra altri/)).toBeNull();
+  });
+
+  it('shows Svuota coda button when idle and files present', () => {
+    render(<QueueSection {...baseProps} pendingFiles={[makeFile()]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Opzioni coda' }));
+    expect(screen.getByRole('menuitem', { name: 'Svuota coda' })).toBeTruthy();
+  });
+
+  it('calls onClearAll when Svuota coda is clicked', () => {
+    const onClearAll = vi.fn();
+    render(<QueueSection {...baseProps} pendingFiles={[makeFile()]} onClearAll={onClearAll} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Opzioni coda' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Svuota coda' }));
+    expect(onClearAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides Svuota coda button when processing', () => {
+    render(
+      <QueueSection
+        {...baseProps}
+        pendingFiles={[makeFile({ status: 'processing' })]}
+        appState="processing"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Opzioni coda' }));
+    expect(screen.queryByRole('menuitem', { name: 'Svuota coda' })).toBeNull();
   });
 });

@@ -16,10 +16,11 @@ import json
 import os
 import platform
 import re
+import shutil
 import threading
 import time
 
-from el_sbobinator.model_registry import (
+from el_sbobinator.core.model_registry import (
     DEFAULT_FALLBACK_MODELS,
     DEFAULT_MODEL,
     sanitize_fallback_models,
@@ -192,10 +193,6 @@ def _dpapi_protect_text_windows(text: str) -> str:
 
         DATA_BLOB = _dpapi_make_blob_class(ctypes, wintypes)  # type: ignore[arg-type]
 
-        def _bytes_to_blob(data: bytes) -> DATA_BLOB:  # type: ignore[valid-type]
-            buf = ctypes.create_string_buffer(data)
-            return DATA_BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte)))
-
         crypt32 = ctypes.windll.crypt32  # type: ignore[attr-defined]
         kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
 
@@ -216,7 +213,8 @@ def _dpapi_protect_text_windows(text: str) -> str:
         plain = (text or "").encode("utf-8", errors="strict")
         if not plain:
             return ""
-        in_blob = _bytes_to_blob(plain)
+        buf = ctypes.create_string_buffer(plain)
+        in_blob = DATA_BLOB(len(plain), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte)))
         out_blob = DATA_BLOB()
         CRYPTPROTECT_UI_FORBIDDEN = 0x1
         ok = crypt32.CryptProtectData(
@@ -269,10 +267,6 @@ def _dpapi_unprotect_text_windows_once(b64: str) -> str:
 
         DATA_BLOB = _dpapi_make_blob_class(ctypes, wintypes)  # type: ignore[arg-type]
 
-        def _bytes_to_blob(data: bytes) -> DATA_BLOB:  # type: ignore[valid-type]
-            buf = ctypes.create_string_buffer(data)
-            return DATA_BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte)))
-
         crypt32 = ctypes.windll.crypt32  # type: ignore[attr-defined]
         kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
 
@@ -295,7 +289,8 @@ def _dpapi_unprotect_text_windows_once(b64: str) -> str:
         )
         if not raw:
             return ""
-        in_blob = _bytes_to_blob(raw)
+        buf = ctypes.create_string_buffer(raw)
+        in_blob = DATA_BLOB(len(raw), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte)))
         out_blob = DATA_BLOB()
         desc = wintypes.LPWSTR()
         CRYPTPROTECT_UI_FORBIDDEN = 0x1
@@ -359,6 +354,23 @@ def safe_output_basename(name: str) -> str:
     return s[:140] if len(s) > 140 else s
 
 
+def _remove_legacy_config_after_migration() -> None:
+    migrated_path = LEGACY_CONFIG_FILE + ".migrated"
+    try:
+        os.replace(LEGACY_CONFIG_FILE, migrated_path)
+    except FileNotFoundError:
+        return
+    except Exception as exc:
+        debug_log(f"legacy config migration cleanup: replace failed: {exc}")
+        return
+    try:
+        os.remove(migrated_path)
+    except FileNotFoundError:
+        pass
+    except Exception as exc:
+        debug_log(f"legacy config migration cleanup: remove failed: {exc}")
+
+
 def load_config() -> dict:  # noqa: C901
     global _config_cache, _config_cache_ts
     with _config_lock:
@@ -372,6 +384,7 @@ def load_config() -> dict:  # noqa: C901
             return _hit
         gen_at_start = _config_cache_gen
     # Prefer new location, but migrate from legacy (<= 2026-03) file if present.
+    _corrupt_path: str | None = None
     for path in (CONFIG_FILE, LEGACY_CONFIG_FILE):
         if not os.path.exists(path):
             continue
@@ -385,6 +398,7 @@ def load_config() -> dict:  # noqa: C901
                         k = _keyring_get_api_key()
                         if k:
                             data["api_key"] = k
+                            data["has_protected_key"] = True
                         else:
                             # One-time migration: if plaintext exists on disk, move to keyring.
                             plain = str(data.get("api_key") or "").strip()
@@ -394,21 +408,29 @@ def load_config() -> dict:  # noqa: C901
                                         save_config(plain)
                                     except Exception:
                                         pass
-                            elif data.get("use_keyring"):
-                                data["has_protected_key"] = True
+                            if not data.get("api_key"):
+                                data["has_protected_key"] = False
                 except Exception:
                     pass
                 # Decrypt best-effort on Windows (do not expose protected value to callers).
                 try:
                     if platform.system() == "Windows":
+                        plain_api_key = str(data.get("api_key") or "").strip()
+                        protected = str(data.get("api_key_protected") or "").strip()
+                        if plain_api_key:
+                            data["api_key_insecure"] = True
+                            data.setdefault(
+                                "api_key_insecure_reason",
+                                "Chiave API presente in chiaro nel file di configurazione.",
+                            )
                         if not (str(data.get("api_key") or "").strip()):
-                            protected = str(data.get("api_key_protected") or "").strip()
                             if protected:
                                 dec = _dpapi_unprotect_text_windows(protected)
                                 if dec:
                                     data["api_key"] = dec
-                                else:
                                     data["has_protected_key"] = True
+                                else:
+                                    data["has_protected_key"] = False
                 except Exception:
                     pass
                 # Decrypt fallback keys on Windows.
@@ -443,6 +465,7 @@ def load_config() -> dict:  # noqa: C901
                             preferred_model=data.get("preferred_model"),
                             fallback_models=data.get("fallback_models"),
                         )
+                        _remove_legacy_config_after_migration()
                     except Exception:
                         pass
                 preferred_model = sanitize_model_name(
@@ -470,6 +493,20 @@ def load_config() -> dict:  # noqa: C901
                 result["fallback_models"] = list(data.get("fallback_models") or [])
                 result["fallback_keys"] = list(data.get("fallback_keys") or [])
                 return result
+        except json.JSONDecodeError:
+            try:
+                _ts = int(time.time())
+                _dest = f"{path}.corrupt-{_ts}"
+                try:
+                    os.close(os.open(_dest, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+                except FileExistsError:
+                    pass  # concurrent caller already backed up the same (identical) file
+                else:
+                    shutil.copy2(path, _dest)
+            except Exception:
+                pass
+            if _corrupt_path is None:
+                _corrupt_path = path
         except Exception:
             pass
     _default = {
@@ -483,10 +520,15 @@ def load_config() -> dict:  # noqa: C901
             _cache_entry["fallback_models"] = list(
                 _default.get("fallback_models") or []
             )
+            if _corrupt_path is not None:
+                _cache_entry["config_recovered_from"] = _corrupt_path
             _config_cache = _cache_entry
             _config_cache_ts = time.monotonic()
     result = dict(_default)
     result["fallback_models"] = list(_default.get("fallback_models") or [])
+    result["fallback_keys"] = list(_default.get("fallback_keys") or [])
+    if _corrupt_path is not None:
+        result["config_recovered_from"] = _corrupt_path
     return result
 
 
@@ -582,10 +624,18 @@ def save_config(  # noqa: C901
                     data["api_key"] = ""
                     data["api_key_protected"] = protected
                 else:
+                    data["api_key_insecure"] = True
+                    data["api_key_insecure_reason"] = (
+                        "CryptProtectData non ha restituito dati protetti."
+                    )
                     debug_log(
                         "dpapi: CryptProtectData failed; API key stored as plaintext in config"
                     )
         except Exception as _dpapi_exc:
+            data["api_key_insecure"] = True
+            data["api_key_insecure_reason"] = (
+                str(_dpapi_exc) or "Errore DPAPI sconosciuto."
+            )
             debug_log(
                 f"dpapi: exception during protect — API key stored as plaintext in config: {_dpapi_exc}"
             )
@@ -649,27 +699,45 @@ def save_config(  # noqa: C901
                     data["fallback_keys"] = []
             except Exception:
                 pass
+        elif platform.system() != "Windows" and fallback_keys is not None:
+            try:
+                import keyring  # type: ignore
+
+                try:
+                    keyring.delete_password(_KEYRING_SERVICE, "gemini_fallback_keys")
+                except Exception:
+                    pass
+            except Exception:
+                pass
+        # Preserve non-credential config keys (e.g. session_root) from the existing config.
+        for _preserve_key in ("session_root",):
+            if _preserve_key in current_cfg and _preserve_key not in data:
+                data[_preserve_key] = current_cfg[_preserve_key]
+
         try:
             os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
         except Exception:
             pass
 
+        # Atomic write to avoid truncation on crash/force-close.
+        tmp_path = CONFIG_FILE + ".tmp"
         try:
-            # Atomic write to avoid truncation on crash/force-close.
-            tmp_path = CONFIG_FILE + ".tmp"
             with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False)
             os.replace(tmp_path, CONFIG_FILE)
-
-            # Restrict permissions on POSIX systems (best-effort).
-            if platform.system() != "Windows":
-                try:
-                    os.chmod(CONFIG_FILE, 0o600)
-                except Exception:
-                    pass
         except Exception:
-            # Best-effort: non bloccare l'app se il config non e' scrivibile.
-            return
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+
+        # Restrict permissions on POSIX systems (best-effort).
+        if platform.system() != "Windows":
+            try:
+                os.chmod(CONFIG_FILE, 0o600)
+            except Exception:
+                pass
 
         # Back-compat (opt-in): write legacy file only if explicitly requested.
         # Avoid duplicating secrets (especially on Windows).
@@ -691,3 +759,45 @@ def save_config(  # noqa: C901
                         pass
         except Exception:
             pass
+
+
+def save_session_root_to_config(path: str) -> None:
+    """Persist a custom session_root to config.json without touching credentials."""
+    global _config_cache, _config_cache_gen
+    with _write_lock:
+        with _config_lock:
+            _config_cache = None
+            _config_cache_gen += 1
+        current_cfg: dict = {}
+        for _p in (CONFIG_FILE, LEGACY_CONFIG_FILE):
+            if not os.path.exists(_p):
+                continue
+            try:
+                with open(_p, encoding="utf-8") as _f:
+                    raw = json.load(_f)
+                if isinstance(raw, dict):
+                    current_cfg = raw
+                    break
+            except Exception:
+                pass
+        current_cfg["session_root"] = str(path)
+        try:
+            os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+        except Exception:
+            pass
+        tmp = CONFIG_FILE + ".tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as _f:
+                json.dump(current_cfg, _f, ensure_ascii=False)
+            os.replace(tmp, CONFIG_FILE)
+            if platform.system() != "Windows":
+                try:
+                    os.chmod(CONFIG_FILE, 0o600)
+                except Exception:
+                    pass
+        except Exception:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise

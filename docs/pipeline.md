@@ -51,8 +51,8 @@ For each chunk in `range(start_sec, total_duration_sec, step_seconds)`:
 | Inline audio rejected (size/400) | Automatic fallback to upload, no quota consumed. |
 | `DegenerateOutputError` | One retry on the next model in the chain. If the chain is already exhausted: **chain-exhaustion recovery** resets to the primary model for one extra pass. If that also fails → `last_error = "phase1_degenerate_output"`. |
 | `AllModelsUnavailableError` (503 on every model) | Same chain-exhaustion recovery as above. On second failure → `last_error = "phase1_all_models_unavailable"`. |
-| `QuotaDailyLimitError` | `last_error = "quota_daily_limit_phase1"`, abort. |
-| Other exceptions after `_MAX_RETRY_ATTEMPTS` | `last_error = f"phase1_chunk_failed_{N}"`, abort. |
+| `QuotaDailyLimitError` | `last_error = "quota_daily_limit_phase1"`, abort. If the replacement-key popup times out, also set `last_error_detail = "api_key_prompt_timeout"`. |
+| Other exceptions after `_MAX_RETRY_ATTEMPTS` | `last_error = f"phase1_chunk_failed_{N}"`, `last_error_detail` captures the final exception summary, abort. |
 
 The `chain_exhaustion_recovery_used` flag (per chunk) ensures the extra primary-model pass can only happen once, so we never loop forever.
 
@@ -104,7 +104,7 @@ All Gemini calls in every phase go through `retry_with_quota(callable_fn, ...)`,
 |---|---|
 | HTTP 503 / "model unavailable" | Progressive back-off `(3 s, 6 s, 15 s)`; if the same model fails all three attempts, switch to the next model (`_switch_to_next_model`). If the chain is exhausted, raise `AllModelsUnavailableError`. |
 | HTTP 429 minute-scoped rate limit | Sleep 65 s then retry. After `_MAX_RETRY_ATTEMPTS` (4) attempts, re-raise. |
-| HTTP 429 daily/exhausted key | Attempt `try_rotate_key` with the fallback keys from `config.fallback_keys`. If rotation fails, prompt the UI via `request_new_api_key`. If both fail and there is still a next model, switch model. Otherwise raise `QuotaDailyLimitError`. |
+| HTTP 429 daily/exhausted key | Attempt `try_rotate_key` with the fallback keys from `config.fallback_keys`. If rotation fails, prompt the UI via `request_new_api_key` for up to 10 minutes. If the prompt times out, save a quota error and stop the batch; otherwise, if no key is supplied and there is still a next model, switch model. |
 | HTTP 404 model-not-found | Switch model; if no fallback left, re-raise. |
 | `DegenerateOutputError` | Switch model; if no fallback left, re-raise. |
 | `PermanentError` | Re-raise immediately (no retry). |
@@ -126,26 +126,29 @@ Source: `el_sbobinator/model_registry.py`.
 
 | Model id | Default chunk min | Default macro char limit | Phase-1 temperature |
 |---|---|---|---|
-| `gemini-2.5-flash` (default primary) | 15 | 22 000 | 0.35 |
-| `gemini-2.5-flash-lite` | 10 | 15 000 | 0.25 |
+| `gemini-3.5-flash` | 15 | 22 000 | 0.35 |
 | `gemini-3-flash-preview` | 15 | 22 000 | 0.35 |
 | `gemini-3.1-flash-lite-preview` | 5 | 7 500 | 0.35 |
+| `gemini-2.5-flash` (default primary) | 15 | 22 000 | 0.35 |
 
 The `ModelState` dataclass tracks the ordered chain and the currently active model. `build_model_state(primary, fallbacks)` always resets `current` to the primary on resume — the previous run's `effective_model` is persisted for observability only.
+New sessions start with no fallback models unless the user explicitly adds them in settings.
 
 ## `last_error` reference
 
-All failure modes write a machine-readable string to `session["last_error"]` before returning. The React UI maps these to Italian strings via `webui/src/utils.ts` (`errorLabel`).
+All failure modes write a machine-readable string to `session["last_error"]` before returning. Some paths also write `session["last_error_detail"]` for UI copy and diagnostics. The React UI maps these to Italian strings via `webui/src/utils.ts` (`errorLabel`).
 
 | `last_error` | Meaning | UI string (`errorLabel`) |
 |---|---|---|
 | `api_key_mancante` | API key absent at job start | "API key mancante o non valida." |
-| `quota_daily_limit_phase1` | Daily quota exhausted during transcription | "Quota giornaliera API esaurita durante la trascrizione." |
+| `quota_daily_limit_phase1` | Daily quota exhausted during transcription | "Quota giornaliera API esaurita durante la trascrizione." With `last_error_detail = "api_key_prompt_timeout"`: "Attesa chiave API scaduta. Sessione salvata — riprendi quando vuoi." |
 | `bad_request_phase1` | HTTP 400 while transcribing a chunk | "Richiesta non valida durante la trascrizione (errore 400)." |
 | `phase1_degenerate_output` | Degenerate output even after chain-exhaustion recovery | "Trascrizione interrotta: testo non valido anche dopo il retry automatico." |
 | `phase1_all_models_unavailable` | Every model 503-unavailable; recovery also failed | Falls through to the raw string. |
-| `phase1_chunk_failed_<N>` | Non-quota exception after all retries on chunk `N` | "Errore critico durante l'elaborazione del blocco `<N>`." |
-| `quota_daily_limit_phase2` | Daily quota during macro revision (main or retry pass) | "Quota giornaliera API esaurita durante la revisione." |
+| `regenerate_prompt_timeout` | The regenerate/resume prompt was left unanswered for 120 seconds | "Nessuna scelta ricevuta sulla ripresa entro 120 secondi. Sessione salvata: clicca Riprendi per continuare." |
+| `session_collision` | A fresh/regenerate path tried to overwrite a completed session with existing HTML without explicit confirmation | "Questo file sembra corrispondere a una sbobina gia completata ma con contenuto diverso. Apri Impostazioni -> Sessioni per risolvere." |
+| `phase1_chunk_failed_<N>` | Non-quota exception after all retries on chunk `N`; detail stores the final exception summary | "Errore al blocco `<N>` dopo 4 tentativi. Dettaglio: `<last_error_detail>`. Clicca Riprendi per continuare dal blocco `<N>`." |
+| `quota_daily_limit_phase2` | Daily quota during macro revision (main or retry pass) | "Quota giornaliera API esaurita durante la revisione." With `last_error_detail = "api_key_prompt_timeout"`: "Attesa chiave API scaduta. Sessione salvata — riprendi quando vuoi." |
 | `html_export_failed` | HTML assembly raised | "Errore durante il salvataggio del file di output." |
 | `html_export_missing` | Output file not present after write | "File di output non trovato dopo il salvataggio." |
 | `processing_failed` | Generic fallback when nothing more specific was set | "Elaborazione non completata." |

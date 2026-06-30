@@ -14,9 +14,14 @@ export function serializeQueueFile(file: FileItem): Record<string, unknown> {
     outputHtml: file.outputHtml,
     outputDir: file.outputDir,
     errorText: file.errorText,
+    errorDetail: file.errorDetail,
     completedAt: file.completedAt,
     primaryModel: file.primaryModel,
     effectiveModel: file.effectiveModel,
+    completionStatus: file.completionStatus,
+    revisionFailedBlocks: file.revisionFailedBlocks,
+    resumeSession: file.resumeSession,
+    allowCompletedDestroy: file.allowCompletedDestroy,
   };
 }
 
@@ -33,9 +38,16 @@ export function deserializeQueueFile(file: Partial<FileItem>, index: number): Fi
     outputHtml: file.outputHtml ? String(file.outputHtml) : undefined,
     outputDir: file.outputDir ? String(file.outputDir) : undefined,
     errorText: file.errorText ? String(file.errorText) : undefined,
+    errorDetail: file.errorDetail ? String(file.errorDetail) : undefined,
     completedAt: file.completedAt ? Number(file.completedAt) : undefined,
     primaryModel: file.primaryModel ? String(file.primaryModel) : undefined,
     effectiveModel: file.effectiveModel ? String(file.effectiveModel) : undefined,
+    completionStatus: file.completionStatus === 'completed_with_warnings' ? 'completed_with_warnings' : 'completed',
+    revisionFailedBlocks: Array.isArray(file.revisionFailedBlocks)
+      ? file.revisionFailedBlocks.map(Number).filter(n => Number.isFinite(n) && n > 0)
+      : [],
+    resumeSession: file.resumeSession === false ? false : undefined,
+    allowCompletedDestroy: file.allowCompletedDestroy ? true : undefined,
   };
 }
 
@@ -63,7 +75,7 @@ export function useQueuePersistence(
       dispatch({ type: 'queue/add', files: restoredFiles });
       appendConsole(`Coda ripristinata: ${restoredFiles.length} file.`);
     } catch (error) {
-      console.error('Queue restore failed:', error);
+      appendConsole(`[ERRORE] Ripristino coda fallito: ${error}`);
     }
   }, [appendConsole]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -78,7 +90,7 @@ export function useQueuePersistence(
       const persisted = currentFiles.map(serializeQueueFile);
       window.localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(persisted));
     } catch (error) {
-      console.error('Queue persist failed:', error);
+      appendConsole(`[ERRORE] Persistenza coda fallita: ${error}`);
     }
-  }, [structuralVersion]);
+  }, [structuralVersion, appendConsole]);
 }
