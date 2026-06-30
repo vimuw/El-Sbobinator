@@ -3173,8 +3173,8 @@ class TestMoveSessionRoot(unittest.TestCase):
 class TestShowNotification(unittest.TestCase):
     """show_notification — Darwin osascript fallback and cross-platform error path."""
 
-    def test_darwin_osascript_popen_called_when_plyer_fails(self):
-        """On darwin, if plyer raises, subprocess.Popen(['osascript', ...]) must be called."""
+    def test_darwin_plyer_failure_returns_error_dict_and_no_osascript_spawned(self):
+        """On darwin, if plyer raises, do NOT call subprocess.Popen to invoke osascript, and return ok=False."""
         import sys
         from unittest.mock import MagicMock
 
@@ -3202,12 +3202,9 @@ class TestShowNotification(unittest.TestCase):
         ):
             result = api.show_notification("Titolo", "Messaggio di test")
 
-        self.assertTrue(result["ok"])
-        self.assertEqual(len(popen_calls), 1)
-        self.assertEqual(popen_calls[0][0], "osascript")
-        joined = " ".join(popen_calls[0])
-        self.assertIn("Messaggio di test", joined)
-        self.assertIn("Titolo", joined)
+        self.assertFalse(result["ok"])
+        self.assertEqual(len(popen_calls), 0)
+        self.assertIn("plyer unavailable", result["error"])
 
     def test_non_darwin_plyer_failure_returns_error_dict(self):
         """On non-darwin platforms, if plyer raises, return ok=False with error string."""
