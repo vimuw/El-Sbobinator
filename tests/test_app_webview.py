@@ -1777,6 +1777,7 @@ class AppWebviewTests(unittest.TestCase):
             self.assertTrue(result["ok"], result.get("error"))
             shell_arg = mock_save.call_args.kwargs.get("shell")
             self.assertIsNotNone(shell_arg, "shell must be passed from cache")
+            assert shell_arg is not None
             self.assertIn(
                 "color:red", "".join(shell_arg), "must use shell_A, not shell_B"
             )
