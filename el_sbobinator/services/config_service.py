@@ -38,21 +38,26 @@ _CONFIG_CACHE_TTL = 30.0
 
 
 def debug_log(msg: str) -> None:
-    # Log opzionale: non sporcare la UI in uso normale.
-    # Abilita con: setx EL_SBOBINATOR_DEBUG 1 (Windows) / export EL_SBOBINATOR_DEBUG=1 (macOS/Linux)
+    # Always print to stdout if debug is enabled
     try:
-        if str(os.environ.get("EL_SBOBINATOR_DEBUG", "")).strip() not in (
+        if str(os.environ.get("EL_SBOBINATOR_DEBUG", "")).strip() in (
             "1",
             "true",
             "TRUE",
             "yes",
             "YES",
         ):
-            return
+            print(f"[debug] {msg}", flush=True)
     except Exception:
-        return
+        pass
+    # Log to a persistent file in user config directory
     try:
-        print(f"[debug] {msg}")
+        log_dir = os.path.dirname(CONFIG_FILE)
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
+            log_file = os.path.join(log_dir, "app.log")
+            with open(log_file, "a", encoding="utf-8") as fh:
+                fh.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {msg}\n")
     except Exception:
         pass
 
@@ -167,6 +172,19 @@ CONFIG_FILE = _get_config_file_path(USER_HOME)
 THEME_PREF_FILE = os.path.join(os.path.dirname(CONFIG_FILE), "theme_pref.txt")
 LEGACY_CONFIG_FILE = os.path.join(USER_HOME, ".el_sbobinator_config.json")
 
+# In testing environment, isolate from actual user configuration to prevent data loss or key overwrites.
+import sys
+
+if "pytest" in sys.modules or os.environ.get("EL_SBOBINATOR_TESTING") == "1":
+    import tempfile
+
+    _test_temp_dir = tempfile.gettempdir()
+    CONFIG_FILE = os.path.join(_test_temp_dir, "el_sbobinator_test_config.json")
+    THEME_PREF_FILE = os.path.join(_test_temp_dir, "el_sbobinator_test_theme_pref.txt")
+    LEGACY_CONFIG_FILE = os.path.join(
+        _test_temp_dir, "el_sbobinator_test_legacy_config.json"
+    )
+
 
 @functools.lru_cache(maxsize=1)
 def _dpapi_make_blob_class(ctypes_mod, wintypes_mod):
@@ -193,8 +211,8 @@ def _dpapi_protect_text_windows(text: str) -> str:
 
         DATA_BLOB = _dpapi_make_blob_class(ctypes, wintypes)  # type: ignore[arg-type]
 
-        crypt32 = ctypes.windll.crypt32  # type: ignore[attr-defined]
-        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        crypt32 = ctypes.WinDLL("crypt32", use_last_error=True)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
         crypt32.CryptProtectData.argtypes = [
             ctypes.POINTER(DATA_BLOB),
@@ -226,17 +244,23 @@ def _dpapi_protect_text_windows(text: str) -> str:
             CRYPTPROTECT_UI_FORBIDDEN,
             ctypes.byref(out_blob),
         )
+        # Reference buf to keep it alive
+        _ = buf
         if not ok:
+            err_code = ctypes.get_last_error()
+            err_msg = str(ctypes.WinError(err_code))
+            debug_log(f"dpapi: CryptProtectData failed: {err_msg} (code {err_code})")
             return ""
         try:
             out_bytes = ctypes.string_at(out_blob.pbData, out_blob.cbData)
         finally:
             try:
                 kernel32.LocalFree(out_blob.pbData)
-            except Exception:
-                pass
+            except Exception as e:
+                debug_log(f"dpapi: LocalFree in protect raised: {e}")
         return base64.b64encode(out_bytes).decode("ascii")
-    except Exception:
+    except Exception as exc:
+        debug_log(f"dpapi: protect exception: {exc}")
         return ""
 
 
@@ -267,8 +291,8 @@ def _dpapi_unprotect_text_windows_once(b64: str) -> str:
 
         DATA_BLOB = _dpapi_make_blob_class(ctypes, wintypes)  # type: ignore[arg-type]
 
-        crypt32 = ctypes.windll.crypt32  # type: ignore[attr-defined]
-        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        crypt32 = ctypes.WinDLL("crypt32", use_last_error=True)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
         crypt32.CryptUnprotectData.argtypes = [
             ctypes.POINTER(DATA_BLOB),
@@ -303,22 +327,28 @@ def _dpapi_unprotect_text_windows_once(b64: str) -> str:
             CRYPTPROTECT_UI_FORBIDDEN,
             ctypes.byref(out_blob),
         )
+        # Reference buf to keep it alive
+        _ = buf
         if not ok:
+            err_code = ctypes.get_last_error()
+            err_msg = str(ctypes.WinError(err_code))
+            debug_log(f"dpapi: CryptUnprotectData failed: {err_msg} (code {err_code})")
             return ""
         try:
             out_bytes = ctypes.string_at(out_blob.pbData, out_blob.cbData)
         finally:
             try:
                 kernel32.LocalFree(out_blob.pbData)
-            except Exception:
-                pass
+            except Exception as e:
+                debug_log(f"dpapi: LocalFree pbData raised: {e}")
             try:
                 if desc:
                     kernel32.LocalFree(desc)
-            except Exception:
-                pass
+            except Exception as e:
+                debug_log(f"dpapi: LocalFree desc raised: {e}")
         return out_bytes.decode("utf-8", errors="replace").strip()
-    except Exception:
+    except Exception as exc:
+        debug_log(f"dpapi: unprotect exception: {exc}")
         return ""
 
 
@@ -389,9 +419,11 @@ def load_config() -> dict:  # noqa: C901
         if not os.path.exists(path):
             continue
         try:
+            debug_log(f"load_config: checking file at {path}")
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, dict):
+                debug_log(f"load_config: successfully read json dictionary from {path}")
                 # Prefer keyring secret on macOS/Linux (keeps disk config without secrets).
                 try:
                     if platform.system() != "Windows":
@@ -410,8 +442,8 @@ def load_config() -> dict:  # noqa: C901
                                         pass
                             if not data.get("api_key"):
                                 data["has_protected_key"] = False
-                except Exception:
-                    pass
+                except Exception as e:
+                    debug_log(f"load_config: non-windows keyring load error: {e}")
                 # Decrypt best-effort on Windows (do not expose protected value to callers).
                 try:
                     if platform.system() == "Windows":
@@ -425,14 +457,21 @@ def load_config() -> dict:  # noqa: C901
                             )
                         if not (str(data.get("api_key") or "").strip()):
                             if protected:
+                                debug_log(
+                                    "load_config: found api_key_protected, attempting to decrypt..."
+                                )
                                 dec = _dpapi_unprotect_text_windows(protected)
                                 if dec:
                                     data["api_key"] = dec
                                     data["has_protected_key"] = True
+                                    debug_log(
+                                        "load_config: successfully decrypted api_key"
+                                    )
                                 else:
                                     data["has_protected_key"] = False
-                except Exception:
-                    pass
+                                    debug_log("load_config: failed to decrypt api_key")
+                except Exception as e:
+                    debug_log(f"load_config: windows dpapi load error: {e}")
                 # Decrypt fallback keys on Windows.
                 try:
                     if platform.system() == "Windows":
@@ -440,11 +479,23 @@ def load_config() -> dict:  # noqa: C901
                             data.get("fallback_keys_protected") or ""
                         ).strip()
                         if protected_fk:
+                            debug_log(
+                                "load_config: found fallback_keys_protected, attempting to decrypt..."
+                            )
                             dec_fk = _dpapi_unprotect_text_windows(protected_fk)
                             if dec_fk:
                                 data["fallback_keys"] = json.loads(dec_fk)
-                except Exception:
-                    pass
+                                debug_log(
+                                    f"load_config: successfully decrypted fallback_keys ({len(data['fallback_keys'])} keys)"
+                                )
+                            else:
+                                debug_log(
+                                    "load_config: failed to decrypt fallback_keys"
+                                )
+                except Exception as e:
+                    debug_log(
+                        f"load_config: windows dpapi fallback keys load error: {e}"
+                    )
                 # Get fallback keys from keyring on macOS/Linux.
                 try:
                     if platform.system() != "Windows":
@@ -455,8 +506,10 @@ def load_config() -> dict:  # noqa: C901
                         )
                         if fk_json:
                             data["fallback_keys"] = json.loads(fk_json)
-                except Exception:
-                    pass
+                except Exception as e:
+                    debug_log(
+                        f"load_config: non-windows keyring fallback keys load error: {e}"
+                    )
                 # Best-effort migration forward.
                 if path == LEGACY_CONFIG_FILE and data.get("api_key"):
                     try:
@@ -466,8 +519,8 @@ def load_config() -> dict:  # noqa: C901
                             fallback_models=data.get("fallback_models"),
                         )
                         _remove_legacy_config_after_migration()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        debug_log(f"load_config: migration error: {e}")
                 preferred_model = sanitize_model_name(
                     data.get("preferred_model"), DEFAULT_MODEL
                 )
@@ -492,8 +545,12 @@ def load_config() -> dict:  # noqa: C901
                 result = dict(data)
                 result["fallback_models"] = list(data.get("fallback_models") or [])
                 result["fallback_keys"] = list(data.get("fallback_keys") or [])
+                debug_log(
+                    f"load_config: returning config. api_key length={len(result.get('api_key') or '')}, has_protected_key={result.get('has_protected_key')}"
+                )
                 return result
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            debug_log(f"load_config: json decode error for {path}: {e}")
             try:
                 _ts = int(time.time())
                 _dest = f"{path}.corrupt-{_ts}"
@@ -503,12 +560,15 @@ def load_config() -> dict:  # noqa: C901
                     pass  # concurrent caller already backed up the same (identical) file
                 else:
                     shutil.copy2(path, _dest)
-            except Exception:
-                pass
+            except Exception as ex:
+                debug_log(f"load_config: backup copy failed: {ex}")
             if _corrupt_path is None:
                 _corrupt_path = path
-        except Exception:
-            pass
+        except Exception as exc:
+            debug_log(f"load_config: failed to read config from {path}: {exc}")
+            if _corrupt_path is None:
+                _corrupt_path = path
+    debug_log("load_config: no config read, returning default values")
     _default = {
         "api_key": "",
         "preferred_model": DEFAULT_MODEL,
