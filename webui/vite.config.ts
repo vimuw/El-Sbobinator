@@ -17,14 +17,16 @@ export default defineConfig({
       '@': path.resolve(__dirname, '.'),
     },
   },
-  esbuild: {
-    // @ts-expect-error - Vite 8 esbuild options are stricter
-    drop: ['console', 'debugger'],
-  },
   build: {
     target: 'esnext',
     rollupOptions: {
       output: {
+        minify: {
+          compress: {
+            dropConsole: true,
+            dropDebugger: true,
+          },
+        },
         entryFileNames: 'assets/index.js',
         chunkFileNames: 'assets/[name].js',
         assetFileNames: 'assets/[name][extname]',
