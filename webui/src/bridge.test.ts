@@ -145,4 +145,24 @@ describe('createBridge', () => {
     expect(state.files[0].phase).toBe(0);
     expect(onBatchDone).toHaveBeenCalledWith({ cancelled: true, completed: 0, failed: 0, total: 1 });
   });
+
+  it('calls onFileFailed when a file fails', () => {
+    const onFileFailed = vi.fn();
+    const bridge = createBridge({
+      dispatch: vi.fn(),
+      appendConsole: vi.fn(),
+      onRegenerate: vi.fn(),
+      onAskNewKey: vi.fn(),
+      onDismissNewKey: vi.fn(),
+      onBatchDone: vi.fn(),
+      onFileDone: vi.fn(),
+      onFileFailed,
+      onFilesDropped: vi.fn(),
+      onBatchStart: vi.fn(),
+    });
+
+    bridge.fileFailed({ id: 'abc', index: 0, error: 'Test error' });
+
+    expect(onFileFailed).toHaveBeenCalledWith({ id: 'abc', index: 0, error: 'Test error' });
+  });
 });

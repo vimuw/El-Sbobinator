@@ -39,7 +39,7 @@ afterEach(() => {
   setPywebview(undefined);
 });
 
-describe('SettingsModal — diagnostica chunk display', () => {
+describe('SettingsModal — model parameters chunk display', () => {
   it('shows default_chunk_minutes from availableModels registry for the primary model', async () => {
     const models = [
       { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash (Preview)', summary: '', default_chunk_minutes: 15 },
@@ -55,6 +55,29 @@ describe('SettingsModal — diagnostica chunk display', () => {
 
     rerender(<SettingsModal {...makeProps()} availableModels={models} preferredModel="gemini-3.1-flash-lite-preview" />);
     expect(screen.getByText('10 min')).toBeDefined();
+  });
+});
+
+describe('SettingsModal — diagnostics environment pending checks', () => {
+  it('shows pending environment checks with "da verificare" status initially', async () => {
+    render(
+      <SettingsModal
+        {...makeProps()}
+        apiKey="test-api-key"
+        preferredModel="gemini-2.5-flash"
+      />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+    });
+
+    expect(screen.getByText('API Key Gemini')).toBeDefined();
+    expect(screen.getByText('FFmpeg')).toBeDefined();
+    expect(screen.getByText('Config locale')).toBeDefined();
+    expect(screen.getByText('Cartella sessioni/output')).toBeDefined();
+
+    const statusBadges = screen.getAllByText('da verificare');
+    expect(statusBadges.length).toBeGreaterThanOrEqual(4);
   });
 });
 
@@ -486,6 +509,88 @@ describe('SettingsModal — validate environment', () => {
       fireEvent.click(screen.getByTitle('Verifica ambiente'));
     });
     await vi.waitFor(() => expect(screen.getByText('Ambiente OK')).toBeTruthy());
-    expect(screen.getByText('ffmpeg')).toBeTruthy();
+    expect(screen.getByText('FFmpeg')).toBeTruthy();
+  });
+
+  it('resets validation result when preferredModel changes', async () => {
+    const models = [
+      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast', default_chunk_minutes: 12 },
+      { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', summary: 'New', default_chunk_minutes: 15 },
+    ];
+    const validateFn = vi.fn().mockResolvedValue({
+      ok: true,
+      result: {
+        ok: true,
+        summary: 'Ambiente OK',
+        checks: [
+          { id: 'ffmpeg', label: 'ffmpeg', status: 'ok', message: 'ffmpeg trovato' },
+        ],
+      },
+    });
+    setPywebview({ validate_environment: validateFn });
+    const props = {
+      ...makeProps(),
+      availableModels: models,
+      preferredModel: 'gemini-2.5-flash',
+      isOpen: true,
+    };
+    const { rerender } = render(<SettingsModal {...props} />);
+    await act(async () => {
+      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Verifica ambiente'));
+    });
+    await vi.waitFor(() => expect(screen.getByText('Ambiente OK')).toBeTruthy());
+
+    // Change preferredModel
+    rerender(<SettingsModal {...props} preferredModel="gemini-3.5-flash" />);
+
+    // Expect 'Ambiente OK' to be cleared (since validationResult is set to null)
+    expect(screen.queryByText('Ambiente OK')).toBeNull();
+  });
+
+  it('keeps validation result when modal is closed and reopened if settings are unchanged', async () => {
+    const models = [
+      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast', default_chunk_minutes: 12 },
+    ];
+    const validateFn = vi.fn().mockResolvedValue({
+      ok: true,
+      result: {
+        ok: true,
+        summary: 'Ambiente OK',
+        checks: [
+          { id: 'ffmpeg', label: 'ffmpeg', status: 'ok', message: 'ffmpeg trovato' },
+        ],
+      },
+    });
+    setPywebview({ validate_environment: validateFn });
+    const props = {
+      ...makeProps(),
+      availableModels: models,
+      preferredModel: 'gemini-2.5-flash',
+      isOpen: true,
+    };
+    const { rerender } = render(<SettingsModal {...props} />);
+    await act(async () => {
+      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Verifica ambiente'));
+    });
+    await vi.waitFor(() => expect(screen.getByText('Ambiente OK')).toBeTruthy());
+
+    // Close the modal
+    rerender(<SettingsModal {...props} isOpen={false} />);
+
+    // Reopen the modal
+    rerender(<SettingsModal {...props} isOpen={true} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+    });
+
+    // Expect 'Ambiente OK' to still be present (because settings didn't change)
+    expect(screen.getByText('Ambiente OK')).toBeTruthy();
   });
 });

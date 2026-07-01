@@ -193,11 +193,24 @@ export function createBridge(options: {
   onDismissNewKey: () => void;
   onBatchDone: (data: ProcessDonePayload) => void;
   onFileDone: (data: FileDonePayload) => void;
+  onFileFailed?: (data: FileFailedPayload) => void;
   onFilesDropped: (files: FileDescriptor[]) => void;
   onBatchStart: () => void;
   onDownloadProgress?: (data: UpdateDownloadProgressPayload) => void;
 }): BridgeCallbacks {
-  const { dispatch, appendConsole, onRegenerate, onAskNewKey, onDismissNewKey, onBatchDone, onFileDone, onFilesDropped, onBatchStart, onDownloadProgress } = options;
+  const {
+    dispatch,
+    appendConsole,
+    onRegenerate,
+    onAskNewKey,
+    onDismissNewKey,
+    onBatchDone,
+    onFileDone,
+    onFileFailed,
+    onFilesDropped,
+    onBatchStart,
+    onDownloadProgress,
+  } = options;
 
   return {
     appendConsole,
@@ -216,7 +229,10 @@ export function createBridge(options: {
       dispatch({ type: 'bridge/file_done', data });
       onFileDone(data);
     },
-    fileFailed: data => dispatch({ type: 'bridge/file_failed', data }),
+    fileFailed: data => {
+      dispatch({ type: 'bridge/file_failed', data });
+      onFileFailed?.(data);
+    },
     askRegenerate: onRegenerate,
     askNewKey: onAskNewKey,
     dismissNewKey: onDismissNewKey,

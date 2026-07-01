@@ -82,6 +82,12 @@ export function useBridgeCallbacks(options: {
       onDownloadProgress: data => { onDownloadProgressRef.current?.(data); },
       onAskNewKey: () => {
         setAskNewKeyPromptRef.current(true);
+        if (localStorage.getItem('notifications_enabled') !== 'false' && !document.hasFocus() && window.pywebview?.api?.show_notification) {
+          void window.pywebview.api.show_notification(
+            '⚠️ Chiavi esaurite — El Sbobinator',
+            'La quota di tutte le API Key è terminata. Inserisci una nuova chiave per continuare.',
+          );
+        }
       },
       onDismissNewKey: () => {
         setAskNewKeyPromptRef.current(false);
@@ -110,14 +116,40 @@ export function useBridgeCallbacks(options: {
         if (localStorage.getItem('notifications_enabled') === 'false') return;
         const currentFile = filesRef.current?.find(file => file.id === data.id);
         if (currentFile && window.pywebview?.api?.show_notification && !document.hasFocus()) {
-          const model = data.effective_model || currentFile.effectiveModel;
-          const modelPart = model ? ` con ${shortModelName(model)}` : '';
-          const elapsed = currentFile.startedAt ? Math.round((Date.now() - currentFile.startedAt) / 60000) : null;
-          const elapsedPart = elapsed !== null && elapsed > 0 ? ` · ${elapsed} min` : '';
-          window.pywebview.api.show_notification(
-            `✅ Sbobina pronta — ${currentFile.name}`,
-            `Completata${modelPart}${elapsedPart}. Clicca per aprire.`,
-          );
+          const isWarning = data.completion_status === 'completed_with_warnings' || (Array.isArray(data.revision_failed_blocks) && data.revision_failed_blocks.length > 0);
+          if (isWarning) {
+            window.pywebview.api.show_notification(
+              `⚠️ Sbobina pronta con avvisi — ${currentFile.name}`,
+              'Completata con alcune parti non revisionate. Clicca per aprire.',
+            );
+          } else {
+            const model = data.effective_model || currentFile.effectiveModel;
+            const modelPart = model ? ` con ${shortModelName(model)}` : '';
+            const elapsed = currentFile.startedAt ? Math.round((Date.now() - currentFile.startedAt) / 60000) : null;
+            const elapsedPart = elapsed !== null && elapsed > 0 ? ` · ${elapsed} min` : '';
+            window.pywebview.api.show_notification(
+              `✅ Sbobina pronta — ${currentFile.name}`,
+              `Completata${modelPart}${elapsedPart}. Clicca per aprire.`,
+            );
+          }
+        }
+      },
+      onFileFailed: data => {
+        if (localStorage.getItem('notifications_enabled') === 'false') return;
+        const currentFile = filesRef.current?.find(file => file.id === data.id);
+        if (currentFile && window.pywebview?.api?.show_notification && !document.hasFocus()) {
+          const isGoogleServerOverload = data.error?.includes('indisponibile') || data.error?.includes('unavailable');
+          if (isGoogleServerOverload) {
+            window.pywebview.api.show_notification(
+              `⚠️ Server occupati — ${currentFile.name}`,
+              "I server di Google sono sovraccarichi. L'elaborazione è stata interrotta.",
+            );
+          } else {
+            window.pywebview.api.show_notification(
+              `❌ Errore elaborazione — ${currentFile.name}`,
+              data.error || 'Si è verificato un errore imprevisto.',
+            );
+          }
         }
       },
     });

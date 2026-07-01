@@ -310,4 +310,96 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     act(() => { window.elSbobinatorBridge?.processDone({ completed: 0, failed: 1, total: 1 }); });
     expect(setRegeneratePrompt).toHaveBeenCalledWith(null);
   });
+
+  it('askNewKey callback: covers notification path for key exhaustion', () => {
+    const showNotification = vi.fn();
+    setPywebview({ show_notification: showNotification });
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    const opts = makeMinimalHook();
+    renderHook(() => { useBridgeCallbacks(opts); });
+    localStorage.removeItem('notifications_enabled');
+    act(() => {
+      window.elSbobinatorBridge?.askNewKey();
+    });
+    expect(showNotification).toHaveBeenCalledWith(
+      '⚠️ Chiavi esaurite — El Sbobinator',
+      expect.stringContaining('La quota di tutte le API Key'),
+    );
+    vi.restoreAllMocks();
+  });
+
+  it('fileDone callback: covers warning notification for completed file with warnings', () => {
+    const showNotification = vi.fn();
+    setPywebview({ show_notification: showNotification });
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    const doneFile: FileItem = {
+      id: 'file-1', name: 'audio.mp3', size: 1, duration: 60, path: '/a.mp3', status: 'done', progress: 1, phase: 0,
+    };
+    const opts = makeMinimalHook();
+    opts.filesRef = { current: [doneFile] } as unknown as ReturnType<typeof useRef<FileItem[]>>;
+    renderHook(() => { useBridgeCallbacks(opts); });
+    localStorage.removeItem('notifications_enabled');
+    act(() => {
+      window.elSbobinatorBridge?.fileDone({
+        id: 'file-1', index: 0, output_html: '/out.html', output_dir: '/sessions/x', completion_status: 'completed_with_warnings'
+      });
+    });
+    expect(showNotification).toHaveBeenCalledWith(
+      '⚠️ Sbobina pronta con avvisi — audio.mp3',
+      'Completata con alcune parti non revisionate. Clicca per aprire.',
+    );
+    vi.restoreAllMocks();
+  });
+
+  it('fileFailed callback: covers server overload and generic error notification paths', () => {
+    const showNotification = vi.fn();
+    setPywebview({ show_notification: showNotification });
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    const doneFile: FileItem = {
+      id: 'file-1', name: 'audio.mp3', size: 1, duration: 60, path: '/a.mp3', status: 'error', progress: 0, phase: 0,
+    };
+    const opts = makeMinimalHook();
+    opts.filesRef = { current: [doneFile] } as unknown as ReturnType<typeof useRef<FileItem[]>>;
+    renderHook(() => { useBridgeCallbacks(opts); });
+    localStorage.removeItem('notifications_enabled');
+
+    // Test server busy/unavailable error
+    act(() => {
+      window.elSbobinatorBridge?.fileFailed({
+        id: 'file-1', index: 0, error: 'Modello Gemini indisponibile'
+      });
+    });
+    expect(showNotification).toHaveBeenCalledWith(
+      '⚠️ Server occupati — audio.mp3',
+      expect.stringContaining('I server di Google sono sovraccarichi'),
+    );
+
+    showNotification.mockClear();
+
+    // Test phase1_all_models_unavailable error
+    act(() => {
+      window.elSbobinatorBridge?.fileFailed({
+        id: 'file-1', index: 0, error: 'phase1_all_models_unavailable'
+      });
+    });
+    expect(showNotification).toHaveBeenCalledWith(
+      '⚠️ Server occupati — audio.mp3',
+      expect.stringContaining('I server di Google sono sovraccarichi'),
+    );
+
+    showNotification.mockClear();
+
+    // Test generic error
+    act(() => {
+      window.elSbobinatorBridge?.fileFailed({
+        id: 'file-1', index: 0, error: 'Errore generico di test'
+      });
+    });
+    expect(showNotification).toHaveBeenCalledWith(
+      '❌ Errore elaborazione — audio.mp3',
+      'Errore generico di test',
+    );
+
+    vi.restoreAllMocks();
+  });
 });

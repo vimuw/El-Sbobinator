@@ -354,6 +354,10 @@ export function SettingsModal({
   }, [isOpen, checkForUpdates]);
 
   useEffect(() => {
+    setValidationResult(null);
+  }, [apiKey, preferredModel, fallbackModels, fallbackKeys, sessionInfo?.session_root]);
+
+  useEffect(() => {
     if (!isOpen) {
       setActiveTab('general');
       setIsSaving(false);
@@ -599,7 +603,7 @@ export function SettingsModal({
     try {
       const response = await window.pywebview.api.validate_environment(
         apiKey.trim(),
-        Boolean(apiKey.trim()),
+        true,
         preferredModel,
         fallbackModels,
       );
@@ -618,6 +622,54 @@ export function SettingsModal({
     } finally {
       if (isMountedRef.current) setIsValidatingEnvironment(false);
     }
+  };
+
+  const getPendingChecks = () => {
+    const isWindows = typeof window !== 'undefined' && /windows|win32/i.test(navigator.userAgent || '');
+    const checks = [
+      {
+        id: 'api_key',
+        label: 'API Key Gemini',
+        status: 'pending' as const,
+        message: apiKey.trim()
+          ? 'Chiave inserita. Verrà verificato l\'accesso a internet e la validità della chiave.'
+          : 'Chiave assente: il controllo dell\'API Gemini verrà saltato.',
+        details: `Modello primario: ${preferredModel}${fallbackModels.length > 0 ? ` • Fallback: ${fallbackModels.join(', ')}` : ''}`,
+      },
+      {
+        id: 'ffmpeg',
+        label: 'FFmpeg',
+        status: 'pending' as const,
+        message: 'Verifica se FFmpeg è installato e disponibile per la conversione audio.',
+        details: '',
+      },
+      {
+        id: 'config',
+        label: 'Config locale',
+        status: 'pending' as const,
+        message: 'Verifica la possibilità di scrivere le impostazioni sul disco locale.',
+        details: '',
+      },
+      {
+        id: 'output',
+        label: 'Cartella sessioni/output',
+        status: 'pending' as const,
+        message: 'Verifica i permessi di scrittura nella cartella delle sessioni.',
+        details: sessionInfo?.session_root || '',
+      },
+    ];
+
+    if (!isWindows) {
+      checks.push({
+        id: 'keyring',
+        label: 'Keyring',
+        status: 'pending' as const,
+        message: 'Verifica la disponibilità del portachiavi di sistema per salvare la chiave API in modo sicuro.',
+        details: '',
+      });
+    }
+
+    return checks;
   };
 
   const saveSettings = async () => {
@@ -689,6 +741,73 @@ export function SettingsModal({
 
   const removeFallbackModel = (modelId: string) => {
     setFallbackModels(fallbackModels.filter(item => item !== modelId));
+  };
+
+  const getDisplayChecks = () => {
+    const pending = getPendingChecks();
+    if (!validationResult) return pending;
+
+    const resultChecks = validationResult.checks;
+    const resultMap = new Map(resultChecks.map(c => [c.id, c]));
+
+    const list: Array<{
+      id: string;
+      label: string;
+      status: 'pending' | 'ok' | 'warning' | 'error';
+      message: string;
+      details: string;
+      errorMessage?: string;
+      errorDetails?: string;
+    }> = [];
+
+    for (const p of pending) {
+      const r = resultMap.get(p.id);
+      if (!r) {
+        list.push(p);
+      } else {
+        if (r.status === 'ok') {
+          list.push({
+            ...p,
+            status: 'ok',
+            details: p.details || r.details,
+          });
+        } else {
+          list.push({
+            ...p,
+            status: r.status,
+            errorMessage: r.message,
+            errorDetails: r.details,
+          });
+        }
+      }
+    }
+
+    const pendingIds = new Set(pending.map(p => p.id));
+    for (const r of resultChecks) {
+      if (!pendingIds.has(r.id)) {
+        if (r.status === 'ok') {
+          list.push({
+            id: r.id,
+            label: r.label,
+            status: 'ok',
+            message: 'Verifica la disponibilità del modello di fallback.',
+            details: `Modello: ${r.details}`,
+          });
+        } else {
+          list.push({
+            id: r.id,
+            label: r.label,
+            status: r.status,
+            message: 'Verifica la disponibilità del modello di fallback.',
+            details: `Modello: ${r.id.replace('api_model_', 'Fallback ')}`,
+            errorMessage: r.message,
+            errorDetails: r.details,
+          });
+        }
+      }
+    }
+
+    return list;
   };
 
   return (
@@ -1014,6 +1133,16 @@ export function SettingsModal({
                           {primaryModelSummary && (
                             <p className="text-xs text-[var(--text-muted)] mt-1">{primaryModelSummary}</p>
                           )}
+                          {(defaultChunkMinutes !== '—' || defaultTemperature !== '—') && (
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-muted)] mt-1.5 pt-1.5 border-t border-[var(--border-subtle)] border-dashed">
+                              {defaultChunkMinutes !== '—' && (
+                                <span>Dimensione chunk audio: <strong className="text-[var(--text-secondary)]">{defaultChunkMinutes} min</strong></span>
+                              )}
+                              {defaultTemperature !== '—' && (
+                                <span>Temperatura (Fase 1): <strong className="text-[var(--text-secondary)]">{defaultTemperature}</strong></span>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         <div className="space-y-2.5 border-t border-[var(--border-subtle)] pt-4">
@@ -1272,57 +1401,65 @@ export function SettingsModal({
                       </div>
 
                       <div className="space-y-4">
-                        <ul className="space-y-2.5 py-1">
-                          <li className="flex justify-between text-sm text-[var(--text-secondary)] py-1 border-b border-[var(--border-subtle)] last:border-0">
-                            <span className="font-medium">Modello primario</span>
-                            <span className="font-semibold text-[var(--text-primary)]">{preferredModel}</span>
-                          </li>
-                          <li className="flex justify-between text-sm text-[var(--text-secondary)] py-1 border-b border-[var(--border-subtle)] last:border-0">
-                            <span className="font-medium">Fallback configurati</span>
-                            <span className="font-semibold text-[var(--text-primary)]">{fallbackModels.join(' → ') || 'nessuno'}</span>
-                          </li>
-                          <li className="flex justify-between text-sm text-[var(--text-secondary)] py-1 border-b border-[var(--border-subtle)] last:border-0">
-                            <span className="font-medium">Dimensione chunk audio</span>
-                            <span className="font-semibold text-[var(--text-primary)]">{defaultChunkMinutes} min</span>
-                          </li>
-                          <li className="flex justify-between text-sm text-[var(--text-secondary)] py-1 border-b border-[var(--border-subtle)] last:border-0">
-                            <span className="font-medium">Temperatura (Fase 1)</span>
-                            <span className="font-semibold text-[var(--text-primary)]">{defaultTemperature}</span>
-                          </li>
-                        </ul>
-
                         {validationResult && (
-                          <div className="space-y-3 pt-3 border-t border-[var(--border-subtle)]">
-                            <p className="text-sm font-bold" style={{ color: validationResult.ok ? 'var(--success-text)' : 'var(--error-text)' }}>
+                          <div className="flex items-center gap-2 px-1 pb-3 border-b border-[var(--border-subtle)] animate-fade-in">
+                            {validationResult.ok ? (
+                              <Check className="w-4 h-4 text-[var(--success-text)] shrink-0" />
+                            ) : (
+                              <AlertCircle className="w-4 h-4 text-[var(--error-text)] shrink-0" />
+                            )}
+                            <span
+                              className="text-sm font-bold"
+                              style={{ color: validationResult.ok ? 'var(--success-text)' : 'var(--error-text)' }}
+                            >
                               {validationResult.summary}
-                            </p>
-                            {validationResult.checks.map(check => (
-                              <div
-                                key={check.id}
-                                className="rounded-lg p-3 bg-[var(--bg-panel)] border border-[var(--border-subtle)] space-y-1.5"
-                              >
-                                <div className="flex items-center justify-between gap-3">
-                                  <span className="text-sm font-semibold text-[var(--text-primary)]">{check.label}</span>
-                                  <span
-                                    className="text-xs font-bold uppercase tracking-wider rounded px-1.5 py-0.5"
-                                    style={{
-                                      color: check.status === 'ok' ? 'var(--success-text)' : check.status === 'warning' ? 'var(--warning-text)' : 'var(--error-text)',
-                                      background: check.status === 'ok' ? 'var(--success-subtle)' : check.status === 'warning' ? 'var(--warning-subtle)' : 'var(--error-subtle)',
-                                    }}
-                                  >
-                                    {check.status}
-                                  </span>
-                                </div>
-                                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{check.message}</p>
-                                {check.details && (
-                                  <p className="text-xs font-mono break-all whitespace-pre-wrap text-[var(--text-muted)] bg-[var(--bg-input)] p-1.5 rounded mt-1 border border-[var(--border-subtle)]">
-                                    {check.details}
-                                  </p>
-                                )}
-                              </div>
-                            ))}
+                            </span>
                           </div>
                         )}
+
+                        <ul className="space-y-3 py-1">
+                          {getDisplayChecks().map(check => (
+                            <li
+                              key={check.id}
+                              className="flex justify-between items-start py-2.5 border-b border-[var(--border-subtle)] last:border-0"
+                            >
+                              <div className="flex-1 min-w-0 space-y-0.5">
+                                <span className="text-sm font-semibold text-[var(--text-primary)]">{check.label}</span>
+                                <p className="text-xs text-[var(--text-muted)] leading-relaxed">{check.message}</p>
+                                {check.details && (
+                                  <p className="text-xs font-mono text-[var(--text-muted)] break-all mt-1">{check.details}</p>
+                                )}
+                                {(check.status === 'error' || check.status === 'warning') && check.errorMessage && (
+                                  <div className="mt-1.5 p-2 rounded bg-[var(--error-subtle)] border border-[var(--error-ring)] text-xs text-[var(--error-text)] space-y-1 animate-fade-in">
+                                    <p className="font-semibold">{check.errorMessage}</p>
+                                    {check.errorDetails && (
+                                      <p className="font-mono break-all opacity-90">{check.errorDetails}</p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="shrink-0 pl-3 flex items-center h-full">
+                                {check.status === 'pending' ? (
+                                  <span className="text-[10px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 text-[var(--text-muted)] bg-[var(--sidebar-active-bg)]">
+                                    da verificare
+                                  </span>
+                                ) : check.status === 'ok' ? (
+                                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-[var(--success-subtle)] text-[var(--success-text)] animate-fade-in" title="Verificato">
+                                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                  </div>
+                                ) : check.status === 'warning' ? (
+                                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-[var(--warning-subtle)] text-[var(--warning-text)] animate-fade-in" title="Avviso">
+                                    <AlertTriangle className="w-3.5 h-3.5" />
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-[var(--error-subtle)] text-[var(--error-text)] animate-fade-in" title="Errore">
+                                    <X className="w-3.5 h-3.5 stroke-[3]" />
+                                  </div>
+                                )}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     </div>
                   </div>

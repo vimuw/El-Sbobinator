@@ -61,63 +61,6 @@ def validate_environment(
 ) -> ValidationResult:
     checks: list[ValidationCheck] = []
 
-    try:
-        ffmpeg_path = resolve_ffmpeg()
-        checks.append(
-            {
-                "id": "ffmpeg",
-                "label": "FFmpeg",
-                "status": "ok",
-                "message": "FFmpeg disponibile.",
-                "details": ffmpeg_path,
-            }
-        )
-    except Exception as exc:
-        checks.append(
-            {
-                "id": "ffmpeg",
-                "label": "FFmpeg",
-                "status": "error",
-                "message": "FFmpeg non trovato o non utilizzabile.",
-                "details": redact_secrets(exc),
-            }
-        )
-
-    config_dir = os.path.dirname(CONFIG_FILE)
-    ok_config, msg_config = _check_writable_dir(config_dir)
-    checks.append(
-        {
-            "id": "config",
-            "label": "Config locale",
-            "status": "ok" if ok_config else "error",
-            "message": "Cartella config scrivibile."
-            if ok_config
-            else "Impossibile scrivere la config.",
-            "details": config_dir if ok_config else msg_config,
-        }
-    )
-
-    session_output_dir = get_session_root()
-    ok_output, msg_output = _check_writable_dir(session_output_dir)
-    checks.append(
-        {
-            "id": "output",
-            "label": "Cartella sessioni/output",
-            "status": "ok" if ok_output else "error",
-            "message": "Cartella sessioni/output scrivibile."
-            if ok_output
-            else "Cartella sessioni/output non scrivibile.",
-            "details": session_output_dir
-            if ok_output
-            else (
-                f"Percorso: {session_output_dir}\n"
-                f"Errore: {msg_output}\n"
-                "Rimedio: scegli una cartella sessioni scrivibile dalle impostazioni "
-                "o correggi i permessi della cartella."
-            ),
-        }
-    )
-
     if validate_api_key:
         cleaned = str(api_key or "").strip()
         primary_model = sanitize_model_name(preferred_model, DEFAULT_MODEL)
@@ -188,6 +131,63 @@ def validate_environment(
                                 "details": redact_secrets(f"{model_name}: {exc}"),
                             }
                         )
+
+    try:
+        ffmpeg_path = resolve_ffmpeg()
+        checks.append(
+            {
+                "id": "ffmpeg",
+                "label": "FFmpeg",
+                "status": "ok",
+                "message": "FFmpeg disponibile.",
+                "details": ffmpeg_path,
+            }
+        )
+    except Exception as exc:
+        checks.append(
+            {
+                "id": "ffmpeg",
+                "label": "FFmpeg",
+                "status": "error",
+                "message": "FFmpeg non trovato o non utilizzabile.",
+                "details": redact_secrets(exc),
+            }
+        )
+
+    config_dir = os.path.dirname(CONFIG_FILE)
+    ok_config, msg_config = _check_writable_dir(config_dir)
+    checks.append(
+        {
+            "id": "config",
+            "label": "Config locale",
+            "status": "ok" if ok_config else "error",
+            "message": "Cartella config scrivibile."
+            if ok_config
+            else "Impossibile scrivere la config.",
+            "details": config_dir if ok_config else msg_config,
+        }
+    )
+
+    session_output_dir = get_session_root()
+    ok_output, msg_output = _check_writable_dir(session_output_dir)
+    checks.append(
+        {
+            "id": "output",
+            "label": "Cartella sessioni/output",
+            "status": "ok" if ok_output else "error",
+            "message": "Cartella sessioni/output scrivibile."
+            if ok_output
+            else "Cartella sessioni/output non scrivibile.",
+            "details": session_output_dir
+            if ok_output
+            else (
+                f"Percorso: {session_output_dir}\n"
+                f"Errore: {msg_output}\n"
+                "Rimedio: scegli una cartella sessioni scrivibile dalle impostazioni "
+                "o correggi i permessi della cartella."
+            ),
+        }
+    )
 
     if platform.system() != "Windows":
         keyring_ok = False
