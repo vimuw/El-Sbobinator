@@ -36,15 +36,10 @@ Essendo Google Gemini il cervello del programma, ti serve una password unica (AP
 
 ## ▶️ Come Avviare l'App!
 
-È un programma "plug & play", non devi installare Python o altri programmi sul PC.
-
 ### 💻 Se usi Windows:
 Esegui il file `El-Sbobinator-Setup-v*.exe` e segui il wizard di installazione. Al termine trovi l'app nel menu Start (o tramite il collegamento creato sul Desktop).
 
-> ⚠️ **Windows SmartScreen o l'antivirus ti blocca? È normalissimo** — il codice è pubblico e verificabile su GitHub, ma Windows diffida dei programmi senza firma digitale commerciale.
-> - **Schermata blu SmartScreen:** clicca **"Ulteriori informazioni"** → poi **"Esegui comunque"**.
-> - **L'antivirus elimina il file:** apri la *Cronologia protezione* di Windows Defender → clicca sulla minaccia rilevata → **"Consenti nel dispositivo"**.
-> - **Finestra nera / interfaccia non caricata:** installa [Microsoft Edge WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703) e riavvia l'app.
+> ⚠️ **L'antivirus o SmartScreen bloccano l'app, o vedi una finestra nera?** È un comportamento del tutto normale per via della mancanza di una firma digitale commerciale. Trovi le soluzioni rapide passo-passo nella sezione [Risoluzione problemi delle FAQ](#è-sicuro-il-mio-antivirus-lo-segnala-come-minaccia).
 
 ### 🍎 Se usi Mac:
 Apri il file `.dmg`, trascina `El Sbobinator.app` nella cartella **Applicazioni** e avviala da lì.
@@ -66,7 +61,7 @@ Quando esce una nuova versione, l'app mostra direttamente nell'interfaccia un pu
 
 > ⚠️ Il PC deve rimanere **acceso e connesso a internet** per tutta la durata dell'elaborazione. L'AI gira sui server di Google, non sul tuo processore: la potenza del tuo PC non influisce sulla velocità.
 >
-> 💾 Lo spazio occupato cresce nel tempo: ogni elaborazione salva i progressi parziali (testo già trascritto, blocchi revisionati) in modo da poter riprendere in caso di interruzione. Puoi liberare spazio con il tasto **"Pulisci sessioni vecchie"** nelle Impostazioni.
+> 💾 Lo spazio occupato cresce nel tempo (~0.5–2 GB per lezione). I dettagli su dove vengono salvati i file e su come liberare spazio sono spiegati nella sezione [Autosalvataggio e Ripresa nelle FAQ](#autosalvataggio-e-ripresa-niente-panico).
 
 ---
 
@@ -92,15 +87,55 @@ Quando esce una nuova versione, l'app mostra direttamente nell'interfaccia un pu
 6. **Esporta:** Una volta perfetto, usa il tasto **"Copia testo"** per copiare il documento con tutta la formattazione intatta (titoli, grassetti, elenchi) e incollalo direttamente su **Google Docs** o **Word** — il risultato sarà già ben strutturato, senza bisogno di riformattare nulla. Per ottenere un **PDF**, usa la funzione di stampa del browser (`Ctrl+P` → "Salva come PDF") direttamente dall'Editor. Per sicurezza, una copia `.html` viene sempre salvata in automatico sul tuo Desktop.
 
 ---
+
 ## ❓ FAQ - Domande Frequenti
 
-### ⚡ Quanto è veloce?
+### ⚙️ Funzionamento e Modelli
 
+#### ⚡ Quanto è veloce?
 Molto più di quanto immagini. Anche una registrazione di **3 ore di lezione** viene elaborata in circa **10-12 minuti**.
 
 Il tempo dipende principalmente dalla velocità di risposta delle API di Google, non dalla potenza del tuo PC. Durante l'elaborazione l'app mostra lo stato di avanzamento in tempo reale (fase corrente, blocco in elaborazione e tempo trascorso) così sai sempre a che punto è il processo.
 
-### 💾 Autosalvataggio e Ripresa (Niente panico!)
+#### 🧠 Quale modello Gemini conviene scegliere nelle Impostazioni?
+El Sbobinator supporta diversi modelli, selezionabili nelle Impostazioni dell'app:
+* **Gemini 2.5 Flash** (Consigliato / Default): È il modello più ampiamente testato, stabile e affidabile con l'applicazione. Offre il miglior bilanciamento tra velocità, qualità della sbobina e limiti di utilizzo della quota gratuita. È perfetto per l'uso quotidiano.
+* **Gemini 3.5 Flash**: È il modello di ultima generazione più recente. **Nota bene:** questo modello non è ancora stato testato approfonditamente con la nostra applicazione come la versione 2.5 Flash, di conseguenza la stabilità e la resa della pipeline di sbobinatura non sono pienamente verificate.
+* **Gemini 3.1 Flash Lite**: Un modello più leggero. Ha limiti di quota gratuiti molto più generosi ed è estremamente veloce, ma le sbobine prodotte potrebbero essere leggermente meno dettagliate rispetto ai modelli Flash principali.
+
+#### 🎯 Cosa aspettarsi dai risultati (Disclaimer sull'AI)
+È importante ricordare che l'intelligenza artificiale **non è perfetta**. La sbobina finale potrebbe contenere qualche parola tecnica interpretata male o qualche piccola ripetizione residua.
+
+Il vero vantaggio è che l'app **farà il 90% del lavoro sporco e pesante al posto tuo**. A te basterà dare una rapida rilettura per sistemare quelle due o tre imperfezioni, risparmiando comunque ore e ore di digitazione manuale!
+
+Ricorda la regola d'oro dell'AI: **la qualità del risultato dipende dalla qualità dell'audio di partenza**. Se l'audio è incomprensibile per un umano, lo sarà anche per Gemini.
+
+---
+
+### 🔑 Chiave API e Costi
+
+#### 💰 La chiave API di Gemini è davvero gratuita? Rischio addebiti improvvisi?
+Sì, è al 100% gratuita. Google AI Studio ti consente di creare chiavi API sul piano gratuito ("Free Tier"). Durante la creazione **non viene richiesta alcuna carta di credito o metodo di pagamento**, pertanto è fisicamente impossibile che ti vengano addebitati dei costi. Se superi la quota massima di utilizzo giornaliero, l'app si metterà semplicemente in pausa in attesa del reset o di una nuova chiave, senza farti spendere un centesimo.
+
+#### ⏳ Quali sono i limiti giornalieri dell'API?
+L'intelligenza artificiale di Google non è illimitata: le quote gratuite dipendono dal tuo account e possono cambiare. In generale, più l'audio è lungo, più richieste servono.
+
+**Se finisci i token (Errore: LIMITE GIORNALIERO RAGGIUNTO):**
+- **Se hai configurato delle chiavi di riserva (fallback keys):** l'app le utilizzerà e le ruoterà in modo del tutto trasparente e automatico, continuando il lavoro.
+- **Se non ci sono chiavi di riserva attive o sono tutte esaurite:** l'app si metterà in pausa e mostrerà un popup. Potrai incollare una nuova chiave API per riprendere subito, oppure premere "Annulla" per chiudere salvando i progressi e riprendere in seguito (ad esempio dopo il reset giornaliero di Google, che di solito avviene intorno alle 9:00 di mattina in Italia).
+
+---
+
+### 🛡️ Privacy e Autosalvataggio
+
+#### 🔒 Google utilizza le mie lezioni registrate per addestrare l'AI?
+Dipende dal tipo di piano associato alla tua chiave API su Google AI Studio:
+* **Se usi il piano gratuito (Free Tier - default):** I termini di servizio di Google indicano che i dati (audio inviati e testi generati) potrebbero essere conservati e analizzati da revisori umani per migliorare e addestrare i modelli di Google. Non inviare mai registrazioni che contengono dati personali sensibili o informazioni strettamente private.
+* **Se usi il piano a consumo (Paid Tier):** Se decidi di collegare una carta di credito al tuo account Google Cloud/AI Studio per passare al piano a consumo (i cui costi reali per lezione rimangono comunque di pochi centesimi), le condizioni cambiano: i tuoi dati rimangono completamente privati e Google **non li utilizzerà in alcun modo** per l'addestramento dei suoi modelli.
+
+> 🔒 **Nota sulla privacy locale:** A prescindere da Google, El Sbobinator non ha server propri: l'applicazione gestisce tutto in locale sul tuo PC e non salva, traccia o condivide in alcun modo le tue registrazioni con terze parti.
+
+#### 💾 Autosalvataggio e Ripresa (Niente panico!)
 El Sbobinator 🤠 salva automaticamente i progressi mentre lavora e le modifiche che fai nell'editor di anteprima.
 
 Se chiudi l'app per sbaglio, se il PC si spegne, o se finisci la quota giornaliera dell'API, **non perdi quasi nulla**.
@@ -108,33 +143,32 @@ Quando riaprirai l'app e ricaricherai lo stesso file audio, El Sbobinator 🤠 t
 
 I dati di sessione (blocchi di testo già elaborati, progressi parziali, audio pre-convertito) vengono salvati in una cartella locale sul tuo computer, **fuori dalle cartelle sincronizzate** dal cloud (OneDrive o iCloud): su Windows in `%LOCALAPPDATA%\El Sbobinator\sessions`, su macOS in `~/Library/Caches/El Sbobinator/sessions`. Le sessioni usano **~0.5–2 GB per lezione** durante l'elaborazione. La cartella può crescere nel tempo: nelle **Impostazioni** trovi il tasto **"Pulisci sessioni vecchie"** per eliminare automaticamente i dati più vecchi di 14 giorni, e il tasto **"Sposta…"** per spostare la cartella in un'altra posizione.
 
-### 🎯 Cosa aspettarsi dai risultati (Disclaimer sull'AI)
-È importante ricordare che l'intelligenza artificiale **non è perfetta**. La sbobina finale potrebbe contenere qualche parola tecnica interpretata male o qualche piccola ripetizione residua.
+---
 
-Il vero vantaggio è che l'app **farà il 90% del lavoro sporco e pesante al posto tuo**. A te basterà dare una rapida rilettura per sistemare quelle due o tre imperfezioni, risparmiando comunque ore e ore di digitazione manuale!
+### 💻 Risoluzione problemi (Windows)
 
-Ricorda la regola d'oro dell'AI: **la qualità del risultato dipende dalla qualità dell'audio di partenza**. Se l'audio è incomprensibile per un umano, lo sarà anche per Gemini.
-
-
-### È sicuro? Il mio antivirus lo segnala come minaccia!
+#### ⚠️ È sicuro? Il mio antivirus lo segnala come minaccia!
 Assolutamente sì, è sicuro al 100%. Il codice sorgente dell'applicazione è completamente pubblico e verificabile da chiunque su GitHub. Se il tuo antivirus o Windows Defender blocca l'app, si tratta di un **falso positivo**.
-Questo succede quasi sempre con i programmi scritti in Python e trasformati in eseguibili `.exe`. Gli antivirus diffidano "di default" dei programmi creati da sviluppatori indipendenti senza una firma digitale commerciale. Per scrupolo, puoi analizzare il file su VirusTotal.
+Questo succede quasi sempre con i programmi scritti in Python e trasformati in eseguibili `.exe`. Gli antivirus diffidano "di default" dei programmi creati da sviluppatori indipendenti senza una firma digitale commerciale. Per scrupolo, puoi analizzare il file su [VirusTotal](https://www.virustotal.com/).
 
 **Come risolvere su Windows:**
 - **Schermata blu SmartScreen:** Clicca su `"Ulteriori Informazioni"` e poi `"Esegui Comunque"`.
 - **Se l'antivirus lo elimina:** Vai nella Cronologia Protezione di Windows, clicca sulla minaccia rilevata e seleziona `"Consenti nel dispositivo"`.
 
-### Su Windows vedo una finestra nera o l'app non carica l'interfaccia!
+#### 📺 Su Windows vedo una finestra nera o l'app non carica l'interfaccia!
 Molto probabilmente sul tuo computer manca **Microsoft Edge WebView2 Runtime**, un componente standard di Windows necessario per far funzionare la bellissima interfaccia grafica.
 Puoi installarlo ufficialmente e gratuitamente da qui: 👉 [Scarica WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703). Dopo l'installazione, chiudi e riapri l'app.
 
-### Quali sono i limiti giornalieri dell'API?
+---
 
-L'intelligenza artificiale di Google non è illimitata: le quote gratuite dipendono dal tuo account e possono cambiare. In generale, più l'audio è lungo, più richieste servono.
+## ⚖️ Disclaimer Etico e Legale (Importante)
+El Sbobinator 🤠 è esclusivamente uno **strumento software locale** che facilita l'interazione tra l'utente e le API pubbliche di Google Gemini.
 
-**Se finisci i token (Errore: LIMITE GIORNALIERO RAGGIUNTO):**
-- **Se hai configurato delle chiavi di riserva (fallback keys):** l'app le utilizzerà e le ruoterà in modo del tutto trasparente e automatico, continuando il lavoro.
-- **Se non ci sono chiavi di riserva attive o sono tutte esaurite:** l'app si metterà in pausa e mostrerà un popup. Potrai incollare una nuova chiave API per riprendere subito, oppure premere "Annulla" per chiudere salvando i progressi e riprendere in seguito (ad esempio dopo il reset giornaliero di Google, che di solito avviene intorno alle 9:00 di mattina in Italia).
+Scaricando e utilizzando questa applicazione, accetti e comprendi che:
+* **Diritto d'autore e Uso Personale:** Le lezioni universitarie sono proprietà intellettuale dei rispettivi docenti. L'uso di questo strumento è inteso **esclusivamente per scopi di studio personale**. La diffusione pubblica, la pubblicazione online o la vendita a terzi delle sbobine generate senza il consenso esplicito del docente è una violazione del diritto d'autore.
+* **Privacy e Gestione dei Dati:** Inserendo la tua chiave API personale (BYOK), stabilisci una connessione diretta tra il tuo computer e i server di Google. El Sbobinator 🤠 non ha server propri: non intercetta né salva in cloud i tuoi file audio. Tutto avviene e rimane sul tuo dispositivo.
+* **Tassativo Divieto per Dati Clinici Sensibili (Privacy e GDPR):** È assolutamente vietato dare in pasto all'app registrazioni effettuate in ambiente clinico, durante i tirocini in reparto o che contengono conversazioni con pazienti reali. L'elaborazione di dati sanitari sensibili tramite API esterne è una grave violazione della privacy. Usa l'app **solo per trascrivere le lezioni frontali in aula**.
+* **Nessuna Garanzia:** Come specificato dalla Licenza MIT allegata al progetto, il software è fornito "così com'è", senza alcuna garanzia.
 
 ---
 
@@ -154,17 +188,6 @@ Grazie e in bocca al lupo per gli esami! 🎉
 Hai trovato un bug o vuoi suggerire una nuova funzione? Apri una **[Issue](https://github.com/vimuw/El-Sbobinator/issues)** su GitHub — ogni segnalazione è benvenuta!
 
 For development/contributing, see [CONTRIBUTING.md](CONTRIBUTING.md).
-
----
-
-## ⚖️ Disclaimer Etico e Legale (Importante)
-El Sbobinator 🤠 è esclusivamente uno **strumento software locale** che facilita l'interazione tra l'utente e le API pubbliche di Google Gemini.
-
-Scaricando e utilizzando questa applicazione, accetti e comprendi che:
-* **Diritto d'autore e Uso Personale:** Le lezioni universitarie sono proprietà intellettuale dei rispettivi docenti. L'uso di questo strumento è inteso **esclusivamente per scopi di studio personale**. La diffusione pubblica, la pubblicazione online o la vendita a terzi delle sbobine generate senza il consenso esplicito del docente è una violazione del diritto d'autore.
-* **Privacy e Gestione dei Dati:** Inserendo la tua chiave API personale (BYOK), stabilisci una connessione diretta tra il tuo computer e i server di Google. El Sbobinator 🤠 non ha server propri: non intercetta né salva in cloud i tuoi file audio. Tutto avviene e rimane sul tuo dispositivo.
-* **Tassativo Divieto per Dati Clinici Sensibili (Privacy e GDPR):** È assolutamente vietato dare in pasto all'app registrazioni effettuate in ambiente clinico, durante i tirocini in reparto o che contengono conversazioni con pazienti reali. L'elaborazione di dati sanitari sensibili tramite API esterne è una grave violazione della privacy. Usa l'app **solo per trascrivere le lezioni frontali in aula**.
-* **Nessuna Garanzia:** Come specificato dalla Licenza MIT allegata al progetto, il software è fornito "così com'è", senza alcuna garanzia.
 
 ---
 

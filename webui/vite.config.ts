@@ -19,7 +19,7 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
-    rollupOptions: {
+    rolldownOptions: {
       output: {
         minify: {
           compress: {

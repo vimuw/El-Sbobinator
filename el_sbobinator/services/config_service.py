@@ -38,16 +38,32 @@ _CONFIG_CACHE_TTL = 30.0
 
 
 def debug_log(msg: str) -> None:
-    # Always print to stdout if debug is enabled
+    # Check if debug mode is active
     try:
-        if str(os.environ.get("EL_SBOBINATOR_DEBUG", "")).strip() in (
+        is_debug = str(os.environ.get("EL_SBOBINATOR_DEBUG", "")).strip() in (
             "1",
             "true",
             "TRUE",
             "yes",
             "YES",
-        ):
-            print(f"[debug] {msg}", flush=True)
+        )
+    except Exception:
+        is_debug = False
+
+    if not is_debug:
+        return
+
+    # Redact secrets to prevent leaking credentials in stdout or app.log
+    try:
+        from el_sbobinator.utils.logging_utils import redact_secrets
+
+        msg = redact_secrets(msg)
+    except Exception:
+        pass
+
+    # Always print to stdout if debug is enabled
+    try:
+        print(f"[debug] {msg}", flush=True)
     except Exception:
         pass
     # Log to a persistent file in user config directory
@@ -176,9 +192,23 @@ LEGACY_CONFIG_FILE = os.path.join(USER_HOME, ".el_sbobinator_config.json")
 import sys
 
 if "pytest" in sys.modules or os.environ.get("EL_SBOBINATOR_TESTING") == "1":
+    import getpass
     import tempfile
 
-    _test_temp_dir = tempfile.gettempdir()
+    # Incorporate username to prevent PermissionError on multi-user systems
+    try:
+        _username = getpass.getuser()
+    except Exception:
+        _username = "unknown"
+    _test_temp_dir = os.path.join(
+        tempfile.gettempdir(), f"el_sbobinator_test_{_username}"
+    )
+
+    try:
+        os.makedirs(_test_temp_dir, exist_ok=True)
+    except Exception:
+        pass
+
     CONFIG_FILE = os.path.join(_test_temp_dir, "el_sbobinator_test_config.json")
     THEME_PREF_FILE = os.path.join(_test_temp_dir, "el_sbobinator_test_theme_pref.txt")
     LEGACY_CONFIG_FILE = os.path.join(
