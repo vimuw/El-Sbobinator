@@ -694,6 +694,7 @@ export default function App() {
       if (deletedSessionDirs.length > 0) {
         const deletedSet = new Set(deletedSessionDirs);
         setArchiveSessions(prev => prev.filter(s => !deletedSet.has(s.session_dir)));
+        setArchiveTotal(prev => Math.max(0, prev - deletedSessionDirs.length));
         // Also strip deleted session dirs from folder associations so the
         // re-elaborated file does not inherit the old folder tag.
         const updated = foldersRef.current.map(folder => ({
@@ -839,6 +840,7 @@ export default function App() {
     }
     if (sessionDirsToHide.size > 0) {
       setArchiveSessions(prev => prev.filter(s => !sessionDirsToHide.has(s.session_dir)));
+      setArchiveTotal(prev => Math.max(0, prev - sessionDirsToHide.size));
     }
   }, [dispatch]);
 
@@ -1017,6 +1019,7 @@ export default function App() {
       window.pywebview?.api?.delete_session?.(sessionDir).then(res => {
         if (res?.ok) {
           setArchiveSessions(prev => prev.filter(s => s.session_dir !== sessionDir));
+          setArchiveTotal(prev => Math.max(0, prev - 1));
           // Strip deleted session from folders and persist
           const updated = foldersRef.current.map(folder => ({
             ...folder,
