@@ -13,6 +13,11 @@ on:
         description: 'Optional: tag to publish a Release (e.g. v1.2.3). Leave empty for build-only.'
         required: false
         default: ''
+      release_body:
+        description: 'Optional: custom description for the release (changelog commits will still be appended).'
+        required: false
+        default: ''
+
 
 permissions:
   contents: write
@@ -156,21 +161,23 @@ jobs:
         shell: bash
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            APP_VERSION="${GITHUB_REF_NAME#v}"
-          elif [[ -n "${{ inputs.release_tag }}" ]]; then
-            APP_VERSION="${{ inputs.release_tag }}"
-            APP_VERSION="${APP_VERSION#v}"
+            export APP_VERSION="${GITHUB_REF_NAME#v}"
+          elif [[ -n "$RELEASE_TAG" ]]; then
+            export APP_VERSION="$RELEASE_TAG"
+            export APP_VERSION="${APP_VERSION#v}"
           else
-            APP_VERSION="0.0.0"
+            export APP_VERSION="0.0.0"
           fi
           echo "APP_VERSION=${APP_VERSION}" >> $GITHUB_ENV
           node -e "
             const fs = require('fs');
             const pkg = JSON.parse(fs.readFileSync('./webui/package.json','utf8'));
-            pkg.version = '${APP_VERSION}';
+            pkg.version = process.env.APP_VERSION;
             fs.writeFileSync('./webui/package.json', JSON.stringify(pkg, null, 2) + '\n');
           "
           echo "Version set to ${APP_VERSION}"
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
 
       - name: Install Inno Setup (Windows)
         if: runner.os == 'Windows'
@@ -214,6 +221,11 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Download all workflow run artifacts
         uses: actions/download-artifact@v4
         with:
@@ -227,11 +239,20 @@ jobs:
           find output_files -name "El-Sbobinator-v*.dmg" -exec mv {} release_assets/ \; || echo "Mac build not found"
           find output_files -name "El-Sbobinator-v*.dmg.sha256" -exec mv {} release_assets/ \; || echo "Mac checksum not found"
 
+      - name: Generate Changelog
+        run: |
+          python scripts/generate_changelog.py \
+            --tag "$RELEASE_TAG" \
+            --output changelog.md
+        env:
+          CUSTOM_RELEASE_BODY: ${{ inputs.release_body }}
+          RELEASE_TAG: ${{ (startsWith(github.ref, 'refs/tags/') && github.ref_name) || inputs.release_tag }}
+
       - name: Publish Release to GitHub
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ (startsWith(github.ref, 'refs/tags/') && github.ref_name) || inputs.release_tag }}
           files: release_assets/*
-          generate_release_notes: true
+          body_path: changelog.md
         env:
           GITHUB_TOKEN: ${{ github.token }}

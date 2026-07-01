@@ -191,7 +191,11 @@ LEGACY_CONFIG_FILE = os.path.join(USER_HOME, ".el_sbobinator_config.json")
 # In testing environment, isolate from actual user configuration to prevent data loss or key overwrites.
 import sys
 
-if "pytest" in sys.modules or os.environ.get("EL_SBOBINATOR_TESTING") == "1":
+if (
+    "pytest" in sys.modules
+    or "unittest" in sys.modules
+    or os.environ.get("EL_SBOBINATOR_TESTING") == "1"
+):
     import getpass
     import tempfile
 

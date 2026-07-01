@@ -8,6 +8,7 @@
 [Setup]
 AppId={{B348000F-C12F-4F17-9130-FF166C04EADF}
 AppName=El Sbobinator
+AppVerName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher=vimuw
 AppPublisherURL=https://github.com/vimuw/El-Sbobinator

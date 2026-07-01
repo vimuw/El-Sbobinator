@@ -93,3 +93,6 @@ ORIGINAL_REQUEST.md
 
 # Developer local scratch tools
 tools/resize_icon.py
+
+# Temporary changelog generated during build/release
+/changelog.md
