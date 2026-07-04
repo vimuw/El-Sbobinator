@@ -25,21 +25,22 @@ def run_git(args: list[str]) -> str:
     return result.stdout.strip()
 
 
+def get_previous_tag(resolved_tag: str) -> str:
+    try:
+        return run_git(["describe", "--tags", "--abbrev=0", f"{resolved_tag}^"])
+    except Exception:
+        return ""
+
+
 def get_commits(tag: str, max_commits: int = 0) -> list[tuple[str, str]]:
     clean_tag = tag[len("refs/tags/") :] if tag.startswith("refs/tags/") else tag
-    # Resolve tag to a valid commit or ref. If it doesn't exist (e.g. manual dispatch run before tagging), fall back to "HEAD"
     resolved_tag = clean_tag
     try:
         run_git(["rev-parse", "--verify", clean_tag])
     except Exception:
         resolved_tag = "HEAD"
 
-    # Get previous tag
-    prev_ref = ""
-    try:
-        prev_ref = run_git(["describe", "--tags", "--abbrev=0", f"{resolved_tag}^"])
-    except Exception:
-        pass
+    prev_ref = get_previous_tag(resolved_tag)
 
     effective_max = max_commits
     if not prev_ref:
@@ -109,6 +110,11 @@ def categorize_commits(
             scope_lower = scope.lower() if scope else ""
             desc = capitalize_first(desc)
 
+            if repo:
+                desc = re.sub(
+                    r"#(\d+)", rf"[#\1](https://github.com/{repo}/pull/\1)", desc
+                )
+
             if (
                 ctype_lower in ["deps", "dependencies"]
                 or "deps" in scope_lower
@@ -129,6 +135,10 @@ def categorize_commits(
             categories[category].append(item)
         else:
             s_cap = capitalize_first(s)
+            if repo:
+                s_cap = re.sub(
+                    r"#(\d+)", rf"[#\1](https://github.com/{repo}/pull/\1)", s_cap
+                )
             link = (
                 f"([`{h}`](https://github.com/{repo}/commit/{h}))" if repo else f"({h})"
             )
@@ -173,7 +183,6 @@ def main() -> None:
     try:
         tag_type = run_git(["cat-file", "-t", tag])
         if tag_type == "tag":
-            # Strip refs/tags/ prefix if present so git tag -l matches correctly
             clean_tag = (
                 tag[len("refs/tags/") :] if tag.startswith("refs/tags/") else tag
             )
@@ -184,6 +193,14 @@ def main() -> None:
     commits = get_commits(tag, max_commits=args.max_commits)
     repo = os.environ.get("GITHUB_REPOSITORY")
     categories = categorize_commits(commits, repo)
+
+    clean_tag = tag[len("refs/tags/") :] if tag.startswith("refs/tags/") else tag
+    try:
+        run_git(["rev-parse", "--verify", clean_tag])
+        resolved_tag = clean_tag
+    except Exception:
+        resolved_tag = "HEAD"
+    prev_ref = get_previous_tag(resolved_tag)
 
     # Write markdown file
     with open(args.output, "w", encoding="utf-8") as f:
@@ -209,7 +226,12 @@ def main() -> None:
                 has_content = True
 
         if not has_content:
-            f.write("* No changes\n")
+            f.write("* No changes\n\n")
+
+        if repo and prev_ref:
+            f.write(
+                f"**Full Changelog**: https://github.com/{repo}/compare/{prev_ref}...{clean_tag}\n"
+            )
 
     print(f"Changelog written to {args.output}")
 
