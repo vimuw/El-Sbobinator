@@ -39,6 +39,7 @@ indent-style = "space"
 
 [tool.pyright]
 pythonVersion = "3.11"
+pythonPlatform = "All"
 typeCheckingMode = "basic"
 include = ["el_sbobinator", "scripts", "tests"]
 exclude = [".venv", "build", "dist", "test_dist", "webui/dist", "webui/node_modules"]
