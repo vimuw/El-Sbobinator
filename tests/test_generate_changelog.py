@@ -9,25 +9,26 @@ import unittest
 from unittest.mock import patch
 
 from scripts.generate_changelog import (
-    capitalize_first,
     categorize_commits,
     get_commits,
     get_previous_tag,
     main,
     run_git,
+    uncapitalize_first,
 )
 
 
 class TestGenerateChangelog(unittest.TestCase):
-    def test_capitalize_first(self) -> None:
-        self.assertEqual(capitalize_first(""), "")
-        self.assertEqual(capitalize_first("foo"), "Foo")
-        self.assertEqual(capitalize_first("Bar"), "Bar")
+    def test_uncapitalize_first(self) -> None:
+        self.assertEqual(uncapitalize_first(""), "")
+        self.assertEqual(uncapitalize_first("Foo"), "foo")
+        self.assertEqual(uncapitalize_first("bar"), "bar")
+        self.assertEqual(uncapitalize_first("DPAPI test"), "DPAPI test")
 
     def test_categorize_commits(self) -> None:
         commits = [
-            ("abc1234", "feat(ui): add new dialog (#42)"),
-            ("def5678", "fix: fix bug in player"),
+            ("abc1234", "feat(UI): Add new dialog (#42)"),
+            ("def5678", "fix: Fix bug in player"),
             ("ghi9012", "docs: update readme"),
             ("jkl3456", "deps: bump react"),
             ("mno7890", "chore: clean up code"),
@@ -36,7 +37,7 @@ class TestGenerateChangelog(unittest.TestCase):
         categories = categorize_commits(commits, repo="owner/repo")
         self.assertEqual(len(categories["Features"]), 1)
         self.assertIn(
-            "Add new dialog ([#42](https://github.com/owner/repo/pull/42))",
+            "add new dialog ([#42](https://github.com/owner/repo/pull/42))",
             categories["Features"][0],
         )
         self.assertIn("owner/repo/commit/abc1234", categories["Features"][0])
@@ -63,8 +64,11 @@ class TestGenerateChangelog(unittest.TestCase):
     @patch("scripts.generate_changelog.run_git")
     def test_get_previous_tag(self, mock_run_git) -> None:
         mock_run_git.return_value = "v0.9.0"
-        prev = get_previous_tag("v1.0.0")
+        prev = get_previous_tag("v1.0.0", current_tag="v1.0.0")
         self.assertEqual(prev, "v0.9.0")
+        mock_run_git.assert_called_once_with(
+            ["describe", "--tags", "--abbrev=0", "--exclude", "v1.0.0", "v1.0.0^"]
+        )
 
     def test_main_custom_release_body_empty_env_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

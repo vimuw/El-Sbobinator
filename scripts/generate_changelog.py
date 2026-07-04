@@ -25,9 +25,21 @@ def run_git(args: list[str]) -> str:
     return result.stdout.strip()
 
 
-def get_previous_tag(resolved_tag: str) -> str:
+def get_previous_tag(resolved_tag: str, current_tag: str = "") -> str:
+    clean_tag = (
+        current_tag[len("refs/tags/") :]
+        if current_tag.startswith("refs/tags/")
+        else current_tag
+    )
+    cmd = ["describe", "--tags", "--abbrev=0"]
+    if clean_tag:
+        cmd.extend(["--exclude", clean_tag])
+    cmd.append(f"{resolved_tag}^")
     try:
-        return run_git(["describe", "--tags", "--abbrev=0", f"{resolved_tag}^"])
+        tag_out = run_git(cmd)
+        if tag_out == clean_tag or tag_out == resolved_tag:
+            return ""
+        return tag_out
     except Exception:
         return ""
 
@@ -40,10 +52,10 @@ def get_commits(tag: str, max_commits: int = 0) -> list[tuple[str, str]]:
     except Exception:
         resolved_tag = "HEAD"
 
-    prev_ref = get_previous_tag(resolved_tag)
+    prev_ref = get_previous_tag(resolved_tag, current_tag=clean_tag)
 
     effective_max = max_commits
-    if not prev_ref:
+    if not prev_ref or prev_ref == clean_tag:
         commit_range = resolved_tag
         if max_commits == 0:
             effective_max = 50
@@ -67,10 +79,13 @@ def get_commits(tag: str, max_commits: int = 0) -> list[tuple[str, str]]:
     return commits
 
 
-def capitalize_first(text: str) -> str:
+def uncapitalize_first(text: str) -> str:
     if not text:
         return text
-    return text[0].upper() + text[1:]
+    words = text.split(maxsplit=1)
+    if words and len(words[0]) > 1 and words[0].isupper():
+        return text
+    return text[0].lower() + text[1:]
 
 
 def categorize_commits(
@@ -108,7 +123,7 @@ def categorize_commits(
             ctype, scope, desc = match.groups()
             ctype_lower = ctype.lower()
             scope_lower = scope.lower() if scope else ""
-            desc = capitalize_first(desc)
+            desc = uncapitalize_first(desc)
 
             if repo:
                 desc = re.sub(
@@ -128,21 +143,21 @@ def categorize_commits(
                 f"([`{h}`](https://github.com/{repo}/commit/{h}))" if repo else f"({h})"
             )
             if scope:
-                item = f"- **{scope}**: {desc} {link}"
+                item = f"- **{scope_lower}**: {desc} {link}"
             else:
                 item = f"- {desc} {link}"
 
             categories[category].append(item)
         else:
-            s_cap = capitalize_first(s)
+            s_uncap = uncapitalize_first(s)
             if repo:
-                s_cap = re.sub(
-                    r"#(\d+)", rf"[#\1](https://github.com/{repo}/pull/\1)", s_cap
+                s_uncap = re.sub(
+                    r"#(\d+)", rf"[#\1](https://github.com/{repo}/pull/\1)", s_uncap
                 )
             link = (
                 f"([`{h}`](https://github.com/{repo}/commit/{h}))" if repo else f"({h})"
             )
-            item = f"- {s_cap} {link}"
+            item = f"- {s_uncap} {link}"
             categories["Other Changes"].append(item)
     return categories
 
@@ -200,7 +215,7 @@ def main() -> None:
         resolved_tag = clean_tag
     except Exception:
         resolved_tag = "HEAD"
-    prev_ref = get_previous_tag(resolved_tag)
+    prev_ref = get_previous_tag(resolved_tag, current_tag=clean_tag)
 
     # Write markdown file
     with open(args.output, "w", encoding="utf-8") as f:
