@@ -260,9 +260,9 @@ def _process_phase1_transcription_impl(  # noqa: C901
         chunk_idx += 1
         chunk_end_sec = min(chunk_start_sec + chunk_seconds, total_duration_sec)
 
-        print(f"\n======================================")
+        print(f"\n--------------------------------------")
         print(
-            f"-> LAVORAZIONE BLOCCO AUDIO {chunk_idx} DI {total_chunks} (Da {chunk_start_sec}s a {int(chunk_end_sec)}s)"
+            f"-> Blocco Audio {chunk_idx}/{total_chunks} ({chunk_start_sec}s -> {int(chunk_end_sec)}s)"
         )
         runtime.phase(f"Fase 1/3: trascrizione (chunk {chunk_idx}/{total_chunks})")
 
@@ -340,7 +340,6 @@ def _process_phase1_transcription_impl(  # noqa: C901
                     print("   -> (2/3) Preparazione audio (inline)...")
 
                 # 3. Generazione testuale
-                print("   -> (3/3) Generazione sbobina in corso...")
                 chunk_prompt = generation_service.build_chunk_prompt(prev_memory)
 
                 def _ensure_uploaded_audio_input(current_client):
@@ -426,6 +425,7 @@ def _process_phase1_transcription_impl(  # noqa: C901
                                 )
                                 if audio_input is None:
                                     return None  # cancelled during upload wait
+                            print("   -> (3/3) Generazione sbobina in corso...")
                             _active_model = current_model_name(model_state, model_name)
                             response = current_client.models.generate_content(
                                 model=_active_model,
@@ -522,7 +522,7 @@ def _process_phase1_transcription_impl(  # noqa: C901
 
                         if chunk_file_saved:
                             full_transcript += f"\n\n{generated_text}\n\n"
-                            prev_memory = generated_text[-1000:]
+                            prev_memory = generated_text[-2000:]
                             _update_session(
                                 session,
                                 {

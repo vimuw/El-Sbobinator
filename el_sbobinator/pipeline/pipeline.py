@@ -15,7 +15,10 @@ import time
 
 from google import genai
 
-from el_sbobinator.core.model_registry import build_model_state
+from el_sbobinator.core.model_registry import (
+    build_model_state,
+    default_macro_char_limit_for_model,
+)
 from el_sbobinator.core.prompts import PROMPT_REVISIONE, PROMPT_SISTEMA
 from el_sbobinator.core.session_store import _update_session, mark_html_exported
 from el_sbobinator.core.shared import (
@@ -403,12 +406,6 @@ def _esegui_sbobinatura_impl(  # noqa: C901
             print(
                 f"[*] INIZIO FASE 1: Trascrizione a blocchi (circa {settings.chunk_minutes} min per blocco)"
             )
-            print(
-                "    - Cosa fa: taglia l'audio in blocchi e genera una sbobina dettagliata per ogni blocco."
-            )
-            print(
-                "    - Perche': blocchi piu' piccoli aiutano a mantenere alto il dettaglio e ridurre errori."
-            )
             runtime.phase("Fase 1/3: trascrizione (chunk)")
         else:
             print(f"[*] Ripresa sessione: stage='{stage}'. Salto Fase 1.")
@@ -466,17 +463,13 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         # ==========================================
         # FASE 2: REVISIONE LOGICA E CUCITURA DOPPIONI
         # ==========================================
-        print("\n======================================")
+        print("\n--------------------------------------")
         runtime.phase("Fase 2/3: revisione")
-        print("[*] INIZIO FASE 2: Revisione e pulizia (macro-blocchi)")
-        print(
-            "    - Cosa fa: divide il testo in macro-sezioni e le rivede per togliere doppioni e migliorare la leggibilita'."
-        )
-        print(
-            "    - Nota: questa fase usa l'AI su ogni macro-blocco per mantenere coerenza e dettaglio."
-        )
 
-        char_limit = int(settings.macro_char_limit or 22000)
+        char_limit = int(
+            settings.macro_char_limit
+            or default_macro_char_limit_for_model(settings.model)
+        )
 
         macro_blocks = None
         if os.path.exists(macro_path):
@@ -497,7 +490,7 @@ def _esegui_sbobinatura_impl(  # noqa: C901
                 pass
 
         print(
-            f"Il documento è stato diviso in {len(macro_blocks)} macro-sezioni per mantenere il livello di dettaglio. Revisione in corso..."
+            f"[*] INIZIO FASE 2: Revisione e pulizia ({len(macro_blocks)} macro-sezioni)"
         )
         _update_session(
             session,

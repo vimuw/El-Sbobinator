@@ -351,12 +351,12 @@ def restore_phase1_progress(
         full_transcript = load_phase1_text(context.phase1_chunks_dir)
         try:
             _, _, _, last_path = existing_chunks[-1]
-            prev_memory = read_text_file(last_path).strip()[-1000:]
+            prev_memory = read_text_file(last_path).strip()[-2000:]
         except Exception:
-            prev_memory = full_transcript[-1000:]
+            prev_memory = full_transcript[-2000:]
     elif stage != "phase1":
         full_transcript = load_phase1_text(context.phase1_chunks_dir)
-        prev_memory = full_transcript[-1000:]
+        prev_memory = full_transcript[-2000:]
     else:
         full_transcript = ""
         prev_memory = str(session.get("phase1", {}).get("memoria_precedente", "") or "")

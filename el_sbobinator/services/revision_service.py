@@ -152,11 +152,11 @@ def process_macro_revision_phase(  # noqa: C901
         block_for_ai = (block_local or block_src).strip()
         if removed_exact or removed_adj:
             print(
-                f"   -> Pre-clean locale Macro-blocco {index}/{macro_total}: duplicati rimossi={removed_exact + removed_adj} (sospetti={near_adj})."
+                f"   -> Pre-clean locale ({index}/{macro_total}): {removed_exact + removed_adj} duplicati rimossi."
             )
 
         step_t0 = time.monotonic()
-        print(f"   -> Revisione Macro-blocco {index} di {macro_total}...")
+        print(f"   -> Revisione Macro-blocco {index}/{macro_total}...")
         success = False
 
         def _call(current_client):
