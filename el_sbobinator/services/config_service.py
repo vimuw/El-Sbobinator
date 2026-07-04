@@ -241,8 +241,8 @@ def _dpapi_protect_text_windows(text: str) -> str:
 
         DATA_BLOB = _dpapi_make_blob_class(ctypes, wintypes)  # type: ignore[arg-type]
 
-        crypt32 = ctypes.WinDLL("crypt32", use_last_error=True)
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        crypt32 = ctypes.WinDLL("crypt32", use_last_error=True)  # pyright: ignore[reportAttributeAccessIssue]
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # pyright: ignore[reportAttributeAccessIssue]
 
         crypt32.CryptProtectData.argtypes = [
             ctypes.POINTER(DATA_BLOB),
@@ -277,8 +277,8 @@ def _dpapi_protect_text_windows(text: str) -> str:
         # Reference buf to keep it alive
         _ = buf
         if not ok:
-            err_code = ctypes.get_last_error()
-            err_msg = str(ctypes.WinError(err_code))
+            err_code = ctypes.get_last_error()  # pyright: ignore[reportAttributeAccessIssue]
+            err_msg = str(ctypes.WinError(err_code))  # pyright: ignore[reportAttributeAccessIssue]
             debug_log(f"dpapi: CryptProtectData failed: {err_msg} (code {err_code})")
             return ""
         try:
@@ -321,8 +321,8 @@ def _dpapi_unprotect_text_windows_once(b64: str) -> str:
 
         DATA_BLOB = _dpapi_make_blob_class(ctypes, wintypes)  # type: ignore[arg-type]
 
-        crypt32 = ctypes.WinDLL("crypt32", use_last_error=True)
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        crypt32 = ctypes.WinDLL("crypt32", use_last_error=True)  # pyright: ignore[reportAttributeAccessIssue]
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # pyright: ignore[reportAttributeAccessIssue]
 
         crypt32.CryptUnprotectData.argtypes = [
             ctypes.POINTER(DATA_BLOB),
@@ -360,8 +360,8 @@ def _dpapi_unprotect_text_windows_once(b64: str) -> str:
         # Reference buf to keep it alive
         _ = buf
         if not ok:
-            err_code = ctypes.get_last_error()
-            err_msg = str(ctypes.WinError(err_code))
+            err_code = ctypes.get_last_error()  # pyright: ignore[reportAttributeAccessIssue]
+            err_msg = str(ctypes.WinError(err_code))  # pyright: ignore[reportAttributeAccessIssue]
             debug_log(f"dpapi: CryptUnprotectData failed: {err_msg} (code {err_code})")
             return ""
         try:
