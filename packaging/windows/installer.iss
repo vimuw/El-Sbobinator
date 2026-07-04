@@ -1,14 +1,15 @@
 ; El Sbobinator — Inno Setup installer script
 ; Compiled by CI via: ISCC /DAppVersion=X.Y.Z installer.iss
 
+#define AppName "El Sbobinator"
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
 
 [Setup]
 AppId={{B348000F-C12F-4F17-9130-FF166C04EADF}
-AppName=El Sbobinator
-AppVerName={#AppName}
+AppName={#AppName}
+AppVerName={#AppName} v{#AppVersion}
 AppVersion={#AppVersion}
 AppPublisher=vimuw
 AppPublisherURL=https://github.com/vimuw/El-Sbobinator
