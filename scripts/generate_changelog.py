@@ -14,15 +14,23 @@ import sys
 
 
 def run_git(args: list[str]) -> str:
-    result = subprocess.run(["git", *args], capture_output=True, text=True, check=True)
+    result = subprocess.run(
+        ["git", *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=True,
+    )
     return result.stdout.strip()
 
 
-def get_commits(tag: str) -> list[tuple[str, str]]:
+def get_commits(tag: str, max_commits: int = 0) -> list[tuple[str, str]]:
+    clean_tag = tag[len("refs/tags/") :] if tag.startswith("refs/tags/") else tag
     # Resolve tag to a valid commit or ref. If it doesn't exist (e.g. manual dispatch run before tagging), fall back to "HEAD"
-    resolved_tag = tag
+    resolved_tag = clean_tag
     try:
-        run_git(["rev-parse", "--verify", tag])
+        run_git(["rev-parse", "--verify", clean_tag])
     except Exception:
         resolved_tag = "HEAD"
 
@@ -33,14 +41,21 @@ def get_commits(tag: str) -> list[tuple[str, str]]:
     except Exception:
         pass
 
+    effective_max = max_commits
     if not prev_ref:
         commit_range = resolved_tag
+        if max_commits == 0:
+            effective_max = 50
     else:
         commit_range = f"{prev_ref}..{resolved_tag}"
 
     commits: list[tuple[str, str]] = []
     try:
-        log_out = run_git(["log", commit_range, "--format=%h|%s"])
+        cmd = ["log", "--format=%h|%s"]
+        if effective_max > 0:
+            cmd.extend(["-n", str(effective_max)])
+        cmd.append(commit_range)
+        log_out = run_git(cmd)
         if log_out:
             for line in log_out.splitlines():
                 if "|" in line:
@@ -51,31 +66,37 @@ def get_commits(tag: str) -> list[tuple[str, str]]:
     return commits
 
 
+def capitalize_first(text: str) -> str:
+    if not text:
+        return text
+    return text[0].upper() + text[1:]
+
+
 def categorize_commits(
     commits: list[tuple[str, str]], repo: str | None
 ) -> dict[str, list[str]]:
     categories: dict[str, list[str]] = {
-        "🚀 Features": [],
-        "🐛 Bug Fixes": [],
-        "📝 Documentation": [],
-        "⬆️ Dependencies": [],
-        "🧰 Maintenance & Refactoring": [],
+        "Features": [],
+        "Bug Fixes": [],
+        "Documentation": [],
+        "Dependencies": [],
+        "Maintenance & Refactoring": [],
         "Other Changes": [],
     }
 
     type_mapping = {
-        "feat": "🚀 Features",
-        "fix": "🐛 Bug Fixes",
-        "docs": "📝 Documentation",
-        "dependencies": "⬆️ Dependencies",
-        "deps": "⬆️ Dependencies",
-        "chore": "🧰 Maintenance & Refactoring",
-        "refactor": "🧰 Maintenance & Refactoring",
-        "perf": "🧰 Maintenance & Refactoring",
-        "test": "🧰 Maintenance & Refactoring",
-        "style": "🧰 Maintenance & Refactoring",
-        "ci": "🧰 Maintenance & Refactoring",
-        "build": "🧰 Maintenance & Refactoring",
+        "feat": "Features",
+        "fix": "Bug Fixes",
+        "docs": "Documentation",
+        "dependencies": "Dependencies",
+        "deps": "Dependencies",
+        "chore": "Maintenance & Refactoring",
+        "refactor": "Maintenance & Refactoring",
+        "perf": "Maintenance & Refactoring",
+        "test": "Maintenance & Refactoring",
+        "style": "Maintenance & Refactoring",
+        "ci": "Maintenance & Refactoring",
+        "build": "Maintenance & Refactoring",
     }
 
     pattern = re.compile(r"^([a-zA-Z0-9_\-]+)(?:\(([^)]+)\))?!?:\s*(.+)$")
@@ -86,13 +107,14 @@ def categorize_commits(
             ctype, scope, desc = match.groups()
             ctype_lower = ctype.lower()
             scope_lower = scope.lower() if scope else ""
+            desc = capitalize_first(desc)
 
             if (
                 ctype_lower in ["deps", "dependencies"]
                 or "deps" in scope_lower
                 or "dependencies" in scope_lower
             ):
-                category = "⬆️ Dependencies"
+                category = "Dependencies"
             else:
                 category = type_mapping.get(ctype_lower, "Other Changes")
 
@@ -106,10 +128,11 @@ def categorize_commits(
 
             categories[category].append(item)
         else:
+            s_cap = capitalize_first(s)
             link = (
                 f"([`{h}`](https://github.com/{repo}/commit/{h}))" if repo else f"({h})"
             )
-            item = f"- {s} {link}"
+            item = f"- {s_cap} {link}"
             categories["Other Changes"].append(item)
     return categories
 
@@ -125,6 +148,12 @@ def main() -> None:
         "--custom-body",
         default="",
         help="Optional custom message to prepend to the release notes.",
+    )
+    parser.add_argument(
+        "--max-commits",
+        type=int,
+        default=0,
+        help="Maximum number of commits to include in changelog (0 for unlimited).",
     )
     parser.add_argument(
         "--output", required=True, help="Path to write the markdown output."
@@ -152,7 +181,7 @@ def main() -> None:
     except Exception:
         pass
 
-    commits = get_commits(tag)
+    commits = get_commits(tag, max_commits=args.max_commits)
     repo = os.environ.get("GITHUB_REPOSITORY")
     categories = categorize_commits(commits, repo)
 
@@ -160,7 +189,9 @@ def main() -> None:
     with open(args.output, "w", encoding="utf-8") as f:
         # Prepend custom body if provided
         env_body = os.environ.get("CUSTOM_RELEASE_BODY")
-        custom_body = (env_body if env_body is not None else args.custom_body).strip()
+        custom_body = (
+            env_body.strip() if env_body and env_body.strip() else args.custom_body
+        ).strip()
         if custom_body:
             f.write(f"{custom_body}\n\n")
         elif tag_msg.strip():

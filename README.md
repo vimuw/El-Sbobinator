@@ -172,6 +172,14 @@ Scaricando e utilizzando questa applicazione, accetti e comprendi che:
 
 ---
 
+## 🤝 Contribuire al progetto
+
+Hai trovato un bug o vuoi suggerire una nuova funzione? Apri una **[Issue](https://github.com/vimuw/El-Sbobinator/issues)** su GitHub — ogni segnalazione è benvenuta!
+
+Per lo sviluppo e le istruzioni per i contributor, vedi [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
+
 ## ☕ Supporta il progetto!
 El Sbobinator 🤠 è e sarà sempre **100% gratuito e open-source**.
 
@@ -183,62 +191,6 @@ Grazie e in bocca al lupo per gli esami! 🎉
 
 ---
 
-## 🤝 Contribuire al progetto
-
-Hai trovato un bug o vuoi suggerire una nuova funzione? Apri una **[Issue](https://github.com/vimuw/El-Sbobinator/issues)** su GitHub — ogni segnalazione è benvenuta!
-
-For development/contributing, see [CONTRIBUTING.md](CONTRIBUTING.md).
-
----
-
 ## 📝 Licenza
 Questo progetto è open-source e distribuito sotto la **Licenza MIT**.
 Per tutti i dettagli, consulta il file `LICENSE` incluso in questa repository.
-
----
-
-<details>
-<summary>🛠️ Costruire l'App dai sorgenti</summary>
-
-Se scarichi il codice sorgente completo e vuoi compilare tu stesso i pacchetti nativi, usa gli script di automazione inclusi. La WebUI è l'unica interfaccia supportata per lo sviluppo e le release (i vecchi entrypoint desktop restano solo come alias di compatibilità).
-- **Windows:** usa `packaging/Costruisci_EXE_Windows.bat`.
-- **macOS:** dal terminale, avvia `packaging/Costruisci_APP_Mac.command`.
-
-### Developer setup
-
-**Requisiti:** Python 3.11, Node.js 24 (versioni esatte richieste per allineamento con la CI).
-
-```bash
-python scripts/build_release.py deps --ui webui --dev
-```
-
-**Gestione delle API key — nessuna variabile d'ambiente necessaria.**
-Le chiavi Gemini vengono inserite dall'utente direttamente nella schermata **Impostazioni** dell'app desktop. L'app le salva in modo sicuro localmente: tramite DPAPI su Windows, tramite il Portachiavi di sistema su macOS. Non esiste nessun file `.env` da configurare per sviluppare o compilare il progetto.
-
-### Local checks
-
-```bash
-# Verifica dipendenze e tooling
-python scripts/build_release.py deps --ui webui --dev
-
-# Lint + test (salta npm install se già fatto)
-python scripts/build_release.py check --skip-npm-install
-```
-
-**Build locale:**
-
-```bash
-python scripts/build_release.py build --target windows --ui webui --install-deps --dev-deps
-python scripts/build_release.py build --target macos --ui webui --install-deps --dev-deps
-```
-
-### Documentazione per sviluppatori
-
-Per i dettagli di architettura, pipeline, formato sessione e contratto del bridge vedi:
-
-- [docs/architecture.md](docs/architecture.md) — mappa dei moduli Python/React e flusso a runtime.
-- [docs/pipeline.md](docs/pipeline.md) — fasi della pipeline, catena di fallback e valori di `last_error`.
-- [docs/session_model.md](docs/session_model.md) — layout su disco delle sessioni e schema `session.json`.
-- [docs/bridge_protocol.md](docs/bridge_protocol.md) — eventi Python→JS e API JS→Python.
-
-</details>

@@ -1,5 +1,14 @@
 # Contributing to El Sbobinator
 
+## Costruire i pacchetti nativi
+
+Se vuoi compilare i pacchetti nativi senza usare la riga di comando, usa gli script di automazione inclusi:
+
+- **Windows:** `packaging/Costruisci_EXE_Windows.bat`
+- **macOS:** `packaging/Costruisci_APP_Mac.command`
+
+La WebUI è l'unica interfaccia supportata per le release. I vecchi entrypoint desktop restano solo come alias di compatibilità.
+
 ## Prerequisites
 
 | Tool | Required version |
@@ -70,3 +79,10 @@ python scripts/build_release.py build --target macos --ui webui --install-deps -
 python scripts/build_release.py deps --ui webui --dev
 python scripts/build_release.py check --skip-npm-install
 ```
+
+## Documentazione per sviluppatori
+
+- [docs/architecture.md](docs/architecture.md) — mappa dei moduli Python/React e flusso a runtime.
+- [docs/pipeline.md](docs/pipeline.md) — fasi della pipeline, catena di fallback e valori di `last_error`.
+- [docs/session_model.md](docs/session_model.md) — layout su disco delle sessioni e schema `session.json`.
+- [docs/bridge_protocol.md](docs/bridge_protocol.md) — eventi Python→JS e API JS→Python.

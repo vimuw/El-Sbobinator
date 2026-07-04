@@ -10,6 +10,8 @@ import time
 import unittest
 from unittest.mock import MagicMock, patch
 
+os.environ["EL_SBOBINATOR_TESTING"] = "1"
+
 import el_sbobinator.services.config_service as cs
 
 _FAKE_CFG: dict = {
