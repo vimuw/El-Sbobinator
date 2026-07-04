@@ -737,6 +737,8 @@ def save_config(  # noqa: C901
             _existing_protected = current_cfg.get("api_key_protected")
             if _existing_protected:
                 data["api_key_protected"] = _existing_protected
+            elif current_cfg.get("api_key"):
+                data["api_key"] = current_cfg["api_key"]
 
         # Store secret in OS keyring on macOS/Linux if available.
         try:

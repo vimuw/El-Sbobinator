@@ -711,6 +711,37 @@ class TestSaveConfigToDisk(unittest.TestCase):
 
         self.assertEqual(data.get("api_key_protected"), "EXISTING_PROTECTED==")
 
+    def test_save_config_none_key_preserves_existing_plaintext_on_windows(self) -> None:
+        """On Windows, save_config(api_key=None) preserves existing plaintext api_key if DPAPI was unavailable."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            existing = {"api_key": "PLAINTEXT_KEY_123"}
+            with open(cfg_path, "w", encoding="utf-8") as fh:
+                json.dump(existing, fh)
+
+            with (
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
+                patch(
+                    "el_sbobinator.services.config_service.LEGACY_CONFIG_FILE",
+                    cfg_path + ".legacy",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service.platform.system",
+                    return_value="Windows",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service._dpapi_protect_text_windows",
+                    return_value="",
+                ),
+            ):
+                cs.save_config(None, preferred_model="gemini-3.5-flash")
+
+            with open(cfg_path, encoding="utf-8") as fh:
+                data = json.load(fh)
+
+        self.assertEqual(data.get("api_key"), "PLAINTEXT_KEY_123")
+        self.assertEqual(data.get("preferred_model"), "gemini-3.5-flash")
+
     def test_save_config_writes_legacy_file_when_env_set(self) -> None:
         """When EL_SBOBINATOR_WRITE_LEGACY_CONFIG=1, the legacy file is also written."""
         with tempfile.TemporaryDirectory() as tmpdir:

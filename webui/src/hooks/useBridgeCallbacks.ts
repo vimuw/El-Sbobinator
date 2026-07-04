@@ -118,7 +118,7 @@ export function useBridgeCallbacks(options: {
         if (currentFile && window.pywebview?.api?.show_notification && !document.hasFocus()) {
           const isWarning = data.completion_status === 'completed_with_warnings' || (Array.isArray(data.revision_failed_blocks) && data.revision_failed_blocks.length > 0);
           if (isWarning) {
-            window.pywebview.api.show_notification(
+            void window.pywebview.api.show_notification(
               `⚠️ Sbobina pronta con avvisi — ${currentFile.name}`,
               'Completata con alcune parti non revisionate. Clicca per aprire.',
             );
@@ -127,7 +127,7 @@ export function useBridgeCallbacks(options: {
             const modelPart = model ? ` con ${shortModelName(model)}` : '';
             const elapsed = currentFile.startedAt ? Math.round((Date.now() - currentFile.startedAt) / 60000) : null;
             const elapsedPart = elapsed !== null && elapsed > 0 ? ` · ${elapsed} min` : '';
-            window.pywebview.api.show_notification(
+            void window.pywebview.api.show_notification(
               `✅ Sbobina pronta — ${currentFile.name}`,
               `Completata${modelPart}${elapsedPart}. Clicca per aprire.`,
             );
@@ -140,12 +140,12 @@ export function useBridgeCallbacks(options: {
         if (currentFile && window.pywebview?.api?.show_notification && !document.hasFocus()) {
           const isGoogleServerOverload = data.error?.includes('indisponibile') || data.error?.includes('unavailable');
           if (isGoogleServerOverload) {
-            window.pywebview.api.show_notification(
+            void window.pywebview.api.show_notification(
               `⚠️ Server occupati — ${currentFile.name}`,
               "I server di Google sono sovraccarichi. L'elaborazione è stata interrotta.",
             );
           } else {
-            window.pywebview.api.show_notification(
+            void window.pywebview.api.show_notification(
               `❌ Errore elaborazione — ${currentFile.name}`,
               data.error || 'Si è verificato un errore imprevisto.',
             );
