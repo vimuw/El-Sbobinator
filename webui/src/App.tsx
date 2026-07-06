@@ -1469,7 +1469,6 @@ export default function App() {
           <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link">
             <Github className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
           </a>
-          <span>·</span>
           <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }} className="footer-link">
             ☕ Offrimi un caffè su Ko-fi!
           </a>

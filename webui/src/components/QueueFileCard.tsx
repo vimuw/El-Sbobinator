@@ -22,11 +22,6 @@ interface QueueFileCardProps {
   showDragHandle?: boolean;
 }
 
-function abbreviatePath(path: string): string {
-  const parts = path.replace(/\\/g, '/').split('/').filter(Boolean);
-  if (parts.length <= 2) return path;
-  return `…/${parts.slice(-2).join('/')}`;
-}
 
 function QueueFileCardInner({
   file, appState, currentPhase: _currentPhase,
@@ -244,7 +239,7 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
                 <FolderIndicatorChip folder={currentFolder} />
               )}
               {isNewest && (
-                <span className="shrink-0 whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full badge-success">
+                <span className="shrink-0 whitespace-nowrap text-[10px] leading-none font-semibold uppercase tracking-wider px-1.5 py-[2px] h-4 box-border rounded-full badge-success">
                   Nuovo
                 </span>
               )}
@@ -265,7 +260,7 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
                   </span>
                   {file.primaryModel && file.effectiveModel && file.primaryModel !== file.effectiveModel && (
                     <span
-                      className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full badge-warning"
+                      className="text-[10px] leading-none font-semibold uppercase tracking-wider px-1.5 py-[2px] h-4 box-border rounded-full badge-warning"
                       title={`Fallback usato: ${shortModelName(file.effectiveModel)}`}
                     >
                       fallback
@@ -281,7 +276,7 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
                 <>
                   <span className="w-1 h-1 rounded-full bg-[var(--border-default)]" />
                   <span
-                    className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full badge-warning"
+                    className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold uppercase tracking-wider px-1.5 py-[2px] h-4 box-border rounded-full badge-warning"
                   >
                     <AlertTriangle className="w-3 h-3" />
                     {failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}
@@ -291,7 +286,7 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
                       type="button"
                       onClick={handleRetryBlocks}
                       disabled={isRetrying}
-                      className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full transition-opacity premium-button-secondary compact-button is-warning"
+                      className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold px-1.5 py-[2px] h-4 box-border rounded-full transition-opacity premium-button-secondary compact-button is-warning"
                       style={{ opacity: isRetrying ? 0.65 : 1 }}
                       title="Riprova solo i blocchi inclusi senza revisione"
                     >
@@ -302,16 +297,6 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
                 </>
               )}
             </div>
-            {file.outputHtml && (
-              <div
-                className="mt-1 flex items-center gap-1 text-[11px] text-[var(--text-faint)] cursor-pointer opacity-0 group-hover/card:opacity-100 transition-opacity hover:underline"
-                onClick={(e) => { e.stopPropagation(); onOpenFile(file.outputDir ?? file.outputHtml!); }}
-                title={`Apri cartella: ${file.outputDir ?? file.outputHtml}`}
-              >
-                <FolderOpen className="w-3 h-3 shrink-0" />
-                <span className="truncate">{abbreviatePath(file.outputHtml)}</span>
-              </div>
-            )}
           </div>
         </div>
 
@@ -323,6 +308,11 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
                   label: 'Modifica',
                   icon: <PenLine className="w-3.5 h-3.5" />,
                   onClick: () => onPreview(file.outputHtml!, file.name, file.path, file.id, file.outputDir),
+                } as KebabMenuItem,
+                {
+                  label: 'Apri cartella',
+                  icon: <FolderOpen className="w-3.5 h-3.5" />,
+                  onClick: () => onOpenFile(file.outputDir ?? file.outputHtml!),
                 } as KebabMenuItem,
                 {
                   label: 'Apri nel browser',

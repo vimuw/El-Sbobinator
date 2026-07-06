@@ -5,7 +5,7 @@ import type { ArchiveFolder } from '../bridge';
 export function FolderIndicatorChip({ folder }: { folder: Pick<ArchiveFolder, 'name' | 'color'> }) {
   return (
     <span
-      className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0"
+      className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold px-1.5 py-[2px] rounded-full shrink-0 h-4 box-border"
       style={{ background: `${folder.color}22`, color: folder.color, border: `1px solid ${folder.color}55` }}
       title={`Raccolta: ${folder.name}`}
     >

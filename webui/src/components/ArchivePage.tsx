@@ -2,7 +2,7 @@ import { type FormEvent, type MouseEvent, useCallback, useEffect, useMemo, useRe
 import { motion, AnimatePresence } from 'motion/react';
 import {
   AlertTriangle, ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
-  ExternalLink, FileSearch, FolderOpen, FolderPlus, History,
+  ExternalLink, FileSearch, FileText, FolderOpen, FolderPlus,
   Loader2, Pencil, Plus, RefreshCw, Search, Trash2, X,
 } from 'lucide-react';
 import {
@@ -421,7 +421,7 @@ export function ArchivePage({
 
         {!fullTextMode && sessionPageData.length === 0 && sessions.length === 0 && (
           <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>
-            <History className="w-8 h-8 mx-auto mb-3 opacity-30" />
+            <FileText className="w-8 h-8 mx-auto mb-3 opacity-30" />
             <p className="text-sm">Nessuna sbobina nell&apos;archivio.</p>
           </div>
         )}
@@ -797,6 +797,11 @@ function DraggableSessionCard({
     } as KebabMenuItem] : []),
     ...(allFolders.length > 0 || currentFolder ? [{ separator: true } as KebabMenuItem] : []),
     {
+      label: 'Apri cartella',
+      icon: <FolderOpen className="w-3.5 h-3.5" />,
+      onClick: () => onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path),
+    },
+    {
       label: 'Apri nel browser',
       icon: <ExternalLink className="w-3.5 h-3.5" />,
       onClick: () => onOpenFile(session.html_path),
@@ -816,7 +821,7 @@ function DraggableSessionCard({
       style={hasRevisionWarnings ? { borderColor: 'var(--warning-ring)', boxShadow: 'inset 3px 0 0 var(--warning-ring)', background: 'var(--warning-subtle)' } : undefined}
     >
       <div className="flex items-center gap-3 overflow-hidden flex-1">
-        <History className="w-4 h-4 shrink-0" style={{ color: hasRevisionWarnings ? 'var(--warning-text)' : 'var(--text-faint)' }} />
+        <FileText className="w-4 h-4 shrink-0" style={{ color: hasRevisionWarnings ? 'var(--warning-text)' : 'var(--text-faint)' }} />
 
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{session.name}</p>
@@ -837,7 +842,7 @@ function DraggableSessionCard({
             {failedBlockCount > 0 && (
               <>
                 <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}>
+                <span className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold uppercase tracking-wider px-1.5 py-[2px] h-4 box-border rounded-full" style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}>
                   <AlertTriangle className="w-3 h-3" />{failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}
                 </span>
                 {canRetryBlocks && (
@@ -845,7 +850,7 @@ function DraggableSessionCard({
                     type="button"
                     onClick={handleRetryBlocks}
                     disabled={isRetryingBlocks}
-                    className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full transition-opacity"
+                    className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold px-1.5 py-[2px] h-4 box-border rounded-full transition-opacity"
                     style={{ color: 'var(--warning-text)', border: '1px solid var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
                     title="Riprova solo i blocchi inclusi senza revisione"
                   >
@@ -855,14 +860,6 @@ function DraggableSessionCard({
                 )}
               </>
             )}
-          </div>
-          <div
-            className="mt-0.5 flex items-center gap-1 text-[11px] opacity-0 group-hover/card:opacity-100 transition-opacity hover:underline"
-            style={{ color: 'var(--text-faint)', cursor: 'pointer' }}
-            onClick={e => { e.stopPropagation(); onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path); }}
-          >
-            <FolderOpen className="w-3 h-3 shrink-0" />
-            <span className="truncate">{session.html_path.replace(/\\/g, '/').split('/').slice(-2).join('/')}</span>
           </div>
         </div>
       </div>
@@ -900,10 +897,6 @@ function FolderSessionCardOverlay({ session, folderColor }: {
             {hasRevisionWarnings && (
               <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span style={{ color: 'var(--warning-text)', fontWeight: 600 }}>Completata con avvisi</span></>
             )}
-          </div>
-          <div className="mt-0.5 flex items-center gap-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-            <FolderOpen className="w-3 h-3 shrink-0" />
-            <span className="truncate">{session.html_path.replace(/\\/g, '/').split('/').slice(-2).join('/')}</span>
           </div>
         </div>
       </div>
@@ -953,6 +946,11 @@ function SortableSessionCard({
   };
 
   const kebabItems: KebabMenuItem[] = [
+    {
+      label: 'Apri cartella',
+      icon: <FolderOpen className="w-3.5 h-3.5" />,
+      onClick: () => onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path),
+    },
     {
       label: 'Apri nel browser',
       icon: <ExternalLink className="w-3.5 h-3.5" />,
@@ -1004,7 +1002,7 @@ function SortableSessionCard({
             {failedBlockCount > 0 && (
               <>
                 <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}>
+                <span className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold uppercase tracking-wider px-1.5 py-[2px] h-4 box-border rounded-full" style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}>
                   <AlertTriangle className="w-3 h-3" />{failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}
                 </span>
                 {canRetryBlocks && (
@@ -1012,7 +1010,7 @@ function SortableSessionCard({
                     type="button"
                     onClick={handleRetryBlocks}
                     disabled={isRetryingBlocks}
-                    className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full transition-opacity"
+                    className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold px-1.5 py-[2px] h-4 box-border rounded-full transition-opacity"
                     style={{ color: 'var(--warning-text)', border: '1px solid var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
                     title="Riprova solo i blocchi inclusi senza revisione"
                   >
@@ -1022,14 +1020,6 @@ function SortableSessionCard({
                 )}
               </>
             )}
-          </div>
-          <div
-            className="mt-0.5 flex items-center gap-1 text-[11px] opacity-0 group-hover/card:opacity-100 transition-opacity hover:underline"
-            style={{ color: 'var(--text-faint)', cursor: 'pointer' }}
-            onClick={e => { e.stopPropagation(); onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path); }}
-          >
-            <FolderOpen className="w-3 h-3 shrink-0" />
-            <span className="truncate">{session.html_path.replace(/\\/g, '/').split('/').slice(-2).join('/')}</span>
           </div>
         </div>
       </div>
@@ -1338,7 +1328,7 @@ function FolderDetailView({
                         style={{}}
                       >
                         <div className="flex items-center gap-3 overflow-hidden flex-1">
-                          <History className="w-4 h-4 shrink-0" style={{ color: 'var(--text-faint)' }} />
+                          <FileText className="w-4 h-4 shrink-0" style={{ color: 'var(--text-faint)' }} />
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
                               {session.name}
@@ -1376,7 +1366,7 @@ function FolderDetailView({
         <div className="flex flex-col gap-2">
           {folderSessions.length === 0 && !search.trim() && (
             <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>
-              <History className="w-8 h-8 mx-auto mb-3 opacity-30" />
+              <FileText className="w-8 h-8 mx-auto mb-3 opacity-30" />
               <p className="text-sm">Nessuna sbobina in questa cartella.</p>
             </div>
           )}

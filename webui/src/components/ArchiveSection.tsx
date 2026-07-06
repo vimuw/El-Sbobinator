@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ExternalLink, FolderOpen, History, Search, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ExternalLink, FileText, FolderOpen, Search, Trash2 } from 'lucide-react';
 import type { ArchiveSession } from '../bridge';
 import { formatRelativeTime, shortModelName } from '../utils';
 
@@ -73,7 +73,7 @@ export function ArchiveSection({ sessions, onPreview, onOpenFile, onDeleteSessio
             style={{ background: 'none', border: 'none', cursor: 'pointer', borderBottom: isArchiveOpen ? '1px solid var(--border-subtle)' : 'none' }}
           >
             <div className="flex items-center gap-2">
-              <History className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
+              <FileText className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
               <span className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Archivio Sbobine</span>
               <span className="status-pill shrink-0 whitespace-nowrap">{sessions.length}</span>
             </div>
@@ -129,7 +129,7 @@ export function ArchiveSection({ sessions, onPreview, onOpenFile, onDeleteSessio
                           style={{ border: '1px solid var(--border-subtle)' }}
                         >
                           <div className="flex items-center gap-3 overflow-hidden flex-1">
-                            <History className="w-4 h-4 shrink-0" style={{ color: 'var(--text-faint)' }} />
+                            <FileText className="w-4 h-4 shrink-0" style={{ color: 'var(--text-faint)' }} />
                             <div className="min-w-0 flex-1">
                               <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{session.name}</p>
                               <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -138,20 +138,18 @@ export function ArchiveSection({ sessions, onPreview, onOpenFile, onDeleteSessio
                                   <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span>{shortModelName(session.effective_model)}</span></>
                                 )}
                               </div>
-                              <div
-                                className="mt-0.5 flex items-center gap-1 text-[11px] opacity-0 group-hover/card:opacity-100 transition-opacity hover:underline"
-                                style={{ color: 'var(--text-faint)', cursor: 'pointer' }}
-                                onClick={(e) => { e.stopPropagation(); onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path); }}
-                                title={`Apri cartella: ${session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path}`}
-                              >
-                                <FolderOpen className="w-3 h-3 shrink-0" />
-                                <span className="truncate">
-                                  {session.html_path.replace(/\\/g, '/').split('/').slice(-2).join('/')}
-                                </span>
-                              </div>
                             </div>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={e => { e.stopPropagation(); onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path); }}
+                              className="icon-button compact-icon-button"
+                              style={{ color: 'var(--text-muted)' }}
+                              title="Apri cartella"
+                              aria-label="Apri cartella"
+                            >
+                              <FolderOpen className="w-3.5 h-3.5" />
+                            </button>
                             <button
                               onClick={e => { e.stopPropagation(); onOpenFile(session.html_path); }}
                               className="icon-button compact-icon-button"

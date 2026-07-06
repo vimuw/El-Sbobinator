@@ -94,6 +94,10 @@ class TestLocalMacroCleanupNearAdjacent(unittest.TestCase):
         self.assertIn(p1, cleaned)
         self.assertIn(p2, cleaned)
 
+    def test_empty_or_whitespace_input(self):
+        self.assertEqual(local_macro_cleanup(""), ("", 0, 0, 0, 0))
+        self.assertEqual(local_macro_cleanup("   \n\n  "), ("", 0, 0, 0, 0))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -14,9 +14,12 @@ interface KebabMenuProps {
 }
 
 interface DropdownPos {
-  top: number;
+  top?: number;
+  bottom?: number;
   left?: number;
   right?: number;
+  maxHeight?: number;
+  opensUp?: boolean;
 }
 
 export function KebabMenu({ items, align = 'right', buttonClassName }: KebabMenuProps) {
@@ -25,40 +28,69 @@ export function KebabMenu({ items, align = 'right', buttonClassName }: KebabMenu
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const computePos = () => {
-    if (!buttonRef.current) return;
-    const rect = buttonRef.current.getBoundingClientRect();
-    if (align === 'right') {
-      setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
-    } else {
-      setPos({ top: rect.bottom + 4, left: rect.left });
-    }
-  };
-
   useLayoutEffect(() => {
-    if (open) computePos();
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!open || !buttonRef.current) return;
+
+    const computePos = () => {
+      if (!buttonRef.current) return;
+      const rect = buttonRef.current.getBoundingClientRect();
+      const menuHeight = dropdownRef.current
+        ? dropdownRef.current.offsetHeight
+        : items.reduce((acc, item) => acc + ('separator' in item ? 5 : 36), 8);
+
+      const spaceBelow = window.innerHeight - rect.bottom - 12;
+      const spaceAbove = rect.top - 12;
+
+      const opensUp = spaceBelow < menuHeight && spaceAbove > spaceBelow;
+      const maxHeight = Math.max(120, opensUp ? spaceAbove : spaceBelow);
+
+      const newPos: DropdownPos = {
+        maxHeight,
+        opensUp,
+      };
+
+      if (opensUp) {
+        newPos.bottom = Math.max(8, window.innerHeight - rect.top + 4);
+      } else {
+        newPos.top = Math.max(8, rect.bottom + 4);
+      }
+
+      if (align === 'right') {
+        newPos.right = Math.max(8, window.innerWidth - rect.right);
+      } else {
+        newPos.left = Math.max(8, rect.left);
+      }
+
+      setPos(newPos);
+    };
+
+    computePos();
+    const rafId = requestAnimationFrame(computePos);
+    return () => cancelAnimationFrame(rafId);
+  }, [open, items, align]);
 
   useEffect(() => {
     if (!open) return;
     const handleOutside = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (
-        buttonRef.current && buttonRef.current.contains(target)
-      ) return;
-      if (
-        dropdownRef.current && dropdownRef.current.contains(target)
-      ) return;
+      if (buttonRef.current && buttonRef.current.contains(target)) return;
+      if (dropdownRef.current && dropdownRef.current.contains(target)) return;
       setOpen(false);
     };
-    const handleScroll = () => setOpen(false);
+    const handleClose = () => setOpen(false);
+
     document.addEventListener('mousedown', handleOutside);
-    window.addEventListener('scroll', handleScroll, { capture: true, passive: true });
+    window.addEventListener('scroll', handleClose, { capture: true, passive: true });
+    window.addEventListener('resize', handleClose, { passive: true });
+
     return () => {
       document.removeEventListener('mousedown', handleOutside);
-      window.removeEventListener('scroll', handleScroll, { capture: true });
+      window.removeEventListener('scroll', handleClose, { capture: true });
+      window.removeEventListener('resize', handleClose);
     };
   }, [open]);
+
+  const opensUp = pos?.opensUp ?? false;
 
   return (
     <>
@@ -92,14 +124,16 @@ export function KebabMenu({ items, align = 'right', buttonClassName }: KebabMenu
           {open && pos && (
             <motion.div
               ref={dropdownRef}
-              initial={{ opacity: 0, y: -4, scale: 0.97 }}
+              initial={{ opacity: 0, y: opensUp ? 4 : -4, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -4, scale: 0.97 }}
+              exit={{ opacity: 0, y: opensUp ? 4 : -4, scale: 0.97 }}
               transition={{ duration: 0.12 }}
               style={{
                 position: 'fixed',
-                top: pos.top,
+                ...(pos.top !== undefined ? { top: pos.top } : { bottom: pos.bottom }),
                 ...(pos.right !== undefined ? { right: pos.right } : { left: pos.left }),
+                maxHeight: pos.maxHeight,
+                overflowY: 'auto',
                 zIndex: 9999,
                 background: 'var(--bg-elevated)',
                 border: '1px solid var(--border-default)',

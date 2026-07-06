@@ -229,8 +229,7 @@
 
 :root:not([data-theme="dark"]) .queue-card:hover {
   box-shadow: none;
-  border-color: rgba(100, 116, 139, 0.55);
-  background: #f7f4ef;
+  border-color: rgba(100, 116, 139, 0.65);
 }
 
 :root:not([data-theme="dark"]) .processing-card {
@@ -2412,6 +2411,10 @@ input[type="password"]::-ms-reveal {
   box-shadow: none;
 }
 
+.archive-session-card:hover {
+  border-color: var(--border-strong);
+}
+
 .archive-session-card:focus-visible {
   outline: none;
 }
@@ -2422,8 +2425,7 @@ input[type="password"]::-ms-reveal {
 
 :root:not([data-theme="dark"]) .archive-session-card:hover {
   box-shadow: none;
-  border-color: var(--accent-ring);
-  background: var(--accent-subtle);
+  border-color: rgba(100, 116, 139, 0.65);
 }
 
 :root[data-theme="dark"] .archive-session-card {
@@ -2432,8 +2434,7 @@ input[type="password"]::-ms-reveal {
 }
 
 :root[data-theme="dark"] .archive-session-card:hover {
-  background: var(--accent-subtle);
-  border-color: var(--accent-ring);
+  border-color: rgba(255, 255, 255, 0.35);
 }
 
 /* ═══ HOURGLASS BADGE ANIMATION ═══ */
@@ -2975,7 +2976,7 @@ input[type="password"]::-ms-reveal {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 16px;
   color: var(--text-muted) !important;
   font-size: 13px;
 }
