@@ -1,4 +1,5 @@
 import unittest
+from typing import Any, cast
 from unittest.mock import patch
 
 from el_sbobinator.pipeline.pipeline_settings import (
@@ -264,7 +265,7 @@ class BuildDefaultPipelineSettingsTests(unittest.TestCase):
             preconvert_audio=True,
             audio_bitrate="48k",
             prefetch_next_chunk=True,
-            inline_audio_max_mb="invalid_mb",
+            inline_audio_max_mb=cast(Any, "invalid_mb"),
         )
         self.assertIsNone(settings.inline_max_bytes)
 
