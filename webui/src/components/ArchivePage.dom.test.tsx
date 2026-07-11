@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { ArchivePage } from './ArchivePage';
@@ -43,50 +43,17 @@ describe('ArchivePage', () => {
     expect(screen.getByTitle('Raccolta: Corso A')).toBeTruthy();
   });
 
-  it('can move a folder detail item to the next page while preserving the full order', () => {
-    const sessions = Array.from({ length: 6 }, (_, index) => makeSession(`s${index + 1}`, `Lezione ${index + 1}`));
-    const folder: ArchiveFolder = {
-      id: 'f1',
-      name: 'Corso A',
-      color: '#4D96FF',
-      session_dirs: sessions.map(s => s.session_dir),
-    };
-    const onFoldersChange = vi.fn();
-    renderArchive({ sessions, folders: [folder], onFoldersChange });
+  it('renders all sessions in a single list without pagination controls', () => {
+    const sessions = Array.from({ length: 15 }, (_, index) => makeSession(`s${index + 1}`, `Lezione ${index + 1}`));
+    renderArchive({ sessions });
 
-    fireEvent.click(screen.getAllByText('Corso A')[0]);
-    fireEvent.click(screen.getByLabelText('Sposta Lezione 1 alla pagina successiva'));
+    // Assert all 15 sessions are visible on the screen
+    for (let i = 1; i <= 15; i++) {
+      expect(screen.getByText(`Lezione ${i}`)).toBeTruthy();
+    }
 
-    expect(onFoldersChange).toHaveBeenCalledWith([
-      {
-        ...folder,
-        session_dirs: [
-          '/sessions/s2',
-          '/sessions/s3',
-          '/sessions/s4',
-          '/sessions/s5',
-          '/sessions/s6',
-          '/sessions/s1',
-        ],
-      },
-    ]);
-  });
-
-  it('hides folder page-move controls while searching', () => {
-    const sessions = Array.from({ length: 6 }, (_, index) => makeSession(`s${index + 1}`, `Lezione ${index + 1}`));
-    const folder: ArchiveFolder = {
-      id: 'f1',
-      name: 'Corso A',
-      color: '#4D96FF',
-      session_dirs: sessions.map(s => s.session_dir),
-    };
-    const onFoldersChange = vi.fn();
-    renderArchive({ sessions, folders: [folder], onFoldersChange });
-
-    fireEvent.click(screen.getAllByText('Corso A')[0]);
-    fireEvent.change(screen.getByPlaceholderText('Cerca per nome...'), { target: { value: 'Lezione' } });
-
-    expect(screen.queryByLabelText('Sposta Lezione 1 alla pagina successiva')).toBeNull();
-    expect(onFoldersChange).not.toHaveBeenCalled();
+    // Assert that the page navigation buttons do not exist
+    expect(screen.queryByLabelText('Pagina successiva')).toBeNull();
+    expect(screen.queryByLabelText('Pagina precedente')).toBeNull();
   });
 });

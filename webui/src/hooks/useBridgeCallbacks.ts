@@ -20,6 +20,18 @@ export function useBridgeCallbacks(options: {
   clearCompletionFlash: () => void;
   onRevisionWarning?: (data: FileDonePayload) => void;
   onDownloadProgress?: (data: UpdateDownloadProgressPayload) => void;
+  addNotification?: (
+    title: string,
+    message: string,
+    type: 'info' | 'warning' | 'error' | 'success',
+    category: 'processing' | 'update' | 'system',
+    opts?: {
+      persistent?: boolean;
+      dedupeKey?: string;
+      actionType?: 'retry_failed_revision_blocks' | 'install_update' | 'open_github';
+      actionData?: unknown;
+    }
+  ) => void;
 }) {
   const {
     dispatch,
@@ -31,6 +43,7 @@ export function useBridgeCallbacks(options: {
     setAskNewKeyPrompt,
     autoContinueRef,
     startProcessingRef,
+    addNotification,
   } = options;
 
   const dispatchRef = useRef(dispatch);
@@ -44,6 +57,7 @@ export function useBridgeCallbacks(options: {
   const clearCompletionFlashRef = useRef(options.clearCompletionFlash);
   const onRevisionWarningRef = useRef(options.onRevisionWarning);
   const onDownloadProgressRef = useRef(options.onDownloadProgress);
+  const addNotificationRef = useRef(addNotification);
 
   useLayoutEffect(() => {
     dispatchRef.current = dispatch;
@@ -57,6 +71,7 @@ export function useBridgeCallbacks(options: {
     clearCompletionFlashRef.current = options.clearCompletionFlash;
     onRevisionWarningRef.current = options.onRevisionWarning;
     onDownloadProgressRef.current = options.onDownloadProgress;
+    addNotificationRef.current = options.addNotification;
   });
 
   useEffect(() => {
@@ -82,6 +97,14 @@ export function useBridgeCallbacks(options: {
       onDownloadProgress: data => { onDownloadProgressRef.current?.(data); },
       onAskNewKey: () => {
         setAskNewKeyPromptRef.current(true);
+        if (addNotificationRef.current) {
+          addNotificationRef.current(
+            'Chiavi esaurite',
+            'La quota di tutte le API Key è terminata. Inserisci una nuova chiave per continuare.',
+            'warning',
+            'system'
+          );
+        }
         if (localStorage.getItem('notifications_enabled') !== 'false' && !document.hasFocus() && window.pywebview?.api?.show_notification) {
           void window.pywebview.api.show_notification(
             '⚠️ Chiavi esaurite — El Sbobinator',
@@ -113,10 +136,27 @@ export function useBridgeCallbacks(options: {
       },
       onFileDone: data => {
         onRevisionWarningRef.current?.(data);
-        if (localStorage.getItem('notifications_enabled') === 'false') return;
         const currentFile = filesRef.current?.find(file => file.id === data.id);
+        const isWarning = data.completion_status === 'completed_with_warnings' || (Array.isArray(data.revision_failed_blocks) && data.revision_failed_blocks.length > 0);
+
+        if (addNotificationRef.current && currentFile) {
+          if (!isWarning) {
+            const model = data.effective_model || currentFile.effectiveModel;
+            const modelPart = model ? ` con ${shortModelName(model)}` : '';
+            const elapsed = currentFile.startedAt ? Math.round((Date.now() - currentFile.startedAt) / 60000) : null;
+            const elapsedPart = elapsed !== null && elapsed > 0 ? ` · ${elapsed} min` : '';
+            addNotificationRef.current(
+              'Sbobina pronta',
+              `"${currentFile.name}" completata con successo${modelPart}${elapsedPart}.`,
+              'success',
+              'processing'
+            );
+          }
+          // Note: revision warnings are already added via onRevisionWarning -> handleRevisionWarning inside App.tsx
+        }
+
+        if (localStorage.getItem('notifications_enabled') === 'false') return;
         if (currentFile && window.pywebview?.api?.show_notification && !document.hasFocus()) {
-          const isWarning = data.completion_status === 'completed_with_warnings' || (Array.isArray(data.revision_failed_blocks) && data.revision_failed_blocks.length > 0);
           if (isWarning) {
             void window.pywebview.api.show_notification(
               `⚠️ Sbobina pronta con avvisi — ${currentFile.name}`,
@@ -135,10 +175,29 @@ export function useBridgeCallbacks(options: {
         }
       },
       onFileFailed: data => {
-        if (localStorage.getItem('notifications_enabled') === 'false') return;
         const currentFile = filesRef.current?.find(file => file.id === data.id);
+        const isGoogleServerOverload = data.error?.includes('indisponibile') || data.error?.includes('unavailable');
+
+        if (addNotificationRef.current && currentFile) {
+          if (isGoogleServerOverload) {
+            addNotificationRef.current(
+              'Server occupati',
+              `I server di Google sono sovraccarichi. L'elaborazione per "${currentFile.name}" è stata interrotta.`,
+              'warning',
+              'processing'
+            );
+          } else {
+            addNotificationRef.current(
+              'Errore elaborazione',
+              `Errore per "${currentFile.name}": ${data.error || 'Si è verificato un errore imprevisto.'}`,
+              'error',
+              'processing'
+            );
+          }
+        }
+
+        if (localStorage.getItem('notifications_enabled') === 'false') return;
         if (currentFile && window.pywebview?.api?.show_notification && !document.hasFocus()) {
-          const isGoogleServerOverload = data.error?.includes('indisponibile') || data.error?.includes('unavailable');
           if (isGoogleServerOverload) {
             void window.pywebview.api.show_notification(
               `⚠️ Server occupati — ${currentFile.name}`,

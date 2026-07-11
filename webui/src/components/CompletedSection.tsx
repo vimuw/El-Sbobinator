@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle, Search, Trash2 } from 'lucide-react';
 import type { AppStatus, FileItem } from '../appState';
@@ -19,10 +19,26 @@ interface CompletedSectionProps {
 
 export function CompletedSection({ doneFiles, appState, onRemove, onPreview, onOpenFile, onClearAll, onRetryFailedRevisionBlocks, sessionFolderMap }: CompletedSectionProps) {
   const [completedSearch, setCompletedSearch] = useState('');
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [isOverflowing, setIsOverflowing] = useState(false);
 
   const filteredDoneFiles = completedSearch.trim()
     ? doneFiles.filter(f => f.name.toLowerCase().includes(completedSearch.toLowerCase()))
     : doneFiles;
+
+  useEffect(() => {
+    const outer = scrollRef.current;
+    const inner = innerRef.current;
+    if (!outer || !inner) return;
+    const ro = new ResizeObserver(() => {
+      setIsOverflowing(inner.offsetHeight > outer.clientHeight);
+    });
+    ro.observe(inner);
+    setIsOverflowing(inner.offsetHeight > outer.clientHeight);
+    return () => ro.disconnect();
+  }, [filteredDoneFiles.length]);
+
   const warningCount = doneFiles.filter(f => f.completionStatus === 'completed_with_warnings' || (f.revisionFailedBlocks?.length ?? 0) > 0).length;
   const fullyCompletedCount = doneFiles.length - warningCount;
 
@@ -73,32 +89,46 @@ export function CompletedSection({ doneFiles, appState, onRemove, onPreview, onO
             </div>
           </div>
 
-          <AnimatePresence>
-            {filteredDoneFiles.map(file => (
-              <CompletedFileCard
-                key={file.id}
-                file={file}
-                isNewest={file.id === doneFiles[0]?.id}
-                onRemove={onRemove}
-                onPreview={onPreview}
-                onOpenFile={onOpenFile}
-                onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
-                currentFolder={file.outputDir ? sessionFolderMap?.get(normalizeSessionPath(file.outputDir)) : undefined}
-              />
-            ))}
-            {completedSearch.trim() && filteredDoneFiles.length === 0 && (
-              <motion.p
-                key="no-results"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="text-sm text-center py-6"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                Nessun risultato per "{completedSearch}"
-              </motion.p>
-            )}
-          </AnimatePresence>
+          <div
+            ref={scrollRef}
+            style={{
+              maxHeight: '26rem',
+              overflowY: isOverflowing ? 'auto' : 'hidden',
+              overflowX: 'hidden',
+              scrollbarWidth: 'thin',
+              scrollbarColor: 'var(--border-strong) transparent',
+              padding: '4px 8px',
+            }}
+          >
+            <div ref={innerRef} className="space-y-3" style={{ margin: '-4px -8px' }}>
+              <AnimatePresence>
+                {filteredDoneFiles.map(file => (
+                  <CompletedFileCard
+                    key={file.id}
+                    file={file}
+                    isNewest={file.id === doneFiles[0]?.id}
+                    onRemove={onRemove}
+                    onPreview={onPreview}
+                    onOpenFile={onOpenFile}
+                    onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
+                    currentFolder={file.outputDir ? sessionFolderMap?.get(normalizeSessionPath(file.outputDir)) : undefined}
+                  />
+                ))}
+                {completedSearch.trim() && filteredDoneFiles.length === 0 && (
+                  <motion.p
+                    key="no-results"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="text-sm text-center py-6"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    Nessun risultato per "{completedSearch}"
+                  </motion.p>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
         </motion.div>
       )}
     </>

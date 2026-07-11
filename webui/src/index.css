@@ -452,11 +452,12 @@ button {
 .app-shell {
   position: relative;
   isolation: isolate;
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: row;
   background: var(--bg-base);
   color: var(--text-secondary);
+  overflow: hidden;
 }
 
 

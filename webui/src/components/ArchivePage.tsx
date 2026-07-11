@@ -23,7 +23,7 @@ const FOLDER_COLORS = [
   '#4D96FF', '#CC5DE8', '#FF8FAB', '#20C997',
   '#748FFC', '#94A3B8',
 ];
-const ARCHIVE_PAGE_SIZE = 5;
+
 
 interface ArchivePageProps {
   sessions: ArchiveSession[];
@@ -54,7 +54,7 @@ export function ArchivePage({
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [folderModal, setFolderModal] = useState<FolderModalState | null>(null);
   const [deleteFolderConfirm, setDeleteFolderConfirm] = useState<DeleteFolderConfirmState | null>(null);
-  const [sessionPage, setSessionPage] = useState(0);
+
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -121,14 +121,7 @@ export function ArchivePage({
     () => sortSessions(sessions),
     [sessions, sortSessions],
   );
-  const sessionPages = Math.ceil(allSortedSessions.length / ARCHIVE_PAGE_SIZE);
-  const sessionPageData = useMemo(
-    () => allSortedSessions.slice(sessionPage * ARCHIVE_PAGE_SIZE, (sessionPage + 1) * ARCHIVE_PAGE_SIZE),
-    [allSortedSessions, sessionPage],
-  );
-
-  useEffect(() => { setSessionPage(0); }, [search, sort]);
-  useEffect(() => { if (sessionPages > 0 && sessionPage >= sessionPages) setSessionPage(sessionPages - 1); }, [sessionPages, sessionPage]);
+  const sessionPageData = allSortedSessions;
 
   useEffect(() => {
     if (ftDebounceRef.current) clearTimeout(ftDebounceRef.current);
@@ -255,7 +248,7 @@ export function ArchivePage({
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 flex-1 min-h-0">
       {/* Header */}
       <div className="flex items-center gap-3">
         <h2 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
@@ -313,7 +306,7 @@ export function ArchivePage({
       </DndContext>
 
       {/* Unfiled sessions */}
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 flex-1 min-h-0">
         <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--text-faint)' }}>
           Tutte le sbobine
         </h3>
@@ -419,33 +412,33 @@ export function ArchivePage({
           )}
         </div>
 
-        {!fullTextMode && sessionPageData.length === 0 && sessions.length === 0 && (
-          <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>
-            <FileText className="w-8 h-8 mx-auto mb-3 opacity-30" />
-            <p className="text-sm">Nessuna sbobina nell&apos;archivio.</p>
-          </div>
-        )}
+        <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-3 min-h-0 scrollbar-thin">
+          {!fullTextMode && sessionPageData.length === 0 && sessions.length === 0 && (
+            <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>
+              <FileText className="w-8 h-8 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">Nessuna sbobina nell&apos;archivio.</p>
+            </div>
+          )}
 
-        {!fullTextMode && sessionPageData.length === 0 && sessions.length > 0 && search.trim() && (
-          <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
-            {`Nessun risultato per "${search}"`}
-          </div>
-        )}
+          {!fullTextMode && sessionPageData.length === 0 && sessions.length > 0 && search.trim() && (
+            <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+              {`Nessun risultato per "${search}"`}
+            </div>
+          )}
 
-        {fullTextMode && (
-          <FullTextResultList
-            query={search.trim()}
-            results={ftResults}
-            isSearching={isSearching}
-            onPreview={(r) => onPreview(r.html_path, r.name, undefined, undefined, r.session_dir, search.trim())}
-          />
-        )}
+          {fullTextMode && (
+            <FullTextResultList
+              query={search.trim()}
+              results={ftResults}
+              isSearching={isSearching}
+              onPreview={(r) => onPreview(r.html_path, r.name, undefined, undefined, r.session_dir, search.trim())}
+            />
+          )}
 
-        {!fullTextMode && (
-          <>
+          {!fullTextMode && (
             <AnimatePresence mode="wait">
               <motion.div
-                key={`session-page-${sessionPage}`}
+                key="archive-session-list"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -471,28 +464,8 @@ export function ArchivePage({
                 ))}
               </motion.div>
             </AnimatePresence>
-
-            {sessionPages > 1 && (
-              <div className="flex items-center justify-center gap-3 pt-1">
-                <button
-                  onClick={() => setSessionPage(p => Math.max(0, p - 1))}
-                  disabled={sessionPage === 0}
-                  className="icon-button compact-icon-button"
-                  style={{ color: 'var(--text-muted)' }}
-                  aria-label="Pagina precedente"
-                ><ChevronLeft className="w-4 h-4" /></button>
-                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{sessionPage + 1} / {sessionPages}</span>
-                <button
-                  onClick={() => setSessionPage(p => Math.min(sessionPages - 1, p + 1))}
-                  disabled={sessionPage >= sessionPages - 1}
-                  className="icon-button compact-icon-button"
-                  style={{ color: 'var(--text-muted)' }}
-                  aria-label="Pagina successiva"
-                ><ChevronRight className="w-4 h-4" /></button>
-              </div>
-            )}
-          </>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Folder modal */}
@@ -1078,7 +1051,7 @@ function FolderDetailView({
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
 }) {
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(0);
+
   const folderSearchInputRef = useRef<HTMLInputElement>(null);
   const [folderSearchFocused, setFolderSearchFocused] = useState(false);
 
@@ -1088,11 +1061,7 @@ function FolderDetailView({
     return q ? all.filter(s => s.name.toLowerCase().includes(q)) : all;
   }, [folder.session_dirs, sessionsByDir, search]);
 
-  const totalPages = Math.ceil(folderSessions.length / ARCHIVE_PAGE_SIZE);
-  const pageData = useMemo(
-    () => folderSessions.slice(page * ARCHIVE_PAGE_SIZE, (page + 1) * ARCHIVE_PAGE_SIZE),
-    [folderSessions, page],
-  );
+  const pageData = folderSessions;
 
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [addSearch, setAddSearch] = useState('');
@@ -1122,22 +1091,7 @@ function FolderDetailView({
     onReorderSessions(merged);
   }, [folder.session_dirs, folderSessions, onReorderSessions]);
 
-  const moveSessionAcrossPages = useCallback((sessionDir: string, direction: -1 | 1) => {
-    const visibleDirs = folderSessions.map(s => s.session_dir);
-    const oldIndex = visibleDirs.indexOf(sessionDir);
-    if (oldIndex === -1) return;
-    const newIndex = Math.max(
-      0,
-      Math.min(visibleDirs.length - 1, oldIndex + direction * ARCHIVE_PAGE_SIZE),
-    );
-    if (oldIndex === newIndex) return;
-    const reorderedVisible = arrayMove(visibleDirs, oldIndex, newIndex);
-    const visibleSet = new Set(visibleDirs);
-    let vi = 0;
-    const merged = folder.session_dirs.map(d => visibleSet.has(d) ? reorderedVisible[vi++] : d);
-    onReorderSessions(merged);
-    setPage(Math.floor(newIndex / ARCHIVE_PAGE_SIZE));
-  }, [folder.session_dirs, folderSessions, onReorderSessions]);
+
 
   const availableToAdd = useMemo(() => {
     const inFolder = new Set(folder.session_dirs);
@@ -1151,8 +1105,7 @@ function FolderDetailView({
     });
   }, [folder.session_dirs, sessionsByDir, addSearch]);
 
-  useEffect(() => { setPage(0); }, [search]);
-  useEffect(() => { if (totalPages > 0 && page >= totalPages) setPage(totalPages - 1); }, [totalPages, page]);
+
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1181,7 +1134,7 @@ function FolderDetailView({
   ];
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 flex-1 min-h-0">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <button
@@ -1363,7 +1316,7 @@ function FolderDetailView({
         onDragStart={handleSortStart}
         onDragEnd={handleSortEnd}
       >
-        <div className="flex flex-col gap-2">
+        <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-2 min-h-0 scrollbar-thin">
           {folderSessions.length === 0 && !search.trim() && (
             <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>
               <FileText className="w-8 h-8 mx-auto mb-3 opacity-30" />
@@ -1381,16 +1334,14 @@ function FolderDetailView({
           >
             <AnimatePresence mode="wait">
               <motion.div
-                key={`folder-page-${page}`}
+                key="folder-session-list"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.12, ease: 'easeOut' }}
                 className="flex flex-col gap-2"
               >
-                {pageData.map((session, index) => {
-                  const visibleIndex = page * ARCHIVE_PAGE_SIZE + index;
-                  const showPageMoveControls = totalPages > 1 && !isSearching;
+                {pageData.map((session) => {
                   return (
                     <SortableSessionCard
                       key={session.session_dir}
@@ -1402,35 +1353,12 @@ function FolderDetailView({
                       onOpenFile={onOpenFile}
                       onDeleteSession={onDeleteSession}
                       onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
-                      canMoveToPreviousPage={visibleIndex >= ARCHIVE_PAGE_SIZE}
-                      canMoveToNextPage={visibleIndex < (totalPages - 1) * ARCHIVE_PAGE_SIZE}
-                      onMoveToPreviousPage={showPageMoveControls ? () => moveSessionAcrossPages(session.session_dir, -1) : undefined}
-                      onMoveToNextPage={showPageMoveControls ? () => moveSessionAcrossPages(session.session_dir, 1) : undefined}
                     />
                   );
                 })}
               </motion.div>
             </AnimatePresence>
           </SortableContext>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-3 pt-1">
-              <button
-                onClick={() => setPage(p => Math.max(0, p - 1))}
-                disabled={page === 0}
-                className="icon-button compact-icon-button"
-                style={{ color: 'var(--text-muted)' }}
-                aria-label="Pagina precedente"
-              ><ChevronLeft className="w-4 h-4" /></button>
-              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{page + 1} / {totalPages}</span>
-              <button
-                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                disabled={page >= totalPages - 1}
-                className="icon-button compact-icon-button"
-                style={{ color: 'var(--text-muted)' }}
-                aria-label="Pagina successiva"
-              ><ChevronRight className="w-4 h-4" /></button>
-            </div>
-          )}
         </div>
         <DragOverlay>
           {activeSortId ? (() => {

@@ -1,6 +1,6 @@
 import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Archive, Moon, Settings, Sun, Terminal } from 'lucide-react';
+import { Archive, Bell, Moon, Settings, Sun, Terminal } from 'lucide-react';
 import type { AppStatus } from '../appState';
 export type ActivePage = 'queue' | 'archive';
 
@@ -22,7 +22,19 @@ interface NavSidebarProps {
   setIsSettingsOpen: (v: boolean) => void;
   hasPendingUpdate: boolean;
   consoleDisabled: boolean;
+  unreadNotificationsCount: number;
+  isNotificationsOpen: boolean;
+  setIsNotificationsOpen: Dispatch<SetStateAction<boolean>>;
+  shakeBell: boolean;
 }
+
+const bellVariants = {
+  shake: {
+    rotate: [0, -15, 15, -15, 15, -10, 10, -5, 5, 0],
+    transition: { duration: 0.5, ease: 'easeInOut' as const }
+  },
+  idle: { rotate: 0 }
+};
 
 export function NavSidebar({
   activePage, setActivePage,
@@ -32,9 +44,13 @@ export function NavSidebar({
   setIsSettingsOpen,
   hasPendingUpdate,
   consoleDisabled,
+  unreadNotificationsCount,
+  isNotificationsOpen,
+  setIsNotificationsOpen,
+  shakeBell,
 }: NavSidebarProps) {
   const [hovered, setHovered] = useState(false);
-  const collapsed = !hovered;
+  const collapsed = !hovered && !isNotificationsOpen;
 
   const apiStatusColor = !apiReady
     ? (bridgeDelayed ? 'var(--error-text)' : 'var(--warning-text)')
@@ -160,6 +176,43 @@ export function NavSidebar({
         <UtilityButton
           icon={
             <span style={{ position: 'relative', display: 'inline-flex' }}>
+              <motion.span
+                variants={bellVariants}
+                animate={shakeBell ? 'shake' : 'idle'}
+                style={{ display: 'inline-flex' }}
+              >
+                <Bell size={18} />
+              </motion.span>
+              {unreadNotificationsCount > 0 && collapsed && (
+                <span style={{ position: 'absolute', top: -3, right: -3, display: 'inline-flex' }}>
+                  <span className="animate-ping" style={{ position: 'absolute', width: 8, height: 8, borderRadius: '50%', background: '#b91c1c', opacity: 0.6 }} />
+                  <span style={{ position: 'relative', width: 8, height: 8, borderRadius: '50%', background: '#b91c1c', border: '1.5px solid var(--sidebar-bg)' }} />
+                </span>
+              )}
+            </span>
+          }
+          label="Notifiche"
+          ariaLabel="Apri notifiche"
+          active={isNotificationsOpen}
+          collapsed={collapsed}
+          onClick={() => setIsNotificationsOpen(prev => !prev)}
+          rightElement={
+            unreadNotificationsCount > 0 ? (
+              <span
+                className="px-1.5 py-0.5 rounded-full text-[9px] font-bold text-white shrink-0"
+                style={{
+                  background: '#b91c1c',
+                  lineHeight: 1,
+                }}
+              >
+                {unreadNotificationsCount}
+              </span>
+            ) : undefined
+          }
+        />
+        <UtilityButton
+          icon={
+            <span style={{ position: 'relative', display: 'inline-flex' }}>
               <Settings size={18} />
               {hasPendingUpdate && (
                 <span style={{ position: 'absolute', top: -3, right: -3, display: 'inline-flex' }}>
@@ -208,7 +261,7 @@ function SidebarTooltip({ label, disabled, children }: { label: string; disabled
 }
 
 function NavItem({
-  icon, label, active, onClick, isProcessing, collapsed,
+  icon, label, active, onClick, isProcessing, collapsed, ariaLabel,
 }: {
   icon: ReactNode;
   label: string;
@@ -216,11 +269,13 @@ function NavItem({
   onClick: () => void;
   isProcessing?: boolean;
   collapsed: boolean;
+  ariaLabel?: string;
 }) {
   return (
     <SidebarTooltip label={label} disabled={!collapsed}>
       <button
         onClick={onClick}
+        aria-label={ariaLabel || label}
         className="sidebar-nav-item w-full flex items-center rounded-md text-sm font-medium text-left"
         style={{
           background: active ? 'var(--sidebar-active-bg)' : 'transparent',
@@ -265,7 +320,7 @@ function NavItem({
 }
 
 function UtilityButton({
-  icon, label, ariaLabel, active, onClick, collapsed, disabled,
+  icon, label, ariaLabel, active, onClick, collapsed, disabled, rightElement,
 }: {
   icon: ReactNode;
   label: string;
@@ -274,6 +329,7 @@ function UtilityButton({
   onClick: () => void;
   collapsed: boolean;
   disabled?: boolean;
+  rightElement?: ReactNode;
 }) {
   return (
     <SidebarTooltip label={disabled ? 'Console non disponibile' : label} disabled={!collapsed}>
@@ -291,25 +347,28 @@ function UtilityButton({
           gap: collapsed ? 0 : 8,
           padding: '0 10px',
           height: 30,
-          justifyContent: 'flex-start',
+          justifyContent: 'space-between',
         }}
       >
-        <span className="shrink-0 inline-flex items-center" style={{ color: disabled ? 'var(--text-muted)' : (active ? 'var(--sidebar-active-text)' : 'var(--text-muted)'), lineHeight: 0 }}>{icon}</span>
-        <AnimatePresence initial={false}>
-          {!collapsed && (
-            <motion.span
-              key="util-label"
-              className="truncate"
-              initial={{ opacity: 0, width: 0 }}
-              animate={{ opacity: 1, width: 'auto' }}
-              exit={{ opacity: 0, width: 0 }}
-              transition={{ duration: 0.15 }}
-              style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}
-            >
-              {label}
-            </motion.span>
-          )}
-        </AnimatePresence>
+        <div className="flex items-center" style={{ gap: collapsed ? 0 : 8, flex: 1, minWidth: 0 }}>
+          <span className="shrink-0 inline-flex items-center" style={{ color: disabled ? 'var(--text-muted)' : (active ? 'var(--sidebar-active-text)' : 'var(--text-muted)'), lineHeight: 0 }}>{icon}</span>
+          <AnimatePresence initial={false}>
+            {!collapsed && (
+              <motion.span
+                key="util-label"
+                className="truncate"
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: 'auto' }}
+                exit={{ opacity: 0, width: 0 }}
+                transition={{ duration: 0.15 }}
+                style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}
+              >
+                {label}
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </div>
+        {!collapsed && rightElement}
       </button>
     </SidebarTooltip>
   );
