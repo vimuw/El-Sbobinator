@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertCircle, AlertTriangle, BellOff, CheckCheck, CheckCircle2, Info, Loader2, Trash2, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, BellOff, CheckCheck, CheckCircle2, Info, Loader2, X } from 'lucide-react';
 
 export interface NotificationAction {
   label: string;
@@ -108,7 +108,7 @@ function NotificationItem({ notification, onMarkAsRead, onDelete }: Notification
       {/* Unread indicator circle (fades out on hover) */}
       {!notification.read && (
         <span
-          className="absolute top-[18px] right-[18px] w-2 h-2 rounded-full transition-opacity duration-150 group-hover:opacity-0 animate-pulse"
+          className="absolute top-[18px] right-[18px] w-2 h-2 rounded-full transition-opacity duration-150 group-hover:opacity-0 group-hover:animate-none animate-pulse"
           style={{ background: 'var(--accent-text, #3d6b3a)' }}
         />
       )}
@@ -194,7 +194,7 @@ export function NotificationDropdown({
   onMarkAsRead,
   onMarkAllAsRead,
   onDelete,
-  onClearAll,
+  onClearAll: _,
   align = 'right',
   leftOffset = 224,
   valign = 'top',
@@ -254,7 +254,7 @@ export function NotificationDropdown({
                   color: 'var(--accent-text)',
                 }}
               >
-                {unreadCount} nuove
+                {unreadCount}
               </span>
             )}
           </div>
@@ -276,26 +276,6 @@ export function NotificationDropdown({
               >
                 <CheckCheck className="w-3.5 h-3.5" />
                 Segna come già lette
-              </button>
-            )}
-            {notifications.length > 0 && (
-              <button
-                onClick={onClearAll}
-                className="flex items-center gap-1.5 transition-all duration-150 hover:opacity-80"
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '4px 6px',
-                  borderRadius: '6px',
-                  color: 'var(--text-muted)',
-                  fontSize: '11px',
-                  fontWeight: 500,
-                }}
-                aria-label="Cancella tutte le notifiche"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Cancella tutto
               </button>
             )}
           </div>

@@ -1051,6 +1051,12 @@ function FolderDetailView({
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
 }) {
   const [search, setSearch] = useState('');
+  const [fullTextMode, setFullTextMode] = useState(false);
+  const [ftResults, setFtResults] = useState<SearchSessionResult[] | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [ftError, setFtError] = useState<string | null>(null);
+  const searchGenRef = useRef(0);
+  const ftDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const folderSearchInputRef = useRef<HTMLInputElement>(null);
   const [folderSearchFocused, setFolderSearchFocused] = useState(false);
@@ -1061,12 +1067,18 @@ function FolderDetailView({
     return q ? all.filter(s => s.name.toLowerCase().includes(q)) : all;
   }, [folder.session_dirs, sessionsByDir, search]);
 
+  const filteredFtResults = useMemo(() => {
+    if (!ftResults) return null;
+    const inFolder = new Set(folder.session_dirs);
+    return ftResults.filter(r => inFolder.has(r.session_dir));
+  }, [ftResults, folder.session_dirs]);
+
   const pageData = folderSessions;
 
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [addSearch, setAddSearch] = useState('');
   const [activeSortId, setActiveSortId] = useState<string | null>(null);
-  const isSearching = search.trim().length > 0;
+  const isFilteringName = !fullTextMode && search.trim().length > 0;
 
   const sortSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -1106,6 +1118,40 @@ function FolderDetailView({
   }, [folder.session_dirs, sessionsByDir, addSearch]);
 
 
+
+  useEffect(() => {
+    if (ftDebounceRef.current) clearTimeout(ftDebounceRef.current);
+    const q = search.trim();
+    if (!fullTextMode || q.length < 3) {
+      searchGenRef.current++;
+      setFtResults(null);
+      setFtError(null);
+      setIsSearching(false);
+      return;
+    }
+    setIsSearching(true);
+    setFtError(null);
+    const gen = ++searchGenRef.current;
+    ftDebounceRef.current = setTimeout(async () => {
+      try {
+        const res = await window.pywebview?.api?.search_sessions?.(q, 50);
+        if (searchGenRef.current !== gen) return;
+        if (res?.ok) {
+          setFtResults(res.results ?? []);
+        } else {
+          setFtError(res?.error ?? 'Errore durante la ricerca');
+          setFtResults([]);
+        }
+      } catch {
+        if (searchGenRef.current !== gen) return;
+        setFtError('Errore durante la ricerca');
+        setFtResults([]);
+      } finally {
+        if (searchGenRef.current === gen) setIsSearching(false);
+      }
+    }, 400);
+    return () => { if (ftDebounceRef.current) clearTimeout(ftDebounceRef.current); };
+  }, [fullTextMode, search]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1154,47 +1200,60 @@ function FolderDetailView({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <div className="notion-search-wrap">
-          <Search className="notion-search-icon w-3.5 h-3.5" />
-          <input
-            ref={folderSearchInputRef}
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            onFocus={() => setFolderSearchFocused(true)}
-            onBlur={() => setFolderSearchFocused(false)}
-            placeholder="Cerca per nome..."
-            className="notion-search-input"
-          />
-          <AnimatePresence>
-            {search.trim().length > 0 ? (
-              <motion.button
-                key="clear"
-                initial={{ opacity: 0, scale: 0.7 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.7 }}
-                transition={{ duration: 0.1 }}
-                onClick={() => { setSearch(''); folderSearchInputRef.current?.focus(); }}
-                className="notion-search-clear"
-                aria-label="Cancella ricerca"
-              >
-                <X className="w-3 h-3" />
-              </motion.button>
-            ) : !folderSearchFocused ? (
-              <motion.span
-                key="hint"
-                className="notion-search-hint"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.12 }}
-              >
-                <kbd>/</kbd>
-              </motion.span>
-            ) : null}
-          </AnimatePresence>
+        <div className="flex items-center gap-2">
+          <div className="notion-search-wrap">
+            {isSearching
+              ? <Loader2 className="notion-search-icon w-3.5 h-3.5 animate-spin" />
+              : <Search className="notion-search-icon w-3.5 h-3.5" />}
+            <input
+              ref={folderSearchInputRef}
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onFocus={() => setFolderSearchFocused(true)}
+              onBlur={() => setFolderSearchFocused(false)}
+              placeholder={fullTextMode ? 'Cerca nel contenuto...' : 'Cerca per nome...'}
+              className="notion-search-input"
+            />
+            <AnimatePresence>
+              {search.trim().length > 0 ? (
+                <motion.button
+                  key="clear"
+                  initial={{ opacity: 0, scale: 0.7 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.7 }}
+                  transition={{ duration: 0.1 }}
+                  onClick={() => { setSearch(''); folderSearchInputRef.current?.focus(); }}
+                  className="notion-search-clear"
+                  aria-label="Cancella ricerca"
+                >
+                  <X className="w-3 h-3" />
+                </motion.button>
+              ) : !folderSearchFocused ? (
+                <motion.span
+                  key="hint"
+                  className="notion-search-hint"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.12 }}
+                >
+                  <kbd>/</kbd>
+                </motion.span>
+              ) : null}
+            </AnimatePresence>
+          </div>
+          <button
+            onClick={() => { setFullTextMode(m => !m); setSearch(''); }}
+            className="notion-sort-chip"
+            style={fullTextMode ? { color: 'var(--accent-text)', borderColor: 'var(--accent-text)', background: 'var(--accent-subtle)' } : undefined}
+            title={fullTextMode ? 'Disattiva ricerca nel contenuto' : 'Attiva ricerca nel contenuto'}
+          >
+            <FileSearch className="w-3.5 h-3.5" style={{ opacity: 0.8 }} />
+            Testo completo
+          </button>
         </div>
-        {search.trim().length > 0 && (
+        {!fullTextMode && search.trim().length > 0 && (
           <span className="notion-results-count">
             {folderSessions.length === 0
               ? 'Nessun risultato'
@@ -1202,6 +1261,20 @@ function FolderDetailView({
                 ? '1 risultato'
                 : `${folderSessions.length} risultati`}
           </span>
+        )}
+        {fullTextMode && filteredFtResults !== null && !isSearching && (
+          <span className="notion-results-count">
+            {ftError
+              ? ftError
+              : filteredFtResults.length === 0
+                ? `Nessun risultato per «${search.trim()}»`
+                : filteredFtResults.length === 1
+                  ? '1 sbobina corrisponde'
+                  : `${filteredFtResults.length} sbobine corrispondono`}
+          </span>
+        )}
+        {fullTextMode && search.trim().length > 0 && search.trim().length < 3 && (
+          <span className="notion-results-count">Digita almeno 3 caratteri</span>
         )}
       </div>
 
@@ -1311,62 +1384,78 @@ function FolderDetailView({
         </AnimatePresence>
       </div>
 
-      <DndContext
-        sensors={sortSensors}
-        onDragStart={handleSortStart}
-        onDragEnd={handleSortEnd}
-      >
+      {!fullTextMode ? (
+        <DndContext
+          sensors={sortSensors}
+          onDragStart={handleSortStart}
+          onDragEnd={handleSortEnd}
+        >
+          <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-2 min-h-0 scrollbar-thin">
+            {folderSessions.length === 0 && !search.trim() && (
+              <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>
+                <FileText className="w-8 h-8 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">Nessuna sbobina in questa cartella.</p>
+              </div>
+            )}
+            {folderSessions.length === 0 && search.trim() && (
+              <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+                Nessun risultato per &ldquo;{search}&rdquo;
+              </div>
+            )}
+            <SortableContext
+              items={pageData.map(s => s.session_dir)}
+              strategy={verticalListSortingStrategy}
+            >
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key="folder-session-list"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.12, ease: 'easeOut' }}
+                  className="flex flex-col gap-2"
+                >
+                  {pageData.map((session) => {
+                    return (
+                      <SortableSessionCard
+                        key={session.session_dir}
+                        session={session}
+                        folderColor={folder.color}
+                        disabled={isFilteringName}
+                        onRemove={() => onRemoveSession(session.session_dir)}
+                        onPreview={onPreview}
+                        onOpenFile={onOpenFile}
+                        onDeleteSession={onDeleteSession}
+                        onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
+                      />
+                    );
+                  })}
+                </motion.div>
+              </AnimatePresence>
+            </SortableContext>
+          </div>
+          <DragOverlay>
+            {activeSortId ? (() => {
+              const s = folderSessions.find(x => x.session_dir === activeSortId);
+              return s ? <FolderSessionCardOverlay session={s} folderColor={folder.color} /> : null;
+            })() : null}
+          </DragOverlay>
+        </DndContext>
+      ) : (
         <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-2 min-h-0 scrollbar-thin">
-          {folderSessions.length === 0 && !search.trim() && (
-            <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>
-              <FileText className="w-8 h-8 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">Nessuna sbobina in questa cartella.</p>
-            </div>
-          )}
-          {folderSessions.length === 0 && search.trim() && (
+          <FullTextResultList
+            query={search.trim()}
+            results={filteredFtResults}
+            isSearching={isSearching}
+            onPreview={(r) => onPreview(r.html_path, r.name, undefined, undefined, r.session_dir, search.trim())}
+          />
+          {filteredFtResults !== null && filteredFtResults.length === 0 && !isSearching && search.trim().length >= 3 && (
             <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
-              Nessun risultato per &ldquo;{search}&rdquo;
+              Nessun risultato nel testo delle sbobine per &ldquo;{search}&rdquo;
             </div>
           )}
-          <SortableContext
-            items={pageData.map(s => s.session_dir)}
-            strategy={verticalListSortingStrategy}
-          >
-            <AnimatePresence mode="wait">
-              <motion.div
-                key="folder-session-list"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.12, ease: 'easeOut' }}
-                className="flex flex-col gap-2"
-              >
-                {pageData.map((session) => {
-                  return (
-                    <SortableSessionCard
-                      key={session.session_dir}
-                      session={session}
-                      folderColor={folder.color}
-                      disabled={isSearching}
-                      onRemove={() => onRemoveSession(session.session_dir)}
-                      onPreview={onPreview}
-                      onOpenFile={onOpenFile}
-                      onDeleteSession={onDeleteSession}
-                      onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
-                    />
-                  );
-                })}
-              </motion.div>
-            </AnimatePresence>
-          </SortableContext>
         </div>
-        <DragOverlay>
-          {activeSortId ? (() => {
-            const s = folderSessions.find(x => x.session_dir === activeSortId);
-            return s ? <FolderSessionCardOverlay session={s} folderColor={folder.color} /> : null;
-          })() : null}
-        </DragOverlay>
-      </DndContext>
+      )}
     </div>
   );
 }
