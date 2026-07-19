@@ -6,10 +6,21 @@ interface ConsolePanelProps {
   consoleLogs: string[];
   lastConsoleMessage: string;
   appState: AppStatus;
+  isConsoleExpanded?: boolean;
+  setIsConsoleExpanded?: (expanded: boolean | ((prev: boolean) => boolean)) => void;
 }
 
-export function ConsolePanel({ consoleLogs, lastConsoleMessage, appState }: ConsolePanelProps) {
-  const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
+export function ConsolePanel({
+  consoleLogs,
+  lastConsoleMessage,
+  appState,
+  isConsoleExpanded: propIsConsoleExpanded,
+  setIsConsoleExpanded: propSetIsConsoleExpanded,
+}: ConsolePanelProps) {
+  const [localIsExpanded, setLocalIsExpanded] = useState(false);
+  const isConsoleExpanded = propIsConsoleExpanded !== undefined ? propIsConsoleExpanded : localIsExpanded;
+  const setIsConsoleExpanded = propSetIsConsoleExpanded !== undefined ? propSetIsConsoleExpanded : setLocalIsExpanded;
+
   const [isCopied, setIsCopied] = useState(false);
   const consoleScrollRef = useRef<HTMLDivElement>(null);
   const isMouseInConsoleRef = useRef(false);

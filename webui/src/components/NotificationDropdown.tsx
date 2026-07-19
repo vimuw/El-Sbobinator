@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertCircle, AlertTriangle, BellOff, CheckCheck, CheckCircle2, Info, Loader2, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, BellOff, Check, CheckCheck, CheckCircle2, Info, Loader2 } from 'lucide-react';
 
 export interface NotificationAction {
   label: string;
@@ -95,25 +95,23 @@ function NotificationItem({ notification, onMarkAsRead, onDelete }: Notification
   return (
     <div
       onClick={() => !notification.read && onMarkAsRead(notification.id)}
-      className="group relative flex flex-col gap-1 p-3.5 rounded-xl transition-all duration-150 border cursor-pointer"
+      className="group relative flex flex-col gap-1 py-3 px-4.5 transition-all duration-150 border-b border-[var(--border-subtle)] hover:bg-neutral-800/5 dark:hover:bg-neutral-200/5 cursor-pointer last:border-b-0"
       style={{
-        background: !notification.read
-          ? 'var(--bg-elevated)'
-          : 'transparent',
-        borderColor: !notification.read
-          ? 'var(--border-strong)'
-          : 'var(--border-subtle)',
+        background: 'transparent',
       }}
     >
-      {/* Unread indicator circle (fades out on hover) */}
+      {/* Left indicator bar for unread notifications */}
       {!notification.read && (
         <span
-          className="absolute top-[18px] right-[18px] w-2 h-2 rounded-full transition-opacity duration-150 group-hover:opacity-0 group-hover:animate-none animate-pulse"
-          style={{ background: 'var(--accent-text, #3d6b3a)' }}
+          className="absolute left-0 top-0 bottom-0 w-1"
+          style={{
+            background: 'var(--accent-text, #3d6b3a)',
+            borderRadius: '0 2px 2px 0',
+          }}
         />
       )}
 
-      {/* Delete/Dismiss button (fades in on hover in the exact same spot) */}
+      {/* Archive button (fades in on hover) */}
       <button
         onClick={(e) => {
           e.stopPropagation();
@@ -121,11 +119,12 @@ function NotificationItem({ notification, onMarkAsRead, onDelete }: Notification
           onDelete(notification.id);
         }}
         disabled={isLoading}
-        className="absolute top-2.5 right-2.5 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-neutral-800/10 dark:hover:bg-neutral-200/10 transition-all duration-150"
-        aria-label="Chiudi notifica"
-        style={{ cursor: isLoading ? 'default' : 'pointer', color: 'var(--text-muted)' }}
+        className="absolute top-2.5 right-2.5 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-neutral-800/10 dark:hover:bg-neutral-200/10 transition-all duration-150 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+        title="Archivia"
+        aria-label="Archivia notifica"
+        style={{ cursor: isLoading ? 'default' : 'pointer' }}
       >
-        <X className="w-3.5 h-3.5" />
+        <Check className="w-3.5 h-3.5" />
       </button>
 
       <div className="flex items-start gap-2.5">
@@ -200,7 +199,15 @@ export function NotificationDropdown({
   valign = 'top',
   bottomOffset = 48,
 }: NotificationDropdownProps) {
+  const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all');
   const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const filteredNotifications = [...notifications]
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .filter((n) => {
+      if (activeTab === 'unread') return !n.read;
+      return true;
+    });
 
   return (
     <>
@@ -281,9 +288,54 @@ export function NotificationDropdown({
           </div>
         </div>
 
+        {/* Tabs Filter */}
+        <div className="flex px-4.5 border-b border-[var(--border-subtle)] gap-4">
+          <button
+            onClick={() => setActiveTab('all')}
+            className="py-2 text-xs font-medium transition-all relative"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: activeTab === 'all' ? 'var(--text-primary)' : 'var(--text-muted)',
+            }}
+          >
+            Tutte
+            {activeTab === 'all' && (
+              <span className="absolute bottom-0 left-0 right-0 h-[2px]" style={{ background: 'var(--accent-text)' }} />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('unread')}
+            className="py-2 text-xs font-medium transition-all relative flex items-center gap-1.5"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: activeTab === 'unread' ? 'var(--text-primary)' : 'var(--text-muted)',
+            }}
+          >
+            Non lette
+            {unreadCount > 0 && (
+              <span
+                className="px-1.5 py-0.2 text-[9px] rounded-md font-bold"
+                style={{
+                  background: 'var(--accent-subtle)',
+                  color: 'var(--accent-text)',
+                }}
+              >
+                {unreadCount}
+              </span>
+            )}
+            {activeTab === 'unread' && (
+              <span className="absolute bottom-0 left-0 right-0 h-[2px]" style={{ background: 'var(--accent-text)' }} />
+            )}
+          </button>
+        </div>
+
         {/* Content list */}
-        <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2 scrollbar-thin">
-          {notifications.length === 0 ? (
+        <div className="flex-1 overflow-y-auto flex flex-col scrollbar-thin">
+          {filteredNotifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2.5 py-12 text-center h-full">
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center"
@@ -292,23 +344,23 @@ export function NotificationDropdown({
                 <BellOff className="w-4 h-4 opacity-40" style={{ color: 'var(--text-muted)' }} />
               </div>
               <h4 className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-                Nessuna notifica
+                {activeTab === 'unread' ? 'Nessuna notifica non letta' : 'Nessuna notifica'}
               </h4>
-              <p className="text-[11px] max-w-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                Qui troverai le notifiche relative ad aggiornamenti, completamenti ed errori di elaborazione.
+              <p className="text-[11px] max-w-xs leading-relaxed px-6" style={{ color: 'var(--text-muted)' }}>
+                {activeTab === 'unread'
+                  ? 'Tutte le notifiche sono state lette.'
+                  : 'Qui troverai le notifiche relative ad aggiornamenti, completamenti ed errori di elaborazione.'}
               </p>
             </div>
           ) : (
-            [...notifications]
-              .sort((a, b) => b.timestamp - a.timestamp)
-              .map((n) => (
-                <NotificationItem
-                  key={n.id}
-                  notification={n}
-                  onMarkAsRead={onMarkAsRead}
-                  onDelete={onDelete}
-                />
-              ))
+            filteredNotifications.map((n) => (
+              <NotificationItem
+                key={n.id}
+                notification={n}
+                onMarkAsRead={onMarkAsRead}
+                onDelete={onDelete}
+              />
+            ))
           )}
         </div>
       </div>

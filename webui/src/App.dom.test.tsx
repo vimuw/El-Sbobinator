@@ -220,7 +220,7 @@ describe('App', () => {
     expect(await screen.findByText(/file di configurazione era corrotto/i)).toBeTruthy();
 
     await act(async () => {
-      fireEvent.click(screen.getByLabelText('Chiudi notifica'));
+      fireEvent.click(screen.getByLabelText('Archivia notifica'));
     });
     unmount();
 
@@ -853,12 +853,146 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
 
       // Dismiss the notification using the close button
       await act(async () => {
-        fireEvent.click(screen.getByLabelText('Chiudi notifica'));
+        fireEvent.click(screen.getByLabelText('Archivia notifica'));
       });
 
       // Verify empty state again
       expect(screen.getByText('Nessuna notifica')).toBeTruthy();
       unmount();
+    });
+  });
+
+  describe('onBatchFullyDone native OS notifications', () => {
+    let capturedOptions: any = null;
+    const showNotification = vi.fn();
+
+    beforeEach(() => {
+      showNotification.mockClear();
+      setPywebview({
+        get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
+        get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
+        show_notification: showNotification,
+      });
+
+      vi.mocked(useBridgeCallbacks).mockImplementation((options) => {
+        capturedOptions = options;
+        return undefined;
+      });
+
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+      localStorage.setItem('notifications_enabled', 'true');
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('shows successful batch notification when all files completed successfully', async () => {
+      await act(async () => { render(<App />); });
+      expect(capturedOptions).not.toBeNull();
+
+      act(() => {
+        capturedOptions.onBatchFullyDone({
+          total: 3,
+          completed: 3,
+          completed_with_warnings: 0,
+          failed: 0,
+          cancelled: false,
+        });
+      });
+
+      expect(showNotification).toHaveBeenCalledWith(
+        '✅ Batch completato — El Sbobinator',
+        '3 sbobine elaborate con successo.',
+      );
+    });
+
+    it('shows warnings batch notification when some files have warnings', async () => {
+      await act(async () => { render(<App />); });
+
+      act(() => {
+        capturedOptions.onBatchFullyDone({
+          total: 3,
+          completed: 2,
+          completed_with_warnings: 1,
+          failed: 0,
+          cancelled: false,
+        });
+      });
+
+      expect(showNotification).toHaveBeenCalledWith(
+        '⚠️ Batch completato con avvisi — El Sbobinator',
+        'Elaborazione terminata con avvisi. Sbobine con avvisi: 1/3.',
+      );
+    });
+
+    it('shows errors batch notification when some files failed', async () => {
+      await act(async () => { render(<App />); });
+
+      act(() => {
+        capturedOptions.onBatchFullyDone({
+          total: 3,
+          completed: 1,
+          completed_with_warnings: 1,
+          failed: 1,
+          cancelled: false,
+        });
+      });
+
+      expect(showNotification).toHaveBeenCalledWith(
+        '⚠️ Batch completato con errori — El Sbobinator',
+        "Elaborazione terminata. Riuscite: 2/3. Fallite: 1. Apri l'app per i dettagli.",
+      );
+    });
+
+    it('does not show notification when batch was cancelled', async () => {
+      await act(async () => { render(<App />); });
+
+      act(() => {
+        capturedOptions.onBatchFullyDone({
+          total: 3,
+          completed: 1,
+          completed_with_warnings: 1,
+          failed: 1,
+          cancelled: true,
+        });
+      });
+
+      expect(showNotification).not.toHaveBeenCalled();
+    });
+
+    it('does not show notification when notifications_enabled is false', async () => {
+      localStorage.setItem('notifications_enabled', 'false');
+      await act(async () => { render(<App />); });
+
+      act(() => {
+        capturedOptions.onBatchFullyDone({
+          total: 3,
+          completed: 3,
+          completed_with_warnings: 0,
+          failed: 0,
+          cancelled: false,
+        });
+      });
+
+      expect(showNotification).not.toHaveBeenCalled();
+    });
+
+    it('does not show notification when document has focus', async () => {
+      vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+      await act(async () => { render(<App />); });
+
+      act(() => {
+        capturedOptions.onBatchFullyDone({
+          total: 3,
+          completed: 3,
+          completed_with_warnings: 0,
+          failed: 0,
+          cancelled: false,
+        });
+      });
+
+      expect(showNotification).not.toHaveBeenCalled();
     });
   });
 });

@@ -169,7 +169,7 @@ export function QueueSection({
             <div
               ref={scrollRef}
               style={{
-                maxHeight: '26rem',
+                maxHeight: 'calc(100vh - 350px - var(--console-height, 0px))',
                 overflowY: isOverflowing ? 'auto' : 'hidden',
                 overflowX: 'hidden',
                 scrollbarWidth: 'thin',

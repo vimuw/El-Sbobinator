@@ -1219,6 +1219,15 @@ button {
   scrollbar-color: var(--border-strong) transparent;
 }
 
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 .app-scroll {
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
@@ -2980,4 +2989,5 @@ input[type="password"]::-ms-reveal {
   gap: 16px;
   color: var(--text-muted) !important;
   font-size: 13px;
+  flex-shrink: 0;
 }

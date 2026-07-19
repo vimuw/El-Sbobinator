@@ -166,7 +166,7 @@ export default function App() {
 
   const [archiveSessions, setArchiveSessions] = useState<ArchiveSession[]>([]);
   const [archiveTotal, setArchiveTotal] = useState(0);
-  const archiveLimitRef = useRef(20);
+  const archiveLimitRef = useRef(0);
   const [rawNotifications, setRawNotifications] = useState<PersistedNotification[]>(() => {
     try {
       const stored = localStorage.getItem('el-sbobinator.notifications.v1');
@@ -198,6 +198,7 @@ export default function App() {
   const prevSessionDirsRef = useRef<Map<string, string>>(new Map());
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
   const [hasOpenedSettings, setHasOpenedSettings] = useState(false);
   const shouldRenderSettings = isSettingsOpen || hasOpenedSettings;
 
@@ -483,11 +484,11 @@ export default function App() {
       ));
       if (remaining.length > 0) {
         if (res.cancelled) {
-          addNotification('Retry annullato', `Retry annullato: ${remaining.length} ${remaining.length === 1 ? 'blocco resta' : 'blocchi restano'} non revisionato.`, 'warning', 'processing');
+          addNotification('Retry annullato', `Retry annullato: ${remaining.length} ${remaining.length === 1 ? 'blocco resta non revisionato' : 'blocchi restano non revisionati'}.`, 'warning', 'processing');
         } else if (res.quota_exhausted) {
-          addNotification('Quota esaurita', `Quota giornaliera esaurita: ${remaining.length} ${remaining.length === 1 ? 'blocco resta' : 'blocchi restano'} non revisionato. Riprova domani.`, 'warning', 'processing');
+          addNotification('Quota esaurita', `Quota giornaliera esaurita: ${remaining.length} ${remaining.length === 1 ? 'blocco resta non revisionato' : 'blocchi restano non revisionati'}. Riprova domani.`, 'warning', 'processing');
         } else {
-          addNotification('Elaborazione parziale', `${remaining.length} ${remaining.length === 1 ? 'blocco resta' : 'blocchi restano'} non revisionato. Puoi riprovare piu tardi.`, 'warning', 'processing');
+          addNotification('Elaborazione parziale', `${remaining.length} ${remaining.length === 1 ? 'blocco resta non revisionato' : 'blocchi restano non revisionati'}. Puoi riprovare più tardi.`, 'warning', 'processing');
         }
       } else {
         addNotification('Elaborazione completata', 'Blocchi mancanti revisionati e HTML aggiornato.', 'success', 'processing');
@@ -506,7 +507,7 @@ export default function App() {
     if (key) warnedRevisionSessionsRef.current.add(key);
     addNotification(
       'Completata con avvisi',
-      `Completata con avvisi: ${count} ${count === 1 ? 'sezione e stata inclusa' : 'sezioni sono state incluse'} senza revisione AI.`,
+      `Completata con avvisi: ${count} ${count === 1 ? 'sezione è stata inclusa' : 'sezioni sono state incluse'} senza revisione AI.`,
       'warning',
       'processing',
       {
@@ -827,7 +828,7 @@ export default function App() {
     }, 30_000);
     return () => {
       clearInterval(intervalId);
-      archiveLimitRef.current = 20;
+      archiveLimitRef.current = 0;
     };
   }, [activePage, addNotification]);
 
@@ -1338,17 +1339,39 @@ export default function App() {
   const onBatchReset = useCallback(() => { setBatchTotal(0); setBatchCompleted(0); }, []);
   const onBatchFullyDone = useCallback((data: ProcessDonePayload) => {
     onBatchReset();
+
+    // Set flash if successful
     if (isSuccessfulProcessDone(data)) {
       setCompletionFlash(true);
       setTimeout(() => setCompletionFlash(false), 5000);
-      const completedCount = Number(data.completed ?? 0);
-      if (completedCount > 1 && !document.hasFocus()) {
-        void window.pywebview?.api?.show_notification?.(
-          '✅ Batch completato — El Sbobinator',
-          `${completedCount} sbobine elaborate con successo.`,
-        );
+    }
+
+    if (localStorage.getItem('notifications_enabled') !== 'false' && !document.hasFocus()) {
+      const total = Number(data.total ?? 0);
+      const completed = Number(data.completed ?? 0);
+      const completed_with_warnings = Number(data.completed_with_warnings ?? 0);
+      const failed = Number(data.failed ?? 0);
+
+      if (total > 1 && !data.cancelled) {
+        if (failed > 0) {
+          void window.pywebview?.api?.show_notification?.(
+            '⚠️ Batch completato con errori — El Sbobinator',
+            `Elaborazione terminata. Riuscite: ${completed + completed_with_warnings}/${total}. Fallite: ${failed}. Apri l'app per i dettagli.`,
+          );
+        } else if (completed_with_warnings > 0) {
+          void window.pywebview?.api?.show_notification?.(
+            '⚠️ Batch completato con avvisi — El Sbobinator',
+            `Elaborazione terminata con avvisi. Sbobine con avvisi: ${completed_with_warnings}/${total}.`,
+          );
+        } else {
+          void window.pywebview?.api?.show_notification?.(
+            '✅ Batch completato — El Sbobinator',
+            `${completed} sbobine elaborate con successo.`,
+          );
+        }
       }
     }
+
     void refreshArchiveSessions();
   }, [onBatchReset, refreshArchiveSessions]);
 
@@ -1369,6 +1392,7 @@ export default function App() {
     clearCompletionFlash: () => setCompletionFlash(false),
     onRevisionWarning: handleRevisionWarning,
     addNotification,
+    batchTotal,
     onDownloadProgress: useCallback((data: UpdateDownloadProgressPayload) => {
       const currentDownload = downloadCompletionRef.current;
       const version = currentDownload?.version ?? updateInstallStateRef.current.version ?? latestVersion;
@@ -1470,7 +1494,10 @@ export default function App() {
           {activePage === 'queue' ? (
             <motion.main
               key="queue"
-              className="flex-1 max-w-3xl w-full mx-auto flex flex-col"
+              className="flex-1 w-full flex flex-col overflow-y-auto hide-scrollbar"
+              style={{
+                '--console-height': showConsole ? (isConsoleExpanded ? '250px' : '50px') : '0px'
+              } as React.CSSProperties}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.15, ease: 'easeOut' }}
@@ -1478,7 +1505,7 @@ export default function App() {
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
-              <div className="my-auto px-5 sm:px-6 py-8 flex flex-col gap-5">
+              <div className="my-auto px-5 sm:px-6 py-8 flex flex-col gap-5 max-w-3xl w-full mx-auto">
                 {apiKeyInsecure && (
                   <motion.div
                     key="api-key-insecure-banner"
@@ -1636,19 +1663,29 @@ export default function App() {
                     consoleLogs={consoleLogs}
                     lastConsoleMessage={lastConsoleMessage}
                     appState={appState}
+                    isConsoleExpanded={isConsoleExpanded}
+                    setIsConsoleExpanded={setIsConsoleExpanded}
                   />
                 )}
               </div>
+              <footer className="app-footer">
+                <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link">
+                  <Github className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
+                </a>
+                <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }} className="footer-link">
+                  ☕ Offrimi un caffè su Ko-fi!
+                </a>
+              </footer>
             </motion.main>
           ) : (
             <motion.main
               key="archive"
-              className="flex-1 max-w-4xl w-full mx-auto flex flex-col min-h-0"
+              className="flex-1 w-full flex flex-col overflow-y-auto hide-scrollbar"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.15, ease: 'easeOut' }}
             >
-              <div className="flex-1 px-5 sm:px-6 py-8 flex flex-col min-h-0">
+              <div className="flex-1 px-5 sm:px-6 py-8 flex flex-col max-w-4xl w-full mx-auto">
                 <React.Suspense fallback={null}>
                   <ArchivePage
                     sessions={archiveFiltered}
@@ -1664,17 +1701,17 @@ export default function App() {
                   />
                 </React.Suspense>
               </div>
+              <footer className="app-footer">
+                <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link">
+                  <Github className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
+                </a>
+                <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }} className="footer-link">
+                  ☕ Offrimi un caffè su Ko-fi!
+                </a>
+              </footer>
             </motion.main>
           )}
         </AnimatePresence>
-        <footer className="app-footer">
-          <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link">
-            <Github className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
-          </a>
-          <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }} className="footer-link">
-            ☕ Offrimi un caffè su Ko-fi!
-          </a>
-        </footer>
       </div>
 
       <RegenerateModal

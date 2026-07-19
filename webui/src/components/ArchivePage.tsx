@@ -46,7 +46,7 @@ type DeleteFolderConfirmState = { folder: ArchiveFolder };
 
 export function ArchivePage({
   sessions, total, folders, onFoldersChange,
-  onPreview, onOpenFile, onDeleteSession, onRefresh, onLoadAll,
+  onPreview, onOpenFile, onDeleteSession, onRefresh,
   onRetryFailedRevisionBlocks,
 }: ArchivePageProps) {
   const [search, setSearch] = useState('');
@@ -248,7 +248,7 @@ export function ArchivePage({
   }
 
   return (
-    <div className="flex flex-col gap-6 flex-1 min-h-0">
+    <div className="flex flex-col gap-6 w-full">
       {/* Header */}
       <div className="flex items-center gap-3">
         <h2 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
@@ -257,24 +257,7 @@ export function ArchivePage({
         <span className="status-pill">{total != null && total > sessions.length ? total : sessions.length}</span>
       </div>
 
-      {/* Truncation notice */}
-      {total != null && total > sessions.length && onLoadAll && (
-        <div
-          className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl text-sm"
-          style={{ background: 'var(--accent-subtle)', color: 'var(--text-secondary)', border: '1px solid var(--accent-ring, var(--border-default))' }}
-        >
-          <span style={{ color: 'var(--text-muted)' }}>
-            Mostrate <strong style={{ color: 'var(--text-primary)' }}>{sessions.length}</strong> di <strong style={{ color: 'var(--text-primary)' }}>{total}</strong> sbobine
-          </span>
-          <button
-            onClick={onLoadAll}
-            className="compact-button"
-            style={{ color: 'var(--accent-text)', fontWeight: 600, flexShrink: 0 }}
-          >
-            Mostra tutte
-          </button>
-        </div>
-      )}
+
 
       {/* Folders grid — always visible, first card is "new folder" */}
       <DndContext
@@ -412,7 +395,7 @@ export function ArchivePage({
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-3 min-h-0 scrollbar-thin">
+        <div className="flex flex-col gap-3">
           {!fullTextMode && sessionPageData.length === 0 && sessions.length === 0 && (
             <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>
               <FileText className="w-8 h-8 mx-auto mb-3 opacity-30" />
@@ -436,34 +419,36 @@ export function ArchivePage({
           )}
 
           {!fullTextMode && (
-            <AnimatePresence mode="wait">
-              <motion.div
-                key="archive-session-list"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.12, ease: 'easeOut' }}
-                className="flex flex-col gap-3"
-              >
-                {sessionPageData.map(session => (
-                  <DraggableSessionCard
-                    key={session.session_dir}
-                    session={session}
-                    allFolders={folders}
-                    currentFolder={sessionFolderMap.get(session.session_dir)}
-                    onAssignToFolder={fId => assignToFolder(session.session_dir, fId)}
-                    onRemoveFromFolder={() => {
-                      const f = sessionFolderMap.get(session.session_dir);
-                      if (f) removeFromFolder(session.session_dir, f.id);
-                    }}
-                    onPreview={onPreview}
-                    onOpenFile={onOpenFile}
-                    onDeleteSession={onDeleteSession}
-                    onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
-                  />
-                ))}
-              </motion.div>
-            </AnimatePresence>
+            <div className="max-h-[calc(100vh-380px)] overflow-y-auto app-scroll pr-1">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key="archive-session-list"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.12, ease: 'easeOut' }}
+                  className="flex flex-col gap-3"
+                >
+                  {sessionPageData.map(session => (
+                    <DraggableSessionCard
+                      key={session.session_dir}
+                      session={session}
+                      allFolders={folders}
+                      currentFolder={sessionFolderMap.get(session.session_dir)}
+                      onAssignToFolder={fId => assignToFolder(session.session_dir, fId)}
+                      onRemoveFromFolder={() => {
+                        const f = sessionFolderMap.get(session.session_dir);
+                        if (f) removeFromFolder(session.session_dir, f.id);
+                      }}
+                      onPreview={onPreview}
+                      onOpenFile={onOpenFile}
+                      onDeleteSession={onDeleteSession}
+                      onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
+                    />
+                  ))}
+                </motion.div>
+              </AnimatePresence>
+            </div>
           )}
         </div>
       </div>
@@ -1180,7 +1165,7 @@ function FolderDetailView({
   ];
 
   return (
-    <div className="flex flex-col gap-6 flex-1 min-h-0">
+    <div className="flex flex-col gap-6 w-full">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <button
@@ -1342,8 +1327,8 @@ function FolderDetailView({
                   </p>
                 )}
                 <div
-                  className="flex flex-col gap-2"
-                  style={{ maxHeight: 320, overflowY: 'auto' }}
+                  className="flex flex-col gap-2 overflow-y-auto app-scroll pr-1"
+                  style={{ maxHeight: 320 }}
                 >
                   {availableToAdd.map(session => {
                     const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
@@ -1390,7 +1375,7 @@ function FolderDetailView({
           onDragStart={handleSortStart}
           onDragEnd={handleSortEnd}
         >
-          <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-2 min-h-0 scrollbar-thin">
+          <div className="flex flex-col gap-2">
             {folderSessions.length === 0 && !search.trim() && (
               <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>
                 <FileText className="w-8 h-8 mx-auto mb-3 opacity-30" />
@@ -1402,37 +1387,39 @@ function FolderDetailView({
                 Nessun risultato per &ldquo;{search}&rdquo;
               </div>
             )}
-            <SortableContext
-              items={pageData.map(s => s.session_dir)}
-              strategy={verticalListSortingStrategy}
-            >
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key="folder-session-list"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.12, ease: 'easeOut' }}
-                  className="flex flex-col gap-2"
-                >
-                  {pageData.map((session) => {
-                    return (
-                      <SortableSessionCard
-                        key={session.session_dir}
-                        session={session}
-                        folderColor={folder.color}
-                        disabled={isFilteringName}
-                        onRemove={() => onRemoveSession(session.session_dir)}
-                        onPreview={onPreview}
-                        onOpenFile={onOpenFile}
-                        onDeleteSession={onDeleteSession}
-                        onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
-                      />
-                    );
-                  })}
-                </motion.div>
-              </AnimatePresence>
-            </SortableContext>
+            <div className="max-h-[calc(100vh-300px)] overflow-y-auto app-scroll pr-1">
+              <SortableContext
+                items={pageData.map(s => s.session_dir)}
+                strategy={verticalListSortingStrategy}
+              >
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key="folder-session-list"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.12, ease: 'easeOut' }}
+                    className="flex flex-col gap-2"
+                  >
+                    {pageData.map((session) => {
+                      return (
+                        <SortableSessionCard
+                          key={session.session_dir}
+                          session={session}
+                          folderColor={folder.color}
+                          disabled={isFilteringName}
+                          onRemove={() => onRemoveSession(session.session_dir)}
+                          onPreview={onPreview}
+                          onOpenFile={onOpenFile}
+                          onDeleteSession={onDeleteSession}
+                          onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
+                        />
+                      );
+                    })}
+                  </motion.div>
+                </AnimatePresence>
+              </SortableContext>
+            </div>
           </div>
           <DragOverlay>
             {activeSortId ? (() => {
@@ -1442,7 +1429,7 @@ function FolderDetailView({
           </DragOverlay>
         </DndContext>
       ) : (
-        <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-2 min-h-0 scrollbar-thin">
+        <div className="flex flex-col gap-2">
           <FullTextResultList
             query={search.trim()}
             results={filteredFtResults}
