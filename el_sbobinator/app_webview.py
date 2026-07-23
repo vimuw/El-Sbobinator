@@ -409,7 +409,7 @@ class ElSbobinatorApi:
                 "session_root": "",
             }
 
-    def get_completed_sessions(self, limit: int = 20) -> dict:
+    def get_completed_sessions(self, limit: int = 0) -> dict:
         """Return the most recent completed sessions for the archive UI."""
         import json as _json
 

@@ -1,4 +1,5 @@
 import unittest
+from typing import Any, cast
 from unittest.mock import patch
 
 from el_sbobinator.pipeline.pipeline_settings import (
@@ -250,6 +251,23 @@ class BuildDefaultPipelineSettingsTests(unittest.TestCase):
             {"preferred_model": "gemini-2.5-flash"}
         )
         self.assertEqual(result["fallback_models"], [])
+
+    def test_inline_max_bytes_invalid_value(self):
+        from el_sbobinator.pipeline.pipeline_settings import PipelineSettings
+
+        settings = PipelineSettings(
+            model="gemini-2.5-flash",
+            fallback_models=[],
+            effective_model="gemini-2.5-flash",
+            chunk_minutes=10,
+            overlap_seconds=30,
+            macro_char_limit=10000,
+            preconvert_audio=True,
+            audio_bitrate="48k",
+            prefetch_next_chunk=True,
+            inline_audio_max_mb=cast(Any, "invalid_mb"),
+        )
+        self.assertIsNone(settings.inline_max_bytes)
 
     def test_loads_from_system_config_when_none_passed(self):
         fake_cfg = {"preferred_model": "gemini-2.5-flash", "fallback_models": []}

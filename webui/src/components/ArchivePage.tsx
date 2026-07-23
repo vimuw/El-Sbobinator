@@ -2,7 +2,7 @@ import { type FormEvent, type MouseEvent, useCallback, useEffect, useMemo, useRe
 import { motion, AnimatePresence } from 'motion/react';
 import {
   AlertTriangle, ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
-  ExternalLink, FileSearch, FolderOpen, FolderPlus, History,
+  ExternalLink, FileSearch, FileText, FolderOpen, FolderPlus,
   Loader2, Pencil, Plus, RefreshCw, Search, Trash2, X,
 } from 'lucide-react';
 import {
@@ -23,7 +23,7 @@ const FOLDER_COLORS = [
   '#4D96FF', '#CC5DE8', '#FF8FAB', '#20C997',
   '#748FFC', '#94A3B8',
 ];
-const ARCHIVE_PAGE_SIZE = 5;
+
 
 interface ArchivePageProps {
   sessions: ArchiveSession[];
@@ -46,7 +46,7 @@ type DeleteFolderConfirmState = { folder: ArchiveFolder };
 
 export function ArchivePage({
   sessions, total, folders, onFoldersChange,
-  onPreview, onOpenFile, onDeleteSession, onRefresh, onLoadAll,
+  onPreview, onOpenFile, onDeleteSession, onRefresh,
   onRetryFailedRevisionBlocks,
 }: ArchivePageProps) {
   const [search, setSearch] = useState('');
@@ -54,7 +54,7 @@ export function ArchivePage({
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [folderModal, setFolderModal] = useState<FolderModalState | null>(null);
   const [deleteFolderConfirm, setDeleteFolderConfirm] = useState<DeleteFolderConfirmState | null>(null);
-  const [sessionPage, setSessionPage] = useState(0);
+
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -121,14 +121,7 @@ export function ArchivePage({
     () => sortSessions(sessions),
     [sessions, sortSessions],
   );
-  const sessionPages = Math.ceil(allSortedSessions.length / ARCHIVE_PAGE_SIZE);
-  const sessionPageData = useMemo(
-    () => allSortedSessions.slice(sessionPage * ARCHIVE_PAGE_SIZE, (sessionPage + 1) * ARCHIVE_PAGE_SIZE),
-    [allSortedSessions, sessionPage],
-  );
-
-  useEffect(() => { setSessionPage(0); }, [search, sort]);
-  useEffect(() => { if (sessionPages > 0 && sessionPage >= sessionPages) setSessionPage(sessionPages - 1); }, [sessionPages, sessionPage]);
+  const sessionPageData = allSortedSessions;
 
   useEffect(() => {
     if (ftDebounceRef.current) clearTimeout(ftDebounceRef.current);
@@ -255,7 +248,7 @@ export function ArchivePage({
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 w-full">
       {/* Header */}
       <div className="flex items-center gap-3">
         <h2 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
@@ -264,24 +257,7 @@ export function ArchivePage({
         <span className="status-pill">{total != null && total > sessions.length ? total : sessions.length}</span>
       </div>
 
-      {/* Truncation notice */}
-      {total != null && total > sessions.length && onLoadAll && (
-        <div
-          className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl text-sm"
-          style={{ background: 'var(--accent-subtle)', color: 'var(--text-secondary)', border: '1px solid var(--accent-ring, var(--border-default))' }}
-        >
-          <span style={{ color: 'var(--text-muted)' }}>
-            Mostrate <strong style={{ color: 'var(--text-primary)' }}>{sessions.length}</strong> di <strong style={{ color: 'var(--text-primary)' }}>{total}</strong> sbobine
-          </span>
-          <button
-            onClick={onLoadAll}
-            className="compact-button"
-            style={{ color: 'var(--accent-text)', fontWeight: 600, flexShrink: 0 }}
-          >
-            Mostra tutte
-          </button>
-        </div>
-      )}
+
 
       {/* Folders grid — always visible, first card is "new folder" */}
       <DndContext
@@ -313,7 +289,7 @@ export function ArchivePage({
       </DndContext>
 
       {/* Unfiled sessions */}
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 flex-1 min-h-0">
         <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--text-faint)' }}>
           Tutte le sbobine
         </h3>
@@ -419,80 +395,62 @@ export function ArchivePage({
           )}
         </div>
 
-        {!fullTextMode && sessionPageData.length === 0 && sessions.length === 0 && (
-          <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>
-            <History className="w-8 h-8 mx-auto mb-3 opacity-30" />
-            <p className="text-sm">Nessuna sbobina nell&apos;archivio.</p>
-          </div>
-        )}
+        <div className="flex flex-col gap-3">
+          {!fullTextMode && sessionPageData.length === 0 && sessions.length === 0 && (
+            <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>
+              <FileText className="w-8 h-8 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">Nessuna sbobina nell&apos;archivio.</p>
+            </div>
+          )}
 
-        {!fullTextMode && sessionPageData.length === 0 && sessions.length > 0 && search.trim() && (
-          <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
-            {`Nessun risultato per "${search}"`}
-          </div>
-        )}
+          {!fullTextMode && sessionPageData.length === 0 && sessions.length > 0 && search.trim() && (
+            <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+              {`Nessun risultato per "${search}"`}
+            </div>
+          )}
 
-        {fullTextMode && (
-          <FullTextResultList
-            query={search.trim()}
-            results={ftResults}
-            isSearching={isSearching}
-            onPreview={(r) => onPreview(r.html_path, r.name, undefined, undefined, r.session_dir, search.trim())}
-          />
-        )}
+          {fullTextMode && (
+            <FullTextResultList
+              query={search.trim()}
+              results={ftResults}
+              isSearching={isSearching}
+              onPreview={(r) => onPreview(r.html_path, r.name, undefined, undefined, r.session_dir, search.trim())}
+            />
+          )}
 
-        {!fullTextMode && (
-          <>
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={`session-page-${sessionPage}`}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.12, ease: 'easeOut' }}
-                className="flex flex-col gap-3"
-              >
-                {sessionPageData.map(session => (
-                  <DraggableSessionCard
-                    key={session.session_dir}
-                    session={session}
-                    allFolders={folders}
-                    currentFolder={sessionFolderMap.get(session.session_dir)}
-                    onAssignToFolder={fId => assignToFolder(session.session_dir, fId)}
-                    onRemoveFromFolder={() => {
-                      const f = sessionFolderMap.get(session.session_dir);
-                      if (f) removeFromFolder(session.session_dir, f.id);
-                    }}
-                    onPreview={onPreview}
-                    onOpenFile={onOpenFile}
-                    onDeleteSession={onDeleteSession}
-                    onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
-                  />
-                ))}
-              </motion.div>
-            </AnimatePresence>
-
-            {sessionPages > 1 && (
-              <div className="flex items-center justify-center gap-3 pt-1">
-                <button
-                  onClick={() => setSessionPage(p => Math.max(0, p - 1))}
-                  disabled={sessionPage === 0}
-                  className="icon-button compact-icon-button"
-                  style={{ color: 'var(--text-muted)' }}
-                  aria-label="Pagina precedente"
-                ><ChevronLeft className="w-4 h-4" /></button>
-                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{sessionPage + 1} / {sessionPages}</span>
-                <button
-                  onClick={() => setSessionPage(p => Math.min(sessionPages - 1, p + 1))}
-                  disabled={sessionPage >= sessionPages - 1}
-                  className="icon-button compact-icon-button"
-                  style={{ color: 'var(--text-muted)' }}
-                  aria-label="Pagina successiva"
-                ><ChevronRight className="w-4 h-4" /></button>
-              </div>
-            )}
-          </>
-        )}
+          {!fullTextMode && (
+            <div className="max-h-[calc(100vh-380px)] overflow-y-auto app-scroll pr-1">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key="archive-session-list"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.12, ease: 'easeOut' }}
+                  className="flex flex-col gap-3"
+                >
+                  {sessionPageData.map(session => (
+                    <DraggableSessionCard
+                      key={session.session_dir}
+                      session={session}
+                      allFolders={folders}
+                      currentFolder={sessionFolderMap.get(session.session_dir)}
+                      onAssignToFolder={fId => assignToFolder(session.session_dir, fId)}
+                      onRemoveFromFolder={() => {
+                        const f = sessionFolderMap.get(session.session_dir);
+                        if (f) removeFromFolder(session.session_dir, f.id);
+                      }}
+                      onPreview={onPreview}
+                      onOpenFile={onOpenFile}
+                      onDeleteSession={onDeleteSession}
+                      onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
+                    />
+                  ))}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Folder modal */}
@@ -797,6 +755,11 @@ function DraggableSessionCard({
     } as KebabMenuItem] : []),
     ...(allFolders.length > 0 || currentFolder ? [{ separator: true } as KebabMenuItem] : []),
     {
+      label: 'Apri cartella',
+      icon: <FolderOpen className="w-3.5 h-3.5" />,
+      onClick: () => onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path),
+    },
+    {
       label: 'Apri nel browser',
       icon: <ExternalLink className="w-3.5 h-3.5" />,
       onClick: () => onOpenFile(session.html_path),
@@ -816,7 +779,7 @@ function DraggableSessionCard({
       style={hasRevisionWarnings ? { borderColor: 'var(--warning-ring)', boxShadow: 'inset 3px 0 0 var(--warning-ring)', background: 'var(--warning-subtle)' } : undefined}
     >
       <div className="flex items-center gap-3 overflow-hidden flex-1">
-        <History className="w-4 h-4 shrink-0" style={{ color: hasRevisionWarnings ? 'var(--warning-text)' : 'var(--text-faint)' }} />
+        <FileText className="w-4 h-4 shrink-0" style={{ color: hasRevisionWarnings ? 'var(--warning-text)' : 'var(--text-faint)' }} />
 
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{session.name}</p>
@@ -837,7 +800,7 @@ function DraggableSessionCard({
             {failedBlockCount > 0 && (
               <>
                 <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}>
+                <span className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold uppercase tracking-wider px-1.5 py-[2px] h-4 box-border rounded-full" style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}>
                   <AlertTriangle className="w-3 h-3" />{failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}
                 </span>
                 {canRetryBlocks && (
@@ -845,7 +808,7 @@ function DraggableSessionCard({
                     type="button"
                     onClick={handleRetryBlocks}
                     disabled={isRetryingBlocks}
-                    className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full transition-opacity"
+                    className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold px-1.5 py-[2px] h-4 box-border rounded-full transition-opacity"
                     style={{ color: 'var(--warning-text)', border: '1px solid var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
                     title="Riprova solo i blocchi inclusi senza revisione"
                   >
@@ -855,14 +818,6 @@ function DraggableSessionCard({
                 )}
               </>
             )}
-          </div>
-          <div
-            className="mt-0.5 flex items-center gap-1 text-[11px] opacity-0 group-hover/card:opacity-100 transition-opacity hover:underline"
-            style={{ color: 'var(--text-faint)', cursor: 'pointer' }}
-            onClick={e => { e.stopPropagation(); onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path); }}
-          >
-            <FolderOpen className="w-3 h-3 shrink-0" />
-            <span className="truncate">{session.html_path.replace(/\\/g, '/').split('/').slice(-2).join('/')}</span>
           </div>
         </div>
       </div>
@@ -900,10 +855,6 @@ function FolderSessionCardOverlay({ session, folderColor }: {
             {hasRevisionWarnings && (
               <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span style={{ color: 'var(--warning-text)', fontWeight: 600 }}>Completata con avvisi</span></>
             )}
-          </div>
-          <div className="mt-0.5 flex items-center gap-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-            <FolderOpen className="w-3 h-3 shrink-0" />
-            <span className="truncate">{session.html_path.replace(/\\/g, '/').split('/').slice(-2).join('/')}</span>
           </div>
         </div>
       </div>
@@ -953,6 +904,11 @@ function SortableSessionCard({
   };
 
   const kebabItems: KebabMenuItem[] = [
+    {
+      label: 'Apri cartella',
+      icon: <FolderOpen className="w-3.5 h-3.5" />,
+      onClick: () => onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path),
+    },
     {
       label: 'Apri nel browser',
       icon: <ExternalLink className="w-3.5 h-3.5" />,
@@ -1004,7 +960,7 @@ function SortableSessionCard({
             {failedBlockCount > 0 && (
               <>
                 <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}>
+                <span className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold uppercase tracking-wider px-1.5 py-[2px] h-4 box-border rounded-full" style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}>
                   <AlertTriangle className="w-3 h-3" />{failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}
                 </span>
                 {canRetryBlocks && (
@@ -1012,7 +968,7 @@ function SortableSessionCard({
                     type="button"
                     onClick={handleRetryBlocks}
                     disabled={isRetryingBlocks}
-                    className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full transition-opacity"
+                    className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold px-1.5 py-[2px] h-4 box-border rounded-full transition-opacity"
                     style={{ color: 'var(--warning-text)', border: '1px solid var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
                     title="Riprova solo i blocchi inclusi senza revisione"
                   >
@@ -1022,14 +978,6 @@ function SortableSessionCard({
                 )}
               </>
             )}
-          </div>
-          <div
-            className="mt-0.5 flex items-center gap-1 text-[11px] opacity-0 group-hover/card:opacity-100 transition-opacity hover:underline"
-            style={{ color: 'var(--text-faint)', cursor: 'pointer' }}
-            onClick={e => { e.stopPropagation(); onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path); }}
-          >
-            <FolderOpen className="w-3 h-3 shrink-0" />
-            <span className="truncate">{session.html_path.replace(/\\/g, '/').split('/').slice(-2).join('/')}</span>
           </div>
         </div>
       </div>
@@ -1088,7 +1036,13 @@ function FolderDetailView({
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
 }) {
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(0);
+  const [fullTextMode, setFullTextMode] = useState(false);
+  const [ftResults, setFtResults] = useState<SearchSessionResult[] | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [ftError, setFtError] = useState<string | null>(null);
+  const searchGenRef = useRef(0);
+  const ftDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const folderSearchInputRef = useRef<HTMLInputElement>(null);
   const [folderSearchFocused, setFolderSearchFocused] = useState(false);
 
@@ -1098,16 +1052,18 @@ function FolderDetailView({
     return q ? all.filter(s => s.name.toLowerCase().includes(q)) : all;
   }, [folder.session_dirs, sessionsByDir, search]);
 
-  const totalPages = Math.ceil(folderSessions.length / ARCHIVE_PAGE_SIZE);
-  const pageData = useMemo(
-    () => folderSessions.slice(page * ARCHIVE_PAGE_SIZE, (page + 1) * ARCHIVE_PAGE_SIZE),
-    [folderSessions, page],
-  );
+  const filteredFtResults = useMemo(() => {
+    if (!ftResults) return null;
+    const inFolder = new Set(folder.session_dirs);
+    return ftResults.filter(r => inFolder.has(r.session_dir));
+  }, [ftResults, folder.session_dirs]);
+
+  const pageData = folderSessions;
 
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [addSearch, setAddSearch] = useState('');
   const [activeSortId, setActiveSortId] = useState<string | null>(null);
-  const isSearching = search.trim().length > 0;
+  const isFilteringName = !fullTextMode && search.trim().length > 0;
 
   const sortSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -1132,22 +1088,7 @@ function FolderDetailView({
     onReorderSessions(merged);
   }, [folder.session_dirs, folderSessions, onReorderSessions]);
 
-  const moveSessionAcrossPages = useCallback((sessionDir: string, direction: -1 | 1) => {
-    const visibleDirs = folderSessions.map(s => s.session_dir);
-    const oldIndex = visibleDirs.indexOf(sessionDir);
-    if (oldIndex === -1) return;
-    const newIndex = Math.max(
-      0,
-      Math.min(visibleDirs.length - 1, oldIndex + direction * ARCHIVE_PAGE_SIZE),
-    );
-    if (oldIndex === newIndex) return;
-    const reorderedVisible = arrayMove(visibleDirs, oldIndex, newIndex);
-    const visibleSet = new Set(visibleDirs);
-    let vi = 0;
-    const merged = folder.session_dirs.map(d => visibleSet.has(d) ? reorderedVisible[vi++] : d);
-    onReorderSessions(merged);
-    setPage(Math.floor(newIndex / ARCHIVE_PAGE_SIZE));
-  }, [folder.session_dirs, folderSessions, onReorderSessions]);
+
 
   const availableToAdd = useMemo(() => {
     const inFolder = new Set(folder.session_dirs);
@@ -1161,8 +1102,41 @@ function FolderDetailView({
     });
   }, [folder.session_dirs, sessionsByDir, addSearch]);
 
-  useEffect(() => { setPage(0); }, [search]);
-  useEffect(() => { if (totalPages > 0 && page >= totalPages) setPage(totalPages - 1); }, [totalPages, page]);
+
+
+  useEffect(() => {
+    if (ftDebounceRef.current) clearTimeout(ftDebounceRef.current);
+    const q = search.trim();
+    if (!fullTextMode || q.length < 3) {
+      searchGenRef.current++;
+      setFtResults(null);
+      setFtError(null);
+      setIsSearching(false);
+      return;
+    }
+    setIsSearching(true);
+    setFtError(null);
+    const gen = ++searchGenRef.current;
+    ftDebounceRef.current = setTimeout(async () => {
+      try {
+        const res = await window.pywebview?.api?.search_sessions?.(q, 50);
+        if (searchGenRef.current !== gen) return;
+        if (res?.ok) {
+          setFtResults(res.results ?? []);
+        } else {
+          setFtError(res?.error ?? 'Errore durante la ricerca');
+          setFtResults([]);
+        }
+      } catch {
+        if (searchGenRef.current !== gen) return;
+        setFtError('Errore durante la ricerca');
+        setFtResults([]);
+      } finally {
+        if (searchGenRef.current === gen) setIsSearching(false);
+      }
+    }, 400);
+    return () => { if (ftDebounceRef.current) clearTimeout(ftDebounceRef.current); };
+  }, [fullTextMode, search]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1191,7 +1165,7 @@ function FolderDetailView({
   ];
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 w-full">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <button
@@ -1211,47 +1185,60 @@ function FolderDetailView({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <div className="notion-search-wrap">
-          <Search className="notion-search-icon w-3.5 h-3.5" />
-          <input
-            ref={folderSearchInputRef}
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            onFocus={() => setFolderSearchFocused(true)}
-            onBlur={() => setFolderSearchFocused(false)}
-            placeholder="Cerca per nome..."
-            className="notion-search-input"
-          />
-          <AnimatePresence>
-            {search.trim().length > 0 ? (
-              <motion.button
-                key="clear"
-                initial={{ opacity: 0, scale: 0.7 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.7 }}
-                transition={{ duration: 0.1 }}
-                onClick={() => { setSearch(''); folderSearchInputRef.current?.focus(); }}
-                className="notion-search-clear"
-                aria-label="Cancella ricerca"
-              >
-                <X className="w-3 h-3" />
-              </motion.button>
-            ) : !folderSearchFocused ? (
-              <motion.span
-                key="hint"
-                className="notion-search-hint"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.12 }}
-              >
-                <kbd>/</kbd>
-              </motion.span>
-            ) : null}
-          </AnimatePresence>
+        <div className="flex items-center gap-2">
+          <div className="notion-search-wrap">
+            {isSearching
+              ? <Loader2 className="notion-search-icon w-3.5 h-3.5 animate-spin" />
+              : <Search className="notion-search-icon w-3.5 h-3.5" />}
+            <input
+              ref={folderSearchInputRef}
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onFocus={() => setFolderSearchFocused(true)}
+              onBlur={() => setFolderSearchFocused(false)}
+              placeholder={fullTextMode ? 'Cerca nel contenuto...' : 'Cerca per nome...'}
+              className="notion-search-input"
+            />
+            <AnimatePresence>
+              {search.trim().length > 0 ? (
+                <motion.button
+                  key="clear"
+                  initial={{ opacity: 0, scale: 0.7 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.7 }}
+                  transition={{ duration: 0.1 }}
+                  onClick={() => { setSearch(''); folderSearchInputRef.current?.focus(); }}
+                  className="notion-search-clear"
+                  aria-label="Cancella ricerca"
+                >
+                  <X className="w-3 h-3" />
+                </motion.button>
+              ) : !folderSearchFocused ? (
+                <motion.span
+                  key="hint"
+                  className="notion-search-hint"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.12 }}
+                >
+                  <kbd>/</kbd>
+                </motion.span>
+              ) : null}
+            </AnimatePresence>
+          </div>
+          <button
+            onClick={() => { setFullTextMode(m => !m); setSearch(''); }}
+            className="notion-sort-chip"
+            style={fullTextMode ? { color: 'var(--accent-text)', borderColor: 'var(--accent-text)', background: 'var(--accent-subtle)' } : undefined}
+            title={fullTextMode ? 'Disattiva ricerca nel contenuto' : 'Attiva ricerca nel contenuto'}
+          >
+            <FileSearch className="w-3.5 h-3.5" style={{ opacity: 0.8 }} />
+            Testo completo
+          </button>
         </div>
-        {search.trim().length > 0 && (
+        {!fullTextMode && search.trim().length > 0 && (
           <span className="notion-results-count">
             {folderSessions.length === 0
               ? 'Nessun risultato'
@@ -1259,6 +1246,20 @@ function FolderDetailView({
                 ? '1 risultato'
                 : `${folderSessions.length} risultati`}
           </span>
+        )}
+        {fullTextMode && filteredFtResults !== null && !isSearching && (
+          <span className="notion-results-count">
+            {ftError
+              ? ftError
+              : filteredFtResults.length === 0
+                ? `Nessun risultato per «${search.trim()}»`
+                : filteredFtResults.length === 1
+                  ? '1 sbobina corrisponde'
+                  : `${filteredFtResults.length} sbobine corrispondono`}
+          </span>
+        )}
+        {fullTextMode && search.trim().length > 0 && search.trim().length < 3 && (
+          <span className="notion-results-count">Digita almeno 3 caratteri</span>
         )}
       </div>
 
@@ -1326,8 +1327,8 @@ function FolderDetailView({
                   </p>
                 )}
                 <div
-                  className="flex flex-col gap-2"
-                  style={{ maxHeight: 320, overflowY: 'auto' }}
+                  className="flex flex-col gap-2 overflow-y-auto app-scroll pr-1"
+                  style={{ maxHeight: 320 }}
                 >
                   {availableToAdd.map(session => {
                     const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
@@ -1338,7 +1339,7 @@ function FolderDetailView({
                         style={{}}
                       >
                         <div className="flex items-center gap-3 overflow-hidden flex-1">
-                          <History className="w-4 h-4 shrink-0" style={{ color: 'var(--text-faint)' }} />
+                          <FileText className="w-4 h-4 shrink-0" style={{ color: 'var(--text-faint)' }} />
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
                               {session.name}
@@ -1368,87 +1369,80 @@ function FolderDetailView({
         </AnimatePresence>
       </div>
 
-      <DndContext
-        sensors={sortSensors}
-        onDragStart={handleSortStart}
-        onDragEnd={handleSortEnd}
-      >
-        <div className="flex flex-col gap-2">
-          {folderSessions.length === 0 && !search.trim() && (
-            <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>
-              <History className="w-8 h-8 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">Nessuna sbobina in questa cartella.</p>
-            </div>
-          )}
-          {folderSessions.length === 0 && search.trim() && (
-            <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
-              Nessun risultato per &ldquo;{search}&rdquo;
-            </div>
-          )}
-          <SortableContext
-            items={pageData.map(s => s.session_dir)}
-            strategy={verticalListSortingStrategy}
-          >
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={`folder-page-${page}`}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.12, ease: 'easeOut' }}
-                className="flex flex-col gap-2"
+      {!fullTextMode ? (
+        <DndContext
+          sensors={sortSensors}
+          onDragStart={handleSortStart}
+          onDragEnd={handleSortEnd}
+        >
+          <div className="flex flex-col gap-2">
+            {folderSessions.length === 0 && !search.trim() && (
+              <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>
+                <FileText className="w-8 h-8 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">Nessuna sbobina in questa cartella.</p>
+              </div>
+            )}
+            {folderSessions.length === 0 && search.trim() && (
+              <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+                Nessun risultato per &ldquo;{search}&rdquo;
+              </div>
+            )}
+            <div className="max-h-[calc(100vh-300px)] overflow-y-auto app-scroll pr-1">
+              <SortableContext
+                items={pageData.map(s => s.session_dir)}
+                strategy={verticalListSortingStrategy}
               >
-                {pageData.map((session, index) => {
-                  const visibleIndex = page * ARCHIVE_PAGE_SIZE + index;
-                  const showPageMoveControls = totalPages > 1 && !isSearching;
-                  return (
-                    <SortableSessionCard
-                      key={session.session_dir}
-                      session={session}
-                      folderColor={folder.color}
-                      disabled={isSearching}
-                      onRemove={() => onRemoveSession(session.session_dir)}
-                      onPreview={onPreview}
-                      onOpenFile={onOpenFile}
-                      onDeleteSession={onDeleteSession}
-                      onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
-                      canMoveToPreviousPage={visibleIndex >= ARCHIVE_PAGE_SIZE}
-                      canMoveToNextPage={visibleIndex < (totalPages - 1) * ARCHIVE_PAGE_SIZE}
-                      onMoveToPreviousPage={showPageMoveControls ? () => moveSessionAcrossPages(session.session_dir, -1) : undefined}
-                      onMoveToNextPage={showPageMoveControls ? () => moveSessionAcrossPages(session.session_dir, 1) : undefined}
-                    />
-                  );
-                })}
-              </motion.div>
-            </AnimatePresence>
-          </SortableContext>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-3 pt-1">
-              <button
-                onClick={() => setPage(p => Math.max(0, p - 1))}
-                disabled={page === 0}
-                className="icon-button compact-icon-button"
-                style={{ color: 'var(--text-muted)' }}
-                aria-label="Pagina precedente"
-              ><ChevronLeft className="w-4 h-4" /></button>
-              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{page + 1} / {totalPages}</span>
-              <button
-                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                disabled={page >= totalPages - 1}
-                className="icon-button compact-icon-button"
-                style={{ color: 'var(--text-muted)' }}
-                aria-label="Pagina successiva"
-              ><ChevronRight className="w-4 h-4" /></button>
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key="folder-session-list"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.12, ease: 'easeOut' }}
+                    className="flex flex-col gap-2"
+                  >
+                    {pageData.map((session) => {
+                      return (
+                        <SortableSessionCard
+                          key={session.session_dir}
+                          session={session}
+                          folderColor={folder.color}
+                          disabled={isFilteringName}
+                          onRemove={() => onRemoveSession(session.session_dir)}
+                          onPreview={onPreview}
+                          onOpenFile={onOpenFile}
+                          onDeleteSession={onDeleteSession}
+                          onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
+                        />
+                      );
+                    })}
+                  </motion.div>
+                </AnimatePresence>
+              </SortableContext>
+            </div>
+          </div>
+          <DragOverlay>
+            {activeSortId ? (() => {
+              const s = folderSessions.find(x => x.session_dir === activeSortId);
+              return s ? <FolderSessionCardOverlay session={s} folderColor={folder.color} /> : null;
+            })() : null}
+          </DragOverlay>
+        </DndContext>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <FullTextResultList
+            query={search.trim()}
+            results={filteredFtResults}
+            isSearching={isSearching}
+            onPreview={(r) => onPreview(r.html_path, r.name, undefined, undefined, r.session_dir, search.trim())}
+          />
+          {filteredFtResults !== null && filteredFtResults.length === 0 && !isSearching && search.trim().length >= 3 && (
+            <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+              Nessun risultato nel testo delle sbobine per &ldquo;{search}&rdquo;
             </div>
           )}
         </div>
-        <DragOverlay>
-          {activeSortId ? (() => {
-            const s = folderSessions.find(x => x.session_dir === activeSortId);
-            return s ? <FolderSessionCardOverlay session={s} folderColor={folder.color} /> : null;
-          })() : null}
-        </DragOverlay>
-      </DndContext>
+      )}
     </div>
   );
 }

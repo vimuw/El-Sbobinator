@@ -158,6 +158,13 @@ class AttachDetachFileHandlerTests(unittest.TestCase):
             detach_file_handler(handler)
             self.assertNotIn(handler, logger.handlers)
 
+    def test_detach_handler_exception_safety(self):
+        from unittest.mock import MagicMock
+
+        mock_handler = MagicMock()
+        mock_handler.close.side_effect = Exception("close err")
+        detach_file_handler(mock_handler)
+
 
 if __name__ == "__main__":
     unittest.main()

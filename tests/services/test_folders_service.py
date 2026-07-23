@@ -112,6 +112,13 @@ class TestFoldersService(unittest.TestCase):
         save_folders([{"id": "new"}])
         self.assertEqual(get_folders(), [{"id": "new"}])
 
+    def test_save_folders_exception_handling(self):
+        from el_sbobinator.services.folders_service import save_folders
+
+        with patch("builtins.open", side_effect=OSError("write error")):
+            with self.assertRaises(IOError):
+                save_folders([{"id": "test"}])
+
 
 if __name__ == "__main__":
     unittest.main()

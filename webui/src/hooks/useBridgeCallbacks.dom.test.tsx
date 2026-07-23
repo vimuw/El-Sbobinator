@@ -290,6 +290,30 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
         id: 'file-1', index: 0, output_html: '/out.html', output_dir: '/sessions/x', effective_model: 'gemini-2.5-flash',
       });
     });
+    expect(showNotification).toHaveBeenCalledWith(
+      '✅ Sbobina pronta — audio.mp3',
+      expect.stringContaining('Elaborata con successo'),
+    );
+    vi.restoreAllMocks();
+  });
+
+  it('fileDone callback: does not show native notification when batchTotal > 1', () => {
+    const showNotification = vi.fn();
+    setPywebview({ show_notification: showNotification });
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    const doneFile: FileItem = {
+      id: 'file-1', name: 'audio.mp3', size: 1, duration: 60, path: '/a.mp3', status: 'done', progress: 1, phase: 0,
+    };
+    const opts = makeMinimalHook();
+    opts.batchTotal = 2;
+    opts.filesRef = { current: [doneFile] } as unknown as ReturnType<typeof useRef<FileItem[]>>;
+    renderHook(() => { useBridgeCallbacks(opts); });
+    act(() => {
+      window.elSbobinatorBridge?.fileDone({
+        id: 'file-1', index: 0, output_html: '/out.html', output_dir: '/sessions/x', effective_model: 'gemini-2.5-flash',
+      });
+    });
+    expect(showNotification).not.toHaveBeenCalled();
     vi.restoreAllMocks();
   });
 
@@ -323,7 +347,7 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     });
     expect(showNotification).toHaveBeenCalledWith(
       '⚠️ Chiavi esaurite — El Sbobinator',
-      expect.stringContaining('La quota di tutte le API Key'),
+      expect.stringContaining('Limite API raggiunto'),
     );
     vi.restoreAllMocks();
   });
@@ -346,7 +370,7 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     });
     expect(showNotification).toHaveBeenCalledWith(
       '⚠️ Sbobina pronta con avvisi — audio.mp3',
-      'Completata con alcune parti non revisionate. Clicca per aprire.',
+      "Completata con alcune parti non revisionate. Apri l'app per rivederle.",
     );
     vi.restoreAllMocks();
   });
@@ -371,7 +395,7 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     });
     expect(showNotification).toHaveBeenCalledWith(
       '⚠️ Server occupati — audio.mp3',
-      expect.stringContaining('I server di Google sono sovraccarichi'),
+      expect.stringContaining('I server di Google Gemini sono temporaneamente sovraccarichi'),
     );
 
     showNotification.mockClear();
@@ -384,7 +408,7 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     });
     expect(showNotification).toHaveBeenCalledWith(
       '⚠️ Server occupati — audio.mp3',
-      expect.stringContaining('I server di Google sono sovraccarichi'),
+      expect.stringContaining('I server di Google Gemini sono temporaneamente sovraccarichi'),
     );
 
     showNotification.mockClear();

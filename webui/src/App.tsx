@@ -21,7 +21,7 @@ import { ConfirmActionModal } from './components/modals/ConfirmActionModal';
 import { DuplicateFileModal, type AlreadyProcessedMatch, type DuplicatePrompt } from './components/modals/DuplicateFileModal';
 import { buildArchiveLookup, filterArchiveSessionsByInputPath, getArchiveMatchesForFile } from './duplicateDetection';
 import { NavSidebar, type ActivePage } from './components/NavSidebar';
-import { Toaster, type ToastMessage } from './components/Toast';
+import { NotificationDropdown, type NotificationMessage } from './components/NotificationDropdown';
 import { DropZone } from './components/DropZone';
 import { WelcomeDashboard } from './components/WelcomeDashboard';
 import { QueueSection } from './components/QueueSection';
@@ -123,6 +123,20 @@ function formatUpdateInstallStatus(state: UpdateInstallState): string {
   return '';
 }
 
+interface PersistedNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'warning' | 'error' | 'success';
+  category: 'processing' | 'update' | 'system';
+  timestamp: number;
+  read: boolean;
+  persistent?: boolean;
+  dedupeKey?: string;
+  actionType?: 'retry_failed_revision_blocks' | 'install_update' | 'open_github';
+  actionData?: unknown;
+}
+
 export default function App() {
   const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone }, dispatch] = useReducer(processingReducer, initialProcessingState);
 
@@ -152,14 +166,39 @@ export default function App() {
 
   const [archiveSessions, setArchiveSessions] = useState<ArchiveSession[]>([]);
   const [archiveTotal, setArchiveTotal] = useState(0);
-  const archiveLimitRef = useRef(20);
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const toastTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-  const toastDedupeMapRef = useRef<Map<string, string>>(new Map());
+  const archiveLimitRef = useRef(0);
+  const [rawNotifications, setRawNotifications] = useState<PersistedNotification[]>(() => {
+    try {
+      const stored = localStorage.getItem('el-sbobinator.notifications.v1');
+      return stored ? JSON.parse(stored) : [];
+    } catch (_) {
+      return [];
+    }
+  });
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isSidebarPinned, setIsSidebarPinned] = useState(false);
+
+  useEffect(() => {
+    if (isNotificationsOpen) {
+      setIsSidebarPinned(true);
+    } else {
+      const timer = setTimeout(() => {
+        setIsSidebarPinned(false);
+      }, 200); // 200ms delay covers the dropdown exit transition
+      return () => clearTimeout(timer);
+    }
+  }, [isNotificationsOpen]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('el-sbobinator.notifications.v1', JSON.stringify(rawNotifications));
+    } catch (_) {}
+  }, [rawNotifications]);
   const warnedRevisionSessionsRef = useRef<Set<string>>(new Set());
   const prevSessionDirsRef = useRef<Map<string, string>>(new Map());
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
   const [hasOpenedSettings, setHasOpenedSettings] = useState(false);
   const shouldRenderSettings = isSettingsOpen || hasOpenedSettings;
 
@@ -206,43 +245,154 @@ export default function App() {
   const updateInstallPromiseRef = useRef<Promise<void> | null>(null);
   const updateInstallToastIdRef = useRef<string | null>(null);
 
-  const dismissToast = useCallback((id: string) => {
-    const timer = toastTimersRef.current.get(id);
+  const deleteNotification = useCallback((id: string) => {
+    setRawNotifications(prev => {
+      const notif = prev.find(n => n.id === id);
+      if (notif?.dedupeKey?.startsWith('config-recovery:')) {
+        const recoveredPath = notif.dedupeKey.split('config-recovery:')[1];
+        const storageKey = `el-sbobinator.config-recovery-dismissed.v1:${recoveredPath}`;
+        try { localStorage.setItem(storageKey, '1'); } catch (_) {}
+      }
+      if (notif?.dedupeKey === 'peak-hour-warning') {
+        const next = new Date();
+        next.setDate(next.getDate() + 1);
+        next.setHours(15, 0, 0, 0);
+        localStorage.setItem('peakBannerDismissedUntil', String(next.getTime()));
+        setIsPeakDismissed(true);
+      }
+      if (notif?.dedupeKey === 'update-available') {
+        const actionData = notif.actionData as Record<string, unknown> | undefined;
+        const version = (typeof actionData?.version === 'string' ? actionData.version : undefined) || updateAvailable;
+        if (version) dismissUpdate(version);
+      }
+      if (notif?.dedupeKey === 'update-install') {
+        updateInstallToastIdRef.current = null;
+      }
+      return prev.filter(n => n.id !== id);
+    });
+  }, [updateAvailable, dismissUpdate]);
 
-    if (timer !== undefined) {
-      clearTimeout(timer);
-      toastTimersRef.current.delete(id);
+  const markNotificationAsRead = useCallback((id: string) => {
+    setRawNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  }, []);
+
+  const markAllNotificationsAsRead = useCallback(() => {
+    setRawNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  }, []);
+
+  const clearAllNotifications = useCallback(() => {
+    setRawNotifications(prev => {
+      prev.forEach(notif => {
+        if (notif.dedupeKey?.startsWith('config-recovery:')) {
+          const recoveredPath = notif.dedupeKey.split('config-recovery:')[1];
+          const storageKey = `el-sbobinator.config-recovery-dismissed.v1:${recoveredPath}`;
+          try { localStorage.setItem(storageKey, '1'); } catch (_) {}
+        }
+        if (notif.dedupeKey === 'peak-hour-warning') {
+          const next = new Date();
+          next.setDate(next.getDate() + 1);
+          next.setHours(15, 0, 0, 0);
+          localStorage.setItem('peakBannerDismissedUntil', String(next.getTime()));
+          setIsPeakDismissed(true);
+        }
+        if (notif.dedupeKey === 'update-available') {
+          const actionData = notif.actionData as Record<string, unknown> | undefined;
+          const version = (typeof actionData?.version === 'string' ? actionData.version : undefined) || updateAvailable;
+          if (version) dismissUpdate(version);
+        }
+        if (notif.dedupeKey === 'update-install') {
+          updateInstallToastIdRef.current = null;
+        }
+      });
+      return [];
+    });
+  }, [updateAvailable, dismissUpdate]);
+
+  const addNotification = useCallback((
+    title: string,
+    message: string,
+    type: 'info' | 'warning' | 'error' | 'success' = 'info',
+    category: 'processing' | 'update' | 'system' = 'system',
+    opts?: {
+      persistent?: boolean;
+      dedupeKey?: string;
+      actionType?: 'retry_failed_revision_blocks' | 'install_update' | 'open_github';
+      actionData?: unknown;
     }
-    setToasts(prev => {
-      const toast = prev.find(t => t.id === id);
-      if (toast?.dedupeKey) toastDedupeMapRef.current.delete(toast.dedupeKey);
-      return prev.filter(t => t.id !== id);
+  ) => {
+    setRawNotifications(prev => {
+      if (opts?.dedupeKey) {
+        const exists = prev.some(n => n.dedupeKey === opts.dedupeKey);
+        if (exists) return prev;
+      }
+      const newNotif: PersistedNotification = {
+        id: crypto.randomUUID(),
+        title,
+        message,
+        type,
+        category,
+        timestamp: Date.now(),
+        read: false,
+        persistent: opts?.persistent,
+        dedupeKey: opts?.dedupeKey,
+        actionType: opts?.actionType,
+        actionData: opts?.actionData,
+      };
+      return [newNotif, ...prev].slice(0, 50);
     });
   }, []);
 
-  const showToast = useCallback((message: string, type: 'warning' | 'info' = 'info', opts?: {
-    persistent?: boolean;
-    dedupeKey?: string;
-    durationMs?: number;
-    action?: ToastMessage['action'];
-    onDismiss?: () => void;
-  }) => {
-    if (opts?.dedupeKey) {
-      const existingId = toastDedupeMapRef.current.get(opts.dedupeKey);
-      if (existingId) return existingId;
+  const upsertNotification = useCallback((
+    title: string,
+    message: string,
+    type: 'info' | 'warning' | 'error' | 'success',
+    category: 'processing' | 'update' | 'system',
+    opts?: {
+      persistent?: boolean;
+      dedupeKey?: string;
+      actionType?: 'retry_failed_revision_blocks' | 'install_update' | 'open_github';
+      actionData?: unknown;
     }
-    const toastId = crypto.randomUUID();
-    if (opts?.dedupeKey) toastDedupeMapRef.current.set(opts.dedupeKey, toastId);
-    setToasts(prev => [...prev, { id: toastId, message, type, persistent: opts?.persistent, dedupeKey: opts?.dedupeKey, action: opts?.action, onDismiss: opts?.onDismiss }]);
-    if (!opts?.persistent) {
-      const timer = setTimeout(() => {
-        toastTimersRef.current.delete(toastId);
-        if (opts?.dedupeKey) toastDedupeMapRef.current.delete(opts.dedupeKey);
-        setToasts(prev => prev.filter(t => t.id !== toastId));
-      }, opts?.durationMs ?? 5000);
-      toastTimersRef.current.set(toastId, timer);
-    }
-    return toastId;
+  ) => {
+    let returnId = '';
+    setRawNotifications(prev => {
+      if (opts?.dedupeKey) {
+        const idx = prev.findIndex(n => n.dedupeKey === opts.dedupeKey);
+        if (idx !== -1) {
+          const updated = [...prev];
+          returnId = updated[idx].id;
+          updated[idx] = {
+            ...updated[idx],
+            title,
+            message,
+            type,
+            category,
+            timestamp: Date.now(),
+            read: false,
+            actionType: opts?.actionType,
+            actionData: opts?.actionData,
+          };
+          return updated;
+        }
+      }
+      const newId = crypto.randomUUID();
+      returnId = newId;
+      const newNotif: PersistedNotification = {
+        id: newId,
+        title,
+        message,
+        type,
+        category,
+        timestamp: Date.now(),
+        read: false,
+        persistent: opts?.persistent,
+        dedupeKey: opts?.dedupeKey,
+        actionType: opts?.actionType,
+        actionData: opts?.actionData,
+      };
+      return [newNotif, ...prev].slice(0, 50);
+    });
+    return returnId;
   }, []);
 
   const normalizeSessionDir = useCallback((value?: string) =>
@@ -266,13 +416,18 @@ export default function App() {
   }, [refreshArchiveSessions]);
 
   const handleOpenFailed = useCallback((_htmlPath: string, sessionDir: string) => {
-    showToast('La sbobina non è più disponibile: il file è stato eliminato dal disco.', 'warning');
+    addNotification(
+      'File non disponibile',
+      'La sbobina non è più disponibile: il file è stato eliminato dal disco.',
+      'warning',
+      'system'
+    );
     if (sessionDir) {
       setArchiveSessions(prev => prev.filter(s => s.session_dir !== sessionDir));
       setArchiveTotal(prev => Math.max(0, prev - 1));
       prevSessionDirsRef.current.delete(sessionDir);
     }
-  }, [showToast]);
+  }, [addNotification]);
 
   const handleRetryFailedRevisionBlocks = useCallback(async (sessionDir: string, _fileId?: string) => {
     if (!sessionDir) throw new Error('Sessione non disponibile.');
@@ -286,7 +441,7 @@ export default function App() {
 
     const existing = filesRef.current.find(f => f.id === _fileId);
     if (existing?.isRetryingBlocks) {
-      showToast('Retry già in corso per questa sessione.', 'warning');
+      addNotification('Retry in corso', 'Retry già in corso per questa sessione.', 'warning', 'processing');
       return;
     }
 
@@ -295,14 +450,14 @@ export default function App() {
       const res = await window.pywebview?.api?.retry_failed_revision_blocks?.(sessionDir);
       if (!res?.ok) {
         if (res?.conflict) {
-          showToast('La sbobina è stata modificata: retry annullato per evitare sovrascritture.', 'warning', { durationMs: 9000 });
+          addNotification('Retry annullato', 'La sbobina è stata modificata: retry annullato per evitare sovrascritture.', 'warning', 'processing');
         } else if (res?.cancelled) {
-          showToast('Retry annullato.', 'info');
+          addNotification('Retry annullato', 'Retry annullato.', 'info', 'processing');
         } else if (res?.quota_exhausted) {
-          showToast('Quota giornaliera esaurita: riprova domani.', 'warning', { durationMs: 9000 });
+          addNotification('Quota esaurita', 'Quota giornaliera esaurita: riprova domani.', 'warning', 'processing');
         } else {
           // Fallback for general errors (e.g. "API key mancante")
-          showToast(res?.error ?? 'Impossibile completare la revisione dei blocchi.', 'warning');
+          addNotification('Errore di revisione', res?.error ?? 'Impossibile completare la revisione dei blocchi.', 'error', 'processing');
         }
         throw new Error(res?.error ?? 'Retry non riuscito.');
       }
@@ -329,20 +484,20 @@ export default function App() {
       ));
       if (remaining.length > 0) {
         if (res.cancelled) {
-          showToast(`Retry annullato: ${remaining.length} ${remaining.length === 1 ? 'blocco resta' : 'blocchi restano'} non revisionato.`, 'warning');
+          addNotification('Retry annullato', `Retry annullato: ${remaining.length} ${remaining.length === 1 ? 'blocco resta non revisionato' : 'blocchi restano non revisionati'}.`, 'warning', 'processing');
         } else if (res.quota_exhausted) {
-          showToast(`Quota giornaliera esaurita: ${remaining.length} ${remaining.length === 1 ? 'blocco resta' : 'blocchi restano'} non revisionato. Riprova domani.`, 'warning', { durationMs: 9000 });
+          addNotification('Quota esaurita', `Quota giornaliera esaurita: ${remaining.length} ${remaining.length === 1 ? 'blocco resta non revisionato' : 'blocchi restano non revisionati'}. Riprova domani.`, 'warning', 'processing');
         } else {
-          showToast(`${remaining.length} ${remaining.length === 1 ? 'blocco resta' : 'blocchi restano'} non revisionato. Puoi riprovare piu tardi.`, 'warning');
+          addNotification('Elaborazione parziale', `${remaining.length} ${remaining.length === 1 ? 'blocco resta non revisionato' : 'blocchi restano non revisionati'}. Puoi riprovare più tardi.`, 'warning', 'processing');
         }
       } else {
-        showToast('Blocchi mancanti revisionati e HTML aggiornato.', 'info');
+        addNotification('Elaborazione completata', 'Blocchi mancanti revisionati e HTML aggiornato.', 'success', 'processing');
       }
       void refreshArchiveSessions();
     } finally {
       dispatch({ type: 'queue/set_retrying_blocks', id: _fileId, value: false });
     }
-  }, [normalizeSessionDir, refreshArchiveSessions, showToast]);
+  }, [normalizeSessionDir, refreshArchiveSessions, addNotification]);
 
   const handleRevisionWarning = useCallback((data: FileDonePayload) => {
     const count = data.revision_failed_blocks?.length ?? 0;
@@ -350,21 +505,18 @@ export default function App() {
     const key = normalizeSessionDir(data.output_dir || data.id);
     if (key && warnedRevisionSessionsRef.current.has(key)) return;
     if (key) warnedRevisionSessionsRef.current.add(key);
-    showToast(
-      `Completata con avvisi: ${count} ${count === 1 ? 'sezione e stata inclusa' : 'sezioni sono state incluse'} senza revisione AI.`,
+    addNotification(
+      'Completata con avvisi',
+      `Completata con avvisi: ${count} ${count === 1 ? 'sezione è stata inclusa' : 'sezioni sono state incluse'} senza revisione AI.`,
       'warning',
+      'processing',
       {
         dedupeKey: key || undefined,
-        durationMs: 12000,
-        action: {
-          label: 'Riprova',
-          loadingLabel: 'Riprovo...',
-          errorSuffix: 'puoi usare il pulsante sulla scheda',
-          onAction: () => handleRetryFailedRevisionBlocks(data.output_dir, data.id),
-        },
-      },
+        actionType: 'retry_failed_revision_blocks',
+        actionData: { sessionDir: data.output_dir, fileId: data.id },
+      }
     );
-  }, [handleRetryFailedRevisionBlocks, normalizeSessionDir, showToast]);
+  }, [normalizeSessionDir, addNotification]);
 
   const { preview, openPreview, closePreview, relinkPreviewAudio, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
 
@@ -413,72 +565,50 @@ export default function App() {
       if (localStorage.getItem(storageKey) === '1') return;
     } catch (_) {}
     configRecoveryToastPathRef.current = recoveredPath;
-    showToast(
+    addNotification(
+      'Configurazione ripristinata',
       'Il file di configurazione era corrotto: ho ripristinato i valori predefiniti e salvato una copia di backup del file precedente.',
       'warning',
+      'system',
       {
         persistent: true,
         dedupeKey: `config-recovery:${recoveredPath}`,
-        onDismiss: () => {
-          try { localStorage.setItem(storageKey, '1'); } catch (_) {}
-        },
-      },
+      }
     );
-  }, [configRecoveredFrom, showToast]);
+  }, [configRecoveredFrom, addNotification]);
 
-  const peakToastIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!isPeakHour) {
-      if (peakToastIdRef.current) {
-        dismissToast(peakToastIdRef.current);
-        peakToastIdRef.current = null;
-      }
+      setRawNotifications(prev => prev.filter(n => n.dedupeKey !== 'peak-hour-warning'));
       return;
     }
-    if (isPeakDismissed || peakToastIdRef.current) return;
-    peakToastIdRef.current = showToast(
+    if (isPeakDismissed) return;
+    addNotification(
+      'Fascia oraria di punta',
       'Fascia oraria di punta (15:00–20:00): i modelli Gemini Flash possono subire rallentamenti o errori 503.',
       'warning',
+      'system',
       {
         persistent: true,
-        onDismiss: () => {
-          peakToastIdRef.current = null;
-          const next = new Date();
-          next.setDate(next.getDate() + 1);
-          next.setHours(15, 0, 0, 0);
-          localStorage.setItem('peakBannerDismissedUntil', String(next.getTime()));
-          setIsPeakDismissed(true);
-        },
+        dedupeKey: 'peak-hour-warning',
       }
     );
-  }, [isPeakHour, isPeakDismissed, showToast, dismissToast]);
+  }, [isPeakHour, isPeakDismissed, addNotification]);
 
-  const upsertUpdateInstallToast = useCallback((message: string, type: 'warning' | 'info', action?: ToastMessage['action']) => {
-    const existingId = updateInstallToastIdRef.current;
-    if (existingId) {
-      setToasts(prev => prev.map(toast => toast.id === existingId
-        ? { ...toast, message, type, persistent: true, action }
-        : toast,
-      ));
-      return existingId;
-    }
-    const id = showToast(message, type, {
-      persistent: true,
-      dedupeKey: 'update-install',
-      action,
-      onDismiss: () => {
-        updateInstallToastIdRef.current = null;
-        toastDedupeMapRef.current.delete('update-install');
-      },
-    });
-    updateInstallToastIdRef.current = id;
-    return id;
-  }, [showToast]);
-
-  const updateFallbackAction = useCallback((): ToastMessage['action'] => ({
-    label: 'Apri GitHub',
-    onAction: async () => { await window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL); },
-  }), []);
+  const upsertUpdateInstallNotification = useCallback((message: string, type: 'warning' | 'info', actionType?: 'install_update' | 'open_github', actionData?: unknown) => {
+    upsertNotification(
+      'Installazione aggiornamento',
+      message,
+      type,
+      'update',
+      {
+        persistent: true,
+        dedupeKey: 'update-install',
+        actionType,
+        actionData,
+      }
+    );
+  }, [upsertNotification]);
 
   const applyUpdateInstallState = useCallback((next: UpdateInstallState) => {
     updateInstallStateRef.current = next;
@@ -493,12 +623,12 @@ export default function App() {
     if (!api?.download_and_install_update) {
       const message = 'Bridge aggiornamenti non disponibile.';
       applyUpdateInstallState({ version, status: 'error', bytesDone: 0, bytesTotal: 0, error: message });
-      upsertUpdateInstallToast(`Aggiornamento non riuscito: ${message}`, 'warning', updateFallbackAction());
+      upsertUpdateInstallNotification(`Aggiornamento non riuscito: ${message}`, 'warning', 'open_github');
       throw new Error(message);
     }
 
     applyUpdateInstallState({ version, status: 'downloading', bytesDone: 0, bytesTotal: 0, error: null });
-    upsertUpdateInstallToast('Download aggiornamento…', 'info');
+    upsertUpdateInstallNotification('Download aggiornamento…', 'info');
 
     const completion = new Promise<void>((resolve, reject) => {
       downloadCompletionRef.current = { version, resolve, reject };
@@ -523,7 +653,7 @@ export default function App() {
         bytesTotal: updateInstallStateRef.current.version === version ? updateInstallStateRef.current.bytesTotal : 0,
         error: message,
       });
-      upsertUpdateInstallToast(`Aggiornamento non riuscito: ${message}`, 'warning', updateFallbackAction());
+      upsertUpdateInstallNotification(`Aggiornamento non riuscito: ${message}`, 'warning', 'open_github');
       throw new Error(message);
     }
     if (!result?.ok) {
@@ -532,34 +662,97 @@ export default function App() {
       updateInstallPromiseRef.current = null;
       applyUpdateInstallState({ version, status: 'error', bytesDone: 0, bytesTotal: 0, error: message });
       appendConsole(`❌ Aggiornamento fallito: ${message}`);
-      upsertUpdateInstallToast(`Aggiornamento non riuscito: ${message}`, 'warning', updateFallbackAction());
+      upsertUpdateInstallNotification(`Aggiornamento non riuscito: ${message}`, 'warning', 'open_github');
       throw new Error(message);
     }
     return trackedCompletion;
-  }, [appendConsole, applyUpdateInstallState, updateFallbackAction, upsertUpdateInstallToast]);
+  }, [appendConsole, applyUpdateInstallState, upsertUpdateInstallNotification]);
+
+  const bindNotificationActions = useCallback((raw: PersistedNotification[]): NotificationMessage[] => {
+    return raw.map(n => {
+      if (!n.actionType) return { ...n } as NotificationMessage;
+
+      let onAction: () => Promise<void>;
+      let label = '';
+      let loadingLabel = '';
+      let errorSuffix = '';
+      const actionData = n.actionData as Record<string, unknown> | undefined;
+
+      if (n.actionType === 'retry_failed_revision_blocks') {
+        label = 'Riprova';
+        loadingLabel = 'Riprovo...';
+        errorSuffix = 'puoi usare il pulsante sulla scheda';
+        onAction = async () => {
+          const sessionDir = typeof actionData?.sessionDir === 'string' ? actionData.sessionDir : '';
+          const fileId = typeof actionData?.fileId === 'string' ? actionData.fileId : undefined;
+          await handleRetryFailedRevisionBlocks(sessionDir, fileId);
+        };
+      } else if (n.actionType === 'install_update') {
+        label = 'Aggiorna';
+        loadingLabel = 'Download in corso…';
+        errorSuffix = 'usa il pulsante “Apri GitHub” per scaricare manualmente.';
+        onAction = async () => {
+          const version = typeof actionData?.version === 'string' ? actionData.version : '';
+          await installUpdate(version);
+        };
+      } else if (n.actionType === 'open_github') {
+        label = 'Apri GitHub';
+        onAction = async () => {
+          await window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL);
+        };
+      } else {
+        return { ...n } as NotificationMessage;
+      }
+
+      return {
+        ...n,
+        action: {
+          label,
+          type: n.actionType,
+          data: n.actionData,
+          loadingLabel,
+          errorSuffix,
+          onAction,
+        },
+      } as NotificationMessage;
+    });
+  }, [handleRetryFailedRevisionBlocks, installUpdate]);
+
+  const notifications = useMemo(() => {
+    return bindNotificationActions(rawNotifications);
+  }, [rawNotifications, bindNotificationActions]);
+
+  const unreadNotificationsCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
+  const [shakeBell, setShakeBell] = useState(false);
+  const prevUnreadCountRef = useRef(unreadNotificationsCount);
+
+  useEffect(() => {
+    if (unreadNotificationsCount > prevUnreadCountRef.current) {
+      setShakeBell(true);
+      const timer = setTimeout(() => setShakeBell(false), 500);
+      return () => clearTimeout(timer);
+    }
+    prevUnreadCountRef.current = unreadNotificationsCount;
+  }, [unreadNotificationsCount]);
 
   const updateToastShownVersionRef = useRef<string | null>(null);
   useEffect(() => {
     if (!updateAvailable) return;
     if (updateToastShownVersionRef.current === updateAvailable) return;
     updateToastShownVersionRef.current = updateAvailable;
-    showToast(
+    addNotification(
+      'Aggiornamento disponibile',
       `Nuova versione disponibile: ${updateAvailable}`,
       'info',
+      'update',
       {
         persistent: true,
-        action: {
-          label: 'Aggiorna',
-          loadingLabel: 'Download in corso…',
-          errorSuffix: 'usa il pulsante “Apri GitHub” per scaricare manualmente.',
-          onAction: () => installUpdate(updateAvailable),
-        },
-        onDismiss: () => {
-          dismissUpdate(updateAvailable);
-        },
+        dedupeKey: 'update-available',
+        actionType: 'install_update',
+        actionData: { version: updateAvailable },
       }
     );
-  }, [updateAvailable, showToast, dismissUpdate, installUpdate]);
+  }, [updateAvailable, addNotification]);
 
   const handleFoldersChange = useCallback(async (next: ArchiveFolder[]) => {
     setFolders(next);
@@ -620,7 +813,12 @@ export default function App() {
         const newDirs = new Set<string>(newSessions.map(s => s.session_dir));
         for (const [dir, name] of prevSessionDirsRef.current.entries()) {
           if (!newDirs.has(dir)) {
-            showToast(`La sessione "${name}" è stata cancellata e la sbobina non è più disponibile.`, 'warning');
+            addNotification(
+              'Sessione cancellata',
+              `La sessione "${name}" è stata cancellata e la sbobina non è più disponibile.`,
+              'warning',
+              'system'
+            );
           }
         }
         setArchiveSessions(newSessions);
@@ -630,9 +828,9 @@ export default function App() {
     }, 30_000);
     return () => {
       clearInterval(intervalId);
-      archiveLimitRef.current = 20;
+      archiveLimitRef.current = 0;
     };
-  }, [activePage, showToast]);
+  }, [activePage, addNotification]);
 
   const handleRemoveInsecureApiKey = useCallback(async () => {
     if (isRemovingInsecureKey) return;
@@ -948,7 +1146,7 @@ export default function App() {
 
   const executeRetryFromArchive = useCallback(async (session: ArchiveSession) => {
     if (appStateRef.current !== 'idle') {
-      showToast('Elaborazione in corso: riprova al termine.', 'warning');
+      addNotification('Elaborazione in corso', 'Elaborazione in corso: riprova al termine.', 'warning', 'processing');
       return;
     }
     const normDir = normalizeSessionDir(session.session_dir);
@@ -956,7 +1154,7 @@ export default function App() {
 
     // Guard against concurrent retry triggers
     if (existing?.isRetryingBlocks) {
-      showToast('Retry già in corso per questa sessione.', 'warning');
+      addNotification('Retry in corso', 'Retry già in corso per questa sessione.', 'warning', 'processing');
       return;
     }
 
@@ -991,7 +1189,7 @@ export default function App() {
     } finally {
       dispatch({ type: 'queue/set_retrying_blocks', id: fileId, value: false });
     }
-  }, [handleRetryFailedRevisionBlocks, normalizeSessionDir, showToast]);
+  }, [handleRetryFailedRevisionBlocks, normalizeSessionDir, addNotification]);
 
   const handleConfirmAction = useCallback(() => {
     if (!confirmAction) return;
@@ -1141,17 +1339,39 @@ export default function App() {
   const onBatchReset = useCallback(() => { setBatchTotal(0); setBatchCompleted(0); }, []);
   const onBatchFullyDone = useCallback((data: ProcessDonePayload) => {
     onBatchReset();
+
+    // Set flash if successful
     if (isSuccessfulProcessDone(data)) {
       setCompletionFlash(true);
       setTimeout(() => setCompletionFlash(false), 5000);
-      const completedCount = Number(data.completed ?? 0);
-      if (completedCount > 1 && !document.hasFocus()) {
-        void window.pywebview?.api?.show_notification?.(
-          '✅ Batch completato — El Sbobinator',
-          `${completedCount} sbobine elaborate con successo.`,
-        );
+    }
+
+    if (localStorage.getItem('notifications_enabled') !== 'false' && !document.hasFocus()) {
+      const total = Number(data.total ?? 0);
+      const completed = Number(data.completed ?? 0);
+      const completed_with_warnings = Number(data.completed_with_warnings ?? 0);
+      const failed = Number(data.failed ?? 0);
+
+      if (total > 1 && !data.cancelled) {
+        if (failed > 0) {
+          void window.pywebview?.api?.show_notification?.(
+            '⚠️ Batch completato con errori — El Sbobinator',
+            `Elaborazione terminata. Riuscite: ${completed + completed_with_warnings}/${total}. Fallite: ${failed}. Apri l'app per i dettagli.`,
+          );
+        } else if (completed_with_warnings > 0) {
+          void window.pywebview?.api?.show_notification?.(
+            '⚠️ Batch completato con avvisi — El Sbobinator',
+            `Elaborazione terminata con avvisi. Sbobine con avvisi: ${completed_with_warnings}/${total}.`,
+          );
+        } else {
+          void window.pywebview?.api?.show_notification?.(
+            '✅ Batch completato — El Sbobinator',
+            `${completed} sbobine elaborate con successo.`,
+          );
+        }
       }
     }
+
     void refreshArchiveSessions();
   }, [onBatchReset, refreshArchiveSessions]);
 
@@ -1171,6 +1391,8 @@ export default function App() {
     onBatchFullyDone,
     clearCompletionFlash: () => setCompletionFlash(false),
     onRevisionWarning: handleRevisionWarning,
+    addNotification,
+    batchTotal,
     onDownloadProgress: useCallback((data: UpdateDownloadProgressPayload) => {
       const currentDownload = downloadCompletionRef.current;
       const version = currentDownload?.version ?? updateInstallStateRef.current.version ?? latestVersion;
@@ -1183,19 +1405,19 @@ export default function App() {
       };
       applyUpdateInstallState(messageState);
       if (data.status === 'done') {
-        upsertUpdateInstallToast(formatUpdateInstallStatus(messageState), 'info');
+        upsertUpdateInstallNotification(formatUpdateInstallStatus(messageState), 'info');
         currentDownload?.resolve();
         downloadCompletionRef.current = null;
       } else if (data.status === 'error') {
         const message = messageState.error ?? 'Errore sconosciuto';
         appendConsole(`❌ Aggiornamento fallito: ${message}`);
-        upsertUpdateInstallToast(formatUpdateInstallStatus(messageState), 'warning', updateFallbackAction());
+        upsertUpdateInstallNotification(formatUpdateInstallStatus(messageState), 'warning', 'open_github');
         currentDownload?.reject(new Error(message));
         downloadCompletionRef.current = null;
       } else {
-        upsertUpdateInstallToast(formatUpdateInstallStatus(messageState), 'info');
+        upsertUpdateInstallNotification(formatUpdateInstallStatus(messageState), 'info');
       }
-    }, [appendConsole, applyUpdateInstallState, latestVersion, updateFallbackAction, upsertUpdateInstallToast]),
+    }, [appendConsole, applyUpdateInstallState, latestVersion, upsertUpdateInstallNotification]),
   });
   useBodyScrollLock(isSettingsOpen || regeneratePrompt !== null || preview.content !== null || askNewKeyPrompt || confirmAction !== null || duplicatePrompt !== null || regenDirtyConfirm !== null);
 
@@ -1245,7 +1467,7 @@ export default function App() {
   }, [folders, normalizeSessionDir]);
 
   return (
-    <div className="app-shell min-h-screen font-sans flex flex-row bg-[var(--bg-base)] text-[var(--text-secondary)]">
+    <div className="app-shell h-screen overflow-hidden font-sans flex flex-row bg-[var(--bg-base)] text-[var(--text-secondary)]">
       <NavSidebar
         activePage={activePage}
         setActivePage={setActivePage}
@@ -1261,14 +1483,21 @@ export default function App() {
         setIsSettingsOpen={setIsSettingsOpen}
         hasPendingUpdate={updateAvailable !== null}
         consoleDisabled={isConsoleDisabled}
+        unreadNotificationsCount={unreadNotificationsCount}
+        isNotificationsOpen={isSidebarPinned}
+        setIsNotificationsOpen={setIsNotificationsOpen}
+        shakeBell={shakeBell}
       />
 
-      <div className="flex flex-col flex-1 min-w-0 min-h-screen">
+      <div className="flex flex-col flex-1 min-w-0 h-screen overflow-hidden">
         <AnimatePresence mode="wait">
           {activePage === 'queue' ? (
             <motion.main
               key="queue"
-              className="flex-1 max-w-3xl w-full mx-auto flex flex-col"
+              className="flex-1 w-full flex flex-col overflow-y-auto hide-scrollbar"
+              style={{
+                '--console-height': showConsole ? (isConsoleExpanded ? '250px' : '50px') : '0px'
+              } as React.CSSProperties}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.15, ease: 'easeOut' }}
@@ -1276,7 +1505,7 @@ export default function App() {
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
-              <div className="my-auto px-5 sm:px-6 py-8 flex flex-col gap-5">
+              <div className="my-auto px-5 sm:px-6 py-8 flex flex-col gap-5 max-w-3xl w-full mx-auto">
                 {apiKeyInsecure && (
                   <motion.div
                     key="api-key-insecure-banner"
@@ -1434,19 +1663,29 @@ export default function App() {
                     consoleLogs={consoleLogs}
                     lastConsoleMessage={lastConsoleMessage}
                     appState={appState}
+                    isConsoleExpanded={isConsoleExpanded}
+                    setIsConsoleExpanded={setIsConsoleExpanded}
                   />
                 )}
               </div>
+              <footer className="app-footer">
+                <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link">
+                  <Github className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
+                </a>
+                <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }} className="footer-link">
+                  ☕ Offrimi un caffè su Ko-fi!
+                </a>
+              </footer>
             </motion.main>
           ) : (
             <motion.main
               key="archive"
-              className="flex-1 max-w-4xl w-full mx-auto flex flex-col"
+              className="flex-1 w-full flex flex-col overflow-y-auto hide-scrollbar"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.15, ease: 'easeOut' }}
             >
-              <div className="my-auto px-5 sm:px-6 py-8 flex flex-col">
+              <div className="flex-1 px-5 sm:px-6 py-8 flex flex-col max-w-4xl w-full mx-auto">
                 <React.Suspense fallback={null}>
                   <ArchivePage
                     sessions={archiveFiltered}
@@ -1462,18 +1701,17 @@ export default function App() {
                   />
                 </React.Suspense>
               </div>
+              <footer className="app-footer">
+                <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link">
+                  <Github className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
+                </a>
+                <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }} className="footer-link">
+                  ☕ Offrimi un caffè su Ko-fi!
+                </a>
+              </footer>
             </motion.main>
           )}
         </AnimatePresence>
-        <footer className="app-footer">
-          <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link">
-            <Github className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
-          </a>
-          <span>·</span>
-          <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }} className="footer-link">
-            ☕ Offrimi un caffè su Ko-fi!
-          </a>
-        </footer>
       </div>
 
       <RegenerateModal
@@ -1553,7 +1791,19 @@ export default function App() {
           />
         </React.Suspense>
       )}
-      <Toaster toasts={toasts} onDismiss={dismissToast} />
+      <NotificationDropdown
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+        notifications={notifications}
+        onMarkAsRead={markNotificationAsRead}
+        onMarkAllAsRead={markAllNotificationsAsRead}
+        onDelete={deleteNotification}
+        onClearAll={clearAllNotifications}
+        align="left"
+        leftOffset={224}
+        valign="bottom"
+        bottomOffset={48}
+      />
     </div>
   );
 }

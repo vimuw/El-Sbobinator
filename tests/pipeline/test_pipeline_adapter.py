@@ -186,6 +186,19 @@ class PipelineAdapterBasicTests(unittest.TestCase):
         self.assertEqual(received, [])
         self.assertIsNone(adapter._new_key_callback)
 
+    def test_winfo_exists_exception_handling(self):
+        from unittest.mock import PropertyMock, patch
+
+        adapter = _make_adapter()
+        with patch.object(
+            PipelineAdapter,
+            "window",
+            create=True,
+            new_callable=PropertyMock,
+            side_effect=RuntimeError("err"),
+        ):
+            self.assertFalse(adapter.winfo_exists())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1438,5 +1438,42 @@ class TestSaveConfigPropagatesError(unittest.TestCase):
         self.assertIn("disk full", result.get("error", ""))
 
 
+class TestLogDebugAndSessionRoot(unittest.TestCase):
+    def setUp(self) -> None:
+        _reset_cache()
+
+    def tearDown(self) -> None:
+        _reset_cache()
+
+    def test_log_debug_disabled(self) -> None:
+        with patch.dict(os.environ, {"EL_SBOBINATOR_DEBUG": "0"}):
+            with patch("builtins.print") as mock_print:
+                cs.debug_log("test message")
+                mock_print.assert_not_called()
+
+    def test_log_debug_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_file = os.path.join(tmpdir, "app.log")
+            cfg_file = os.path.join(tmpdir, "config.json")
+            with (
+                patch.dict(os.environ, {"EL_SBOBINATOR_DEBUG": "1"}),
+                patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_file),
+                patch("builtins.print") as mock_print,
+            ):
+                cs.debug_log("hello secret_key_AIzaSy123")
+                mock_print.assert_called_once()
+                self.assertTrue(os.path.exists(log_file))
+
+    def test_save_session_root_to_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_file = os.path.join(tmpdir, "config.json")
+            with patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_file):
+                cs.save_session_root_to_config("/tmp/custom_sessions")
+                self.assertTrue(os.path.exists(cfg_file))
+                with open(cfg_file, encoding="utf-8") as f:
+                    data = json.load(f)
+                self.assertEqual(data.get("session_root"), "/tmp/custom_sessions")
+
+
 if __name__ == "__main__":
     unittest.main()

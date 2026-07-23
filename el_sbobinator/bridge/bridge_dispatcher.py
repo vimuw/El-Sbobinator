@@ -95,7 +95,11 @@ class _BridgeDispatcher:
         if not events:
             return
 
-        window = self._window_getter()
+        try:
+            window = self._window_getter()
+        except Exception:
+            window = None
+
         if window is None:
             # Re-queue all events if window not ready
             with self._lock:

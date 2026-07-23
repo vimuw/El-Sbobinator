@@ -268,5 +268,120 @@ class CutChunkStreamCopyTests(unittest.TestCase):
         self.assertNotIn("-ar", cmd)
 
 
+class FfmpegUtilsCoverageTests(unittest.TestCase):
+    def test_probe_duration_no_match(self):
+        from el_sbobinator.utils.ffmpeg_utils import probe_duration_seconds
+
+        fake_res = MagicMock()
+        fake_res.stderr = b"Unrecognized output format"
+        fake_res.stdout = b""
+        fake_res.returncode = 1
+
+        with (
+            patch("os.path.exists", return_value=True),
+            patch("subprocess.run", return_value=fake_res),
+            patch(
+                "el_sbobinator.utils.ffmpeg_utils.get_ffmpeg_exe", return_value="ffmpeg"
+            ),
+        ):
+            sec, reason = probe_duration_seconds("test.mp3")
+            self.assertIsNone(sec)
+            self.assertEqual(reason, "Unrecognized output format")
+
+    def test_probe_duration_exception(self):
+        from el_sbobinator.utils.ffmpeg_utils import probe_duration_seconds
+
+        with (
+            patch("os.path.exists", side_effect=RuntimeError("disk err")),
+        ):
+            sec, reason = probe_duration_seconds("test.mp3")
+            self.assertIsNone(sec)
+            self.assertEqual(reason, "eccezione_ffmpeg")
+
+    def test_preconvert_output_missing(self):
+        from el_sbobinator.utils.ffmpeg_utils import preconvert_to_mono16k_mp3
+
+        def fake_run(cmd, *, stop_event=None):
+            return 0, "", "", False
+
+        with (
+            patch(
+                "el_sbobinator.utils.ffmpeg_utils._run_cancellable",
+                side_effect=fake_run,
+            ),
+            patch(
+                "el_sbobinator.utils.ffmpeg_utils.get_ffmpeg_exe", return_value="ffmpeg"
+            ),
+            patch("os.path.exists", return_value=False),
+        ):
+            ok, reason = preconvert_to_mono16k_mp3(
+                input_path="in.mp3", output_path="out.mp3"
+            )
+            self.assertFalse(ok)
+            self.assertEqual(reason, "preconvert_output_missing")
+
+    def test_cut_chunk_failed_and_cancelled(self):
+        from el_sbobinator.utils.ffmpeg_utils import cut_chunk_to_mp3
+
+        # Test cancelled
+        def fake_run_cancelled(cmd, *, stop_event=None):
+            return 0, "", "", True
+
+        with (
+            patch(
+                "el_sbobinator.utils.ffmpeg_utils._run_cancellable",
+                side_effect=fake_run_cancelled,
+            ),
+            patch(
+                "el_sbobinator.utils.ffmpeg_utils.get_ffmpeg_exe", return_value="ffmpeg"
+            ),
+            patch("os.path.exists", return_value=False),
+        ):
+            ok, reason = cut_chunk_to_mp3(
+                input_path="in.mp3", output_path="out.mp3", start_sec=0, duration_sec=5
+            )
+            self.assertFalse(ok)
+            self.assertEqual(reason, "cancelled")
+
+        # Test failure stderr
+        def fake_run_failed(cmd, *, stop_event=None):
+            return 1, "", "some cut error", False
+
+        with (
+            patch(
+                "el_sbobinator.utils.ffmpeg_utils._run_cancellable",
+                side_effect=fake_run_failed,
+            ),
+            patch(
+                "el_sbobinator.utils.ffmpeg_utils.get_ffmpeg_exe", return_value="ffmpeg"
+            ),
+        ):
+            ok, reason = cut_chunk_to_mp3(
+                input_path="in.mp3", output_path="out.mp3", start_sec=0, duration_sec=5
+            )
+            self.assertFalse(ok)
+            self.assertEqual(reason, "some cut error")
+
+        # Test output missing
+        def fake_run_missing(cmd, *, stop_event=None):
+            return 0, "", "", False
+
+        with (
+            patch(
+                "el_sbobinator.utils.ffmpeg_utils._run_cancellable",
+                side_effect=fake_run_missing,
+            ),
+            patch(
+                "el_sbobinator.utils.ffmpeg_utils.get_ffmpeg_exe", return_value="ffmpeg"
+            ),
+            patch("os.path.exists", return_value=False),
+        ):
+            ok, reason = cut_chunk_to_mp3(
+                input_path="in.mp3", output_path="out.mp3", start_sec=0, duration_sec=5
+            )
+            self.assertFalse(ok)
+            self.assertEqual(reason, "chunk_output_missing")
+
+
 if __name__ == "__main__":
     unittest.main()

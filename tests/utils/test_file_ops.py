@@ -444,22 +444,38 @@ class OpenPathWithDefaultAppTests(unittest.TestCase):
             open_path_with_default_app("http://example.com")
             mock_sf.assert_called_once_with("http://example.com")
 
-    def test_url_https_on_darwin(self):
+    def test_url_linux_xdg_open(self):
         with (
-            patch.object(sys, "platform", "darwin"),
+            patch.object(sys, "platform", "linux"),
             patch("subprocess.Popen") as mock_popen,
         ):
             open_path_with_default_app("https://example.com")
-            mock_popen.assert_called_once_with(["open", "https://example.com"])
+            mock_popen.assert_called_once_with(["xdg-open", "https://example.com"])
 
-    def test_directory_path_opens_without_extension_check(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
+    def test_file_linux_xdg_open(self):
+        fd, path = tempfile.mkstemp(suffix=".html")
+        os.close(fd)
+        try:
             with (
-                patch.object(sys, "platform", "win32"),
-                patch("os.startfile", create=True) as mock_sf,
+                patch.object(sys, "platform", "linux"),
+                patch("subprocess.Popen") as mock_popen,
             ):
-                open_path_with_default_app(tmpdir)
-                mock_sf.assert_called_once()
+                open_path_with_default_app(path)
+                mock_popen.assert_called_once_with(["xdg-open", os.path.realpath(path)])
+        finally:
+            os.unlink(path)
+
+    def test_html_gen_max_eviction(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("el_sbobinator.utils.file_ops._HTML_GEN_MAX", 2):
+                paths = [os.path.join(tmpdir, f"test{i}.html") for i in range(3)]
+                for p in paths:
+                    with open(p, "w", encoding="utf-8") as f:
+                        f.write("<html><body></body></html>")
+                for i, p in enumerate(paths, 1):
+                    save_html_body_content(
+                        p, f"<p>{i}</p>", shell=_SHELL_HTML, generation=i
+                    )
 
 
 if __name__ == "__main__":
