@@ -6,4 +6,4 @@ markdown>=3.10.2
 keyring>=25.7.0
 pywebview>=6.2.1
 plyer>=2.1.0
-nh3>=0.2.0
+nh3>=0.3.6
