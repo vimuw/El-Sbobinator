@@ -170,7 +170,7 @@ class RunCancellableTests(unittest.TestCase):
         proc.returncode = 0
 
         with patch("subprocess.Popen", return_value=proc):
-            rc, _out, _err, was_cancelled = _run_cancellable(
+            _rc, _out, _err, was_cancelled = _run_cancellable(
                 ["echo", "hi"], stop_event=stop
             )
 

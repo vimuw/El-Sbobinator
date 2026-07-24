@@ -193,7 +193,7 @@ class DefaultMacroCharLimitTests(unittest.TestCase):
                 "audio": {"bitrate": "48k"},
             }
         }
-        settings, changed = load_and_sanitize_settings(session)
+        settings, _changed = load_and_sanitize_settings(session)
         self.assertEqual(settings.macro_char_limit, 10000)
 
 

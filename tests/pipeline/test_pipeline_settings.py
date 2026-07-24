@@ -123,13 +123,13 @@ class LoadAndSanitizeSettingsTests(unittest.TestCase):
 
     def test_missing_settings_key_creates_defaults(self):
         session = {}
-        settings, changed = load_and_sanitize_settings(session)
+        _settings, changed = load_and_sanitize_settings(session)
         self.assertTrue(changed)
         self.assertIsInstance(session["settings"], dict)
 
     def test_settings_not_a_dict_is_replaced(self):
         session = {"settings": "garbage"}
-        settings, changed = load_and_sanitize_settings(session)
+        _settings, changed = load_and_sanitize_settings(session)
         self.assertTrue(changed)
         self.assertIsInstance(session["settings"], dict)
 

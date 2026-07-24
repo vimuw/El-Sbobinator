@@ -73,7 +73,9 @@ class TestLocalMacroCleanupNearAdjacent(unittest.TestCase):
         p = "q" * 80
         text = p + "\n\n" + p
 
-        cleaned, removed_exact, removed_adj, near_adj, total = local_macro_cleanup(text)
+        cleaned, removed_exact, removed_adj, _near_adj, total = local_macro_cleanup(
+            text
+        )
 
         self.assertEqual(removed_exact, 1)
         self.assertEqual(removed_adj, 0)
@@ -87,7 +89,9 @@ class TestLocalMacroCleanupNearAdjacent(unittest.TestCase):
         p2 = "a" * 98 + "b"
         text = p1 + "\n\n" + p2
 
-        cleaned, removed_exact, removed_adj, near_adj, total = local_macro_cleanup(text)
+        cleaned, _removed_exact, removed_adj, near_adj, _total = local_macro_cleanup(
+            text
+        )
 
         self.assertEqual(removed_adj, 0)
         self.assertEqual(near_adj, 0)

@@ -68,7 +68,7 @@ def evict_html_paths_under(prefix: str) -> None:
         to_evict = [k for k in all_keys if k.startswith(prefix)]
         for k in to_evict:
             if k in _html_write_locks:
-                lock_obj, ref_count = _html_write_locks[k]
+                _lock_obj, ref_count = _html_write_locks[k]
                 if ref_count == 0:
                     _html_write_locks.pop(k, None)
             _html_last_gen.pop(k, None)

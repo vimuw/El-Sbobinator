@@ -227,7 +227,7 @@ class RetryWithQuotaTests(unittest.TestCase):
             "el_sbobinator.services.generation_service.sleep_with_cancel",
             side_effect=AssertionError("404 must not sleep before switching model"),
         ):
-            client, result = retry_with_quota(
+            _client, result = retry_with_quota(
                 fn,
                 client=object(),
                 fallback_keys=[],
@@ -266,7 +266,7 @@ class RetryWithQuotaTests(unittest.TestCase):
                 return "ok"
             raise DegenerateOutputError("frase ripetuta 8 volte")
 
-        client, result = retry_with_quota(
+        _client, result = retry_with_quota(
             fn,
             client=object(),
             fallback_keys=[],
@@ -692,7 +692,7 @@ class RetryWithQuotaTests(unittest.TestCase):
                 raise err
             return "ok"
 
-        client, result = retry_with_quota(
+        _client, result = retry_with_quota(
             fn,
             client=object(),
             fallback_keys=[],
@@ -733,7 +733,7 @@ class RetryWithQuotaTests(unittest.TestCase):
                 raise err
             return "ok"
 
-        client, result = retry_with_quota(
+        _client, result = retry_with_quota(
             fn,
             client=object(),
             fallback_keys=[],
@@ -1402,7 +1402,7 @@ class TryRotateKeyEdgeCaseTests(unittest.TestCase):
         with patch(
             "el_sbobinator.services.generation_service.genai.Client", _FakeClient
         ):
-            returned, rotated, key = try_rotate_key(
+            _returned, rotated, key = try_rotate_key(
                 object(), ["valid-key"], "test-model", cancelled=cancel.is_set
             )
         self.assertFalse(rotated)

@@ -146,7 +146,7 @@ def process_macro_revision_phase(  # noqa: C901
             continue
 
         block_src = (block or "").strip()
-        block_local, removed_exact, removed_adj, near_adj, _ = local_macro_cleanup(
+        block_local, removed_exact, removed_adj, _near_adj, _ = local_macro_cleanup(
             block_src
         )
         block_for_ai = (block_local or block_src).strip()
