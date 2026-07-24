@@ -795,10 +795,13 @@ export default function App() {
 
   useEffect(() => {
     if (!apiReady) return;
-    void refreshArchiveSessions();
-    window.pywebview?.api?.get_archive_folders?.().then(res => {
-      if (res?.ok && res.folders) setFolders(res.folders);
-    }).catch(() => {});
+    const timer = setTimeout(() => {
+      void refreshArchiveSessions();
+      window.pywebview?.api?.get_archive_folders?.().then(res => {
+        if (res?.ok && res.folders) setFolders(res.folders);
+      }).catch(() => {});
+    }, 100);
+    return () => clearTimeout(timer);
   }, [apiReady, refreshArchiveSessions]);
 
   useEffect(() => {

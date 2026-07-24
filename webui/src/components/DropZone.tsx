@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Plus, UploadCloud } from 'lucide-react';
 
 interface DropZoneProps {
@@ -9,7 +10,7 @@ interface DropZoneProps {
   compact?: boolean;
 }
 
-export function DropZone({ isDragging, onDragOver, onDragLeave, onDrop, onClick, compact = false }: DropZoneProps) {
+export const DropZone = memo(function DropZone({ isDragging, onDragOver, onDragLeave, onDrop, onClick, compact = false }: DropZoneProps) {
   if (compact) {
     return (
       <div
@@ -48,4 +49,4 @@ export function DropZone({ isDragging, onDragOver, onDragLeave, onDrop, onClick,
       </div>
     </div>
   );
-}
+});

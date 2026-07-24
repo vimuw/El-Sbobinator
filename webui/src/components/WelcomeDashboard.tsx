@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { motion, useAnimation, type TargetAndTransition } from 'motion/react';
 import { CalendarDays, FileText } from 'lucide-react';
 import type { ArchiveSession } from '../bridge';
@@ -69,7 +69,7 @@ function ClockIcon({ className }: { className?: string }) {
   );
 }
 
-export function WelcomeDashboard({ archiveSessions }: WelcomeDashboardProps) {
+export const WelcomeDashboard = memo(function WelcomeDashboard({ archiveSessions }: WelcomeDashboardProps) {
   const stats = useMemo(() => {
     const total = archiveSessions.length;
     const totalSec = archiveSessions.reduce((acc, s) => acc + (s.duration_sec ?? 0), 0);
@@ -124,7 +124,7 @@ export function WelcomeDashboard({ archiveSessions }: WelcomeDashboardProps) {
       )}
     </motion.div>
   );
-}
+});
 
 interface AnimatedStatIconProps {
   children: ReactNode;

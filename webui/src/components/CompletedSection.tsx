@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { memo, useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle, Search, Trash2 } from 'lucide-react';
 import type { AppStatus, FileItem } from '../appState';
@@ -17,7 +17,7 @@ interface CompletedSectionProps {
   sessionFolderMap?: Map<string, ArchiveFolder>;
 }
 
-export function CompletedSection({ doneFiles, appState, onRemove, onPreview, onOpenFile, onClearAll, onRetryFailedRevisionBlocks, sessionFolderMap }: CompletedSectionProps) {
+export const CompletedSection = memo(function CompletedSection({ doneFiles, appState, onRemove, onPreview, onOpenFile, onClearAll, onRetryFailedRevisionBlocks, sessionFolderMap }: CompletedSectionProps) {
   const [completedSearch, setCompletedSearch] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
@@ -133,4 +133,4 @@ export function CompletedSection({ doneFiles, appState, onRemove, onPreview, onO
       )}
     </>
   );
-}
+});

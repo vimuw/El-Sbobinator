@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect, type Dispatch, type SetStateAction } from 'react';
+import { memo, useMemo, useRef, useState, useEffect, type Dispatch, type SetStateAction } from 'react';
 import { DndContext, closestCenter, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers';
@@ -32,7 +32,7 @@ interface QueueSectionProps {
   currentModel?: string;
 }
 
-export function QueueSection({
+export const QueueSection = memo(function QueueSection({
   pendingFiles, appState, autoContinue, setAutoContinue, preferredModel,
   queuedCount, canStart, hasApiKey, isApiKeyValid, currentPhase,
   dndSensors, onDragEnd, onRemove, onClearAll, onRetry, onPreview, onOpenFile,
@@ -239,4 +239,4 @@ export function QueueSection({
       )}
     </>
   );
-}
+});

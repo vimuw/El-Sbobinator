@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Copy } from 'lucide-react';
 import type { AppStatus } from '../appState';
 
@@ -10,7 +10,7 @@ interface ConsolePanelProps {
   setIsConsoleExpanded?: (expanded: boolean | ((prev: boolean) => boolean)) => void;
 }
 
-export function ConsolePanel({
+export const ConsolePanel = memo(function ConsolePanel({
   consoleLogs,
   lastConsoleMessage,
   appState,
@@ -91,4 +91,4 @@ export function ConsolePanel({
       )}
     </div>
   );
-}
+});

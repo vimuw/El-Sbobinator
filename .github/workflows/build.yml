@@ -59,12 +59,12 @@ jobs:
           python scripts/build_release.py validate
 
       - name: Upload Coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage-python.xml,webui/coverage/lcov.info
           flags: python,frontend
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
   checks-windows:
     name: Lint and Test (Windows)

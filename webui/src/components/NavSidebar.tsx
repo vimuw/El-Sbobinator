@@ -1,4 +1,4 @@
-import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { memo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Archive, Bell, Moon, Settings, Sun, Terminal } from 'lucide-react';
 import type { AppStatus } from '../appState';
@@ -36,7 +36,7 @@ const bellVariants = {
   idle: { rotate: 0 }
 };
 
-export function NavSidebar({
+export const NavSidebar = memo(function NavSidebar({
   activePage, setActivePage,
   apiReady, bridgeDelayed, hasApiKey, isApiKeyValid, appState,
   themeMode, setThemeMode,
@@ -231,7 +231,7 @@ export function NavSidebar({
       </div>
     </motion.nav>
   );
-}
+});
 
 function SidebarTooltip({ label, disabled, children }: { label: string; disabled: boolean; children: ReactNode }) {
   const [visible, setVisible] = useState(false);

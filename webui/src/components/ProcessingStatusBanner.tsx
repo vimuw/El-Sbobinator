@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import type React from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
@@ -301,7 +301,7 @@ function StepBadge({
   );
 }
 
-export function ProcessingStatusBanner({
+export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
   appState,
   currentPhase,
   currentModel,
@@ -486,4 +486,4 @@ export function ProcessingStatusBanner({
       </div>
     </motion.section>
   );
-}
+});

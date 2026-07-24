@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { memo, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AlertTriangle, Loader2, Moon, Settings, Sun, Terminal, X, Zap } from 'lucide-react';
 import type { AppStatus } from '../appState';
@@ -20,7 +20,7 @@ interface AppHeaderProps {
   dismissUpdate: (version: string) => void;
 }
 
-export function AppHeader({
+export const AppHeader = memo(function AppHeader({
   apiReady, bridgeDelayed, hasApiKey, isApiKeyValid, appState,
   themeMode, setThemeMode, showConsole, setShowConsole, setIsSettingsOpen,
   updateAvailable, latestVersion, dismissUpdate,
@@ -243,4 +243,4 @@ export function AppHeader({
       </AnimatePresence>
     </>
   );
-}
+});
