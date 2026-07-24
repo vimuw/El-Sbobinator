@@ -1037,8 +1037,8 @@ class TestLoadConfigMacOS(unittest.TestCase):
                 json.dump(payload, fh)
             mock_kr = MagicMock()
             fk_json = json.dumps(["fk-1", "fk-2"])
-            mock_kr.get_password.side_effect = (
-                lambda svc, usr: fk_json if usr == "gemini_fallback_keys" else None
+            mock_kr.get_password.side_effect = lambda svc, usr: (
+                fk_json if usr == "gemini_fallback_keys" else None
             )
             with (
                 patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_path),
