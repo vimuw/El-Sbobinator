@@ -1469,6 +1469,33 @@ export default function App() {
     return map;
   }, [folders, normalizeSessionDir]);
 
+  const handleQueueRetry = useCallback((id: string) => {
+    dispatch({ type: 'queue/retry_one', id });
+  }, [dispatch]);
+
+  const handleQueueStart = useCallback(() => {
+    void startProcessing();
+  }, [startProcessing]);
+
+  const handleQueueStop = useCallback(() => {
+    setConfirmAction({ type: 'stop-processing' });
+  }, []);
+
+  const handleOpenSettings = useCallback(() => {
+    setIsSettingsOpen(true);
+  }, []);
+
+  const handleRemoveDoneFile = useCallback((id: string) => {
+    const f = filesRef.current.find(item => item.id === id);
+    if (!f) return;
+    if (appStateRef.current !== 'idle' && f.status !== 'done') return;
+    setConfirmAction({ type: 'remove-file', fileId: id, fileName: f.name, isDone: true });
+  }, []);
+
+  const handleClearCompleted = useCallback(() => {
+    setConfirmAction({ type: 'clear-completed', count: doneFiles.length });
+  }, [doneFiles.length]);
+
   return (
     <div className="app-shell h-screen overflow-hidden font-sans flex flex-row bg-[var(--bg-base)] text-[var(--text-secondary)]">
       <NavSidebar
@@ -1635,26 +1662,21 @@ export default function App() {
                       onDragEnd={handleDragEnd}
                       onRemove={requestRemoveFile}
                       onClearAll={handleClearAll}
-                      onRetry={(id) => dispatch({ type: 'queue/retry_one', id })}
+                      onRetry={handleQueueRetry}
                       onPreview={openPreview}
                       onOpenFile={openFile}
-                      onStart={() => void startProcessing()}
-                      onStop={() => setConfirmAction({ type: 'stop-processing' })}
-                      onOpenSettings={() => setIsSettingsOpen(true)}
+                      onStart={handleQueueStart}
+                      onStop={handleQueueStop}
+                      onOpenSettings={handleOpenSettings}
                     />
 
                     <CompletedSection
                       doneFiles={doneFiles}
                       appState={appState}
-                      onRemove={(id) => {
-                        const f = filesRef.current.find(f => f.id === id);
-                        if (!f) return;
-                        if (appState !== 'idle' && f.status !== 'done') return;
-                        setConfirmAction({ type: 'remove-file', fileId: id, fileName: f.name, isDone: true });
-                      }}
+                      onRemove={handleRemoveDoneFile}
                       onPreview={openPreview}
                       onOpenFile={openFile}
-                      onClearAll={() => setConfirmAction({ type: 'clear-completed', count: doneFiles.length })}
+                      onClearAll={handleClearCompleted}
                       onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
                       sessionFolderMap={completedSessionFolderMap}
                     />

@@ -863,7 +863,7 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
   });
 
   describe('onBatchFullyDone native OS notifications', () => {
-    let capturedOptions: any = null;
+    let capturedOptions: Parameters<typeof useBridgeCallbacks>[0] | null = null;
     const showNotification = vi.fn();
 
     beforeEach(() => {
