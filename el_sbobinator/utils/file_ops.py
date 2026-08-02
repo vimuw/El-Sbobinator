@@ -7,6 +7,8 @@ from __future__ import annotations
 import os
 import sys
 import threading
+import time
+import uuid
 
 _HTML_CACHE_MAX = 200  # FIFO cap for write-lock entries
 _HTML_GEN_MAX = (
@@ -15,6 +17,19 @@ _HTML_GEN_MAX = (
 _html_write_locks: dict[str, tuple[threading.Lock, int]] = {}
 _html_last_gen: dict[str, int] = {}
 _html_write_locks_meta = threading.Lock()
+
+
+def _replace_with_retry(
+    src: str, dst: str, max_retries: int = 5, delay: float = 0.02
+) -> None:
+    for attempt in range(max_retries):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if attempt == max_retries - 1:
+                raise
+            time.sleep(delay)
 
 
 class HTMLWriteLock:
@@ -164,7 +179,7 @@ def save_html_body_content(
 
     body_inner = sanitize_html_basic(str(content or ""))
 
-    tmp_path = path + ".tmp"
+    tmp_path = f"{path}.{uuid.uuid4().hex}.tmp"
     with _html_write_lock(path):
         with _html_write_locks_meta:
             if generation is not None and generation <= _html_last_gen.get(path, 0):
@@ -187,9 +202,16 @@ def save_html_body_content(
                 '<html>\n<head>\n<meta charset="utf-8">\n</head>\n'
                 f"<body>\n{body_inner}\n</body>\n</html>\n"
             )
-        with open(tmp_path, "w", encoding="utf-8") as handle:
-            handle.write(updated_html)
-        os.replace(tmp_path, path)
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as handle:
+                handle.write(updated_html)
+            _replace_with_retry(tmp_path, path)
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
         if generation is not None:
             with _html_write_locks_meta:
                 _html_last_gen.pop(path, None)

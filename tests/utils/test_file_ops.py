@@ -216,37 +216,42 @@ class SaveHtmlBodyContentWithoutShellTests(unittest.TestCase):
         the fix, the read happens inside the lock so both reads always observe
         the file as it stands at the moment of each writer's turn.
         """
-        N = 20
-        with tempfile.TemporaryDirectory() as tmpdir:
-            path = os.path.join(tmpdir, "concurrent.html")
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(
-                    "<html><head><meta charset='utf-8'></head>"
-                    "<body><p>init</p></body></html>"
-                )
 
-            barrier = threading.Barrier(N)
-            errors: list[Exception] = []
+        def _run_single_test() -> None:
+            N = 20
+            with tempfile.TemporaryDirectory() as tmpdir:
+                path = os.path.join(tmpdir, "concurrent.html")
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(
+                        "<html><head><meta charset='utf-8'></head>"
+                        "<body><p>init</p></body></html>"
+                    )
 
-            def writer(idx: int) -> None:
-                try:
-                    barrier.wait()
-                    save_html_body_content(path, f"<p>thread-{idx}</p>", shell=None)
-                except Exception as exc:
-                    errors.append(exc)
+                barrier = threading.Barrier(N)
+                errors: list[Exception] = []
 
-            threads = [threading.Thread(target=writer, args=(i,)) for i in range(N)]
-            for t in threads:
-                t.start()
-            for t in threads:
-                t.join()
+                def writer(idx: int) -> None:
+                    try:
+                        barrier.wait()
+                        save_html_body_content(path, f"<p>thread-{idx}</p>", shell=None)
+                    except Exception as exc:
+                        errors.append(exc)
 
-            self.assertEqual(errors, [], errors)
-            with open(path, encoding="utf-8") as f:
-                final = f.read()
-            self.assertIn("<html", final)
-            self.assertIn("</body>", final)
-            self.assertIn("<p>thread-", final)
+                threads = [threading.Thread(target=writer, args=(i,)) for i in range(N)]
+                for t in threads:
+                    t.start()
+                for t in threads:
+                    t.join()
+
+                self.assertEqual(errors, [], errors)
+                with open(path, encoding="utf-8") as f:
+                    final = f.read()
+                self.assertIn("<html", final)
+                self.assertIn("</body>", final)
+                self.assertIn("<p>thread-", final)
+
+        for _ in range(5):
+            _run_single_test()
 
 
 class HtmlCacheEvictionTests(unittest.TestCase):
