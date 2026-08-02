@@ -138,9 +138,7 @@ Verifica che sia installato il componente di sistema **Microsoft Edge WebView2 R
 
 Segnalazioni di bug e proposte di nuove funzionalità sono sempre le benvenute! Apri una **[Issue](https://github.com/vimuw/El-Sbobinator/issues)** o consulta la guida [CONTRIBUTING.md](CONTRIBUTING.md) per le istruzioni riservate ai contributor.
 
-Se El Sbobinator ti ha salvato la sessione d'esami e desideri sostenere il progetto:
-
-<a href="https://ko-fi.com/vimuw" target="_blank"><img src="https://storage.ko-fi.com/cdn/kofi3.png?v=3" height="36" alt="Buy Me a Coffee at ko-fi.com" /></a>
+Se El Sbobinator ti ha salvato la sessione d'esami e desideri sostenere il progetto: <a href="https://ko-fi.com/vimuw" target="_blank"><img src="https://storage.ko-fi.com/cdn/kofi3.png?v=3" height="36" alt="Buy Me a Coffee at ko-fi.com" /></a>
 
 ---
 
