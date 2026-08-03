@@ -1,10 +1,11 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Check, Copy, ExternalLink, FileText, Loader2 } from 'lucide-react';
+import { ArrowLeft, Check, Copy, ExternalLink, FileText, Loader2, Users } from 'lucide-react';
 import type { Heading } from './RichTextEditor';
 import type { SaveHtmlResult } from '../bridge';
 import { nextHtmlAutosaveGeneration, seedHtmlAutosaveGeneration } from '../autosaveGeneration';
 import { normalizePreviewHtmlContent } from '../previewHtml';
+import { CollaborationModal } from './modals/CollaborationModal';
 
 const LazyAudioPlayer = React.lazy(() =>
   import('./AudioPlayer').then(m => ({ default: m.AudioPlayer }))
@@ -26,18 +27,24 @@ interface EditorFullPageProps {
   previewInitAudio: { time?: number; playbackRate?: number; volume?: number };
   previewInitScrollTop: number | undefined;
   initialSearchTerm?: string;
+  initialRoom?: string;
+  initialUser?: { name: string; color: string };
   onAudioStateChange: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
   onScrollTopChange: (scrollTop: number) => void;
+  onCollaborationStateChange?: (room?: string, user?: { name: string; color: string }) => void;
 }
 
 export function EditorFullPage({
   previewContent, previewTitle, htmlPath, onClose,
   audioSrc, audioRelinkNeeded, onRelink,
   previewInitAudio, previewInitScrollTop,
-  initialSearchTerm,
-  onAudioStateChange, onScrollTopChange,
+  initialSearchTerm, initialRoom, initialUser,
+  onAudioStateChange, onScrollTopChange, onCollaborationStateChange,
 }: EditorFullPageProps) {
   const [isTocOpen, setIsTocOpen] = useState(false);
+  const [isCollabModalOpen, setIsCollabModalOpen] = useState(false);
+  const [collabRoom, setCollabRoom] = useState<string | undefined>(initialRoom);
+  const [collabUser, setCollabUser] = useState<{ name: string; color: string } | undefined>(initialUser);
   const [headings, setHeadings] = useState<Heading[]>([]);
   const [isCopied, setIsCopied] = useState(false);
   const [relinkSuccess, setRelinkSuccess] = useState(false);
@@ -296,6 +303,13 @@ export function EditorFullPage({
                 </button>
               )}
               <button
+                onClick={() => setIsCollabModalOpen(true)}
+                className={`icon-button${collabRoom ? ' icon-button--active' : ''}`}
+                title={collabRoom ? `Collaborazione attiva: ${collabRoom}` : 'Lavora in gruppo (Collaborazione P2P)'}
+              >
+                <Users className="w-4 h-4" />
+              </button>
+              <button
                 onClick={() => void handleCopy()}
                 className="icon-button"
                 style={isCopied ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : {}}
@@ -338,6 +352,7 @@ export function EditorFullPage({
           <div className="editor-fullpage-body">
             <Suspense fallback={<div className="p-6 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento editor...</div>}>
               <LazyRichTextEditor
+                key={collabRoom ? `collab-${collabRoom}` : 'standalone'}
                 initialContent={previewContent}
                 onChange={scheduleAutosave}
                 onEditorReady={getHtml => { getHtmlRef.current = getHtml; }}
@@ -351,6 +366,8 @@ export function EditorFullPage({
                 onScrollToHeading={scrollToHeading}
                 zoomLevel={zoomLevel}
                 onZoomChange={handleZoomChange}
+                collaborationRoom={collabRoom}
+                collaborationUser={collabUser}
               />
             </Suspense>
 
@@ -399,6 +416,24 @@ export function EditorFullPage({
               </div>
             )}
           </div>
+
+          <CollaborationModal
+            isOpen={isCollabModalOpen}
+            onClose={() => setIsCollabModalOpen(false)}
+            activeRoom={collabRoom}
+            activeUser={collabUser}
+            onStartCollaboration={(room, user) => {
+              setCollabRoom(room);
+              setCollabUser(user);
+              setIsCollabModalOpen(false);
+              onCollaborationStateChange?.(room, user);
+            }}
+            onStopCollaboration={() => {
+              setCollabRoom(undefined);
+              setCollabUser(undefined);
+              onCollaborationStateChange?.(undefined, undefined);
+            }}
+          />
         </motion.div>
       )}
     </AnimatePresence>

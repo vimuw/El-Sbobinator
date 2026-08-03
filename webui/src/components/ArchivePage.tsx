@@ -2,8 +2,8 @@ import { type FormEvent, type MouseEvent, useCallback, useEffect, useMemo, useRe
 import { motion, AnimatePresence } from 'motion/react';
 import {
   AlertTriangle, ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
-  ExternalLink, FileSearch, FileText, FolderOpen, FolderPlus,
-  Loader2, Pencil, Plus, RefreshCw, Search, Trash2, X,
+  Download, ExternalLink, Eye, FileSearch, FileText, FolderOpen, FolderPlus,
+  Loader2, Pencil, Plus, RefreshCw, Search, Trash2, Upload, Users, X,
 } from 'lucide-react';
 import {
   DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -14,9 +14,11 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { ArchiveFolder, ArchiveSession, SearchSessionResult } from '../bridge';
+import { loadAllEditorSessions, type EditorSession } from '../editorSessions';
 import { formatRelativeTime, shortModelName } from '../utils';
 import { KebabMenu, type KebabMenuItem } from './KebabMenu';
 import { FolderIndicatorChip } from './FolderChip';
+import { ShareExportModal } from './modals/ShareExportModal';
 
 const FOLDER_COLORS = [
   '#FF6B6B', '#FF922B', '#FFD93D', '#6BCB77',
@@ -36,6 +38,7 @@ interface ArchivePageProps {
   onRefresh?: () => void;
   onLoadAll?: () => void;
   onRetryFailedRevisionBlocks?: (sessionDir: string) => Promise<void>;
+  onOpenJoinRoom?: () => void;
 }
 
 type FolderModalState =
@@ -44,13 +47,29 @@ type FolderModalState =
 
 type DeleteFolderConfirmState = { folder: ArchiveFolder };
 
+function getOpenedAtMs(
+  session: ArchiveSession,
+  editorSessionsMap: Record<string, EditorSession>,
+): number {
+  let backendMs = 0;
+  if (session.last_opened_at_iso) {
+    const parsed = new Date(session.last_opened_at_iso).getTime();
+    if (!isNaN(parsed) && parsed > 0) {
+      backendMs = parsed;
+    }
+  }
+  const localOpened = editorSessionsMap[session.session_dir]?.openedAt
+    ?? editorSessionsMap[session.html_path]?.openedAt;
+  return Math.max(backendMs, localOpened || 0);
+}
+
 export function ArchivePage({
   sessions, total, folders, onFoldersChange,
   onPreview, onOpenFile, onDeleteSession, onRefresh,
-  onRetryFailedRevisionBlocks,
+  onRetryFailedRevisionBlocks, onOpenJoinRoom,
 }: ArchivePageProps) {
   const [search, setSearch] = useState('');
-  const [sort, setSort] = useState<'newest' | 'oldest'>('newest');
+  const [sort, setSort] = useState<'newest' | 'oldest' | 'recently_opened'>('newest');
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [folderModal, setFolderModal] = useState<FolderModalState | null>(null);
   const [deleteFolderConfirm, setDeleteFolderConfirm] = useState<DeleteFolderConfirmState | null>(null);
@@ -85,6 +104,26 @@ export function ArchivePage({
     onFoldersChange(arrayMove(folders, oldIndex, newIndex));
   }, [folders, onFoldersChange]);
 
+  const [sharingSession, setSharingSession] = useState<ArchiveSession | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+
+  const handleImportSbobina = useCallback(async () => {
+    if (isImporting) return;
+    setIsImporting(true);
+    try {
+      if (window.pywebview?.api?.import_sbobina_package) {
+        const res = await window.pywebview.api.import_sbobina_package();
+        if (res.ok) {
+          onRefresh?.();
+        } else if (!res.cancelled && res.error) {
+          alert(res.error);
+        }
+      }
+    } finally {
+      setIsImporting(false);
+    }
+  }, [isImporting, onRefresh]);
+
   const handleRefresh = useCallback(async () => {
     if (isRefreshing || !onRefresh) return;
     setIsRefreshing(true);
@@ -107,15 +146,23 @@ export function ArchivePage({
     return map;
   }, [folders]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const editorSessionsMap = useMemo(() => loadAllEditorSessions(), [sessions]);
+
   const sortSessions = useCallback((arr: ArchiveSession[]) => {
     const q = search.trim().toLowerCase();
     const filtered = q ? arr.filter(s => s.name.toLowerCase().includes(q)) : arr;
     return [...filtered].sort((a, b) => {
+      if (sort === 'recently_opened') {
+        const oa = getOpenedAtMs(a, editorSessionsMap);
+        const ob = getOpenedAtMs(b, editorSessionsMap);
+        if (oa !== ob) return ob - oa;
+      }
       const ta = a.completed_at_iso ? new Date(a.completed_at_iso).getTime() : 0;
       const tb = b.completed_at_iso ? new Date(b.completed_at_iso).getTime() : 0;
-      return sort === 'newest' ? tb - ta : ta - tb;
+      return sort === 'oldest' ? ta - tb : tb - ta;
     });
-  }, [search, sort]);
+  }, [search, sort, editorSessionsMap]);
 
   const allSortedSessions = useMemo(
     () => sortSessions(sessions),
@@ -201,6 +248,7 @@ export function ArchivePage({
         <FolderDetailView
           folder={selectedFolder}
           sessionsByDir={sessionsByDir}
+          editorSessionsMap={editorSessionsMap}
           onBack={() => setSelectedFolderId(null)}
           onEdit={() => setFolderModal({ type: 'edit', folder: selectedFolder })}
           onDelete={() => setDeleteFolderConfirm({ folder: selectedFolder })}
@@ -213,6 +261,7 @@ export function ArchivePage({
           onOpenFile={onOpenFile}
           onDeleteSession={onDeleteSession}
           onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
+          onShareSession={setSharingSession}
         />
         <AnimatePresence>
           {folderModal && (
@@ -243,6 +292,12 @@ export function ArchivePage({
             />
           )}
         </AnimatePresence>
+        {sharingSession && (
+          <ShareExportModal
+            session={sharingSession}
+            onClose={() => setSharingSession(null)}
+          />
+        )}
       </>
     );
   }
@@ -250,14 +305,14 @@ export function ArchivePage({
   return (
     <div className="flex flex-col gap-6 w-full">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <h2 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-          Archivio Sbobine
-        </h2>
-        <span className="status-pill">{total != null && total > sessions.length ? total : sessions.length}</span>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h2 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+            Archivio Sbobine
+          </h2>
+          <span className="status-pill">{total != null && total > sessions.length ? total : sessions.length}</span>
+        </div>
       </div>
-
-
 
       {/* Folders grid — always visible, first card is "new folder" */}
       <DndContext
@@ -294,7 +349,7 @@ export function ArchivePage({
           Tutte le sbobine
         </h3>
 
-        {/* Search + Sort */}
+        {/* Search + Sort + Actions */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
             <div className="notion-search-wrap">
@@ -350,25 +405,49 @@ export function ArchivePage({
             </button>
             {!fullTextMode && (
               <button
-                onClick={() => setSort(s => s === 'newest' ? 'oldest' : 'newest')}
+                onClick={() => setSort(s => s === 'newest' ? 'oldest' : s === 'oldest' ? 'recently_opened' : 'newest')}
                 className="notion-sort-chip"
+                title="Cambia ordinamento (Più recenti / Meno recenti / Aperti di recente)"
               >
                 <ChevronDown className="w-3.5 h-3.5" style={{ opacity: 0.55 }} />
-                {sort === 'newest' ? 'Recente' : 'Meno recente'}
+                {sort === 'newest' ? 'Recente' : sort === 'oldest' ? 'Meno recente' : 'Aperti di recente'}
               </button>
             )}
-            {onRefresh && (
+            <div className="ml-auto flex items-center gap-2 shrink-0">
+              {onOpenJoinRoom && (
+                <button
+                  type="button"
+                  onClick={onOpenJoinRoom}
+                  className="notion-sort-chip"
+                  title="Partecipa a una stanza di collaborazione tramite codice"
+                >
+                  <Users className="w-3.5 h-3.5" style={{ opacity: 0.8 }} />
+                  Partecipa con codice
+                </button>
+              )}
               <button
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                className="icon-button compact-icon-button"
-                style={{ color: 'var(--text-muted)', flexShrink: 0 }}
-                title="Aggiorna archivio"
-                aria-label="Aggiorna archivio"
+                type="button"
+                onClick={handleImportSbobina}
+                disabled={isImporting}
+                className="notion-sort-chip"
+                title="Importa un pacchetto .sbobina creato su un altro PC"
               >
-                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                {isImporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" style={{ opacity: 0.8 }} />}
+                Importa Sbobina
               </button>
-            )}
+              {onRefresh && (
+                <button
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="icon-button compact-icon-button"
+                  style={{ color: 'var(--text-muted)', flexShrink: 0 }}
+                  title="Aggiorna archivio"
+                  aria-label="Aggiorna archivio"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                </button>
+              )}
+            </div>
           </div>
           {!fullTextMode && search.trim().length > 0 && (
             <span className="notion-results-count">
@@ -435,6 +514,7 @@ export function ArchivePage({
                       session={session}
                       allFolders={folders}
                       currentFolder={sessionFolderMap.get(session.session_dir)}
+                      editorSessionsMap={editorSessionsMap}
                       onAssignToFolder={fId => assignToFolder(session.session_dir, fId)}
                       onRemoveFromFolder={() => {
                         const f = sessionFolderMap.get(session.session_dir);
@@ -444,6 +524,7 @@ export function ArchivePage({
                       onOpenFile={onOpenFile}
                       onDeleteSession={onDeleteSession}
                       onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
+                      onShareSession={setSharingSession}
                     />
                   ))}
                 </motion.div>
@@ -478,6 +559,14 @@ export function ArchivePage({
           />
         )}
       </AnimatePresence>
+
+      {/* Share/Export modal */}
+      {sharingSession && (
+        <ShareExportModal
+          session={sharingSession}
+          onClose={() => setSharingSession(null)}
+        />
+      )}
 
       {/* Delete-folder confirmation modal (grid view) */}
       <AnimatePresence>
@@ -713,20 +802,23 @@ function FolderCard({
 // ─── DraggableSessionCard ─────────────────────────────────────────────────────
 
 function DraggableSessionCard({
-  session, allFolders, currentFolder, onAssignToFolder, onRemoveFromFolder,
-  onPreview, onOpenFile, onDeleteSession, onRetryFailedRevisionBlocks,
+  session, allFolders, currentFolder, editorSessionsMap, onAssignToFolder, onRemoveFromFolder,
+  onPreview, onOpenFile, onDeleteSession, onRetryFailedRevisionBlocks, onShareSession,
 }: {
   session: ArchiveSession;
   allFolders: ArchiveFolder[];
   currentFolder?: ArchiveFolder;
+  editorSessionsMap?: Record<string, EditorSession>;
   onAssignToFolder: (folderId: string) => void;
   onRemoveFromFolder: () => void;
   onPreview: ArchivePageProps['onPreview'];
   onOpenFile: ArchivePageProps['onOpenFile'];
   onDeleteSession: ArchivePageProps['onDeleteSession'];
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
+  onShareSession?: (session: ArchiveSession) => void;
 }) {
   const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
+  const openedAtMs = getOpenedAtMs(session, editorSessionsMap ?? loadAllEditorSessions());
   const [isRetryingBlocks, setIsRetryingBlocks] = useState(false);
   const failedBlockCount = session.revision_failed_blocks?.length ?? 0;
   const hasRevisionWarnings = session.completion_status === 'completed_with_warnings' || failedBlockCount > 0;
@@ -743,17 +835,6 @@ function DraggableSessionCard({
   };
 
   const kebabItems: KebabMenuItem[] = [
-    ...allFolders.map(f => ({
-      label: f.name,
-      icon: <span className="w-3 h-3 rounded-full inline-block" style={{ background: f.color }} />,
-      onClick: () => onAssignToFolder(f.id),
-    })),
-    ...(currentFolder ? [{
-      label: `Rimuovi da "${currentFolder.name}"`,
-      icon: <X className="w-3.5 h-3.5" />,
-      onClick: onRemoveFromFolder,
-    } as KebabMenuItem] : []),
-    ...(allFolders.length > 0 || currentFolder ? [{ separator: true } as KebabMenuItem] : []),
     {
       label: 'Apri cartella',
       icon: <FolderOpen className="w-3.5 h-3.5" />,
@@ -764,6 +845,23 @@ function DraggableSessionCard({
       icon: <ExternalLink className="w-3.5 h-3.5" />,
       onClick: () => onOpenFile(session.html_path),
     },
+    ...(onShareSession ? [{
+      label: 'Esporta Sbobina...',
+      icon: <Download className="w-3.5 h-3.5" />,
+      onClick: () => onShareSession(session),
+    } as KebabMenuItem] : []),
+    ...(allFolders.length > 0 || currentFolder ? [{ separator: true } as KebabMenuItem] : []),
+    ...allFolders.map(f => ({
+      label: f.name,
+      icon: <span className="w-3 h-3 rounded-full inline-block" style={{ background: f.color }} />,
+      onClick: () => onAssignToFolder(f.id),
+    })),
+    ...(currentFolder ? [{
+      label: `Rimuovi da "${currentFolder.name}"`,
+      icon: <X className="w-3.5 h-3.5" />,
+      onClick: onRemoveFromFolder,
+    } as KebabMenuItem] : []),
+    { separator: true },
     {
       label: 'Elimina',
       icon: <Trash2 className="w-3.5 h-3.5" />,
@@ -787,6 +885,15 @@ function DraggableSessionCard({
             {ts > 0 && <span>{formatRelativeTime(ts)}</span>}
             {session.effective_model && (
               <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span>{shortModelName(session.effective_model)}</span></>
+            )}
+            {openedAtMs > 0 && (
+              <>
+                <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
+                <span className="inline-flex items-center gap-1 shrink-0" title={`Ultima apertura: ${new Date(openedAtMs).toLocaleString('it-IT')}`}>
+                  <Eye className="w-3 h-3 text-muted" style={{ opacity: 0.65 }} />
+                  Aperto {formatRelativeTime(openedAtMs)}
+                </span>
+              </>
             )}
             {currentFolder && (
               <>
@@ -865,18 +972,20 @@ function FolderSessionCardOverlay({ session, folderColor }: {
 // ─── SortableSessionCard (inside folder detail view) ─────────────────────────
 
 function SortableSessionCard({
-  session, folderColor, disabled, onRemove,
-  onPreview, onOpenFile, onDeleteSession, onRetryFailedRevisionBlocks,
+  session, folderColor, disabled, onRemove, editorSessionsMap,
+  onPreview, onOpenFile, onDeleteSession, onRetryFailedRevisionBlocks, onShareSession,
   canMoveToPreviousPage, canMoveToNextPage, onMoveToPreviousPage, onMoveToNextPage,
 }: {
   session: ArchiveSession;
   folderColor: string;
   disabled: boolean;
   onRemove: () => void;
+  editorSessionsMap?: Record<string, EditorSession>;
   onPreview: ArchivePageProps['onPreview'];
   onOpenFile: ArchivePageProps['onOpenFile'];
   onDeleteSession: ArchivePageProps['onDeleteSession'];
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
+  onShareSession?: (session: ArchiveSession) => void;
   canMoveToPreviousPage?: boolean;
   canMoveToNextPage?: boolean;
   onMoveToPreviousPage?: () => void;
@@ -888,6 +997,7 @@ function SortableSessionCard({
   } = useSortable({ id: session.session_dir, disabled });
 
   const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
+  const openedAtMs = getOpenedAtMs(session, editorSessionsMap ?? loadAllEditorSessions());
   const [isRetryingBlocks, setIsRetryingBlocks] = useState(false);
   const failedBlockCount = session.revision_failed_blocks?.length ?? 0;
   const hasRevisionWarnings = session.completion_status === 'completed_with_warnings' || failedBlockCount > 0;
@@ -914,11 +1024,18 @@ function SortableSessionCard({
       icon: <ExternalLink className="w-3.5 h-3.5" />,
       onClick: () => onOpenFile(session.html_path),
     },
+    ...(onShareSession ? [{
+      label: 'Esporta Sbobina...',
+      icon: <Download className="w-3.5 h-3.5" />,
+      onClick: () => onShareSession(session),
+    } as KebabMenuItem] : []),
+    { separator: true },
     {
       label: 'Rimuovi dalla cartella',
       icon: <X className="w-3.5 h-3.5" />,
       onClick: onRemove,
     },
+    { separator: true },
     {
       label: 'Elimina',
       icon: <Trash2 className="w-3.5 h-3.5" />,
@@ -953,6 +1070,15 @@ function SortableSessionCard({
             {ts > 0 && <span>{formatRelativeTime(ts)}</span>}
             {session.effective_model && (
               <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span>{shortModelName(session.effective_model)}</span></>
+            )}
+            {openedAtMs > 0 && (
+              <>
+                <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
+                <span className="inline-flex items-center gap-1 shrink-0" title={`Ultima apertura: ${new Date(openedAtMs).toLocaleString('it-IT')}`}>
+                  <Eye className="w-3 h-3 text-muted" style={{ opacity: 0.65 }} />
+                  Aperto {formatRelativeTime(openedAtMs)}
+                </span>
+              </>
             )}
             {hasRevisionWarnings && (
               <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span style={{ color: 'var(--warning-text)', fontWeight: 600 }}>Completata con avvisi</span></>
@@ -1017,13 +1143,14 @@ function SortableSessionCard({
 // ─── FolderDetailView ─────────────────────────────────────────────────────────
 
 function FolderDetailView({
-  folder, sessionsByDir,
+  folder, sessionsByDir, editorSessionsMap,
   onBack, onEdit, onDelete,
   onRemoveSession, onAddSession, onReorderSessions,
-  onPreview, onOpenFile, onDeleteSession, onRetryFailedRevisionBlocks,
+  onPreview, onOpenFile, onDeleteSession, onRetryFailedRevisionBlocks, onShareSession,
 }: {
   folder: ArchiveFolder;
   sessionsByDir: Map<string, ArchiveSession>;
+  editorSessionsMap?: Record<string, EditorSession>;
   onBack: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -1034,6 +1161,7 @@ function FolderDetailView({
   onOpenFile: ArchivePageProps['onOpenFile'];
   onDeleteSession: ArchivePageProps['onDeleteSession'];
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
+  onShareSession?: (session: ArchiveSession) => void;
 }) {
   const [search, setSearch] = useState('');
   const [fullTextMode, setFullTextMode] = useState(false);
@@ -1408,11 +1536,13 @@ function FolderDetailView({
                           session={session}
                           folderColor={folder.color}
                           disabled={isFilteringName}
+                          editorSessionsMap={editorSessionsMap}
                           onRemove={() => onRemoveSession(session.session_dir)}
                           onPreview={onPreview}
                           onOpenFile={onOpenFile}
                           onDeleteSession={onDeleteSession}
                           onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
+                          onShareSession={onShareSession}
                         />
                       );
                     })}

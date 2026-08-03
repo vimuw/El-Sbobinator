@@ -47,6 +47,7 @@ export interface SettingsPayload {
 export interface ArchiveSession {
   name: string;
   completed_at_iso: string;
+  last_opened_at_iso?: string;
   html_path: string;
   effective_model: string;
   input_path: string;
@@ -161,6 +162,7 @@ export interface PywebviewApi {
   get_completed_sessions?: (limit?: number) => Promise<{ ok: boolean; sessions?: ArchiveSession[]; total?: number; error?: string }>;
   delete_session?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;
   update_session_input_path?: (sessionDir: string, newPath: string) => Promise<{ ok: boolean; error?: string }>;
+  touch_session_opened?: (sessionDir: string) => Promise<{ ok: boolean; last_opened_at_iso?: string; error?: string }>;
   open_session_folder?: () => Promise<{ ok: boolean; error?: string }>;
   ask_session_folder?: () => Promise<{ ok: boolean; path?: string; cancelled?: boolean; error?: string }>;
   move_session_root?: (newPath: string) => Promise<{ ok: boolean; started?: boolean; error?: string }>;
@@ -182,6 +184,45 @@ export interface PywebviewApi {
     cancelled?: boolean;
     quota_exhausted?: boolean;
     conflict?: boolean;
+  }>;
+  export_sbobina_package?: (
+    sessionDir: string,
+    exportType?: 'full' | 'text_only' | 'audio_only',
+    targetPath?: string,
+  ) => Promise<{
+    ok: boolean;
+    error?: string;
+    cancelled?: boolean;
+    target_path?: string;
+    include_mode?: string;
+    audio_included?: boolean;
+    size_bytes?: number;
+  }>;
+  import_sbobina_package?: (
+    packagePath?: string,
+  ) => Promise<{
+    ok: boolean;
+    error?: string;
+    cancelled?: boolean;
+    session_dir?: string;
+    name?: string;
+    html_path?: string;
+    has_audio?: boolean;
+  }>;
+  share_sbobina_via_email?: (
+    sessionDir: string,
+    exportType?: 'full' | 'text_only' | 'audio_only',
+    recipient?: string,
+    mailProvider?: 'system' | 'gmail',
+  ) => Promise<{
+    ok: boolean;
+    error?: string;
+    package_path?: string;
+    mailto_url?: string;
+    folder_opened?: string;
+    audio_included?: boolean;
+    subject?: string;
+    body?: string;
   }>;
 }
 

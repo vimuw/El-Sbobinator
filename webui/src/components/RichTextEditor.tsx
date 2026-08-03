@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -15,9 +15,16 @@ import Superscript from '@tiptap/extension-superscript';
 import {
   Bold, Clipboard, Copy, ImagePlus, Italic,
   Menu, RemoveFormatting, Scissors, Underline as UnderlineIcon, X,
+  Link2, Search, Calculator, Highlighter, Trash2
 } from 'lucide-react';
 import { FloatingImage } from './FloatingImage';
-import { type Heading, SearchHighlight, FontSize, extractHeadings } from '../editorExtensions';
+import { type Heading, SearchHighlight, FontSize, MathInline, MathBlock, SmartArrows, extractHeadings } from '../editorExtensions';
+import Youtube from '@tiptap/extension-youtube';
+import Typography from '@tiptap/extension-typography';
+import Collaboration from '@tiptap/extension-collaboration';
+import CollaborationCursor from '@tiptap/extension-collaboration-cursor';
+import * as Y from 'yjs';
+import { WebrtcProvider } from 'y-webrtc';
 import { MenuBar } from './EditorToolbar';
 import { FindReplacePanel } from './EditorFindReplace';
 import { WordCount } from './EditorWordCount';
@@ -26,8 +33,8 @@ import { readFileAsDataUrl } from '../utils';
 export type { Heading };
 
 interface RichTextEditorProps {
-  initialContent: string;
-  onChange?: (html: string) => void;
+  initialContent?: string;
+  onChange?: (content: string) => void;
   onEditorReady?: (getHtml: () => string) => void;
   initialScrollTop?: number;
   initialSearchTerm?: string;
@@ -38,10 +45,12 @@ interface RichTextEditorProps {
   tocHeadings?: Heading[];
   onScrollToHeading?: (heading: Heading) => void;
   zoomLevel?: number;
-  onZoomChange?: (level: number) => void;
+  onZoomChange?: (zoomLevel: number) => void;
+  collaborationRoom?: string;
+  collaborationUser?: { name: string; color: string };
 }
 
-export function RichTextEditor({ initialContent, onChange, onEditorReady, initialScrollTop, initialSearchTerm, onScrollTopChange, onHeadingsChange, isTocOpen = false, onTocToggle, tocHeadings = [], onScrollToHeading, zoomLevel, onZoomChange }: RichTextEditorProps) {
+export function RichTextEditor({ initialContent, onChange, onEditorReady, initialScrollTop, initialSearchTerm, onScrollTopChange, onHeadingsChange, isTocOpen = false, onTocToggle, tocHeadings = [], onScrollToHeading, zoomLevel, onZoomChange, collaborationRoom, collaborationUser }: RichTextEditorProps) {
   const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number } | null>(null);
   const [findMode, setFindMode] = useState<null | 'find' | 'replace'>(initialSearchTerm ? 'find' : null);
   const [findFocusTrigger, setFindFocusTrigger] = useState(0);
@@ -49,6 +58,9 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
   useEffect(() => { findModeRef.current = findMode; }, [findMode]);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<TiptapEditor | null>(null);
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const hasRestoredScrollRef = useRef(false);
   const onScrollTopChangeRef = useRef(onScrollTopChange);
@@ -64,6 +76,242 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
   const headingElsCacheRef = useRef<HTMLElement[] | null>(null);
   useEffect(() => { headingElsCacheRef.current = null; }, [tocHeadings]);
   const tocScrollRafRef = useRef<number | null>(null);
+
+  const collabState = useMemo(() => {
+    if (!collaborationRoom) {
+      return { ydoc: null, provider: null };
+    }
+    const doc = new Y.Doc();
+    let webrtc: WebrtcProvider | null = null;
+    try {
+      webrtc = new WebrtcProvider(collaborationRoom, doc, {
+        signaling: [
+          'wss://y-webrtc.fly.dev',
+          'wss://y-webrtc-signaling.onrender.com',
+        ],
+        peerOpts: {
+          config: {
+            iceServers: [
+              { urls: 'stun:stun.l.google.com:19302' },
+              { urls: 'stun:stun1.l.google.com:19302' },
+              { urls: 'stun:stun2.l.google.com:19302' },
+              { urls: 'stun:global.stun.twilio.com:3478' },
+            ],
+          },
+        },
+      });
+    } catch (err) {
+      console.error('Errore inizializzazione WebRTC provider:', err);
+    }
+    return { ydoc: doc, provider: webrtc };
+  }, [collaborationRoom]);
+
+  useEffect(() => {
+    return () => {
+      collabState.provider?.destroy();
+      collabState.ydoc?.destroy();
+    };
+  }, [collabState]);
+
+  const { ydoc, provider } = collabState;
+
+  const draggedImageRef = useRef<{ pos: number; size: number; node: any } | null>(null);
+
+  const isPlaceholderContent = typeof initialContent === 'string' && initialContent.includes('Connessione in corso alla stanza');
+  const effectiveInitialContent = (collaborationRoom && isPlaceholderContent) ? undefined : initialContent;
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure(collaborationRoom ? ({ history: false } as any) : {}),
+      FloatingImage,
+      TextStyle,
+      Color,
+      FontFamily.configure({ types: ['textStyle'] }),
+      FontSize,
+      Underline,
+      Highlight.configure({ multicolor: true }),
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      Link.configure({ openOnClick: false, markdownLinks: true }),
+      Subscript,
+      Superscript,
+      SearchHighlight,
+      Youtube.configure({
+        controls: true,
+        nocookie: true,
+        width: 640,
+        height: 360,
+      }),
+      Typography,
+      MathInline,
+      MathBlock,
+      SmartArrows,
+      ...(collaborationRoom && ydoc && provider ? [
+        Collaboration.configure({ document: ydoc }),
+        CollaborationCursor.configure({
+          provider: provider as any,
+          user: collaborationUser || { name: 'Studente', color: '#3b82f6' },
+        }),
+      ] : []),
+    ],
+    content: effectiveInitialContent,
+    onCreate: ({ editor }) => {
+      editorRef.current = editor;
+      if (editor.utils?.getUpdatedPosition) {
+        const origGetUpdatedPosition = editor.utils.getUpdatedPosition;
+        editor.utils.getUpdatedPosition = (pos: any, tr: any) => {
+          try {
+            return origGetUpdatedPosition(pos, tr);
+          } catch (_) {
+            return { position: pos, mapResult: null };
+          }
+        };
+      }
+      onEditorReady?.(() => editorRef.current!.getHTML());
+      onHeadingsChangeRef.current?.(extractHeadings(editor));
+    },
+    onUpdate: ({ editor }) => {
+      onChange?.(editor.getHTML());
+      if (headingsDebounceRef.current) clearTimeout(headingsDebounceRef.current);
+      headingsDebounceRef.current = setTimeout(() => {
+        onHeadingsChangeRef.current?.(extractHeadings(editor));
+      }, 400);
+    },
+    editorProps: {
+      attributes: {
+        class: 'prose prose-sm sm:prose-base max-w-none focus:outline-none tiptap-editor',
+        spellcheck: 'false',
+      },
+      handleDOMEvents: {
+        dragstart: (view, event) => {
+          const target = event.target as HTMLElement | null;
+          const imageNodeView = target?.closest('.editor-image-node') as HTMLElement | null;
+          if (imageNodeView) {
+            try {
+              const pos = view.posAtDOM(imageNodeView, 0);
+              if (pos !== null && pos !== undefined) {
+                const node = view.state.doc.nodeAt(pos);
+                if (node && node.type.name === 'floatingImage') {
+                  draggedImageRef.current = { pos, size: node.nodeSize, node };
+                }
+              }
+            } catch (_) {
+              draggedImageRef.current = null;
+            }
+          }
+          return false;
+        },
+      },
+      handlePaste: (_view, event) => {
+        const files = Array.from(event.clipboardData?.files || []).filter(f => f.type.startsWith('image/'));
+        if (!files.length) return false;
+        event.preventDefault();
+        void insertImageFiles(files);
+        return true;
+      },
+      handleDrop: (view, event) => {
+        const files = Array.from(event.dataTransfer?.files || []).filter(f => f.type.startsWith('image/'));
+        if (files.length) {
+          event.preventDefault();
+          void insertImageFiles(files);
+          return true;
+        }
+
+        let dragged = draggedImageRef.current;
+        draggedImageRef.current = null;
+
+        if (!dragged) {
+          const sel = view.state.selection as any;
+          if (sel && sel.node && sel.node.type.name === 'floatingImage') {
+            dragged = { pos: sel.from, size: sel.node.nodeSize, node: sel.node };
+          } else if (sel) {
+            const nodeAtFrom = view.state.doc.nodeAt(sel.from);
+            if (nodeAtFrom?.type.name === 'floatingImage') {
+              dragged = { pos: sel.from, size: nodeAtFrom.nodeSize, node: nodeAtFrom };
+            }
+          }
+        }
+
+        if (dragged && dragged.node) {
+          event.preventDefault();
+          const dropCoords = view.posAtCoords({ left: event.clientX, top: event.clientY });
+          if (!dropCoords) return true;
+
+          const dragFrom = dragged.pos;
+          const dragSize = dragged.size;
+          const dragTo = dragFrom + dragSize;
+
+          let insertPos = dropCoords.pos;
+          let isTargetEmptyParagraph = false;
+          let targetPStart = 0;
+          let targetPEnd = 0;
+
+          try {
+            const $target = view.state.doc.resolve(dropCoords.pos);
+            if ($target.depth >= 1) {
+              targetPStart = $target.before(1);
+              targetPEnd = $target.after(1);
+
+              const targetParent = $target.parent;
+              if (targetParent && targetParent.type.name === 'paragraph' && targetParent.content.size === 0) {
+                isTargetEmptyParagraph = true;
+              }
+
+              const targetDOM = view.nodeDOM(targetPStart) as HTMLElement | null;
+              if (targetDOM && typeof targetDOM.getBoundingClientRect === 'function') {
+                const rect = targetDOM.getBoundingClientRect();
+                if (event.clientY > rect.top + rect.height / 2) {
+                  insertPos = targetPEnd;
+                } else {
+                  insertPos = targetPStart;
+                }
+              } else {
+                insertPos = targetPStart;
+              }
+            }
+          } catch (_) {
+            insertPos = dropCoords.pos;
+          }
+
+          if (insertPos >= dragFrom && insertPos <= dragTo) {
+            return true;
+          }
+
+          const tr = view.state.tr;
+
+          if (isTargetEmptyParagraph && targetPStart !== undefined && targetPEnd !== undefined) {
+            if (dragFrom < targetPStart) {
+              tr.replaceWith(targetPStart, targetPEnd, dragged.node);
+              tr.delete(dragFrom, dragFrom + dragSize);
+            } else {
+              tr.delete(dragFrom, dragTo);
+              tr.replaceWith(targetPStart, targetPEnd, dragged.node);
+            }
+          } else {
+            tr.delete(dragFrom, dragTo);
+            let finalInsertPos = insertPos;
+            if (insertPos > dragFrom) {
+              finalInsertPos = Math.max(0, insertPos - dragSize);
+            }
+            tr.insert(finalInsertPos, dragged.node);
+          }
+
+          view.dispatch(tr);
+          return true;
+        }
+
+        return false;
+      },
+      transformPastedHTML(html: string): string {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        doc.body.querySelectorAll('[style]').forEach(el => {
+          const s = (el as HTMLElement).style;
+          s.removeProperty('color');
+          s.removeProperty('background-color');
+        });
+        return doc.body.innerHTML;
+      },
+    },
+  });
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -130,7 +378,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
       container.removeEventListener('scroll', handleScroll);
       if (tocScrollRafRef.current !== null) cancelAnimationFrame(tocScrollRafRef.current);
     };
-  }, []); // attach once, reads tocHeadingsRef via refs
+  }, []);
 
   const insertImageFiles = useCallback(async (inputFiles: FileList | File[]) => {
     const activeEditor = editorRef.current;
@@ -142,7 +390,6 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
         const src = await readFileAsDataUrl(file);
         activeEditor.chain().focus().insertContent([
           { type: 'floatingImage', attrs: { src, alt: file.name, title: file.name, width: 56 } },
-          { type: 'paragraph' },
         ]).run();
       } catch (err) {
         console.error(`Errore durante la lettura dell'immagine ${file.name}:`, err);
@@ -152,7 +399,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
-      if ((event.target as HTMLElement | null)?.closest('.context-menu')) return;
+      if ((event.target as HTMLElement | null)?.closest('.gdocs-context-menu')) return;
       setContextMenu(null);
     };
     document.addEventListener('pointerdown', handlePointerDown, true);
@@ -185,73 +432,11 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    const menuWidth = 220, menuHeight = 260, padding = 12;
+    const menuWidth = 280, menuHeight = 360, padding = 12;
     const x = Math.min(e.clientX, window.innerWidth - menuWidth - padding);
     const y = Math.min(e.clientY, window.innerHeight - menuHeight - padding);
     setContextMenu({ x: Math.max(padding, x), y: Math.max(padding, y) });
   };
-
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      FloatingImage,
-      TextStyle,
-      Color,
-      FontFamily.configure({ types: ['textStyle'] }),
-      FontSize,
-      Underline,
-      Highlight.configure({ multicolor: true }),
-      TextAlign.configure({ types: ['heading', 'paragraph'] }),
-      Link.configure({ openOnClick: false }),
-      Subscript,
-      Superscript,
-      SearchHighlight,
-    ],
-    content: initialContent,
-    onCreate: ({ editor }) => {
-      editorRef.current = editor;
-      onEditorReady?.(() => editorRef.current!.getHTML());
-      onHeadingsChangeRef.current?.(extractHeadings(editor));
-    },
-    onUpdate: ({ editor }) => {
-      onChange?.(editor.getHTML());
-      if (headingsDebounceRef.current) clearTimeout(headingsDebounceRef.current);
-      headingsDebounceRef.current = setTimeout(() => {
-        onHeadingsChangeRef.current?.(extractHeadings(editor));
-      }, 400);
-    },
-    editorProps: {
-      attributes: {
-        class: 'prose prose-sm sm:prose-base max-w-none focus:outline-none tiptap-editor',
-        spellcheck: 'false',
-      },
-      handlePaste: (_view, event) => {
-        const files = Array.from(event.clipboardData?.files || []).filter(f => f.type.startsWith('image/'));
-        if (!files.length) return false;
-        event.preventDefault();
-        void insertImageFiles(files);
-        return true;
-      },
-      handleDrop: (_view, event) => {
-        const files = Array.from(event.dataTransfer?.files || []).filter(f => f.type.startsWith('image/'));
-        if (!files.length) return false;
-        event.preventDefault();
-        void insertImageFiles(files);
-        return true;
-      },
-      transformPastedHTML(html: string): string {
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-        doc.body.querySelectorAll('[style]').forEach(el => {
-          const s = (el as HTMLElement).style;
-          s.removeProperty('color');
-          s.removeProperty('background-color');
-        });
-        return doc.body.innerHTML;
-      },
-    },
-  });
-
-  useEffect(() => { if (editor) editorRef.current = editor; }, [editor]);
 
   useEffect(() => {
     if (editor && initialContent !== editor.getHTML() && !editor.isFocused && editor.isEmpty) {
@@ -267,7 +452,6 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
     });
   }, [editor, initialScrollTop]);
 
-  // Center paper in viewport and handle off-screen TOC scrolling
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -283,7 +467,6 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
 
       if (isTocOpen && contentWidth > viewportWidth) {
         const idealScrollLeft = contentWidth / 2 - viewportWidth / 2;
-        // Limit scrollLeft to keep a comfortable 20px padding on the left edge of the paper
         const maxScrollLeft = leftColWidth;
         const targetScrollLeft = Math.max(0, Math.min(idealScrollLeft, maxScrollLeft));
 
@@ -299,10 +482,8 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
       }
     };
 
-    // Initial positioning
     adjustScroll('auto');
 
-    // Poll during the width transitions to match the 0.25s CSS animation dynamically
     let transitionActive = true;
     const start = Date.now();
     const duration = 300;
@@ -316,7 +497,6 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
     };
     requestAnimationFrame(poll);
 
-    // Responsive adjustment on container resize or split screen activation
     const resizeObserver = new ResizeObserver(() => {
       adjustScroll('auto');
     });
@@ -332,7 +512,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
     <div className={`editor-shell flex flex-1 min-h-0 w-full flex-col relative ${isTocOpen ? 'editor-toc-open' : ''}`} onContextMenu={handleContextMenu}>
       <MenuBar
         editor={editor}
-        onInsertImages={insertImageFiles}
+        onOpenImagePicker={() => imageInputRef.current?.click()}
         showFindReplace={findMode !== null}
         onToggleFindReplace={() => setFindMode(p => p ? null : 'find')}
         zoomLevel={zoomLevel}
@@ -352,7 +532,6 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
         }}
       >
         <div className="editor-page-outer">
-          {/* Left TOC column — lives inside the gray area */}
           <div className="editor-toc-col" style={{ width: isTocOpen ? 260 : 44 }}>
             <div className="editor-toc-sticky" ref={tocStickyRef}>
               {!isTocOpen ? (
@@ -388,13 +567,11 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
               )}
             </div>
           </div>
-          {/* White paper — centering wrapper takes all remaining space */}
           <div className="editor-page-center">
             <div className="editor-page" style={zoomLevel !== undefined ? { zoom: zoomLevel / 100 } : undefined}>
               <EditorContent editor={editor} />
             </div>
           </div>
-          {/* Symmetric right spacer so the paper stays centered */}
           <div className="editor-toc-spacer" style={{ width: isTocOpen ? 260 : 44 }} />
         </div>
       </div>
@@ -402,54 +579,158 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
 
       {contextMenu && createPortal(
         <div
-          className="context-menu fixed z-50 py-1 text-sm"
+          className="gdocs-context-menu fixed z-50 py-1 text-xs select-none"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={e => { e.stopPropagation(); setContextMenu(null); }}
         >
-          <button className="context-menu-item" onClick={async () => {
+          <button className="gdocs-menu-item" onClick={async () => {
             try {
               const { from, to } = editor!.state.selection;
               const text = editor!.state.doc.textBetween(from, to, '\n');
               await navigator.clipboard.writeText(text);
               editor!.chain().focus().deleteSelection().run();
-            } catch (_) { console.error('Clipboard permission denied'); }
+            } catch (_) { console.error('Clipboard error'); }
           }}>
-            <Scissors className="h-4 w-4" /> Taglia
+            <span className="flex items-center gap-2.5 font-medium">
+              <Scissors className="h-4 w-4 shrink-0" />
+              <span>Taglia</span>
+            </span>
+            <kbd className="gdocs-kbd">Ctrl+X</kbd>
           </button>
-          <button className="context-menu-item" onClick={async () => {
+
+          <button className="gdocs-menu-item" onClick={async () => {
             try {
               const { from, to } = editor!.state.selection;
               const text = editor!.state.doc.textBetween(from, to, '\n');
               await navigator.clipboard.writeText(text);
-              editor!.chain().focus().run();
-            } catch (_) { console.error('Clipboard permission denied'); }
+            } catch (_) { console.error('Clipboard error'); }
           }}>
-            <Copy className="h-4 w-4" /> Copia
+            <span className="flex items-center gap-2.5 font-medium">
+              <Copy className="h-4 w-4 shrink-0" />
+              <span>Copia</span>
+            </span>
+            <kbd className="gdocs-kbd">Ctrl+C</kbd>
           </button>
-          <button className="context-menu-item" onClick={async () => {
+
+          <button className="gdocs-menu-item" onClick={async () => {
             try {
               const text = await navigator.clipboard.readText();
               editor?.commands.insertContent(text);
-            } catch (_) { console.error('Clipboard permission denied'); }
+            } catch (_) { console.error('Clipboard error'); }
           }}>
-            <Clipboard className="h-4 w-4" /> Incolla
+            <span className="flex items-center gap-2.5 font-medium">
+              <Clipboard className="h-4 w-4 shrink-0" />
+              <span>Incolla</span>
+            </span>
+            <kbd className="gdocs-kbd">Ctrl+V</kbd>
           </button>
-          <div className="editor-separator mx-3 my-1 w-auto" />
-          <button className="context-menu-item" onClick={() => { editor?.chain().focus().toggleBold().run(); setContextMenu(null); }}>
-            <Bold className="h-4 w-4" /> Grassetto
+
+          <button className="gdocs-menu-item" onClick={async () => {
+            try {
+              const text = await navigator.clipboard.readText();
+              const plain = text.replace(/<[^>]*>?/gm, '');
+              editor?.commands.insertContent(plain);
+            } catch (_) { console.error('Clipboard error'); }
+          }}>
+            <span className="flex items-center gap-2.5 font-medium">
+              <Clipboard className="h-4 w-4 shrink-0" />
+              <span>Incolla senza formattazione</span>
+            </span>
+            <kbd className="gdocs-kbd">Ctrl+Shift+V</kbd>
           </button>
-          <button className="context-menu-item" onClick={() => { editor?.chain().focus().toggleItalic().run(); setContextMenu(null); }}>
-            <Italic className="h-4 w-4" /> Corsivo
+
+          {!editor?.state.selection.empty && (
+            <button className="gdocs-menu-item text-red-600 dark:text-red-400" onClick={() => {
+              editor?.chain().focus().deleteSelection().run();
+            }}>
+              <span className="flex items-center gap-2.5 font-medium text-red-600 dark:text-red-400">
+                <Trash2 className="h-4 w-4 shrink-0 text-red-500" />
+                <span>Elimina selezione</span>
+              </span>
+              <kbd className="gdocs-kbd text-red-400 font-mono">Canc</kbd>
+            </button>
+          )}
+
+          <div className="my-1 border-t border-slate-200 dark:border-zinc-700" />
+
+          <button className="gdocs-menu-item" onClick={() => editor?.chain().focus().toggleBold().run()}>
+            <span className="flex items-center gap-2.5 font-medium">
+              <Bold className="h-4 w-4 shrink-0" />
+              <span>Grassetto</span>
+            </span>
+            <kbd className="gdocs-kbd">Ctrl+B</kbd>
           </button>
-          <button className="context-menu-item" onClick={() => { editor?.chain().focus().toggleUnderline().run(); setContextMenu(null); }}>
-            <UnderlineIcon className="h-4 w-4" /> Sottolineato
+
+          <button className="gdocs-menu-item" onClick={() => editor?.chain().focus().toggleItalic().run()}>
+            <span className="flex items-center gap-2.5 font-medium">
+              <Italic className="h-4 w-4 shrink-0" />
+              <span>Corsivo</span>
+            </span>
+            <kbd className="gdocs-kbd">Ctrl+I</kbd>
           </button>
-          <button className="context-menu-item" onClick={() => { if (editor && !editor.state.selection.empty) { editor.chain().focus().unsetAllMarks().clearNodes().run(); } setContextMenu(null); }}>
-            <RemoveFormatting className="h-4 w-4" /> Rimuovi formattazione
+
+          <button className="gdocs-menu-item" onClick={() => editor?.chain().focus().toggleUnderline().run()}>
+            <span className="flex items-center gap-2.5 font-medium">
+              <UnderlineIcon className="h-4 w-4 shrink-0" />
+              <span>Sottolineato</span>
+            </span>
+            <kbd className="gdocs-kbd">Ctrl+U</kbd>
           </button>
-          <div className="editor-separator mx-3 my-1 w-auto" />
-          <button className="context-menu-item" onClick={() => { imageInputRef.current?.click(); }}>
-            <ImagePlus className="h-4 w-4" /> Inserisci immagine
+
+          <button className="gdocs-menu-item" onClick={() => editor?.chain().focus().toggleHighlight({ color: '#fef08a' }).run()}>
+            <span className="flex items-center gap-2.5 font-medium">
+              <Highlighter className="h-4 w-4 text-yellow-500 shrink-0" />
+              <span>Evidenzia</span>
+            </span>
+          </button>
+
+          <button className="gdocs-menu-item" onClick={() => {
+            if (editor && !editor.state.selection.empty) {
+              editor.chain().focus().unsetAllMarks().clearNodes().run();
+            }
+          }}>
+            <span className="flex items-center gap-2.5 font-medium">
+              <RemoveFormatting className="h-4 w-4 shrink-0" />
+              <span>Rimuovi formattazione</span>
+            </span>
+          </button>
+
+          <div className="my-1 border-t border-slate-200 dark:border-zinc-700" />
+
+          <button className="gdocs-menu-item" onClick={() => {
+            const url = window.prompt('Inserisci URL del link:');
+            if (url) editor?.chain().focus().setLink({ href: url }).run();
+          }}>
+            <span className="flex items-center gap-2.5 font-medium">
+              <Link2 className="h-4 w-4 shrink-0" />
+              <span>Inserisci link</span>
+            </span>
+            <kbd className="gdocs-kbd">Ctrl+K</kbd>
+          </button>
+
+          <button className="gdocs-menu-item" onClick={() => imageInputRef.current?.click()}>
+            <span className="flex items-center gap-2.5 font-medium">
+              <ImagePlus className="h-4 w-4 shrink-0" />
+              <span>Inserisci immagine</span>
+            </span>
+          </button>
+
+          <button className="gdocs-menu-item" onClick={() => {
+            editor?.chain().focus().insertContent({ type: 'mathInline', attrs: { latex: 'E=mc^2' } }).run();
+          }}>
+            <span className="flex items-center gap-2.5 font-medium">
+              <Calculator className="h-4 w-4 shrink-0" />
+              <span>Inserisci formula LaTeX</span>
+            </span>
+            <kbd className="gdocs-kbd">Ctrl+M</kbd>
+          </button>
+
+          <button className="gdocs-menu-item" onClick={() => setFindMode('find')}>
+            <span className="flex items-center gap-2.5 font-medium">
+              <Search className="h-4 w-4 shrink-0" />
+              <span>Trova e sostituisci</span>
+            </span>
+            <kbd className="gdocs-kbd">Ctrl+F</kbd>
           </button>
         </div>
       , document.body)}

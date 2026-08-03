@@ -24,6 +24,7 @@ import { NavSidebar, type ActivePage } from './components/NavSidebar';
 import { NotificationDropdown, type NotificationMessage } from './components/NotificationDropdown';
 import { DropZone } from './components/DropZone';
 import { WelcomeDashboard } from './components/WelcomeDashboard';
+import { JoinRoomModal } from './components/modals/JoinRoomModal';
 import { QueueSection } from './components/QueueSection';
 import { CompletedSection } from './components/CompletedSection';
 import { ConsolePanel } from './components/ConsolePanel';
@@ -166,6 +167,7 @@ export default function App() {
 
   const [archiveSessions, setArchiveSessions] = useState<ArchiveSession[]>([]);
   const [archiveTotal, setArchiveTotal] = useState(0);
+  const [isArchiveLoaded, setIsArchiveLoaded] = useState(false);
   const archiveLimitRef = useRef(0);
   const [rawNotifications, setRawNotifications] = useState<PersistedNotification[]>(() => {
     try {
@@ -406,9 +408,22 @@ export default function App() {
         setArchiveSessions(result.sessions);
         setArchiveTotal(result.total ?? result.sessions.length);
         prevSessionDirsRef.current = new Map(result.sessions.map((s: ArchiveSession) => [s.session_dir, s.name]));
+        try {
+          localStorage.setItem('el-sbobinator.has_sessions.v1', String(result.sessions.length > 0));
+        } catch (_) {}
       }
-    } catch (_) {}
+    } catch (_) {} finally {
+      setIsArchiveLoaded(true);
+    }
   }, []);
+
+  useEffect(() => {
+    if (isArchiveLoaded) {
+      try {
+        localStorage.setItem('el-sbobinator.has_sessions.v1', String(archiveSessions.length > 0));
+      } catch (_) {}
+    }
+  }, [archiveSessions, isArchiveLoaded]);
 
   const handleLoadAll = useCallback(() => {
     archiveLimitRef.current = 0;
@@ -518,8 +533,9 @@ export default function App() {
     );
   }, [normalizeSessionDir, addNotification]);
 
-  const { preview, openPreview, closePreview, relinkPreviewAudio, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
+  const { preview, openPreview, openSharedSession, closePreview, relinkPreviewAudio, handleAudioStateChange, handleScrollTopChange, handleCollaborationStateChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
 
+  const [isJoinRoomOpen, setIsJoinRoomOpen] = useState(false);
   const [hasOpenedPreview, setHasOpenedPreview] = useState(false);
   const shouldRenderPreview = preview.content !== null || hasOpenedPreview;
 
@@ -795,13 +811,10 @@ export default function App() {
 
   useEffect(() => {
     if (!apiReady) return;
-    const timer = setTimeout(() => {
-      void refreshArchiveSessions();
-      window.pywebview?.api?.get_archive_folders?.().then(res => {
-        if (res?.ok && res.folders) setFolders(res.folders);
-      }).catch(() => {});
-    }, 100);
-    return () => clearTimeout(timer);
+    void refreshArchiveSessions();
+    window.pywebview?.api?.get_archive_folders?.().then(res => {
+      if (res?.ok && res.folders) setFolders(res.folders);
+    }).catch(() => {});
   }, [apiReady, refreshArchiveSessions]);
 
   useEffect(() => {
@@ -1600,7 +1613,7 @@ export default function App() {
                 ) : (
                   <>
                     {!(pendingFiles.length > 0 || doneFiles.length > 0 || showProcessingBanner) && (
-                      <WelcomeDashboard archiveSessions={archiveSessions} />
+                      <WelcomeDashboard archiveSessions={archiveSessions} isArchiveLoaded={isArchiveLoaded} />
                     )}
                     <AnimatePresence>
                       {showProcessingBanner ? (
@@ -1723,6 +1736,7 @@ export default function App() {
                     onRefresh={refreshArchiveSessions}
                     onLoadAll={handleLoadAll}
                     onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
+                    onOpenJoinRoom={() => setIsJoinRoomOpen(true)}
                   />
                 </React.Suspense>
               </div>
@@ -1811,11 +1825,21 @@ export default function App() {
             previewInitAudio={preview.initAudio}
             previewInitScrollTop={preview.initScrollTop}
             initialSearchTerm={preview.initialSearchTerm}
+            initialRoom={preview.initialRoom}
+            initialUser={preview.initialUser}
             onAudioStateChange={handleAudioStateChange}
             onScrollTopChange={handleScrollTopChange}
+            onCollaborationStateChange={handleCollaborationStateChange}
           />
         </React.Suspense>
       )}
+      <JoinRoomModal
+        isOpen={isJoinRoomOpen}
+        onClose={() => setIsJoinRoomOpen(false)}
+        onJoinRoom={(room, user) => {
+          openSharedSession(room, user.name, user.color);
+        }}
+      />
       <NotificationDropdown
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}

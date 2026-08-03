@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import type { ProcessingAction } from '../appState';
 import type { ArchiveSession } from '../bridge';
-import { loadEditorSession, saveEditorSession, type EditorSession } from '../editorSessions';
+import { loadEditorSession, saveEditorSession, touchEditorSession, type EditorSession } from '../editorSessions';
 import { normalizePreviewHtmlContent } from '../previewHtml';
 
 export type PreviewState = {
@@ -16,6 +16,8 @@ export type PreviewState = {
   initAudio: { time?: number; playbackRate?: number; volume?: number };
   initScrollTop?: number;
   initialSearchTerm?: string;
+  initialRoom?: string;
+  initialUser?: { name: string; color: string };
 };
 
 export const initialPreviewState: PreviewState = {
@@ -29,6 +31,8 @@ export const initialPreviewState: PreviewState = {
   audioRelinkNeeded: false,
   initAudio: {},
   initScrollTop: undefined,
+  initialRoom: undefined,
+  initialUser: undefined,
 };
 
 type UsePreviewOptions = {
@@ -53,7 +57,8 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
         session.audioTime !== undefined
         || session.playbackRate !== undefined
         || session.volume !== undefined
-        || session.scrollTop !== undefined;
+        || session.scrollTop !== undefined
+        || session.collaborationRoom !== undefined;
       if (hasData) saveEditorSession(sessionKey, session);
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -97,6 +102,10 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
         const safeContent = normalizePreviewHtmlContent(extractedContent);
         const sessionKey = fileId ?? htmlPath;
         currentPreviewSessionKeyRef.current = sessionKey;
+        touchEditorSession(sessionKey);
+        if (sessionDir && window.pywebview?.api?.touch_session_opened) {
+          void window.pywebview.api.touch_session_opened(sessionDir).catch(() => {});
+        }
         const savedSession = loadEditorSession(sessionKey);
         currentEditorSessionRef.current = { ...savedSession };
         setPreview({
@@ -111,6 +120,8 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
           initAudio: { time: savedSession.audioTime, playbackRate: savedSession.playbackRate, volume: savedSession.volume },
           initScrollTop: savedSession.scrollTop,
           initialSearchTerm: searchTerm || undefined,
+          initialRoom: undefined,
+          initialUser: undefined,
         });
         await loadPreviewAudio(sourcePath, sessionDir);
       } else {
@@ -130,7 +141,8 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
         session.audioTime !== undefined
         || session.playbackRate !== undefined
         || session.volume !== undefined
-        || session.scrollTop !== undefined;
+        || session.scrollTop !== undefined
+        || session.collaborationRoom !== undefined;
       if (hasData) saveEditorSession(sessionKey, session);
     }
     currentEditorSessionRef.current = {};
@@ -189,12 +201,43 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
     currentEditorSessionRef.current = { ...currentEditorSessionRef.current, scrollTop };
   }, []);
 
+  const handleCollaborationStateChange = useCallback((room?: string, user?: { name: string; color: string }) => {
+    currentEditorSessionRef.current = { ...currentEditorSessionRef.current, collaborationRoom: room, collaborationUser: user };
+    const sessionKey = currentPreviewSessionKeyRef.current;
+    if (sessionKey) {
+      saveEditorSession(sessionKey, currentEditorSessionRef.current);
+    }
+  }, []);
+
+  const openSharedSession = useCallback((roomCode: string, userName: string, userColor: string) => {
+    const cleanRoom = roomCode.trim().toLowerCase();
+    const cleanUser = userName.trim();
+    if (!cleanRoom) return;
+
+    setPreview({
+      content: `<p>Connessione in corso alla stanza condivisa <strong>${cleanRoom}</strong>...</p>`,
+      title: `Sessione Condivisa: ${cleanRoom}`,
+      path: `collaboration://${cleanRoom}`,
+      fileId: null,
+      sourcePath: '',
+      sessionDir: '',
+      audioSrc: null,
+      audioRelinkNeeded: false,
+      initAudio: {},
+      initScrollTop: 0,
+      initialRoom: cleanRoom,
+      initialUser: { name: cleanUser, color: userColor },
+    });
+  }, []);
+
   return {
     preview,
     openPreview,
+    openSharedSession,
     closePreview,
     relinkPreviewAudio,
     handleAudioStateChange,
     handleScrollTopChange,
+    handleCollaborationStateChange,
   };
 }

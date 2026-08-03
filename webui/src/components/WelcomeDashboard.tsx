@@ -1,10 +1,11 @@
-import { memo, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { motion, useAnimation, type TargetAndTransition } from 'motion/react';
 import { CalendarDays, FileText } from 'lucide-react';
 import type { ArchiveSession } from '../bridge';
 
 interface WelcomeDashboardProps {
   archiveSessions: ArchiveSession[];
+  isArchiveLoaded?: boolean;
 }
 
 function formatAudioDuration(totalSec: number): string {
@@ -69,7 +70,15 @@ function ClockIcon({ className }: { className?: string }) {
   );
 }
 
-export const WelcomeDashboard = memo(function WelcomeDashboard({ archiveSessions }: WelcomeDashboardProps) {
+export const WelcomeDashboard = memo(function WelcomeDashboard({ archiveSessions, isArchiveLoaded = true }: WelcomeDashboardProps) {
+  const [cachedHasSessions] = useState(() => {
+    try {
+      return localStorage.getItem('el-sbobinator.has_sessions.v1') === 'true';
+    } catch (_) {
+      return false;
+    }
+  });
+
   const stats = useMemo(() => {
     const total = archiveSessions.length;
     const totalSec = archiveSessions.reduce((acc, s) => acc + (s.duration_sec ?? 0), 0);
@@ -77,7 +86,7 @@ export const WelcomeDashboard = memo(function WelcomeDashboard({ archiveSessions
     return { total, totalSec, lastSession };
   }, [archiveSessions]);
 
-  const hasSessions = stats.total > 0;
+  const hasSessions = stats.total > 0 || (!isArchiveLoaded && cachedHasSessions);
 
   return (
     <motion.div
@@ -97,7 +106,7 @@ export const WelcomeDashboard = memo(function WelcomeDashboard({ archiveSessions
         </p>
       </div>
 
-      {hasSessions && (
+      {stats.total > 0 && (
         <div className="grid grid-cols-3 gap-3">
           <StatCard
             icon={<FileText className="w-6 h-6" />}

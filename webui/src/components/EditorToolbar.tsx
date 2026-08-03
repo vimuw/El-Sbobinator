@@ -3,12 +3,12 @@ import { type Editor as TiptapEditor } from '@tiptap/core';
 import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight,
   Bold, ImagePlus, Italic, List, ListOrdered, Minus, Plus, Quote, Redo,
-  Search, Strikethrough, Subscript as SubIcon, Superscript as SupIcon,
+  RemoveFormatting, Search, Strikethrough, Subscript as SubIcon, Superscript as SupIcon,
   Underline as UnderlineIcon, Undo,
 } from 'lucide-react';
 import {
   ColorPickerButton, HighlightPickerButton, FontFamilySelect,
-  FontSizeSelect, HeadingSelect, LinkButton,
+  FontSizeSelect, HeadingSelect, LinkButton, InsertMathButton, InsertYoutubeButton,
 } from './EditorToolbarControls';
 
 const menuBarStateKey = (editor: TiptapEditor): string => [
@@ -41,21 +41,20 @@ const menuBarStateKey = (editor: TiptapEditor): string => [
 
 export const MenuBar = ({
   editor,
-  onInsertImages,
+  onOpenImagePicker,
   showFindReplace,
   onToggleFindReplace,
   zoomLevel,
   onZoomChange,
 }: {
   editor: TiptapEditor | null;
-  onInsertImages: (files: FileList | File[]) => void;
+  onOpenImagePicker: () => void;
   showFindReplace: boolean;
   onToggleFindReplace: () => void;
   zoomLevel?: number;
   onZoomChange?: (level: number) => void;
 }) => {
   const [, forceUpdate] = React.useState({});
-  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const prevMenuKeyRef = useRef('');
 
   React.useEffect(() => {
@@ -102,11 +101,21 @@ export const MenuBar = ({
       </button>
       <ColorPickerButton editor={editor} />
       <HighlightPickerButton editor={editor} />
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
+        className="editor-button"
+        title="Rimuovi formattazione"
+      >
+        <RemoveFormatting className="h-4 w-4" />
+      </button>
       <div className="editor-separator" />
       <LinkButton editor={editor} />
-      <button type="button" onClick={() => imageInputRef.current?.click()} className="editor-button" title="Inserisci immagine">
+      <button type="button" onClick={onOpenImagePicker} className="editor-button" title="Inserisci immagine">
         <ImagePlus className="h-4 w-4" />
       </button>
+      <InsertMathButton editor={editor} />
+      <InsertYoutubeButton editor={editor} />
       <div className="editor-separator" />
       <button type="button" onClick={() => editor.chain().focus().setTextAlign('left').run()} className={btn(editor.isActive({ textAlign: 'left' }))} title="Allinea sinistra">
         <AlignLeft className="h-4 w-4" />
@@ -178,20 +187,6 @@ export const MenuBar = ({
           </div>
         </>
       )}
-
-      <input
-        ref={imageInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        onChange={event => {
-          if (event.target.files?.length) {
-            onInsertImages(event.target.files);
-          }
-          event.currentTarget.value = '';
-        }}
-      />
     </div>
   );
 };

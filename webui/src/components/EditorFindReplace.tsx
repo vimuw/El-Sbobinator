@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { type Editor as TiptapEditor } from '@tiptap/core';
-import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { ChevronDown, MoreVertical, X } from 'lucide-react';
+import { getSearchMatches, type SearchMatch } from '../editorExtensions';
 
 export const FindReplacePanel = ({
   editor,
@@ -22,26 +22,18 @@ export const FindReplacePanel = ({
   const [matchCount, setMatchCount] = useState(0);
   const [currentMatch, setCurrentMatch] = useState(0);
   const [matchCase, setMatchCase] = useState(false);
-  const matchesRef = useRef<{ from: number; to: number }[]>([]);
+  const matchesRef = useRef<SearchMatch[]>([]);
   const currentMatchRef = useRef(0);
   const findInputRef = useRef<HTMLInputElement>(null);
   const initializedRef = useRef(false);
 
-  const buildMatches = useCallback((text: string, caseFlag: boolean) => {
-    if (!editor || !text) return [];
-    const results: { from: number; to: number }[] = [];
-    const searchStr = caseFlag ? text : text.toLowerCase();
-    editor.state.doc.descendants((node: ProseMirrorNode, pos: number) => {
-      if (!node.isText || !node.text) return;
-      const nodeText = caseFlag ? node.text : node.text.toLowerCase();
-      let idx = 0;
-      while ((idx = nodeText.indexOf(searchStr, idx)) !== -1) {
-        results.push({ from: pos + idx, to: pos + idx + text.length });
-        idx += searchStr.length;
-      }
-    });
-    return results;
-  }, [editor]);
+  const updateSearch = useCallback((text: string, curIdx = -1, caseFlag = matchCase) => {
+    editor.commands.setSearchTerm(text, curIdx, caseFlag);
+    const matches = getSearchMatches(editor);
+    matchesRef.current = matches;
+    setMatchCount(matches.length);
+    return matches;
+  }, [editor, matchCase]);
 
   useEffect(() => {
     findInputRef.current?.focus({ preventScroll: true });
@@ -49,10 +41,7 @@ export const FindReplacePanel = ({
       initializedRef.current = true;
       setFindText(initialFindText);
       requestAnimationFrame(() => {
-        const matches = buildMatches(initialFindText, false);
-        matchesRef.current = matches;
-        setMatchCount(matches.length);
-        editor.commands.setSearchTerm(initialFindText, 0, false);
+        const matches = updateSearch(initialFindText, 0, false);
         if (matches.length > 0) {
           currentMatchRef.current = 1;
           setCurrentMatch(1);
@@ -64,7 +53,7 @@ export const FindReplacePanel = ({
       });
     }
     return () => { editor.commands.setSearchTerm('', -1, false); };
-  }, [editor, buildMatches, initialFindText]);
+  }, [editor, updateSearch, initialFindText]);
 
   useEffect(() => {
     if (focusTrigger !== undefined && focusTrigger > 0) {
@@ -76,15 +65,7 @@ export const FindReplacePanel = ({
     if (initialMode === 'replace') setExpanded(true);
   }, [initialMode]);
 
-  const updateSearch = useCallback((text: string, curIdx = -1, caseFlag = matchCase) => {
-    const matches = buildMatches(text, caseFlag);
-    matchesRef.current = matches;
-    setMatchCount(matches.length);
-    editor.commands.setSearchTerm(text, curIdx, caseFlag);
-    return matches;
-  }, [editor, buildMatches, matchCase]);
-
-  const scrollToMatch = useCallback((matches: { from: number; to: number }[], idx: number, text = findText, caseFlag = matchCase) => {
+  const scrollToMatch = useCallback((matches: SearchMatch[], idx: number, text = findText, caseFlag = matchCase) => {
     if (!matches.length || !editor) return;
     currentMatchRef.current = idx + 1;
     setCurrentMatch(idx + 1);
@@ -97,18 +78,18 @@ export const FindReplacePanel = ({
   }, [editor, findText, matchCase]);
 
   const handleNext = useCallback(() => {
-    const matches = matchesRef.current.length ? matchesRef.current : buildMatches(findText, matchCase);
+    const matches = matchesRef.current.length ? matchesRef.current : getSearchMatches(editor);
     if (!matches.length) return;
     const next = currentMatchRef.current >= matches.length ? 0 : currentMatchRef.current;
     scrollToMatch(matches, next);
-  }, [findText, matchCase, buildMatches, scrollToMatch]);
+  }, [editor, scrollToMatch]);
 
   const handlePrev = useCallback(() => {
-    const matches = matchesRef.current.length ? matchesRef.current : buildMatches(findText, matchCase);
+    const matches = matchesRef.current.length ? matchesRef.current : getSearchMatches(editor);
     if (!matches.length) return;
     const prev = currentMatchRef.current <= 1 ? matches.length - 1 : currentMatchRef.current - 2;
     scrollToMatch(matches, prev);
-  }, [findText, matchCase, buildMatches, scrollToMatch]);
+  }, [editor, scrollToMatch]);
 
   const handleReplace = () => {
     if (!editor || !findText || !matchesRef.current.length) return;
@@ -133,7 +114,7 @@ export const FindReplacePanel = ({
 
   const handleReplaceAll = () => {
     if (!editor || !findText) return;
-    const matches = buildMatches(findText, matchCase);
+    const matches = getSearchMatches(editor);
     if (!matches.length) return;
     const sortedMatches = [...matches].sort((a, b) => b.from - a.from);
     const tr = editor.state.tr;

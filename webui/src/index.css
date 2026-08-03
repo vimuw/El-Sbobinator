@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "katex/dist/katex.min.css";
 /* Optimized font imports to bundle ONLY the modern woff2 format (saving ~91kB of unused .woff assets) */
 
 @font-face {
@@ -2161,46 +2162,219 @@ button {
 }
 
 /* ── Image node ────────────────────────────────── */
+/* ── Google Docs Minimal Image Selection & Handles ───────────────── */
 .editor-image-node {
-  outline: 2px solid transparent;
-  outline-offset: 3px;
-  border-radius: 20px;
-  transition: outline-color 120ms ease;
-}
-
-.editor-image-node.is-selected {
-  outline-color: var(--accent-ring, #4a86e8);
-  box-shadow: 0 0 0 4px rgba(74, 134, 232, 0.18);
-}
-
-.editor-image-asset {
+  position: relative;
   display: block;
-  width: 100%;
-  height: auto;
-  border-radius: 18px;
-  pointer-events: none;
+  margin: 14px auto;
+  user-select: none;
+  clear: both;
 }
 
-.editor-image-controls {
+.gdocs-handles-container {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  border: 1.5px solid #1a73e8;
+  border-radius: 10px;
+  z-index: 10;
 }
 
-.editor-image-toolbar {
+.gdocs-handle {
   position: absolute;
-  top: 8px;
-  right: 10px;
-  display: flex;
-  gap: 4px;
+  width: 9px;
+  height: 9px;
+  background-color: #1a73e8;
+  border: 1px solid #ffffff;
+  border-radius: 1.5px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
   pointer-events: auto;
-  opacity: 0;
-  transition: opacity 140ms ease;
+  z-index: 12;
 }
 
-.editor-image-node:hover .editor-image-toolbar,
-.editor-image-node.is-selected .editor-image-toolbar {
-  opacity: 1;
+.gdocs-handle-tl { top: -5px; left: -5px; cursor: nwse-resize; }
+.gdocs-handle-tc { top: -5px; left: calc(50% - 4.5px); cursor: ns-resize; }
+.gdocs-handle-tr { top: -5px; right: -5px; cursor: nesw-resize; }
+.gdocs-handle-ml { top: calc(50% - 4.5px); left: -5px; cursor: ew-resize; }
+.gdocs-handle-mr { top: calc(50% - 4.5px); right: -5px; cursor: ew-resize; }
+.gdocs-handle-bl { bottom: -5px; left: -5px; cursor: nesw-resize; }
+.gdocs-handle-bc { bottom: -5px; left: calc(50% - 4.5px); cursor: ns-resize; }
+.gdocs-handle-br { bottom: -5px; right: -5px; cursor: nwse-resize; }
+
+/* Google Docs Image Floating Pill Toolbar */
+.gdocs-image-pill-toolbar {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background-color: #ffffff;
+  border: 1px solid #dadce0;
+  border-radius: 20px;
+  box-shadow: 0 2px 10px rgba(60, 64, 67, 0.15);
+  z-index: 30;
+  white-space: nowrap;
+}
+
+:root[data-theme="dark"] .gdocs-image-pill-toolbar {
+  background-color: #202124;
+  border-color: #3c4043;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+}
+
+.gdocs-pill-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
+  border-radius: 6px;
+  color: #3c4043;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 120ms ease, color 120ms ease;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+:root[data-theme="dark"] .gdocs-pill-btn {
+  color: #e8eaed;
+}
+
+.gdocs-pill-btn:hover {
+  background-color: #f1f3f4;
+}
+
+:root[data-theme="dark"] .gdocs-pill-btn:hover {
+  background-color: #303134;
+}
+
+.gdocs-pill-btn.active {
+  background-color: #e8f0fe;
+  color: #1a73e8;
+}
+
+:root[data-theme="dark"] .gdocs-pill-btn.active {
+  background-color: #2c384e;
+  color: #8ab4f8;
+}
+
+.gdocs-pill-btn-sm {
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  color: #5f6368;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+:root[data-theme="dark"] .gdocs-pill-btn-sm {
+  color: #9ca3af;
+}
+
+.gdocs-pill-btn-sm:hover {
+  background-color: #f1f3f4;
+  color: #202124;
+}
+
+:root[data-theme="dark"] .gdocs-pill-btn-sm:hover {
+  background-color: #303134;
+  color: #f3f4f6;
+}
+
+.gdocs-pill-btn-sm.active {
+  background-color: #1a73e8;
+  color: #ffffff;
+}
+
+:root[data-theme="dark"] .gdocs-pill-btn-sm.active {
+  background-color: #8ab4f8;
+  color: #202124;
+}
+
+.gdocs-pill-divider {
+  width: 1px;
+  height: 16px;
+  background-color: #dadce0;
+  margin: 0 2px;
+}
+
+:root[data-theme="dark"] .gdocs-pill-divider {
+  background-color: #3c4043;
+}
+
+/* ── Google Docs Right-Click Context Menu ───────────────── */
+.gdocs-context-menu {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: #ffffff;
+  color: #1f2937;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08);
+  padding: 6px 0;
+  width: 290px;
+  max-width: 90vw;
+}
+
+:root[data-theme="dark"] .gdocs-context-menu,
+.dark .gdocs-context-menu {
+  background-color: #1f2937;
+  color: #f3f4f6;
+  border-color: #374151;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.gdocs-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+  color: #1f2937;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 100ms ease;
+  white-space: nowrap;
+}
+
+:root[data-theme="dark"] .gdocs-menu-item,
+.dark .gdocs-menu-item {
+  color: #f3f4f6;
+}
+
+.gdocs-menu-item:hover {
+  background-color: #f3f4f6;
+}
+
+:root[data-theme="dark"] .gdocs-menu-item:hover,
+.dark .gdocs-menu-item:hover {
+  background-color: #374151;
+}
+
+.gdocs-kbd {
+  font-size: 11px;
+  font-family: inherit;
+  color: #6b7280;
+  letter-spacing: 0.2px;
+  margin-left: auto;
+  padding-left: 12px;
+  flex-shrink: 0;
+}
+
+:root[data-theme="dark"] .gdocs-kbd,
+.dark .gdocs-kbd {
+  color: #9ca3af;
 }
 
 .editor-image-action {
@@ -2703,6 +2877,12 @@ input[type="password"]::-ms-reveal {
   height: 32px;
 }
 
+.editor-fullpage-actions .icon-button.icon-button--active {
+  color: var(--accent-color);
+  background: var(--accent-subtle);
+  border-color: var(--accent-ring);
+}
+
 .editor-autosave-badge {
   display: inline-flex;
   align-items: center;
@@ -2990,4 +3170,62 @@ input[type="password"]::-ms-reveal {
   color: var(--text-muted) !important;
   font-size: 13px;
   flex-shrink: 0;
+}
+
+/* Collaboration Cursors */
+.collaboration-cursor__caret {
+  position: relative;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left: 2px solid #0d0d0d;
+  border-right: 2px solid #0d0d0d;
+  word-break: normal;
+  pointer-events: none;
+}
+
+.collaboration-cursor__label {
+  position: absolute;
+  top: -1.4em;
+  left: -1px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: normal;
+  user-select: none;
+  color: #fff;
+  padding: 1px 4px;
+  border-radius: 4px 4px 4px 0;
+  white-space: nowrap;
+}
+
+/* YouTube Iframe Embed */
+.iframe-wrapper {
+  position: relative;
+  padding-bottom: 56.25%;
+  height: 0;
+  overflow: hidden;
+  max-width: 100%;
+  margin: 16px 0;
+  border-radius: 12px;
+}
+
+.iframe-wrapper iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 12px;
+}
+
+/* KaTeX Math Node */
+.math-node-inline {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--bg-hover, rgba(0, 0, 0, 0.04));
+  font-family: inherit;
+  user-select: none;
 }

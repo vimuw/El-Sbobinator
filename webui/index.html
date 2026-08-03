@@ -18,129 +18,174 @@
     <style>
       :root {
         --boot-bg: #f7f5f2;
-        --boot-panel: #faf9f7;
-        --boot-surface: #ffffff;
-        --boot-border: rgba(100, 116, 139, 0.20);
-        --boot-text: #111827;
-        --boot-muted: #6b7280;
-        --boot-title-a: #111827;
-        --boot-title-b: #374151;
+        --boot-sidebar: #faf9f7;
+        --boot-card-bg: #ffffff;
+        --boot-border: rgba(100, 116, 139, 0.16);
+        --boot-skeleton: rgba(100, 116, 139, 0.08);
       }
 
       :root[data-theme="dark"] {
         --boot-bg: #0f0f0f;
-        --boot-panel: #1a1a1a;
-        --boot-surface: #161616;
-        --boot-border: rgba(255, 255, 255, 0.09);
-        --boot-text: #f5f5f5;
-        --boot-muted: #9ca3af;
-        --boot-title-a: #f5f5f5;
-        --boot-title-b: #d1d5db;
+        --boot-sidebar: #141414;
+        --boot-card-bg: #1a1a1a;
+        --boot-border: rgba(255, 255, 255, 0.08);
+        --boot-skeleton: rgba(255, 255, 255, 0.06);
       }
 
       html, body, #root {
-        min-height: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
       }
 
       body {
-        margin: 0;
-        background:
-          radial-gradient(circle at top, rgba(255,255,255,0.04), transparent 30%),
-          var(--boot-bg);
-        color: var(--boot-text);
+        background: var(--boot-bg);
         font-family: "Manrope", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
       }
 
       .boot-shell {
-        min-height: 100vh;
+        display: flex;
+        height: 100vh;
+        width: 100vw;
+        box-sizing: border-box;
+      }
+
+      .boot-sidebar {
+        width: 56px;
+        height: 100%;
+        flex-shrink: 0;
+        background: var(--boot-sidebar);
+        border-right: 1px solid var(--boot-border);
         display: flex;
         flex-direction: column;
-      }
-
-      .boot-header {
-        min-height: 84px;
-        display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 0 24px;
-        border-bottom: 1px solid var(--boot-border);
-        background: rgba(16, 13, 11, 0.02);
+        padding: 16px 0;
+        box-sizing: border-box;
       }
 
-      .boot-brand {
-        font-size: 1.75rem;
-        font-weight: 600;
-        letter-spacing: -0.03em;
-        line-height: 1;
-        background: linear-gradient(90deg, var(--boot-title-a), var(--boot-title-b));
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+      .boot-sidebar-group {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .boot-sidebar-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: var(--boot-skeleton);
+      }
+
+      .boot-sidebar-icon.logo {
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        background: rgba(61, 107, 58, 0.20);
+      }
+
+      .boot-sidebar-icon.small {
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
       }
 
       .boot-main {
-        width: min(1152px, calc(100vw - 40px));
-        margin: 0 auto;
-        padding: 32px 0;
+        flex: 1;
         display: flex;
         flex-direction: column;
-        gap: 24px;
+        padding: 40px min(48px, 4vw);
+        gap: 28px;
+        overflow-y: auto;
+        box-sizing: border-box;
       }
 
-      .boot-card {
+      .boot-header-skeleton {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .boot-title-skeleton {
+        width: 210px;
+        height: 36px;
+        border-radius: 10px;
+        background: var(--boot-skeleton);
+      }
+
+      .boot-subtitle-skeleton {
+        width: 320px;
+        height: 16px;
+        border-radius: 6px;
+        background: var(--boot-skeleton);
+      }
+
+      .boot-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 16px;
+        width: 100%;
+      }
+
+      .boot-stat-card {
+        height: 110px;
+        border-radius: 16px;
         border: 1px solid var(--boot-border);
-        border-radius: 12px;
-        background: var(--boot-panel);
-        box-shadow: none;
+        background: var(--boot-card-bg);
       }
 
-      .boot-dropzone {
-        min-height: 260px;
-        border-style: dashed;
-        border-width: 2px;
-        border-color: var(--boot-border);
-        background: transparent;
+      .boot-dropzone-card {
+        width: 100%;
+        height: 240px;
+        border-radius: 16px;
+        border: 2px dashed var(--boot-border);
+        background: var(--boot-card-bg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
 
-      .boot-queue {
-        padding: 24px;
-      }
-
-      .boot-queue-title {
-        width: 280px;
-        height: 22px;
-        border-radius: 999px;
-        background: var(--boot-surface);
-      }
-
-      .boot-queue-item {
-        margin-top: 22px;
-        height: 96px;
-        border-radius: 8px;
-        border: 1px solid var(--boot-border);
-        background: var(--boot-surface);
-      }
-
-      .boot-console {
-        height: 98px;
-        border-radius: 8px;
-        border: 1px solid var(--boot-border);
-        background: var(--boot-panel);
+      .boot-dropzone-inner {
+        width: 120px;
+        height: 48px;
+        border-radius: 10px;
+        background: var(--boot-skeleton);
       }
     </style>
   </head>
   <body>
     <div id="root">
       <div class="boot-shell" aria-hidden="true">
-        <header class="boot-header">
-          <div class="boot-brand">El Sbobinator</div>
-        </header>
+        <!-- Sidebar Skeleton -->
+        <aside class="boot-sidebar">
+          <div class="boot-sidebar-group">
+            <div class="boot-sidebar-icon logo"></div>
+            <div class="boot-sidebar-icon"></div>
+            <div class="boot-sidebar-icon"></div>
+          </div>
+          <div class="boot-sidebar-group">
+            <div class="boot-sidebar-icon small"></div>
+            <div class="boot-sidebar-icon small"></div>
+            <div class="boot-sidebar-icon small"></div>
+          </div>
+        </aside>
+
+        <!-- Main Content Skeleton -->
         <main class="boot-main">
-          <div class="boot-card boot-dropzone"></div>
-          <section class="boot-card boot-queue">
-            <div class="boot-queue-title"></div>
-            <div class="boot-queue-item"></div>
-          </section>
-          <div class="boot-console"></div>
+          <div class="boot-header-skeleton">
+            <div class="boot-title-skeleton"></div>
+            <div class="boot-subtitle-skeleton"></div>
+          </div>
+          <div class="boot-stats-grid">
+            <div class="boot-stat-card"></div>
+            <div class="boot-stat-card"></div>
+            <div class="boot-stat-card"></div>
+          </div>
+          <div class="boot-dropzone-card">
+            <div class="boot-dropzone-inner"></div>
+          </div>
         </main>
       </div>
     </div>

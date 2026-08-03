@@ -4,16 +4,17 @@ import App from './App.tsx';
 import './index.css';
 
 
-class RootErrorBoundary extends React.Component<React.PropsWithChildren, { hasError: boolean; message: string }> {
+class RootErrorBoundary extends React.Component<React.PropsWithChildren, { hasError: boolean; message: string; stack: string }> {
   constructor(props: React.PropsWithChildren) {
     super(props);
-    this.state = { hasError: false, message: '' };
+    this.state = { hasError: false, message: '', stack: '' };
   }
 
   static getDerivedStateFromError(error: unknown) {
     return {
       hasError: true,
       message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? (error.stack || '') : '',
     };
   }
 
@@ -39,7 +40,7 @@ class RootErrorBoundary extends React.Component<React.PropsWithChildren, { hasEr
           <div
             style={{
               width: '100%',
-              maxWidth: '560px',
+              maxWidth: '680px',
               borderRadius: '24px',
               border: '1px solid rgba(148,163,184,0.16)',
               background: 'rgba(20,24,31,0.96)',
@@ -49,7 +50,7 @@ class RootErrorBoundary extends React.Component<React.PropsWithChildren, { hasEr
           >
             <h1 style={{ margin: 0, fontSize: '20px' }}>Errore caricamento interfaccia</h1>
             <p style={{ margin: '10px 0 0', color: '#94a3b8', lineHeight: 1.6 }}>
-              L'app si e aperta ma il frontend ha generato un errore in avvio.
+              L'app si è aperta ma il frontend ha generato un errore in avvio.
             </p>
             <pre
               style={{
@@ -60,10 +61,12 @@ class RootErrorBoundary extends React.Component<React.PropsWithChildren, { hasEr
                 color: '#fca5a5',
                 whiteSpace: 'pre-wrap',
                 overflowWrap: 'anywhere',
-                fontSize: '12px',
+                fontSize: '11px',
+                maxHeight: '320px',
+                overflowY: 'auto',
               }}
             >
-              {this.state.message || 'Errore sconosciuto'}
+              {this.state.stack || this.state.message || 'Errore sconosciuto'}
             </pre>
           </div>
         </div>

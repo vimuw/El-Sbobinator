@@ -6,7 +6,10 @@ export type EditorSession = {
   playbackRate?: number;
   volume?: number;
   scrollTop?: number;
+  collaborationRoom?: string;
+  collaborationUser?: { name: string; color: string };
   savedAt?: number;
+  openedAt?: number;
 };
 
 type EditorSessionMap = Record<string, EditorSession>;
@@ -15,7 +18,9 @@ const hasSessionState = (session: EditorSession): boolean =>
   session.audioTime !== undefined
   || session.playbackRate !== undefined
   || session.volume !== undefined
-  || session.scrollTop !== undefined;
+  || session.scrollTop !== undefined
+  || session.collaborationRoom !== undefined
+  || session.openedAt !== undefined;
 
 export const normalizeEditorSessions = (
   sessions: EditorSessionMap,
@@ -38,16 +43,25 @@ export const normalizeEditorSessions = (
   );
 };
 
-export const loadEditorSession = (key: string): EditorSession => {
+export const loadAllEditorSessions = (now: number = Date.now()): EditorSessionMap => {
   try {
     const raw = window.localStorage.getItem(EDITOR_SESSION_STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as EditorSessionMap;
-    const sessions = normalizeEditorSessions(parsed);
+    const sessions = normalizeEditorSessions(parsed, now);
     const normalizedRaw = JSON.stringify(sessions);
     if (normalizedRaw !== raw) {
       window.localStorage.setItem(EDITOR_SESSION_STORAGE_KEY, normalizedRaw);
     }
+    return sessions;
+  } catch (_) {
+    return {};
+  }
+};
+
+export const loadEditorSession = (key: string): EditorSession => {
+  try {
+    const sessions = loadAllEditorSessions();
     return sessions[key] ?? {};
   } catch (_) {
     return {};
@@ -62,6 +76,20 @@ export const saveEditorSession = (key: string, session: EditorSession) => {
     const sessions = normalizeEditorSessions(
       { ...parsed, [key]: { ...session, savedAt: now } },
       now,
+    );
+    window.localStorage.setItem(EDITOR_SESSION_STORAGE_KEY, JSON.stringify(sessions));
+  } catch (_) {}
+};
+
+export const touchEditorSession = (key: string, timestampMs: number = Date.now()) => {
+  try {
+    const raw = window.localStorage.getItem(EDITOR_SESSION_STORAGE_KEY) ?? '{}';
+    const parsed = JSON.parse(raw) as EditorSessionMap;
+    const existing = parsed[key] ?? {};
+    const updated = { ...existing, openedAt: timestampMs, savedAt: timestampMs };
+    const sessions = normalizeEditorSessions(
+      { ...parsed, [key]: updated },
+      timestampMs,
     );
     window.localStorage.setItem(EDITOR_SESSION_STORAGE_KEY, JSON.stringify(sessions));
   } catch (_) {}

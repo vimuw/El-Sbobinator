@@ -3038,6 +3038,42 @@ class TestGetCompletedSessions(unittest.TestCase):
                 updated["input"]["path"], _os.path.realpath(new_audio_path)
             )
 
+    def test_touch_session_opened(self):
+        """test_touch_session_opened updates last_opened_at in session.json and get_completed_sessions."""
+        import json as _json
+        import os as _os
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            api = ElSbobinatorApi()
+            session_root = _os.path.join(tmp_dir, "sessions")
+            session_dir = _os.path.join(session_root, "sess1")
+            _os.makedirs(session_dir)
+            html_path = _os.path.join(session_dir, "output.html")
+            open(html_path, "w").close()
+            session_path = _os.path.join(session_dir, "session.json")
+            with open(session_path, "w", encoding="utf-8") as fh:
+                _json.dump(
+                    {
+                        "stage": "done",
+                        "updated_at": "2024-01-01T00:00:00",
+                        "outputs": {"html": html_path},
+                        "settings": {},
+                    },
+                    fh,
+                )
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                res = api.touch_session_opened(session_dir)
+                self.assertTrue(res["ok"])
+                self.assertIn("last_opened_at_iso", res)
+
+                sessions_res = api.get_completed_sessions(limit=0)
+                self.assertTrue(sessions_res["ok"])
+                self.assertEqual(len(sessions_res["sessions"]), 1)
+                self.assertEqual(
+                    sessions_res["sessions"][0]["last_opened_at_iso"],
+                    res["last_opened_at_iso"],
+                )
+
 
 class TestMoveSessionRoot(unittest.TestCase):
     """Tests for _do_move_session_root: atomic-rename fast path, cross-device

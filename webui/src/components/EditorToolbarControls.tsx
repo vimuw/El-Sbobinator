@@ -1,7 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { type Editor as TiptapEditor } from '@tiptap/core';
-import { ChevronDown, Link2, Link2Off } from 'lucide-react';
+import { ChevronDown, Link2, Link2Off, Calculator, Video } from 'lucide-react';
 
 const COLOR_PALETTE: string[][] = [
   ['#000000', '#434343', '#666666', '#999999', '#b7b7b7', '#cccccc', '#d9d9d9', '#ffffff'],
@@ -401,5 +401,45 @@ export const LinkButton = ({ editor }: { editor: TiptapEditor }) => {
         document.body
       )}
     </>
+  );
+};
+
+export const InsertMathButton = ({ editor }: { editor: TiptapEditor }) => {
+  const handleInsert = () => {
+    const latex = window.prompt('Inserisci formula LaTeX (es. E=mc^2, \\frac{a}{b}):', 'E=mc^2');
+    if (latex && latex.trim()) {
+      editor.chain().focus().insertContent({ type: 'mathInline', attrs: { latex: latex.trim() } }).run();
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleInsert}
+      className="editor-button"
+      title="Inserisci formula matematica (LaTeX)"
+    >
+      <Calculator className="h-4 w-4" />
+    </button>
+  );
+};
+
+export const InsertYoutubeButton = ({ editor }: { editor: TiptapEditor }) => {
+  const handleInsert = () => {
+    const url = window.prompt('Inserisci URL del video YouTube:');
+    if (url && url.trim()) {
+      (editor.chain().focus() as any).setYoutubeVideo({ src: url.trim() }).run();
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleInsert}
+      className="editor-button"
+      title="Inserisci video YouTube"
+    >
+      <Video className="h-4 w-4" />
+    </button>
   );
 };

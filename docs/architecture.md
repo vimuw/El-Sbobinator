@@ -84,7 +84,7 @@ El Sbobinator is a Windows/macOS desktop application that turns audio lectures i
 | `components/QueueSection.tsx` | Queue container holding intake dropzone and queue lists |
 | `components/SetupPage.tsx` | Step-by-step walkthrough settings wizard on first run |
 | `components/WelcomeDashboard.tsx` | Warm entrance dashboard when queue is empty |
-| `components/modals/*.tsx` | `SettingsModal`, `PreviewModal`, `RegenerateModal`, `NewKeyModal`, `DuplicateFileModal`, `ConfirmActionModal` |
+| `components/modals/*.tsx` | `SettingsModal`, `RegenerateModal`, `NewKeyModal`, `DuplicateFileModal`, `ConfirmActionModal` |
 | `hooks/useApiReady.ts` | Polls `window.pywebview.api` until ready, then binds the bridge |
 | `hooks/useBridgeCallbacks.ts` | Wires `BridgeCallbacks` onto `window.elSbobinatorBridge` |
 | `hooks/useQueuePersistence.ts` | Persists the file queue across app restarts |

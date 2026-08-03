@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { EDITOR_SESSION_STORAGE_KEY, loadEditorSession, normalizeEditorSessions, saveEditorSession } from './editorSessions';
+import { EDITOR_SESSION_STORAGE_KEY, loadAllEditorSessions, loadEditorSession, normalizeEditorSessions, saveEditorSession, touchEditorSession } from './editorSessions';
 
 describe('normalizeEditorSessions', () => {
   it('preserves legacy sessions that do not have savedAt yet', () => {
@@ -105,6 +105,20 @@ describe('editorSessions storage integration', () => {
       scrollTop: 55,
       volume: 0.8,
       savedAt: 777,
+    });
+  });
+
+  it('touches session to update openedAt timestamp', () => {
+    const now = Date.now();
+    touchEditorSession('file3', now);
+
+    expect(loadEditorSession('file3')).toEqual({
+      openedAt: now,
+      savedAt: now,
+    });
+    expect(loadAllEditorSessions()['file3']).toEqual({
+      openedAt: now,
+      savedAt: now,
     });
   });
 });

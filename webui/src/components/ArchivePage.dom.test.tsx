@@ -56,4 +56,13 @@ describe('ArchivePage', () => {
     expect(screen.queryByLabelText('Pagina successiva')).toBeNull();
     expect(screen.queryByLabelText('Pagina precedente')).toBeNull();
   });
+
+  it('displays Aperto badge when last_opened_at_iso is present on a session', () => {
+    const session = {
+      ...makeSession('s1'),
+      last_opened_at_iso: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    };
+    renderArchive({ sessions: [session] });
+    expect(screen.getByText(/Aperto/)).toBeTruthy();
+  });
 });

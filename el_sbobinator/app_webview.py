@@ -492,6 +492,7 @@ class ElSbobinatorApi:
                     if raw_status == "completed_with_warnings" or revision_failed_blocks
                     else "completed"
                 )
+                last_opened_at_iso = data.get("last_opened_at", "")
                 sessions.append(
                     {
                         "name": name,
@@ -506,6 +507,11 @@ class ElSbobinatorApi:
                         **(
                             {"duration_sec": duration_sec}
                             if duration_sec is not None
+                            else {}
+                        ),
+                        **(
+                            {"last_opened_at_iso": str(last_opened_at_iso)}
+                            if last_opened_at_iso
                             else {}
                         ),
                     }
@@ -545,6 +551,11 @@ class ElSbobinatorApi:
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": redact_secrets(e)}
+
+    def _invalidate_sessions_cache(self) -> None:
+        with self._sessions_cache_lock:
+            self._sessions_cache = None
+            self._sessions_cache_gen += 1
 
     def _evict_deleted_session_caches(self, session_dir: str) -> None:
         abs_dir = os.path.realpath(session_dir)
@@ -839,6 +850,36 @@ class ElSbobinatorApi:
         except Exception as e:
             return {"ok": False, "error": redact_secrets(e)}
 
+    def touch_session_opened(self, session_dir: str) -> dict:
+        """Record the last opened ISO timestamp in session.json."""
+        import json as _json
+        from datetime import UTC, datetime
+
+        try:
+            session_root = self._get_session_root()
+            abs_dir = os.path.realpath(session_dir)
+            abs_root = os.path.realpath(session_root)
+            if not _path_under_root(abs_dir, abs_root):
+                return {"ok": False, "error": "Percorso non valido"}
+            session_path = os.path.join(abs_dir, "session.json")
+            if not os.path.isfile(session_path):
+                return {"ok": False, "error": "session.json non trovato"}
+            with open(session_path, encoding="utf-8") as fh:
+                data = _json.load(fh)
+            if not isinstance(data, dict):
+                return {"ok": False, "error": "session.json non valido"}
+
+            now_iso = datetime.now(UTC).isoformat()
+            data["last_opened_at"] = now_iso
+
+            _atomic_write_json(session_path, data)
+            with self._sessions_cache_lock:
+                self._sessions_cache = None
+                self._sessions_cache_gen += 1
+            return {"ok": True, "last_opened_at_iso": now_iso}
+        except Exception as e:
+            return {"ok": False, "error": redact_secrets(e)}
+
     def _find_candidate_audio_path(
         self,
         data: dict,
@@ -1024,6 +1065,125 @@ class ElSbobinatorApi:
             else:
                 subprocess.Popen(["xdg-open", session_root])
             return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": redact_secrets(e)}
+
+    # ---- Sharing, Export and Import ----
+
+    def export_sbobina_package(
+        self,
+        session_dir: str,
+        export_type: str = "full",
+        target_path: str | None = None,
+    ) -> dict:
+        """Export a session as a `.sbobina` package."""
+        from el_sbobinator.services.sharing_service import create_sbobina_package
+
+        try:
+            if not target_path and self._window:
+                session_path = os.path.join(session_dir, "session.json")
+                session_data = (
+                    _load_json(session_path) if os.path.isfile(session_path) else {}
+                )
+                title = session_data.get("input", {}).get("name") or os.path.basename(
+                    session_dir
+                )
+                nome_puro = os.path.splitext(title)[0]
+                default_name = f"{nome_puro}_Sbobina.sbobina"
+
+                try:
+                    file_paths = self._window.create_file_dialog(
+                        webview.SAVE_DIALOG,
+                        save_filename=default_name,
+                        file_types=(
+                            "Pacchetto Sbobina (*.sbobina)",
+                            "Tutti i file (*.*)",
+                        ),
+                    )
+                except Exception:
+                    file_paths = self._window.create_file_dialog(
+                        webview.SAVE_DIALOG,
+                        save_filename=default_name,
+                    )
+                if not file_paths:
+                    return {"ok": False, "cancelled": True}
+                target_path = str(
+                    file_paths[0]
+                    if isinstance(file_paths, list | tuple)
+                    else file_paths
+                )
+
+            if not target_path:
+                return {
+                    "ok": False,
+                    "error": "Percorso di destinazione non specificato.",
+                }
+
+            res = create_sbobina_package(
+                session_dir,
+                target_path,
+                include_mode=export_type,  # type: ignore[arg-type]
+            )
+            return res
+        except Exception as e:
+            return {"ok": False, "error": redact_secrets(e)}
+
+    def import_sbobina_package(self, package_path: str | None = None) -> dict:
+        """Import a `.sbobina` package into the session store."""
+        from el_sbobinator.services.sharing_service import unpack_and_import_package
+
+        try:
+            if not package_path and self._window:
+                try:
+                    file_paths = self._window.create_file_dialog(
+                        webview.OPEN_DIALOG,
+                        allow_multiple=False,
+                        file_types=(
+                            "Pacchetto Sbobina (*.sbobina;*.zip)",
+                            "Tutti i file (*.*)",
+                        ),
+                    )
+                except Exception:
+                    file_paths = self._window.create_file_dialog(
+                        webview.OPEN_DIALOG,
+                        allow_multiple=False,
+                    )
+                if not file_paths:
+                    return {"ok": False, "cancelled": True}
+                package_path = str(
+                    file_paths[0]
+                    if isinstance(file_paths, list | tuple)
+                    else file_paths
+                )
+
+            if not package_path:
+                return {"ok": False, "error": "Nessun pacchetto selezionato."}
+
+            res = unpack_and_import_package(package_path, self._get_session_root())
+            if res.get("ok"):
+                self._invalidate_sessions_cache()
+            return res
+        except Exception as e:
+            return {"ok": False, "error": redact_secrets(e)}
+
+    def share_sbobina_via_email(
+        self,
+        session_dir: str,
+        export_type: str = "full",
+        recipient: str = "",
+        mail_provider: str = "system",
+    ) -> dict:
+        """Prepare email sharing with pre-filled content and output package location."""
+        from el_sbobinator.services.sharing_service import prepare_email_share
+
+        try:
+            res = prepare_email_share(
+                session_dir=session_dir,
+                include_mode=export_type,  # type: ignore[arg-type]
+                recipient=recipient,
+                mail_provider=mail_provider,  # type: ignore[arg-type]
+            )
+            return res
         except Exception as e:
             return {"ok": False, "error": redact_secrets(e)}
 

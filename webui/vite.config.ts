@@ -10,6 +10,8 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   define: {
     __APP_VERSION__: JSON.stringify(`v${version}`),
+    'process.env': {},
+    global: 'globalThis',
   },
   base: './',
   resolve: {
@@ -17,30 +19,12 @@ export default defineConfig({
       '@': path.resolve(__dirname, '.'),
     },
   },
+  esbuild: {
+    drop: ['console', 'debugger'],
+  } as any,
   build: {
     target: 'esnext',
-    rollupOptions: {
-      output: {
-        minify: {
-          compress: {
-            dropConsole: true,
-            dropDebugger: true,
-          },
-        },
-        entryFileNames: 'assets/index.js',
-        chunkFileNames: 'assets/[name].js',
-        assetFileNames: 'assets/[name][extname]',
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.includes('@tiptap') || id.includes('prosemirror')) return 'tiptap';
-            if (id.includes('motion')) return 'motion';
-            if (id.includes('lucide')) return 'lucide';
-            if (id.includes('@dnd-kit')) return 'dnd-kit';
-            if (id.includes('react') || id.includes('scheduler')) return 'react-vendor';
-          }
-        },
-      },
-    },
+    chunkSizeWarningLimit: 1000,
   },
   server: {
     port: 3000,
