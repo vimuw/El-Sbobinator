@@ -2446,6 +2446,23 @@ class ElSbobinatorApi:
 
         return _download_and_install_update(version, emit_fn=self._adapter.emit)
 
+    def send_collaboration_signal(self, room: str, payload: str) -> dict:
+        """Relay a collaboration room signal/update across all local pywebview windows on the desktop for instant zero-latency testing."""
+        if not room or not payload:
+            return {"ok": False, "error": "Parametri non validi"}
+        room_clean = str(room).strip().lower()
+        payload_str = str(payload)
+        import json
+
+        for w in webview.windows:
+            try:
+                w.evaluate_js(
+                    f"window.__elSbobinatorReceiveCollabSignal && window.__elSbobinatorReceiveCollabSignal({json.dumps(room_clean)}, {json.dumps(payload_str)});"
+                )
+            except Exception:
+                pass
+        return {"ok": True}
+
     # ---- Console push helper ----
 
     def _push_console(self, msg: str):

@@ -120,8 +120,8 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
           initAudio: { time: savedSession.audioTime, playbackRate: savedSession.playbackRate, volume: savedSession.volume },
           initScrollTop: savedSession.scrollTop,
           initialSearchTerm: searchTerm || undefined,
-          initialRoom: undefined,
-          initialUser: undefined,
+          initialRoom: savedSession.collaborationRoom,
+          initialUser: savedSession.collaborationUser,
         });
         await loadPreviewAudio(sourcePath, sessionDir);
       } else {
@@ -215,7 +215,7 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
     if (!cleanRoom) return;
 
     setPreview({
-      content: `<p>Connessione in corso alla stanza condivisa <strong>${cleanRoom}</strong>...</p>`,
+      content: '',
       title: `Sessione Condivisa: ${cleanRoom}`,
       path: `collaboration://${cleanRoom}`,
       fileId: null,

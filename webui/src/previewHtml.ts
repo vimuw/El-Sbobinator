@@ -4,6 +4,12 @@ export const ALLOWED_STYLE_PROPS = new Set(['font-size', 'color', 'font-family',
 export const normalizePreviewHtmlContent = (content: string) => {
   const parsed = new DOMParser().parseFromString(`<body>${content || ''}</body>`, 'text/html');
 
+  parsed.body.querySelectorAll('p').forEach(p => {
+    if (p.textContent && p.textContent.includes('Connessione in corso alla stanza condivisa')) {
+      p.remove();
+    }
+  });
+
   parsed.body.querySelectorAll('*').forEach(element => {
     const tag = element.tagName.toLowerCase();
     const isEditorImageContainer = tag === 'div' && element.hasAttribute('data-editor-image');

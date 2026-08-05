@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Check, Copy, ExternalLink, FileText, Loader2, Users } from 'lucide-react';
 import type { Heading } from './RichTextEditor';
 import type { SaveHtmlResult } from '../bridge';
+import { registerCollabSignalListener } from '../bridge';
 import { nextHtmlAutosaveGeneration, seedHtmlAutosaveGeneration } from '../autosaveGeneration';
 import { normalizePreviewHtmlContent } from '../previewHtml';
 import { CollaborationModal } from './modals/CollaborationModal';
@@ -45,6 +46,35 @@ export function EditorFullPage({
   const [isCollabModalOpen, setIsCollabModalOpen] = useState(false);
   const [collabRoom, setCollabRoom] = useState<string | undefined>(initialRoom);
   const [collabUser, setCollabUser] = useState<{ name: string; color: string } | undefined>(initialUser);
+  const [detectedLocalRoom, setDetectedLocalRoom] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!collabRoom) return;
+    const roomClean = collabRoom.trim().toLowerCase();
+    const sendAnnounce = () => {
+      const payload = JSON.stringify({ type: 'room-announcement', room: roomClean });
+      window.pywebview?.api?.send_collaboration_signal?.(roomClean, payload);
+    };
+    sendAnnounce();
+    const interval = setInterval(sendAnnounce, 1500);
+    return () => clearInterval(interval);
+  }, [collabRoom]);
+
+  useEffect(() => {
+    if (collabRoom) {
+      setDetectedLocalRoom(null);
+      return;
+    }
+    const handler = (_room: string, payloadStr: string) => {
+      try {
+        const data = JSON.parse(payloadStr);
+        if (data.type === 'room-announcement' && data.room) {
+          setDetectedLocalRoom(data.room);
+        }
+      } catch (_) {}
+    };
+    return registerCollabSignalListener(handler);
+  }, [collabRoom]);
   const [headings, setHeadings] = useState<Heading[]>([]);
   const [isCopied, setIsCopied] = useState(false);
   const [relinkSuccess, setRelinkSuccess] = useState(false);
@@ -209,7 +239,7 @@ export function EditorFullPage({
   }, [previewContent, flushAndClose, handleZoomChange]);
 
   const scheduleAutosave = useCallback(() => {
-    if (!htmlPath || previewContent === null) return;
+    if (!htmlPath || previewContent === null || htmlPath.startsWith('collaboration://')) return;
     isDirtyRef.current = true;
     saveErrorOnCloseRef.current = false;
     if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
@@ -348,6 +378,26 @@ export function EditorFullPage({
               </span>
             </div>
           </div>
+
+          {detectedLocalRoom && !collabRoom && (
+            <div className="bg-blue-600 dark:bg-blue-500 text-white px-4 py-2 text-xs flex items-center justify-between shadow-md shrink-0 border-b border-blue-700">
+              <div className="flex items-center gap-2 font-medium">
+                <Users className="w-4 h-4" />
+                <span>Stanza di collaborazione attiva trovata sul tuo PC: <strong className="font-mono font-bold px-1.5 py-0.5 bg-blue-700/60 rounded">{detectedLocalRoom}</strong></span>
+              </div>
+              <button
+                onClick={() => {
+                  setCollabRoom(detectedLocalRoom);
+                  setCollabUser({ name: 'Partecipante Desktop', color: '#10b981' });
+                  setDetectedLocalRoom(null);
+                  onCollaborationStateChange?.(detectedLocalRoom, { name: 'Partecipante Desktop', color: '#10b981' });
+                }}
+                className="bg-white text-blue-700 hover:bg-blue-50 font-bold px-3 py-1 rounded-md text-xs transition-colors shadow-xs cursor-pointer flex items-center gap-1"
+              >
+                <span>Unisciti ora</span> 🚀
+              </button>
+            </div>
+          )}
 
           <div className="editor-fullpage-body">
             <Suspense fallback={<div className="p-6 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento editor...</div>}>

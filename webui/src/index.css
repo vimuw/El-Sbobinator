@@ -3172,18 +3172,20 @@ input[type="password"]::-ms-reveal {
   flex-shrink: 0;
 }
 
-/* Collaboration Cursors */
-.collaboration-cursor__caret {
+/* Collaboration Cursors & Selections */
+.collaboration-cursor__caret,
+.ProseMirror-yjs-cursor {
   position: relative;
   margin-left: -1px;
   margin-right: -1px;
-  border-left: 2px solid #0d0d0d;
-  border-right: 2px solid #0d0d0d;
+  border-left: 2px solid currentColor;
+  border-right: 0;
   word-break: normal;
   pointer-events: none;
 }
 
-.collaboration-cursor__label {
+.collaboration-cursor__label,
+.ProseMirror-yjs-cursor > div {
   position: absolute;
   top: -1.4em;
   left: -1px;
@@ -3192,10 +3194,19 @@ input[type="password"]::-ms-reveal {
   font-weight: 600;
   line-height: normal;
   user-select: none;
-  color: #fff;
-  padding: 1px 4px;
+  color: #ffffff !important;
+  padding: 1px 6px;
   border-radius: 4px 4px 4px 0;
   white-space: nowrap;
+  z-index: 50;
+  pointer-events: none;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.collaboration-cursor__selection,
+.ProseMirror-yjs-selection {
+  background-color: rgba(59, 130, 246, 0.25) !important;
+  border-radius: 2px;
 }
 
 /* YouTube Iframe Embed */

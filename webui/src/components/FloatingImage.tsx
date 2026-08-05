@@ -36,7 +36,7 @@ const extractImageAttrs = (element: HTMLElement) => {
     src: img.getAttribute('src') || '',
     alt: img.getAttribute('alt') || '',
     title: img.getAttribute('title') || '',
-    width: clampWidth(element.getAttribute('data-width') || img.style.width || element.style.width || '56'),
+    width: clampWidth(element.getAttribute('data-width') || element.style.width || img.style.width || '56'),
     align: 'center',
     caption: figcaption ? figcaption.textContent || '' : element.getAttribute('data-caption') || '',
   };
@@ -48,18 +48,46 @@ function FloatingImageView({ node, updateAttributes, selected }: NodeViewProps) 
   const caption: string = String(node.attrs.caption || '');
 
   // Resize handler for 8 handles
-  const startResizeHandle = (event: React.PointerEvent<HTMLDivElement>, direction: 'left' | 'right') => {
+  const startResizeHandle = (
+    event: React.PointerEvent<HTMLDivElement>,
+    handle: 'tl' | 'tc' | 'tr' | 'ml' | 'mr' | 'bl' | 'bc' | 'br'
+  ) => {
     event.preventDefault();
     event.stopPropagation();
 
     const startX = event.clientX;
+    const startY = event.clientY;
     const startWidth = width;
     const editorRoot = anchorRef.current?.closest('.tiptap-editor') as HTMLElement | null;
-    const availableWidth = Math.max(editorRoot?.clientWidth || 0, 320);
+
+    let contentWidth = 320;
+    if (editorRoot) {
+      const style = window.getComputedStyle(editorRoot);
+      const paddingLeft = Number.parseFloat(style.paddingLeft) || 0;
+      const paddingRight = Number.parseFloat(style.paddingRight) || 0;
+      contentWidth = Math.max(editorRoot.clientWidth - paddingLeft - paddingRight, 320);
+    }
+
+    const imgEl = anchorRef.current?.querySelector('img');
+    const aspectRatio = imgEl && imgEl.clientHeight > 0 ? imgEl.clientWidth / imgEl.clientHeight : 16 / 9;
 
     const move = (moveEvent: PointerEvent) => {
-      const delta = (moveEvent.clientX - startX) * (direction === 'left' ? -1 : 1);
-      updateAttributes({ width: clampWidth(startWidth + (delta / availableWidth) * 100) });
+      let deltaPx = 0;
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+
+      if (handle === 'mr' || handle === 'tr' || handle === 'br') {
+        deltaPx = 2 * dx;
+      } else if (handle === 'ml' || handle === 'tl' || handle === 'bl') {
+        deltaPx = -2 * dx;
+      } else if (handle === 'bc') {
+        deltaPx = 2 * dy * aspectRatio;
+      } else if (handle === 'tc') {
+        deltaPx = -2 * dy * aspectRatio;
+      }
+
+      const deltaPercent = (deltaPx / contentWidth) * 100;
+      updateAttributes({ width: clampWidth(startWidth + deltaPercent) });
     };
 
     const stop = () => {
@@ -98,14 +126,14 @@ function FloatingImageView({ node, updateAttributes, selected }: NodeViewProps) 
       {/* 8 Google Docs Blue Resize Handles */}
       {selected && (
         <span className="gdocs-handles-container" contentEditable={false}>
-          <div className="gdocs-handle gdocs-handle-tl" onPointerDown={e => startResizeHandle(e, 'left')} />
-          <div className="gdocs-handle gdocs-handle-tc" onPointerDown={e => startResizeHandle(e, 'right')} />
-          <div className="gdocs-handle gdocs-handle-tr" onPointerDown={e => startResizeHandle(e, 'right')} />
-          <div className="gdocs-handle gdocs-handle-ml" onPointerDown={e => startResizeHandle(e, 'left')} />
-          <div className="gdocs-handle gdocs-handle-mr" onPointerDown={e => startResizeHandle(e, 'right')} />
-          <div className="gdocs-handle gdocs-handle-bl" onPointerDown={e => startResizeHandle(e, 'left')} />
-          <div className="gdocs-handle gdocs-handle-bc" onPointerDown={e => startResizeHandle(e, 'right')} />
-          <div className="gdocs-handle gdocs-handle-br" onPointerDown={e => startResizeHandle(e, 'right')} />
+          <div className="gdocs-handle gdocs-handle-tl" onPointerDown={e => startResizeHandle(e, 'tl')} />
+          <div className="gdocs-handle gdocs-handle-tc" onPointerDown={e => startResizeHandle(e, 'tc')} />
+          <div className="gdocs-handle gdocs-handle-tr" onPointerDown={e => startResizeHandle(e, 'tr')} />
+          <div className="gdocs-handle gdocs-handle-ml" onPointerDown={e => startResizeHandle(e, 'ml')} />
+          <div className="gdocs-handle gdocs-handle-mr" onPointerDown={e => startResizeHandle(e, 'mr')} />
+          <div className="gdocs-handle gdocs-handle-bl" onPointerDown={e => startResizeHandle(e, 'bl')} />
+          <div className="gdocs-handle gdocs-handle-bc" onPointerDown={e => startResizeHandle(e, 'bc')} />
+          <div className="gdocs-handle gdocs-handle-br" onPointerDown={e => startResizeHandle(e, 'br')} />
         </span>
       )}
     </NodeViewWrapper>

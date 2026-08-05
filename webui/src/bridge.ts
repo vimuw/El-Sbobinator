@@ -224,6 +224,7 @@ export interface PywebviewApi {
     subject?: string;
     body?: string;
   }>;
+  send_collaboration_signal?: (room: string, payload: string) => Promise<{ ok: boolean; error?: string }>;
 }
 
 export function createBridge(options: {
@@ -279,5 +280,28 @@ export function createBridge(options: {
     dismissNewKey: onDismissNewKey,
     filesDropped: onFilesDropped,
     updateDownloadProgress: data => { onDownloadProgress?.(data); },
+  };
+}
+
+export type CollabSignalHandler = (room: string, payloadStr: string) => void;
+
+export function registerCollabSignalListener(handler: CollabSignalHandler): () => void {
+  const win = window as unknown as Record<string, unknown>;
+  if (!win.__elSbobinatorCollabListeners) {
+    win.__elSbobinatorCollabListeners = new Set<CollabSignalHandler>();
+    win.__elSbobinatorReceiveCollabSignal = (room: string, payloadStr: string) => {
+      const listeners = win.__elSbobinatorCollabListeners as Set<CollabSignalHandler>;
+      listeners.forEach(fn => {
+        try {
+          fn(room, payloadStr);
+        } catch (e) {
+          console.error('Collab signal listener error:', e);
+        }
+      });
+    };
+  }
+  (win.__elSbobinatorCollabListeners as Set<CollabSignalHandler>).add(handler);
+  return () => {
+    (win.__elSbobinatorCollabListeners as Set<CollabSignalHandler>)?.delete(handler);
   };
 }
