@@ -31,7 +31,8 @@ import { ConsolePanel } from './components/ConsolePanel';
 const EditorFullPage = React.lazy(() => import('./components/EditorFullPage').then(m => ({ default: m.EditorFullPage })));
 const SettingsModal = React.lazy(() => import('./components/modals/SettingsModal').then(m => ({ default: m.SettingsModal })));
 const SetupPage = React.lazy(() => import('./components/SetupPage').then(m => ({ default: m.SetupPage })));
-const ArchivePage = React.lazy(() => import('./components/ArchivePage').then(m => ({ default: m.ArchivePage })));
+const archivePagePromise = import('./components/ArchivePage');
+const ArchivePage = React.lazy(() => archivePagePromise.then(m => ({ default: m.ArchivePage })));
 
 declare global {
   interface Window {
@@ -178,18 +179,6 @@ export default function App() {
     }
   });
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [isSidebarPinned, setIsSidebarPinned] = useState(false);
-
-  useEffect(() => {
-    if (isNotificationsOpen) {
-      setIsSidebarPinned(true);
-    } else {
-      const timer = setTimeout(() => {
-        setIsSidebarPinned(false);
-      }, 200); // 200ms delay covers the dropdown exit transition
-      return () => clearTimeout(timer);
-    }
-  }, [isNotificationsOpen]);
 
   useEffect(() => {
     try {
@@ -1487,8 +1476,8 @@ export default function App() {
   }, [dispatch]);
 
   const handleQueueStart = useCallback(() => {
-    void startProcessing();
-  }, [startProcessing]);
+    void startProcessingRef.current();
+  }, []);
 
   const handleQueueStop = useCallback(() => {
     setConfirmAction({ type: 'stop-processing' });
@@ -1527,7 +1516,7 @@ export default function App() {
         hasPendingUpdate={updateAvailable !== null}
         consoleDisabled={isConsoleDisabled}
         unreadNotificationsCount={unreadNotificationsCount}
-        isNotificationsOpen={isSidebarPinned}
+        isNotificationsOpen={isNotificationsOpen}
         setIsNotificationsOpen={setIsNotificationsOpen}
         shakeBell={shakeBell}
       />
@@ -1827,6 +1816,8 @@ export default function App() {
             initialSearchTerm={preview.initialSearchTerm}
             initialRoom={preview.initialRoom}
             initialUser={preview.initialUser}
+            themeMode={themeMode}
+            setThemeMode={setThemeMode}
             onAudioStateChange={handleAudioStateChange}
             onScrollTopChange={handleScrollTopChange}
             onCollaborationStateChange={handleCollaborationStateChange}
@@ -1849,9 +1840,9 @@ export default function App() {
         onDelete={deleteNotification}
         onClearAll={clearAllNotifications}
         align="left"
-        leftOffset={224}
+        leftOffset={72}
         valign="bottom"
-        bottomOffset={48}
+        bottomOffset={16}
       />
     </div>
   );

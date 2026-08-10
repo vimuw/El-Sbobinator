@@ -90,7 +90,7 @@ export const AppHeader = memo(function AppHeader({
             </span>
             <button
               onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
-              className="icon-button icon-btn-theme"
+              className="icon-button icon-btn-theme theme-toggle-btn"
               aria-label={themeMode === 'dark' ? 'Attiva tema chiaro' : 'Attiva tema scuro'}
               title={themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro'}
             >

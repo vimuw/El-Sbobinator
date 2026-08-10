@@ -1,12 +1,13 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Check, Copy, ExternalLink, FileText, Loader2, Users } from 'lucide-react';
+import { ArrowLeft, Check, Copy, ExternalLink, FileText, Loader2, Moon, Sun, Users } from 'lucide-react';
 import type { Heading } from './RichTextEditor';
 import type { SaveHtmlResult } from '../bridge';
 import { registerCollabSignalListener } from '../bridge';
 import { nextHtmlAutosaveGeneration, seedHtmlAutosaveGeneration } from '../autosaveGeneration';
 import { normalizePreviewHtmlContent } from '../previewHtml';
 import { CollaborationModal } from './modals/CollaborationModal';
+import { useTheme } from '../hooks/useTheme';
 
 const LazyAudioPlayer = React.lazy(() =>
   import('./AudioPlayer').then(m => ({ default: m.AudioPlayer }))
@@ -30,6 +31,8 @@ interface EditorFullPageProps {
   initialSearchTerm?: string;
   initialRoom?: string;
   initialUser?: { name: string; color: string };
+  themeMode?: 'light' | 'dark';
+  setThemeMode?: React.Dispatch<React.SetStateAction<'light' | 'dark'>>;
   onAudioStateChange: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
   onScrollTopChange: (scrollTop: number) => void;
   onCollaborationStateChange?: (room?: string, user?: { name: string; color: string }) => void;
@@ -40,8 +43,12 @@ export function EditorFullPage({
   audioSrc, audioRelinkNeeded, onRelink,
   previewInitAudio, previewInitScrollTop,
   initialSearchTerm, initialRoom, initialUser,
+  themeMode: propThemeMode, setThemeMode: propSetThemeMode,
   onAudioStateChange, onScrollTopChange, onCollaborationStateChange,
 }: EditorFullPageProps) {
+  const fallbackTheme = useTheme();
+  const themeMode = propThemeMode ?? fallbackTheme.themeMode;
+  const setThemeMode = propSetThemeMode ?? fallbackTheme.setThemeMode;
   const [isTocOpen, setIsTocOpen] = useState(false);
   const [isCollabModalOpen, setIsCollabModalOpen] = useState(false);
   const [collabRoom, setCollabRoom] = useState<string | undefined>(initialRoom);
@@ -333,19 +340,28 @@ export function EditorFullPage({
                 </button>
               )}
               <button
-                onClick={() => setIsCollabModalOpen(true)}
-                className={`icon-button${collabRoom ? ' icon-button--active' : ''}`}
-                title={collabRoom ? `Collaborazione attiva: ${collabRoom}` : 'Lavora in gruppo (Collaborazione P2P)'}
-              >
-                <Users className="w-4 h-4" />
-              </button>
-              <button
                 onClick={() => void handleCopy()}
                 className="icon-button"
                 style={isCopied ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : {}}
                 title={isCopied ? 'Copiato!' : 'Copia per Google Docs'}
               >
                 {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              </button>
+              <button
+                onClick={() => setIsCollabModalOpen(true)}
+                className={`icon-button${collabRoom ? ' icon-button--active' : ''}`}
+                title={collabRoom ? `Collaborazione attiva: ${collabRoom}` : 'Inizia sessione (Collaborazione P2P)'}
+                aria-label="Inizia sessione"
+              >
+                <Users className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
+                className="icon-button theme-toggle-btn"
+                aria-label={themeMode === 'dark' ? 'Attiva tema chiaro' : 'Attiva tema scuro'}
+                title={themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro'}
+              >
+                {themeMode === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>
               <span
                 className="editor-autosave-badge"

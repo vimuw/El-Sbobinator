@@ -1,6 +1,8 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { useRef } from 'react';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react';
+import { NodeSelection, Plugin, PluginKey } from '@tiptap/pm/state';
 
 export type ImageAlignment = 'center';
 
@@ -23,7 +25,7 @@ const buildWrapperReactStyle = (width: number): React.CSSProperties => ({
 const buildWrapperStyle = (width: number) =>
   `width:${width}%;max-width:100%;position:relative;float:none;margin:14px auto;display:block;clear:both;`;
 
-const buildImageStyle = () => 'display:block;width:100%;height:auto;border-radius:10px;';
+const buildImageStyle = () => 'display:block;width:100%;height:auto;margin:0;padding:0;';
 
 const extractImageAttrs = (element: HTMLElement) => {
   const img = element.tagName.toLowerCase() === 'img' ? (element as HTMLImageElement) : element.querySelector('img');
@@ -42,10 +44,20 @@ const extractImageAttrs = (element: HTMLElement) => {
   };
 };
 
-function FloatingImageView({ node, updateAttributes, selected }: NodeViewProps) {
+function FloatingImageView({ node, updateAttributes, selected, getPos, editor }: NodeViewProps) {
   const anchorRef = useRef<HTMLSpanElement | null>(null);
   const width = clampWidth(node.attrs.width);
   const caption: string = String(node.attrs.caption || '');
+
+  const selectImageNode = (e: React.SyntheticEvent) => {
+    if ((e.target as HTMLElement)?.closest('.gdocs-handle')) return;
+    if (typeof getPos === 'function') {
+      const pos = getPos();
+      if (typeof pos === 'number') {
+        editor?.chain().focus().setNodeSelection(pos).run();
+      }
+    }
+  };
 
   // Resize handler for 8 handles
   const startResizeHandle = (
@@ -111,15 +123,17 @@ function FloatingImageView({ node, updateAttributes, selected }: NodeViewProps) 
       data-align="center"
       data-caption={caption}
       style={buildWrapperReactStyle(width)}
+      onClick={selectImageNode}
+      onPointerDown={selectImageNode}
     >
       {/* Asset Wrapper with Google Docs Blue Border */}
-      <span className="editor-image-asset-wrapper relative block rounded-xl transition-all overflow-hidden" data-drag-handle>
+      <span className="editor-image-asset-wrapper relative block transition-all overflow-hidden" data-drag-handle>
         <img
           src={String(node.attrs.src || '')}
           alt={String(node.attrs.alt || '')}
           title={String(node.attrs.title || '')}
           draggable={false}
-          className="editor-image-asset cursor-grab active:cursor-grabbing block w-full h-auto rounded-xl"
+          className="editor-image-asset cursor-grab active:cursor-grabbing block w-full h-auto"
         />
       </span>
 
@@ -192,7 +206,7 @@ export const FloatingImage = Node.create({
     const width = clampWidth(HTMLAttributes.width);
     const caption: string = HTMLAttributes.caption || '';
 
-    const children: any[] = [
+    const children: Array<[string, Record<string, string>] | [string, Record<string, string>, string]> = [
       [
         'img',
         {
@@ -218,6 +232,24 @@ export const FloatingImage = Node.create({
         style: buildWrapperStyle(width),
       }),
       ...children,
+    ];
+  },
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey('floatingImageClick'),
+        props: {
+          handleClickOn(view, _pos, node, nodePos, _event, _direct) {
+            if (node.type.name === 'floatingImage') {
+              view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, nodePos)));
+              view.focus();
+              return true;
+            }
+            return false;
+          },
+        },
+      }),
     ];
   },
 

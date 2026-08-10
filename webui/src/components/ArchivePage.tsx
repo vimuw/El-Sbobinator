@@ -1,7 +1,8 @@
-import { type FormEvent, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type FormEvent, type MouseEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  AlertTriangle, ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
+  AlertTriangle, ArrowLeft, ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
   Download, ExternalLink, Eye, FileSearch, FileText, FolderOpen, FolderPlus,
   Loader2, Pencil, Plus, RefreshCw, Search, Trash2, Upload, Users, X,
 } from 'lucide-react';
@@ -63,13 +64,153 @@ function getOpenedAtMs(
   return Math.max(backendMs, localOpened || 0);
 }
 
+export type SortOption = 'newest' | 'oldest' | 'recently_opened' | 'name';
+
+const SORT_OPTIONS: { id: SortOption; label: string }[] = [
+  { id: 'recently_opened', label: 'Aperti di recente' },
+  { id: 'newest', label: 'Più recenti' },
+  { id: 'oldest', label: 'Meno recenti' },
+  { id: 'name', label: 'Nome (A-Z)' },
+];
+
+function SortMenu({ sort, onSortChange }: { sort: SortOption; onSortChange: (sort: SortOption) => void }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; left?: number; right?: number; opensUp?: boolean } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (!open || !buttonRef.current) return;
+    const computePos = () => {
+      if (!buttonRef.current) return;
+      const rect = buttonRef.current.getBoundingClientRect();
+      const menuHeight = 175;
+      const spaceBelow = window.innerHeight - rect.bottom - 12;
+      const spaceAbove = rect.top - 12;
+      const opensUp = spaceBelow < menuHeight && spaceAbove > spaceBelow;
+
+      setPos({
+        opensUp,
+        top: opensUp ? undefined : rect.bottom + 4,
+        bottom: opensUp ? window.innerHeight - rect.top + 4 : undefined,
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - 215)),
+      });
+    };
+    computePos();
+    const rafId = requestAnimationFrame(computePos);
+    return () => cancelAnimationFrame(rafId);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleOutside = (e: globalThis.MouseEvent) => {
+      const target = e.target as Node;
+      if (buttonRef.current?.contains(target) || dropdownRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const handleClose = () => setOpen(false);
+    document.addEventListener('mousedown', handleOutside);
+    window.addEventListener('scroll', handleClose, { capture: true, passive: true });
+    window.addEventListener('resize', handleClose, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      window.removeEventListener('scroll', handleClose, { capture: true });
+      window.removeEventListener('resize', handleClose);
+    };
+  }, [open]);
+
+  const currentOption = SORT_OPTIONS.find(o => o.id === sort);
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="notion-sort-chip w-9 p-0 flex items-center justify-center transition-colors"
+        style={open ? { background: 'var(--border-default)', color: 'var(--text-primary)' } : undefined}
+        title={`Ordinamento: ${currentOption?.label ?? ''}`}
+        aria-label="Cambia ordinamento"
+      >
+        <ArrowUpDown className="w-4 h-4" style={{ opacity: open ? 1 : 0.8 }} />
+      </button>
+
+      {createPortal(
+        <AnimatePresence>
+          {open && pos && (
+            <motion.div
+              ref={dropdownRef}
+              initial={{ opacity: 0, scale: 0.95, y: pos.opensUp ? 4 : -4 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: pos.opensUp ? 4 : -4 }}
+              transition={{ duration: 0.1, ease: 'easeOut' }}
+              style={{
+                position: 'fixed',
+                ...(pos.top !== undefined ? { top: pos.top } : { bottom: pos.bottom }),
+                ...(pos.left !== undefined ? { left: pos.left } : { right: pos.right }),
+                zIndex: 9999,
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border-default)',
+                borderRadius: 12,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                minWidth: 200,
+                width: 200,
+                padding: 4,
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              {SORT_OPTIONS.map(opt => {
+                const isSelected = sort === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => {
+                      onSortChange(opt.id);
+                      setOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-left whitespace-nowrap transition-colors"
+                    style={{
+                      border: 'none',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                      background: 'transparent',
+                      color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      fontWeight: isSelected ? 600 : 400,
+                      fontSize: '14px',
+                      whiteSpace: 'nowrap',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = 'var(--sidebar-active-bg)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = 'transparent';
+                    }}
+                  >
+                    <span className="w-3.5 h-3.5 flex items-center justify-center shrink-0">
+                      {isSelected && <Check className="w-3.5 h-3.5" style={{ color: 'var(--accent-text)' }} />}
+                    </span>
+                    <span>{opt.label}</span>
+                  </button>
+                );
+              })}
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
+    </>
+  );
+}
+
 export function ArchivePage({
   sessions, total, folders, onFoldersChange,
   onPreview, onOpenFile, onDeleteSession, onRefresh,
   onRetryFailedRevisionBlocks, onOpenJoinRoom,
 }: ArchivePageProps) {
   const [search, setSearch] = useState('');
-  const [sort, setSort] = useState<'newest' | 'oldest' | 'recently_opened'>('newest');
+  const [sort, setSort] = useState<SortOption>('newest');
+
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [folderModal, setFolderModal] = useState<FolderModalState | null>(null);
   const [deleteFolderConfirm, setDeleteFolderConfirm] = useState<DeleteFolderConfirmState | null>(null);
@@ -153,6 +294,9 @@ export function ArchivePage({
     const q = search.trim().toLowerCase();
     const filtered = q ? arr.filter(s => s.name.toLowerCase().includes(q)) : arr;
     return [...filtered].sort((a, b) => {
+      if (sort === 'name') {
+        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+      }
       if (sort === 'recently_opened') {
         const oa = getOpenedAtMs(a, editorSessionsMap);
         const ob = getOpenedAtMs(b, editorSessionsMap);
@@ -395,56 +539,50 @@ export function ArchivePage({
               </AnimatePresence>
             </div>
             <button
+              type="button"
               onClick={() => { setFullTextMode(m => !m); setSearch(''); }}
-              className="notion-sort-chip"
+              className="notion-sort-chip w-9 p-0 flex items-center justify-center"
               style={fullTextMode ? { color: 'var(--accent-text)', borderColor: 'var(--accent-text)', background: 'var(--accent-subtle)' } : undefined}
-              title={fullTextMode ? 'Disattiva ricerca nel contenuto' : 'Attiva ricerca nel contenuto'}
+              title={fullTextMode ? 'Testo completo (Attivo - Clicca per disattivare)' : 'Testo completo (Ricerca nel contenuto)'}
+              aria-label="Testo completo"
             >
-              <FileSearch className="w-3.5 h-3.5" style={{ opacity: 0.8 }} />
-              Testo completo
+              <FileSearch className="w-4 h-4" style={{ opacity: 0.85 }} />
             </button>
             {!fullTextMode && (
-              <button
-                onClick={() => setSort(s => s === 'newest' ? 'oldest' : s === 'oldest' ? 'recently_opened' : 'newest')}
-                className="notion-sort-chip"
-                title="Cambia ordinamento (Più recenti / Meno recenti / Aperti di recente)"
-              >
-                <ChevronDown className="w-3.5 h-3.5" style={{ opacity: 0.55 }} />
-                {sort === 'newest' ? 'Recente' : sort === 'oldest' ? 'Meno recente' : 'Aperti di recente'}
-              </button>
+              <SortMenu sort={sort} onSortChange={setSort} />
             )}
             <div className="ml-auto flex items-center gap-2 shrink-0">
               {onOpenJoinRoom && (
                 <button
                   type="button"
                   onClick={onOpenJoinRoom}
-                  className="notion-sort-chip"
-                  title="Partecipa a una stanza di collaborazione tramite codice"
+                  className="notion-sort-chip w-9 p-0 flex items-center justify-center"
+                  title="Partecipa con codice (Stanza di collaborazione)"
+                  aria-label="Partecipa con codice"
                 >
-                  <Users className="w-3.5 h-3.5" style={{ opacity: 0.8 }} />
-                  Partecipa con codice
+                  <Users className="w-4 h-4" style={{ opacity: 0.85 }} />
                 </button>
               )}
               <button
                 type="button"
                 onClick={handleImportSbobina}
                 disabled={isImporting}
-                className="notion-sort-chip"
-                title="Importa un pacchetto .sbobina creato su un altro PC"
+                className="notion-sort-chip w-9 p-0 flex items-center justify-center"
+                title="Importa Sbobina (.sbobina)"
+                aria-label="Importa Sbobina"
               >
-                {isImporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" style={{ opacity: 0.8 }} />}
-                Importa Sbobina
+                {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" style={{ opacity: 0.85 }} />}
               </button>
               {onRefresh && (
                 <button
+                  type="button"
                   onClick={handleRefresh}
                   disabled={isRefreshing}
-                  className="icon-button compact-icon-button"
-                  style={{ color: 'var(--text-muted)', flexShrink: 0 }}
+                  className="notion-sort-chip w-9 p-0 flex items-center justify-center shrink-0"
                   title="Aggiorna archivio"
                   aria-label="Aggiorna archivio"
                 >
-                  <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} style={{ opacity: 0.85 }} />
                 </button>
               )}
             </div>
@@ -499,36 +637,27 @@ export function ArchivePage({
 
           {!fullTextMode && (
             <div className="max-h-[calc(100vh-380px)] overflow-y-auto app-scroll pr-1">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key="archive-session-list"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.12, ease: 'easeOut' }}
-                  className="flex flex-col gap-3"
-                >
-                  {sessionPageData.map(session => (
-                    <DraggableSessionCard
-                      key={session.session_dir}
-                      session={session}
-                      allFolders={folders}
-                      currentFolder={sessionFolderMap.get(session.session_dir)}
-                      editorSessionsMap={editorSessionsMap}
-                      onAssignToFolder={fId => assignToFolder(session.session_dir, fId)}
-                      onRemoveFromFolder={() => {
-                        const f = sessionFolderMap.get(session.session_dir);
-                        if (f) removeFromFolder(session.session_dir, f.id);
-                      }}
-                      onPreview={onPreview}
-                      onOpenFile={onOpenFile}
-                      onDeleteSession={onDeleteSession}
-                      onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
-                      onShareSession={setSharingSession}
-                    />
-                  ))}
-                </motion.div>
-              </AnimatePresence>
+              <div className="flex flex-col gap-3">
+                {sessionPageData.map(session => (
+                  <DraggableSessionCard
+                    key={session.session_dir}
+                    session={session}
+                    allFolders={folders}
+                    currentFolder={sessionFolderMap.get(session.session_dir)}
+                    editorSessionsMap={editorSessionsMap}
+                    onAssignToFolder={fId => assignToFolder(session.session_dir, fId)}
+                    onRemoveFromFolder={() => {
+                      const f = sessionFolderMap.get(session.session_dir);
+                      if (f) removeFromFolder(session.session_dir, f.id);
+                    }}
+                    onPreview={onPreview}
+                    onOpenFile={onOpenFile}
+                    onDeleteSession={onDeleteSession}
+                    onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
+                    onShareSession={setSharingSession}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -798,6 +927,8 @@ function FolderCard({
     </div>
   );
 }
+
+
 
 // ─── DraggableSessionCard ─────────────────────────────────────────────────────
 
@@ -1218,17 +1349,20 @@ function FolderDetailView({
 
 
 
-  const availableToAdd = useMemo(() => {
+  const availableToAddAll = useMemo(() => {
     const inFolder = new Set(folder.session_dirs);
-    const all = Array.from(sessionsByDir.values()).filter(s => !inFolder.has(s.session_dir));
+    return Array.from(sessionsByDir.values()).filter(s => !inFolder.has(s.session_dir));
+  }, [folder.session_dirs, sessionsByDir]);
+
+  const availableToAdd = useMemo(() => {
     const q = addSearch.trim().toLowerCase();
-    const filtered = q ? all.filter(s => s.name.toLowerCase().includes(q)) : all;
+    const filtered = q ? availableToAddAll.filter(s => s.name.toLowerCase().includes(q)) : availableToAddAll;
     return [...filtered].sort((a, b) => {
       const ta = a.completed_at_iso ? new Date(a.completed_at_iso).getTime() : 0;
       const tb = b.completed_at_iso ? new Date(b.completed_at_iso).getTime() : 0;
       return tb - ta;
     });
-  }, [folder.session_dirs, sessionsByDir, addSearch]);
+  }, [availableToAddAll, addSearch]);
 
 
 
@@ -1357,13 +1491,14 @@ function FolderDetailView({
             </AnimatePresence>
           </div>
           <button
+            type="button"
             onClick={() => { setFullTextMode(m => !m); setSearch(''); }}
-            className="notion-sort-chip"
+            className="notion-sort-chip w-9 p-0 flex items-center justify-center"
             style={fullTextMode ? { color: 'var(--accent-text)', borderColor: 'var(--accent-text)', background: 'var(--accent-subtle)' } : undefined}
-            title={fullTextMode ? 'Disattiva ricerca nel contenuto' : 'Attiva ricerca nel contenuto'}
+            title={fullTextMode ? 'Testo completo (Attivo - Clicca per disattivare)' : 'Testo completo (Ricerca nel contenuto)'}
+            aria-label="Testo completo"
           >
-            <FileSearch className="w-3.5 h-3.5" style={{ opacity: 0.8 }} />
-            Testo completo
+            <FileSearch className="w-4 h-4" style={{ opacity: 0.85 }} />
           </button>
         </div>
         {!fullTextMode && search.trim().length > 0 && (
@@ -1392,17 +1527,46 @@ function FolderDetailView({
       </div>
 
       {/* Add lesson panel */}
-      <div className="flex flex-col gap-3">
+      <div
+        className="rounded-xl border transition-all overflow-hidden"
+        style={{
+          borderColor: showAddPanel ? 'var(--border-strong)' : 'var(--border-default)',
+          background: 'var(--bg-elevated)',
+        }}
+      >
         <button
+          type="button"
           onClick={() => setShowAddPanel(v => !v)}
-          className="flex items-center gap-2 text-sm font-semibold w-full text-left py-1"
-          style={{ color: 'var(--accent-text)', background: 'none', border: 'none', cursor: 'pointer' }}
+          className="w-full flex items-center justify-between px-3.5 py-2.5 transition-colors cursor-pointer select-none"
+          style={{
+            background: showAddPanel ? 'var(--sidebar-active-bg)' : 'var(--bg-input)',
+            borderBottom: showAddPanel ? '1px solid var(--border-subtle)' : 'none',
+          }}
         >
-          <Plus className="w-4 h-4" />
-          Aggiungi lezione
-          {showAddPanel
-            ? <ChevronUp className="w-3.5 h-3.5 ml-auto" />
-            : <ChevronDown className="w-3.5 h-3.5 ml-auto" />}
+          <div className="flex items-center gap-2.5">
+            <span
+              className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-transform"
+              style={{ background: 'var(--accent-subtle)', color: 'var(--accent-text)' }}
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </span>
+            <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+              Aggiungi lezione
+            </span>
+            {availableToAddAll.length > 0 && (
+              <span
+                className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                style={{ background: 'var(--border-subtle)', color: 'var(--text-muted)' }}
+              >
+                {availableToAddAll.length} disponibili
+              </span>
+            )}
+          </div>
+          {showAddPanel ? (
+            <ChevronUp className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+          ) : (
+            <ChevronDown className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+          )}
         </button>
 
         <AnimatePresence>
@@ -1415,20 +1579,21 @@ function FolderDetailView({
               transition={{ duration: 0.18, ease: 'easeOut' }}
               style={{ overflow: 'hidden' }}
             >
-              <div className="flex flex-col gap-3">
-                {availableToAdd.length === 0 && !addSearch.trim() && (
-                  <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>
-                    Tutte le sbobine sono già in una cartella.
-                  </p>
+              <div className="p-3 flex flex-col gap-3">
+                {availableToAddAll.length === 0 && !addSearch.trim() && (
+                  <div className="py-5 text-center flex flex-col items-center justify-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                    <FolderPlus className="w-7 h-7 opacity-35" />
+                    <p className="text-xs font-medium">Tutte le sbobine sono già in una cartella.</p>
+                  </div>
                 )}
-                {(availableToAdd.length > 0 || addSearch.trim().length > 0) && (
+                {(availableToAddAll.length > 0 || addSearch.trim().length > 0) && (
                   <div className="notion-search-wrap">
                     <Search className="notion-search-icon w-3.5 h-3.5" />
                     <input
                       type="text"
                       value={addSearch}
                       onChange={e => setAddSearch(e.target.value)}
-                      placeholder="Cerca per nome..."
+                      placeholder="Cerca sbobina per nome..."
                       className="notion-search-input"
                     />
                     <AnimatePresence>
@@ -1450,47 +1615,51 @@ function FolderDetailView({
                   </div>
                 )}
                 {availableToAdd.length === 0 && addSearch.trim() && (
-                  <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>
+                  <p className="text-xs py-4 text-center" style={{ color: 'var(--text-muted)' }}>
                     Nessun risultato per &ldquo;{addSearch}&rdquo;
                   </p>
                 )}
-                <div
-                  className="flex flex-col gap-2 overflow-y-auto app-scroll pr-1"
-                  style={{ maxHeight: 320 }}
-                >
-                  {availableToAdd.map(session => {
-                    const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
-                    return (
-                      <div
-                        key={session.session_dir}
-                        className="archive-session-card flex items-center justify-between gap-3 px-4 py-3"
-                        style={{}}
-                      >
-                        <div className="flex items-center gap-3 overflow-hidden flex-1">
-                          <FileText className="w-4 h-4 shrink-0" style={{ color: 'var(--text-faint)' }} />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
-                              {session.name}
-                            </p>
-                            {ts > 0 && (
-                              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                                {formatRelativeTime(ts)}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => onAddSession(session.session_dir)}
-                          className="icon-button compact-icon-button shrink-0"
-                          style={{ color: 'var(--accent-text)' }}
-                          title="Aggiungi alla cartella"
+                {availableToAdd.length > 0 && (
+                  <div
+                    className="flex flex-col gap-2 overflow-y-auto app-scroll pr-1"
+                    style={{ maxHeight: 280 }}
+                  >
+                    {availableToAdd.map(session => {
+                      const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
+                      return (
+                        <div
+                          key={session.session_dir}
+                          className="archive-session-card flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg border"
+                          style={{ borderColor: 'var(--border-subtle)' }}
                         >
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
+                          <div className="flex items-center gap-2.5 overflow-hidden flex-1">
+                            <FileText className="w-4 h-4 shrink-0" style={{ color: 'var(--accent-text)', opacity: 0.8 }} />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                                {session.name}
+                              </p>
+                              {ts > 0 && (
+                                <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                                  {formatRelativeTime(ts)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => onAddSession(session.session_dir)}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all cursor-pointer hover:scale-105 active:scale-95"
+                            style={{ background: 'var(--accent-subtle)', color: 'var(--accent-text)', border: '1px solid var(--accent-text)' }}
+                            title="Aggiungi alla cartella"
+                            aria-label="Aggiungi alla cartella"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
@@ -1520,34 +1689,23 @@ function FolderDetailView({
                 items={pageData.map(s => s.session_dir)}
                 strategy={verticalListSortingStrategy}
               >
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key="folder-session-list"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.12, ease: 'easeOut' }}
-                    className="flex flex-col gap-2"
-                  >
-                    {pageData.map((session) => {
-                      return (
-                        <SortableSessionCard
-                          key={session.session_dir}
-                          session={session}
-                          folderColor={folder.color}
-                          disabled={isFilteringName}
-                          editorSessionsMap={editorSessionsMap}
-                          onRemove={() => onRemoveSession(session.session_dir)}
-                          onPreview={onPreview}
-                          onOpenFile={onOpenFile}
-                          onDeleteSession={onDeleteSession}
-                          onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
-                          onShareSession={onShareSession}
-                        />
-                      );
-                    })}
-                  </motion.div>
-                </AnimatePresence>
+                <div className="flex flex-col gap-2">
+                  {pageData.map((session) => (
+                    <SortableSessionCard
+                      key={session.session_dir}
+                      session={session}
+                      folderColor={folder.color}
+                      disabled={isFilteringName}
+                      editorSessionsMap={editorSessionsMap}
+                      onRemove={() => onRemoveSession(session.session_dir)}
+                      onPreview={onPreview}
+                      onOpenFile={onOpenFile}
+                      onDeleteSession={onDeleteSession}
+                      onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
+                      onShareSession={onShareSession}
+                    />
+                  ))}
+                </div>
               </SortableContext>
             </div>
           </div>

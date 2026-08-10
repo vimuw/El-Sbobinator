@@ -21,10 +21,12 @@ class ModelOption(TypedDict):
 
 
 SUPPORTED_MODELS: tuple[str, ...] = (
+    "gemini-2.5-flash",
+    "gemini-3.6-flash",
     "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
     "gemini-3-flash-preview",
     "gemini-3.1-flash-lite-preview",
-    "gemini-2.5-flash",
 )
 
 DEFAULT_MODEL = "gemini-2.5-flash"
@@ -32,9 +34,33 @@ DEFAULT_FALLBACK_MODELS: tuple[str, ...] = ()
 
 MODEL_OPTIONS: tuple[ModelOption, ...] = (
     {
+        "id": "gemini-2.5-flash",
+        "label": "Gemini 2.5 Flash",
+        "summary": "Primario consigliato: ottimo equilibrio qualita/velocita, stabile e ampiamente testato.",
+        "default_chunk_minutes": 15,
+        "default_macro_char_limit": 22000,
+        "phase1_temperature": 0.35,
+    },
+    {
+        "id": "gemini-3.6-flash",
+        "label": "Gemini 3.6 Flash",
+        "summary": "",
+        "default_chunk_minutes": 15,
+        "default_macro_char_limit": 22000,
+        "phase1_temperature": 0.35,
+    },
+    {
         "id": "gemini-3.5-flash",
         "label": "Gemini 3.5 Flash",
-        "summary": "Nuovo modello Flash: disponibile come primario o fallback configurabile dall'utente.",
+        "summary": "",
+        "default_chunk_minutes": 15,
+        "default_macro_char_limit": 22000,
+        "phase1_temperature": 0.35,
+    },
+    {
+        "id": "gemini-3.5-flash-lite",
+        "label": "Gemini 3.5 Flash Lite",
+        "summary": "",
         "default_chunk_minutes": 15,
         "default_macro_char_limit": 22000,
         "phase1_temperature": 0.35,
@@ -42,7 +68,7 @@ MODEL_OPTIONS: tuple[ModelOption, ...] = (
     {
         "id": "gemini-3-flash-preview",
         "label": "Gemini 3 Flash (Preview)",
-        "summary": "Modello di prossima generazione in anteprima: prestazioni frontier con ragionamento veloce. Possibili 503 nelle ore di punta.",
+        "summary": "",
         "default_chunk_minutes": 15,
         "default_macro_char_limit": 22000,
         "phase1_temperature": 0.35,
@@ -50,17 +76,9 @@ MODEL_OPTIONS: tuple[ModelOption, ...] = (
     {
         "id": "gemini-3.1-flash-lite-preview",
         "label": "Gemini 3.1 Flash Lite (Preview)",
-        "summary": "Fallback di ultima istanza con quota giornaliera altissima (500 RPD): ideale quando tutti gli altri modelli hanno esaurito la quota. Architettura Gemini 3, ottimizzata per velocita.",
+        "summary": "",
         "default_chunk_minutes": 5,
         "default_macro_char_limit": 7500,
-        "phase1_temperature": 0.35,
-    },
-    {
-        "id": "gemini-2.5-flash",
-        "label": "Gemini 2.5 Flash",
-        "summary": "Primario consigliato: ottimo equilibrio qualita/velocita, stabile e ampiamente testato.",
-        "default_chunk_minutes": 15,
-        "default_macro_char_limit": 22000,
         "phase1_temperature": 0.35,
     },
 )

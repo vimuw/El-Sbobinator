@@ -54,6 +54,12 @@ class SupportedModelsTests(unittest.TestCase):
     def test_gemini_35_flash_in_supported_models(self):
         self.assertIn("gemini-3.5-flash", SUPPORTED_MODELS)
 
+    def test_gemini_36_flash_in_supported_models(self):
+        self.assertIn("gemini-3.6-flash", SUPPORTED_MODELS)
+
+    def test_gemini_35_flash_lite_in_supported_models(self):
+        self.assertIn("gemini-3.5-flash-lite", SUPPORTED_MODELS)
+
     def test_gemini_15_flash_not_in_supported_models(self):
         self.assertNotIn("gemini-1.5-flash", SUPPORTED_MODELS)
 

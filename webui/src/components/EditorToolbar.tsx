@@ -1,14 +1,13 @@
 import React, { useRef } from 'react';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import {
-  AlignCenter, AlignJustify, AlignLeft, AlignRight,
-  Bold, ImagePlus, Italic, List, ListOrdered, Minus, Plus, Quote, Redo,
-  RemoveFormatting, Search, Strikethrough, Subscript as SubIcon, Superscript as SupIcon,
+  Bold, Italic, List, ListOrdered, Minus, Plus, Quote, Redo,
+  RemoveFormatting, Search, Strikethrough,
   Underline as UnderlineIcon, Undo,
 } from 'lucide-react';
 import {
   ColorPickerButton, HighlightPickerButton, FontFamilySelect,
-  FontSizeSelect, HeadingSelect, LinkButton, InsertMathButton, InsertYoutubeButton,
+  FontSizeSelect, HeadingSelect, LinkButton, InsertDropdownButton, AlignDropdownButton
 } from './EditorToolbarControls';
 
 const menuBarStateKey = (editor: TiptapEditor): string => [
@@ -83,7 +82,6 @@ export const MenuBar = ({
       </button>
       <div className="editor-separator" />
       <HeadingSelect editor={editor} />
-      <div className="editor-separator" />
       <FontFamilySelect editor={editor} />
       <FontSizeSelect editor={editor} />
       <div className="editor-separator" />
@@ -110,25 +108,10 @@ export const MenuBar = ({
         <RemoveFormatting className="h-4 w-4" />
       </button>
       <div className="editor-separator" />
+      <InsertDropdownButton editor={editor} onOpenImagePicker={onOpenImagePicker} />
       <LinkButton editor={editor} />
-      <button type="button" onClick={onOpenImagePicker} className="editor-button" title="Inserisci immagine">
-        <ImagePlus className="h-4 w-4" />
-      </button>
-      <InsertMathButton editor={editor} />
-      <InsertYoutubeButton editor={editor} />
       <div className="editor-separator" />
-      <button type="button" onClick={() => editor.chain().focus().setTextAlign('left').run()} className={btn(editor.isActive({ textAlign: 'left' }))} title="Allinea sinistra">
-        <AlignLeft className="h-4 w-4" />
-      </button>
-      <button type="button" onClick={() => editor.chain().focus().setTextAlign('center').run()} className={btn(editor.isActive({ textAlign: 'center' }))} title="Centra">
-        <AlignCenter className="h-4 w-4" />
-      </button>
-      <button type="button" onClick={() => editor.chain().focus().setTextAlign('right').run()} className={btn(editor.isActive({ textAlign: 'right' }))} title="Allinea destra">
-        <AlignRight className="h-4 w-4" />
-      </button>
-      <button type="button" onClick={() => editor.chain().focus().setTextAlign('justify').run()} className={btn(editor.isActive({ textAlign: 'justify' }))} title="Giustifica">
-        <AlignJustify className="h-4 w-4" />
-      </button>
+      <AlignDropdownButton editor={editor} />
       <div className="editor-separator" />
       <button type="button" onClick={() => editor.chain().focus().toggleBulletList().run()} className={btn(editor.isActive('bulletList'))} title="Elenco puntato">
         <List className="h-4 w-4" />
@@ -136,15 +119,8 @@ export const MenuBar = ({
       <button type="button" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btn(editor.isActive('orderedList'))} title="Elenco numerato">
         <ListOrdered className="h-4 w-4" />
       </button>
-      <div className="editor-separator" />
       <button type="button" onClick={() => editor.chain().focus().toggleBlockquote().run()} className={btn(editor.isActive('blockquote'))} title="Citazione">
         <Quote className="h-4 w-4" />
-      </button>
-      <button type="button" onClick={() => editor.chain().focus().toggleSubscript().run()} className={btn(editor.isActive('subscript'))} title="Pedice">
-        <SubIcon className="h-4 w-4" />
-      </button>
-      <button type="button" onClick={() => editor.chain().focus().toggleSuperscript().run()} className={btn(editor.isActive('superscript'))} title="Apice">
-        <SupIcon className="h-4 w-4" />
       </button>
       <div className="editor-separator" />
       <button

@@ -59,8 +59,8 @@
   --border-subtle: rgba(100, 116, 139, 0.20);
   --border-strong: rgba(100, 116, 139, 0.52);
 
-  --text-primary: #111827;
-  --text-secondary: #374151;
+  --text-primary: #000000;
+  --text-secondary: #000000;
   --text-muted: #6b7280;
   --text-faint: #9ca3af;
 
@@ -139,8 +139,8 @@
     --border-subtle: rgba(255, 255, 255, 0.09);
     --border-strong: rgba(255, 255, 255, 0.26);
 
-    --text-primary: #f5f5f5;
-    --text-secondary: #d1d5db;
+    --text-primary: #ffffff;
+    --text-secondary: #ffffff;
     --text-muted: #9ca3af;
     --text-faint: #6b7280;
 
@@ -204,6 +204,74 @@
     --glass-top-shimmer: rgba(255, 255, 255, 0.04);
 
     --header-bg: #0f0f0f;
+}
+
+/* ── Theme Mode Transition for Editor & UI ─────────── */
+:root,
+body,
+#root,
+.editor-fullpage,
+.editor-fullpage-header,
+.editor-fullpage-back,
+.editor-fullpage-title,
+.editor-fullpage-actions .icon-button,
+.editor-autosave-badge,
+.editor-shell,
+.editor-toolbar,
+.editor-select,
+.editor-button,
+.editor-separator,
+.editor-wordcount,
+.editor-page-container,
+.editor-page-outer,
+.editor-page,
+.tiptap-editor,
+.tiptap-editor h1,
+.tiptap-editor h2,
+.tiptap-editor h3,
+.tiptap-editor h4,
+.tiptap-editor h5,
+.tiptap-editor p,
+.tiptap-editor li,
+.tiptap-editor blockquote,
+.tiptap-editor code,
+.tiptap-editor pre,
+.editor-toc-col,
+.toc-left-sidebar,
+.editor-toc-sticky,
+.editor-toc-header,
+.editor-toc-btn,
+.editor-toc-nav,
+.toc-item,
+.find-bar-float,
+.find-bar-input,
+.gdocs-context-menu,
+.gdocs-menu-item,
+.editor-dropdown-panel,
+.editor-dropdown-item,
+.editor-bubble-menu,
+.editor-bubble-btn,
+.gdocs-image-pill-toolbar,
+.gdocs-pill-btn {
+  transition:
+    background-color 250ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 250ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 250ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 250ms cubic-bezier(0.4, 0, 0.2, 1),
+    fill 250ms cubic-bezier(0.4, 0, 0.2, 1),
+    stroke 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-toggle-btn svg {
+  transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1), color 250ms ease;
+}
+
+.theme-toggle-btn:hover svg {
+  transform: rotate(18deg) scale(1.12);
+}
+
+.theme-toggle-btn:active svg {
+  transform: rotate(-25deg) scale(0.92);
 }
 
 /* ── Light mode component overrides ─────────────── */
@@ -1233,6 +1301,7 @@ button {
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
   overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
 }
 
 .console-scroll::-webkit-scrollbar {
@@ -1368,6 +1437,113 @@ button {
 .heading-select {
   min-width: 120px;
 }
+
+/* ═══ BUBBLE MENU & DROPDOWN PANELS ═══ */
+
+.editor-bubble-menu {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(12px);
+  z-index: 999;
+  white-space: nowrap;
+}
+
+.editor-bubble-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+
+.editor-bubble-btn:hover {
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+}
+
+.editor-bubble-btn.is-active {
+  background: var(--accent-bg);
+  color: #ffffff;
+}
+
+.editor-bubble-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border-subtle);
+  margin: 0 3px;
+  flex-shrink: 0;
+}
+
+.editor-button.insert-dropdown-btn {
+  width: auto;
+  min-width: unset;
+  padding: 0 8px;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.editor-button.align-dropdown-btn {
+  width: auto;
+  min-width: unset;
+  padding: 0 6px;
+  gap: 2px;
+}
+
+.editor-dropdown-panel {
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  min-width: 200px;
+}
+
+.editor-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.editor-dropdown-item:hover {
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+}
+
+.editor-dropdown-item.is-active {
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
 
 .editor-page-container {
   background: #edeae4;
@@ -2045,20 +2221,24 @@ button {
 /* ═══ CONTEXT MENU ═══ */
 
 .context-menu {
-  width: 204px;
+  width: 200px;
+  min-width: 200px;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
   box-shadow: var(--shadow-strong);
+  padding: 4px;
 }
 
 .context-menu-item {
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.7rem 0.95rem;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 14px;
   color: var(--text-secondary);
   transition: background 180ms ease, color 180ms ease;
 }
@@ -2069,7 +2249,11 @@ button {
 }
 
 .tiptap-editor {
-  color: var(--text-primary);
+  color: var(--text-primary) !important;
+  --tw-prose-body: var(--text-primary);
+  --tw-prose-headings: var(--text-primary);
+  --tw-prose-bold: var(--text-primary);
+  --tw-prose-bullet: var(--text-primary);
   background: transparent;
   font-family: Arial, sans-serif;
   font-size: 11pt;
@@ -2089,7 +2273,7 @@ button {
 .tiptap-editor h5 {
   font-family: var(--font-display);
   letter-spacing: -0.03em;
-  color: var(--text-primary);
+  color: var(--text-primary) !important;
 }
 
 .tiptap-editor h1 {
@@ -2125,7 +2309,7 @@ button {
 .tiptap-editor p,
 .tiptap-editor li,
 .tiptap-editor blockquote {
-  color: var(--text-secondary);
+  color: var(--text-primary) !important;
 }
 
 .tiptap-editor * {
@@ -2137,20 +2321,28 @@ button {
 .tiptap-editor b,
 .tiptap-editor i,
 .tiptap-editor a,
-.tiptap-editor mark,
 .tiptap-editor code {
   color: inherit !important;
+}
+
+.tiptap-editor mark:not(.search-highlight):not(.search-highlight-active),
+.tiptap-editor mark:not(.search-highlight):not(.search-highlight-active) * {
+  color: #000000 !important;
+  border-radius: 2px;
+  padding: 0 1px;
 }
 
 .search-highlight {
   background-color: rgba(255, 214, 0, 0.45);
   border-radius: 2px;
+  color: inherit;
 }
 
 .search-highlight-active {
   background-color: rgba(255, 140, 0, 0.70);
   border-radius: 2px;
   outline: 1px solid rgba(255, 120, 0, 0.5);
+  color: inherit;
 }
 
 :root[data-theme="dark"] .search-highlight {
@@ -2169,6 +2361,18 @@ button {
   margin: 14px auto;
   user-select: none;
   clear: both;
+  line-height: 0;
+}
+
+.editor-image-node img {
+  margin: 0 !important;
+  padding: 0 !important;
+  display: block !important;
+  border-radius: 0 !important;
+}
+
+.editor-image-asset-wrapper {
+  border-radius: 0 !important;
 }
 
 .gdocs-handles-container {
@@ -2176,7 +2380,7 @@ button {
   inset: 0;
   pointer-events: none;
   border: 1.5px solid #1a73e8;
-  border-radius: 10px;
+  border-radius: 0;
   z-index: 10;
 }
 
@@ -2211,18 +2415,18 @@ button {
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
-  background-color: #ffffff;
-  border: 1px solid #dadce0;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: 20px;
-  box-shadow: 0 2px 10px rgba(60, 64, 67, 0.15);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
   z-index: 30;
   white-space: nowrap;
 }
 
 :root[data-theme="dark"] .gdocs-image-pill-toolbar {
-  background-color: #202124;
-  border-color: #3c4043;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+  background-color: var(--bg-elevated);
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-strong);
 }
 
 .gdocs-pill-btn {
@@ -2231,7 +2435,7 @@ button {
   justify-content: center;
   padding: 4px 6px;
   border-radius: 6px;
-  color: #3c4043;
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 500;
   transition: background-color 120ms ease, color 120ms ease;
@@ -2241,25 +2445,27 @@ button {
 }
 
 :root[data-theme="dark"] .gdocs-pill-btn {
-  color: #e8eaed;
+  color: var(--text-secondary);
 }
 
 .gdocs-pill-btn:hover {
-  background-color: #f1f3f4;
+  background-color: rgba(0, 0, 0, 0.06);
+  color: var(--text-primary);
 }
 
 :root[data-theme="dark"] .gdocs-pill-btn:hover {
-  background-color: #303134;
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
 }
 
 .gdocs-pill-btn.active {
-  background-color: #e8f0fe;
-  color: #1a73e8;
+  background-color: var(--accent-subtle);
+  color: var(--accent-text);
 }
 
 :root[data-theme="dark"] .gdocs-pill-btn.active {
-  background-color: #2c384e;
-  color: #8ab4f8;
+  background-color: var(--accent-subtle);
+  color: var(--accent-text);
 }
 
 .gdocs-pill-btn-sm {
@@ -2267,7 +2473,7 @@ button {
   font-size: 11px;
   font-weight: 600;
   border-radius: 4px;
-  color: #5f6368;
+  color: var(--text-muted);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -2275,59 +2481,60 @@ button {
 }
 
 :root[data-theme="dark"] .gdocs-pill-btn-sm {
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .gdocs-pill-btn-sm:hover {
-  background-color: #f1f3f4;
-  color: #202124;
+  background-color: rgba(0, 0, 0, 0.06);
+  color: var(--text-primary);
 }
 
 :root[data-theme="dark"] .gdocs-pill-btn-sm:hover {
-  background-color: #303134;
-  color: #f3f4f6;
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
 }
 
 .gdocs-pill-btn-sm.active {
-  background-color: #1a73e8;
+  background-color: var(--accent-bg);
   color: #ffffff;
 }
 
 :root[data-theme="dark"] .gdocs-pill-btn-sm.active {
-  background-color: #8ab4f8;
-  color: #202124;
+  background-color: var(--accent-bg);
+  color: #ffffff;
 }
 
 .gdocs-pill-divider {
   width: 1px;
   height: 16px;
-  background-color: #dadce0;
+  background-color: var(--border-subtle);
   margin: 0 2px;
 }
 
 :root[data-theme="dark"] .gdocs-pill-divider {
-  background-color: #3c4043;
+  background-color: var(--border-subtle);
 }
 
 /* ── Google Docs Right-Click Context Menu ───────────────── */
 .gdocs-context-menu {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background-color: #ffffff;
-  color: #1f2937;
-  border: 1px solid #e5e7eb;
+  font-family: var(--font-display);
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
   border-radius: 10px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08);
   padding: 6px 0;
   width: 290px;
   max-width: 90vw;
+  backdrop-filter: blur(12px);
 }
 
 :root[data-theme="dark"] .gdocs-context-menu,
 .dark .gdocs-context-menu {
-  background-color: #1f2937;
-  color: #f3f4f6;
-  border-color: #374151;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-strong);
 }
 
 .gdocs-menu-item {
@@ -2338,34 +2545,36 @@ button {
   padding: 6px 14px;
   font-size: 13px;
   line-height: 20px;
-  font-weight: 400;
-  color: #1f2937;
+  font-weight: 500;
+  color: var(--text-secondary);
   background: transparent;
   border: none;
   cursor: pointer;
   text-align: left;
-  transition: background-color 100ms ease;
+  transition: background-color 120ms ease, color 120ms ease;
   white-space: nowrap;
 }
 
 :root[data-theme="dark"] .gdocs-menu-item,
 .dark .gdocs-menu-item {
-  color: #f3f4f6;
+  color: var(--text-secondary);
 }
 
 .gdocs-menu-item:hover {
-  background-color: #f3f4f6;
+  background-color: rgba(0, 0, 0, 0.06);
+  color: var(--text-primary);
 }
 
 :root[data-theme="dark"] .gdocs-menu-item:hover,
 .dark .gdocs-menu-item:hover {
-  background-color: #374151;
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
 }
 
 .gdocs-kbd {
   font-size: 11px;
   font-family: inherit;
-  color: #6b7280;
+  color: var(--text-muted);
   letter-spacing: 0.2px;
   margin-left: auto;
   padding-left: 12px;
@@ -2374,7 +2583,7 @@ button {
 
 :root[data-theme="dark"] .gdocs-kbd,
 .dark .gdocs-kbd {
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .editor-image-action {
@@ -2536,21 +2745,24 @@ input[type="password"]::-ms-reveal {
   left: calc(100% + 10px);
   top: 50%;
   transform: translateY(-50%);
-  background: var(--text-primary);
-  color: var(--bg-base);
-  font-size: 0.72rem;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 0.75rem;
   font-weight: 600;
   white-space: nowrap;
-  padding: 4px 9px;
-  border-radius: 6px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
   pointer-events: none;
   z-index: 200;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 :root[data-theme="dark"] .sidebar-tooltip {
-  background: #f5f5f5;
-  color: #111;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
 }
 
 /* ═══ FOLDER CARDS ═══ */
@@ -3240,3 +3452,5 @@ input[type="password"]::-ms-reveal {
   font-family: inherit;
   user-select: none;
 }
+
+/* ═══ GOOGLE DOCS STYLE ARCHIVE GRID PREVIEW ═══ */

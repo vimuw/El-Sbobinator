@@ -145,4 +145,31 @@ describe('EditorFullPage autosave', () => {
 
     expect(secondGeneration).toBeGreaterThan(firstGeneration);
   });
+
+  it('renders "Inizia sessione" icon after the copy icon and includes dark/light theme toggle button', async () => {
+    const setThemeMode = vi.fn();
+    render(<EditorFullPage {...baseProps} themeMode="dark" setThemeMode={setThemeMode} />);
+
+    const copyBtn = screen.getByTitle('Copia per Google Docs');
+    const collabBtn = screen.getByTitle('Inizia sessione (Collaborazione P2P)');
+    const themeBtn = screen.getByTitle('Tema chiaro');
+
+    expect(copyBtn).toBeTruthy();
+    expect(collabBtn).toBeTruthy();
+    expect(themeBtn).toBeTruthy();
+
+    // Verify order: copyBtn comes before collabBtn
+    const buttons = screen.getAllByRole('button');
+    const copyIndex = buttons.indexOf(copyBtn);
+    const collabIndex = buttons.indexOf(collabBtn);
+    const themeIndex = buttons.indexOf(themeBtn);
+
+    expect(copyIndex).toBeGreaterThan(-1);
+    expect(collabIndex).toBeGreaterThan(copyIndex);
+    expect(themeIndex).toBeGreaterThan(collabIndex);
+
+    // Toggling theme calls setThemeMode
+    fireEvent.click(themeBtn);
+    expect(setThemeMode).toHaveBeenCalled();
+  });
 });

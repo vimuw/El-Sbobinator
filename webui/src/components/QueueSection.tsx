@@ -3,7 +3,7 @@ import { DndContext, closestCenter, useSensors, type DragEndEvent } from '@dnd-k
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { motion, AnimatePresence } from 'motion/react';
-import { FileAudio, MoreVertical, Play, Square, Trash2 } from 'lucide-react';
+import { FileAudio, MoreVertical, Play, Square, Trash2, Check, Zap } from 'lucide-react';
 import type { AppStatus, FileItem } from '../appState';
 import { shortModelName } from '../utils';
 import { QueueFileCard } from './QueueFileCard';
@@ -41,21 +41,6 @@ export const QueueSection = memo(function QueueSection({
   const sortableIds = useMemo(() => pendingFiles.map(f => f.id), [pendingFiles]);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const innerRef = useRef<HTMLDivElement>(null);
-  const [isOverflowing, setIsOverflowing] = useState(false);
-
-  useEffect(() => {
-    const outer = scrollRef.current;
-    const inner = innerRef.current;
-    if (!outer || !inner) return;
-    const ro = new ResizeObserver(() => {
-      setIsOverflowing(inner.offsetHeight > outer.clientHeight);
-    });
-    ro.observe(inner);
-    setIsOverflowing(inner.offsetHeight > outer.clientHeight);
-    return () => ro.disconnect();
-  }, [pendingFiles.length]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -106,36 +91,40 @@ export const QueueSection = memo(function QueueSection({
               </button>
               {menuOpen && (
                 <div
-                  role="menu"
+                role="menu"
+                style={{
+                  position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+                  minWidth: '210px', zIndex: 50,
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border-default)',
+                  borderRadius: '12px',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                  padding: '4px',
+                }}
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setAutoContinue(v => !v); }}
+                  title="Avvia automaticamente il file successivo al termine di ogni sbobinatura"
                   style={{
-                    position: 'absolute', top: 'calc(100% + 6px)', right: 0,
-                    minWidth: '200px', zIndex: 50,
-                    background: 'var(--bg-elevated)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: '12px',
-                    boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-                    padding: '4px',
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    width: '100%', padding: '8px 12px', borderRadius: '8px',
+                    border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '14px',
+                    background: autoContinue ? 'var(--success-subtle)' : 'transparent',
+                    color: autoContinue ? 'var(--success-text)' : 'var(--text-primary)',
+                    fontWeight: autoContinue ? 600 : 400,
+                    marginBottom: '2px',
+                    transition: 'background 140ms ease, color 140ms ease',
+                    whiteSpace: 'nowrap',
                   }}
+                  onMouseEnter={e => (e.currentTarget.style.background = autoContinue ? 'var(--success-subtle)' : 'var(--sidebar-active-bg)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = autoContinue ? 'var(--success-subtle)' : 'transparent')}
                 >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => { setAutoContinue(v => !v); }}
-                    title="Avvia automaticamente il file successivo al termine di ogni sbobinatura"
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '10px',
-                      width: '100%', padding: '8px 12px', borderRadius: '8px',
-                      border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '14px',
-                      background: autoContinue ? 'var(--success-subtle)' : 'transparent',
-                      color: autoContinue ? 'var(--success-text)' : 'var(--text-primary)',
-                      fontWeight: autoContinue ? 600 : 400,
-                      marginBottom: '2px',
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.background = autoContinue ? 'var(--success-subtle)' : 'var(--bg-hover, var(--border-subtle))')}
-                    onMouseLeave={e => (e.currentTarget.style.background = autoContinue ? 'var(--success-subtle)' : 'transparent')}
-                  >
-                    Coda automatica
-                  </button>
+                  <Zap className="w-4 h-4 shrink-0" style={{ color: autoContinue ? 'var(--success-text)' : 'var(--text-muted)' }} />
+                  <span className="grow whitespace-nowrap">Coda automatica</span>
+                  {autoContinue && <Check className="w-4 h-4 shrink-0" style={{ color: 'var(--success-text)' }} />}
+                </button>
                   {appState === 'idle' && pendingFiles.length > 0 && (
                     <button
                       type="button"
@@ -159,26 +148,23 @@ export const QueueSection = memo(function QueueSection({
             </div>
           </div>
 
-           <DndContext
+          <DndContext
             sensors={dndSensors}
             collisionDetection={closestCenter}
             onDragEnd={onDragEnd}
-            autoScroll={false}
+            autoScroll={{ threshold: { x: 0, y: 0.2 }, acceleration: 10 }}
             modifiers={[restrictToVerticalAxis, restrictToParentElement]}
           >
             <div
-              ref={scrollRef}
+              className="app-scroll overflow-y-auto overflow-x-hidden"
               style={{
-                maxHeight: 'calc(100vh - 350px - var(--console-height, 0px))',
-                overflowY: isOverflowing ? 'auto' : 'hidden',
-                overflowX: 'hidden',
-                scrollbarWidth: 'thin',
-                scrollbarColor: 'var(--border-strong) transparent',
+                maxHeight: 'clamp(260px, calc(100vh - 360px - var(--console-height, 0px)), 520px)',
                 padding: '4px 8px',
+                overscrollBehavior: 'contain',
               }}
             >
             <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-              <div ref={innerRef} className="space-y-3" style={{ margin: '-4px -8px' }}>
+              <div className="space-y-3" style={{ margin: '-4px -8px' }}>
               <AnimatePresence>
                 {pendingFiles.map((file) => {
                   const isActive = file.status === 'processing';

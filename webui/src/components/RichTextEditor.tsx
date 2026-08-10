@@ -27,6 +27,8 @@ import * as Y from 'yjs';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import { WebrtcProvider } from 'y-webrtc';
 import { MenuBar } from './EditorToolbar';
+import { getLastHighlightColor } from '../editorUtils';
+import { EditorBubbleMenu } from './EditorBubbleMenu';
 import { FindReplacePanel } from './EditorFindReplace';
 import { WordCount } from './EditorWordCount';
 import { readFileAsDataUrl } from '../utils';
@@ -537,8 +539,15 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
       if ((event.target as HTMLElement | null)?.closest('.gdocs-context-menu')) return;
       setContextMenu(null);
     };
+    const handleScroll = () => {
+      setContextMenu(null);
+    };
     document.addEventListener('pointerdown', handlePointerDown, true);
-    return () => document.removeEventListener('pointerdown', handlePointerDown, true);
+    window.addEventListener('scroll', handleScroll, true);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
   }, []);
 
   useEffect(() => {
@@ -559,11 +568,15 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
           setFindMode('replace');
         }
       }
+      if ((e.ctrlKey || e.metaKey) && e.altKey && (e.key === 'o' || e.key === 'O')) {
+        e.preventDefault();
+        onTocToggle?.();
+      }
       if (e.key === 'Escape' && findModeRef.current) { e.stopPropagation(); setFindMode(null); }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [onTocToggle]);
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -598,35 +611,23 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
 
       const viewportWidth = container.clientWidth;
       const contentWidth = outer.scrollWidth;
-      const leftColWidth = tocCol.offsetWidth;
-
-      if (isTocOpen && contentWidth > viewportWidth) {
-        const idealScrollLeft = contentWidth / 2 - viewportWidth / 2;
-        const maxScrollLeft = leftColWidth;
-        const targetScrollLeft = Math.max(0, Math.min(idealScrollLeft, maxScrollLeft));
-
-        container.scrollTo({
-          left: targetScrollLeft,
-          behavior,
-        });
-      } else {
-        container.scrollTo({
-          left: 0,
-          behavior,
-        });
+      if (contentWidth <= viewportWidth) {
+        container.scrollTo({ left: 0, behavior });
+        return;
       }
+
+      const paperWidth = 816;
+      const targetLeft = Math.max(0, (paperWidth / 2) - (viewportWidth / 2));
+      container.scrollTo({ left: targetLeft, behavior });
     };
 
-    adjustScroll('auto');
-
     let transitionActive = true;
-    const start = Date.now();
-    const duration = 300;
+    const startTime = performance.now();
+    const duration = 250;
 
     const poll = () => {
-      if (!transitionActive) return;
       adjustScroll('auto');
-      if (Date.now() - start < duration) {
+      if (transitionActive && performance.now() - startTime < duration) {
         requestAnimationFrame(poll);
       }
     };
@@ -645,6 +646,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
 
   return (
     <div className={`editor-shell flex flex-1 min-h-0 w-full flex-col relative ${isTocOpen ? 'editor-toc-open' : ''}`} onContextMenu={handleContextMenu}>
+      {editor && <EditorBubbleMenu editor={editor} isContextMenuOpen={Boolean(contextMenu)} />}
       <MenuBar
         editor={editor}
         onOpenImagePicker={() => imageInputRef.current?.click()}
@@ -661,6 +663,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
         className="editor-page-container flex-1 overflow-y-auto"
         style={{ overflowX: 'auto' }}
         onScroll={() => {
+          setContextMenu(null);
           if (scrollContainerRef.current) {
             onScrollTopChangeRef.current?.(scrollContainerRef.current.scrollTop);
           }
@@ -786,7 +789,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
             </button>
           )}
 
-          <div className="my-1 border-t border-slate-200 dark:border-zinc-700" />
+          <div className="my-1 border-t border-[var(--border-subtle)]" />
 
           <button className="gdocs-menu-item" onClick={() => editor?.chain().focus().toggleBold().run()}>
             <span className="flex items-center gap-2.5 font-medium">
@@ -812,9 +815,9 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
             <kbd className="gdocs-kbd">Ctrl+U</kbd>
           </button>
 
-          <button className="gdocs-menu-item" onClick={() => editor?.chain().focus().toggleHighlight({ color: '#fef08a' }).run()}>
+          <button className="gdocs-menu-item" onClick={() => editor?.chain().focus().toggleHighlight({ color: getLastHighlightColor() }).run()}>
             <span className="flex items-center gap-2.5 font-medium">
-              <Highlighter className="h-4 w-4 text-yellow-500 shrink-0" />
+              <Highlighter className="h-4 w-4 shrink-0" style={{ color: getLastHighlightColor() }} />
               <span>Evidenzia</span>
             </span>
           </button>
@@ -830,7 +833,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
             </span>
           </button>
 
-          <div className="my-1 border-t border-slate-200 dark:border-zinc-700" />
+          <div className="my-1 border-t border-[var(--border-subtle)]" />
 
           <button className="gdocs-menu-item" onClick={() => {
             const url = window.prompt('Inserisci URL del link:');

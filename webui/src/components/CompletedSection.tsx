@@ -1,4 +1,4 @@
-import { memo, useState, useRef, useEffect } from 'react';
+import { memo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle, Search, Trash2 } from 'lucide-react';
 import type { AppStatus, FileItem } from '../appState';
@@ -19,25 +19,10 @@ interface CompletedSectionProps {
 
 export const CompletedSection = memo(function CompletedSection({ doneFiles, appState, onRemove, onPreview, onOpenFile, onClearAll, onRetryFailedRevisionBlocks, sessionFolderMap }: CompletedSectionProps) {
   const [completedSearch, setCompletedSearch] = useState('');
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const innerRef = useRef<HTMLDivElement>(null);
-  const [isOverflowing, setIsOverflowing] = useState(false);
 
   const filteredDoneFiles = completedSearch.trim()
     ? doneFiles.filter(f => f.name.toLowerCase().includes(completedSearch.toLowerCase()))
     : doneFiles;
-
-  useEffect(() => {
-    const outer = scrollRef.current;
-    const inner = innerRef.current;
-    if (!outer || !inner) return;
-    const ro = new ResizeObserver(() => {
-      setIsOverflowing(inner.offsetHeight > outer.clientHeight);
-    });
-    ro.observe(inner);
-    setIsOverflowing(inner.offsetHeight > outer.clientHeight);
-    return () => ro.disconnect();
-  }, [filteredDoneFiles.length]);
 
   const warningCount = doneFiles.filter(f => f.completionStatus === 'completed_with_warnings' || (f.revisionFailedBlocks?.length ?? 0) > 0).length;
   const fullyCompletedCount = doneFiles.length - warningCount;
@@ -90,17 +75,14 @@ export const CompletedSection = memo(function CompletedSection({ doneFiles, appS
           </div>
 
           <div
-            ref={scrollRef}
+            className="app-scroll overflow-y-auto overflow-x-hidden"
             style={{
-              maxHeight: 'calc(100vh - 350px - var(--console-height, 0px))',
-              overflowY: isOverflowing ? 'auto' : 'hidden',
-              overflowX: 'hidden',
-              scrollbarWidth: 'thin',
-              scrollbarColor: 'var(--border-strong) transparent',
+              maxHeight: 'clamp(260px, calc(100vh - 360px - var(--console-height, 0px)), 520px)',
               padding: '4px 8px',
+              overscrollBehavior: 'contain',
             }}
           >
-            <div ref={innerRef} className="space-y-3" style={{ margin: '-4px -8px' }}>
+            <div className="space-y-3" style={{ margin: '-4px -8px' }}>
               <AnimatePresence>
                 {filteredDoneFiles.map(file => (
                   <CompletedFileCard

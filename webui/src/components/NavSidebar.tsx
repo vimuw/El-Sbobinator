@@ -4,8 +4,7 @@ import { Archive, Bell, Moon, Settings, Sun, Terminal } from 'lucide-react';
 import type { AppStatus } from '../appState';
 export type ActivePage = 'queue' | 'archive';
 
-const SIDEBAR_EXPANDED_W = 216;
-const SIDEBAR_COLLAPSED_W = 56;
+const SIDEBAR_COLLAPSED_W = 64;
 
 interface NavSidebarProps {
   activePage: ActivePage;
@@ -49,9 +48,6 @@ export const NavSidebar = memo(function NavSidebar({
   setIsNotificationsOpen,
   shakeBell,
 }: NavSidebarProps) {
-  const [hovered, setHovered] = useState(false);
-  const collapsed = !hovered && !isNotificationsOpen;
-
   const apiStatusColor = !apiReady
     ? (bridgeDelayed ? 'var(--error-text)' : 'var(--warning-text)')
     : !hasApiKey ? 'var(--text-muted)'
@@ -65,14 +61,10 @@ export const NavSidebar = memo(function NavSidebar({
     : 'API pronta';
 
   return (
-    <motion.nav
+    <nav
       className="app-sidebar flex flex-col"
-      animate={{ width: collapsed ? SIDEBAR_COLLAPSED_W : SIDEBAR_EXPANDED_W }}
-      initial={false}
-      transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       style={{
+        width: SIDEBAR_COLLAPSED_W,
         height: '100vh',
         position: 'sticky',
         top: 0,
@@ -80,21 +72,19 @@ export const NavSidebar = memo(function NavSidebar({
         borderRight: '1px solid var(--border-subtle)',
         flexShrink: 0,
         zIndex: 30,
-        overflowY: 'auto',
-        overflowX: 'hidden',
+        overflow: 'visible',
       }}
     >
-
       {/* Logo */}
-      <div className="flex justify-start pt-3 pb-1" style={{ paddingLeft: 12 }}>
-        <img src="/icon.png" alt="El Sbobinator" style={{ width: 32, height: 32, borderRadius: 8 }} />
+      <div className="flex justify-center pt-3 pb-1">
+        <img src="/icon.png" alt="El Sbobinator" style={{ width: 36, height: 36, borderRadius: 9 }} />
       </div>
 
       {/* Navigation items */}
-      <div className="flex flex-col gap-0.5 px-2 pt-2 pb-2 flex-1">
+      <div className="flex flex-col items-center gap-1.5 px-2 pt-2 pb-2 flex-1">
         <NavItem
           icon={
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2L2 7l10 5 10-5-10-5z"/>
               <path d="M2 17l10 5 10-5"/>
               <path d="M2 12l10 5 10-5"/>
@@ -104,68 +94,44 @@ export const NavSidebar = memo(function NavSidebar({
           active={activePage === 'queue'}
           onClick={() => setActivePage('queue')}
           isProcessing={appState === 'processing'}
-          collapsed={collapsed}
         />
         <NavItem
-          icon={<Archive size={20} />}
+          icon={<Archive size={22} />}
           label="Archivio"
           active={activePage === 'archive'}
           onClick={() => setActivePage('archive')}
-          collapsed={collapsed}
         />
       </div>
 
       {/* Utility buttons */}
-      <div className="px-2 pb-4 flex flex-col gap-0.5" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 10 }}>
+      <div className="px-2 pb-4 flex flex-col items-center gap-1.5" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 10 }}>
         {/* API status */}
-        <SidebarTooltip label={apiStatusLabel} disabled={!collapsed}>
+        <SidebarTooltip label={apiStatusLabel}>
           <div
             aria-label={apiStatusLabel}
-            className="flex items-center gap-2 rounded-md text-xs font-medium"
-            style={{
-              color: apiStatusColor,
-              padding: '0 10px',
-              height: 30,
-              justifyContent: 'flex-start',
-            }}
+            className="flex items-center justify-center rounded-lg text-xs font-medium w-11 h-9 cursor-default"
+            style={{ color: apiStatusColor }}
           >
-            <span className="shrink-0 inline-flex items-center justify-center" style={{ width: 18, height: 18, lineHeight: 0 }}>
+            <span className="shrink-0 inline-flex items-center justify-center" style={{ width: 20, height: 20, lineHeight: 0 }}>
               <span
-                className={`inline-flex h-1.5 w-1.5 rounded-full ${appState === 'processing' ? 'animate-pulse' : ''}`}
+                className={`inline-flex h-2 w-2 rounded-full ${appState === 'processing' ? 'animate-pulse' : ''}`}
                 style={{ background: apiStatusColor }}
               />
             </span>
-            <AnimatePresence initial={false}>
-              {!collapsed && (
-                <motion.span
-                  key="api-label"
-                  className="truncate"
-                  initial={{ opacity: 0, width: 0 }}
-                  animate={{ opacity: 1, width: 'auto' }}
-                  exit={{ opacity: 0, width: 0 }}
-                  transition={{ duration: 0.15 }}
-                  style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}
-                >
-                  {apiStatusLabel}
-                </motion.span>
-              )}
-            </AnimatePresence>
           </div>
         </SidebarTooltip>
 
         <UtilityButton
-          icon={themeMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          icon={themeMode === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
           label={themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro'}
           active={false}
-          collapsed={collapsed}
           onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
         />
         <UtilityButton
-          icon={<Terminal size={18} />}
+          icon={<Terminal size={20} />}
           label="Console"
           ariaLabel="Mostra console"
           active={showConsole}
-          collapsed={collapsed}
           onClick={() => {
             const next = !showConsole;
             setShowConsole(next);
@@ -181,9 +147,9 @@ export const NavSidebar = memo(function NavSidebar({
                 animate={shakeBell ? 'shake' : 'idle'}
                 style={{ display: 'inline-flex' }}
               >
-                <Bell size={18} />
+                <Bell size={20} />
               </motion.span>
-              {unreadNotificationsCount > 0 && collapsed && (
+              {unreadNotificationsCount > 0 && (
                 <span style={{ position: 'absolute', top: -3, right: -3, display: 'inline-flex' }}>
                   <span className="animate-ping" style={{ position: 'absolute', width: 8, height: 8, borderRadius: '50%', background: '#b91c1c', opacity: 0.6 }} />
                   <span style={{ position: 'relative', width: 8, height: 8, borderRadius: '50%', background: '#b91c1c', border: '1.5px solid var(--sidebar-bg)' }} />
@@ -191,29 +157,15 @@ export const NavSidebar = memo(function NavSidebar({
               )}
             </span>
           }
-          label="Notifiche"
+          label={unreadNotificationsCount > 0 ? `Notifiche (${unreadNotificationsCount})` : 'Notifiche'}
           ariaLabel="Apri notifiche"
           active={isNotificationsOpen}
-          collapsed={collapsed}
           onClick={() => setIsNotificationsOpen(prev => !prev)}
-          rightElement={
-            unreadNotificationsCount > 0 ? (
-              <span
-                className="px-1.5 py-0.5 rounded-full text-[9px] font-bold text-white shrink-0"
-                style={{
-                  background: '#b91c1c',
-                  lineHeight: 1,
-                }}
-              >
-                {unreadNotificationsCount}
-              </span>
-            ) : undefined
-          }
         />
         <UtilityButton
           icon={
             <span style={{ position: 'relative', display: 'inline-flex' }}>
-              <Settings size={18} />
+              <Settings size={20} />
               {hasPendingUpdate && (
                 <span style={{ position: 'absolute', top: -3, right: -3, display: 'inline-flex' }}>
                   <span className="animate-ping" style={{ position: 'absolute', width: 8, height: 8, borderRadius: '50%', background: 'var(--warning-text)', opacity: 0.6 }} />
@@ -225,26 +177,25 @@ export const NavSidebar = memo(function NavSidebar({
           label="Impostazioni"
           ariaLabel="Apri impostazioni"
           active={false}
-          collapsed={collapsed}
           onClick={() => setIsSettingsOpen(true)}
         />
       </div>
-    </motion.nav>
+    </nav>
   );
 });
 
-function SidebarTooltip({ label, disabled, children }: { label: string; disabled: boolean; children: ReactNode }) {
+function SidebarTooltip({ label, children }: { label: string; children: ReactNode }) {
   const [visible, setVisible] = useState(false);
   return (
     <span
       className="sidebar-tooltip-anchor"
-      onMouseEnter={() => !disabled && setVisible(true)}
+      onMouseEnter={() => setVisible(true)}
       onMouseLeave={() => setVisible(false)}
       style={{ position: 'relative', display: 'block' }}
     >
       {children}
       <AnimatePresence>
-        {visible && !disabled && (
+        {visible && (
           <motion.span
             className="sidebar-tooltip"
             initial={{ opacity: 0, x: -4 }}
@@ -261,36 +212,30 @@ function SidebarTooltip({ label, disabled, children }: { label: string; disabled
 }
 
 function NavItem({
-  icon, label, active, onClick, isProcessing, collapsed, ariaLabel,
+  icon, label, active, onClick, isProcessing, ariaLabel,
 }: {
   icon: ReactNode;
   label: string;
   active: boolean;
   onClick: () => void;
   isProcessing?: boolean;
-  collapsed: boolean;
   ariaLabel?: string;
 }) {
   return (
-    <SidebarTooltip label={label} disabled={!collapsed}>
+    <SidebarTooltip label={label}>
       <button
         onClick={onClick}
         aria-label={ariaLabel || label}
-        className="sidebar-nav-item w-full flex items-center rounded-md text-sm font-medium text-left"
+        className="sidebar-nav-item w-11 h-10 flex items-center justify-center rounded-lg"
         style={{
           background: active ? 'var(--sidebar-active-bg)' : 'transparent',
           color: active ? 'var(--sidebar-active-text)' : 'var(--text-secondary)',
           border: 'none',
           cursor: 'pointer',
-          fontWeight: active ? 600 : 500,
-          gap: collapsed ? 0 : 8,
-          padding: '0 10px',
-          height: 32,
-          justifyContent: 'flex-start',
           boxShadow: 'none',
         }}
       >
-        <span className="shrink-0 inline-flex items-center" style={{ position: 'relative', color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>
+        <span className="inline-flex items-center justify-center" style={{ position: 'relative', color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>
           {icon}
           {isProcessing && (
             <span style={{ position: 'absolute', top: -3, right: -3, display: 'inline-flex' }}>
@@ -299,76 +244,39 @@ function NavItem({
             </span>
           )}
         </span>
-        <AnimatePresence initial={false}>
-          {!collapsed && (
-            <motion.span
-              key="nav-label"
-              className="truncate"
-              initial={{ opacity: 0, width: 0 }}
-              animate={{ opacity: 1, width: 'auto' }}
-              exit={{ opacity: 0, width: 0 }}
-              transition={{ duration: 0.15 }}
-              style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}
-            >
-              {label}
-            </motion.span>
-          )}
-        </AnimatePresence>
       </button>
     </SidebarTooltip>
   );
 }
 
 function UtilityButton({
-  icon, label, ariaLabel, active, onClick, collapsed, disabled, rightElement,
+  icon, label, ariaLabel, active, onClick, disabled,
 }: {
   icon: ReactNode;
   label: string;
   ariaLabel?: string;
   active: boolean;
   onClick: () => void;
-  collapsed: boolean;
   disabled?: boolean;
-  rightElement?: ReactNode;
 }) {
   return (
-    <SidebarTooltip label={disabled ? 'Console non disponibile' : label} disabled={!collapsed}>
+    <SidebarTooltip label={disabled ? 'Console non disponibile' : label}>
       <button
         onClick={onClick}
-        aria-label={ariaLabel}
+        aria-label={ariaLabel || label}
         disabled={disabled}
-        className="sidebar-nav-item w-full flex items-center rounded-md text-xs font-medium text-left"
+        className="sidebar-nav-item w-11 h-9 flex items-center justify-center rounded-lg"
         style={{
           background: active ? 'var(--sidebar-active-bg)' : 'transparent',
           color: disabled ? 'var(--text-muted)' : (active ? 'var(--sidebar-active-text)' : 'var(--text-secondary)'),
           border: 'none',
           cursor: disabled ? 'not-allowed' : 'pointer',
           opacity: disabled ? 0.4 : 1,
-          gap: collapsed ? 0 : 8,
-          padding: '0 10px',
-          height: 30,
-          justifyContent: 'space-between',
         }}
       >
-        <div className="flex items-center" style={{ gap: collapsed ? 0 : 8, flex: 1, minWidth: 0 }}>
-          <span className="shrink-0 inline-flex items-center" style={{ color: disabled ? 'var(--text-muted)' : (active ? 'var(--sidebar-active-text)' : 'var(--text-muted)'), lineHeight: 0 }}>{icon}</span>
-          <AnimatePresence initial={false}>
-            {!collapsed && (
-              <motion.span
-                key="util-label"
-                className="truncate"
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: 'auto' }}
-                exit={{ opacity: 0, width: 0 }}
-                transition={{ duration: 0.15 }}
-                style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}
-              >
-                {label}
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </div>
-        {!collapsed && rightElement}
+        <span className="inline-flex items-center justify-center" style={{ color: disabled ? 'var(--text-muted)' : (active ? 'var(--sidebar-active-text)' : 'var(--text-muted)'), lineHeight: 0 }}>
+          {icon}
+        </span>
       </button>
     </SidebarTooltip>
   );

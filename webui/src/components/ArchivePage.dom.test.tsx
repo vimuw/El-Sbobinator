@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { ArchivePage } from './ArchivePage';
@@ -64,5 +64,28 @@ describe('ArchivePage', () => {
     };
     renderArchive({ sessions: [session] });
     expect(screen.getByText(/Aperto/)).toBeTruthy();
+  });
+
+  it('expands the unified add lesson panel and renders icon-only add button', () => {
+    const s1 = makeSession('s1', 'Lezione In Cartella');
+    const s2 = makeSession('s2', 'Lezione Disponibile');
+    const folder: ArchiveFolder = {
+      id: 'f1',
+      name: 'Corso A',
+      color: '#4D96FF',
+      session_dirs: ['/sessions/s1'],
+    };
+
+    renderArchive({ sessions: [s1, s2], folders: [folder] });
+
+    fireEvent.click(screen.getAllByText('Corso A')[0]);
+
+    const toggleButton = screen.getByText('Aggiungi lezione').closest('button');
+    expect(toggleButton).toBeTruthy();
+    fireEvent.click(toggleButton!);
+
+    const addButton = screen.getByTitle('Aggiungi alla cartella');
+    expect(addButton).toBeTruthy();
+    expect(addButton.textContent).not.toContain('Aggiungi');
   });
 });

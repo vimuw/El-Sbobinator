@@ -139,7 +139,7 @@ export function KebabMenu({ items, align = 'right', buttonClassName }: KebabMenu
                 border: '1px solid var(--border-default)',
                 borderRadius: 12,
                 boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
-                minWidth: 160,
+                minWidth: 210,
                 padding: 4,
               }}
               onClick={e => e.stopPropagation()}
@@ -153,7 +153,7 @@ export function KebabMenu({ items, align = 'right', buttonClassName }: KebabMenu
                     key={i}
                     disabled={item.disabled}
                     onClick={e => { e.stopPropagation(); item.onClick(); setOpen(false); }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left bg-transparent transition-colors"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left whitespace-nowrap bg-transparent transition-colors"
                     style={{
                       border: 'none',
                       borderRadius: 8,

@@ -1,7 +1,8 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { type Editor as TiptapEditor } from '@tiptap/core';
-import { ChevronDown, Link2, Link2Off, Calculator, Video } from 'lucide-react';
+import { ChevronDown, Link2, Link2Off, Calculator, Video, Plus, AlignLeft, AlignCenter, AlignRight, AlignJustify, ImagePlus, Minus } from 'lucide-react';
+import { getLastHighlightColor, setLastHighlightColor } from '../editorUtils';
 
 const COLOR_PALETTE: string[][] = [
   ['#000000', '#434343', '#666666', '#999999', '#b7b7b7', '#cccccc', '#d9d9d9', '#ffffff'],
@@ -142,12 +143,14 @@ export const ColorPickerButton = ({ editor }: { editor: TiptapEditor }) => {
   );
 };
 
+
 export const HighlightPickerButton = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
   const currentColor: string | undefined = editor.getAttributes('highlight').color;
+  const activeColor = currentColor ?? getLastHighlightColor();
 
   const toggleOpen = () => {
     if (!isOpen && buttonRef.current) {
@@ -181,7 +184,7 @@ export const HighlightPickerButton = ({ editor }: { editor: TiptapEditor }) => {
           <span style={{ fontWeight: 700, fontSize: '0.8rem', lineHeight: 1 }}>H</span>
           <span
             className="color-indicator"
-            style={{ background: currentColor ?? '#fef08a', opacity: 0.9 }}
+            style={{ background: activeColor, opacity: 0.9 }}
           />
         </span>
         <ChevronDown style={{ width: 9, height: 9, opacity: 0.55, flexShrink: 0 }} />
@@ -202,6 +205,7 @@ export const HighlightPickerButton = ({ editor }: { editor: TiptapEditor }) => {
                   if (color === '#ffffff') {
                     editor.chain().focus().unsetHighlight().run();
                   } else {
+                    setLastHighlightColor(color);
                     editor.chain().focus().toggleHighlight({ color }).run();
                   }
                   setIsOpen(false);
@@ -428,7 +432,7 @@ export const InsertYoutubeButton = ({ editor }: { editor: TiptapEditor }) => {
   const handleInsert = () => {
     const url = window.prompt('Inserisci URL del video YouTube:');
     if (url && url.trim()) {
-      (editor.chain().focus() as any).setYoutubeVideo({ src: url.trim() }).run();
+      (editor.chain().focus() as unknown as { setYoutubeVideo: (options: { src: string }) => { run: () => boolean } }).setYoutubeVideo({ src: url.trim() }).run();
     }
   };
 
@@ -441,5 +445,197 @@ export const InsertYoutubeButton = ({ editor }: { editor: TiptapEditor }) => {
     >
       <Video className="h-4 w-4" />
     </button>
+  );
+};
+
+export const InsertDropdownButton = ({
+  editor,
+  onOpenImagePicker,
+}: {
+  editor: TiptapEditor;
+  onOpenImagePicker: () => void;
+}) => {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
+  const panelRef = React.useRef<HTMLDivElement>(null);
+
+  const toggleOpen = () => {
+    if (!isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setPanelPos({ top: rect.bottom + 6, left: rect.left });
+    }
+    setIsOpen(prev => !prev);
+  };
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (buttonRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setIsOpen(false);
+    };
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
+  }, [isOpen]);
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={toggleOpen}
+        className={`editor-button insert-dropdown-btn${isOpen ? ' is-active' : ''}`}
+        title="Inserisci elemento"
+      >
+        <Plus className="h-4 w-4" />
+        <span className="text-xs font-medium ml-1">Inserisci</span>
+        <ChevronDown style={{ width: 10, height: 10, opacity: 0.6, marginLeft: 2 }} />
+      </button>
+      {isOpen && createPortal(
+        <div
+          ref={panelRef}
+          className="editor-dropdown-panel"
+          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 9999 }}
+        >
+          <button
+            type="button"
+            className="editor-dropdown-item"
+            onClick={() => { setIsOpen(false); onOpenImagePicker(); }}
+          >
+            <ImagePlus className="h-4 w-4" />
+            <span>Immagine</span>
+          </button>
+          <button
+            type="button"
+            className="editor-dropdown-item"
+            onClick={() => {
+              setIsOpen(false);
+              const url = window.prompt('Inserisci URL del video YouTube:');
+              if (url && url.trim()) {
+                (editor.chain().focus() as unknown as { setYoutubeVideo: (options: { src: string }) => { run: () => boolean } }).setYoutubeVideo({ src: url.trim() }).run();
+              }
+            }}
+          >
+            <Video className="h-4 w-4" />
+            <span>Video YouTube</span>
+          </button>
+          <button
+            type="button"
+            className="editor-dropdown-item"
+            onClick={() => {
+              setIsOpen(false);
+              const latex = window.prompt('Inserisci formula LaTeX:', 'E=mc^2');
+              if (latex && latex.trim()) {
+                editor.chain().focus().insertContent({ type: 'mathInline', attrs: { latex: latex.trim() } }).run();
+              }
+            }}
+          >
+            <Calculator className="h-4 w-4" />
+            <span>Formula Matematica (LaTeX)</span>
+          </button>
+          <button
+            type="button"
+            className="editor-dropdown-item"
+            onClick={() => {
+              setIsOpen(false);
+              editor.chain().focus().setHorizontalRule().run();
+            }}
+          >
+            <Minus className="h-4 w-4" />
+            <span>Linea divisoria</span>
+          </button>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+};
+
+export const AlignDropdownButton = ({ editor }: { editor: TiptapEditor }) => {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
+  const panelRef = React.useRef<HTMLDivElement>(null);
+
+  const isCenter = editor.isActive({ textAlign: 'center' });
+  const isRight = editor.isActive({ textAlign: 'right' });
+  const isJustify = editor.isActive({ textAlign: 'justify' });
+
+  const toggleOpen = () => {
+    if (!isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setPanelPos({ top: rect.bottom + 6, left: rect.left });
+    }
+    setIsOpen(prev => !prev);
+  };
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (buttonRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setIsOpen(false);
+    };
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
+  }, [isOpen]);
+
+  const CurrentIcon = isCenter ? AlignCenter : isRight ? AlignRight : isJustify ? AlignJustify : AlignLeft;
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={toggleOpen}
+        className={`editor-button align-dropdown-btn${isOpen ? ' is-active' : ''}`}
+        title="Allineamento testo"
+      >
+        <CurrentIcon className="h-4 w-4" />
+        <ChevronDown style={{ width: 9, height: 9, opacity: 0.6, marginLeft: 2 }} />
+      </button>
+      {isOpen && createPortal(
+        <div
+          ref={panelRef}
+          className="editor-dropdown-panel"
+          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 9999 }}
+        >
+          <button
+            type="button"
+            className={`editor-dropdown-item${!isCenter && !isRight && !isJustify ? ' is-active' : ''}`}
+            onClick={() => { setIsOpen(false); editor.chain().focus().setTextAlign('left').run(); }}
+          >
+            <AlignLeft className="h-4 w-4" />
+            <span>A sinistra</span>
+          </button>
+          <button
+            type="button"
+            className={`editor-dropdown-item${isCenter ? ' is-active' : ''}`}
+            onClick={() => { setIsOpen(false); editor.chain().focus().setTextAlign('center').run(); }}
+          >
+            <AlignCenter className="h-4 w-4" />
+            <span>Al centro</span>
+          </button>
+          <button
+            type="button"
+            className={`editor-dropdown-item${isRight ? ' is-active' : ''}`}
+            onClick={() => { setIsOpen(false); editor.chain().focus().setTextAlign('right').run(); }}
+          >
+            <AlignRight className="h-4 w-4" />
+            <span>A destra</span>
+          </button>
+          <button
+            type="button"
+            className={`editor-dropdown-item${isJustify ? ' is-active' : ''}`}
+            onClick={() => { setIsOpen(false); editor.chain().focus().setTextAlign('justify').run(); }}
+          >
+            <AlignJustify className="h-4 w-4" />
+            <span>Giustificato</span>
+          </button>
+        </div>,
+        document.body
+      )}
+    </>
   );
 };

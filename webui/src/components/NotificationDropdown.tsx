@@ -195,9 +195,9 @@ export function NotificationDropdown({
   onDelete,
   onClearAll: _,
   align = 'right',
-  leftOffset = 224,
+  leftOffset = 72,
   valign = 'top',
-  bottomOffset = 48,
+  bottomOffset = 16,
 }: NotificationDropdownProps) {
   const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all');
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -208,6 +208,10 @@ export function NotificationDropdown({
       if (activeTab === 'unread') return !n.read;
       return true;
     });
+
+  const maxHeightStyle = valign === 'bottom'
+    ? `min(480px, calc(100vh - ${bottomOffset + 16}px))`
+    : 'min(480px, calc(100vh - 88px))';
 
   return (
     <>
@@ -225,10 +229,11 @@ export function NotificationDropdown({
 
       {/* Dropdown Container */}
       <div
-        className="fixed z-50 w-96 max-h-[480px] rounded-2xl border flex flex-col overflow-hidden shadow-strong backdrop-blur-md"
+        className="fixed z-50 w-96 rounded-2xl border flex flex-col overflow-hidden shadow-strong backdrop-blur-md"
         style={{
           background: 'var(--bg-elevated)',
           borderColor: 'var(--border-subtle)',
+          maxHeight: maxHeightStyle,
           top: valign === 'top' ? '72px' : 'auto',
           bottom: valign === 'bottom' ? `${bottomOffset}px` : 'auto',
           right: align === 'right' ? '24px' : 'auto',
@@ -334,7 +339,7 @@ export function NotificationDropdown({
         </div>
 
         {/* Content list */}
-        <div className="flex-1 overflow-y-auto flex flex-col scrollbar-thin">
+        <div className="flex-1 overflow-y-auto flex flex-col scrollbar-thin py-1 pb-2">
           {filteredNotifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2.5 py-12 text-center h-full">
               <div
