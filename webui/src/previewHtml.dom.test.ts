@@ -28,14 +28,14 @@ describe('normalizePreviewHtmlContent', () => {
   });
 
   it('strips disallowed style properties', () => {
-    const html = '<p style="margin: 10px; padding: 5px;">text</p>';
+    const html = '<p style="font-size: 14px; padding: 5px;">text</p>';
     const result = normalizePreviewHtmlContent(html);
-    expect(result).not.toContain('margin');
+    expect(result).toContain('font-size');
     expect(result).not.toContain('padding');
   });
 
   it('removes style attribute entirely when no allowed props remain', () => {
-    const html = '<p style="margin: 10px;">text</p>';
+    const html = '<p style="padding: 10px;">text</p>';
     const result = normalizePreviewHtmlContent(html);
     expect(result).not.toContain('style=');
   });
@@ -70,10 +70,17 @@ describe('normalizePreviewHtmlContent', () => {
     expect(result).toContain('text');
   });
 
+  it('preserves align="center" attribute on editor image containers and images', () => {
+    const html = '<div data-editor-image align="center"><img src="img.png" align="center" /></div>';
+    const result = normalizePreviewHtmlContent(html);
+    expect(result).toContain('align="center"');
+  });
+
   it('exports ALLOWED_STYLE_PROPS with expected members', () => {
     expect(ALLOWED_STYLE_PROPS.has('color')).toBe(true);
     expect(ALLOWED_STYLE_PROPS.has('font-size')).toBe(true);
-    expect(ALLOWED_STYLE_PROPS.has('margin')).toBe(false);
+    expect(ALLOWED_STYLE_PROPS.has('margin')).toBe(true);
+    expect(ALLOWED_STYLE_PROPS.has('padding')).toBe(false);
   });
 
   it('exports EDITOR_IMAGE_ALLOWED_DATA_ATTRS with expected members', () => {

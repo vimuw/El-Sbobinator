@@ -25,8 +25,7 @@ const HIGHLIGHT_COLORS = [
 ];
 
 const FONT_FAMILIES = [
-  { label: 'Predefinito', value: '' },
-  { label: 'Arial', value: 'Arial, sans-serif' },
+  { label: 'Arial', value: '' },
   { label: 'Times New Roman', value: '"Times New Roman", serif' },
   { label: 'Georgia', value: 'Georgia, serif' },
   { label: 'Courier New', value: '"Courier New", monospace' },
@@ -233,7 +232,9 @@ export const HighlightPickerButton = ({ editor }: { editor: TiptapEditor }) => {
 };
 
 export const FontFamilySelect = ({ editor }: { editor: TiptapEditor }) => {
-  const currentFamily = editor.getAttributes('textStyle').fontFamily ?? '';
+  const rawFamily = editor.getAttributes('textStyle').fontFamily ?? '';
+  const currentFamily = (rawFamily === '' || rawFamily === 'Arial, sans-serif' || rawFamily === 'Arial') ? '' : rawFamily;
+
   return (
     <div className="editor-select-wrap">
       <select

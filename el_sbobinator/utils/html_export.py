@@ -54,9 +54,10 @@ _ALLOWED_ATTRS: dict[str, set[str]] = {
         "data-layout",
         "data-align",
         "data-width",
+        "align",
     },
     "a": {"href", "title", "target"},
-    "img": {"src", "alt", "width", "height"},
+    "img": {"src", "alt", "width", "height", "align"},
     "th": {"colspan", "rowspan"},
     "td": {"colspan", "rowspan"},
 }

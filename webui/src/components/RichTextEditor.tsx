@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { type Editor as TiptapEditor } from '@tiptap/core';
+import { NodeSelection } from '@tiptap/pm/state';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Color } from '@tiptap/extension-color';
@@ -395,14 +396,16 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
           }
 
           const tr = view.state.tr;
-
+          let selPos = 0;
           if (isTargetEmptyParagraph && targetPStart !== undefined && targetPEnd !== undefined) {
             if (dragFrom < targetPStart) {
               tr.replaceWith(targetPStart, targetPEnd, dragged.node);
               tr.delete(dragFrom, dragFrom + dragSize);
+              selPos = Math.max(0, targetPStart - dragSize);
             } else {
               tr.delete(dragFrom, dragTo);
               tr.replaceWith(targetPStart, targetPEnd, dragged.node);
+              selPos = targetPStart;
             }
           } else {
             tr.delete(dragFrom, dragTo);
@@ -411,9 +414,17 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
               finalInsertPos = Math.max(0, insertPos - dragSize);
             }
             tr.insert(finalInsertPos, dragged.node);
+            selPos = finalInsertPos;
+          }
+
+          if (typeof selPos === 'number' && selPos >= 0 && selPos < tr.doc.content.size) {
+            try {
+              tr.setSelection(NodeSelection.create(tr.doc, selPos));
+            } catch (_) {}
           }
 
           view.dispatch(tr);
+          view.focus();
           return true;
         }
 

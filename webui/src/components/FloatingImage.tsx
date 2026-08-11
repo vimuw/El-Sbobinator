@@ -18,14 +18,17 @@ const buildWrapperReactStyle = (width: number): React.CSSProperties => ({
   position: 'relative',
   userSelect: 'none',
   margin: '14px auto',
+  marginLeft: 'auto',
+  marginRight: 'auto',
   display: 'block',
   clear: 'both',
+  textAlign: 'center',
 });
 
 const buildWrapperStyle = (width: number) =>
-  `width:${width}%;max-width:100%;position:relative;float:none;margin:14px auto;display:block;clear:both;`;
+  `width:${width}%;max-width:100%;position:relative;float:none;margin:14px auto;margin-left:auto;margin-right:auto;display:block;clear:both;text-align:center;`;
 
-const buildImageStyle = () => 'display:block;width:100%;height:auto;margin:0;padding:0;';
+const buildImageStyle = () => 'display:block;width:100%;height:auto;margin:0 auto;margin-left:auto;margin-right:auto;padding:0;text-align:center;';
 
 const extractImageAttrs = (element: HTMLElement) => {
   const img = element.tagName.toLowerCase() === 'img' ? (element as HTMLImageElement) : element.querySelector('img');
@@ -53,8 +56,11 @@ function FloatingImageView({ node, updateAttributes, selected, getPos, editor }:
     if ((e.target as HTMLElement)?.closest('.gdocs-handle')) return;
     if (typeof getPos === 'function') {
       const pos = getPos();
-      if (typeof pos === 'number') {
-        editor?.chain().focus().setNodeSelection(pos).run();
+      if (typeof pos === 'number' && pos >= 0) {
+        const { selection } = editor?.state || {};
+        if (!(selection instanceof NodeSelection && selection.from === pos)) {
+          editor?.chain().focus().setNodeSelection(pos).run();
+        }
       }
     }
   };
@@ -66,6 +72,10 @@ function FloatingImageView({ node, updateAttributes, selected, getPos, editor }:
   ) => {
     event.preventDefault();
     event.stopPropagation();
+
+    const handleEl = event.currentTarget;
+    const pointerId = event.pointerId;
+    handleEl.setPointerCapture?.(pointerId);
 
     const startX = event.clientX;
     const startY = event.clientY;
@@ -103,6 +113,7 @@ function FloatingImageView({ node, updateAttributes, selected, getPos, editor }:
     };
 
     const stop = () => {
+      handleEl.releasePointerCapture?.(pointerId);
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', stop);
       window.removeEventListener('pointercancel', stop);
@@ -121,6 +132,7 @@ function FloatingImageView({ node, updateAttributes, selected, getPos, editor }:
       data-editor-image="true"
       data-width={width}
       data-align="center"
+      align="center"
       data-caption={caption}
       style={buildWrapperReactStyle(width)}
       onClick={selectImageNode}
@@ -213,6 +225,7 @@ export const FloatingImage = Node.create({
           src: HTMLAttributes.src,
           alt: HTMLAttributes.alt || '',
           title: HTMLAttributes.title || '',
+          align: 'center',
           style: buildImageStyle(),
         },
       ],
@@ -229,6 +242,7 @@ export const FloatingImage = Node.create({
         'data-width': String(width),
         'data-align': 'center',
         'data-caption': caption,
+        align: 'center',
         style: buildWrapperStyle(width),
       }),
       ...children,
@@ -240,9 +254,62 @@ export const FloatingImage = Node.create({
       new Plugin({
         key: new PluginKey('floatingImageClick'),
         props: {
+          handleDOMEvents: {
+            mousedown(view, event) {
+              const target = event.target as HTMLElement | null;
+              if (!target) return false;
+
+              if (target.closest('.gdocs-handle') || target.closest('.gdocs-image-pill-toolbar')) {
+                return false;
+              }
+
+              const imageNodeEl = target.closest('.editor-image-node') as HTMLElement | null;
+              if (!imageNodeEl) return false;
+
+              try {
+                let pos: number | null = null;
+                try {
+                  pos = view.posAtDOM(imageNodeEl, 0);
+                } catch (_) {}
+
+                if (pos === null || pos === undefined || pos < 0) {
+                  const coordsPos = view.posAtCoords({ left: event.clientX, top: event.clientY });
+                  if (coordsPos) pos = coordsPos.pos;
+                }
+
+                if (typeof pos === 'number' && pos >= 0 && pos < view.state.doc.content.size) {
+                  let targetPos = pos;
+                  let node = view.state.doc.nodeAt(targetPos);
+                  if (node?.type.name !== 'floatingImage' && targetPos > 0) {
+                    const prevNode = view.state.doc.nodeAt(targetPos - 1);
+                    if (prevNode?.type.name === 'floatingImage') {
+                      targetPos = targetPos - 1;
+                      node = prevNode;
+                    }
+                  }
+
+                  if (node && node.type.name === 'floatingImage') {
+                    const { selection } = view.state;
+                    if (!(selection instanceof NodeSelection && selection.from === targetPos)) {
+                      const tr = view.state.tr.setSelection(NodeSelection.create(view.state.doc, targetPos));
+                      view.dispatch(tr);
+                    }
+                    view.focus();
+                    return true;
+                  }
+                }
+              } catch (e) {
+                console.error('Error selecting image node on mousedown:', e);
+              }
+              return false;
+            },
+          },
           handleClickOn(view, _pos, node, nodePos, _event, _direct) {
             if (node.type.name === 'floatingImage') {
-              view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, nodePos)));
+              const { selection } = view.state;
+              if (!(selection instanceof NodeSelection && selection.from === nodePos)) {
+                view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, nodePos)));
+              }
               view.focus();
               return true;
             }

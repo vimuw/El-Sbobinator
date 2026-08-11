@@ -498,6 +498,7 @@ def main():
             **_pos_kwargs,
             min_size=(750, 620),
             background_color=_boot_bg_color(),
+            maximized=True,
         )
     else:
         print(
@@ -511,6 +512,7 @@ def main():
             **_pos_kwargs,
             min_size=(750, 620),
             background_color=_boot_bg_color(),
+            maximized=True,
         )
 
         stop_event = threading.Event()

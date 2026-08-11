@@ -1,5 +1,5 @@
 export const EDITOR_IMAGE_ALLOWED_DATA_ATTRS = new Set(['data-editor-image', 'data-layout', 'data-align', 'data-width']);
-export const ALLOWED_STYLE_PROPS = new Set(['font-size', 'color', 'font-family', 'background-color', 'text-align', 'font-weight', 'font-style', 'text-decoration']);
+export const ALLOWED_STYLE_PROPS = new Set(['font-size', 'color', 'font-family', 'background-color', 'text-align', 'font-weight', 'font-style', 'text-decoration', 'margin-left', 'margin-right', 'margin']);
 
 export const normalizePreviewHtmlContent = (content: string) => {
   const parsed = new DOMParser().parseFromString(`<body>${content || ''}</body>`, 'text/html');
@@ -15,9 +15,8 @@ export const normalizePreviewHtmlContent = (content: string) => {
     const isEditorImageContainer = tag === 'div' && element.hasAttribute('data-editor-image');
     const isEditorImageAsset = tag === 'img' && element.parentElement?.hasAttribute('data-editor-image');
 
-    element.removeAttribute('align');
-
     if (!isEditorImageContainer && !isEditorImageAsset) {
+      element.removeAttribute('align');
       const htmlEl = element as HTMLElement;
       const allowedStyles = Array.from(htmlEl.style)
         .filter(prop => ALLOWED_STYLE_PROPS.has(prop))
