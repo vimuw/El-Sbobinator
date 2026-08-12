@@ -1,0 +1,297 @@
+"""
+Settings and configuration IPC bridge controller.
+"""
+
+from __future__ import annotations
+
+import os
+import threading
+from typing import TYPE_CHECKING
+
+import webview
+
+import el_sbobinator.app_webview as _awv
+
+if TYPE_CHECKING:
+    from typing import Any
+
+
+def _path_under_root(path: str, root: str) -> bool:
+    try:
+        return os.path.commonpath([path, root]) == root
+    except ValueError:
+        return False
+
+
+class SettingsControllerMixin:
+    """Mixin providing settings, configuration, and session storage move IPC methods."""
+
+    if TYPE_CHECKING:
+        _window: webview.Window | None
+        _logger: Any
+        _processing_thread: threading.Thread | None
+        _move_lock: threading.Lock
+        _move_state: dict
+        _sessions_cache: dict | None
+        _sessions_cache_gen: int
+        _sessions_cache_lock: threading.Lock
+
+    def load_settings(self) -> dict:
+        """Load saved config from disk."""
+        try:
+            cfg = _awv.load_config()
+            result: dict = {
+                "api_key": cfg.get("api_key", ""),
+                "fallback_keys": cfg.get("fallback_keys", []),
+                "preferred_model": cfg.get("preferred_model", _awv.DEFAULT_MODEL),
+                "fallback_models": cfg.get("fallback_models", []),
+                "available_models": list(_awv.MODEL_OPTIONS),
+                "has_protected_key": bool(cfg.get("has_protected_key")),
+                "api_key_insecure": bool(cfg.get("api_key_insecure")),
+                "api_key_insecure_reason": str(
+                    cfg.get("api_key_insecure_reason") or ""
+                ),
+            }
+            if cfg.get("config_recovered_from"):
+                result["config_recovered_from"] = cfg["config_recovered_from"]
+            return result
+        except Exception:
+            return {
+                "api_key": "",
+                "fallback_keys": [],
+                "preferred_model": _awv.DEFAULT_MODEL,
+                "fallback_models": list(_awv.DEFAULT_FALLBACK_MODELS),
+                "available_models": list(_awv.MODEL_OPTIONS),
+                "has_protected_key": False,
+                "api_key_insecure": False,
+                "api_key_insecure_reason": "",
+            }
+
+    def save_settings(
+        self,
+        api_key: str | None,
+        fallback_keys: list[str],
+        preferred_model: str,
+        fallback_models: list[str],
+    ) -> dict:
+        """Save config to disk."""
+        try:
+            _awv.save_config(
+                api_key,
+                fallback_keys=fallback_keys,
+                preferred_model=preferred_model,
+                fallback_models=fallback_models,
+            )
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": _awv.redact_secrets(e)}
+
+    def save_theme_preference(self, theme: str) -> None:
+        """Persist theme preference to disk so the native window gets the right background on next launch."""
+        try:
+            if theme not in ("light", "dark"):
+                return
+            os.makedirs(os.path.dirname(_awv.THEME_PREF_FILE), exist_ok=True)
+            with open(_awv.THEME_PREF_FILE, "w", encoding="utf-8") as fh:
+                fh.write(theme)
+        except Exception:
+            pass
+
+    def validate_environment(
+        self,
+        api_key: str | None = None,
+        check_api_key: bool = False,
+        preferred_model: str | None = None,
+        fallback_models: list[str] | None = None,
+    ) -> dict:
+        """Run system validation check (FFmpeg availability, Gemini API reachability)."""
+        try:
+            from el_sbobinator.services.validation_service import (
+                validate_environment as _validate_env,
+            )
+
+            result = _validate_env(
+                api_key=api_key,
+                validate_api_key=bool(check_api_key),
+                preferred_model=preferred_model,
+                fallback_models=fallback_models,
+            )
+            return {"ok": True, "result": result}
+        except Exception as e:
+            self._logger.exception("Validazione ambiente fallita.")
+            return {"ok": False, "error": _awv.redact_secrets(e)}
+
+    def ask_session_folder(self) -> dict:
+        """Open a folder-picker dialog and return the user-selected path."""
+        try:
+            if self._window is None:
+                return {"ok": False, "error": "Finestra non disponibile"}
+            result = self._window.create_file_dialog(webview.FOLDER_DIALOG)
+            if not result:
+                return {"ok": False, "cancelled": True}
+            path = str(result[0]) if isinstance(result, list | tuple) else str(result)
+            return {"ok": True, "path": path}
+        except Exception as e:
+            return {"ok": False, "error": _awv.redact_secrets(e)}
+
+    def move_session_root(self, new_path: str) -> dict:
+        """Start an async move of the session-storage folder to new_path."""
+        new_path = str(new_path or "").strip()
+        if not new_path or not os.path.isabs(new_path):
+            return {"ok": False, "error": "Percorso non valido"}
+        old_root = _awv.get_session_root()
+        if os.path.normcase(os.path.realpath(new_path)) == os.path.normcase(
+            os.path.realpath(old_root)
+        ):
+            return {"ok": False, "error": "Percorso identico a quello attuale"}
+        if _path_under_root(
+            os.path.normcase(os.path.realpath(new_path)),
+            os.path.normcase(os.path.realpath(old_root)),
+        ):
+            return {
+                "ok": False,
+                "error": "La destinazione è dentro la cartella attuale",
+            }
+        if self._processing_thread is not None and self._processing_thread.is_alive():
+            return {"ok": False, "error": "Impossibile spostare durante l'elaborazione"}
+        with self._move_lock:
+            if self._move_state.get("status") == "moving":
+                return {"ok": False, "error": "Spostamento già in corso"}
+            self._move_state = {
+                "status": "moving",
+                "moved": 0,
+                "total": 0,
+                "error": None,
+            }
+        thread = threading.Thread(
+            target=self._do_move_session_root,
+            args=(old_root, new_path),
+            daemon=True,
+            name="session-move",
+        )
+        thread.start()
+        return {"ok": True, "started": True}
+
+    def get_session_move_status(self) -> dict:
+        """Return the current status of an ongoing or completed session move."""
+        with self._move_lock:
+            return dict(self._move_state)
+
+    def _finish_move(self, new_path: str) -> None:
+        """Persist new SESSION_ROOT and invalidate all caches after a move."""
+        _awv.set_session_root(new_path)
+        try:
+            _awv.save_session_root_to_config(new_path)
+        except Exception:
+            pass
+        _awv.invalidate_session_storage_cache()
+        with self._sessions_cache_lock:
+            self._sessions_cache = None
+            self._sessions_cache_gen += 1
+
+    def _do_move_session_root(self, old_root: str, new_path: str) -> None:
+        import shutil as _shutil
+
+        try:
+            items = os.listdir(old_root) if os.path.isdir(old_root) else []
+        except Exception:
+            items = []
+        total = len(items)
+        with self._move_lock:
+            self._move_state = {
+                "status": "moving",
+                "moved": 0,
+                "total": total,
+                "error": None,
+            }
+        try:
+            os.makedirs(new_path, exist_ok=True)
+        except Exception as e:
+            with self._move_lock:
+                self._move_state = {
+                    "status": "error",
+                    "moved": 0,
+                    "total": total,
+                    "error": _awv.redact_secrets(e),
+                }
+            return
+        try:
+            if os.listdir(new_path):
+                with self._move_lock:
+                    self._move_state = {
+                        "status": "error",
+                        "moved": 0,
+                        "total": total,
+                        "error": "Cartella di destinazione non vuota",
+                    }
+                return
+        except Exception as e:
+            with self._move_lock:
+                self._move_state = {
+                    "status": "error",
+                    "moved": 0,
+                    "total": total,
+                    "error": _awv.redact_secrets(e),
+                }
+            return
+
+        try:
+            os.rmdir(new_path)
+            os.rename(old_root, new_path)
+            self._finish_move(new_path)
+            with self._move_lock:
+                self._move_state = {
+                    "status": "done",
+                    "moved": total,
+                    "total": total,
+                    "error": None,
+                }
+            return
+        except OSError:
+            os.makedirs(new_path, exist_ok=True)
+
+        moved = 0
+        error_msg: str | None = None
+        failed_item: str | None = None
+        for name in items:
+            src = os.path.join(old_root, name)
+            dst = os.path.join(new_path, name)
+            try:
+                _shutil.move(src, dst)
+                moved += 1
+                with self._move_lock:
+                    self._move_state["moved"] = moved
+            except Exception as e:
+                error_msg = str(e)
+                failed_item = name
+                break
+
+        self._finish_move(new_path)
+
+        if error_msg is not None:
+            remaining = total - moved
+            split_note = (
+                f" {moved} sessioni spostate; {remaining} rimasta/e in {old_root}."
+                if remaining > 0
+                else ""
+            )
+            with self._move_lock:
+                self._move_state = {
+                    "status": "error",
+                    "moved": moved,
+                    "total": total,
+                    "error": f"Errore spostamento {failed_item}: {error_msg}.{split_note}",
+                }
+            return
+
+        try:
+            os.rmdir(old_root)
+        except Exception:
+            pass
+        with self._move_lock:
+            self._move_state = {
+                "status": "done",
+                "moved": moved,
+                "total": total,
+                "error": None,
+            }
