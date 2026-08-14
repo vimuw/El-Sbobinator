@@ -1,6 +1,7 @@
 import React from 'react';
 import { Cpu, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import type { ModelOption } from '../../../bridge';
+import { CustomSelect } from './CustomSelect';
 
 interface ModelSectionProps {
   preferredModel: string;
@@ -46,9 +47,19 @@ export const ModelSection: React.FC<ModelSectionProps> = ({
   };
 
   const availableFallbackOptions = availableModels.filter(model => model.id !== preferredModel);
+  const primaryModelOptions = availableModels.map(m => ({
+    value: m.id,
+    label: m.label,
+    sublabel: m.id,
+  }));
+  const fallbackSelectOptions = availableFallbackOptions.map(m => ({
+    value: m.id,
+    label: m.label,
+    disabled: fallbackModels.includes(m.id),
+  }));
 
   return (
-    <div className="space-y-6">
+    <div className="p-4 rounded-xl border border-[var(--border-subtle)] space-y-5">
       <div>
         <h3 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2 mb-1">
           <Cpu className="w-4 h-4 text-[var(--accent-text)]" />
@@ -64,32 +75,21 @@ export const ModelSection: React.FC<ModelSectionProps> = ({
         <label className="text-xs font-semibold text-[var(--text-primary)] block">
           Modello Primario
         </label>
-        <select
+        <CustomSelect
           value={preferredModel}
-          onChange={e => handlePrimaryModelChange(e.target.value)}
-          className="w-full app-input text-xs font-medium"
-        >
-          {availableModels.map(m => (
-            <option key={m.id} value={m.id}>
-              {m.label} ({m.id})
-            </option>
-          ))}
-        </select>
+          onChange={handlePrimaryModelChange}
+          options={primaryModelOptions}
+        />
 
         {primaryModelSummary && (
           <p className="text-xs text-[var(--text-muted)] italic">{primaryModelSummary}</p>
         )}
-      </div>
 
-      {/* Model Parameters / Chunk Info */}
-      <div className="grid grid-cols-2 gap-3 p-3 rounded-lg bg-[var(--bg-panel)] border border-[var(--border-subtle)]">
-        <div>
-          <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase block">Durata Blocco</span>
-          <span className="text-sm font-bold text-[var(--text-primary)]">{defaultChunkMinutes} min</span>
-        </div>
-        <div>
-          <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase block">Temperatura Fase 1</span>
-          <span className="text-sm font-bold text-[var(--text-primary)]">{defaultTemperature}</span>
+        {/* Small discreet parameters */}
+        <div className="flex items-center gap-3 text-[11px] text-[var(--text-muted)] pt-1">
+          <span>Durata blocco: <span className="font-medium text-[var(--text-secondary)]">{defaultChunkMinutes} min</span></span>
+          <span>•</span>
+          <span>Temperatura fase 1: <span className="font-medium text-[var(--text-secondary)]">{defaultTemperature}</span></span>
         </div>
       </div>
 
@@ -109,7 +109,7 @@ export const ModelSection: React.FC<ModelSectionProps> = ({
               return (
                 <div
                   key={modelId}
-                  className="flex items-center justify-between p-2.5 rounded bg-[var(--bg-panel)] border border-[var(--border-subtle)] text-xs"
+                  className="flex items-center justify-between p-2.5 rounded bg-[var(--bg-input)] border border-[var(--border-subtle)] text-xs"
                 >
                   <div>
                     <span className="font-semibold text-[var(--text-primary)] block">
@@ -157,21 +157,12 @@ export const ModelSection: React.FC<ModelSectionProps> = ({
 
         {availableFallbackOptions.length > 0 && (
           <div className="flex gap-2">
-            <select
-              defaultValue=""
-              onChange={e => {
-                handleAddFallbackModel(e.target.value);
-                e.target.value = '';
-              }}
-              className="flex-1 app-input text-xs"
-            >
-              <option value="" disabled>Aggiungi modello di riserva...</option>
-              {availableFallbackOptions.map(m => (
-                <option key={m.id} value={m.id} disabled={fallbackModels.includes(m.id)}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
+            <CustomSelect
+              value=""
+              onChange={handleAddFallbackModel}
+              options={fallbackSelectOptions}
+              placeholder="Aggiungi modello di riserva..."
+            />
           </div>
         )}
       </div>

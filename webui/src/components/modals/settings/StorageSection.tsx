@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, Folder, Loader2 } from 'lucide-react';
+import { Database, Folder, FolderInput, Loader2, Wrench, RefreshCw, Trash2 } from 'lucide-react';
 
 function formatSize(bytes: number): string {
   if (bytes <= 0) return '0 B';
@@ -48,7 +48,7 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
   return (
     <div className="space-y-6">
       {/* Storage Information Card */}
-      <div className="p-4 rounded-xl bg-[var(--bg-panel)] border border-[var(--border-subtle)] space-y-4">
+      <div className="p-4 rounded-xl border border-[var(--border-subtle)] space-y-4">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-[var(--accent-subtle)] text-[var(--accent-color)]">
             <Database className="w-5 h-5" />
@@ -61,7 +61,7 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 pt-2 border-t border-[var(--border-subtle)]">
+        <div className="grid grid-cols-2 gap-4 pt-2 border-t border-[var(--border-subtle)] text-center">
           <div>
             <span className="text-xs text-[var(--text-muted)] block">Dimensione Totale</span>
             <span className="text-lg font-bold text-[var(--text-primary)]">
@@ -81,11 +81,11 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
           <div
             onClick={onOpenSessionFolder}
             title="Apri cartella sessioni"
-            className="p-2 rounded bg-[var(--bg-surface)] font-mono text-[11px] break-all text-[var(--text-secondary)] border border-[var(--border-subtle)] cursor-pointer hover:underline"
+            className="p-2 rounded bg-[var(--bg-input)] font-mono text-[11px] break-all text-[var(--text-secondary)] border border-[var(--border-subtle)] cursor-pointer hover:underline"
           >
             {sessionInfo?.session_root || (isLoadingSessionInfo ? '…' : '—')}
           </div>
-          <div className="flex items-center gap-2 pt-1">
+          <div className="flex items-center justify-center gap-2 pt-1">
             <button
               type="button"
               onClick={onOpenSessionFolder}
@@ -98,8 +98,13 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
               type="button"
               onClick={onAskMoveFolder}
               disabled={isMoveInProgress}
-              className="app-button-secondary text-xs px-3 py-1.5"
+              className="app-button-secondary text-xs px-3 py-1.5 flex items-center gap-1.5"
             >
+              {isMoveInProgress ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <FolderInput className="w-3.5 h-3.5" />
+              )}
               {isMoveInProgress ? 'Spostamento...' : 'Cambia Cartella'}
             </button>
           </div>
@@ -113,7 +118,7 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
                 <span>{moveProgress.moved} / {moveProgress.total} file</span>
               )}
             </div>
-            <div className="w-full h-1.5 bg-[var(--bg-panel)] rounded-full overflow-hidden">
+            <div className="w-full h-1.5 bg-[var(--bg-input)] rounded-full overflow-hidden">
               <div
                 className="h-full bg-[var(--accent-color)] transition-all duration-300"
                 style={{
@@ -135,17 +140,22 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
         )}
       </div>
 
-      {/* Storage Cleanup Section */}
-      <div className="p-4 rounded-xl bg-[var(--bg-panel)] border border-[var(--border-subtle)] space-y-4">
-        <div>
-          <h3 className="font-semibold text-sm text-[var(--text-primary)]">Manutenzione e Pulizia</h3>
-          <p className="text-xs text-[var(--text-muted)]">
-            Rimuovi file temporanei di elaborazioni vecchie di oltre {SESSION_CLEANUP_DAYS} giorni per liberare spazio.
-          </p>
+      {/* Storage Cleanup Card */}
+      <div className="p-4 rounded-xl border border-[var(--border-subtle)] space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-[var(--accent-subtle)] text-[var(--accent-color)]">
+            <Wrench className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-sm text-[var(--text-primary)]">Manutenzione e Pulizia</h3>
+            <p className="text-xs text-[var(--text-muted)]">
+              Rimuovi file temporanei di elaborazioni vecchie di oltre {SESSION_CLEANUP_DAYS} giorni per liberare spazio.
+            </p>
+          </div>
         </div>
 
         {(cleanupResult || completedCleanupResult) && (
-          <div className="space-y-1.5 bg-[var(--bg-panel)] rounded-lg p-3 border border-[var(--border-subtle)]">
+          <div className="space-y-1.5 bg-[var(--bg-input)] rounded-lg p-3 border border-[var(--border-subtle)]">
             {cleanupResult && (
               <>
                 <p className="text-xs font-medium" style={{ color: cleanupResult.removed > 0 ? 'var(--success-text)' : 'var(--text-muted)' }}>
@@ -175,15 +185,15 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-2 border-t border-[var(--border-subtle)]">
           <button
             type="button"
             onClick={onAskCleanup}
             disabled={isCleaningSession}
             title="Conta ed elimina elaborazioni incomplete"
-            className="modal-action-button text-xs px-3 py-2 flex items-center gap-1.5"
+            className="app-button-secondary text-xs px-3.5 py-2 flex items-center gap-1.5 font-medium"
           >
-            {isCleaningSession && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {isCleaningSession ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
             Pulisci Sessioni Incomplete
           </button>
           <button
@@ -191,9 +201,9 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
             onClick={onAskCompletedCleanup}
             disabled={isCleaningCompletedSessions}
             title="Conta ed elimina sbobine completate"
-            className="modal-action-button text-xs px-3 py-2 flex items-center gap-1.5 text-[var(--error-text)]"
+            className="app-button-secondary text-xs px-3.5 py-2 flex items-center gap-1.5 font-medium text-[var(--error-text)] border-[var(--error-ring)]/30 hover:bg-[var(--error-subtle)]"
           >
-            {isCleaningCompletedSessions && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {isCleaningCompletedSessions ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
             Pulisci Sbobine Completate Vecchie
           </button>
         </div>

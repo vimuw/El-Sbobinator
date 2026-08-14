@@ -40,7 +40,7 @@ describe('ArchivePage', () => {
       session_dirs: ['/sessions/s1'],
     };
     renderArchive({ folders: [folder] });
-    expect(screen.getByTitle('Raccolta: Corso A')).toBeTruthy();
+    expect(screen.getAllByTitle('Raccolta: Corso A').length).toBeGreaterThan(0);
   });
 
   it('renders all sessions in a single list without pagination controls', () => {
@@ -49,7 +49,7 @@ describe('ArchivePage', () => {
 
     // Assert all 15 sessions are visible on the screen
     for (let i = 1; i <= 15; i++) {
-      expect(screen.getByText(`Lezione ${i}`)).toBeTruthy();
+      expect(screen.getAllByText(`Lezione ${i}`).length).toBeGreaterThan(0);
     }
 
     // Assert that the page navigation buttons do not exist
@@ -63,7 +63,7 @@ describe('ArchivePage', () => {
       last_opened_at_iso: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
     };
     renderArchive({ sessions: [session] });
-    expect(screen.getByText(/Aperto/)).toBeTruthy();
+    expect(screen.getAllByText(/Aperto/).length).toBeGreaterThan(0);
   });
 
   it('expands the unified add lesson panel and renders icon-only add button', () => {
@@ -87,5 +87,35 @@ describe('ArchivePage', () => {
     const addButton = screen.getByTitle('Aggiungi alla cartella');
     expect(addButton).toBeTruthy();
     expect(addButton.textContent).not.toContain('Aggiungi');
+  });
+
+  it('renders the last opened/modified sbobina mini section and triggers preview on click', () => {
+    const onPreview = vi.fn();
+    const s1 = {
+      ...makeSession('s1', 'Lezione Vecchia'),
+      completed_at_iso: '2024-01-01T00:00:00Z',
+    };
+    const s2 = {
+      ...makeSession('s2', 'Lezione Recente'),
+      last_opened_at_iso: new Date(Date.now() - 60000).toISOString(),
+    };
+
+    render(
+      <ArchivePage
+        sessions={[s1, s2]}
+        folders={[]}
+        onFoldersChange={vi.fn()}
+        onPreview={onPreview}
+        onOpenFile={vi.fn()}
+        onDeleteSession={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Ultima sbobina aperta / modificata')).toBeTruthy();
+    expect(screen.getAllByText('Lezione Recente').length).toBeGreaterThan(0);
+    expect(screen.getByText('Riprendi')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Riprendi'));
+    expect(onPreview).toHaveBeenCalledWith(s2.html_path, s2.name, s2.input_path, undefined, s2.session_dir);
   });
 });

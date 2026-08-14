@@ -27,7 +27,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = ({
 }) => {
   return (
     <div className="space-y-6">
-      <div className="p-4 rounded-xl bg-[var(--bg-panel)] border border-[var(--border-subtle)] space-y-4">
+      <div className="p-4 rounded-xl border border-[var(--border-subtle)] space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h4 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">

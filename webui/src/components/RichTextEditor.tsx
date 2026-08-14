@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { type Editor as TiptapEditor } from '@tiptap/core';
-import { NodeSelection } from '@tiptap/pm/state';
+import { NodeSelection, TextSelection } from '@tiptap/pm/state';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Color } from '@tiptap/extension-color';
@@ -28,7 +28,7 @@ import * as Y from 'yjs';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import { WebrtcProvider } from 'y-webrtc';
 import { MenuBar } from './EditorToolbar';
-import { getLastHighlightColor } from '../editorUtils';
+import { getLastHighlightColor, getWordRangeAtPos } from '../editorUtils';
 import { EditorBubbleMenu } from './EditorBubbleMenu';
 import { FindReplacePanel } from './EditorFindReplace';
 import { WordCount } from './EditorWordCount';
@@ -299,6 +299,17 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
       attributes: {
         class: 'prose prose-sm sm:prose-base max-w-none focus:outline-none tiptap-editor',
         spellcheck: 'false',
+      },
+      handleDoubleClick: (view, pos) => {
+        const range = getWordRangeAtPos(view, pos);
+        if (range) {
+          const tr = view.state.tr.setSelection(
+            TextSelection.create(view.state.tr.doc, range.from, range.to),
+          );
+          view.dispatch(tr);
+          return true;
+        }
+        return false;
       },
       handleDOMEvents: {
         dragstart: (view, event) => {

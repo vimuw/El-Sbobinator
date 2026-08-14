@@ -615,7 +615,7 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
     });
 
     // Verify session card is shown on Archive page
-    expect(await screen.findByText('Lezione test')).toBeTruthy();
+    expect((await screen.findAllByText('Lezione test')).length).toBeGreaterThan(0);
 
     // Click "Riprova revisione" button on the session card
     await act(async () => {
@@ -694,7 +694,7 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
     });
 
     // Verify session card is shown
-    expect(await screen.findByText('Lezione errore generale')).toBeTruthy();
+    expect((await screen.findAllByText('Lezione errore generale')).length).toBeGreaterThan(0);
 
     // Click "Riprova revisione" button
     await act(async () => {

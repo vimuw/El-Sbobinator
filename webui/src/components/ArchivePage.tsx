@@ -2,7 +2,7 @@ import { type FormEvent, type MouseEvent, useCallback, useEffect, useLayoutEffec
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  AlertTriangle, ArrowLeft, ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
+  AlertTriangle, ArrowLeft, ArrowRight, ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock,
   Download, ExternalLink, Eye, FileSearch, FileText, FolderOpen, FolderPlus,
   Loader2, Pencil, Plus, RefreshCw, Search, Trash2, Upload, Users, X,
 } from 'lucide-react';
@@ -290,6 +290,45 @@ export function ArchivePage({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const editorSessionsMap = useMemo(() => loadAllEditorSessions(), [sessions]);
 
+  const lastOpenedOrModifiedSessionData = useMemo(() => {
+    if (!sessions || sessions.length === 0) return null;
+    let bestSession: ArchiveSession | null = null;
+    let maxTime = -1;
+    let bestOpenedAtMs = 0;
+    let bestSavedAtMs = 0;
+    let bestCompletedAtMs = 0;
+
+    for (const s of sessions) {
+      const openedAtMs = getOpenedAtMs(s, editorSessionsMap);
+      const completedAtMs = s.completed_at_iso ? new Date(s.completed_at_iso).getTime() : 0;
+      const savedAtMs = editorSessionsMap[s.session_dir]?.savedAt
+        ?? editorSessionsMap[s.html_path]?.savedAt
+        ?? 0;
+
+      const time = Math.max(openedAtMs, completedAtMs, savedAtMs);
+      if (time > maxTime) {
+        maxTime = time;
+        bestSession = s;
+        bestOpenedAtMs = openedAtMs;
+        bestSavedAtMs = savedAtMs;
+        bestCompletedAtMs = completedAtMs;
+      }
+    }
+
+    if (!bestSession || maxTime <= 0) return null;
+
+    const isOpenedRecently = bestOpenedAtMs >= bestCompletedAtMs && bestOpenedAtMs >= bestSavedAtMs && bestOpenedAtMs > 0;
+    const isSavedRecently = bestSavedAtMs > bestOpenedAtMs && bestSavedAtMs >= bestCompletedAtMs;
+
+    return {
+      session: bestSession,
+      activityTimeMs: maxTime,
+      isOpened: isOpenedRecently,
+      isSaved: isSavedRecently,
+      folder: sessionFolderMap.get(bestSession.session_dir),
+    };
+  }, [sessions, editorSessionsMap, sessionFolderMap]);
+
   const sortSessions = useCallback((arr: ArchiveSession[]) => {
     const q = search.trim().toLowerCase();
     const filtered = q ? arr.filter(s => s.name.toLowerCase().includes(q)) : arr;
@@ -486,6 +525,80 @@ export function ArchivePage({
           })() : null}
         </DragOverlay>
       </DndContext>
+
+      {/* Mini Section: Ultima sbobina aperta / modificata */}
+      {lastOpenedOrModifiedSessionData && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <Clock className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
+            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-faint)' }}>
+              Ultima sbobina aperta / modificata
+            </span>
+          </div>
+          <div
+            onClick={() => onPreview(
+              lastOpenedOrModifiedSessionData.session.html_path,
+              lastOpenedOrModifiedSessionData.session.name,
+              lastOpenedOrModifiedSessionData.session.input_path,
+              undefined,
+              lastOpenedOrModifiedSessionData.session.session_dir,
+            )}
+            className="archive-session-card flex items-center justify-between gap-4 p-4 cursor-pointer group/recent transition-all hover:border-[var(--border-strong)]"
+            style={{
+              borderRadius: '12px',
+            }}
+          >
+            <div className="flex items-center gap-3.5 min-w-0 flex-1">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover/recent:scale-105"
+                style={{ background: 'var(--accent-subtle)', color: 'var(--accent-text)' }}
+              >
+                <FileText className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                    {lastOpenedOrModifiedSessionData.session.name}
+                  </p>
+                  {lastOpenedOrModifiedSessionData.folder && (
+                    <FolderIndicatorChip folder={lastOpenedOrModifiedSessionData.folder} />
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {lastOpenedOrModifiedSessionData.isOpened ? (
+                    <span className="inline-flex items-center gap-1 shrink-0" title={`Ultima apertura: ${new Date(lastOpenedOrModifiedSessionData.activityTimeMs).toLocaleString('it-IT')}`}>
+                      <Eye className="w-3 h-3" style={{ opacity: 0.7 }} />
+                      Aperto {formatRelativeTime(lastOpenedOrModifiedSessionData.activityTimeMs)}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 shrink-0" title={`Ultima modifica: ${new Date(lastOpenedOrModifiedSessionData.activityTimeMs).toLocaleString('it-IT')}`}>
+                      <Pencil className="w-3 h-3" style={{ opacity: 0.7 }} />
+                      {lastOpenedOrModifiedSessionData.isSaved ? 'Modificato' : 'Completato'} {formatRelativeTime(lastOpenedOrModifiedSessionData.activityTimeMs)}
+                    </span>
+                  )}
+                  {lastOpenedOrModifiedSessionData.session.effective_model && (
+                    <>
+                      <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
+                      <span>{shortModelName(lastOpenedOrModifiedSessionData.session.effective_model)}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-opacity hover:opacity-90"
+              style={{
+                background: 'var(--btn-primary-bg)',
+                color: 'var(--btn-primary-text)',
+              }}
+            >
+              <span>Riprendi</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Unfiled sessions */}
       <div className="flex flex-col gap-3 flex-1 min-h-0">

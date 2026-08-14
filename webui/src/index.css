@@ -48,9 +48,9 @@
 :root {
   --font-display: "Manrope", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
 
-  --bg-base: #f7f5f2;
+  --bg-base: #ffffff;
   --bg-surface: #ffffff;
-  --bg-panel: #faf9f7;
+  --bg-panel: #ffffff;
   --bg-elevated: #ffffff;
   --bg-input: #ffffff;
   --bg-overlay: rgba(15, 23, 42, 0.38);
@@ -103,8 +103,8 @@
   --btn-disabled-bg: rgba(148, 163, 184, 0.22);
   --btn-disabled-text: rgba(100, 116, 139, 0.72);
 
-  --console-bg: #f0ede8;
-  --console-header: #e5e0d8;
+  --console-bg: #f8fafc;
+  --console-header: #f1f5f9;
   --console-heading: #111827;
   --console-text: #374151;
 
@@ -124,7 +124,7 @@
   --glass-top-shimmer: rgba(255, 255, 255, 0.90);
 
   --header-bg: #ffffff;
-  --editor-chrome-bg: #eeebe5;
+  --editor-chrome-bg: #f1f5f9;
 }
 
 :root[data-theme="dark"] {
@@ -321,6 +321,11 @@ body,
   border-color: rgba(100, 116, 139, 0.34);
 }
 
+:root:not([data-theme="dark"]) .dropzone-card:hover {
+  box-shadow: none;
+  border-color: var(--accent-bg);
+}
+
 :root:not([data-theme="dark"]) .dropzone-card::before {
   background: radial-gradient(circle at 50% 45%, rgba(61, 107, 58, 0.07), transparent 65%);
 }
@@ -332,7 +337,7 @@ body,
 
 :root[data-theme="dark"] .dropzone-card:hover {
   box-shadow: none;
-  border-color: rgba(255, 255, 255, 0.18);
+  border-color: var(--accent-bg);
 }
 
 :root[data-theme="dark"] .dropzone-card::before {
@@ -937,6 +942,41 @@ button {
   gap: 0.4rem;
 }
 
+.app-button-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.app-button-secondary:hover:not(:disabled) {
+  background: var(--sidebar-active-bg);
+  border-color: var(--accent-bg);
+  color: var(--text-primary);
+}
+
+.app-button-secondary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.app-button-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .modal-icon-button {
   width: 38px;
   height: 38px;
@@ -1113,7 +1153,7 @@ button {
 }
 
 .dropzone-card:hover {
-  border-color: var(--border-strong);
+  border-color: var(--accent-bg);
   box-shadow: none;
 }
 
@@ -1165,7 +1205,7 @@ button {
 
 .dropzone-compact:hover,
 .dropzone-compact:focus-visible {
-  border-color: var(--border-strong);
+  border-color: var(--accent-bg);
   background: color-mix(in srgb, var(--accent-subtle) 60%, var(--glass-bg));
   outline: none;
 }

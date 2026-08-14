@@ -227,7 +227,20 @@ def main() -> None:
         if custom_body:
             f.write(f"{custom_body}\n\n")
         elif tag_msg.strip():
-            f.write(f"{tag_msg.strip()}\n\n")
+            cleaned_msg = tag_msg.strip()
+            clean_tag_lower = clean_tag.lower()
+            generic_headers = {
+                clean_tag_lower,
+                f"release {clean_tag_lower}",
+                f"release v{clean_tag_lower.lstrip('v')}",
+                f"v{clean_tag_lower.lstrip('v')}",
+            }
+            if (
+                cleaned_msg.lower() not in generic_headers
+                and "## Changes" not in cleaned_msg
+                and "**Full Changelog**:" not in cleaned_msg
+            ):
+                f.write(f"{cleaned_msg}\n\n")
 
         f.write("## Changes\n\n")
 
