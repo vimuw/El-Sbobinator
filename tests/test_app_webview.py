@@ -158,7 +158,7 @@ class AppWebviewTests(unittest.TestCase):
     def test_load_settings_exposes_insecure_api_key_flag(self):
         api = ElSbobinatorApi()
         with patch(
-            "el_sbobinator.app_webview.load_config",
+            "el_sbobinator.bridge.controllers.settings_controller.load_config",
             return_value={
                 "api_key": "plain-key",
                 "fallback_keys": [],
@@ -187,7 +187,7 @@ class AppWebviewTests(unittest.TestCase):
             path = tmp.name
 
         with patch(
-            "el_sbobinator.app_webview.get_desktop_dir",
+            "el_sbobinator.services.config_service.get_desktop_dir",
             return_value=_tempfile.gettempdir(),
         ):
             result = api.save_html_content(path, "<p>New</p>")
@@ -209,7 +209,7 @@ class AppWebviewTests(unittest.TestCase):
         result = api.open_url("C:\\Windows\\System32\\cmd.exe")
         self.assertFalse(result["ok"])
 
-    @patch("el_sbobinator.app_webview.open_path_with_default_app")
+    @patch("el_sbobinator.utils.file_ops.open_path_with_default_app")
     def test_open_url_accepts_allowed_github_url(self, mock_open):
         api = ElSbobinatorApi()
         result = api.open_url("https://github.com/vimuw/El-Sbobinator/releases/latest")
@@ -325,7 +325,9 @@ class AppWebviewTests(unittest.TestCase):
             fallback_models=None,
         )
 
-    @patch("el_sbobinator.app_webview.cleanup_orphan_sessions")
+    @patch(
+        "el_sbobinator.bridge.controllers.session_controller.cleanup_orphan_sessions"
+    )
     def test_cleanup_old_sessions_uses_14_day_default(self, mock_cleanup):
         api = ElSbobinatorApi()
         mock_cleanup.return_value = {
@@ -345,7 +347,9 @@ class AppWebviewTests(unittest.TestCase):
         self.assertEqual(result["missing_completed_html"], 1)
         mock_cleanup.assert_called_once_with(14, dry_run=False)
 
-    @patch("el_sbobinator.app_webview._cleanup_completed_sessions")
+    @patch(
+        "el_sbobinator.bridge.controllers.session_controller.cleanup_completed_sessions"
+    )
     def test_cleanup_completed_sessions_dry_run_counts_without_deleting(
         self, mock_cleanup
     ):
@@ -367,7 +371,9 @@ class AppWebviewTests(unittest.TestCase):
         self.assertEqual(result["freed_bytes"], 8192)
         mock_cleanup.assert_called_once_with(14, dry_run=True)
 
-    @patch("el_sbobinator.app_webview._cleanup_completed_sessions")
+    @patch(
+        "el_sbobinator.bridge.controllers.session_controller.cleanup_completed_sessions"
+    )
     def test_cleanup_completed_sessions_delete_invalidates_caches(self, mock_cleanup):
         api = ElSbobinatorApi()
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -395,7 +401,7 @@ class AppWebviewTests(unittest.TestCase):
             api._html_shell_cache[unrelated_html] = ("<body>", "</body>")
 
             with patch(
-                "el_sbobinator.app_webview.evict_html_paths_under"
+                "el_sbobinator.bridge.controllers.session_controller.evict_html_paths_under"
             ) as mock_evict:
                 result = api.cleanup_completed_sessions(dry_run=False)
 
@@ -1042,7 +1048,7 @@ class AppWebviewTests(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.app_webview.resolve_session_paths",
+                    "el_sbobinator.bridge.controllers.pipeline_controller.resolve_session_paths",
                     return_value=paths,
                 ),
                 patch(
@@ -1135,7 +1141,7 @@ class AppWebviewTests(unittest.TestCase):
                     "el_sbobinator.pipeline.pipeline.esegui_sbobinatura"
                 ) as mock_pipeline_run,
                 patch(
-                    "el_sbobinator.app_webview.cleanup_orphan_temp_chunks",
+                    "el_sbobinator.bridge.controllers.pipeline_controller.cleanup_orphan_temp_chunks",
                     return_value=2,
                 ) as mock_cleanup,
             ):
@@ -1197,7 +1203,7 @@ class AppWebviewTests(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
                 patch.object(api, "_get_session_root", return_value=session_root),
@@ -1229,7 +1235,7 @@ class AppWebviewTests(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
                 patch.object(api, "_get_session_root", return_value=session_root),
@@ -1283,7 +1289,7 @@ class AppWebviewTests(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
                 patch.object(api, "_get_session_root", return_value=session_root),
@@ -1349,7 +1355,7 @@ class AppWebviewTests(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
                 patch.object(api, "_get_session_root", return_value=session_root),
@@ -1405,7 +1411,7 @@ class AppWebviewTests(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
                 patch.object(api, "_get_session_root", return_value=session_root),
@@ -1483,7 +1489,7 @@ class AppWebviewTests(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
                 patch.object(api, "_get_session_root", return_value=session_root),
@@ -1531,7 +1537,7 @@ class AppWebviewTests(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
                 patch.object(api, "_get_session_root", return_value=session_root),
@@ -1572,7 +1578,7 @@ class AppWebviewTests(unittest.TestCase):
 
             with (
                 _patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
                 _patch.object(api, "_get_session_root", return_value=session_root),
@@ -1583,7 +1589,7 @@ class AppWebviewTests(unittest.TestCase):
                 os.remove(desktop_html)
 
                 with _patch(
-                    "el_sbobinator.app_webview.save_html_body_content",
+                    "el_sbobinator.utils.file_ops.save_html_body_content",
                     wraps=__import__(
                         "el_sbobinator.utils.file_ops",
                         fromlist=["save_html_body_content"],
@@ -1649,7 +1655,7 @@ class AppWebviewTests(unittest.TestCase):
 
             with (
                 _patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
                 _patch.object(api, "_get_session_root", return_value=session_root),
@@ -1708,7 +1714,7 @@ class AppWebviewTests(unittest.TestCase):
 
             with (
                 _patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
                 _patch.object(api, "_get_session_root", return_value=session_root),
@@ -1757,7 +1763,7 @@ class AppWebviewTests(unittest.TestCase):
 
             with (
                 _patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
                 _patch.object(api, "_get_session_root", return_value=session_root),
@@ -1766,7 +1772,7 @@ class AppWebviewTests(unittest.TestCase):
                 self.assertTrue(api.read_html_content(path_b)["ok"])
 
                 with _patch(
-                    "el_sbobinator.app_webview.save_html_body_content",
+                    "el_sbobinator.utils.file_ops.save_html_body_content",
                     wraps=__import__(
                         "el_sbobinator.utils.file_ops",
                         fromlist=["save_html_body_content"],
@@ -1818,7 +1824,7 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
                 patch.object(api, "_get_session_root", return_value=session_root),
@@ -1858,7 +1864,7 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
                 patch.object(api, "_get_session_root", return_value=session_root),
@@ -2026,7 +2032,8 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
             with (
                 _patch.object(api, "_get_session_root", return_value=td),
                 _patch(
-                    "el_sbobinator.app_webview.os.scandir", side_effect=fake_scandir
+                    "el_sbobinator.bridge.controllers.session_controller.os.scandir",
+                    side_effect=fake_scandir,
                 ),
             ):
                 with api._sessions_cache_lock:
@@ -2148,7 +2155,10 @@ class SaveThemePreferenceTests(unittest.TestCase):
         api = ElSbobinatorApi()
         with tempfile.TemporaryDirectory() as tmpdir:
             pref_file = os.path.join(tmpdir, "theme_pref.txt")
-            with patch("el_sbobinator.app_webview.THEME_PREF_FILE", pref_file):
+            with patch(
+                "el_sbobinator.bridge.controllers.settings_controller.THEME_PREF_FILE",
+                pref_file,
+            ):
                 api.save_theme_preference("dark")
             with open(pref_file, encoding="utf-8") as fh:
                 self.assertEqual(fh.read(), "dark")
@@ -2159,7 +2169,10 @@ class SaveThemePreferenceTests(unittest.TestCase):
         api = ElSbobinatorApi()
         with tempfile.TemporaryDirectory() as tmpdir:
             pref_file = os.path.join(tmpdir, "theme_pref.txt")
-            with patch("el_sbobinator.app_webview.THEME_PREF_FILE", pref_file):
+            with patch(
+                "el_sbobinator.bridge.controllers.settings_controller.THEME_PREF_FILE",
+                pref_file,
+            ):
                 api.save_theme_preference("light")
             with open(pref_file, encoding="utf-8") as fh:
                 self.assertEqual(fh.read(), "light")
@@ -2170,7 +2183,10 @@ class SaveThemePreferenceTests(unittest.TestCase):
         api = ElSbobinatorApi()
         with tempfile.TemporaryDirectory() as tmpdir:
             pref_file = os.path.join(tmpdir, "theme_pref.txt")
-            with patch("el_sbobinator.app_webview.THEME_PREF_FILE", pref_file):
+            with patch(
+                "el_sbobinator.bridge.controllers.settings_controller.THEME_PREF_FILE",
+                pref_file,
+            ):
                 api.save_theme_preference("system")
             self.assertFalse(os.path.exists(pref_file))
 
@@ -2180,7 +2196,10 @@ class SaveThemePreferenceTests(unittest.TestCase):
         api = ElSbobinatorApi()
         with tempfile.TemporaryDirectory() as tmpdir:
             pref_file = os.path.join(tmpdir, "theme_pref.txt")
-            with patch("el_sbobinator.app_webview.THEME_PREF_FILE", pref_file):
+            with patch(
+                "el_sbobinator.bridge.controllers.settings_controller.THEME_PREF_FILE",
+                pref_file,
+            ):
                 api.save_theme_preference("dark")
                 api.save_theme_preference("light")
             with open(pref_file, encoding="utf-8") as fh:
@@ -2279,7 +2298,7 @@ class TestReadHtmlContentPathValidation(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
                 patch.object(api, "_get_session_root", return_value=session_root),
@@ -2309,7 +2328,7 @@ class TestReadHtmlContentPathValidation(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
                 patch.object(api, "_get_session_root", return_value=session_root),
@@ -2335,7 +2354,7 @@ class TestReadHtmlContentPathValidation(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
                 patch.object(api, "_get_session_root", return_value=session_root),
@@ -2361,7 +2380,7 @@ class TestSaveHtmlContentPathValidation(unittest.TestCase):
             missing_html = os.path.join(desktop_dir, "missing.html")
             with (
                 patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
                 patch.object(api, "_get_session_root", return_value=session_root),
@@ -2398,11 +2417,13 @@ class TestSaveHtmlContentPathValidation(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
                 patch.object(api, "_get_session_root", return_value=session_root),
-                patch("el_sbobinator.app_webview.save_html_body_content") as mock_save,
+                patch(
+                    "el_sbobinator.utils.file_ops.save_html_body_content"
+                ) as mock_save,
             ):
                 result = api.save_html_content(stale_html, "<p>new</p>")
                 saved_path = mock_save.call_args[0][0] if mock_save.called else None
@@ -2436,7 +2457,7 @@ class TestSaveHtmlContentPathValidation(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
                 patch.object(api, "_get_session_root", return_value=session_root),
@@ -2740,7 +2761,10 @@ class TestUpdateSessionInputPath(unittest.TestCase):
 
             with (
                 patch.object(api, "_get_session_root", return_value=session_root),
-                patch("el_sbobinator.app_webview._safe_relpath", return_value=None),
+                patch(
+                    "el_sbobinator.bridge.controllers.session_controller._safe_relpath",
+                    return_value=None,
+                ),
             ):
                 result = api.update_session_input_path(session_dir, new_audio_path)
 
@@ -2759,7 +2783,7 @@ class TestStreamMediaFile(unittest.TestCase):
     def test_returns_url_from_media_server(self):
         api = ElSbobinatorApi()
         with patch(
-            "el_sbobinator.app_webview.LocalMediaServer.stream_url_for_file",
+            "el_sbobinator.core.media_server.LocalMediaServer.stream_url_for_file",
             return_value="http://127.0.0.1:8765/audio/abc",
         ):
             result = api.stream_media_file("/audio/lecture.mp3")
@@ -2770,7 +2794,7 @@ class TestStreamMediaFile(unittest.TestCase):
     def test_returns_error_dict_on_exception(self):
         api = ElSbobinatorApi()
         with patch(
-            "el_sbobinator.app_webview.LocalMediaServer.stream_url_for_file",
+            "el_sbobinator.core.media_server.LocalMediaServer.stream_url_for_file",
             side_effect=RuntimeError("server failed to bind"),
         ):
             result = api.stream_media_file("/bad/path.mp3")
@@ -2782,7 +2806,7 @@ class TestStreamMediaFile(unittest.TestCase):
         api = ElSbobinatorApi()
         secret = "AIza" + ("B" * 24)
         with patch(
-            "el_sbobinator.app_webview.LocalMediaServer.stream_url_for_file",
+            "el_sbobinator.core.media_server.LocalMediaServer.stream_url_for_file",
             side_effect=RuntimeError(f"server failed api_key={secret}"),
         ):
             result = api.stream_media_file("/bad/path.mp3")
@@ -2794,7 +2818,7 @@ class TestStreamMediaFile(unittest.TestCase):
     def test_rejects_disallowed_extension(self):
         api = ElSbobinatorApi()
         with patch(
-            "el_sbobinator.app_webview.LocalMediaServer.stream_url_for_file"
+            "el_sbobinator.core.media_server.LocalMediaServer.stream_url_for_file"
         ) as mock_server:
             result = api.stream_media_file("/some/file.html")
             mock_server.assert_not_called()
@@ -2805,7 +2829,7 @@ class TestStreamMediaFile(unittest.TestCase):
     def test_rejects_no_extension(self):
         api = ElSbobinatorApi()
         with patch(
-            "el_sbobinator.app_webview.LocalMediaServer.stream_url_for_file"
+            "el_sbobinator.core.media_server.LocalMediaServer.stream_url_for_file"
         ) as mock_server:
             result = api.stream_media_file("/etc/passwd")
             mock_server.assert_not_called()
@@ -2815,7 +2839,7 @@ class TestStreamMediaFile(unittest.TestCase):
     def test_extension_check_is_case_insensitive(self):
         api = ElSbobinatorApi()
         with patch(
-            "el_sbobinator.app_webview.LocalMediaServer.stream_url_for_file",
+            "el_sbobinator.core.media_server.LocalMediaServer.stream_url_for_file",
             return_value="http://127.0.0.1:9000/stream-xyz/media",
         ):
             result = api.stream_media_file("/audio/lecture.MP3")
@@ -2828,7 +2852,7 @@ class TestStreamMediaFile(unittest.TestCase):
         for ext in allowed:
             with self.subTest(ext=ext):
                 with patch(
-                    "el_sbobinator.app_webview.LocalMediaServer.stream_url_for_file",
+                    "el_sbobinator.core.media_server.LocalMediaServer.stream_url_for_file",
                     return_value="http://127.0.0.1:9001/stream-abc/media",
                 ):
                     result = api.stream_media_file(f"/audio/file{ext}")
@@ -2866,7 +2890,7 @@ class TestStreamMediaFile(unittest.TestCase):
             with (
                 patch.object(api, "_get_session_root", return_value=session_root),
                 patch(
-                    "el_sbobinator.app_webview.LocalMediaServer.stream_url_for_file",
+                    "el_sbobinator.core.media_server.LocalMediaServer.stream_url_for_file",
                     return_value="http://127.0.0.1:8765/audio/rel",
                 ) as mock_server,
             ):
@@ -2974,7 +2998,7 @@ class TestGetCompletedSessions(unittest.TestCase):
             self._clear_cache(api)
             with patch.object(api, "_get_session_root", return_value=td):
                 with patch(
-                    "el_sbobinator.app_webview.os.scandir",
+                    "el_sbobinator.bridge.controllers.session_controller.os.scandir",
                     side_effect=OSError("disk error"),
                 ):
                     result = api.get_completed_sessions()
@@ -3079,9 +3103,9 @@ class TestMoveSessionRoot(unittest.TestCase):
     """Tests for _do_move_session_root: atomic-rename fast path, cross-device
     fallback, and partial-failure option-b (SESSION_ROOT updated even on error)."""
 
-    _SET_ROOT = "el_sbobinator.app_webview.set_session_root"
-    _SAVE_ROOT = "el_sbobinator.app_webview.save_session_root_to_config"
-    _INVALIDATE = "el_sbobinator.app_webview.invalidate_session_storage_cache"
+    _SET_ROOT = "el_sbobinator.bridge.controllers.settings_controller.set_session_root"
+    _SAVE_ROOT = "el_sbobinator.bridge.controllers.settings_controller.save_session_root_to_config"
+    _INVALIDATE = "el_sbobinator.bridge.controllers.settings_controller.invalidate_session_storage_cache"
 
     def setUp(self):
         self.api = ElSbobinatorApi()
@@ -3392,7 +3416,7 @@ class TestRetryFailedRevisionBlocksBridge(unittest.TestCase):
                     "el_sbobinator.app_webview.get_session_root", return_value=tmpdir
                 ),
                 patch(
-                    "el_sbobinator.app_webview.load_config",
+                    "el_sbobinator.bridge.controllers.pipeline_controller.load_config",
                     return_value={
                         "api_key": "key",
                         "preferred_model": "gemini-test",
@@ -3473,7 +3497,8 @@ class TestRetryFailedRevisionBlocksBridge(unittest.TestCase):
                 json.dump({"stage": "done", "user_edited": False}, fh)
 
             with patch(
-                "el_sbobinator.app_webview.get_desktop_dir", return_value=tmpdir
+                "el_sbobinator.services.config_service.get_desktop_dir",
+                return_value=tmpdir,
             ):
                 first = api.save_html_content(html_path, "<p>New</p>", generation=1)
             self.assertTrue(first["ok"])
@@ -3484,7 +3509,8 @@ class TestRetryFailedRevisionBlocksBridge(unittest.TestCase):
             with open(session_path, "w", encoding="utf-8") as fh:
                 json.dump({"stage": "done", "user_edited": False}, fh)
             with patch(
-                "el_sbobinator.app_webview.get_desktop_dir", return_value=tmpdir
+                "el_sbobinator.services.config_service.get_desktop_dir",
+                return_value=tmpdir,
             ):
                 stale = api.save_html_content(html_path, "<p>Stale</p>", generation=1)
             self.assertFalse(stale["ok"])
@@ -3494,7 +3520,8 @@ class TestRetryFailedRevisionBlocksBridge(unittest.TestCase):
                 self.assertFalse(json.load(fh)["user_edited"])
 
             with patch(
-                "el_sbobinator.app_webview.get_desktop_dir", return_value=tmpdir
+                "el_sbobinator.services.config_service.get_desktop_dir",
+                return_value=tmpdir,
             ):
                 newest = api.save_html_content(html_path, "<p>Newest</p>", generation=2)
             self.assertTrue(newest["ok"])
@@ -3569,7 +3596,7 @@ class TestOpenUrlAllowlistCoverage(unittest.TestCase):
         return sorted(urls)
 
     def test_every_react_open_url_target_is_in_allowlist(self):
-        from el_sbobinator.app_webview import _ALLOWED_URL_PREFIXES
+        from el_sbobinator.bridge.bridge_utils import _ALLOWED_URL_PREFIXES
 
         branding_urls = self._resolve_branding_urls()
         react_urls = self._collect_react_open_url_targets(branding_urls)
@@ -3589,7 +3616,7 @@ class TestOpenUrlAllowlistCoverage(unittest.TestCase):
         )
 
     def test_no_allowlist_prefix_is_orphaned(self):
-        from el_sbobinator.app_webview import _ALLOWED_URL_PREFIXES
+        from el_sbobinator.bridge.bridge_utils import _ALLOWED_URL_PREFIXES
 
         branding_urls = self._resolve_branding_urls()
         react_urls = self._collect_react_open_url_targets(branding_urls)
@@ -3645,7 +3672,10 @@ class TestRetryStartProcessingGuard(unittest.TestCase):
 
         with (
             patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura") as mock_run,
-            patch("el_sbobinator.app_webview.threading.Thread", _SyncThread),
+            patch(
+                "el_sbobinator.bridge.controllers.pipeline_controller.threading.Thread",
+                _SyncThread,
+            ),
         ):
             mock_run.return_value = None
             api._adapter.set_run_result("done", "")
@@ -3723,7 +3753,7 @@ class TestRetryStartProcessingGuard(unittest.TestCase):
             with (
                 patch.object(api, "_get_session_root", return_value=session_root),
                 patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
             ):
@@ -3748,11 +3778,11 @@ class TestRetryStartProcessingGuard(unittest.TestCase):
             with (
                 patch.object(api, "_get_session_root", return_value=session_root),
                 patch(
-                    "el_sbobinator.app_webview.get_desktop_dir",
+                    "el_sbobinator.services.config_service.get_desktop_dir",
                     return_value=desktop_dir,
                 ),
                 patch(
-                    "el_sbobinator.app_webview.open_path_with_default_app"
+                    "el_sbobinator.utils.file_ops.open_path_with_default_app"
                 ) as mock_open,
             ):
                 result = api.open_file(inside_file)
@@ -3760,7 +3790,7 @@ class TestRetryStartProcessingGuard(unittest.TestCase):
                 mock_open.assert_called_once_with(os.path.realpath(inside_file))
 
     def test_path_under_root_with_drive_root(self):
-        from el_sbobinator.app_webview import _path_under_root
+        from el_sbobinator.bridge.bridge_utils import _path_under_root
 
         # Test case: root is a Windows-style drive root or POSIX root (ending in slash/backslash)
         root = "C:\\" if os.name == "nt" else "/"
@@ -3775,7 +3805,7 @@ class TestRetryStartProcessingGuard(unittest.TestCase):
             self.assertFalse(_path_under_root(disallowed_file, root))
 
     def test_path_under_root_with_normal_paths(self):
-        from el_sbobinator.app_webview import _path_under_root
+        from el_sbobinator.bridge.bridge_utils import _path_under_root
 
         root = "C:\\Users\\Desktop" if os.name == "nt" else "/home/user/desktop"
         allowed_file = (

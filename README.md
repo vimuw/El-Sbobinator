@@ -1,8 +1,6 @@
-<div align="center">
+# El Sbobinator
 
-# 🤠 El Sbobinator
-
-**Trasforma le registrazioni delle tue lezioni in dispense dettagliate, ordinate e pronte da studiare.**
+Applicazione desktop per trasformare registrazioni audio e video di lezioni universitarie in dispense di studio strutturate e formattate tramite i modelli Google Gemini.
 
 [![Release](https://img.shields.io/github/v/release/vimuw/El-Sbobinator?style=flat-square&color=blue)](https://github.com/vimuw/El-Sbobinator/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/vimuw/El-Sbobinator/build.yml?branch=main&style=flat-square&label=CI)](https://github.com/vimuw/El-Sbobinator/actions/workflows/build.yml)
@@ -10,138 +8,127 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-informational?style=flat-square)](https://github.com/vimuw/El-Sbobinator/releases)
 [![License](https://img.shields.io/github/license/vimuw/El-Sbobinator?style=flat-square&color=green)](LICENSE)
 
-<br />
-
-[Scarica Ora](#-download) • [Caratteristiche](#-caratteristiche-principali) • [Guida Rapida](#-guida-rapida) • [FAQ & Risoluzione Problemi](#-domande-frequenti-faq)
-
-<br />
-
 <p align="center">
   <img width="48%" alt="Interfaccia Principale" src="https://github.com/user-attachments/assets/cec7f84f-3a3f-4cd5-9d7c-938abbd32159" />
   <img width="48%" alt="Editor Integrato" src="https://github.com/user-attachments/assets/569c83b0-5244-4227-826e-95fc68991c80" />
 </p>
 
-</div>
+---
+
+## Panoramica
+
+El Sbobinator è un'applicazione desktop standalone sviluppata con Python e un'interfaccia React/TypeScript (ospitata tramite pywebview). Elabora registrazioni di lezioni attraverso una pipeline a più stadi basata su Gemini, generando dispense di studio pronte per la lettura e la revisione che eliminano disfluenze, ripetizioni e digressioni del parlato preservando il rigore tecnico.
+
+Tutte le operazioni avvengono in locale sul computer dell'utente, con chiamate API inviate direttamente a Google AI Studio senza server intermediari.
 
 ---
 
-## ⚡ Caratteristiche Principali
+## Caratteristiche Principali
 
-* **🧠 AI-Powered by Google Gemini**: Basato su **Gemini 2.5 Flash** (con supporto a **3.5 Flash** e **3.1 Flash Lite**) per generare dispense chiare eliminando esitazioni, ripetizioni e retorica del parlato.
-* **🔑 100% Gratuito (BYOK)**: Collega la tua API Key gratuita di Google AI Studio. Gestisce la **rotazione automatica delle chiavi** e la **catena di fallback dei modelli** in caso di limiti di quota.
-* **✍️ Editor Rich-Text Integrato**: Modifica il testo, applica formattazione (**grassetto**, *corsivo*, titoli `H1`-`H3`), inserisci immagini, usa *Trova & Sostituisci* e riascolta l'audio con il player multimediale avanzato.
-* **📂 Archivio & Ricerca Full-Text**: Organizza le lezioni in cartelle e ricerca istantaneamente qualsiasi argomento tra i testi e i titoli delle sbobine salvate.
-* **🛡️ Autosalvataggio & Ripresa**: In caso di chiusura accidentale, spegnimento o esaurimento della quota API, le sessioni si salvano in automatico e riprendono esattamente da dove si erano interrotte.
-* **🔒 Privacy First & 100% Locale**: Nessun server proprietario intermediate. I file audio e i dati rimangono esclusivamente sul tuo computer.
+- **Pipeline AI a Più Stadi**: Architettura a 2 fasi ottimizzata per i modelli Google Gemini (`gemini-2.5-flash`, `gemini-3.5-flash`, `gemini-3.1-flash-lite`) con trascrizione a blocchi e revisione editoriale macro.
+- **Architettura BYOK e Resilienza**: Utilizza la tua chiave API gratuita di Google AI Studio. Supporta rotazione automatica multi-chiave, catene di fallback dei modelli e gestione automatica dei limiti di rate limit.
+- **Editor Rich-Text Integrato**: Editor TipTap completo con formattazione markdown, indice dei contenuti (TOC) navigabile, funzione Trova e Sostituisci, immagini ridimensionabili e statistiche di lettura in tempo reale.
+- **Player Audio Sincronizzato**: Riproduttore multimediale integrato con streaming HTTP locale, velocità regolabile (0.5x–2.0x), scrubber della forma d'onda e segnalibri temporali collegati al testo.
+- **Archivio e Ricerca Full-Text**: Ricerca indicizzata su tutte le sbobine salvate con anteprima dei frammenti di testo, organizzazione in cartelle personalizzate e gestione delle sessioni.
+- **Esportazione e Portabilità**: Copia diretta formattata per Google Docs e Microsoft Word, stampa in PDF e pacchetti compressi `.sbobina` per esportazione e importazione rapida.
+- **Privacy e Sicurezza**: Elaborazione 100% locale. Le chiavi API sono memorizzate nel portachiavi sicuro del sistema operativo (Windows DPAPI / macOS Keychain) e i documenti esportati adottano rigide Content Security Policy.
 
 ---
 
-## 📦 Download
+## Download
 
-Scarica l'ultima versione per il tuo sistema operativo dalla sezione [**Releases**](https://github.com/vimuw/El-Sbobinator/releases/latest):
+I file binari precompilati sono disponibili nella sezione [Releases](https://github.com/vimuw/El-Sbobinator/releases/latest):
 
-| Piattaforma | Pacchetto | Note |
+| Piattaforma | Pacchetto | Note / Architettura |
 | :--- | :--- | :--- |
-| **Windows** | [`El-Sbobinator-Setup-v*.exe`](https://github.com/vimuw/El-Sbobinator/releases/latest) | Installer guidato per Windows 10/11 (64-bit) |
-| **macOS** | [`El-Sbobinator-v*.dmg`](https://github.com/vimuw/El-Sbobinator/releases/latest) | Immagine disco per macOS 11 (Big Sur) o successivi |
+| **Windows** | `El-Sbobinator-Setup-v*.exe` | Installer per Windows 10 / 11 (64-bit) |
+| **macOS** | `El-Sbobinator-v*.dmg` | Immagine disco per macOS 11 (Big Sur) o versioni successive |
 
-> 🔄 **Aggiornamenti Automatici**: L'app include un sistema di aggiornamento integrato: quando esce una nuova versione, basta un clic nell'interfaccia per installarla in autonomia.
-
----
-
-## 🚀 Guida Rapida
-
-1. **Ottieni la Chiave API (Gratis)**: Accedi a [Google AI Studio](https://aistudio.google.com/app/apikey) col tuo account Google e clicca su *"Create API Key"*.
-2. **Configura le Impostazioni**: Apri El Sbobinator, incolla la chiave nelle *Impostazioni* (verrà salvata in modo sicuro nel Portachiavi/Keyring di sistema).
-3. **Carica l'Audio & Avvia**: Trascina i tuoi file audio/video (`.mp3`, `.m4a`, `.wav`, `.aac`, `.mp4`, `.mkv`, `.webm`, ecc.) e clicca su **Avvia Sbobinatura**.
-4. **Rifinisci ed Esporta**: Correggi il testo nell'editor integrato e copialo direttamente su **Google Docs** / **Word** con la formattazione intatta, oppure esporta in **PDF**.
+L'applicazione include un sistema di aggiornamento automatico integrato che notifica e installa le nuove versioni direttamente dall'interfaccia.
 
 ---
 
-## ❓ Domande Frequenti (FAQ)
+## Guida Rapida
 
-<details>
-<summary><b>💰 La chiave API di Gemini è davvero gratuita? Rischio addebiti?</b></summary>
+1. **Ottieni una Chiave API**: Crea una chiave API Gemini gratuita su [Google AI Studio](https://aistudio.google.com/app/apikey).
+2. **Configura le Impostazioni**: Apri El Sbobinator, accedi alle **Impostazioni** e incolla la chiave API (salvata in modo sicuro nel portachiavi di sistema).
+3. **Importa i File e Avvia**: Trascina i file audio o video nella coda e clicca su **Avvia Sbobinatura**.
+4. **Modifica ed Esporta**: Revisiona il testo nell'editor integrato ed esportalo in HTML, PDF, Google Docs o Word.
 
-Sì, è al 100% gratuita. Google AI Studio non richiede carte di credito per il piano "Free Tier", rendendo fisicamente impossibili addebiti imprevisti. In caso di superamento della quota giornaliera, l'app ruoterà le chiavi di riserva o si metterà in pausa in attesa del reset.
-</details>
+### Formati Supportati
 
-<details>
-<summary><b>⚡ Quanto dura l'elaborazione di una lezione?</b></summary>
-
-Molto rapida: anche una registrazione di **3 ore** viene elaborata in circa **10-12 minuti**. I tempi dipendono dai server di Google, non dalla potenza del tuo computer.
-</details>
-
-<details>
-<summary><b>🧠 Quale modello conviene scegliere nelle Impostazioni?</b></summary>
-
-- **Gemini 2.5 Flash** *(Consigliato / Default)*: Il modello più stabile e testato per l'app. Offre il miglior bilanciamento tra velocità, qualità e quota gratuita.
-- **Gemini 3.5 Flash**: Modello di ultima generazione per massima capacità espressiva.
-- **Gemini 3.1 Flash Lite**: Ultra-veloce e con quote gratuite particolarmente ampie, ideale per volumi elevati.
-</details>
-
-<details>
-<summary><b>🔒 Google utilizza le mie registrazioni per addestrare l'AI?</b></summary>
-
-- **Piano Gratuito (Free Tier)**: I dati inviati possono essere analizzati da Google per il miglioramento dei modelli. Si raccomanda di non inviare registrazioni contenenti dati personali o sensibili.
-- **Piano a Consumo (Paid Tier)**: I dati rimangono riservati e Google non li impiega per l'addestramento.
-- **Nota Locale**: El Sbobinator non invia dati a nessun altro server ed elabora tutto in locale sul tuo PC.
-</details>
-
-<details>
-<summary><b>💾 Come funziona l'autosalvataggio delle sessioni?</b></summary>
-
-I progressi parziali vengono salvati continuamente in una cartella locale (`%LOCALAPPDATA%\El Sbobinator` su Windows, `~/Library/Caches/El Sbobinator` su Mac). Nelle *Impostazioni* puoi pulire i file vecchi o spostare la cartella di salvataggio in un'altra posizione.
-</details>
+- **Audio**: `.mp3`, `.m4a`, `.wav`, `.aac`, `.ogg`, `.flac`, `.opus`
+- **Video**: `.mp4`, `.mkv`, `.webm`, `.mov`, `.avi`
 
 ---
 
-## 🛠️ Risoluzione Problemi (Troubleshooting)
+## Architettura
 
-<details>
-<summary><b>⚠️ Windows Defender o l'antivirus segnala il file come minaccia?</b></summary>
+```
+Audio/Video di input
+       │
+       ▼
+┌──────────────┐      ┌──────────────────────────┐      ┌──────────────────────────┐      ┌──────────────────┐
+│    Fase 0    │ ───▶ │          Fase 1          │ ───▶ │          Fase 2          │ ───▶ │   Esportazione   │
+│ Pre-convers. │      │ Trascrizione a Blocchi   │      │ Revisione Macro-Blocchi  │      │ Markdown → HTML  │
+│ Mono 16 kHz  │      │   (Gemini + Contesto)    │      │ (Struttura e Pulizia)    │      │ (Sicurezza CSP)  │
+└──────────────┘      └──────────────────────────┘      └──────────────────────────┘      └──────────────────┘
+```
 
-È un **falso positivo** del tutto normale. Succede spesso con gli eseguibili generati da script Python privi di firma digitale commerciale.
-- **Windows SmartScreen**: Clicca su *"Ulteriori Informazioni"* e poi su *"Esegui Comunque"*.
-- **Antivirus**: Nella cronologia di protezione, seleziona *"Consenti nel dispositivo"*.
-- Puoi comunque analizzare il file su [VirusTotal](https://www.virustotal.com/) per verificare la sicurezza del pacchetto.
-</details>
-
-<details>
-<summary><b>📺 Su Windows l'app mostra una finestra nera o non si avvia?</b></summary>
-
-Verifica che sia installato il componente di sistema **Microsoft Edge WebView2 Runtime**, necessario per l'interfaccia grafica. Può essere scaricato gratuitamente da qui: 👉 [Scarica WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703).
-</details>
+- **Fase 0 (Pre-conversione)**: Converte i media in MP3 mono a 16 kHz per velocizzare il taglio dei blocchi tramite stream-copy.
+- **Fase 1 (Trascrizione a Blocchi)**: Suddivide l'audio in blocchi con memoria contestuale sovrapposta per garantire coerenza e continuità.
+- **Fase 2 (Revisione Macro-Blocchi)**: Unisce i testi in blocchi tematici coerenti per normalizzare la formattazione e correggere imprecisioni.
+- **Esportazione**: Genera documenti HTML sanitizzati e compatibili con i principali programmi di videoscrittura.
 
 ---
 
-## 💻 Requisiti di Sistema
+## Requisiti di Sistema
 
-| Specifiche | Windows | macOS |
+| Requisito | Windows | macOS |
 | :--- | :--- | :--- |
-| **OS Minimo** | Windows 10 (64-bit) | macOS 11 Big Sur |
-| **RAM** | 4 GB consigliati | 4 GB consigliati |
-| **Spazio Disco** | ~160 MB (Installata) + ~0.5–2 GB temporanei per lezione | ~160 MB (Installata) + ~0.5–2 GB temporanei per lezione |
-| **Connessione** | ✅ Richiesta durante l'elaborazione (chiamate API Gemini) | ✅ Richiesta durante l'elaborazione (chiamate API Gemini) |
+| **Sistema Operativo** | Windows 10 (64-bit) o successivo | macOS 11 (Big Sur) o successivo |
+| **Memoria RAM** | Minimo 4 GB (8 GB consigliati) | Minimo 4 GB (8 GB consigliati) |
+| **Spazio su Disco** | ~200 MB per l'applicazione + spazio temporaneo per i file audio | ~200 MB per l'applicazione + spazio temporaneo per i file audio |
+| **Componenti Aggiuntivi** | [Microsoft Edge WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703) (incluso di default in Windows 10/11) | Nessuno (utilizza WebKit nativo) |
+| **Connessione di Rete** | Connessione internet attiva richiesta durante l'elaborazione (chiamate API) | Connessione internet attiva richiesta durante l'elaborazione (chiamate API) |
 
 ---
 
-## ⚖️ Disclaimer Legale ed Etico
+## Sviluppo e Contributi
 
-* **Diritto d'autore e Uso Personale**: Le lezioni universitarie sono proprietà intellettuale dei rispettivi docenti. L'uso di questo strumento è inteso **esclusivamente per scopi di studio personale**.
-* **Divieto per Dati Clinici e Sanitari (GDPR)**: È rigorosamente vietato elaborare registrazioni effettuate in contesti clinici, ospedalieri o contenenti dati di pazienti reali.
-* **Licenza**: Software distribuito sotto licenza MIT "così com'è", senza alcuna garanzia.
+Per configurare l'ambiente locale, eseguire i test di integrazione (`ruff`, `pytest`, `vitest`) o compilare i pacchetti di rilascio, consulta:
 
----
-
-## 🤝 Contribuire & Supporto
-
-Segnalazioni di bug e proposte di nuove funzionalità sono sempre le benvenute! Apri una **[Issue](https://github.com/vimuw/El-Sbobinator/issues)** o consulta la guida [CONTRIBUTING.md](CONTRIBUTING.md) per le istruzioni riservate ai contributor.
-
-Se El Sbobinator ti ha salvato la sessione d'esami e desideri sostenere il progetto: <a href="https://ko-fi.com/vimuw" target="_blank"><img src="https://storage.ko-fi.com/cdn/kofi3.png?v=3" height="36" alt="Buy Me a Coffee at ko-fi.com" /></a>
+- [CONTRIBUTING.md](CONTRIBUTING.md) per i comandi di setup, test e compilazione dei binari.
+- [docs/architecture.md](docs/architecture.md) per l'architettura dettagliata dei moduli Python e React.
+- [docs/pipeline.md](docs/pipeline.md) per il funzionamento interno della pipeline e la gestione degli errori.
 
 ---
 
-## 📝 Licenza
+## Risoluzione Problemi
+
+- **Avviso Windows SmartScreen / Antivirus**: Gli eseguibili open-source privi di certificato commerciale a pagamento possono generare falsi positivi. Clicca su *Ulteriori informazioni* -> *Esegui comunque*, oppure verifica il file su [VirusTotal](https://www.virustotal.com/).
+- **Finestra vuota su Windows**: Verifica che il runtime [Microsoft Edge WebView2](https://go.microsoft.com/fwlink/p/?LinkId=2124703) sia installato e aggiornato.
+- **Limiti di Quota API**: Il piano gratuito di Google AI Studio include limiti giornalieri di richieste e token. È possibile configurare chiavi di riserva nelle **Impostazioni** per abilitare la rotazione automatica.
+
+---
+
+## Disclaimer Legale ed Etico
+
+- **Uso per Studio Personale**: Le registrazioni delle lezioni universitarie costituiscono proprietà intellettuale dei rispettivi docenti. L'uso di questo strumento è inteso esclusivamente a fini di studio personale.
+- **Divieto per Dati Clinici e Sanitari (GDPR)**: È fatto divieto assoluto di elaborare registrazioni contenenti dati sanitari identificabili, conversazioni cliniche o informazioni personali sensibili.
+
+---
+
+## Sostieni il Progetto
+
+Se El Sbobinator ti è stato utile per preparare i tuoi esami e desideri supportare lo sviluppo del software:
+
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Offri%20un%20caffè-29abe0?style=flat-square&logo=kofi&logoColor=white)](https://ko-fi.com/vimuw)
+
+Puoi fare una donazione su [ko-fi.com/vimuw](https://ko-fi.com/vimuw).
+
+---
+
+## Licenza
 
 Distribuito sotto **Licenza MIT**. Per i dettagli consulta il file [`LICENSE`](LICENSE).

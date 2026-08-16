@@ -10,17 +10,24 @@ from typing import TYPE_CHECKING
 
 import webview
 
-import el_sbobinator.app_webview as _awv
+from el_sbobinator.bridge.bridge_utils import _path_under_root
+from el_sbobinator.core.model_registry import DEFAULT_FALLBACK_MODELS, MODEL_OPTIONS
+from el_sbobinator.core.shared import (
+    DEFAULT_MODEL,
+    get_session_root,
+    invalidate_session_storage_cache,
+    set_session_root,
+)
+from el_sbobinator.services.config_service import (
+    THEME_PREF_FILE,
+    load_config,
+    save_config,
+    save_session_root_to_config,
+)
+from el_sbobinator.utils.logging_utils import redact_secrets
 
 if TYPE_CHECKING:
     from typing import Any
-
-
-def _path_under_root(path: str, root: str) -> bool:
-    try:
-        return os.path.commonpath([path, root]) == root
-    except ValueError:
-        return False
 
 
 class SettingsControllerMixin:
@@ -39,13 +46,13 @@ class SettingsControllerMixin:
     def load_settings(self) -> dict:
         """Load saved config from disk."""
         try:
-            cfg = _awv.load_config()
+            cfg = load_config()
             result: dict = {
                 "api_key": cfg.get("api_key", ""),
                 "fallback_keys": cfg.get("fallback_keys", []),
-                "preferred_model": cfg.get("preferred_model", _awv.DEFAULT_MODEL),
+                "preferred_model": cfg.get("preferred_model", DEFAULT_MODEL),
                 "fallback_models": cfg.get("fallback_models", []),
-                "available_models": list(_awv.MODEL_OPTIONS),
+                "available_models": list(MODEL_OPTIONS),
                 "has_protected_key": bool(cfg.get("has_protected_key")),
                 "api_key_insecure": bool(cfg.get("api_key_insecure")),
                 "api_key_insecure_reason": str(
@@ -59,9 +66,9 @@ class SettingsControllerMixin:
             return {
                 "api_key": "",
                 "fallback_keys": [],
-                "preferred_model": _awv.DEFAULT_MODEL,
-                "fallback_models": list(_awv.DEFAULT_FALLBACK_MODELS),
-                "available_models": list(_awv.MODEL_OPTIONS),
+                "preferred_model": DEFAULT_MODEL,
+                "fallback_models": list(DEFAULT_FALLBACK_MODELS),
+                "available_models": list(MODEL_OPTIONS),
                 "has_protected_key": False,
                 "api_key_insecure": False,
                 "api_key_insecure_reason": "",
@@ -76,7 +83,7 @@ class SettingsControllerMixin:
     ) -> dict:
         """Save config to disk."""
         try:
-            _awv.save_config(
+            save_config(
                 api_key,
                 fallback_keys=fallback_keys,
                 preferred_model=preferred_model,
@@ -84,42 +91,18 @@ class SettingsControllerMixin:
             )
             return {"ok": True}
         except Exception as e:
-            return {"ok": False, "error": _awv.redact_secrets(e)}
+            return {"ok": False, "error": redact_secrets(e)}
 
     def save_theme_preference(self, theme: str) -> None:
         """Persist theme preference to disk so the native window gets the right background on next launch."""
         try:
             if theme not in ("light", "dark"):
                 return
-            os.makedirs(os.path.dirname(_awv.THEME_PREF_FILE), exist_ok=True)
-            with open(_awv.THEME_PREF_FILE, "w", encoding="utf-8") as fh:
+            os.makedirs(os.path.dirname(THEME_PREF_FILE), exist_ok=True)
+            with open(THEME_PREF_FILE, "w", encoding="utf-8") as fh:
                 fh.write(theme)
         except Exception:
             pass
-
-    def validate_environment(
-        self,
-        api_key: str | None = None,
-        check_api_key: bool = False,
-        preferred_model: str | None = None,
-        fallback_models: list[str] | None = None,
-    ) -> dict:
-        """Run system validation check (FFmpeg availability, Gemini API reachability)."""
-        try:
-            from el_sbobinator.services.validation_service import (
-                validate_environment as _validate_env,
-            )
-
-            result = _validate_env(
-                api_key=api_key,
-                validate_api_key=bool(check_api_key),
-                preferred_model=preferred_model,
-                fallback_models=fallback_models,
-            )
-            return {"ok": True, "result": result}
-        except Exception as e:
-            self._logger.exception("Validazione ambiente fallita.")
-            return {"ok": False, "error": _awv.redact_secrets(e)}
 
     def ask_session_folder(self) -> dict:
         """Open a folder-picker dialog and return the user-selected path."""
@@ -132,14 +115,14 @@ class SettingsControllerMixin:
             path = str(result[0]) if isinstance(result, list | tuple) else str(result)
             return {"ok": True, "path": path}
         except Exception as e:
-            return {"ok": False, "error": _awv.redact_secrets(e)}
+            return {"ok": False, "error": redact_secrets(e)}
 
     def move_session_root(self, new_path: str) -> dict:
         """Start an async move of the session-storage folder to new_path."""
         new_path = str(new_path or "").strip()
         if not new_path or not os.path.isabs(new_path):
             return {"ok": False, "error": "Percorso non valido"}
-        old_root = _awv.get_session_root()
+        old_root = get_session_root()
         if os.path.normcase(os.path.realpath(new_path)) == os.path.normcase(
             os.path.realpath(old_root)
         ):
@@ -179,12 +162,12 @@ class SettingsControllerMixin:
 
     def _finish_move(self, new_path: str) -> None:
         """Persist new SESSION_ROOT and invalidate all caches after a move."""
-        _awv.set_session_root(new_path)
+        set_session_root(new_path)
         try:
-            _awv.save_session_root_to_config(new_path)
+            save_session_root_to_config(new_path)
         except Exception:
             pass
-        _awv.invalidate_session_storage_cache()
+        invalidate_session_storage_cache()
         with self._sessions_cache_lock:
             self._sessions_cache = None
             self._sessions_cache_gen += 1
@@ -212,7 +195,7 @@ class SettingsControllerMixin:
                     "status": "error",
                     "moved": 0,
                     "total": total,
-                    "error": _awv.redact_secrets(e),
+                    "error": redact_secrets(e),
                 }
             return
         try:
@@ -231,7 +214,7 @@ class SettingsControllerMixin:
                     "status": "error",
                     "moved": 0,
                     "total": total,
-                    "error": _awv.redact_secrets(e),
+                    "error": redact_secrets(e),
                 }
             return
 

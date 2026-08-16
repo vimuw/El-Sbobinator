@@ -9,18 +9,26 @@ import shutil
 import time
 from typing import TYPE_CHECKING
 
-import el_sbobinator.app_webview as _awv
+from el_sbobinator.bridge.bridge_utils import (
+    _normalize_revision_failed_blocks,
+    _path_under_root,
+    _safe_relpath,
+)
+from el_sbobinator.core.shared import (
+    _atomic_write_json,
+    cleanup_completed_sessions,
+    cleanup_orphan_sessions,
+    get_session_root,
+    get_session_storage_info,
+)
+from el_sbobinator.utils.file_ops import evict_html_paths_under
+from el_sbobinator.utils.logging_utils import redact_secrets
 
 if TYPE_CHECKING:
     import threading
     from collections import OrderedDict
 
-
-def _path_under_root(path: str, root: str) -> bool:
-    try:
-        return os.path.commonpath([path, root]) == root
-    except ValueError:
-        return False
+_TEXT_CACHE_MAX = 50
 
 
 class SessionControllerMixin:
@@ -50,17 +58,17 @@ class SessionControllerMixin:
     def get_session_storage_info(self) -> dict:
         """Return total size and count of session folders in SESSION_ROOT."""
         try:
-            info = _awv.get_session_storage_info()
+            info = get_session_storage_info()
             return {
                 "ok": True,
                 "total_bytes": info["total_bytes"],
                 "total_sessions": info["total_sessions"],
-                "session_root": _awv.get_session_root(),
+                "session_root": get_session_root(),
             }
         except Exception as e:
             return {
                 "ok": False,
-                "error": _awv.redact_secrets(e),
+                "error": redact_secrets(e),
                 "total_bytes": 0,
                 "total_sessions": 0,
                 "session_root": "",
@@ -118,7 +126,7 @@ class SessionControllerMixin:
                     html_path = session_copy
                     try:
                         data["outputs"]["html"] = html_path
-                        _awv._atomic_write_json(
+                        _atomic_write_json(
                             os.path.join(session_dir, "session.json"), data
                         )
                     except Exception:
@@ -134,7 +142,7 @@ class SessionControllerMixin:
                 )
                 effective_model = data.get("settings", {}).get("effective_model", "")
                 duration_sec = data.get("phase1", {}).get("duration_seconds")
-                revision_failed_blocks = _awv._normalize_revision_failed_blocks(
+                revision_failed_blocks = _normalize_revision_failed_blocks(
                     data.get("revision_failed_blocks", [])
                 )
                 raw_status = str(data.get("completion_status") or "")
@@ -177,7 +185,7 @@ class SessionControllerMixin:
         except Exception as e:
             return {
                 "ok": False,
-                "error": _awv.redact_secrets(e),
+                "error": redact_secrets(e),
                 "sessions": [],
                 "total": 0,
             }
@@ -199,7 +207,7 @@ class SessionControllerMixin:
                 self._sessions_cache_gen += 1
             return {"ok": True}
         except Exception as e:
-            return {"ok": False, "error": _awv.redact_secrets(e)}
+            return {"ok": False, "error": redact_secrets(e)}
 
     def _invalidate_sessions_cache(self) -> None:
         with self._sessions_cache_lock:
@@ -209,7 +217,7 @@ class SessionControllerMixin:
     def _evict_deleted_session_caches(self, session_dir: str) -> None:
         abs_dir = os.path.realpath(session_dir)
         prefix = abs_dir + os.sep
-        _awv.evict_html_paths_under(prefix)
+        evict_html_paths_under(prefix)
         with self._resolved_cache_lock:
             resolved_to_evict = [
                 key
@@ -250,26 +258,26 @@ class SessionControllerMixin:
             data["input"]["name"] = os.path.basename(norm_path)
             data["input"].pop("path_rel_to_session", None)
             data["input"].pop("path_rel_to_html", None)
-            session_rel = _awv._safe_relpath(os.path.realpath(norm_path), abs_dir)
+            session_rel = _safe_relpath(os.path.realpath(norm_path), abs_dir)
             if session_rel:
                 data["input"]["path_rel_to_session"] = session_rel
             html_path = str(data.get("outputs", {}).get("html", "") or "")
             if html_path:
                 html_dir = os.path.dirname(os.path.realpath(html_path))
-                html_rel = _awv._safe_relpath(os.path.realpath(norm_path), html_dir)
+                html_rel = _safe_relpath(os.path.realpath(norm_path), html_dir)
                 if html_rel:
                     data["input"]["path_rel_to_html"] = html_rel
             try:
                 data["input"]["size"] = os.path.getsize(norm_path)
             except Exception:
                 pass
-            _awv._atomic_write_json(session_path, data)
+            _atomic_write_json(session_path, data)
             with self._sessions_cache_lock:
                 self._sessions_cache = None
                 self._sessions_cache_gen += 1
             return {"ok": True}
         except Exception as e:
-            return {"ok": False, "error": _awv.redact_secrets(e)}
+            return {"ok": False, "error": redact_secrets(e)}
 
     def touch_session_opened(self, session_dir: str) -> dict:
         """Record the last opened ISO timestamp in session.json."""
@@ -293,13 +301,13 @@ class SessionControllerMixin:
             now_iso = datetime.now(UTC).isoformat()
             data["last_opened_at"] = now_iso
 
-            _awv._atomic_write_json(session_path, data)
+            _atomic_write_json(session_path, data)
             with self._sessions_cache_lock:
                 self._sessions_cache = None
                 self._sessions_cache_gen += 1
             return {"ok": True, "last_opened_at_iso": now_iso}
         except Exception as e:
-            return {"ok": False, "error": _awv.redact_secrets(e)}
+            return {"ok": False, "error": redact_secrets(e)}
 
     def cleanup_old_sessions(
         self,
@@ -309,7 +317,7 @@ class SessionControllerMixin:
         """Delete incomplete session folders older than max_age_days days."""
         try:
             with self._cleanup_lock:
-                result = _awv.cleanup_orphan_sessions(
+                result = cleanup_orphan_sessions(
                     max(1, int(max_age_days)),
                     dry_run=bool(dry_run),
                 )
@@ -329,7 +337,7 @@ class SessionControllerMixin:
         except Exception as e:
             return {
                 "ok": False,
-                "error": _awv.redact_secrets(e),
+                "error": redact_secrets(e),
                 "removed": 0,
                 "freed_bytes": 0,
                 "errors": 0,
@@ -346,7 +354,7 @@ class SessionControllerMixin:
         """Count or delete completed session folders older than max_age_days days."""
         try:
             with self._cleanup_lock:
-                result = _awv._cleanup_completed_sessions(
+                result = cleanup_completed_sessions(
                     max(1, int(max_age_days)),
                     dry_run=bool(dry_run),
                 )
@@ -370,7 +378,7 @@ class SessionControllerMixin:
         except Exception as e:
             return {
                 "ok": False,
-                "error": _awv.redact_secrets(e),
+                "error": redact_secrets(e),
                 "removed": 0,
                 "freed_bytes": 0,
                 "errors": 0,
@@ -395,7 +403,7 @@ class SessionControllerMixin:
                 subprocess.Popen(["xdg-open", session_root])
             return {"ok": True}
         except Exception as e:
-            return {"ok": False, "error": _awv.redact_secrets(e)}
+            return {"ok": False, "error": redact_secrets(e)}
 
     def search_sessions(self, query: str, limit: int = 10) -> dict:
         """Search plain-text content of every completed session HTML."""
@@ -452,7 +460,7 @@ class SessionControllerMixin:
                         text = extract_text_from_html(raw_html)
                         with self._text_cache_lock:
                             self._text_cache[html_path] = (mtime, text)
-                            if len(self._text_cache) > _awv._TEXT_CACHE_MAX:
+                            if len(self._text_cache) > _TEXT_CACHE_MAX:
                                 self._text_cache.popitem(last=False)
 
                     snippets, match_count = find_snippets(text, query)
@@ -481,7 +489,7 @@ class SessionControllerMixin:
             results.sort(key=lambda r: r["match_count"], reverse=True)
             return {"ok": True, "results": results[: max(0, int(limit))]}
         except Exception as e:
-            return {"ok": False, "error": _awv.redact_secrets(e), "results": []}
+            return {"ok": False, "error": redact_secrets(e), "results": []}
 
     def get_archive_folders(self) -> dict:
         """Return the user-defined archive folders."""
@@ -493,7 +501,7 @@ class SessionControllerMixin:
             folders = _get_archive_folders()
             return {"ok": True, "folders": folders}
         except Exception as e:
-            return {"ok": False, "error": _awv.redact_secrets(e), "folders": []}
+            return {"ok": False, "error": redact_secrets(e), "folders": []}
 
     def save_archive_folders(self, folders: list) -> dict:
         """Persist the archive folder list to disk."""
@@ -507,4 +515,4 @@ class SessionControllerMixin:
             _save_archive_folders(folders)
             return {"ok": True}
         except Exception as e:
-            return {"ok": False, "error": _awv.redact_secrets(e)}
+            return {"ok": False, "error": redact_secrets(e)}

@@ -241,7 +241,11 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure(collaborationRoom ? ({ history: false } as any) : {}),
+      StarterKit.configure({
+        link: false,
+        underline: false,
+        ...(collaborationRoom ? { history: false } : {}),
+      } as any),
       FloatingImage,
       TextStyle,
       Color,

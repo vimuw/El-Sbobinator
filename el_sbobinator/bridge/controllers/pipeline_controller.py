@@ -9,7 +9,6 @@ import threading
 import time
 from typing import TYPE_CHECKING, ClassVar
 
-import el_sbobinator.app_webview as _awv
 from el_sbobinator.bridge.bridge_types import (
     BridgeFileItem,
     FileDonePayload,
@@ -18,22 +17,39 @@ from el_sbobinator.bridge.bridge_types import (
     ProcessDonePayload,
     SetCurrentFilePayload,
 )
+from el_sbobinator.bridge.bridge_utils import (
+    _normalize_revision_failed_blocks,
+    _path_under_root,
+    _retry_no_failed_blocks_response,
+    _retry_would_overwrite_user_html,
+    _retry_zero_retried_response,
+    _RetryRuntime,
+    _safe_relpath,
+)
+from el_sbobinator.core.session_store import (
+    mark_html_exported,
+    resolve_session_paths,
+    save_session,
+)
+from el_sbobinator.core.shared import (
+    DEFAULT_MODEL,
+    _atomic_write_json,
+    _load_json,
+    cleanup_orphan_temp_chunks,
+    get_session_root,
+    invalidate_session_storage_cache,
+)
 from el_sbobinator.pipeline.pipeline_adapter import PipelineAdapter
+from el_sbobinator.pipeline.pipeline_settings import (
+    build_default_pipeline_settings,
+    load_and_sanitize_settings,
+)
+from el_sbobinator.services.config_service import load_config, save_config
+from el_sbobinator.utils.file_ops import evict_html_paths_under
+from el_sbobinator.utils.logging_utils import redact_secrets
 
 if TYPE_CHECKING:
     from collections import OrderedDict
-
-
-class _RetryRuntime:
-    """Minimal runtime wrapper providing API adapter access and cancellation state for retry runs."""
-
-    def __init__(self, adapter: PipelineAdapter, cancel_event: threading.Event) -> None:
-        self.adapter = adapter
-        self._cancel_event = cancel_event
-
-    @property
-    def cancelled(self) -> bool:
-        return self._cancel_event.is_set()
 
 
 class PipelineControllerMixin:
@@ -65,7 +81,7 @@ class PipelineControllerMixin:
     def _resolve_retry_session(self, session_dir: str) -> tuple[str, str]:
         session_root = os.path.realpath(self._get_session_root())
         abs_dir = os.path.realpath(str(session_dir or ""))
-        if not _awv._path_under_root(abs_dir, session_root):
+        if not _path_under_root(abs_dir, session_root):
             raise ValueError("Sessione non valida.")
         session_path = os.path.join(abs_dir, "session.json")
         if not os.path.isfile(session_path):
@@ -144,10 +160,10 @@ class PipelineControllerMixin:
                 self._retry_active_count += 1
             _retry_count_incremented = True
 
-            session = _awv._load_json(session_path)
+            session = _load_json(session_path)
             if not isinstance(session, dict) or session.get("stage") != "done":
                 return {"ok": False, "error": "Sessione non completata."}
-            if _awv._retry_would_overwrite_user_html(
+            if _retry_would_overwrite_user_html(
                 session, self._existing_html_for_session(session, abs_dir)
             ):
                 return {
@@ -157,13 +173,13 @@ class PipelineControllerMixin:
                     "session_dir": abs_dir,
                 }
             failed_blocks = session.get("revision_failed_blocks", [])
-            no_failed_blocks = _awv._retry_no_failed_blocks_response(
+            no_failed_blocks = _retry_no_failed_blocks_response(
                 session, failed_blocks, abs_dir
             )
             if no_failed_blocks is not None:
                 return no_failed_blocks
 
-            cfg = _awv.load_config()
+            cfg = load_config()
             api_key = str(cfg.get("api_key") or "").strip()
             if not api_key:
                 return {
@@ -173,9 +189,7 @@ class PipelineControllerMixin:
 
             settings = session.get("settings", {}) if isinstance(session, dict) else {}
             primary_model = str(
-                settings.get("model")
-                or cfg.get("preferred_model")
-                or _awv.DEFAULT_MODEL
+                settings.get("model") or cfg.get("preferred_model") or DEFAULT_MODEL
             ).strip()
             fallback_models = settings.get("fallback_models") or cfg.get(
                 "fallback_models", []
@@ -188,15 +202,13 @@ class PipelineControllerMixin:
 
             def _save_session() -> bool:
                 try:
-                    _awv.save_session(session_path, session)
+                    save_session(session_path, session)
                     return True
                 except Exception:
                     return False
 
             def _request_fallback_key() -> str | None:
-                key = generation_service.request_new_api_key(
-                    runtime, lambda: runtime.cancelled
-                )
+                key = generation_service.request_new_api_key(runtime, runtime.cancelled)
                 if not key or not str(key).strip():
                     retry_cancel_event.set()
                 return key
@@ -215,7 +227,7 @@ class PipelineControllerMixin:
                 session=session,
                 save_session=_save_session,
                 runtime=runtime,
-                cancelled=lambda: runtime.cancelled,
+                cancelled=runtime.cancelled,
                 fallback_keys=fallback_keys,
                 request_fallback_key=_request_fallback_key,
                 prompt_revisione=PROMPT_REVISIONE,
@@ -226,7 +238,7 @@ class PipelineControllerMixin:
             remaining = list(retry_result.get("failed_blocks", []))
             cancelled = bool(retry_result.get("cancelled"))
             quota_exhausted = bool(retry_result.get("quota_exhausted"))
-            zero_response = _awv._retry_zero_retried_response(
+            zero_response = _retry_zero_retried_response(
                 retried_blocks=retried_blocks,
                 remaining=remaining,
                 cancelled=cancelled,
@@ -252,10 +264,10 @@ class PipelineControllerMixin:
             session["outputs"]["html"] = html_path
             session.setdefault("settings", {})
             session["settings"]["effective_model"] = model_state.current
-            _awv.mark_html_exported(session)
+            mark_html_exported(session)
             _save_session()
-            _awv.invalidate_session_storage_cache()
-            _awv.evict_html_paths_under(abs_dir + os.sep)
+            invalidate_session_storage_cache()
+            evict_html_paths_under(abs_dir + os.sep)
             with self._text_cache_lock:
                 self._text_cache.pop(html_path, None)
             with self._sessions_cache_lock:
@@ -281,7 +293,7 @@ class PipelineControllerMixin:
                 "quota_exhausted": quota_exhausted,
             }
         except Exception as e:
-            return {"ok": False, "error": _awv.redact_secrets(e)}
+            return {"ok": False, "error": redact_secrets(e)}
         finally:
             if _retry_count_incremented:
                 with self._pipeline_lifecycle_lock:
@@ -310,12 +322,10 @@ class PipelineControllerMixin:
         )
 
         try:
-            cfg = _awv.load_config()
-            defaults = _awv.build_default_pipeline_settings(cfg)
+            cfg = load_config()
+            defaults = build_default_pipeline_settings(cfg)
             default_session = {"settings": defaults}
-            default_settings, _changed = _awv.load_and_sanitize_settings(
-                default_session
-            )
+            default_settings, _changed = load_and_sanitize_settings(default_session)
         except Exception:
             return None
 
@@ -341,7 +351,7 @@ class PipelineControllerMixin:
             if duration <= 0:
                 continue
             try:
-                paths = _awv.resolve_session_paths(file_path)
+                paths = resolve_session_paths(file_path)
             except Exception:
                 continue
             stage = "phase1"
@@ -349,9 +359,9 @@ class PipelineControllerMixin:
             settings = default_settings
             try:
                 if os.path.exists(paths.session_path):
-                    saved = _awv._load_json(paths.session_path)
+                    saved = _load_json(paths.session_path)
                     if isinstance(saved, dict):
-                        settings, _changed = _awv.load_and_sanitize_settings(saved)
+                        settings, _changed = load_and_sanitize_settings(saved)
                         stage = normalize_stage(saved)
                         phase1 = saved.get("phase1", {})
                         if isinstance(phase1, dict):
@@ -394,7 +404,7 @@ class PipelineControllerMixin:
         fallback_models: list[str] | None,
     ) -> None:
         try:
-            _awv.save_config(
+            save_config(
                 api_key,
                 preferred_model=preferred_model or None,
                 fallback_models=fallback_models
@@ -461,7 +471,7 @@ class PipelineControllerMixin:
             return start_error
 
         try:
-            removed = _awv.cleanup_orphan_temp_chunks()
+            removed = cleanup_orphan_temp_chunks()
             if removed > 0:
                 self._push_console(f"[*] Pulizia: rimossi {removed} file temporanei.")
         except Exception:
@@ -593,10 +603,10 @@ class PipelineControllerMixin:
                                 or ""
                             )
                             error_message = (
-                                _awv.redact_secrets(self._adapter.last_run_error)
+                                redact_secrets(self._adapter.last_run_error)
                                 or "Elaborazione non completata."
                             )
-                            error_detail = _awv.redact_secrets(error_detail)
+                            error_detail = redact_secrets(error_detail)
                             ff_payload3: FileFailedPayload = {
                                 "index": idx,
                                 "id": file_info.get("id", ""),
@@ -619,7 +629,7 @@ class PipelineControllerMixin:
                             ff_payload4: FileFailedPayload = {
                                 "index": current_index,
                                 "id": current_file_id,
-                                "error": _awv.redact_secrets(e) or "Errore fatale.",
+                                "error": redact_secrets(e) or "Errore fatale.",
                             }
                             self._adapter.emit("fileFailed", ff_payload4, batched=False)
                             failed_count += 1
