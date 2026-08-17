@@ -2,11 +2,13 @@ import os
 import tempfile
 import threading
 import unittest
+from collections import OrderedDict
 from unittest.mock import MagicMock, patch
 
 from el_sbobinator.bridge.controllers.export_controller import ExportControllerMixin
 from el_sbobinator.bridge.controllers.html_controller import HtmlControllerMixin
 from el_sbobinator.bridge.controllers.media_controller import MediaControllerMixin
+from el_sbobinator.bridge.controllers.session_controller import SessionControllerMixin
 from el_sbobinator.bridge.controllers.settings_controller import SettingsControllerMixin
 from el_sbobinator.bridge.controllers.system_controller import SystemControllerMixin
 
@@ -74,6 +76,30 @@ class DummyHtmlHost(HtmlControllerMixin):
 
     def _get_session_root(self) -> str:
         return self._session_root
+
+
+class DummySessionHost(SessionControllerMixin):
+    def __init__(self, session_root=""):
+        self._session_root = session_root
+        self._logger = MagicMock()
+        self._sessions_cache = None
+        self._sessions_cache_ts = 0.0
+        self._sessions_cache_gen = 0
+        self._sessions_cache_lock = threading.Lock()
+        self._resolved_path_cache: dict[str, str] = {}
+        self._resolved_cache_lock = threading.Lock()
+        self._html_shell_cache: dict[str, tuple[str, str]] = {}
+        self._text_cache: OrderedDict = OrderedDict()
+        self._text_cache_lock = threading.Lock()
+        self._cleanup_lock = threading.Lock()
+
+    def _get_session_root(self) -> str:
+        return self._session_root
+
+    def _find_candidate_audio_path(
+        self, data, session_dir, session_path, write_back=True
+    ):
+        return data.get("input", {}).get("path")
 
 
 class TestExportController(unittest.TestCase):
@@ -479,6 +505,102 @@ class TestHtmlController(unittest.TestCase):
             res = host.read_html_content(html_file)
             self.assertTrue(res.get("ok"))
             self.assertIn("Hello", res.get("content", ""))
+
+
+class TestSessionController(unittest.TestCase):
+    def test_get_session_storage_info(self):
+        host = DummySessionHost()
+        with (
+            patch(
+                "el_sbobinator.bridge.controllers.session_controller.get_session_storage_info",
+                return_value={"total_bytes": 1024, "total_sessions": 3},
+            ),
+            patch(
+                "el_sbobinator.bridge.controllers.session_controller.get_session_root",
+                return_value="/dummy/root",
+            ),
+        ):
+            res = host.get_session_storage_info()
+            self.assertTrue(res["ok"])
+            self.assertEqual(res["total_bytes"], 1024)
+            self.assertEqual(res["total_sessions"], 3)
+            self.assertEqual(res["session_root"], "/dummy/root")
+
+    def test_get_session_storage_info_error(self):
+        host = DummySessionHost()
+        with patch(
+            "el_sbobinator.bridge.controllers.session_controller.get_session_storage_info",
+            side_effect=RuntimeError("storage error"),
+        ):
+            res = host.get_session_storage_info()
+            self.assertFalse(res["ok"])
+            self.assertIn("storage error", res["error"])
+
+    def test_get_and_save_archive_folders(self):
+        host = DummySessionHost()
+        with (
+            patch(
+                "el_sbobinator.services.folders_service.get_folders",
+                return_value=[{"id": "f1", "name": "Folder 1"}],
+            ),
+            patch("el_sbobinator.services.folders_service.save_folders") as mock_save,
+        ):
+            res_get = host.get_archive_folders()
+            self.assertTrue(res_get["ok"])
+            self.assertEqual(len(res_get["folders"]), 1)
+
+            res_save_invalid = host.save_archive_folders("not-a-list")  # type: ignore[arg-type]
+            self.assertFalse(res_save_invalid["ok"])
+
+            res_save = host.save_archive_folders([{"id": "f1", "name": "Folder 1"}])
+            self.assertTrue(res_save["ok"])
+            mock_save.assert_called_once()
+
+    def test_get_completed_sessions(self):
+        with tempfile.TemporaryDirectory() as td:
+            session_root = os.path.join(td, "sessions")
+            os.makedirs(session_root, exist_ok=True)
+            host = DummySessionHost(session_root=session_root)
+
+            # Empty
+            res = host.get_completed_sessions()
+            self.assertTrue(res["ok"])
+            self.assertEqual(res["sessions"], [])
+
+            # Create a completed session
+            s1_dir = os.path.join(session_root, "sess_1")
+            os.makedirs(s1_dir, exist_ok=True)
+            html_path = os.path.join(s1_dir, "doc.html")
+            with open(html_path, "w", encoding="utf-8") as f:
+                f.write("<html><body>Test Document</body></html>")
+
+            import json
+
+            s1_data = {
+                "stage": "done",
+                "updated_at": "2026-08-01T12:00:00Z",
+                "outputs": {"html": html_path},
+                "input": {"path": "/fake/input.mp3", "size": 1234},
+                "metadata": {"title": "Test Title"},
+            }
+            with open(os.path.join(s1_dir, "session.json"), "w", encoding="utf-8") as f:
+                json.dump(s1_data, f)
+
+            res = host.get_completed_sessions()
+            self.assertTrue(res["ok"])
+            self.assertEqual(len(res["sessions"]), 1)
+            self.assertEqual(res["sessions"][0]["name"], "input.mp3")
+
+    def test_search_sessions(self):
+        with tempfile.TemporaryDirectory() as td:
+            session_root = os.path.join(td, "sessions")
+            os.makedirs(session_root, exist_ok=True)
+            host = DummySessionHost(session_root=session_root)
+
+            # Query too short
+            res = host.search_sessions("a")
+            self.assertFalse(res["ok"])
+            self.assertEqual(res["results"], [])
 
 
 if __name__ == "__main__":

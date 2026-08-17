@@ -23,10 +23,10 @@ export default defineConfig({
         'src/components/EditorFullPage.tsx',
       ],
       thresholds: {
-        lines: 70,
-        branches: 69,
-        functions: 70,
-        statements: 70,
+        lines: 75,
+        branches: 70,
+        functions: 75,
+        statements: 75,
       },
     },
     projects: [

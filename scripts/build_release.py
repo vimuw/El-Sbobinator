@@ -180,7 +180,7 @@ def run_python_checks(with_coverage: bool = False) -> None:
                 "--cov=el_sbobinator",
                 "--cov-report=xml:coverage-python.xml",
                 "--cov-report=term-missing",
-                "--cov-fail-under=69",
+                "--cov-fail-under=85",
             ]
         )
     else:

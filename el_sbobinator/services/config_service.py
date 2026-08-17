@@ -332,11 +332,7 @@ def _resolve_loaded_secrets_posix(data: dict) -> None:
 
     # Get fallback keys from keyring on macOS/Linux.
     try:
-        import keyring  # type: ignore
-
-        fk_json = keyring.get_password(_KEYRING_SERVICE, "gemini_fallback_keys")
-        if fk_json:
-            data["fallback_keys"] = json.loads(fk_json)
+        data["fallback_keys"] = _keyring_get_fallback_keys()
     except Exception as e:
         debug_log(f"load_config: non-windows keyring fallback keys load error: {e}")
 
@@ -500,13 +496,7 @@ def _prepare_fallback_keys(
                         data["fallback_keys"] = _raw["fallback_keys"]
             else:
                 try:
-                    import keyring as _kr  # type: ignore
-
-                    _fk_json = _kr.get_password(
-                        _KEYRING_SERVICE, "gemini_fallback_keys"
-                    )
-                    if _fk_json:
-                        data["fallback_keys"] = json.loads(_fk_json)
+                    data["fallback_keys"] = _keyring_get_fallback_keys()
                 except Exception:
                     pass
         except Exception:
@@ -591,22 +581,13 @@ def _secure_fallback_keys(fallback_keys: list | None, data: dict) -> None:
             )
         try:
             if platform.system() != "Windows":
-                import keyring  # type: ignore
-
-                keyring.set_password(
-                    _KEYRING_SERVICE, "gemini_fallback_keys", json.dumps(fk)
-                )
+                _keyring_set_fallback_keys(fk)
                 data["fallback_keys"] = []
         except Exception:
             pass
     elif platform.system() != "Windows" and fallback_keys is not None:
         try:
-            import keyring  # type: ignore
-
-            try:
-                keyring.delete_password(_KEYRING_SERVICE, "gemini_fallback_keys")
-            except Exception:
-                pass
+            _keyring_delete_fallback_keys()
         except Exception:
             pass
 
