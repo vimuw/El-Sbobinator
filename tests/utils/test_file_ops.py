@@ -483,5 +483,39 @@ class OpenPathWithDefaultAppTests(unittest.TestCase):
                     )
 
 
+class AtomicFileOpsTests(unittest.TestCase):
+    def test_safe_mkdir(self):
+        from el_sbobinator.utils.file_ops import _safe_mkdir
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target = os.path.join(tmpdir, "a", "b", "c")
+            _safe_mkdir(target)
+            self.assertTrue(os.path.isdir(target))
+            # Idempotent call
+            _safe_mkdir(target)
+            self.assertTrue(os.path.isdir(target))
+
+    def test_atomic_write_text_and_fsync(self):
+        from el_sbobinator.utils.file_ops import _atomic_write_text, _fsync_dir
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target = os.path.join(tmpdir, "test.txt")
+            _atomic_write_text(target, "hello atomic world")
+            with open(target, encoding="utf-8") as fh:
+                content = fh.read()
+            self.assertEqual(content, "hello atomic world")
+            _fsync_dir(target)
+
+    def test_atomic_write_json_and_load_json(self):
+        from el_sbobinator.utils.file_ops import _atomic_write_json, _load_json
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target = os.path.join(tmpdir, "data.json")
+            data = {"key": "value", "numbers": [1, 2, 3]}
+            _atomic_write_json(target, data)
+            loaded = _load_json(target)
+            self.assertEqual(loaded, data)
+
+
 if __name__ == "__main__":
     unittest.main()

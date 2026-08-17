@@ -645,5 +645,23 @@ class SessionRootTests(unittest.TestCase):
             self.assertFalse(result)
 
 
+class SharedFacadeTests(unittest.TestCase):
+    def test_shared_re_exports_expected_functions_and_constants(self):
+        self.assertTrue(hasattr(shared, "get_session_root"))
+        self.assertTrue(hasattr(shared, "set_session_root"))
+        self.assertTrue(hasattr(shared, "_atomic_write_json"))
+        self.assertTrue(hasattr(shared, "_atomic_write_text"))
+        self.assertTrue(hasattr(shared, "_safe_mkdir"))
+        self.assertTrue(hasattr(shared, "_load_json"))
+        self.assertTrue(hasattr(shared, "cleanup_orphan_sessions"))
+        self.assertTrue(hasattr(shared, "DEFAULT_MODEL"))
+
+    def test_shared_getattr_fallback_and_missing_attribute(self):
+        # Attribute on session_store accessible dynamically
+        self.assertTrue(callable(shared.new_session))
+        with self.assertRaises(AttributeError):
+            _ = shared.non_existent_attribute_12345
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -4,11 +4,81 @@ File-system helpers shared by the WebView backend.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import threading
 import time
 import uuid
+from typing import Any
+
+
+def _safe_mkdir(path: str) -> None:
+    os.makedirs(path, exist_ok=True)
+
+
+def _fsync_dir(path: str) -> None:
+    """Best-effort directory fsync after an atomic rename (Linux/macOS only)."""
+    try:
+        dir_fd = os.open(os.path.dirname(os.path.abspath(path)) or ".", os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+    except OSError:
+        pass
+
+
+def _atomic_write_text(path: str, text: str) -> None:
+    tmp_path = path + ".tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        _replace = os.replace
+        if "el_sbobinator.core.shared" in sys.modules:
+            shared_mod = sys.modules["el_sbobinator.core.shared"]
+            if hasattr(shared_mod, "os") and hasattr(shared_mod.os, "replace"):
+                if shared_mod.os.replace is not os.replace:
+                    _replace = shared_mod.os.replace
+        _replace(tmp_path, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+    _fsync_dir(path)
+
+
+def _atomic_write_json(path: str, data: Any) -> None:
+    tmp_path = path + ".tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        _replace = os.replace
+        if "el_sbobinator.core.shared" in sys.modules:
+            shared_mod = sys.modules["el_sbobinator.core.shared"]
+            if hasattr(shared_mod, "os") and hasattr(shared_mod.os, "replace"):
+                if shared_mod.os.replace is not os.replace:
+                    _replace = shared_mod.os.replace
+        _replace(tmp_path, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+    _fsync_dir(path)
+
+
+def _load_json(path: str) -> Any:
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
 
 _HTML_CACHE_MAX = 200  # FIFO cap for write-lock entries
 _HTML_GEN_MAX = (

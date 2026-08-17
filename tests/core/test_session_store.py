@@ -259,5 +259,83 @@ class TestMigrateSession(unittest.TestCase):
         self.assertEqual(result2["schema_version"], 1)
 
 
+class SessionStoreDomainDutiesTests(unittest.TestCase):
+    def test_get_and_set_session_root(self):
+        from el_sbobinator.core.session_store import (
+            get_session_root,
+            set_session_root,
+        )
+
+        orig = get_session_root()
+        try:
+            set_session_root("/tmp/custom_sessions")
+            self.assertEqual(get_session_root(), "/tmp/custom_sessions")
+        finally:
+            set_session_root(orig)
+
+    def test_fingerprinting_and_session_id(self):
+        import tempfile
+
+        from el_sbobinator.core.session_store import (
+            _file_fingerprint,
+            _file_tail_hash,
+            _partial_file_hash,
+            _session_dir_for_file,
+            _session_id_for_file,
+        )
+
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+            f.write(b"Audio content test bytes " * 100)
+            path = f.name
+
+        try:
+            fp = _file_fingerprint(path)
+            self.assertEqual(fp["path"], os.path.abspath(path))
+            self.assertGreater(fp["size"], 0)
+
+            head_hash = _partial_file_hash(path)
+            self.assertTrue(len(head_hash) > 0)
+
+            tail_hash = _file_tail_hash(path)
+            self.assertTrue(len(tail_hash) > 0)
+
+            sid = _session_id_for_file(path)
+            self.assertTrue(len(sid) > 0)
+            self.assertEqual(_session_id_for_file(path), sid)  # Cache check
+
+            sdir = _session_dir_for_file(path)
+            self.assertTrue(sdir.endswith(sid))
+        finally:
+            os.unlink(path)
+
+    def test_storage_info_and_cleanup(self):
+        import tempfile
+
+        from el_sbobinator.core.session_store import (
+            cleanup_completed_sessions,
+            cleanup_orphan_sessions,
+            cleanup_orphan_temp_chunks,
+            get_session_storage_info,
+            invalidate_session_storage_cache,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("el_sbobinator.core.session_store.SESSION_ROOT", tmpdir):
+                invalidate_session_storage_cache()
+                info = get_session_storage_info()
+                self.assertEqual(info["total_sessions"], 0)
+                self.assertEqual(info["total_bytes"], 0)
+
+                # Orphan cleanup in empty directory
+                cleanup_res = cleanup_orphan_sessions()
+                self.assertEqual(cleanup_res["removed"], 0)
+
+                completed_res = cleanup_completed_sessions()
+                self.assertEqual(completed_res["removed"], 0)
+
+                temp_res = cleanup_orphan_temp_chunks()
+                self.assertIsInstance(temp_res, int)
+
+
 if __name__ == "__main__":
     unittest.main()
