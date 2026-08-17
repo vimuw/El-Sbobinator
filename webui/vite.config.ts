@@ -21,7 +21,7 @@ export default defineConfig({
   },
   esbuild: {
     drop: ['console', 'debugger'],
-  } as any,
+  } as Record<string, unknown>,
   build: {
     target: 'esnext',
     chunkSizeWarningLimit: 1000,

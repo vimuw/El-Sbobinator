@@ -54,9 +54,8 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = ({
   const isError = updateInstallState?.status === 'error';
 
   const handleOpenGitHub = () => {
-    const win = window as unknown as { pywebview?: { api?: Record<string, (...args: unknown[]) => Promise<any>> } };
-    if (win.pywebview?.api?.open_url) {
-      void win.pywebview.api.open_url('https://github.com/vimuw/El-Sbobinator/releases/latest');
+    if (window.pywebview?.api?.open_url) {
+      void window.pywebview.api.open_url('https://github.com/vimuw/El-Sbobinator/releases/latest');
     } else {
       window.open('https://github.com/vimuw/El-Sbobinator/releases/latest', '_blank');
     }

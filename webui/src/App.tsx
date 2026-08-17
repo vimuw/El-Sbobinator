@@ -37,8 +37,8 @@ const ArchivePage = React.lazy(() => archivePagePromise.then(m => ({ default: m.
 
 declare global {
   interface Window {
-    pywebview: { api?: PywebviewApi };
-    elSbobinatorBridge: ElSbobinatorBridge;
+    pywebview?: { api?: PywebviewApi };
+    elSbobinatorBridge?: ElSbobinatorBridge;
   }
 }
 

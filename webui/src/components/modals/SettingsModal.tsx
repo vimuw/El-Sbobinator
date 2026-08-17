@@ -123,8 +123,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   async function pollMoveStatus() {
     try {
-      const win = window as unknown as { pywebview?: { api?: Record<string, (...args: unknown[]) => Promise<any>> } };
-      const res = await win.pywebview?.api?.get_session_move_status?.();
+      const res = await window.pywebview?.api?.get_session_move_status?.();
       if (!res || !isOpenRef.current || !isMountedRef.current) return;
       if (res.status === 'moving') {
         setMoveProgress({ moved: res.moved ?? 0, total: res.total ?? 0 });
@@ -132,8 +131,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       } else if (res.status === 'done') {
         setIsMoveInProgress(false);
         setMoveProgress(null);
-        if (win.pywebview?.api?.get_session_storage_info) {
-          const info = await win.pywebview.api.get_session_storage_info();
+        if (window.pywebview?.api?.get_session_storage_info) {
+          const info = await window.pywebview.api.get_session_storage_info();
           if (info?.ok && isOpenRef.current && isMountedRef.current) {
             setSessionInfo({
               total_bytes: info.total_bytes ?? 0,
@@ -163,9 +162,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     let aborted = false;
     setSaveError(null);
 
-    const win = window as unknown as { pywebview?: { api?: Record<string, (...args: unknown[]) => Promise<any>> } };
-    if (win.pywebview?.api?.load_settings) {
-      win.pywebview.api.load_settings()
+    if (window.pywebview?.api?.load_settings) {
+      window.pywebview.api.load_settings()
         .then(res => {
           if (aborted || !isMountedRef.current) return;
           if (res) {
@@ -176,10 +174,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         .catch(() => {});
     }
 
-    if (win.pywebview?.api?.get_session_storage_info) {
+    if (window.pywebview?.api?.get_session_storage_info) {
       setIsLoadingSessionInfo(true);
       setSessionInfo(null);
-      win.pywebview.api.get_session_storage_info()
+      window.pywebview.api.get_session_storage_info()
         .then(res => {
           if (aborted || !isMountedRef.current) return;
           if (res?.ok) {
@@ -196,8 +194,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         });
     }
 
-    if (win.pywebview?.api?.get_session_move_status) {
-      win.pywebview.api.get_session_move_status()
+    if (window.pywebview?.api?.get_session_move_status) {
+      window.pywebview.api.get_session_move_status()
         .then(res => {
           if (aborted || !isMountedRef.current) return;
           if (res?.status === 'moving') {
@@ -220,14 +218,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   }, [isOpen]);
 
   const handleOpenSessionFolder = () => {
-    const win = window as unknown as { pywebview?: { api?: Record<string, (...args: unknown[]) => Promise<any>> } };
-    win.pywebview?.api?.open_session_folder?.();
+    window.pywebview?.api?.open_session_folder?.();
   };
 
   const handleAskMoveFolder = async () => {
     if (isMoveInProgress) return;
-    const win = window as unknown as { pywebview?: { api?: Record<string, (...args: unknown[]) => Promise<any>> } };
-    const res = await win.pywebview?.api?.ask_session_folder?.();
+    const res = await window.pywebview?.api?.ask_session_folder?.();
     if (!res?.ok || !res.path) return;
     setPendingMovePath(res.path);
     setMoveError(null);
@@ -238,8 +234,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (!pendingMovePath) return;
     setShowMoveConfirm(false);
     setMoveError(null);
-    const win = window as unknown as { pywebview?: { api?: Record<string, (...args: unknown[]) => Promise<any>> } };
-    const res = await win.pywebview?.api?.move_session_root?.(pendingMovePath);
+    const res = await window.pywebview?.api?.move_session_root?.(pendingMovePath);
     setPendingMovePath(null);
     if (!res?.ok) {
       setMoveError(res?.error ?? 'Errore sconosciuto');
@@ -251,12 +246,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleAskCleanup = async () => {
-    const win = window as unknown as { pywebview?: { api?: Record<string, (...args: unknown[]) => Promise<any>> } };
-    if (!win.pywebview?.api?.cleanup_old_sessions || isCleaningSession) return;
+    if (!window.pywebview?.api?.cleanup_old_sessions || isCleaningSession) return;
     setIsCleaningSession(true);
     setCleanupPreview(null);
     try {
-      const res = await win.pywebview.api.cleanup_old_sessions(SESSION_CLEANUP_DAYS, true);
+      const res = await window.pywebview.api.cleanup_old_sessions(SESSION_CLEANUP_DAYS, true);
       if (!isMountedRef.current) return;
       if (res?.ok) {
         setCleanupPreview({
@@ -276,13 +270,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleCleanupSessions = async () => {
-    const win = window as unknown as { pywebview?: { api?: Record<string, (...args: unknown[]) => Promise<any>> } };
-    if (!win.pywebview?.api?.cleanup_old_sessions) return;
+    if (!window.pywebview?.api?.cleanup_old_sessions) return;
     setShowCleanupConfirm(false);
     setIsCleaningSession(true);
     setCleanupResult(null);
     try {
-      const res = await win.pywebview.api.cleanup_old_sessions(SESSION_CLEANUP_DAYS, false);
+      const res = await window.pywebview.api.cleanup_old_sessions(SESSION_CLEANUP_DAYS, false);
       if (!isMountedRef.current) return;
       if (res?.ok) {
         setCleanupResult({
@@ -292,8 +285,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           preserved_completed: res.preserved_completed ?? 0,
           missing_completed_html: res.missing_completed_html ?? 0,
         });
-        if (win.pywebview?.api?.get_session_storage_info) {
-          const info = await win.pywebview.api.get_session_storage_info();
+        if (window.pywebview?.api?.get_session_storage_info) {
+          const info = await window.pywebview.api.get_session_storage_info();
           if (info?.ok && isMountedRef.current) {
             setSessionInfo({
               total_bytes: info.total_bytes ?? 0,
@@ -313,12 +306,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleAskCompletedCleanup = async () => {
-    const win = window as unknown as { pywebview?: { api?: Record<string, (...args: unknown[]) => Promise<any>> } };
-    if (!win.pywebview?.api?.cleanup_completed_sessions || isCleaningCompletedSessions) return;
+    if (!window.pywebview?.api?.cleanup_completed_sessions || isCleaningCompletedSessions) return;
     setIsCleaningCompletedSessions(true);
     setCompletedCleanupPreview(null);
     try {
-      const res = await win.pywebview.api.cleanup_completed_sessions(SESSION_CLEANUP_DAYS, true);
+      const res = await window.pywebview.api.cleanup_completed_sessions(SESSION_CLEANUP_DAYS, true);
       if (!isMountedRef.current) return;
       if (res?.ok) {
         setCompletedCleanupPreview({
@@ -338,12 +330,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleCleanupCompletedSessions = async () => {
-    const win = window as unknown as { pywebview?: { api?: Record<string, (...args: unknown[]) => Promise<any>> } };
-    if (!win.pywebview?.api?.cleanup_completed_sessions) return;
+    if (!window.pywebview?.api?.cleanup_completed_sessions) return;
     setShowCompletedCleanupConfirm(false);
     setIsCleaningCompletedSessions(true);
     try {
-      const res = await win.pywebview.api.cleanup_completed_sessions(SESSION_CLEANUP_DAYS, false);
+      const res = await window.pywebview.api.cleanup_completed_sessions(SESSION_CLEANUP_DAYS, false);
       if (!isMountedRef.current) return;
       if (res?.ok) {
         setCompletedCleanupResult({
@@ -351,8 +342,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           freed_bytes: res.freed_bytes ?? 0,
           candidates: res.candidates ?? res.removed ?? 0,
         });
-        if (win.pywebview?.api?.get_session_storage_info) {
-          const info = await win.pywebview.api.get_session_storage_info();
+        if (window.pywebview?.api?.get_session_storage_info) {
+          const info = await window.pywebview.api.get_session_storage_info();
           if (info?.ok && isMountedRef.current) {
             setSessionInfo({
               total_bytes: info.total_bytes ?? 0,
@@ -372,11 +363,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const runEnvironmentValidation = async () => {
-    const win = window as unknown as { pywebview?: { api?: Record<string, (...args: unknown[]) => Promise<any>> } };
-    if (!win.pywebview?.api?.validate_environment) return;
+    if (!window.pywebview?.api?.validate_environment) return;
     setIsValidatingEnvironment(true);
     try {
-      const response = await win.pywebview.api.validate_environment(
+      const response = await window.pywebview.api.validate_environment(
         apiKey.trim(),
         true,
         preferredModel,
@@ -477,8 +467,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setIsSaving(true);
     setSaveError(null);
     try {
-      const win = window as unknown as { pywebview?: { api?: Record<string, (...args: unknown[]) => Promise<any>> } };
-      if (!win.pywebview?.api?.save_settings) {
+      if (!window.pywebview?.api?.save_settings) {
         const err = 'Bridge Python non disponibile — impostazioni non salvate.';
         if (isMountedRef.current) setSaveError(err);
         appendConsole(`❌ ${err}`);
@@ -488,7 +477,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       let result;
       try {
         const apiKeyPayload = hasProtectedKey && !apiKey.trim() ? null : apiKey.trim();
-        result = await win.pywebview.api.save_settings(apiKeyPayload, keys, preferredModel, fallbackModels);
+        result = await window.pywebview.api.save_settings(apiKeyPayload, keys, preferredModel, fallbackModels);
       } catch (e: unknown) {
         const err = `Errore salvataggio impostazioni: ${getErrorMessage(e)}`;
         if (isMountedRef.current) setSaveError(err);

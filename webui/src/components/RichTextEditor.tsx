@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { type Editor as TiptapEditor } from '@tiptap/core';
+import type { Node as ProsemirrorNode } from '@tiptap/pm/model';
 import { NodeSelection, TextSelection } from '@tiptap/pm/state';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -113,7 +114,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
           'wss://y-webrtc.fly.dev',
           'wss://y-webrtc-signaling.onrender.com',
         ],
-        filterBc: false,
+        filterBcConns: false,
         peerOpts: {
           config: {
             iceServers: [
@@ -124,7 +125,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
             ],
           },
         },
-      } as any);
+      });
     } catch (err) {
       console.error('Errore inizializzazione WebRTC provider:', err);
     }
@@ -197,7 +198,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
     };
     const unregisterSignal = registerCollabSignalListener(receiveSignalHandler);
 
-    const handleDocUpdate = (update: Uint8Array, origin: any) => {
+    const handleDocUpdate = (update: Uint8Array, origin: unknown) => {
       if (origin === 'pywebview-bridge' || origin === 'local-bc') return;
       const b64 = bytesToBase64(update);
       const payload = JSON.stringify({ type: 'yjs-update', update: b64 });
@@ -206,7 +207,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
     };
     doc.on('update', handleDocUpdate);
 
-    const handleAwarenessUpdate = ({ added, updated, removed }: any, origin: any) => {
+    const handleAwarenessUpdate = ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }, origin: unknown) => {
       if (origin === 'pywebview-bridge' || origin === 'local-bc' || !awareness) return;
       let changedClients = added.concat(updated).concat(removed);
       if (changedClients.length === 0) changedClients = [awareness.clientID];
@@ -234,7 +235,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
 
   const { ydoc, provider } = collabState;
 
-  const draggedImageRef = useRef<{ pos: number; size: number; node: any } | null>(null);
+  const draggedImageRef = useRef<{ pos: number; size: number; node: ProsemirrorNode } | null>(null);
 
   const isPlaceholderContent = typeof initialContent === 'string' && initialContent.includes('Connessione in corso alla stanza');
   const effectiveInitialContent = collaborationRoom ? undefined : initialContent;
@@ -244,8 +245,8 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
       StarterKit.configure({
         link: false,
         underline: false,
-        ...(collaborationRoom ? { history: false } : {}),
-      } as any),
+        ...(collaborationRoom ? { undoRedo: false } : {}),
+      }),
       FloatingImage,
       TextStyle,
       Color,
@@ -271,7 +272,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
       ...(collaborationRoom && ydoc && provider ? [
         Collaboration.configure({ document: ydoc }),
         CollaborationCursor.configure({
-          provider: provider as any,
+          provider,
           user: collaborationUser || { name: 'Studente', color: '#3b82f6' },
         }),
       ] : []),
@@ -281,7 +282,10 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
       editorRef.current = editor;
       if (editor.utils?.getUpdatedPosition) {
         const origGetUpdatedPosition = editor.utils.getUpdatedPosition;
-        editor.utils.getUpdatedPosition = (pos: any, tr: any) => {
+        editor.utils.getUpdatedPosition = (
+          pos: Parameters<typeof origGetUpdatedPosition>[0],
+          tr: Parameters<typeof origGetUpdatedPosition>[1],
+        ) => {
           try {
             return origGetUpdatedPosition(pos, tr);
           } catch (_) {
@@ -354,8 +358,8 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
         draggedImageRef.current = null;
 
         if (!dragged) {
-          const sel = view.state.selection as any;
-          if (sel && sel.node && sel.node.type.name === 'floatingImage') {
+          const sel = view.state.selection;
+          if (sel instanceof NodeSelection && sel.node.type.name === 'floatingImage') {
             dragged = { pos: sel.from, size: sel.node.nodeSize, node: sel.node };
           } else if (sel) {
             const nodeAtFrom = view.state.doc.nodeAt(sel.from);
@@ -458,8 +462,9 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
   });
 
   useEffect(() => {
-    if (editor && collaborationUser && (editor.commands as any).updateUser) {
-      (editor.commands as any).updateUser(collaborationUser);
+    if (editor && collaborationUser) {
+      const commands = editor.commands as unknown as { updateUser?: (user: { name: string; color: string }) => boolean };
+      commands.updateUser?.(collaborationUser);
     }
   }, [editor, collaborationUser]);
 

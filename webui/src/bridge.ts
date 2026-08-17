@@ -227,6 +227,15 @@ export interface PywebviewApi {
   send_collaboration_signal?: (room: string, payload: string) => Promise<{ ok: boolean; error?: string }>;
 }
 
+declare global {
+  interface Window {
+    pywebview?: {
+      api?: PywebviewApi;
+    };
+    elSbobinatorBridge?: ElSbobinatorBridge;
+  }
+}
+
 export function createBridge(options: {
   dispatch: Dispatch<ProcessingAction>;
   appendConsole: (msg: string) => void;
