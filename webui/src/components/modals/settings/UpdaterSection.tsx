@@ -38,7 +38,7 @@ interface UpdaterSectionProps {
   onInstallUpdate?: (version: string) => Promise<void>;
 }
 
-export const UpdaterSection: React.FC<UpdaterSectionProps> = ({
+export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
   latestVersion,
   checkForUpdates,
   isCheckingUpdate,
@@ -166,4 +166,6 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = ({
       </div>
     </div>
   );
-};
+});
+
+UpdaterSection.displayName = 'UpdaterSection';

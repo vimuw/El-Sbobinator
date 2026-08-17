@@ -76,7 +76,6 @@ El Sbobinator is a Windows/macOS desktop application that turns audio lectures i
 | `components/EditorFindReplace.tsx` | Advanced find/replace popup bar inside the text editor |
 | `components/EditorFullPage.tsx` | Fullscreen modal page hosting TipTap editor, TOC, sidebar, and player |
 | `components/EditorToolbar.tsx` / `components/EditorToolbarControls.tsx` | Standard document styling controls and formatting actions |
-| `components/EditorWordCount.tsx` | Statistics panel tracking words, characters, and read time |
 | `components/FolderChip.tsx` / `components/KebabMenu.tsx` / `components/Toast.tsx` | Micro-components for folder tags, action triggers, and brief toast alerts |
 | `components/NavSidebar.tsx` | Main lateral navigation bar switching between Queue, Archivio, and Setup pages |
 | `components/ProcessingStatusBanner.tsx` | Top-of-screen banner while a batch is running (ETA, phase, model badge) |

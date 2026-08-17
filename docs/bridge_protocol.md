@@ -76,7 +76,7 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
 | `save_theme_preference(theme)` | theme string (`"light"` \| `"dark"`) | `None` | Persists theme preference to disk. |
 | `validate_environment(api_key?, check_api_key?, preferred_model?, fallback_models?)` | `{ok, result?: ValidationResult, error?}` | Cached environment check. | |
 | `get_session_storage_info()` | — | `{ok, total_bytes, total_sessions, session_root, error?}` | Wraps `shared.get_session_storage_info` (30 s cache). |
-| `cleanup_old_sessions(max_age_days=14)` | — | `{ok, removed, freed_bytes, errors, candidates, preserved_completed, missing_completed_html, error?}` | Deletes incomplete session folders older than threshold. |
+| `cleanup_old_sessions(max_age_days=0)` | — | `{ok, removed, freed_bytes, errors, candidates, preserved_completed, missing_completed_html, error?}` | Deletes incomplete session folders (default: all incomplete sessions). |
 | `cleanup_completed_sessions(max_age_days=14)` | — | `{ok, removed, freed_bytes, errors, candidates, preserved_completed, missing_completed_html, error?}` | Counts or deletes completed session folders older than threshold. |
 | `get_completed_sessions(limit=20)` | — | `{ok, sessions: ArchiveSession[], total, error?}` | 5 s internal cache; filters for `stage == "done"`. |
 | `delete_session(session_dir)` | absolute path under `SESSION_ROOT` | `{ok, error?}` | Path-traversal-checked. |

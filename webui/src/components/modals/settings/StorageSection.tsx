@@ -28,7 +28,7 @@ interface StorageSectionProps {
   onAskCompletedCleanup: () => void;
 }
 
-export const StorageSection: React.FC<StorageSectionProps> = ({
+export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
   sessionInfo,
   isLoadingSessionInfo,
   isMoveInProgress,
@@ -149,7 +149,7 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
           <div>
             <h3 className="font-semibold text-sm text-[var(--text-primary)]">Manutenzione e Pulizia</h3>
             <p className="text-xs text-[var(--text-muted)]">
-              Rimuovi file temporanei di elaborazioni vecchie di oltre {SESSION_CLEANUP_DAYS} giorni per liberare spazio.
+              Rimuovi file temporanei di elaborazioni incomplete o vecchie per liberare spazio.
             </p>
           </div>
         </div>
@@ -190,7 +190,7 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
             type="button"
             onClick={onAskCleanup}
             disabled={isCleaningSession}
-            title="Conta ed elimina elaborazioni incomplete"
+            title="Conta ed elimina tutte le elaborazioni incomplete"
             className="app-button-secondary text-xs px-3.5 py-2 flex items-center gap-1.5 font-medium"
           >
             {isCleaningSession ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
@@ -200,7 +200,7 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
             type="button"
             onClick={onAskCompletedCleanup}
             disabled={isCleaningCompletedSessions}
-            title="Conta ed elimina sbobine completate"
+            title={`Conta ed elimina sbobine completate vecchie di oltre ${SESSION_CLEANUP_DAYS} giorni`}
             className="app-button-secondary text-xs px-3.5 py-2 flex items-center gap-1.5 font-medium text-[var(--error-text)] border-[var(--error-ring)]/30 hover:bg-[var(--error-subtle)]"
           >
             {isCleaningCompletedSessions ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
@@ -210,4 +210,6 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
       </div>
     </div>
   );
-};
+});
+
+StorageSection.displayName = 'StorageSection';

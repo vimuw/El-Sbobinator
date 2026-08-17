@@ -12,7 +12,7 @@ interface ApiKeySectionProps {
   setFallbackKeys: (keys: string[]) => void;
 }
 
-export const ApiKeySection: React.FC<ApiKeySectionProps> = ({
+export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
   apiKey,
   setApiKey,
   hasProtectedKey,
@@ -163,4 +163,6 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = ({
       </div>
     </div>
   );
-};
+});
+
+ApiKeySection.displayName = 'ApiKeySection';

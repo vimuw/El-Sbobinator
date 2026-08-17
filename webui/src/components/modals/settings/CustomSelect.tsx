@@ -17,7 +17,7 @@ interface CustomSelectProps {
   disabled?: boolean;
 }
 
-export const CustomSelect: React.FC<CustomSelectProps> = ({
+export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
   value,
   onChange,
   options,
@@ -157,4 +157,6 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
       )}
     </div>
   );
-};
+});
+
+CustomSelect.displayName = 'CustomSelect';

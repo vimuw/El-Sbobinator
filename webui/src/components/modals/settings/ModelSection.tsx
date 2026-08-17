@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { Cpu, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import type { ModelOption } from '../../../bridge';
 import { CustomSelect } from './CustomSelect';
@@ -11,52 +11,65 @@ interface ModelSectionProps {
   availableModels: ModelOption[];
 }
 
-export const ModelSection: React.FC<ModelSectionProps> = ({
+export const ModelSection: React.FC<ModelSectionProps> = React.memo(({
   preferredModel,
   setPreferredModel,
   fallbackModels,
   setFallbackModels,
   availableModels,
 }) => {
-  const primaryModel = availableModels.find(m => m.id === preferredModel);
+  const primaryModel = useMemo(
+    () => availableModels.find(m => m.id === preferredModel),
+    [availableModels, preferredModel],
+  );
   const primaryModelSummary = primaryModel?.summary;
   const defaultChunkMinutes = primaryModel?.default_chunk_minutes ?? '—';
   const defaultTemperature = primaryModel?.phase1_temperature ?? '—';
 
-  const handlePrimaryModelChange = (nextPrimary: string) => {
+  const handlePrimaryModelChange = useCallback((nextPrimary: string) => {
     setPreferredModel(nextPrimary);
     setFallbackModels(fallbackModels.filter(modelId => modelId !== nextPrimary));
-  };
+  }, [fallbackModels, setPreferredModel, setFallbackModels]);
 
-  const handleAddFallbackModel = (nextFallback: string) => {
+  const handleAddFallbackModel = useCallback((nextFallback: string) => {
     if (!nextFallback || nextFallback === preferredModel || fallbackModels.includes(nextFallback)) return;
     setFallbackModels(prev => [...prev, nextFallback]);
-  };
+  }, [preferredModel, fallbackModels, setFallbackModels]);
 
-  const moveFallbackModel = (index: number, direction: -1 | 1) => {
+  const moveFallbackModel = useCallback((index: number, direction: -1 | 1) => {
     const nextIndex = index + direction;
     if (index < 0 || nextIndex < 0 || nextIndex >= fallbackModels.length) return;
     const nextModels = [...fallbackModels];
     const [moved] = nextModels.splice(index, 1);
     nextModels.splice(nextIndex, 0, moved);
     setFallbackModels(nextModels);
-  };
+  }, [fallbackModels, setFallbackModels]);
 
-  const removeFallbackModel = (modelId: string) => {
+  const removeFallbackModel = useCallback((modelId: string) => {
     setFallbackModels(prev => prev.filter(item => item !== modelId));
-  };
+  }, [setFallbackModels]);
 
-  const availableFallbackOptions = availableModels.filter(model => model.id !== preferredModel);
-  const primaryModelOptions = availableModels.map(m => ({
-    value: m.id,
-    label: m.label,
-    sublabel: m.id,
-  }));
-  const fallbackSelectOptions = availableFallbackOptions.map(m => ({
-    value: m.id,
-    label: m.label,
-    disabled: fallbackModels.includes(m.id),
-  }));
+  const availableFallbackOptions = useMemo(
+    () => availableModels.filter(model => model.id !== preferredModel),
+    [availableModels, preferredModel],
+  );
+
+  const primaryModelOptions = useMemo(
+    () => availableModels.map(m => ({
+      value: m.id,
+      label: m.label,
+    })),
+    [availableModels],
+  );
+
+  const fallbackSelectOptions = useMemo(
+    () => availableFallbackOptions.map(m => ({
+      value: m.id,
+      label: m.label,
+      disabled: fallbackModels.includes(m.id),
+    })),
+    [availableFallbackOptions, fallbackModels],
+  );
 
   return (
     <div className="p-4 rounded-xl border border-[var(--border-subtle)] space-y-5">
@@ -168,4 +181,6 @@ export const ModelSection: React.FC<ModelSectionProps> = ({
       </div>
     </div>
   );
-};
+});
+
+ModelSection.displayName = 'ModelSection';

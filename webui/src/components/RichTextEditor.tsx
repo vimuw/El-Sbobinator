@@ -32,7 +32,6 @@ import { MenuBar } from './EditorToolbar';
 import { getLastHighlightColor, getWordRangeAtPos } from '../editorUtils';
 import { EditorBubbleMenu } from './EditorBubbleMenu';
 import { FindReplacePanel } from './EditorFindReplace';
-import { WordCount } from './EditorWordCount';
 import { readFileAsDataUrl } from '../utils';
 import { registerCollabSignalListener } from '../bridge';
 
@@ -744,7 +743,6 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
           <div className="editor-toc-spacer" style={{ width: isTocOpen ? 260 : 44 }} />
         </div>
       </div>
-      {editor && <WordCount editor={editor} />}
 
       {contextMenu && createPortal(
         <div

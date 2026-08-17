@@ -146,27 +146,31 @@ describe('EditorFullPage autosave', () => {
     expect(secondGeneration).toBeGreaterThan(firstGeneration);
   });
 
-  it('renders "Inizia sessione" icon after the copy icon and includes dark/light theme toggle button', async () => {
+  it('renders top actions in order: theme toggle, inizia sessione, copy html, open html', async () => {
     const setThemeMode = vi.fn();
     render(<EditorFullPage {...baseProps} themeMode="dark" setThemeMode={setThemeMode} />);
 
-    const copyBtn = screen.getByTitle('Copia per Google Docs');
-    const collabBtn = screen.getByTitle('Inizia sessione (Collaborazione P2P)');
     const themeBtn = screen.getByTitle('Tema chiaro');
+    const collabBtn = screen.getByTitle('Inizia sessione (Collaborazione P2P)');
+    const copyBtn = screen.getByTitle('Copia per Google Docs');
+    const openBtn = screen.getByTitle('Apri file HTML');
 
-    expect(copyBtn).toBeTruthy();
-    expect(collabBtn).toBeTruthy();
     expect(themeBtn).toBeTruthy();
+    expect(collabBtn).toBeTruthy();
+    expect(copyBtn).toBeTruthy();
+    expect(openBtn).toBeTruthy();
 
-    // Verify order: copyBtn comes before collabBtn
+    // Verify order: themeBtn -> collabBtn -> copyBtn -> openBtn
     const buttons = screen.getAllByRole('button');
-    const copyIndex = buttons.indexOf(copyBtn);
-    const collabIndex = buttons.indexOf(collabBtn);
     const themeIndex = buttons.indexOf(themeBtn);
+    const collabIndex = buttons.indexOf(collabBtn);
+    const copyIndex = buttons.indexOf(copyBtn);
+    const openIndex = buttons.indexOf(openBtn);
 
-    expect(copyIndex).toBeGreaterThan(-1);
-    expect(collabIndex).toBeGreaterThan(copyIndex);
-    expect(themeIndex).toBeGreaterThan(collabIndex);
+    expect(themeIndex).toBeGreaterThan(-1);
+    expect(collabIndex).toBeGreaterThan(themeIndex);
+    expect(copyIndex).toBeGreaterThan(collabIndex);
+    expect(openIndex).toBeGreaterThan(copyIndex);
 
     // Toggling theme calls setThemeMode
     fireEvent.click(themeBtn);

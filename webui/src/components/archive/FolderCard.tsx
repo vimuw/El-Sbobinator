@@ -136,7 +136,7 @@ export function NewFolderCard({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       className="folder-card folder-card-new cursor-pointer w-full text-left group/newfolder"
     >
-      <FolderPlus className="w-5 h-5 transition-transform duration-200 group-hover/newfolder:scale-110" style={{ color: 'var(--accent-text)' }} />
+      <FolderPlus className="w-5 h-5 transition-transform duration-200 group-hover/newfolder:scale-105" style={{ color: 'var(--accent-text)' }} />
       <span className="text-xs font-semibold" style={{ color: 'var(--accent-text)' }}>Nuova raccolta</span>
     </button>
   );

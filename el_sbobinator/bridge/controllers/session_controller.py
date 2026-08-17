@@ -35,6 +35,7 @@ class SessionControllerMixin:
     """Mixin providing session CRUD, search, folder, and cleanup IPC methods."""
 
     if TYPE_CHECKING:
+        _processing_thread: threading.Thread | None
         _sessions_cache: dict | None
         _sessions_cache_ts: float
         _sessions_cache_gen: int
@@ -311,14 +312,26 @@ class SessionControllerMixin:
 
     def cleanup_old_sessions(
         self,
-        max_age_days: int = 14,
+        max_age_days: int = 0,
         dry_run: bool = False,
     ) -> dict:
-        """Delete incomplete session folders older than max_age_days days."""
+        """Delete incomplete session folders (defaults to all incomplete sessions, or older than max_age_days days)."""
         try:
+            thread = getattr(self, "_processing_thread", None)
+            if thread is not None and thread.is_alive():
+                return {
+                    "ok": False,
+                    "error": "Impossibile eseguire la pulizia durante un'elaborazione in corso.",
+                    "removed": 0,
+                    "freed_bytes": 0,
+                    "errors": 0,
+                    "candidates": 0,
+                    "preserved_completed": 0,
+                    "missing_completed_html": 0,
+                }
             with self._cleanup_lock:
                 result = cleanup_orphan_sessions(
-                    max(1, int(max_age_days)),
+                    max(0, int(max_age_days)),
                     dry_run=bool(dry_run),
                 )
                 if result["removed"] > 0:
@@ -353,6 +366,18 @@ class SessionControllerMixin:
     ) -> dict:
         """Count or delete completed session folders older than max_age_days days."""
         try:
+            thread = getattr(self, "_processing_thread", None)
+            if thread is not None and thread.is_alive():
+                return {
+                    "ok": False,
+                    "error": "Impossibile eseguire la pulizia durante un'elaborazione in corso.",
+                    "removed": 0,
+                    "freed_bytes": 0,
+                    "errors": 0,
+                    "candidates": 0,
+                    "preserved_completed": 0,
+                    "missing_completed_html": 0,
+                }
             with self._cleanup_lock:
                 result = cleanup_completed_sessions(
                     max(1, int(max_age_days)),

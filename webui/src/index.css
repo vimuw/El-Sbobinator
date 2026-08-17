@@ -103,10 +103,16 @@
   --btn-disabled-bg: rgba(148, 163, 184, 0.22);
   --btn-disabled-text: rgba(100, 116, 139, 0.72);
 
-  --console-bg: #f5f4f0;
-  --console-header: #ebe9e3;
-  --console-heading: #111827;
-  --console-text: #374151;
+  --console-bg: #0a0a0a;
+  --console-header: #141414;
+  --console-heading: #f5f5f5;
+  --console-text: #d1d5db;
+  --console-muted: #9ca3af;
+  --console-border: rgba(255, 255, 255, 0.08);
+  --console-shell-border: rgba(0, 0, 0, 0.18);
+  --console-error: #fca5a5;
+  --console-success: #4ade80;
+  --console-warning: #fcd34d;
 
   --gradient-title-from: #1a2e18;
   --gradient-title-to: #4a7c40;
@@ -187,6 +193,12 @@
     --console-header: #141414;
     --console-heading: #f5f5f5;
     --console-text: #d1d5db;
+    --console-muted: #9ca3af;
+    --console-border: rgba(255, 255, 255, 0.08);
+    --console-shell-border: rgba(255, 255, 255, 0.12);
+    --console-error: #fca5a5;
+    --console-success: #4ade80;
+    --console-warning: #fcd34d;
 
     --gradient-title-from: #d4f0d2;
     --gradient-title-to: #5aa356;
@@ -221,7 +233,6 @@ body,
 .editor-select,
 .editor-button,
 .editor-separator,
-.editor-wordcount,
 .editor-page-container,
 .editor-page-outer,
 .editor-page,
@@ -263,11 +274,11 @@ body,
 }
 
 .theme-toggle-btn svg {
-  transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1), color 250ms ease;
+  transition: transform 300ms cubic-bezier(0.34, 1.2, 0.64, 1), color 250ms ease;
 }
 
 .theme-toggle-btn:hover svg {
-  transform: rotate(18deg) scale(1.12);
+  transform: rotate(18deg) scale(1.05);
 }
 
 .theme-toggle-btn:active svg {
@@ -327,7 +338,14 @@ body,
 }
 
 :root:not([data-theme="dark"]) .dropzone-card::before {
-  background: radial-gradient(circle at 50% 45%, rgba(61, 107, 58, 0.07), transparent 65%);
+  background: radial-gradient(
+    circle 220px at 50% 46%,
+    rgba(61, 107, 58, 0.08) 0%,
+    rgba(61, 107, 58, 0.075) 45%,
+    rgba(61, 107, 58, 0.045) 70%,
+    rgba(61, 107, 58, 0.015) 88%,
+    rgba(61, 107, 58, 0) 100%
+  );
 }
 
 :root[data-theme="dark"] .dropzone-card {
@@ -341,7 +359,14 @@ body,
 }
 
 :root[data-theme="dark"] .dropzone-card::before {
-  background: radial-gradient(circle at 50% 45%, rgba(90, 163, 86, 0.08), transparent 65%);
+  background: radial-gradient(
+    circle 220px at 50% 46%,
+    rgba(90, 163, 86, 0.11) 0%,
+    rgba(90, 163, 86, 0.10) 45%,
+    rgba(90, 163, 86, 0.06) 70%,
+    rgba(90, 163, 86, 0.02) 88%,
+    rgba(90, 163, 86, 0) 100%
+  );
 }
 
 /* ═══ FOOTER ═══ */
@@ -427,11 +452,6 @@ body,
 :root:not([data-theme="dark"]) .editor-button.is-active {
   background: rgba(0, 0, 0, 0.10);
   border-color: var(--border-strong);
-}
-
-:root:not([data-theme="dark"]) .editor-wordcount {
-  background: var(--editor-chrome-bg);
-  border-top-color: rgba(100, 116, 139, 0.28);
 }
 
 :root:not([data-theme="dark"]) .color-reset:hover,
@@ -569,6 +589,11 @@ button {
   background: var(--glass-bg);
   border-color: var(--glass-border);
   box-shadow: var(--shadow-strong);
+}
+
+.modal-card {
+  will-change: transform, opacity;
+  transform: translateZ(0);
 }
 
 .premium-badge,
@@ -866,7 +891,8 @@ button {
   position: absolute;
   inset: 0;
   background: var(--bg-overlay);
-  backdrop-filter: blur(10px);
+  will-change: opacity;
+  transform: translateZ(0);
 }
 
 .modal-action-button {
@@ -1150,10 +1176,10 @@ button {
   border: 1.5px dashed var(--border-default);
   background: var(--bg-panel);
   transition:
-    transform 220ms ease,
-    background 300ms ease,
-    box-shadow 220ms ease,
-    border-color 220ms ease;
+    transform 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
 }
 
 .dropzone-card::before {
@@ -1163,7 +1189,8 @@ button {
   border-radius: 12px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 380ms ease;
+  transition: opacity 180ms ease-out;
+  will-change: opacity;
 }
 
 .dropzone-card:hover::before {
@@ -1330,13 +1357,13 @@ button {
 .console-shell {
   border-radius: 10px;
   overflow: hidden;
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--console-shell-border, var(--glass-border));
   background: var(--console-bg);
   box-shadow: none;
 }
 
 .console-shell-subtle {
-  border-color: var(--glass-border);
+  border-color: var(--console-shell-border, var(--glass-border));
   box-shadow: none;
   background: var(--console-bg);
 }
@@ -1871,23 +1898,6 @@ button {
   background: var(--accent-ring);
 }
 
-/* ═══ WORD COUNT ═══ */
-
-.editor-wordcount {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.3rem 1rem;
-  font-size: 0.7rem;
-  color: var(--text-faint);
-  border-top: 1px solid var(--border-subtle);
-  background: rgba(255, 255, 255, 0.01);
-  user-select: none;
-}
-
-.editor-wordcount-sep {
-  opacity: 0.4;
-}
 
 .link-panel {
   display: flex;
@@ -2227,16 +2237,16 @@ button {
   border: 2px solid transparent;
   cursor: pointer;
   flex-shrink: 0;
-  transition: transform 120ms ease, border-color 120ms ease;
+  transition: transform 120ms cubic-bezier(0.34, 1.2, 0.64, 1), border-color 120ms ease;
 }
 
 .color-swatch:hover {
-  transform: scale(1.15);
+  transform: scale(1.06);
 }
 
 .color-swatch.is-selected {
   border-color: var(--text-primary);
-  transform: scale(1.1);
+  transform: scale(1.04);
 }
 
 .color-footer {
@@ -2706,12 +2716,12 @@ button {
   background: var(--bg-elevated);
   border: 2px solid var(--text-secondary);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  transition: transform 120ms ease;
+  transition: transform 120ms cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 
 .custom-scrubber::-webkit-slider-thumb:hover,
 .custom-volume::-webkit-slider-thumb:hover {
-  transform: scale(1.12);
+  transform: scale(1.06);
 }
 
 /* ═══ UTILITY / ANIMATIONS ═══ */
@@ -2805,25 +2815,25 @@ input[type="password"]::-ms-reveal {
 
 .sidebar-nav-item {
   border: 1px solid transparent;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.18s cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 
 .sidebar-nav-item:hover {
   background: var(--sidebar-active-bg) !important;
   color: var(--text-primary) !important;
-  transform: scale(1.06);
+  transform: scale(1.02);
 }
 
 .sidebar-nav-item:active {
-  transform: scale(0.94);
+  transform: scale(0.96);
 }
 
 .sidebar-nav-item svg {
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.2s cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 
 .sidebar-nav-item:hover svg {
-  transform: scale(1.1);
+  transform: scale(1.05);
 }
 
 .sidebar-tooltip-anchor {
@@ -2965,11 +2975,11 @@ input[type="password"]::-ms-reveal {
 }
 
 .folder-card-new svg {
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.2s cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 
 .folder-card-new:hover svg {
-  transform: scale(1.12);
+  transform: scale(1.05);
 }
 
 .folder-color-dot {
@@ -2979,11 +2989,11 @@ input[type="password"]::-ms-reveal {
   height: 12px;
   background: var(--folder-color, var(--accent-bg));
   flex-shrink: 0;
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.2s cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 
 .folder-card:hover .folder-color-dot {
-  transform: scale(1.25);
+  transform: scale(1.05);
 }
 
 .folder-color-dot.is-small {
@@ -3002,7 +3012,7 @@ input[type="password"]::-ms-reveal {
   background: var(--card-queued-bg);
   border: 1px solid var(--card-queued-border);
   border-radius: 10px;
-  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s cubic-bezier(0.34, 1.2, 0.64, 1);
   outline: none;
   box-shadow: none;
 }
@@ -3017,20 +3027,20 @@ input[type="password"]::-ms-reveal {
 
 .archive-session-card svg.lucide-file-text,
 .archive-session-card svg.lucide-file-audio {
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.2s cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 
 .archive-session-card:hover svg.lucide-file-text,
 .archive-session-card:hover svg.lucide-file-audio {
-  transform: scale(1.15);
+  transform: scale(1.05);
 }
 
 .archive-session-card .folder-color-dot {
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.2s cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 
 .archive-session-card:hover .folder-color-dot {
-  transform: scale(1.25);
+  transform: scale(1.05);
 }
 
 .archive-session-card:focus-visible {
@@ -3529,11 +3539,11 @@ input[type="password"]::-ms-reveal {
   border: 1px solid var(--border-default) !important;
   background: var(--bg-elevated) !important;
   color: var(--text-muted) !important;
-  transition: background 200ms ease, color 200ms ease, transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: background 180ms ease, color 180ms ease, transform 180ms ease-out;
 }
 
 .dropzone-card:hover .dropzone-icon-container {
-  transform: translateY(-2px) scale(1.06);
+  transform: translateY(-2px) scale(1.04);
 }
 
 .dropzone-icon-container.is-dragging {
@@ -3550,7 +3560,7 @@ input[type="password"]::-ms-reveal {
   background: var(--accent-subtle) !important;
   color: var(--accent-text) !important;
   border: 1px solid var(--accent-ring) !important;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 180ms ease-out;
 }
 
 .dropzone-browse-button:hover {
@@ -3563,18 +3573,18 @@ input[type="password"]::-ms-reveal {
 }
 
 .dropzone-compact svg.lucide-plus {
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.2s cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 
 .dropzone-compact:hover svg.lucide-plus {
-  transform: rotate(90deg) scale(1.15);
+  transform: rotate(90deg) scale(1.05);
 }
 
 /* Queue Card Status Modifiers */
 .queue-card {
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 
 .queue-card:hover {
@@ -3591,14 +3601,14 @@ input[type="password"]::-ms-reveal {
 .queue-card svg.lucide-check-circle,
 .queue-card svg.lucide-alert-circle,
 .queue-card svg.lucide-alert-triangle {
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.2s cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 
 .queue-card:hover svg.lucide-file-audio,
 .queue-card:hover svg.lucide-check-circle,
 .queue-card:hover svg.lucide-alert-circle,
 .queue-card:hover svg.lucide-alert-triangle {
-  transform: scale(1.15);
+  transform: scale(1.05);
 }
 
 .queue-card.is-queued {

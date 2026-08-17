@@ -299,7 +299,7 @@ export function FolderDetailView({
         >
           <div className="flex items-center gap-2.5">
             <span
-              className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-transform duration-200 group-hover/add:scale-110"
+              className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-transform duration-200 group-hover/add:scale-105"
               style={{ background: 'var(--accent-subtle)', color: 'var(--accent-text)' }}
             >
               <Plus className="w-3.5 h-3.5 transition-transform duration-200 group-hover/add:rotate-90" />
@@ -386,7 +386,7 @@ export function FolderDetailView({
                           className="archive-session-card flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg border"
                           style={{ borderColor: 'var(--border-subtle)' }}
                         >
-                          <div className="flex items-center gap-2.5 overflow-hidden flex-1">
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
                             <FileText className="w-4 h-4 shrink-0" style={{ color: 'var(--accent-text)', opacity: 0.8 }} />
                             <div className="min-w-0 flex-1">
                               <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>

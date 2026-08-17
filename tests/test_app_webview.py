@@ -328,7 +328,7 @@ class AppWebviewTests(unittest.TestCase):
     @patch(
         "el_sbobinator.bridge.controllers.session_controller.cleanup_orphan_sessions"
     )
-    def test_cleanup_old_sessions_uses_14_day_default(self, mock_cleanup):
+    def test_cleanup_old_sessions_uses_0_day_default(self, mock_cleanup):
         api = ElSbobinatorApi()
         mock_cleanup.return_value = {
             "removed": 2,
@@ -345,7 +345,18 @@ class AppWebviewTests(unittest.TestCase):
         self.assertEqual(result["removed"], 2)
         self.assertEqual(result["preserved_completed"], 5)
         self.assertEqual(result["missing_completed_html"], 1)
-        mock_cleanup.assert_called_once_with(14, dry_run=False)
+        mock_cleanup.assert_called_once_with(0, dry_run=False)
+
+    def test_cleanup_old_sessions_fails_when_processing_active(self):
+        api = ElSbobinatorApi()
+        mock_thread = MagicMock()
+        mock_thread.is_alive.return_value = True
+        api._processing_thread = mock_thread
+
+        result = api.cleanup_old_sessions()
+
+        self.assertFalse(result["ok"])
+        self.assertIn("elaborazione in corso", result.get("error", ""))
 
     @patch(
         "el_sbobinator.bridge.controllers.session_controller.cleanup_completed_sessions"
@@ -370,6 +381,17 @@ class AppWebviewTests(unittest.TestCase):
         self.assertEqual(result["candidates"], 3)
         self.assertEqual(result["freed_bytes"], 8192)
         mock_cleanup.assert_called_once_with(14, dry_run=True)
+
+    def test_cleanup_completed_sessions_fails_when_processing_active(self):
+        api = ElSbobinatorApi()
+        mock_thread = MagicMock()
+        mock_thread.is_alive.return_value = True
+        api._processing_thread = mock_thread
+
+        result = api.cleanup_completed_sessions(dry_run=True)
+
+        self.assertFalse(result["ok"])
+        self.assertIn("elaborazione in corso", result.get("error", ""))
 
     @patch(
         "el_sbobinator.bridge.controllers.session_controller.cleanup_completed_sessions"

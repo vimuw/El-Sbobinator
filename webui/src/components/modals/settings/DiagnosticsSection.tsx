@@ -19,7 +19,7 @@ interface DiagnosticsSectionProps {
   displayChecks: DisplayCheck[];
 }
 
-export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = ({
+export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(({
   isValidatingEnvironment,
   onRunValidation,
   validationResult,
@@ -126,4 +126,6 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = ({
       </div>
     </div>
   );
-};
+});
+
+DiagnosticsSection.displayName = 'DiagnosticsSection';

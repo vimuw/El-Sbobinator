@@ -21,7 +21,7 @@ export const DropZone = memo(function DropZone({ isDragging, onDragOver, onDragL
         onKeyDown={e => e.key === 'Enter' && onClick()}
         aria-label="Aggiungi file audio o video"
       >
-        <Plus className={`w-4 h-4 shrink-0 transition-all duration-200 group-hover/compact:rotate-90 group-hover/compact:scale-110 ${isDragging ? 'text-[var(--accent-bg)]' : 'text-[var(--text-muted)] group-hover/compact:text-[var(--text-secondary)]'}`} />
+        <Plus className={`w-4 h-4 shrink-0 transition-all duration-200 group-hover/compact:rotate-90 group-hover/compact:scale-105 ${isDragging ? 'text-[var(--accent-bg)]' : 'text-[var(--text-muted)] group-hover/compact:text-[var(--text-secondary)]'}`} />
         <span className={`text-sm transition-colors ${isDragging ? 'text-[var(--accent-bg)] font-medium' : 'text-[var(--text-secondary)] font-normal'}`}>
           {isDragging ? 'Rilascia qui per aggiungere' : 'Trascina file o clicca per aggiungere'}
         </span>
@@ -38,13 +38,13 @@ export const DropZone = memo(function DropZone({ isDragging, onDragOver, onDragL
       className={`dropzone-card relative cursor-pointer flex flex-col items-center justify-center py-10 px-6 text-center group/dropzone${isDragging ? ' is-dragging' : ''}`}
     >
       <div className={`dropzone-icon-container ${isDragging ? 'is-dragging' : ''}`}>
-        <UploadCloud className="w-6 h-6 transition-transform duration-300 group-hover/dropzone:scale-110" />
+        <UploadCloud className="w-6 h-6 transition-transform duration-200 group-hover/dropzone:scale-105" />
       </div>
       <h3 className="text-base font-semibold mb-1 text-[var(--text-primary)] tracking-tight">Trascina i file qui</h3>
       <p className="text-xs max-w-xs text-[var(--text-muted)]">
         .mp3 · .m4a · .wav · .mp4 · .mkv · .webm · .ogg · .flac · .aac
       </p>
-      <div className="dropzone-browse-button transition-transform duration-150 group-hover/dropzone:scale-105">
+      <div className="dropzone-browse-button transition-transform duration-200 group-hover/dropzone:scale-105">
         Sfoglia file
       </div>
     </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Settings, SlidersHorizontal, X, Loader2 } from 'lucide-react';
 import type { ModelOption, ValidationResult } from '../../bridge';
@@ -103,6 +103,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const isMountedRef = useRef(true);
   const isOpenRef = useRef(isOpen);
   const isSavingRef = useRef(false);
+  const sessionInfoReqIdRef = useRef(0);
   const moveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const prevSettingsKeyRef = useRef<string>('');
 
@@ -119,6 +120,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     return () => {
       isMountedRef.current = false;
     };
+  }, []);
+
+  const fetchSessionStorageInfo = useCallback(() => {
+    if (!window.pywebview?.api?.get_session_storage_info) return;
+    const reqId = ++sessionInfoReqIdRef.current;
+    setIsLoadingSessionInfo(true);
+    setSessionInfo(null);
+    window.pywebview.api.get_session_storage_info()
+      .then(res => {
+        if (!isOpenRef.current || !isMountedRef.current || reqId !== sessionInfoReqIdRef.current) return;
+        if (res?.ok) {
+          setSessionInfo({
+            total_bytes: res.total_bytes ?? 0,
+            total_sessions: res.total_sessions ?? 0,
+            session_root: res.session_root ?? '',
+          });
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (isOpenRef.current && isMountedRef.current && reqId === sessionInfoReqIdRef.current) {
+          setIsLoadingSessionInfo(false);
+        }
+      });
   }, []);
 
   async function pollMoveStatus() {
@@ -157,7 +182,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   useEffect(() => {
     isOpenRef.current = isOpen;
-    if (!isOpen) return;
+    if (!isOpen) {
+      ++sessionInfoReqIdRef.current;
+      return;
+    }
 
     let aborted = false;
     setSaveError(null);
@@ -174,24 +202,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         .catch(() => {});
     }
 
-    if (window.pywebview?.api?.get_session_storage_info) {
-      setIsLoadingSessionInfo(true);
-      setSessionInfo(null);
-      window.pywebview.api.get_session_storage_info()
-        .then(res => {
-          if (aborted || !isMountedRef.current) return;
-          if (res?.ok) {
-            setSessionInfo({
-              total_bytes: res.total_bytes ?? 0,
-              total_sessions: res.total_sessions ?? 0,
-              session_root: res.session_root ?? '',
-            });
-          }
-        })
-        .catch(() => {})
-        .finally(() => {
-          if (!aborted && isMountedRef.current) setIsLoadingSessionInfo(false);
-        });
+    if (activeTab === 'advanced') {
+      fetchSessionStorageInfo();
     }
 
     if (window.pywebview?.api?.get_session_move_status) {
@@ -216,6 +228,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
+
+  const handleTabChange = useCallback((tab: TabType) => {
+    setActiveTab(tab);
+    if (tab === 'advanced' && !sessionInfo && !isLoadingSessionInfo) {
+      fetchSessionStorageInfo();
+    }
+  }, [sessionInfo, isLoadingSessionInfo, fetchSessionStorageInfo]);
 
   const handleOpenSessionFolder = () => {
     window.pywebview?.api?.open_session_folder?.();
@@ -250,7 +269,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setIsCleaningSession(true);
     setCleanupPreview(null);
     try {
-      const res = await window.pywebview.api.cleanup_old_sessions(SESSION_CLEANUP_DAYS, true);
+      const res = await window.pywebview.api.cleanup_old_sessions(0, true);
       if (!isMountedRef.current) return;
       if (res?.ok) {
         setCleanupPreview({
@@ -275,7 +294,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setIsCleaningSession(true);
     setCleanupResult(null);
     try {
-      const res = await window.pywebview.api.cleanup_old_sessions(SESSION_CLEANUP_DAYS, false);
+      const res = await window.pywebview.api.cleanup_old_sessions(0, false);
       if (!isMountedRef.current) return;
       if (res?.ok) {
         setCleanupResult({
@@ -390,7 +409,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  const getPendingChecks = (): DisplayCheck[] => {
+  const getPendingChecks = useCallback((): DisplayCheck[] => {
     const isWindows = typeof window !== 'undefined' && /windows|win32/i.test(navigator.userAgent || '');
     const checks: DisplayCheck[] = [
       {
@@ -436,9 +455,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
 
     return checks;
-  };
+  }, [apiKey, preferredModel, fallbackModels, sessionInfo?.session_root]);
 
-  const getDisplayChecks = (): DisplayCheck[] => {
+  const getDisplayChecks = useCallback((): DisplayCheck[] => {
     const pending = getPendingChecks();
     if (!validationResult) return pending;
 
@@ -459,7 +478,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       }
     }
     return list;
-  };
+  }, [getPendingChecks, validationResult]);
 
   const saveSettings = async () => {
     if (isSavingRef.current) return;
@@ -512,18 +531,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     <>
       <AnimatePresence>
         {isOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: { duration: 0.15, ease: 'easeOut' } }}
+            exit={{ opacity: 0, transition: { duration: 0.12, ease: 'easeIn' } }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          >
+            <div
               onClick={handleClose}
               className="modal-overlay absolute inset-0"
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }}
-              exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14, ease: 'easeIn' } }}
+              animate={{ opacity: 1, scale: 1, transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] } }}
+              exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.12, ease: 'easeIn' } }}
               className="modal-card relative w-full max-w-md md:max-w-4xl h-[85vh] md:h-[80vh] overflow-hidden flex flex-col md:flex-row"
             >
               {/* Sidebar Navigation */}
@@ -537,7 +558,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => setActiveTab('general')}
+                  onClick={() => handleTabChange('general')}
                   className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-sm font-semibold tracking-wide transition-all ${
                     activeTab === 'general'
                       ? 'bg-[var(--accent-subtle)] text-[var(--accent-text)] border-l-4 md:border-l-4 border-b-2 md:border-b-0 border-[var(--accent-bg)]'
@@ -551,7 +572,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => setActiveTab('advanced')}
+                  onClick={() => handleTabChange('advanced')}
                   className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-sm font-semibold tracking-wide transition-all ${
                     activeTab === 'advanced'
                       ? 'bg-[var(--accent-subtle)] text-[var(--accent-text)] border-l-4 md:border-l-4 border-b-2 md:border-b-0 border-[var(--accent-bg)]'
@@ -682,15 +703,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
       {/* Confirmation Dialog Modals */}
       <ConfirmActionModal
         isOpen={showCleanupConfirm}
-        title="Eliminare le elaborazioni incomplete vecchie?"
-        description={`Questa operazione elimina le elaborazioni incomplete più vecchie di ${SESSION_CLEANUP_DAYS} giorni. Sbobine interessate: ${cleanupPreview?.candidates ?? 0}. Spazio stimato: ${formatSize(cleanupPreview?.freed_bytes ?? 0)}. L'operazione è irreversibile.`}
+        title="Eliminare tutte le elaborazioni incomplete?"
+        description={`Questa operazione elimina tutte le elaborazioni incomplete per liberare spazio. Sbobine interessate: ${cleanupPreview?.candidates ?? 0}. Spazio stimato: ${formatSize(cleanupPreview?.freed_bytes ?? 0)}. L'operazione è irreversibile.`}
         confirmLabel="Elimina incomplete"
         cancelLabel="Annulla"
         onClose={() => setShowCleanupConfirm(false)}

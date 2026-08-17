@@ -36,8 +36,7 @@ export function FolderModal({ state, onClose, onSave }: FolderModalProps) {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
-        className="absolute inset-0"
-        style={{ background: 'var(--bg-overlay)', backdropFilter: 'blur(10px)' }}
+        className="modal-overlay absolute inset-0"
       />
       <motion.div
         initial={{ opacity: 0, scale: 0.98 }}
@@ -91,7 +90,7 @@ export function FolderModal({ state, onClose, onSave }: FolderModalProps) {
                     key={c}
                     type="button"
                     onClick={() => setColor(c)}
-                    className="w-7 h-7 rounded-full transition-transform hover:scale-110 focus:outline-none"
+                    className="w-7 h-7 rounded-full transition-transform hover:scale-105 focus:outline-none"
                     style={{
                       background: c,
                       border: color === c ? '3px solid var(--text-primary)' : '3px solid transparent',
@@ -146,8 +145,7 @@ export function DeleteFolderConfirmModal({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
-        className="absolute inset-0"
-        style={{ background: 'var(--bg-overlay)', backdropFilter: 'blur(10px)' }}
+        className="modal-overlay absolute inset-0"
       />
       <motion.div
         initial={{ opacity: 0, scale: 0.98 }}

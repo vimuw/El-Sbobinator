@@ -62,12 +62,24 @@ class SharedCleanupTests(unittest.TestCase):
             os.utime(recent_dir, (now - 13 * 86400, now - 13 * 86400))
 
             with patch("el_sbobinator.core.shared.SESSION_ROOT", tmpdir):
-                result = shared.cleanup_orphan_sessions()
+                result = shared.cleanup_orphan_sessions(14)
 
             self.assertEqual(result["removed"], 1)
             self.assertEqual(result["errors"], 0)
             self.assertFalse(os.path.exists(expired_dir))
             self.assertTrue(os.path.exists(recent_dir))
+
+    def test_cleanup_orphan_sessions_removes_recent_incomplete_by_default(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            incomplete_dir = self._make_session(
+                tmpdir, "incomplete_recent", "phase1", with_html=False
+            )
+
+            with patch("el_sbobinator.core.shared.SESSION_ROOT", tmpdir):
+                result = shared.cleanup_orphan_sessions()
+
+            self.assertEqual(result["removed"], 1)
+            self.assertFalse(os.path.exists(incomplete_dir))
 
     def test_cleanup_orphan_sessions_preserves_old_completed_html(self):
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -308,11 +308,11 @@ describe('SettingsModal — session folder and cleanup', () => {
       fireEvent.click(screen.getByText('Avanzati').closest('button')!);
     });
     await act(async () => {
-      fireEvent.click(screen.getByTitle(/Conta ed elimina elaborazioni incomplete/));
+      fireEvent.click(screen.getByTitle(/Conta ed elimina tutte le elaborazioni incomplete/));
     });
     expect(await screen.findByText(/Sbobine interessate: 3/)).toBeTruthy();
     expect(cleanupFn).toHaveBeenCalledTimes(1);
-    expect(cleanupFn).toHaveBeenCalledWith(30, true);
+    expect(cleanupFn).toHaveBeenCalledWith(0, true);
 
     await act(async () => {
       fireEvent.click(screen.getByText('Elimina incomplete'));
@@ -322,7 +322,7 @@ describe('SettingsModal — session folder and cleanup', () => {
     );
     expect(screen.getByText(/sbobine completate preservate/)).toBeTruthy();
     expect(cleanupFn).toHaveBeenCalledTimes(2);
-    expect(cleanupFn).toHaveBeenLastCalledWith(30, false);
+    expect(cleanupFn).toHaveBeenLastCalledWith(0, false);
   });
 
   it('counts completed notes before dangerous cleanup and deletes only after confirmation', async () => {

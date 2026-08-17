@@ -518,14 +518,16 @@ def _session_cleanup_kind(session_dir: str) -> str:
 
 
 def cleanup_orphan_sessions(
-    max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS,
+    max_age_days: int = 0,
     *,
     mode: str = "incomplete",
     dry_run: bool = False,
 ) -> dict:
     """
-    Delete selected session folders in SESSION_ROOT whose newest file mtime is older
-    than max_age_days days.  Returns a summary dict with keys:
+    Delete selected session folders in SESSION_ROOT. If max_age_days > 0, only folders
+    whose newest file mtime is older than max_age_days days are deleted. When max_age_days <= 0,
+    all matching folders are deleted regardless of age.
+    Returns a summary dict with keys:
       removed     - number of folders successfully deleted
       freed_bytes - total bytes freed
       errors      - number of folders that could not be deleted
@@ -554,15 +556,17 @@ def cleanup_orphan_sessions(
                 "deleted_paths": [],
             }
         now = time.time()
-        cutoff = now - max(1, int(max_age_days)) * 86400
+        age_days = max(0, int(max_age_days))
+        cutoff = (now - age_days * 86400) if age_days > 0 else None
         for name in os.listdir(session_root):
             session_dir = os.path.join(session_root, name)
             if not os.path.isdir(session_dir):
                 continue
             try:
-                newest_mtime = _folder_newest_mtime(session_dir)
-                if newest_mtime >= cutoff:
-                    continue
+                if cutoff is not None:
+                    newest_mtime = _folder_newest_mtime(session_dir)
+                    if newest_mtime >= cutoff:
+                        continue
                 kind = _session_cleanup_kind(session_dir)
                 if kind == "completed":
                     if mode == "incomplete":

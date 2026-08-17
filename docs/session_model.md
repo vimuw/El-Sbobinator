@@ -37,7 +37,7 @@ A second helper, `_session_dir_for_file(path)`, joins `SESSION_ROOT` with the fi
 | `session_store.ensure_session_dirs(paths)` | `mkdir -p` for all subfolders. |
 | `session_store.reset_session_dirs(paths, allow_completed_destroy=False)` | `rmtree` + recreate, but refuses completed sessions with existing HTML unless explicit destruction is allowed. |
 | `pipeline_session.reset_for_regeneration(ctx)` | Wipes the directory, creates a brand-new session, overwrites settings with the defaults derived from the current config. |
-| `shared.cleanup_orphan_sessions(max_age_days=14)` | Deletes session directories whose newest contained file is older than the cutoff (triggered by the "Pulisci sessioni vecchie" button in Settings). |
+| `shared.cleanup_orphan_sessions(max_age_days=0)` | Deletes incomplete session folders (default: all incomplete sessions, or older than `max_age_days`). |
 | `shared.get_session_storage_info()` | Returns `{total_bytes, total_sessions}` with a 30 s cache and a 10 s timeout. Used by the Settings modal. |
 
 ## On-disk layout

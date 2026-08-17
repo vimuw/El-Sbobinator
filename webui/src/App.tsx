@@ -1556,7 +1556,6 @@ export default function App() {
             isOpen={isSettingsOpen}
             onClose={() => {
               setIsSettingsOpen(false);
-              void refreshSettings();
             }}
             apiKey={apiKey}
             setApiKey={setApiKey}

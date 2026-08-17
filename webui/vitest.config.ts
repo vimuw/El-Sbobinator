@@ -17,7 +17,6 @@ export default defineConfig({
         'src/components/EditorFindReplace.tsx',
         'src/components/EditorToolbar.tsx',
         'src/components/EditorToolbarControls.tsx',
-        'src/components/EditorWordCount.tsx',
         'src/components/ArchivePage.tsx',
         'src/components/archive/**',
         'src/components/EditorFullPage.tsx',

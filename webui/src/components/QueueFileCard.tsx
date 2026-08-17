@@ -80,7 +80,7 @@ function QueueFileCardInner({
               </div>
             )}
             <div
-              className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-lg transition-transform duration-200 group-hover/card:scale-110 ${
+              className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-lg transition-transform duration-200 group-hover/card:scale-105 ${
                 file.status === 'processing'
                   ? isCanceling ? 'text-[var(--error-text)]' : 'text-[var(--processing-text)]'
                   : file.status === 'error'
@@ -226,9 +226,9 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
       }`}
     >
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3 overflow-hidden flex-1">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           <div
-            className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-lg transition-transform duration-200 group-hover/card:scale-110 ${hasRevisionWarnings ? 'text-[var(--warning-text)]' : 'text-[var(--success-text)]'}`}
+            className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-lg transition-transform duration-200 group-hover/card:scale-105 ${hasRevisionWarnings ? 'text-[var(--warning-text)]' : 'text-[var(--success-text)]'}`}
           >
             {hasRevisionWarnings ? <AlertTriangle className="w-4.5 h-4.5" /> : <CheckCircle className="w-4.5 h-4.5" />}
           </div>

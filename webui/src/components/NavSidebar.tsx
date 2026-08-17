@@ -235,7 +235,7 @@ function NavItem({
           boxShadow: 'none',
         }}
       >
-        <span className="inline-flex items-center justify-center transition-transform duration-200 group-hover/nav:scale-110" style={{ position: 'relative', color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>
+        <span className="inline-flex items-center justify-center transition-transform duration-200 group-hover/nav:scale-105" style={{ position: 'relative', color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>
           {icon}
           {isProcessing && (
             <span style={{ position: 'absolute', top: -3, right: -3, display: 'inline-flex' }}>
@@ -274,7 +274,7 @@ function UtilityButton({
           opacity: disabled ? 0.4 : 1,
         }}
       >
-        <span className="inline-flex items-center justify-center transition-transform duration-200 group-hover/util:scale-110" style={{ color: disabled ? 'var(--text-muted)' : (active ? 'var(--sidebar-active-text)' : 'var(--text-muted)'), lineHeight: 0 }}>
+        <span className="inline-flex items-center justify-center transition-transform duration-200 group-hover/util:scale-105" style={{ color: disabled ? 'var(--text-muted)' : (active ? 'var(--sidebar-active-text)' : 'var(--text-muted)'), lineHeight: 0 }}>
           {icon}
         </span>
       </button>

@@ -327,44 +327,8 @@ export function EditorFullPage({
             <div className="editor-fullpage-title">
               <FileText className="w-4 h-4 shrink-0" style={{ color: 'var(--text-muted)' }} />
               <span className="truncate">{previewTitle}</span>
-            </div>
-
-            <div className="editor-fullpage-actions">
-              {htmlPath && (
-                <button
-                  onClick={() => window.pywebview?.api?.open_file?.(htmlPath)}
-                  className="icon-button"
-                  title="Apri file HTML"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </button>
-              )}
-              <button
-                onClick={() => void handleCopy()}
-                className="icon-button"
-                style={isCopied ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : {}}
-                title={isCopied ? 'Copiato!' : 'Copia per Google Docs'}
-              >
-                {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              </button>
-              <button
-                onClick={() => setIsCollabModalOpen(true)}
-                className={`icon-button${collabRoom ? ' icon-button--active' : ''}`}
-                title={collabRoom ? `Collaborazione attiva: ${collabRoom}` : 'Inizia sessione (Collaborazione P2P)'}
-                aria-label="Inizia sessione"
-              >
-                <Users className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
-                className="icon-button theme-toggle-btn"
-                aria-label={themeMode === 'dark' ? 'Attiva tema chiaro' : 'Attiva tema scuro'}
-                title={themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro'}
-              >
-                {themeMode === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              </button>
               <span
-                className="editor-autosave-badge"
+                className="editor-autosave-badge shrink-0"
                 style={{
                   color:
                     autosaveStatus === 'error' ? 'var(--error-text)'
@@ -392,6 +356,44 @@ export function EditorFullPage({
                   <span>Autosave</span>
                 )}
               </span>
+            </div>
+
+            <div className="editor-fullpage-actions">
+              <button
+                onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
+                className="icon-button theme-toggle-btn"
+                aria-label={themeMode === 'dark' ? 'Attiva tema chiaro' : 'Attiva tema scuro'}
+                title={themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro'}
+              >
+                {themeMode === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
+              <button
+                onClick={() => setIsCollabModalOpen(true)}
+                className={`icon-button${collabRoom ? ' icon-button--active' : ''}`}
+                title={collabRoom ? `Collaborazione attiva: ${collabRoom}` : 'Inizia sessione (Collaborazione P2P)'}
+                aria-label="Inizia sessione"
+              >
+                <Users className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => void handleCopy()}
+                className="icon-button"
+                style={isCopied ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : {}}
+                title={isCopied ? 'Copiato!' : 'Copia per Google Docs'}
+                aria-label="Copia per Google Docs"
+              >
+                {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              </button>
+              {htmlPath && (
+                <button
+                  onClick={() => window.pywebview?.api?.open_file?.(htmlPath)}
+                  className="icon-button"
+                  title="Apri file HTML"
+                  aria-label="Apri file HTML"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
 
