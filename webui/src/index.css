@@ -103,16 +103,16 @@
   --btn-disabled-bg: rgba(148, 163, 184, 0.22);
   --btn-disabled-text: rgba(100, 116, 139, 0.72);
 
-  --console-bg: #0a0a0a;
-  --console-header: #141414;
-  --console-heading: #f5f5f5;
-  --console-text: #d1d5db;
-  --console-muted: #9ca3af;
-  --console-border: rgba(255, 255, 255, 0.08);
-  --console-shell-border: rgba(0, 0, 0, 0.18);
-  --console-error: #fca5a5;
-  --console-success: #4ade80;
-  --console-warning: #fcd34d;
+  --console-bg: #e5e3dc;
+  --console-header: #ebe8e1;
+  --console-heading: #111827;
+  --console-text: #374151;
+  --console-muted: #6b7280;
+  --console-border: rgba(100, 116, 139, 0.20);
+  --console-shell-border: rgba(100, 116, 139, 0.26);
+  --console-error: #b91c1c;
+  --console-success: #15803d;
+  --console-warning: #a16207;
 
   --gradient-title-from: #1a2e18;
   --gradient-title-to: #4a7c40;

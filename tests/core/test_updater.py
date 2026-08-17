@@ -102,6 +102,7 @@ class UpdaterTests(unittest.TestCase):
                 "el_sbobinator.core.updater._Thread",
                 side_effect=_SyncThread,
             ),
+            patch("el_sbobinator.core.updater.time.sleep"),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
         ):
             mock_tmp.return_value.__enter__.return_value.name = "/tmp/setup.exe"
@@ -265,6 +266,7 @@ class UpdaterTests(unittest.TestCase):
                 "el_sbobinator.core.updater._Thread",
                 side_effect=_SyncThread,
             ),
+            patch("el_sbobinator.core.updater.time.sleep"),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
             patch("os.unlink"),
             patch("os.path.exists", return_value=True),
@@ -314,6 +316,7 @@ class UpdaterTests(unittest.TestCase):
                 "el_sbobinator.core.updater._Thread",
                 side_effect=_SyncThread,
             ),
+            patch("el_sbobinator.core.updater.time.sleep"),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
             patch("os.unlink"),
         ):
@@ -506,6 +509,7 @@ class TestChecksumIntegration(unittest.TestCase):
                 "el_sbobinator.core.updater._Thread",
                 side_effect=_SyncThread,
             ),
+            patch("el_sbobinator.core.updater.time.sleep"),
             patch("os.unlink") as mock_unlink,
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
         ):
@@ -573,6 +577,7 @@ class TestMacOSDmgInstall(unittest.TestCase):
                 "el_sbobinator.core.updater._Thread",
                 side_effect=_SyncThread,
             ),
+            patch("el_sbobinator.core.updater.time.sleep"),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
             patch("os.unlink"),
         ):
@@ -690,6 +695,7 @@ class TestMacOSDmgInstall(unittest.TestCase):
                 "el_sbobinator.core.updater._Thread",
                 side_effect=_SyncThread,
             ),
+            patch("el_sbobinator.core.updater.time.sleep"),
             patch("tempfile.NamedTemporaryFile") as mock_tmp,
             patch("os.unlink"),
             # Make exists return False to simulate missing app_src

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { errorLabel, formatDuration, formatRelativeTime, formatSize, isQuotaError, isResumableError, readFileAsDataUrl, shortModelName } from './utils';
+import { errorLabel, formatDuration, formatRelativeTime, formatSize, isQuotaError, isResumableError, readFileAsDataUrl, readAndOptimizeImageAsDataUrl, calculateOptimalDimensions, shortModelName } from './utils';
 
 describe('isQuotaError', () => {
   it('returns false for undefined', () => {
@@ -241,6 +241,72 @@ describe('readFileAsDataUrl', () => {
     try {
       const file = new Blob([]) as File;
       await expect(readFileAsDataUrl(file)).rejects.toThrow('read error');
+    } finally {
+      (globalThis as unknown as { FileReader: unknown }).FileReader = originalFileReader;
+    }
+  });
+});
+
+describe('calculateOptimalDimensions', () => {
+  it('returns original dimensions when within max bounds', () => {
+    expect(calculateOptimalDimensions(800, 600, 1600, 1600)).toEqual({ width: 800, height: 600 });
+  });
+
+  it('scales down proportionally when width exceeds maxWidth', () => {
+    expect(calculateOptimalDimensions(3200, 1600, 1600, 1600)).toEqual({ width: 1600, height: 800 });
+  });
+
+  it('scales down proportionally when height exceeds maxHeight', () => {
+    expect(calculateOptimalDimensions(1000, 3000, 1600, 1600)).toEqual({ width: 533, height: 1600 });
+  });
+
+  it('scales down proportionally when both dimensions exceed max bounds', () => {
+    expect(calculateOptimalDimensions(4000, 3000, 1600, 1600)).toEqual({ width: 1600, height: 1200 });
+  });
+
+  it('handles edge case of 0 or negative dimensions safely', () => {
+    expect(calculateOptimalDimensions(0, 0)).toEqual({ width: 1, height: 1 });
+    expect(calculateOptimalDimensions(-10, -20)).toEqual({ width: 1, height: 1 });
+  });
+});
+
+describe('readAndOptimizeImageAsDataUrl (node environment)', () => {
+  it('returns rawDataUrl safely in environment without document/canvas', async () => {
+    const mockRawResult = 'data:image/png;base64,originalrawdata';
+    const originalFileReader = (globalThis as unknown as { FileReader: unknown }).FileReader;
+
+    (globalThis as unknown as { FileReader: unknown }).FileReader = class {
+      result = mockRawResult;
+      onload: (() => void) | null = null;
+      readAsDataURL() {
+        if (this.onload) this.onload();
+      }
+    };
+
+    try {
+      const file = new File(['pngdata'], 'photo.png', { type: 'image/png' });
+      const res = await readAndOptimizeImageAsDataUrl(file);
+      expect(res).toBe(mockRawResult);
+    } finally {
+      (globalThis as unknown as { FileReader: unknown }).FileReader = originalFileReader;
+    }
+  });
+
+  it('rejects on FileReader error in node environment', async () => {
+    const mockError = new Error('read error');
+    const originalFileReader = (globalThis as unknown as { FileReader: unknown }).FileReader;
+
+    (globalThis as unknown as { FileReader: unknown }).FileReader = class {
+      error = mockError;
+      onerror: (() => void) | null = null;
+      readAsDataURL() {
+        if (this.onerror) this.onerror();
+      }
+    };
+
+    try {
+      const file = new File(['data'], 'photo.png', { type: 'image/png' });
+      await expect(readAndOptimizeImageAsDataUrl(file)).rejects.toThrow('read error');
     } finally {
       (globalThis as unknown as { FileReader: unknown }).FileReader = originalFileReader;
     }

@@ -136,7 +136,9 @@ class LocalMediaServer:
             server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), MediaHandler)
             port = server.server_address[1]
             cls._servers[file_path] = (server, port, token)
-        threading.Thread(target=server.serve_forever, daemon=True).start()
+        threading.Thread(
+            target=lambda: server.serve_forever(poll_interval=0.05), daemon=True
+        ).start()
         return f"http://127.0.0.1:{port}/stream-{token}/media?t={time.time()}"
 
     @classmethod

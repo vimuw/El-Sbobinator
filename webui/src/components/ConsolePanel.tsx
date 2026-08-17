@@ -46,7 +46,7 @@ export const ConsolePanel = memo(function ConsolePanel({
                 setIsCopied(true);
                 setTimeout(() => setIsCopied(false), 2000);
               }}
-              className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
+              className="p-1.5 rounded-md hover:bg-[var(--border-subtle)] transition-colors"
               title={isCopied ? 'Copiato!' : 'Copia tutto'}
               style={{ color: isCopied ? 'var(--console-success, var(--success-text))' : 'var(--console-heading)', transition: 'color 0.2s' }}
             >
@@ -55,7 +55,7 @@ export const ConsolePanel = memo(function ConsolePanel({
           )}
           <button
             onClick={() => setIsConsoleExpanded(prev => !prev)}
-            className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
+            className="p-1.5 rounded-md hover:bg-[var(--border-subtle)] transition-colors"
             title={isConsoleExpanded ? 'Riduci' : 'Espandi'}
             style={{ color: 'var(--console-heading)' }}
           >

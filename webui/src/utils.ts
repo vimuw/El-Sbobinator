@@ -101,6 +101,32 @@ export const formatDuration = (seconds: number, fallback = ''): string => {
   return `${s}s`;
 };
 
+export interface ImageOptimizationOptions {
+  maxWidth?: number;
+  maxHeight?: number;
+  quality?: number;
+  format?: 'image/webp' | 'image/jpeg';
+}
+
+export function calculateOptimalDimensions(
+  width: number,
+  height: number,
+  maxWidth = 1600,
+  maxHeight = 1600
+): { width: number; height: number } {
+  if (width <= 0 || height <= 0) {
+    return { width: Math.max(1, width), height: Math.max(1, height) };
+  }
+  if (width <= maxWidth && height <= maxHeight) {
+    return { width, height };
+  }
+  const ratio = Math.min(maxWidth / width, maxHeight / height);
+  return {
+    width: Math.max(1, Math.round(width * ratio)),
+    height: Math.max(1, Math.round(height * ratio)),
+  };
+}
+
 export const readFileAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -108,3 +134,107 @@ export const readFileAsDataUrl = (file: File) =>
     reader.onerror = () => reject(reader.error || new Error('Lettura immagine fallita.'));
     reader.readAsDataURL(file);
   });
+
+export const optimizeDataUrlImage = async (
+  dataUrl: string,
+  options: ImageOptimizationOptions = {}
+): Promise<string> => {
+  if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
+    return dataUrl;
+  }
+
+  if (dataUrl.startsWith('data:image/svg+xml') || dataUrl.startsWith('data:image/gif')) {
+    return dataUrl;
+  }
+
+  if (dataUrl.startsWith('data:image/webp') && dataUrl.length < 500_000) {
+    return dataUrl;
+  }
+
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return dataUrl;
+  }
+
+  const {
+    maxWidth = 1600,
+    maxHeight = 1600,
+    quality = 0.82,
+    format = 'image/webp',
+  } = options;
+
+  return new Promise<string>((resolve) => {
+    try {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const srcWidth = img.naturalWidth || img.width;
+          const srcHeight = img.naturalHeight || img.height;
+
+          if (!srcWidth || !srcHeight) {
+            resolve(dataUrl);
+            return;
+          }
+
+          const { width, height } = calculateOptimalDimensions(
+            srcWidth,
+            srcHeight,
+            maxWidth,
+            maxHeight
+          );
+
+          if (srcWidth <= maxWidth && srcHeight <= maxHeight && dataUrl.length < 200_000) {
+            resolve(dataUrl);
+            return;
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(dataUrl);
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+
+          let optimizedDataUrl = canvas.toDataURL(format, quality);
+
+          if (format === 'image/webp' && !optimizedDataUrl.startsWith('data:image/webp')) {
+            const jpegDataUrl = canvas.toDataURL('image/jpeg', quality);
+            if (jpegDataUrl.startsWith('data:image/jpeg')) {
+              optimizedDataUrl = jpegDataUrl;
+            }
+          }
+
+          if (
+            srcWidth <= maxWidth &&
+            srcHeight <= maxHeight &&
+            dataUrl.length > 0 &&
+            dataUrl.length < optimizedDataUrl.length
+          ) {
+            resolve(dataUrl);
+          } else {
+            resolve(optimizedDataUrl);
+          }
+        } catch {
+          resolve(dataUrl);
+        }
+      };
+      img.onerror = () => {
+        resolve(dataUrl);
+      };
+      img.src = dataUrl;
+    } catch {
+      resolve(dataUrl);
+    }
+  });
+};
+
+export const readAndOptimizeImageAsDataUrl = async (
+  file: File,
+  options: ImageOptimizationOptions = {}
+): Promise<string> => {
+  const rawDataUrl = await readFileAsDataUrl(file);
+  return optimizeDataUrlImage(rawDataUrl, options);
+};

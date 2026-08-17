@@ -1,8 +1,9 @@
 /* eslint-disable react-refresh/only-export-components */
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react';
 import { NodeSelection, Plugin, PluginKey } from '@tiptap/pm/state';
+import { optimizeDataUrlImage } from '../utils';
 
 export type ImageAlignment = 'center';
 
@@ -51,6 +52,26 @@ function FloatingImageView({ node, updateAttributes, selected, getPos, editor }:
   const anchorRef = useRef<HTMLSpanElement | null>(null);
   const width = clampWidth(node.attrs.width);
   const caption: string = String(node.attrs.caption || '');
+  const src = String(node.attrs.src || '');
+
+  useEffect(() => {
+    if (
+      src.startsWith('data:image/') &&
+      !src.startsWith('data:image/svg+xml') &&
+      !src.startsWith('data:image/gif') &&
+      (!src.startsWith('data:image/webp') || src.length > 500_000)
+    ) {
+      let isMounted = true;
+      void optimizeDataUrlImage(src).then(optimizedSrc => {
+        if (isMounted && optimizedSrc && optimizedSrc !== src) {
+          updateAttributes({ src: optimizedSrc });
+        }
+      });
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [src, updateAttributes]);
 
   const selectImageNode = (e: React.SyntheticEvent) => {
     if ((e.target as HTMLElement)?.closest('.gdocs-handle')) return;
