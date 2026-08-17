@@ -100,10 +100,10 @@ export function DraggableSessionCard({
       style={hasRevisionWarnings ? { borderColor: 'var(--warning-ring)', boxShadow: 'inset 3px 0 0 var(--warning-ring)', background: 'var(--warning-subtle)' } : undefined}
     >
       <div className="flex items-center gap-3 min-w-0 flex-1">
-        <FileText className="w-4 h-4 shrink-0 transition-transform duration-200 group-hover/card:scale-105" style={{ color: hasRevisionWarnings ? 'var(--warning-text)' : 'var(--text-faint)' }} />
+        <FileText className="w-4 h-4 shrink-0 transition-transform duration-200 group-hover/card:scale-105" style={{ color: hasRevisionWarnings ? 'var(--warning-text)' : 'var(--text-muted)' }} />
 
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{session.name}</p>
+          <p className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{session.name}</p>
           <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
             {ts > 0 && <span>{formatRelativeTime(ts)}</span>}
             {session.effective_model && (
@@ -184,7 +184,7 @@ export function FolderSessionCardOverlay({
       <div className="flex items-center gap-3 min-w-0 flex-1">
         <span className="folder-color-dot is-large" style={{ '--folder-color': folderColor } as React.CSSProperties} />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{session.name}</p>
+          <p className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{session.name}</p>
           <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
             {ts > 0 && <span>{formatRelativeTime(ts)}</span>}
             {session.effective_model && (
@@ -312,7 +312,7 @@ export function SortableSessionCard({
       <div className="flex items-center gap-3 min-w-0 flex-1">
         <span className="folder-color-dot is-large transition-transform duration-200 group-hover/card:scale-105" style={{ '--folder-color': folderColor } as React.CSSProperties} />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{session.name}</p>
+          <p className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{session.name}</p>
           <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
             {ts > 0 && <span>{formatRelativeTime(ts)}</span>}
             {session.effective_model && (

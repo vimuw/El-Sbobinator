@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import App from './App';
@@ -1077,11 +1077,11 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       const f1Heading = await screen.findByText('f1.mp3');
       const card = f1Heading.closest('.queue-card');
       expect(card).toBeTruthy();
-      const trashBtn = card!.querySelector('button.is-danger');
-      expect(trashBtn).toBeTruthy();
+      const removeBtn = within(card as HTMLElement).getByRole('button', { name: 'Rimuovi' });
+      expect(removeBtn).toBeTruthy();
 
       await act(async () => {
-        fireEvent.click(trashBtn!);
+        fireEvent.click(removeBtn);
       });
       expect(screen.getByRole('heading', { name: 'Rimuovere questo elemento?' })).toBeTruthy();
       await act(async () => {

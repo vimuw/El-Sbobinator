@@ -41,7 +41,7 @@ export function FullTextResultList({
             <FileSearch className="w-4 h-4 shrink-0 transition-transform duration-200 group-hover/search:scale-105" style={{ color: 'var(--accent-text)' }} />
             <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{result.name}</span>
             {result.completed_at_iso && (
-              <span className="text-xs shrink-0" style={{ color: 'var(--text-faint)' }}>
+              <span className="text-xs shrink-0" style={{ color: 'var(--text-muted)' }}>
                 {formatRelativeTime(new Date(result.completed_at_iso).getTime())}
               </span>
             )}

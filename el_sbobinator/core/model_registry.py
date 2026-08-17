@@ -22,6 +22,7 @@ class ModelOption(TypedDict):
 
 SUPPORTED_MODELS: tuple[str, ...] = (
     "gemini-2.5-flash",
+    "gemini-3.7-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
@@ -37,6 +38,14 @@ MODEL_OPTIONS: tuple[ModelOption, ...] = (
         "id": "gemini-2.5-flash",
         "label": "Gemini 2.5 Flash",
         "summary": "Primario consigliato: ottimo equilibrio qualita/velocita, stabile e ampiamente testato.",
+        "default_chunk_minutes": 15,
+        "default_macro_char_limit": 22000,
+        "phase1_temperature": 0.35,
+    },
+    {
+        "id": "gemini-3.7-flash",
+        "label": "Gemini 3.7 Flash",
+        "summary": "",
         "default_chunk_minutes": 15,
         "default_macro_char_limit": 22000,
         "phase1_temperature": 0.35,

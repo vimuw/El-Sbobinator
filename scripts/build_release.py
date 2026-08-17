@@ -169,22 +169,22 @@ def run_python_checks(with_coverage: bool = False) -> None:
     ]
     run([sys.executable, "-m", "ruff", "check", *existing_targets])
     run([sys.executable, "-m", "ruff", "format", "--check", *existing_targets])
+    pytest_cmd = [sys.executable, "-m", "pytest", "tests/", "-q"]
+    import importlib.util
+
+    if importlib.util.find_spec("xdist") is not None:
+        pytest_cmd.extend(["-n", "auto"])
+
     if with_coverage:
-        run(
+        pytest_cmd.extend(
             [
-                sys.executable,
-                "-m",
-                "pytest",
-                "tests/",
-                "-q",
                 "--cov=el_sbobinator",
                 "--cov-report=xml:coverage-python.xml",
                 "--cov-report=term-missing",
                 "--cov-fail-under=85",
             ]
         )
-    else:
-        run([sys.executable, "-m", "pytest", "tests/", "-q"])
+    run(pytest_cmd)
     run_pyright()
 
 

@@ -25,7 +25,7 @@ Tutte le operazioni avvengono in locale sul computer dell'utente, con chiamate A
 
 ## Caratteristiche Principali
 
-- **Pipeline AI a Più Stadi**: Architettura a 2 fasi ottimizzata per i modelli Google Gemini (`gemini-2.5-flash`, `gemini-3.5-flash`, `gemini-3.1-flash-lite`) con trascrizione a blocchi e revisione editoriale macro.
+- **Pipeline AI a Più Stadi**: Architettura a 2 fasi ottimizzata per i modelli Google Gemini (`gemini-2.5-flash`, `gemini-3.7-flash`, `gemini-3.5-flash`, `gemini-3.1-flash-lite`) con trascrizione a blocchi e revisione editoriale macro.
 - **Architettura BYOK e Resilienza**: Utilizza la tua chiave API gratuita di Google AI Studio. Supporta rotazione automatica multi-chiave, catene di fallback dei modelli e gestione automatica dei limiti di rate limit.
 - **Editor Rich-Text Integrato**: Editor TipTap completo con formattazione markdown, indice dei contenuti (TOC) navigabile, funzione Trova e Sostituisci, immagini ridimensionabili e statistiche di lettura in tempo reale.
 - **Player Audio Sincronizzato**: Riproduttore multimediale integrato con streaming HTTP locale, velocità regolabile (0.5x–2.0x), scrubber della forma d'onda e segnalibri temporali collegati al testo.

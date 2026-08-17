@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SetupPage } from './SetupPage';
 
@@ -80,7 +80,9 @@ describe('SetupPage', () => {
     const saveBtn = screen.getAllByText('Salva e inizia').find(
       el => el.closest('button') !== null,
     )?.closest('button') as HTMLButtonElement;
-    fireEvent.click(saveBtn);
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
     await vi.waitFor(() =>
       expect(screen.getByText(/Bridge Python non disponibile/)).toBeTruthy(),
     );
@@ -104,7 +106,9 @@ describe('SetupPage', () => {
     const saveBtn = screen.getAllByText('Salva e inizia').find(
       el => el.closest('button') !== null,
     )?.closest('button') as HTMLButtonElement;
-    fireEvent.click(saveBtn);
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
     await vi.waitFor(() =>
       expect(screen.getByText(/quota esaurita/)).toBeTruthy(),
     );
@@ -121,7 +125,9 @@ describe('SetupPage', () => {
     const saveBtn = screen.getAllByText('Salva e inizia').find(
       el => el.closest('button') !== null,
     )?.closest('button') as HTMLButtonElement;
-    fireEvent.click(saveBtn);
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
     await vi.waitFor(() => expect(onSaved).toHaveBeenCalledWith('AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345'));
   });
 
@@ -131,7 +137,9 @@ describe('SetupPage', () => {
     render(<SetupPage {...baseProps} />);
     const input = screen.getByPlaceholderText(/Incolla qui la tua API Key/);
     fireEvent.change(input, { target: { value: 'AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter' });
+    });
     await vi.waitFor(() => expect(mockSave).toHaveBeenCalledTimes(1));
   });
 
@@ -155,7 +163,9 @@ describe('SetupPage', () => {
     const saveBtn = screen.getAllByText('Salva e inizia').find(
       el => el.closest('button') !== null,
     )?.closest('button') as HTMLButtonElement;
-    fireEvent.click(saveBtn);
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
     await vi.waitFor(() =>
       expect(screen.getByText(/network error/)).toBeTruthy(),
     );

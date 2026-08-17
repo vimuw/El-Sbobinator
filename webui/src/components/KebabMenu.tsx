@@ -97,22 +97,17 @@ export function KebabMenu({ items, align = 'right', buttonClassName }: KebabMenu
       <button
         ref={buttonRef}
         onClick={e => { e.stopPropagation(); setOpen(v => !v); }}
-        className={buttonClassName}
+        className={`icon-button compact-icon-button ${buttonClassName ?? ''}`.trim()}
         style={{
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
           padding: 4,
-          background: open ? 'var(--sidebar-active-bg)' : 'transparent',
-          border: 'none',
+          background: open ? 'var(--sidebar-active-bg)' : undefined,
+          color: open ? 'var(--text-primary)' : 'var(--text-secondary)',
           borderRadius: 8,
-          color: 'var(--text-muted)',
-          opacity: open ? 1 : 0.6,
           cursor: 'pointer',
-          transition: 'background 150ms ease, opacity 150ms ease',
         }}
-        onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'var(--sidebar-active-bg)'; }}
-        onMouseLeave={e => { if (!open) { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.background = 'transparent'; } }}
         aria-label="Altre opzioni"
         title="Altre opzioni"
       >

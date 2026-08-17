@@ -54,7 +54,7 @@ export function FolderCard({
         </div>
       </div>
       <div className="px-4 pb-3">
-        <p className="text-xs" style={{ color: 'var(--text-faint)' }}>
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
           {count === 1 ? '1 lezione' : `${count} lezioni`}
         </p>
       </div>
@@ -122,7 +122,7 @@ export function FolderCardOverlay({
         </span>
       </div>
       <div className="px-4 pb-3">
-        <p className="text-xs" style={{ color: 'var(--text-faint)' }}>
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
           {count === 1 ? '1 lezione' : `${count} lezioni`}
         </p>
       </div>

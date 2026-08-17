@@ -64,6 +64,10 @@ class Phase1TempChunkPathTests(unittest.TestCase):
                 "el_sbobinator.services.phase1_service.retry_with_quota",
                 return_value=(object(), "Testo."),
             ),
+            patch(
+                "el_sbobinator.services.phase1_service.sleep_with_cancel",
+                return_value=True,
+            ),
         ):
             _, transcript, _ = process_phase1_transcription(
                 client=object(),
@@ -229,6 +233,10 @@ class Phase1TempChunkPathTests(unittest.TestCase):
                 patch(
                     "el_sbobinator.services.phase1_service.retry_with_quota",
                     return_value=(object(), "Testo."),
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.sleep_with_cancel",
+                    return_value=True,
                 ),
             ):
                 _, transcript, _ = process_phase1_transcription(
@@ -732,6 +740,10 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
                     "el_sbobinator.services.phase1_service.retry_with_quota",
                     side_effect=fake_retry,
                 ),
+                patch(
+                    "el_sbobinator.services.phase1_service.sleep_with_cancel",
+                    return_value=True,
+                ),
             ):
                 _client, transcript, _prev = process_phase1_transcription(  # type: ignore[arg-type]
                     client=object(),
@@ -790,6 +802,10 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
                 patch(
                     "el_sbobinator.services.phase1_service.retry_with_quota",
                     side_effect=fake_retry,
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.sleep_with_cancel",
+                    return_value=True,
                 ),
             ):
                 process_phase1_transcription(  # type: ignore[arg-type]

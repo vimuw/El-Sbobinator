@@ -126,6 +126,8 @@ Source: `el_sbobinator/model_registry.py`.
 
 | Model id | Default chunk min | Default macro char limit | Phase-1 temperature |
 |---|---|---|---|
+| `gemini-3.7-flash` | 15 | 22 000 | 0.35 |
+| `gemini-3.6-flash` | 15 | 22 000 | 0.35 |
 | `gemini-3.5-flash` | 15 | 22 000 | 0.35 |
 | `gemini-3.5-flash-lite` | 15 | 22 000 | 0.35 |
 | `gemini-3-flash-preview` | 15 | 22 000 | 0.35 |

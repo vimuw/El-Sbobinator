@@ -959,6 +959,10 @@ class TestLoadConfigMacOS(unittest.TestCase):
                     "el_sbobinator.services.config_service._keyring_get_api_key",
                     return_value="keyring-key",
                 ),
+                patch(
+                    "el_sbobinator.services.config_service._keyring_get_fallback_keys",
+                    return_value=[],
+                ),
             ):
                 result = cs.load_config()
         self.assertEqual(result["api_key"], "keyring-key")

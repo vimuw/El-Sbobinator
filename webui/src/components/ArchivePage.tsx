@@ -367,7 +367,7 @@ export function ArchivePage({
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <Clock className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
-            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-faint)' }}>
+            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
               Ultima sbobina aperta / modificata
             </span>
           </div>
@@ -438,7 +438,7 @@ export function ArchivePage({
 
       {/* Unfiled sessions */}
       <div className="flex flex-col gap-3 flex-1 min-h-0">
-        <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--text-faint)' }}>
+        <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
           Tutte le sbobine
         </h3>
 

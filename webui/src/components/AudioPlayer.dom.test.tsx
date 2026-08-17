@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AudioPlayer } from './AudioPlayer';
 
@@ -235,10 +235,12 @@ describe('AudioPlayer', () => {
     fireEvent.pointerDown(document.body);
   });
 
-  it('calls onRelink when relink button is clicked', () => {
-    const onRelink = vi.fn();
+  it('calls onRelink when relink button is clicked', async () => {
+    const onRelink = vi.fn().mockResolvedValue(undefined);
     render(<AudioPlayer src="/audio/test.mp3" onRelink={onRelink} />);
-    fireEvent.click(screen.getByLabelText('Cambia audio collegato'));
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Cambia audio collegato'));
+    });
     expect(onRelink).toHaveBeenCalledTimes(1);
   });
 
@@ -253,20 +255,25 @@ describe('AudioPlayer', () => {
     const button = screen.getByLabelText('Cambia audio collegato') as HTMLButtonElement;
 
     // First click initiates the relink process
-    fireEvent.click(button);
+    await act(async () => {
+      fireEvent.click(button);
+    });
     expect(onRelink).toHaveBeenCalledTimes(1);
     expect(button.disabled).toBe(true);
 
     // Subsequent clicks should be guarded and ignored
-    fireEvent.click(button);
+    await act(async () => {
+      fireEvent.click(button);
+    });
     expect(onRelink).toHaveBeenCalledTimes(1);
 
     // Resolve the first relink action
-    resolveRelink(true);
-    await onRelinkPromise;
+    await act(async () => {
+      resolveRelink(true);
+      await onRelinkPromise;
+    });
 
     // After resolving, state should reset and the button should be enabled again
-    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(button.disabled).toBe(false);
   });
 
@@ -281,7 +288,9 @@ describe('AudioPlayer', () => {
     const button = screen.getByLabelText('Cambia audio collegato') as HTMLButtonElement;
 
     // First click initiates the relink process
-    fireEvent.click(button);
+    await act(async () => {
+      fireEvent.click(button);
+    });
     expect(onRelink).toHaveBeenCalledTimes(1);
     expect(button.disabled).toBe(true);
 
@@ -290,15 +299,18 @@ describe('AudioPlayer', () => {
     expect(button.disabled).toBe(false);
 
     // Subsequent clicks should still be ignored by the internal handler guard
-    fireEvent.click(button);
+    await act(async () => {
+      fireEvent.click(button);
+    });
     expect(onRelink).toHaveBeenCalledTimes(1);
 
     // Resolve the first relink action
-    resolveRelink(true);
-    await onRelinkPromise;
+    await act(async () => {
+      resolveRelink(true);
+      await onRelinkPromise;
+    });
 
     // Wait for state update to complete
-    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(button.disabled).toBe(false);
   });
 
@@ -314,18 +326,19 @@ describe('AudioPlayer', () => {
     const button = screen.getByLabelText('Cambia audio collegato') as HTMLButtonElement;
 
     // First click initiates the relink process
-    fireEvent.click(button);
+    await act(async () => {
+      fireEvent.click(button);
+    });
     expect(onRelink).toHaveBeenCalledTimes(1);
     expect(button.disabled).toBe(true);
 
     // Reject the relink action to simulate an error
-    rejectRelink(new Error('Relink failed'));
-
-    // We catch the rejection to avoid unhandled rejection warnings in test
-    await onRelinkPromise.catch(() => {});
+    await act(async () => {
+      rejectRelink(new Error('Relink failed'));
+      await onRelinkPromise.catch(() => {});
+    });
 
     // Wait for the state update in finally block to complete
-    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(button.disabled).toBe(false);
     expect(consoleErrorSpy).toHaveBeenCalled();
     consoleErrorSpy.mockRestore();

@@ -189,7 +189,7 @@ def main() -> None:
 
     # Ensure tags are fetched
     try:
-        subprocess.run(["git", "fetch", "--tags", "--force"], check=False)
+        run_git(["fetch", "--tags", "--force"])
     except Exception:
         pass
 

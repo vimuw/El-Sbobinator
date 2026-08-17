@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { AlertCircle, AlertTriangle, CheckCircle, Clock, ExternalLink, FileAudio, FolderOpen, GripVertical, PenLine, RotateCcw, Settings, Trash2, XCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle, Clock, ExternalLink, FileAudio, FolderOpen, GripVertical, PenLine, RotateCcw, Settings, Trash2, X, XCircle } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
@@ -165,9 +165,11 @@ function QueueFileCardInner({
             {appState === 'idle' && (
               <button
                 onClick={() => onRemove(file.id)}
-                className="icon-button compact-icon-button is-danger"
+                className="icon-button compact-icon-button"
+                title="Rimuovi"
+                aria-label="Rimuovi"
               >
-                <Trash2 className="w-4 h-4" />
+                <X className="w-4 h-4" />
               </button>
             )}
           </div>

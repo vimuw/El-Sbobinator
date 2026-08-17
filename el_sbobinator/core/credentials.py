@@ -345,7 +345,7 @@ def dpapi_unprotect_text_windows(b64: str) -> str:
     Returns plaintext string on success, "" on failure.
     Retries once after 500 ms to tolerate transient service unavailability.
     """
-    if platform.system() != "Windows":
+    if platform.system() != "Windows" or not (b64 or "").strip():
         return ""
     for attempt in range(2):
         result = dpapi_unprotect_text_windows_once(b64)

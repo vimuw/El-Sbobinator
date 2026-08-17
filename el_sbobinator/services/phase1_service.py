@@ -652,8 +652,9 @@ def _process_phase1_transcription_impl(  # noqa: C901
                 return _finish((client, None, prev_memory))
             break
 
-        if not sleep_with_cancel(cancelled, 5):
-            print("   [*] Operazione annullata dall'utente.")
-            return _finish((client, None, prev_memory))
+        if chunk_start_sec + step_seconds < int(total_duration_sec):
+            if not sleep_with_cancel(cancelled, 5):
+                print("   [*] Operazione annullata dall'utente.")
+                return _finish((client, None, prev_memory))
 
     return _finish((client, full_transcript, prev_memory))

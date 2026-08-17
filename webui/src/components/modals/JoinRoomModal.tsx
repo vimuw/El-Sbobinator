@@ -55,7 +55,7 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
             {/* Modal Header */}
             <div className="modal-header">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8.5 h-8.5 rounded-lg flex items-center justify-center shrink-0 bg-[var(--accent-subtle)] text-[var(--accent-color)]">
+                <div className="w-8.5 h-8.5 rounded-lg flex items-center justify-center shrink-0 bg-[var(--accent-subtle)] text-[var(--accent-text)]">
                   <Users className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">

@@ -89,17 +89,16 @@ class GenerationOrderingTests(unittest.TestCase):
 
     def test_concurrent_saves_newer_generation_wins_on_disk(self):
         """Simulate two threads racing: older gen must not overwrite newer content."""
-        barrier = threading.Barrier(2)
+        new_done = threading.Event()
         results = {}
 
         def save_old():
-            barrier.wait()
-            time.sleep(0.02)  # arrives second under lock
+            new_done.wait(timeout=5.0)
             results["old"] = _write(self.path, "<p>OLD</p>", generation=1)
 
         def save_new():
-            barrier.wait()
             results["new"] = _write(self.path, "<p>NEW</p>", generation=2)
+            new_done.set()
 
         t1 = threading.Thread(target=save_old)
         t2 = threading.Thread(target=save_new)

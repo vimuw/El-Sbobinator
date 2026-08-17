@@ -168,14 +168,14 @@ describe('QueueFileCard', () => {
     expect(screen.queryByLabelText('Riprendi')).toBeNull();
   });
 
-  it('calls onRemove when trash button is clicked', () => {
+  it('calls onRemove when remove button is clicked', () => {
     const onRemove = vi.fn();
     render(
       <QueueWrapper>
         <QueueFileCard file={makeFile()} appState="idle" onRemove={onRemove} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />
       </QueueWrapper>,
     );
-    fireEvent.click(screen.getByRole('button', { hidden: true, name: '' }));
+    fireEvent.click(screen.getByLabelText('Rimuovi'));
     expect(onRemove).toHaveBeenCalledWith('f1');
   });
 
