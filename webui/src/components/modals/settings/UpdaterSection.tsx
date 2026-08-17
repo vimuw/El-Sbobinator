@@ -65,7 +65,7 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = ({
     <div className="space-y-4 pt-2 border-t border-[var(--border-subtle)]">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Tag className="w-4 h-4 text-[var(--accent-color)]" />
+          <Tag className="w-4 h-4 text-[var(--accent-text)]" />
           <div>
             <h4 className="text-xs font-semibold text-[var(--text-primary)]">Versione Applicazione</h4>
             <p className="text-[11px] text-[var(--text-muted)]">v{APP_VERSION}</p>
@@ -91,14 +91,14 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = ({
       {updateStatusMessage && (
         <div className={`p-3 rounded-lg border text-xs space-y-1.5 ${
           isError
-            ? 'bg-[var(--color-rose)]/10 border-[var(--color-rose)]/20 text-[var(--color-rose)]'
+            ? 'bg-[var(--error-subtle)] border-[var(--error-ring)] text-[var(--error-text)]'
             : isDone
-            ? 'bg-[var(--color-emerald)]/10 border-[var(--color-emerald)]/20 text-[var(--color-emerald)]'
-            : 'bg-[var(--accent-subtle)] border-[var(--accent-color)]/20 text-[var(--text-primary)]'
+            ? 'bg-[var(--success-subtle)] border-[var(--success-ring)] text-[var(--success-text)]'
+            : 'bg-[var(--accent-subtle)] border-[var(--accent-ring)] text-[var(--text-primary)]'
         }`}>
           <div className="flex items-center gap-2 font-medium">
-            {isInstalling && <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent-color)]" />}
-            {isDone && <CheckCircle className="w-3.5 h-3.5 text-[var(--color-emerald)]" />}
+            {isInstalling && <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent-text)]" />}
+            {isDone && <CheckCircle className="w-3.5 h-3.5 text-[var(--success-text)]" />}
             <span>{updateStatusMessage}</span>
           </div>
 
@@ -107,7 +107,7 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = ({
               <button
                 type="button"
                 onClick={handleOpenGitHub}
-                className="text-xs underline font-semibold hover:opacity-80 text-[var(--accent-color)]"
+                className="text-xs underline font-semibold hover:opacity-80 text-[var(--accent-text)]"
               >
                 Apri GitHub
               </button>
@@ -119,11 +119,11 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = ({
       {hasChecked && !isCheckingUpdate && (
         <div className="text-xs space-y-2">
           {checkFailed && (
-            <p className="text-[var(--color-rose)]">Verifica aggiornamenti non riuscita.</p>
+            <p className="text-[var(--error-text)]">Verifica aggiornamenti non riuscita.</p>
           )}
 
           {isUpdateAvailable && !isInstalling && !isDone && (
-            <div className="p-3 rounded-lg bg-[var(--accent-subtle)] border border-[var(--accent-color)]/20 flex items-center justify-between gap-3">
+            <div className="p-3 rounded-lg bg-[var(--accent-subtle)] border border-[var(--accent-ring)] flex items-center justify-between gap-3">
               <div>
                 <span className="font-semibold text-[var(--text-primary)] block">Nuova versione disponibile!</span>
                 <span className="text-[11px] text-[var(--text-muted)] block">v{latestVersion}</span>
@@ -134,7 +134,7 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = ({
                   onClick={() => { void onInstallUpdate(latestVersion).catch(() => {}); }}
                   aria-label="Installa aggiornamento"
                   disabled={updateInstallState?.status === 'downloading'}
-                  className="app-button-primary text-xs px-3 py-1.5 flex items-center gap-1.5 shrink-0"
+                  className="modal-action-button is-primary text-xs px-3 py-1.5 flex items-center gap-1.5 shrink-0"
                 >
                   <ArrowDownToLine className="w-3.5 h-3.5" />
                   Scarica e Installa
@@ -144,7 +144,7 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = ({
           )}
 
           {!isUpdateAvailable && !checkFailed && !updateStatusMessage && (
-            <div className="flex items-center gap-1.5 text-[var(--color-emerald)] font-medium">
+            <div className="flex items-center gap-1.5 text-[var(--success-text)] font-medium">
               <CheckCircle className="w-4 h-4" />
               ✓ Sei aggiornato alla versione più recente.
             </div>
@@ -158,7 +158,7 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = ({
           href={GITHUB_RELEASES_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="hover:underline text-[var(--accent-color)] inline-flex items-center gap-1"
+          className="hover:underline text-[var(--accent-text)] inline-flex items-center gap-1"
         >
           Vedi note di rilascio su GitHub
           <ExternalLink className="w-3 h-3" />

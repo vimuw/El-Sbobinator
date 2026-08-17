@@ -90,57 +90,27 @@ export const QueueSection = memo(function QueueSection({
                 <MoreVertical className="w-4 h-4" />
               </button>
               {menuOpen && (
-                <div
-                role="menu"
-                style={{
-                  position: 'absolute', top: 'calc(100% + 6px)', right: 0,
-                  minWidth: '210px', zIndex: 50,
-                  background: 'var(--bg-elevated)',
-                  border: '1px solid var(--border-default)',
-                  borderRadius: '12px',
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
-                  padding: '4px',
-                }}
-              >
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => { setAutoContinue(v => !v); }}
-                  title="Avvia automaticamente il file successivo al termine di ogni sbobinatura"
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '10px',
-                    width: '100%', padding: '8px 12px', borderRadius: '8px',
-                    border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '14px',
-                    background: autoContinue ? 'var(--success-subtle)' : 'transparent',
-                    color: autoContinue ? 'var(--success-text)' : 'var(--text-primary)',
-                    fontWeight: autoContinue ? 600 : 400,
-                    marginBottom: '2px',
-                    transition: 'background 140ms ease, color 140ms ease',
-                    whiteSpace: 'nowrap',
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.background = autoContinue ? 'var(--success-subtle)' : 'var(--sidebar-active-bg)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = autoContinue ? 'var(--success-subtle)' : 'transparent')}
-                >
-                  <Zap className="w-4 h-4 shrink-0" style={{ color: autoContinue ? 'var(--success-text)' : 'var(--text-muted)' }} />
-                  <span className="grow whitespace-nowrap">Coda automatica</span>
-                  {autoContinue && <Check className="w-4 h-4 shrink-0" style={{ color: 'var(--success-text)' }} />}
-                </button>
+                <div role="menu" className="kebab-dropdown">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => setAutoContinue(v => !v)}
+                    title="Avvia automaticamente il file successivo al termine di ogni sbobinatura"
+                    className={`kebab-item ${autoContinue ? 'is-active' : ''}`}
+                  >
+                    <Zap className="w-4 h-4 shrink-0" style={{ color: autoContinue ? 'var(--accent-text)' : 'var(--text-muted)' }} />
+                    <span className="grow whitespace-nowrap">Coda automatica</span>
+                    {autoContinue && <Check className="w-4 h-4 shrink-0" style={{ color: 'var(--accent-text)' }} />}
+                  </button>
                   {appState === 'idle' && pendingFiles.length > 0 && (
                     <button
                       type="button"
                       role="menuitem"
                       onClick={() => { onClearAll(); setMenuOpen(false); }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: '10px',
-                        width: '100%', padding: '8px 12px', borderRadius: '8px',
-                        border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '14px',
-                        background: 'transparent', color: 'var(--error-text)',
-                      }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--error-subtle)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                      className="kebab-item is-danger"
                     >
-                      <Trash2 className="w-4 h-4" style={{ flexShrink: 0 }} />
-                      Svuota coda
+                      <Trash2 className="w-4 h-4 shrink-0" />
+                      <span>Svuota coda</span>
                     </button>
                   )}
                 </div>

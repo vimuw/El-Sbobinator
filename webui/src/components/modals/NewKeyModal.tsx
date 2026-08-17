@@ -91,16 +91,16 @@ export function NewKeyModal({ isOpen, onClose }: NewKeyModalProps) {
                 </p>
               </div>
             </div>
-            <div className="modal-footer flex-col">
+            <div className="modal-footer">
+              <button onClick={handleClose} className="modal-action-button flex-1">
+                Annulla
+              </button>
               <button
                 onClick={handleSubmit}
-                className="modal-action-button is-primary w-full"
+                className="modal-action-button is-primary flex-1"
                 disabled={!isReplacementKeyValid}
               >
                 Continua
-              </button>
-              <button onClick={handleClose} className="modal-action-button w-full">
-                Annulla
               </button>
             </div>
           </motion.div>

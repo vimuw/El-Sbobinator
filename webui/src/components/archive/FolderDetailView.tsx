@@ -186,12 +186,12 @@ export function FolderDetailView({
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="icon-button compact-icon-button"
+            className="icon-button compact-icon-button group/back"
             aria-label="Torna all'archivio"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-4 h-4 transition-transform duration-200 group-hover/back:-translate-x-0.5" />
           </button>
-          <span className="w-4 h-4 rounded-full shrink-0" style={{ background: folder.color }} />
+          <span className="folder-color-dot is-large" style={{ '--folder-color': folder.color } as React.CSSProperties} />
           <h2 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
             {folder.name}
           </h2>
@@ -291,7 +291,7 @@ export function FolderDetailView({
         <button
           type="button"
           onClick={() => setShowAddPanel(v => !v)}
-          className="w-full flex items-center justify-between px-3.5 py-2.5 transition-colors cursor-pointer select-none"
+          className="w-full flex items-center justify-between px-3.5 py-2.5 transition-colors cursor-pointer select-none group/add"
           style={{
             background: showAddPanel ? 'var(--sidebar-active-bg)' : 'var(--bg-input)',
             borderBottom: showAddPanel ? '1px solid var(--border-subtle)' : 'none',
@@ -299,10 +299,10 @@ export function FolderDetailView({
         >
           <div className="flex items-center gap-2.5">
             <span
-              className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-transform"
+              className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-transform duration-200 group-hover/add:scale-110"
               style={{ background: 'var(--accent-subtle)', color: 'var(--accent-text)' }}
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-3.5 h-3.5 transition-transform duration-200 group-hover/add:rotate-90" />
             </span>
             <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
               Aggiungi lezione
@@ -438,7 +438,7 @@ export function FolderDetailView({
                 Nessun risultato per &ldquo;{search}&rdquo;
               </div>
             )}
-            <div className="max-h-[calc(100vh-300px)] overflow-y-auto app-scroll pr-1">
+            <div className="max-h-[calc(100vh-300px)] overflow-y-auto app-scroll pr-1 py-1">
               <SortableContext
                 items={pageData.map(s => s.session_dir)}
                 strategy={verticalListSortingStrategy}

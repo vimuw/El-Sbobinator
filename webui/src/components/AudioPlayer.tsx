@@ -239,16 +239,16 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
         <button
           type="button"
           onClick={togglePlay}
-          className={`player-control ${isPlaying ? 'is-active' : ''}`}
+          className={`player-control group ${isPlaying ? 'is-active' : ''}`}
           aria-label={isPlaying ? 'Metti in pausa' : 'Avvia riproduzione'}
         >
-          {isPlaying ? <Pause className="h-4 w-4" strokeWidth={2.2} /> : <Play className="ml-[1px] h-4 w-4 fill-current" strokeWidth={2.2} />}
+          {isPlaying ? <Pause className="h-4 w-4 transition-transform duration-150 group-hover:scale-110" strokeWidth={2.2} /> : <Play className="ml-[1px] h-4 w-4 fill-current transition-transform duration-150 group-hover:scale-110" strokeWidth={2.2} />}
         </button>
-        <button type="button" onClick={() => skip(-10)} className="player-control" aria-label="Indietro di 10 secondi">
-          <SkipBack className="h-4 w-4" />
+        <button type="button" onClick={() => skip(-10)} className="player-control group" aria-label="Indietro di 10 secondi">
+          <SkipBack className="h-4 w-4 transition-transform duration-150 group-hover:-translate-x-0.5" />
         </button>
-        <button type="button" onClick={() => skip(10)} className="player-control" aria-label="Avanti di 10 secondi">
-          <SkipForward className="h-4 w-4" />
+        <button type="button" onClick={() => skip(10)} className="player-control group" aria-label="Avanti di 10 secondi">
+          <SkipForward className="h-4 w-4 transition-transform duration-150 group-hover:translate-x-0.5" />
         </button>
       </div>
 

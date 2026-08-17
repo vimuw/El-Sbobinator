@@ -63,12 +63,12 @@ export function SortMenu({ sort, onSortChange }: SortMenuProps) {
         ref={buttonRef}
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="notion-sort-chip w-9 p-0 flex items-center justify-center transition-colors"
+        className="notion-sort-chip w-9 p-0 flex items-center justify-center transition-colors group/sort"
         style={open ? { background: 'var(--border-default)', color: 'var(--text-primary)' } : undefined}
         title={`Ordinamento: ${currentOption?.label ?? ''}`}
         aria-label="Cambia ordinamento"
       >
-        <ArrowUpDown className="w-4 h-4" style={{ opacity: open ? 1 : 0.8 }} />
+        <ArrowUpDown className={`w-4 h-4 transition-transform duration-200 ${open ? 'scale-110 rotate-180' : 'opacity-80 group-hover/sort:scale-110'}`} />
       </button>
 
       {createPortal(
@@ -105,23 +105,7 @@ export function SortMenu({ sort, onSortChange }: SortMenuProps) {
                       onSortChange(opt.id);
                       setOpen(false);
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-left whitespace-nowrap transition-colors"
-                    style={{
-                      border: 'none',
-                      borderRadius: 8,
-                      cursor: 'pointer',
-                      background: 'transparent',
-                      color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      fontWeight: isSelected ? 600 : 400,
-                      fontSize: '14px',
-                      whiteSpace: 'nowrap',
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.background = 'var(--sidebar-active-bg)';
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.background = 'transparent';
-                    }}
+                    className={`kebab-item ${isSelected ? 'is-active' : ''}`}
                   >
                     <span className="w-3.5 h-3.5 flex items-center justify-center shrink-0">
                       {isSelected && <Check className="w-3.5 h-3.5" style={{ color: 'var(--accent-text)' }} />}

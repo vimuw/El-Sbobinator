@@ -396,10 +396,22 @@ export function EditorFullPage({
           </div>
 
           {detectedLocalRoom && !collabRoom && (
-            <div className="bg-blue-600 dark:bg-blue-500 text-white px-4 py-2 text-xs flex items-center justify-between shadow-md shrink-0 border-b border-blue-700">
+            <div
+              className="px-4 py-2 text-xs flex items-center justify-between shrink-0 border-b transition-colors"
+              style={{
+                background: 'var(--accent-subtle)',
+                borderColor: 'var(--accent-ring)',
+                color: 'var(--text-primary)',
+              }}
+            >
               <div className="flex items-center gap-2 font-medium">
-                <Users className="w-4 h-4" />
-                <span>Stanza di collaborazione attiva trovata sul tuo PC: <strong className="font-mono font-bold px-1.5 py-0.5 bg-blue-700/60 rounded">{detectedLocalRoom}</strong></span>
+                <Users className="w-4 h-4" style={{ color: 'var(--accent-text)' }} />
+                <span>
+                  Stanza di collaborazione attiva trovata:{' '}
+                  <strong className="font-mono font-semibold px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                    {detectedLocalRoom}
+                  </strong>
+                </span>
               </div>
               <button
                 onClick={() => {
@@ -408,9 +420,9 @@ export function EditorFullPage({
                   setDetectedLocalRoom(null);
                   onCollaborationStateChange?.(detectedLocalRoom, { name: 'Partecipante Desktop', color: '#10b981' });
                 }}
-                className="bg-white text-blue-700 hover:bg-blue-50 font-bold px-3 py-1 rounded-md text-xs transition-colors shadow-xs cursor-pointer flex items-center gap-1"
+                className="modal-action-button is-primary is-compact text-xs px-3 py-1 flex items-center gap-1.5 font-semibold"
               >
-                <span>Unisciti ora</span> 🚀
+                <span>Unisciti ora</span>
               </button>
             </div>
           )}

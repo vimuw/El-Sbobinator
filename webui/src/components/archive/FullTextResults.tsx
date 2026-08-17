@@ -34,11 +34,11 @@ export function FullTextResultList({
         <button
           key={result.session_dir}
           onClick={() => onPreview(result)}
-          className="archive-session-card w-full text-left px-4 py-3 flex flex-col gap-2"
+          className="archive-session-card w-full text-left px-4 py-3 flex flex-col gap-2 group/search"
           style={{ cursor: 'pointer' }}
         >
           <div className="flex items-center gap-2">
-            <FileSearch className="w-4 h-4 shrink-0" style={{ color: 'var(--accent-text)' }} />
+            <FileSearch className="w-4 h-4 shrink-0 transition-transform duration-200 group-hover/search:scale-110" style={{ color: 'var(--accent-text)' }} />
             <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{result.name}</span>
             {result.completed_at_iso && (
               <span className="text-xs shrink-0" style={{ color: 'var(--text-faint)' }}>

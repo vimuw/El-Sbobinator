@@ -4,7 +4,7 @@ import { Archive, Bell, Moon, Settings, Sun, Terminal } from 'lucide-react';
 import type { AppStatus } from '../appState';
 export type ActivePage = 'queue' | 'archive';
 
-const SIDEBAR_COLLAPSED_W = 64;
+const SIDEBAR_COLLAPSED_W = 54;
 
 interface NavSidebarProps {
   activePage: ActivePage;
@@ -77,14 +77,14 @@ export const NavSidebar = memo(function NavSidebar({
     >
       {/* Logo */}
       <div className="flex justify-center pt-3 pb-1">
-        <img src="/icon.png" alt="El Sbobinator" style={{ width: 36, height: 36, borderRadius: 9 }} />
+        <img src="/icon.png" alt="El Sbobinator" style={{ width: 30, height: 30, borderRadius: 8 }} />
       </div>
 
       {/* Navigation items */}
-      <div className="flex flex-col items-center gap-1.5 px-2 pt-2 pb-2 flex-1">
+      <div className="flex flex-col items-center gap-1.5 px-1.5 pt-2 pb-2 flex-1">
         <NavItem
           icon={
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2L2 7l10 5 10-5-10-5z"/>
               <path d="M2 17l10 5 10-5"/>
               <path d="M2 12l10 5 10-5"/>
@@ -96,7 +96,7 @@ export const NavSidebar = memo(function NavSidebar({
           isProcessing={appState === 'processing'}
         />
         <NavItem
-          icon={<Archive size={22} />}
+          icon={<Archive size={20} />}
           label="Archivio"
           active={activePage === 'archive'}
           onClick={() => setActivePage('archive')}
@@ -104,15 +104,15 @@ export const NavSidebar = memo(function NavSidebar({
       </div>
 
       {/* Utility buttons */}
-      <div className="px-2 pb-4 flex flex-col items-center gap-1.5" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 10 }}>
+      <div className="px-1.5 pb-3.5 flex flex-col items-center gap-1.5" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
         {/* API status */}
         <SidebarTooltip label={apiStatusLabel}>
           <div
             aria-label={apiStatusLabel}
-            className="flex items-center justify-center rounded-lg text-xs font-medium w-11 h-9 cursor-default"
+            className="flex items-center justify-center rounded-lg text-xs font-medium w-9 h-7 cursor-default"
             style={{ color: apiStatusColor }}
           >
-            <span className="shrink-0 inline-flex items-center justify-center" style={{ width: 20, height: 20, lineHeight: 0 }}>
+            <span className="shrink-0 inline-flex items-center justify-center" style={{ width: 18, height: 18, lineHeight: 0 }}>
               <span
                 className={`inline-flex h-2 w-2 rounded-full ${appState === 'processing' ? 'animate-pulse' : ''}`}
                 style={{ background: apiStatusColor }}
@@ -122,13 +122,13 @@ export const NavSidebar = memo(function NavSidebar({
         </SidebarTooltip>
 
         <UtilityButton
-          icon={themeMode === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+          icon={themeMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           label={themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro'}
           active={false}
           onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
         />
         <UtilityButton
-          icon={<Terminal size={20} />}
+          icon={<Terminal size={18} />}
           label="Console"
           ariaLabel="Mostra console"
           active={showConsole}
@@ -147,12 +147,12 @@ export const NavSidebar = memo(function NavSidebar({
                 animate={shakeBell ? 'shake' : 'idle'}
                 style={{ display: 'inline-flex' }}
               >
-                <Bell size={20} />
+                <Bell size={18} />
               </motion.span>
               {unreadNotificationsCount > 0 && (
                 <span style={{ position: 'absolute', top: -3, right: -3, display: 'inline-flex' }}>
-                  <span className="animate-ping" style={{ position: 'absolute', width: 8, height: 8, borderRadius: '50%', background: '#b91c1c', opacity: 0.6 }} />
-                  <span style={{ position: 'relative', width: 8, height: 8, borderRadius: '50%', background: '#b91c1c', border: '1.5px solid var(--sidebar-bg)' }} />
+                  <span className="animate-ping" style={{ position: 'absolute', width: 7, height: 7, borderRadius: '50%', background: '#b91c1c', opacity: 0.6 }} />
+                  <span style={{ position: 'relative', width: 7, height: 7, borderRadius: '50%', background: '#b91c1c', border: '1.5px solid var(--sidebar-bg)' }} />
                 </span>
               )}
             </span>
@@ -165,11 +165,11 @@ export const NavSidebar = memo(function NavSidebar({
         <UtilityButton
           icon={
             <span style={{ position: 'relative', display: 'inline-flex' }}>
-              <Settings size={20} />
+              <Settings size={18} />
               {hasPendingUpdate && (
                 <span style={{ position: 'absolute', top: -3, right: -3, display: 'inline-flex' }}>
-                  <span className="animate-ping" style={{ position: 'absolute', width: 8, height: 8, borderRadius: '50%', background: 'var(--warning-text)', opacity: 0.6 }} />
-                  <span style={{ position: 'relative', width: 8, height: 8, borderRadius: '50%', background: 'var(--warning-text)', border: '1.5px solid var(--sidebar-bg)' }} />
+                  <span className="animate-ping" style={{ position: 'absolute', width: 7, height: 7, borderRadius: '50%', background: 'var(--warning-text)', opacity: 0.6 }} />
+                  <span style={{ position: 'relative', width: 7, height: 7, borderRadius: '50%', background: 'var(--warning-text)', border: '1.5px solid var(--sidebar-bg)' }} />
                 </span>
               )}
             </span>
@@ -226,7 +226,7 @@ function NavItem({
       <button
         onClick={onClick}
         aria-label={ariaLabel || label}
-        className="sidebar-nav-item w-11 h-10 flex items-center justify-center rounded-lg"
+        className="sidebar-nav-item w-9 h-9 flex items-center justify-center rounded-lg group/nav"
         style={{
           background: active ? 'var(--sidebar-active-bg)' : 'transparent',
           color: active ? 'var(--sidebar-active-text)' : 'var(--text-secondary)',
@@ -235,7 +235,7 @@ function NavItem({
           boxShadow: 'none',
         }}
       >
-        <span className="inline-flex items-center justify-center" style={{ position: 'relative', color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>
+        <span className="inline-flex items-center justify-center transition-transform duration-200 group-hover/nav:scale-110" style={{ position: 'relative', color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>
           {icon}
           {isProcessing && (
             <span style={{ position: 'absolute', top: -3, right: -3, display: 'inline-flex' }}>
@@ -265,7 +265,7 @@ function UtilityButton({
         onClick={onClick}
         aria-label={ariaLabel || label}
         disabled={disabled}
-        className="sidebar-nav-item w-11 h-9 flex items-center justify-center rounded-lg"
+        className="sidebar-nav-item w-9 h-8 flex items-center justify-center rounded-lg group/util"
         style={{
           background: active ? 'var(--sidebar-active-bg)' : 'transparent',
           color: disabled ? 'var(--text-muted)' : (active ? 'var(--sidebar-active-text)' : 'var(--text-secondary)'),
@@ -274,7 +274,7 @@ function UtilityButton({
           opacity: disabled ? 0.4 : 1,
         }}
       >
-        <span className="inline-flex items-center justify-center" style={{ color: disabled ? 'var(--text-muted)' : (active ? 'var(--sidebar-active-text)' : 'var(--text-muted)'), lineHeight: 0 }}>
+        <span className="inline-flex items-center justify-center transition-transform duration-200 group-hover/util:scale-110" style={{ color: disabled ? 'var(--text-muted)' : (active ? 'var(--sidebar-active-text)' : 'var(--text-muted)'), lineHeight: 0 }}>
           {icon}
         </span>
       </button>

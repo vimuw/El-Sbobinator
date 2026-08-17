@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { FolderPlus, Pencil, Trash2 } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import type { ArchiveFolder, ArchiveSession } from '../../bridge';
@@ -19,8 +19,6 @@ export function FolderCard({
   onEdit,
   onDelete,
 }: FolderCardProps) {
-  const [isHover, setIsHover] = useState(false);
-
   const count = useMemo(
     () => folder.session_dirs.filter(d => sessionsByDir.has(d)).length,
     [folder.session_dirs, sessionsByDir],
@@ -42,18 +40,12 @@ export function FolderCard({
 
   return (
     <div
-      className="folder-card"
-      style={{
-        border: `2px solid ${isHover ? `${folder.color}90` : `${folder.color}40`}`,
-        background: `${folder.color}26`,
-        cursor: 'pointer',
-      }}
+      className="folder-card cursor-pointer group/folder"
+      style={{ '--folder-color': folder.color } as React.CSSProperties}
       onClick={onNavigate}
-      onMouseEnter={() => setIsHover(true)}
-      onMouseLeave={() => setIsHover(false)}
     >
       <div className="flex items-center gap-3 px-4 pt-3 pb-1">
-        <span className="w-4 h-4 rounded-full shrink-0" style={{ background: folder.color }} />
+        <span className="folder-color-dot is-large" />
         <span className="flex-1 text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
           {folder.name}
         </span>
@@ -120,18 +112,11 @@ export function FolderCardOverlay({
   const count = folder.session_dirs.filter(d => sessionsByDir.has(d)).length;
   return (
     <div
-      className="folder-card"
-      style={{
-        border: `2px solid ${folder.color}90`,
-        background: `${folder.color}26`,
-        boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
-        opacity: 0.95,
-        pointerEvents: 'none',
-        cursor: 'grabbing',
-      }}
+      className="folder-card shadow-lg opacity-95 pointer-events-none cursor-grabbing"
+      style={{ '--folder-color': folder.color } as React.CSSProperties}
     >
       <div className="flex items-center gap-3 px-4 pt-3 pb-1">
-        <span className="w-4 h-4 rounded-full shrink-0" style={{ background: folder.color }} />
+        <span className="folder-color-dot is-large" />
         <span className="flex-1 text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
           {folder.name}
         </span>
@@ -149,9 +134,9 @@ export function NewFolderCard({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="folder-card folder-card-new cursor-pointer w-full text-left"
+      className="folder-card folder-card-new cursor-pointer w-full text-left group/newfolder"
     >
-      <FolderPlus className="w-5 h-5" style={{ color: 'var(--accent-text)' }} />
+      <FolderPlus className="w-5 h-5 transition-transform duration-200 group-hover/newfolder:scale-110" style={{ color: 'var(--accent-text)' }} />
       <span className="text-xs font-semibold" style={{ color: 'var(--accent-text)' }}>Nuova raccolta</span>
     </button>
   );

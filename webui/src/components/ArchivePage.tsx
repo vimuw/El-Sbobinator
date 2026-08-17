@@ -585,7 +585,7 @@ export function ArchivePage({
           )}
 
           {!fullTextMode && (
-            <div className="max-h-[calc(100vh-380px)] overflow-y-auto app-scroll pr-1">
+            <div className="max-h-[calc(100vh-380px)] overflow-y-auto app-scroll pr-1 py-1">
               <div className="flex flex-col gap-3">
                 {sessionPageData.map(session => (
                   <DraggableSessionCard

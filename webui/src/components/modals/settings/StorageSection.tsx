@@ -134,7 +134,7 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
         )}
 
         {moveError && (
-          <div className="p-3 rounded-lg bg-[var(--color-rose)]/10 border border-[var(--color-rose)]/20 text-xs text-[var(--color-rose)] font-medium">
+          <div className="p-3 rounded-lg bg-[var(--error-subtle)] border border-[var(--error-ring)] text-xs text-[var(--error-text)] font-medium">
             {moveError}
           </div>
         )}

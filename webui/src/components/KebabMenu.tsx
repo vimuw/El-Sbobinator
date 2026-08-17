@@ -153,16 +153,8 @@ export function KebabMenu({ items, align = 'right', buttonClassName }: KebabMenu
                     key={i}
                     disabled={item.disabled}
                     onClick={e => { e.stopPropagation(); item.onClick(); setOpen(false); }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left whitespace-nowrap bg-transparent transition-colors"
-                    style={{
-                      border: 'none',
-                      borderRadius: 8,
-                      cursor: item.disabled ? 'default' : 'pointer',
-                      color: item.danger ? 'var(--error-text)' : 'var(--text-primary)',
-                      opacity: item.disabled ? 0.4 : 1,
-                    }}
-                    onMouseEnter={e => { if (!item.disabled) e.currentTarget.style.background = item.danger ? 'var(--error-subtle)' : 'var(--sidebar-active-bg)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                    className={`kebab-item ${item.danger ? 'is-danger' : ''}`}
+                    style={item.disabled ? { opacity: 0.4, cursor: 'default' } : undefined}
                   >
                     {item.icon && <span className="shrink-0 w-4 h-4 flex items-center justify-center">{item.icon}</span>}
                     <span>{item.label}</span>

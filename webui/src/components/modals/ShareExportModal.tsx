@@ -70,31 +70,24 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
           exit={{ opacity: 0 }}
           onClick={onClose}
           className="modal-overlay absolute inset-0"
-          style={{ background: 'var(--bg-overlay)', backdropFilter: 'blur(4px)' }}
         />
         <motion.div
-          initial={{ opacity: 0, scale: 0.96 }}
+          initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }}
-          exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.14, ease: 'easeIn' } }}
+          exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14, ease: 'easeIn' } }}
           className="modal-card relative w-full max-w-lg overflow-hidden flex flex-col"
-          style={{
-            background: 'var(--bg-elevated)',
-            border: '1px solid var(--border-default)',
-            borderRadius: 16,
-            boxShadow: '0 16px 40px rgba(0,0,0,0.25)',
-          }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+          <div className="modal-header">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--accent-subtle)', color: 'var(--accent-text)' }}>
+              <div className="w-8.5 h-8.5 rounded-lg flex items-center justify-center shrink-0 bg-[var(--accent-subtle)] text-[var(--accent-text)]">
                 <Package className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-base font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                <h2 className="text-base font-semibold truncate text-[var(--text-primary)]">
                   Esporta Pacchetto Sbobina
                 </h2>
-                <p className="text-xs truncate opacity-70" style={{ color: 'var(--text-muted)' }}>
+                <p className="text-xs truncate text-[var(--text-muted)] font-normal">
                   {session.name}
                 </p>
               </div>
@@ -109,24 +102,24 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
           </div>
 
           {/* Body */}
-          <div className="p-6 space-y-5 overflow-y-auto max-h-[70vh]">
+          <div className="modal-body space-y-4">
             {/* Option Cards */}
             <div className="space-y-2.5">
-              <label className="text-xs font-semibold uppercase tracking-wider block" style={{ color: 'var(--text-muted)' }}>
+              <label className="text-xs font-semibold uppercase tracking-wider block text-[var(--text-muted)]">
                 Cosa desideri includere nel pacchetto?
               </label>
 
               {/* Option 1: Sbobina + Audio */}
               <div
                 onClick={() => setExportType('full')}
-                className="p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3.5"
+                className="p-3.5 rounded-lg border cursor-pointer transition-all flex items-start gap-3.5"
                 style={{
                   borderColor: exportType === 'full' ? 'var(--accent-bg)' : 'var(--border-default)',
                   background: exportType === 'full' ? 'var(--accent-subtle)' : 'var(--bg-surface)',
                 }}
               >
                 <div
-                  className="mt-0.5 w-5 h-5 rounded-full border flex items-center justify-center shrink-0"
+                  className="mt-0.5 w-4.5 h-4.5 rounded-full border flex items-center justify-center shrink-0"
                   style={{
                     borderColor: exportType === 'full' ? 'var(--accent-bg)' : 'var(--border-strong)',
                     background: exportType === 'full' ? 'var(--accent-bg)' : 'transparent',
@@ -136,7 +129,7 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    <span className="text-sm font-semibold text-[var(--text-primary)]">
                       Sbobina + Audio (Completo)
                     </span>
                     <span
@@ -146,7 +139,7 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
                       Consigliato
                     </span>
                   </div>
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  <p className="text-xs mt-0.5 text-[var(--text-muted)]">
                     Include la sbobina completa (HTML, revisioni) e la traccia audio per riascoltarla sul nuovo PC.
                   </p>
                 </div>
@@ -155,14 +148,14 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
               {/* Option 2: Solo Sbobina */}
               <div
                 onClick={() => setExportType('text_only')}
-                className="p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3.5"
+                className="p-3.5 rounded-lg border cursor-pointer transition-all flex items-start gap-3.5"
                 style={{
                   borderColor: exportType === 'text_only' ? 'var(--accent-bg)' : 'var(--border-default)',
                   background: exportType === 'text_only' ? 'var(--accent-subtle)' : 'var(--bg-surface)',
                 }}
               >
                 <div
-                  className="mt-0.5 w-5 h-5 rounded-full border flex items-center justify-center shrink-0"
+                  className="mt-0.5 w-4.5 h-4.5 rounded-full border flex items-center justify-center shrink-0"
                   style={{
                     borderColor: exportType === 'text_only' ? 'var(--accent-bg)' : 'var(--border-strong)',
                     background: exportType === 'text_only' ? 'var(--accent-bg)' : 'transparent',
@@ -172,12 +165,12 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4" style={{ color: 'var(--accent-text)' }} />
-                    <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    <FileText className="w-4 h-4 text-[var(--accent-text)]" />
+                    <span className="text-sm font-semibold text-[var(--text-primary)]">
                       Solo Sbobina (Leggero)
                     </span>
                   </div>
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  <p className="text-xs mt-0.5 text-[var(--text-muted)]">
                     Include solo il testo della sbobina e i dati di sessione. File di dimensioni ridotte.
                   </p>
                 </div>
@@ -186,14 +179,14 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
               {/* Option 3: Solo Audio */}
               <div
                 onClick={() => setExportType('audio_only')}
-                className="p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3.5"
+                className="p-3.5 rounded-lg border cursor-pointer transition-all flex items-start gap-3.5"
                 style={{
                   borderColor: exportType === 'audio_only' ? 'var(--accent-bg)' : 'var(--border-default)',
                   background: exportType === 'audio_only' ? 'var(--accent-subtle)' : 'var(--bg-surface)',
                 }}
               >
                 <div
-                  className="mt-0.5 w-5 h-5 rounded-full border flex items-center justify-center shrink-0"
+                  className="mt-0.5 w-4.5 h-4.5 rounded-full border flex items-center justify-center shrink-0"
                   style={{
                     borderColor: exportType === 'audio_only' ? 'var(--accent-bg)' : 'var(--border-strong)',
                     background: exportType === 'audio_only' ? 'var(--accent-bg)' : 'transparent',
@@ -203,12 +196,12 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <Music className="w-4 h-4" style={{ color: 'var(--accent-text)' }} />
-                    <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    <Music className="w-4 h-4 text-[var(--accent-text)]" />
+                    <span className="text-sm font-semibold text-[var(--text-primary)]">
                       Solo Audio
                     </span>
                   </div>
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  <p className="text-xs mt-0.5 text-[var(--text-muted)]">
                     Esporta solo la registrazione audio originale per la condivisione diretta.
                   </p>
                 </div>
@@ -217,29 +210,23 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
 
             {/* Error or Success notification */}
             {errorMsg && (
-              <div className="p-3.5 rounded-xl flex items-center gap-3 text-xs border" style={{ background: 'var(--error-subtle)', borderColor: 'var(--error-ring)', color: 'var(--error-text)' }}>
+              <div className="p-3 rounded-lg flex items-center gap-3 text-xs border bg-[var(--error-subtle)] border-[var(--error-ring)] text-[var(--error-text)]">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{errorMsg}</span>
               </div>
             )}
 
             {successMsg && (
-              <div className="p-3.5 rounded-xl flex flex-col gap-2.5 text-xs border" style={{ background: 'var(--accent-subtle)', borderColor: 'var(--accent-ring)', color: 'var(--text-primary)' }}>
+              <div className="p-3 rounded-lg flex flex-col gap-2.5 text-xs border bg-[var(--accent-subtle)] border-[var(--accent-ring)] text-[var(--text-primary)]">
                 <div className="flex items-center gap-3">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: 'var(--accent-text)' }} />
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-[var(--accent-text)]" />
                   <span>{successMsg}</span>
                 </div>
                 {exportedPath && (
                   <button
                     type="button"
                     onClick={handleOpenFolder}
-                    className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all"
-                    style={{
-                      background: 'var(--bg-surface)',
-                      borderColor: 'var(--border-default)',
-                      color: 'var(--accent-text)',
-                      cursor: 'pointer',
-                    }}
+                    className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all cursor-pointer bg-[var(--bg-surface)] border-[var(--border-default)] text-[var(--accent-text)] hover:bg-[var(--sidebar-active-bg)]"
                   >
                     <FolderOpen className="w-3.5 h-3.5" />
                     <span>Apri cartella del pacchetto</span>
@@ -249,21 +236,20 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
             )}
           </div>
 
-          {/* Footer centered */}
-          <div
-            className="flex items-center justify-center gap-3 px-6 py-4 border-t"
-            style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-panel)' }}
-          >
+          {/* Footer Actions */}
+          <div className="modal-footer">
+            <button
+              type="button"
+              onClick={onClose}
+              className="modal-action-button flex-1"
+            >
+              Annulla
+            </button>
             <button
               type="button"
               onClick={handleExportFile}
               disabled={isProcessing}
-              className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm disabled:opacity-50"
-              style={{
-                background: 'var(--btn-primary-bg)',
-                color: 'var(--btn-primary-text)',
-                cursor: isProcessing ? 'not-allowed' : 'pointer',
-              }}
+              className="modal-action-button is-primary flex-1 flex items-center justify-center gap-2"
             >
               {isProcessing ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : <Download className="w-4 h-4 text-white" />}
               <span>Esporta Pacchetto (.sbobina)</span>

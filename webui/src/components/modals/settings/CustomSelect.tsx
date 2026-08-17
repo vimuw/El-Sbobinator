@@ -116,7 +116,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
       {isOpen && (
         <div
           role="listbox"
-          className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl bg-[var(--bg-panel)] border border-[var(--border-subtle)] shadow-xl shadow-black/25 overflow-hidden py-1 max-h-60 overflow-y-auto app-scroll"
+          className="select-dropdown absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl bg-[var(--bg-panel)] border border-[var(--border-subtle)] shadow-xl shadow-black/25 overflow-hidden py-1 max-h-60 overflow-y-auto app-scroll"
         >
           {options.map(opt => {
             const isSelected = opt.value === value;
@@ -133,12 +133,12 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                     setIsOpen(false);
                   }
                 }}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 text-sm text-left transition-colors ${
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 text-sm text-left transition-all duration-140 ${
                   opt.disabled
                     ? 'opacity-40 cursor-not-allowed text-[var(--text-muted)]'
                     : isSelected
                     ? 'bg-[var(--accent-subtle)] text-[var(--accent-text)] font-semibold'
-                    : 'text-[var(--text-primary)] hover:bg-[var(--sidebar-active-bg)]'
+                    : 'text-[var(--text-primary)] hover:bg-[var(--sidebar-active-bg)] hover:translate-x-0.5'
                 }`}
               >
                 <div className="truncate pr-2">

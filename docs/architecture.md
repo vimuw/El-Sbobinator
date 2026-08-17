@@ -67,10 +67,10 @@ El Sbobinator is a Windows/macOS desktop application that turns audio lectures i
 | `duplicateDetection.ts` | Archive-lookup helpers used by the "already processed" modal |
 | `branding.ts` | Constants for GitHub/Ko-fi/releases URLs |
 | `utils.ts` | `errorLabel` mapping (Python `last_error` → Italian UI string), formatters |
-| `index.css` | Tailwind v4 base + custom rules (including editor + TOC) |
-| `components/AppHeader.tsx` | Sticky app header showing status, API state, theme toggle, and settings controls |
+| `index.css` | Tailwind v4 base + custom theme design tokens (including editor, sidebar, and modals) |
+| `components/NavSidebar.tsx` | Main lateral navigation bar switching between Queue, Archivio, and Setup pages |
 | `components/ArchivePage.tsx` | Main archive search dashboard, layout structure, search logic |
-| `components/ArchiveSection.tsx` / `components/CompletedSection.tsx` | Archive listing layout sections and session cards |
+| `components/archive/*` | Modularized archive subcomponents (`FolderCard`, `FolderDetailView`, `SessionCard`, `SortMenu`, `FolderModals`, `FullTextResults`) |
 | `components/ConsolePanel.tsx` | Embedded expandable system output/log console panel |
 | `components/DropZone.tsx` | Drag and drop files intake zone with SVG marching ants animation |
 | `components/EditorFindReplace.tsx` | Advanced find/replace popup bar inside the text editor |
