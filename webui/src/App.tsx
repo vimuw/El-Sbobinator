@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } 
 import { motion, AnimatePresence } from 'motion/react';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { AlertTriangle, Github, Loader2, Trash2 } from 'lucide-react';
-import { GITHUB_RELEASES_URL, GITHUB_URL, KOFI_URL } from './branding';
+import { GITHUB_URL, KOFI_URL } from './branding';
 import { type ArchiveFolder, type ArchiveSession, type ElSbobinatorBridge, type LowDiskWarning, type PywebviewApi, type UpdateDownloadProgressPayload } from './bridge';
 import { getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type FileDescriptor, type FileDonePayload, type FileItem, type ProcessDonePayload } from './appState';
 import { GEMINI_KEY_PATTERN } from './utils';
@@ -21,7 +21,8 @@ import { ConfirmActionModal } from './components/modals/ConfirmActionModal';
 import { DuplicateFileModal, type AlreadyProcessedMatch, type DuplicatePrompt } from './components/modals/DuplicateFileModal';
 import { buildArchiveLookup, filterArchiveSessionsByInputPath, getArchiveMatchesForFile } from './duplicateDetection';
 import { NavSidebar, type ActivePage } from './components/NavSidebar';
-import { NotificationDropdown, type NotificationMessage } from './components/NotificationDropdown';
+import { NotificationDropdown } from './components/NotificationDropdown';
+import { useNotifications } from './hooks/useNotifications';
 import { DropZone } from './components/DropZone';
 import { WelcomeDashboard } from './components/WelcomeDashboard';
 import { JoinRoomModal } from './components/modals/JoinRoomModal';
@@ -125,20 +126,6 @@ function formatUpdateInstallStatus(state: UpdateInstallState): string {
   return '';
 }
 
-interface PersistedNotification {
-  id: string;
-  title: string;
-  message: string;
-  type: 'info' | 'warning' | 'error' | 'success';
-  category: 'processing' | 'update' | 'system';
-  timestamp: number;
-  read: boolean;
-  persistent?: boolean;
-  dedupeKey?: string;
-  actionType?: 'retry_failed_revision_blocks' | 'install_update' | 'open_github';
-  actionData?: unknown;
-}
-
 export default function App() {
   const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone }, dispatch] = useReducer(processingReducer, initialProcessingState);
 
@@ -169,22 +156,33 @@ export default function App() {
   const [archiveSessions, setArchiveSessions] = useState<ArchiveSession[]>([]);
   const [archiveTotal, setArchiveTotal] = useState(0);
   const [isArchiveLoaded, setIsArchiveLoaded] = useState(false);
-  const archiveLimitRef = useRef(0);
-  const [rawNotifications, setRawNotifications] = useState<PersistedNotification[]>(() => {
-    try {
-      const stored = localStorage.getItem('el-sbobinator.notifications.v1');
-      return stored ? JSON.parse(stored) : [];
-    } catch (_) {
-      return [];
-    }
-  });
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isPeakDismissed, setIsPeakDismissed] = useState(() => {
+    const ts = localStorage.getItem('peakBannerDismissedUntil');
+    return ts ? Date.now() < Number(ts) : false;
+  });
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('el-sbobinator.notifications.v1', JSON.stringify(rawNotifications));
-    } catch (_) {}
-  }, [rawNotifications]);
+  const handleRetryFailedRevisionBlocksRef = useRef<(sessionDir: string, fileId?: string) => Promise<void>>(() => Promise.resolve());
+  const installUpdateRef = useRef<(version: string) => Promise<void>>(() => Promise.resolve());
+
+  const {
+    notifications,
+    unreadNotificationsCount,
+    shakeBell,
+    addNotification,
+    upsertNotification,
+    deleteNotification,
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
+    clearAllNotifications,
+    removeNotificationByDedupeKey,
+  } = useNotifications({
+    onRetryFailedRevisionBlocks: useCallback((sessionDir: string, fileId?: string) => handleRetryFailedRevisionBlocksRef.current(sessionDir, fileId), []),
+    onInstallUpdate: useCallback((version: string) => installUpdateRef.current(version), []),
+    onDismissUpdate: dismissUpdate,
+    updateAvailable,
+    setIsPeakDismissed,
+  });
   const warnedRevisionSessionsRef = useRef<Set<string>>(new Set());
   const prevSessionDirsRef = useRef<Map<string, string>>(new Map());
 
@@ -208,10 +206,7 @@ export default function App() {
   const [activePage, setActivePage] = useState<ActivePage>('queue');
   const [folders, setFolders] = useState<ArchiveFolder[]>([]);
   const [isPeakHour, setIsPeakHour] = useState(() => { const h = new Date().getHours(); return h >= 15 && h < 20; });
-  const [isPeakDismissed, setIsPeakDismissed] = useState(() => {
-    const ts = localStorage.getItem('peakBannerDismissedUntil');
-    return ts ? Date.now() < Number(ts) : false;
-  });
+  const archiveLimitRef = useRef(0);
 
   const [isDragging, setIsDragging] = useState(false);
   const [showConsole, setShowConsole] = useState(() => localStorage.getItem('show_console') === 'true');
@@ -234,157 +229,6 @@ export default function App() {
   const archiveReplacementCleanupInFlightRef = useRef<Set<string>>(new Set());
   const downloadCompletionRef = useRef<{ version: string; resolve: () => void; reject: (e: Error) => void } | null>(null);
   const updateInstallPromiseRef = useRef<Promise<void> | null>(null);
-  const updateInstallToastIdRef = useRef<string | null>(null);
-
-  const deleteNotification = useCallback((id: string) => {
-    setRawNotifications(prev => {
-      const notif = prev.find(n => n.id === id);
-      if (notif?.dedupeKey?.startsWith('config-recovery:')) {
-        const recoveredPath = notif.dedupeKey.split('config-recovery:')[1];
-        const storageKey = `el-sbobinator.config-recovery-dismissed.v1:${recoveredPath}`;
-        try { localStorage.setItem(storageKey, '1'); } catch (_) {}
-      }
-      if (notif?.dedupeKey === 'peak-hour-warning') {
-        const next = new Date();
-        next.setDate(next.getDate() + 1);
-        next.setHours(15, 0, 0, 0);
-        localStorage.setItem('peakBannerDismissedUntil', String(next.getTime()));
-        setIsPeakDismissed(true);
-      }
-      if (notif?.dedupeKey === 'update-available') {
-        const actionData = notif.actionData as Record<string, unknown> | undefined;
-        const version = (typeof actionData?.version === 'string' ? actionData.version : undefined) || updateAvailable;
-        if (version) dismissUpdate(version);
-      }
-      if (notif?.dedupeKey === 'update-install') {
-        updateInstallToastIdRef.current = null;
-      }
-      return prev.filter(n => n.id !== id);
-    });
-  }, [updateAvailable, dismissUpdate]);
-
-  const markNotificationAsRead = useCallback((id: string) => {
-    setRawNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-  }, []);
-
-  const markAllNotificationsAsRead = useCallback(() => {
-    setRawNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  }, []);
-
-  const clearAllNotifications = useCallback(() => {
-    setRawNotifications(prev => {
-      prev.forEach(notif => {
-        if (notif.dedupeKey?.startsWith('config-recovery:')) {
-          const recoveredPath = notif.dedupeKey.split('config-recovery:')[1];
-          const storageKey = `el-sbobinator.config-recovery-dismissed.v1:${recoveredPath}`;
-          try { localStorage.setItem(storageKey, '1'); } catch (_) {}
-        }
-        if (notif.dedupeKey === 'peak-hour-warning') {
-          const next = new Date();
-          next.setDate(next.getDate() + 1);
-          next.setHours(15, 0, 0, 0);
-          localStorage.setItem('peakBannerDismissedUntil', String(next.getTime()));
-          setIsPeakDismissed(true);
-        }
-        if (notif.dedupeKey === 'update-available') {
-          const actionData = notif.actionData as Record<string, unknown> | undefined;
-          const version = (typeof actionData?.version === 'string' ? actionData.version : undefined) || updateAvailable;
-          if (version) dismissUpdate(version);
-        }
-        if (notif.dedupeKey === 'update-install') {
-          updateInstallToastIdRef.current = null;
-        }
-      });
-      return [];
-    });
-  }, [updateAvailable, dismissUpdate]);
-
-  const addNotification = useCallback((
-    title: string,
-    message: string,
-    type: 'info' | 'warning' | 'error' | 'success' = 'info',
-    category: 'processing' | 'update' | 'system' = 'system',
-    opts?: {
-      persistent?: boolean;
-      dedupeKey?: string;
-      actionType?: 'retry_failed_revision_blocks' | 'install_update' | 'open_github';
-      actionData?: unknown;
-    }
-  ) => {
-    setRawNotifications(prev => {
-      if (opts?.dedupeKey) {
-        const exists = prev.some(n => n.dedupeKey === opts.dedupeKey);
-        if (exists) return prev;
-      }
-      const newNotif: PersistedNotification = {
-        id: crypto.randomUUID(),
-        title,
-        message,
-        type,
-        category,
-        timestamp: Date.now(),
-        read: false,
-        persistent: opts?.persistent,
-        dedupeKey: opts?.dedupeKey,
-        actionType: opts?.actionType,
-        actionData: opts?.actionData,
-      };
-      return [newNotif, ...prev].slice(0, 50);
-    });
-  }, []);
-
-  const upsertNotification = useCallback((
-    title: string,
-    message: string,
-    type: 'info' | 'warning' | 'error' | 'success',
-    category: 'processing' | 'update' | 'system',
-    opts?: {
-      persistent?: boolean;
-      dedupeKey?: string;
-      actionType?: 'retry_failed_revision_blocks' | 'install_update' | 'open_github';
-      actionData?: unknown;
-    }
-  ) => {
-    let returnId = '';
-    setRawNotifications(prev => {
-      if (opts?.dedupeKey) {
-        const idx = prev.findIndex(n => n.dedupeKey === opts.dedupeKey);
-        if (idx !== -1) {
-          const updated = [...prev];
-          returnId = updated[idx].id;
-          updated[idx] = {
-            ...updated[idx],
-            title,
-            message,
-            type,
-            category,
-            timestamp: Date.now(),
-            read: false,
-            actionType: opts?.actionType,
-            actionData: opts?.actionData,
-          };
-          return updated;
-        }
-      }
-      const newId = crypto.randomUUID();
-      returnId = newId;
-      const newNotif: PersistedNotification = {
-        id: newId,
-        title,
-        message,
-        type,
-        category,
-        timestamp: Date.now(),
-        read: false,
-        persistent: opts?.persistent,
-        dedupeKey: opts?.dedupeKey,
-        actionType: opts?.actionType,
-        actionData: opts?.actionData,
-      };
-      return [newNotif, ...prev].slice(0, 50);
-    });
-    return returnId;
-  }, []);
 
   const normalizeSessionDir = useCallback((value?: string) =>
     String(value || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase(), []);
@@ -502,6 +346,7 @@ export default function App() {
       dispatch({ type: 'queue/set_retrying_blocks', id: _fileId, value: false });
     }
   }, [normalizeSessionDir, refreshArchiveSessions, addNotification]);
+  handleRetryFailedRevisionBlocksRef.current = handleRetryFailedRevisionBlocks;
 
   const handleRevisionWarning = useCallback((data: FileDonePayload) => {
     const count = data.revision_failed_blocks?.length ?? 0;
@@ -584,7 +429,7 @@ export default function App() {
 
   useEffect(() => {
     if (!isPeakHour) {
-      setRawNotifications(prev => prev.filter(n => n.dedupeKey !== 'peak-hour-warning'));
+      removeNotificationByDedupeKey('peak-hour-warning');
       return;
     }
     if (isPeakDismissed) return;
@@ -598,7 +443,7 @@ export default function App() {
         dedupeKey: 'peak-hour-warning',
       }
     );
-  }, [isPeakHour, isPeakDismissed, addNotification]);
+  }, [isPeakHour, isPeakDismissed, addNotification, removeNotificationByDedupeKey]);
 
   const upsertUpdateInstallNotification = useCallback((message: string, type: 'warning' | 'info', actionType?: 'install_update' | 'open_github', actionData?: unknown) => {
     upsertNotification(
@@ -672,73 +517,7 @@ export default function App() {
     }
     return trackedCompletion;
   }, [appendConsole, applyUpdateInstallState, upsertUpdateInstallNotification]);
-
-  const bindNotificationActions = useCallback((raw: PersistedNotification[]): NotificationMessage[] => {
-    return raw.map(n => {
-      if (!n.actionType) return { ...n } as NotificationMessage;
-
-      let onAction: () => Promise<void>;
-      let label = '';
-      let loadingLabel = '';
-      let errorSuffix = '';
-      const actionData = n.actionData as Record<string, unknown> | undefined;
-
-      if (n.actionType === 'retry_failed_revision_blocks') {
-        label = 'Riprova';
-        loadingLabel = 'Riprovo...';
-        errorSuffix = 'puoi usare il pulsante sulla scheda';
-        onAction = async () => {
-          const sessionDir = typeof actionData?.sessionDir === 'string' ? actionData.sessionDir : '';
-          const fileId = typeof actionData?.fileId === 'string' ? actionData.fileId : undefined;
-          await handleRetryFailedRevisionBlocks(sessionDir, fileId);
-        };
-      } else if (n.actionType === 'install_update') {
-        label = 'Aggiorna';
-        loadingLabel = 'Download in corso…';
-        errorSuffix = 'usa il pulsante “Apri GitHub” per scaricare manualmente.';
-        onAction = async () => {
-          const version = typeof actionData?.version === 'string' ? actionData.version : '';
-          await installUpdate(version);
-        };
-      } else if (n.actionType === 'open_github') {
-        label = 'Apri GitHub';
-        onAction = async () => {
-          await window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL);
-        };
-      } else {
-        return { ...n } as NotificationMessage;
-      }
-
-      return {
-        ...n,
-        action: {
-          label,
-          type: n.actionType,
-          data: n.actionData,
-          loadingLabel,
-          errorSuffix,
-          onAction,
-        },
-      } as NotificationMessage;
-    });
-  }, [handleRetryFailedRevisionBlocks, installUpdate]);
-
-  const notifications = useMemo(() => {
-    return bindNotificationActions(rawNotifications);
-  }, [rawNotifications, bindNotificationActions]);
-
-  const unreadNotificationsCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
-  const [shakeBell, setShakeBell] = useState(false);
-  const prevUnreadCountRef = useRef(unreadNotificationsCount);
-
-  useEffect(() => {
-    if (unreadNotificationsCount > prevUnreadCountRef.current) {
-      setShakeBell(true);
-      const timer = setTimeout(() => setShakeBell(false), 500);
-      return () => clearTimeout(timer);
-    }
-    prevUnreadCountRef.current = unreadNotificationsCount;
-  }, [unreadNotificationsCount]);
+  installUpdateRef.current = installUpdate;
 
   const updateToastShownVersionRef = useRef<string | null>(null);
   useEffect(() => {

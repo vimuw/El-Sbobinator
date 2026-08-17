@@ -995,4 +995,204 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       expect(showNotification).not.toHaveBeenCalled();
     });
   });
+
+  describe('App — Insecure API key removal', () => {
+    it('shows insecure key banner and handles removal successfully', async () => {
+      const saveSettings = vi.fn().mockResolvedValue({ ok: true });
+      const setApiKey = vi.fn();
+      const setApiKeyInsecure = vi.fn();
+      vi.mocked(useApiReady).mockReturnValue({
+        ...mockApiReadyWithKey,
+        apiKeyInsecure: true,
+        apiKeyInsecureReason: 'DPAPI fallback',
+        setApiKey,
+        setApiKeyInsecure,
+        setApiKeyInsecureReason: vi.fn(),
+      });
+      setPywebview({
+        get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
+        get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
+        save_settings: saveSettings,
+      });
+
+      await act(async () => { render(<App />); });
+      expect(screen.getByText(/La tua chiave API è salvata in chiaro/i)).toBeTruthy();
+
+      await act(async () => {
+        fireEvent.click(screen.getByText('Rimuovi chiave'));
+      });
+
+      expect(saveSettings).toHaveBeenCalled();
+      expect(setApiKey).toHaveBeenCalledWith('');
+      expect(setApiKeyInsecure).toHaveBeenCalledWith(false);
+    });
+  });
+
+  describe('App — Queue management interactions', () => {
+    it('handles clear-all confirmation dialog and clear completed', async () => {
+      vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
+      vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
+        React.useEffect(() => {
+          dispatch({
+            type: 'queue/add',
+            files: [
+              { id: 'f1', name: 'f1.mp3', size: 100, duration: 10, path: 'C:\\f1.mp3', status: 'queued', progress: 0, phase: 0 },
+              { id: 'f2', name: 'f2.mp3', size: 100, duration: 10, path: 'C:\\f2.mp3', status: 'done', progress: 100, phase: 3 },
+            ],
+          });
+        }, [dispatch]);
+      });
+
+      await act(async () => { render(<App />); });
+
+      const optionsBtn = await screen.findByLabelText('Opzioni coda');
+      await act(async () => {
+        fireEvent.click(optionsBtn);
+      });
+      const clearAllMenuItem = screen.getByText('Svuota coda');
+      await act(async () => {
+        fireEvent.click(clearAllMenuItem);
+      });
+      expect(screen.getByRole('heading', { name: 'Svuotare tutta la coda?' })).toBeTruthy();
+      await act(async () => {
+        fireEvent.click(screen.getByText('Svuota coda'));
+      });
+      expect(screen.queryByRole('heading', { name: 'Svuotare tutta la coda?' })).toBeNull();
+    });
+
+    it('handles remove file confirmation and cancel', async () => {
+      vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
+      vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
+        React.useEffect(() => {
+          dispatch({
+            type: 'queue/add',
+            files: [
+              { id: 'f1', name: 'f1.mp3', size: 100, duration: 10, path: 'C:\\f1.mp3', status: 'queued', progress: 0, phase: 0 },
+            ],
+          });
+        }, [dispatch]);
+      });
+
+      await act(async () => { render(<App />); });
+      const f1Heading = await screen.findByText('f1.mp3');
+      const card = f1Heading.closest('.queue-card');
+      expect(card).toBeTruthy();
+      const trashBtn = card!.querySelector('button.is-danger');
+      expect(trashBtn).toBeTruthy();
+
+      await act(async () => {
+        fireEvent.click(trashBtn!);
+      });
+      expect(screen.getByRole('heading', { name: 'Rimuovere questo elemento?' })).toBeTruthy();
+      await act(async () => {
+        fireEvent.click(screen.getByText('Tieni elemento'));
+      });
+      expect(screen.queryByRole('heading', { name: 'Rimuovere questo elemento?' })).toBeNull();
+    });
+
+    it('handles start and retry queue actions', async () => {
+      vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
+      vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
+        React.useEffect(() => {
+          dispatch({
+            type: 'queue/add',
+            files: [
+              { id: 'f1', name: 'f1.mp3', size: 100, duration: 10, path: 'C:\\f1.mp3', status: 'queued', progress: 0, phase: 0 },
+            ],
+          });
+        }, [dispatch]);
+      });
+
+      await act(async () => { render(<App />); });
+
+      const startBtn = await screen.findByText('Avvia sbobinatura (1 file)');
+      expect(startBtn).toBeTruthy();
+    });
+  });
+
+  describe('App — Browse files and drag/drop', () => {
+    it('handles browse files selection', async () => {
+      vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
+      const askFiles = vi.fn().mockResolvedValue([
+        { id: 'f-new', name: 'nuovo.mp3', size: 1024, duration: 60, path: 'C:\\nuovo.mp3' },
+      ]);
+      setPywebview({
+        get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
+        get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
+        ask_files: askFiles,
+      });
+
+      await act(async () => { render(<App />); });
+      const dropzone = (await screen.findByRole('button', { name: /Aggiungi file/i }).catch(() => null))
+        ?? (await screen.findByText(/Trascina/i));
+      await act(async () => {
+        fireEvent.click(dropzone);
+      });
+      expect(askFiles).toHaveBeenCalled();
+    });
+
+    it('handles drag over, leave, and drop events', async () => {
+      vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
+      const collectDroppedFiles = vi.fn().mockResolvedValue({ ok: true });
+      setPywebview({
+        get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
+        get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
+        collect_dropped_files: collectDroppedFiles,
+      });
+
+      await act(async () => { render(<App />); });
+      const main = document.querySelector('main');
+      expect(main).toBeTruthy();
+
+      act(() => {
+        fireEvent.dragOver(main!, { preventDefault: vi.fn() });
+      });
+      act(() => {
+        fireEvent.dragLeave(main!);
+      });
+      act(() => {
+        fireEvent.drop(main!, {
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+          dataTransfer: { files: [{ name: 'dragged.mp3' }] },
+        });
+      });
+    });
+  });
+
+  describe('App — Regenerate modal answering', () => {
+    it('answers regenerate prompt via bridge', async () => {
+      vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
+      const answerRegenerate = vi.fn().mockResolvedValue({ ok: true });
+      setPywebview({
+        get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
+        get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
+        answer_regenerate: answerRegenerate,
+      });
+
+      let bridgeCallbacks: Record<string, unknown> = {};
+      vi.mocked(useBridgeCallbacks).mockImplementation((options) => {
+        bridgeCallbacks = options as unknown as Record<string, unknown>;
+        return undefined;
+      });
+
+      await act(async () => { render(<App />); });
+
+      await act(async () => {
+        (bridgeCallbacks.setRegeneratePrompt as (p: { filename: string; mode?: string; sessionDir?: string }) => void)({
+          filename: 'lezione.mp3',
+          mode: 'completed',
+          sessionDir: 'C:\\sessions\\1',
+        });
+      });
+
+      expect(await screen.findByText('Versione già pronta')).toBeTruthy();
+
+      await act(async () => {
+        fireEvent.click(screen.getByText('Usa versione pronta'));
+      });
+
+      expect(answerRegenerate).toHaveBeenCalledWith(false);
+    });
+  });
 });
