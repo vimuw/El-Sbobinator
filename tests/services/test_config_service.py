@@ -296,19 +296,18 @@ class TestSaveConfigWriteLock(unittest.TestCase):
         call_order: list[str] = []
         barrier = threading.Barrier(2)
         errors: list[Exception] = []
+        thread_tags: dict[int, str] = {}
+
+        def _tracked_replace(src: str, dst: str) -> None:
+            tag = thread_tags.get(threading.get_ident(), "unknown")
+            call_order.append("write")
+            call_order.append(f"done-{tag}")
 
         def _save(tag: str, key: str) -> None:
-            def _tracked_replace(src: str, dst: str) -> None:
-                call_order.append("write")
-                call_order.append(f"done-{tag}")
-
+            thread_tags[threading.get_ident()] = tag
             try:
                 barrier.wait()
-                with patch(
-                    "el_sbobinator.services.config_service.os.replace",
-                    side_effect=_tracked_replace,
-                ):
-                    cs.save_config(key)
+                cs.save_config(key)
             except Exception as exc:
                 errors.append(exc)
 
@@ -327,6 +326,10 @@ class TestSaveConfigWriteLock(unittest.TestCase):
                 return_value="",
             ),
             patch("builtins.open", MagicMock()),
+            patch(
+                "el_sbobinator.services.config_service.os.replace",
+                side_effect=_tracked_replace,
+            ),
         ):
             t1 = threading.Thread(target=_save, args=("A", "key-a"))
             t2 = threading.Thread(target=_save, args=("B", "key-b"))
