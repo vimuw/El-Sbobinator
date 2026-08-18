@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings, SlidersHorizontal, X, Loader2 } from 'lucide-react';
+import { Settings, SlidersHorizontal, Loader2 } from 'lucide-react';
 import type { ModelOption, ValidationResult } from '../../bridge';
 import { ConfirmActionModal } from './ConfirmActionModal';
 import { ApiKeySection } from './settings/ApiKeySection';
@@ -587,17 +587,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
               {/* Main Content Column */}
               <div className="flex-1 flex flex-col min-w-0 bg-[var(--bg-surface)] h-full relative">
-                <div className="absolute top-4 right-4 z-10">
-                  <button
-                    onClick={handleClose}
-                    disabled={isSaving}
-                    className="icon-button modal-icon-button disabled:opacity-40 hover:bg-[var(--sidebar-active-bg)] rounded-full p-1.5 transition-colors"
-                    aria-label="Chiudi impostazioni"
-                  >
-                    <X className="w-5 h-5 text-[var(--text-muted)] hover:text-[var(--text-primary)]" />
-                  </button>
-                </div>
-
                 <div className="app-scroll flex-1 overflow-y-auto overflow-x-hidden p-6 md:p-8 space-y-6">
                   {activeTab === 'general' && (
                     <div className="space-y-8 animate-fade-in">

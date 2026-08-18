@@ -6,7 +6,7 @@ export const NOTIFICATIONS_STORAGE_KEY = 'el-sbobinator.notifications.v1';
 
 export type NotificationType = 'info' | 'warning' | 'error' | 'success';
 export type NotificationCategory = 'processing' | 'update' | 'system';
-export type NotificationActionType = 'retry_failed_revision_blocks' | 'install_update' | 'open_github';
+export type NotificationActionType = 'retry_failed_revision_blocks' | 'install_update' | 'open_github' | 'open_settings';
 
 export interface PersistedNotification {
   id: string;
@@ -36,6 +36,7 @@ export interface UseNotificationsOptions {
   onOpenUrl?: (url: string) => Promise<void>;
   setIsPeakDismissed?: (dismissed: boolean) => void;
   updateAvailable?: string | null;
+  onOpenSettings?: () => void;
 }
 
 export function useNotifications(options: UseNotificationsOptions = {}) {
@@ -238,6 +239,11 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
           } else {
             await window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL);
           }
+        };
+      } else if (n.actionType === 'open_settings') {
+        label = 'Apri Impostazioni';
+        onAction = async () => {
+          optionsRef.current.onOpenSettings?.();
         };
       } else {
         return { ...n } as NotificationMessage;

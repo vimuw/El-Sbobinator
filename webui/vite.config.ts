@@ -16,10 +16,10 @@ export default defineConfig({
   base: './',
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, '.'),
+      '@': path.resolve(import.meta.dirname, '.'),
     },
   },
-  esbuild: {
+  oxc: {
     drop: ['console', 'debugger'],
   } as Record<string, unknown>,
   build: {

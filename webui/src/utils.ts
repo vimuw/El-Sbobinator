@@ -105,7 +105,7 @@ export interface ImageOptimizationOptions {
   maxWidth?: number;
   maxHeight?: number;
   quality?: number;
-  format?: 'image/webp' | 'image/jpeg';
+  format?: 'image/jpeg' | 'image/png' | 'image/webp';
 }
 
 export function calculateOptimalDimensions(
@@ -147,20 +147,16 @@ export const optimizeDataUrlImage = async (
     return dataUrl;
   }
 
-  if (dataUrl.startsWith('data:image/webp') && dataUrl.length < 500_000) {
-    return dataUrl;
-  }
+  const {
+    maxWidth = 1600,
+    maxHeight = 1600,
+    quality = 0.85,
+    format = 'image/jpeg',
+  } = options;
 
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return dataUrl;
   }
-
-  const {
-    maxWidth = 1600,
-    maxHeight = 1600,
-    quality = 0.82,
-    format = 'image/webp',
-  } = options;
 
   return new Promise<string>((resolve) => {
     try {
@@ -182,7 +178,13 @@ export const optimizeDataUrlImage = async (
             maxHeight
           );
 
-          if (srcWidth <= maxWidth && srcHeight <= maxHeight && dataUrl.length < 200_000) {
+          if (
+            format === 'image/jpeg' &&
+            dataUrl.startsWith('data:image/jpeg') &&
+            srcWidth <= maxWidth &&
+            srcHeight <= maxHeight &&
+            dataUrl.length < 200_000
+          ) {
             resolve(dataUrl);
             return;
           }
@@ -196,11 +198,16 @@ export const optimizeDataUrlImage = async (
             return;
           }
 
+          if (format === 'image/jpeg') {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, width, height);
+          }
+
           ctx.drawImage(img, 0, 0, width, height);
 
           let optimizedDataUrl = canvas.toDataURL(format, quality);
 
-          if (format === 'image/webp' && !optimizedDataUrl.startsWith('data:image/webp')) {
+          if (format === 'image/jpeg' && !optimizedDataUrl.startsWith('data:image/jpeg')) {
             const jpegDataUrl = canvas.toDataURL('image/jpeg', quality);
             if (jpegDataUrl.startsWith('data:image/jpeg')) {
               optimizedDataUrl = jpegDataUrl;
@@ -208,6 +215,7 @@ export const optimizeDataUrlImage = async (
           }
 
           if (
+            dataUrl.startsWith(format) &&
             srcWidth <= maxWidth &&
             srcHeight <= maxHeight &&
             dataUrl.length > 0 &&
@@ -229,6 +237,42 @@ export const optimizeDataUrlImage = async (
       resolve(dataUrl);
     }
   });
+};
+
+export const convertWebpImagesInHtml = async (html: string): Promise<string> => {
+  if (!html || typeof html !== 'string' || !html.includes('data:image/webp')) {
+    return html;
+  }
+
+  if (typeof DOMParser === 'undefined') {
+    return html;
+  }
+
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<body>${html}</body>`, 'text/html');
+    const images = Array.from(doc.body.querySelectorAll<HTMLImageElement>('img[src^="data:image/webp"]'));
+
+    if (!images.length) {
+      return html;
+    }
+
+    await Promise.all(
+      images.map(async (img) => {
+        const src = img.getAttribute('src');
+        if (src && src.startsWith('data:image/webp')) {
+          const converted = await optimizeDataUrlImage(src, { format: 'image/jpeg' });
+          if (converted) {
+            img.setAttribute('src', converted);
+          }
+        }
+      })
+    );
+
+    return doc.body.innerHTML;
+  } catch {
+    return html;
+  }
 };
 
 export const readAndOptimizeImageAsDataUrl = async (

@@ -6,7 +6,7 @@ Applicazione desktop per trasformare registrazioni audio e video di lezioni univ
 [![CI](https://img.shields.io/github/actions/workflow/status/vimuw/El-Sbobinator/build.yml?branch=main&style=flat-square&label=CI)](https://github.com/vimuw/El-Sbobinator/actions/workflows/build.yml)
 [![codecov](https://codecov.io/gh/vimuw/El-Sbobinator/graph/badge.svg)](https://codecov.io/gh/vimuw/El-Sbobinator)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-informational?style=flat-square)](https://github.com/vimuw/El-Sbobinator/releases)
-[![License](https://img.shields.io/github/license/vimuw/El-Sbobinator?style=flat-square&color=green)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
 <p align="center">
   <img width="48%" alt="Interfaccia Principale" src="https://github.com/user-attachments/assets/cec7f84f-3a3f-4cd5-9d7c-938abbd32159" />
@@ -25,12 +25,12 @@ Tutte le operazioni avvengono in locale sul computer dell'utente, con chiamate A
 
 ## Caratteristiche Principali
 
-- **Pipeline AI a Più Stadi**: Architettura a 2 fasi ottimizzata per i modelli Google Gemini (`gemini-2.5-flash`, `gemini-3.7-flash`, `gemini-3.5-flash`, `gemini-3.1-flash-lite`) con trascrizione a blocchi e revisione editoriale macro.
-- **Architettura BYOK e Resilienza**: Utilizza la tua chiave API gratuita di Google AI Studio. Supporta rotazione automatica multi-chiave, catene di fallback dei modelli e gestione automatica dei limiti di rate limit.
-- **Editor Rich-Text Integrato**: Editor TipTap completo con formattazione markdown, indice dei contenuti (TOC) navigabile, funzione Trova e Sostituisci, immagini ridimensionabili e statistiche di lettura in tempo reale.
-- **Player Audio Sincronizzato**: Riproduttore multimediale integrato con streaming HTTP locale, velocità regolabile (0.5x–2.0x), scrubber della forma d'onda e segnalibri temporali collegati al testo.
-- **Archivio e Ricerca Full-Text**: Ricerca indicizzata su tutte le sbobine salvate con anteprima dei frammenti di testo, organizzazione in cartelle personalizzate e gestione delle sessioni.
-- **Esportazione e Portabilità**: Copia diretta formattata per Google Docs e Microsoft Word, stampa in PDF e pacchetti compressi `.sbobina` per esportazione e importazione rapida.
+- **Pipeline AI a Più Stadi**: Architettura a 2 fasi ottimizzata per i modelli Google Gemini (`gemini-2.5-flash`, `gemini-3.7-flash`, `gemini-3.5-flash`, `gemini-3.5-flash-lite`) con trascrizione a blocchi e revisione editoriale macro.
+- **Architettura BYOK e Resilienza**: Utilizza la tua chiave API gratuita di Google AI Studio. Supporta rotazione automatica multi-chiave, catene di fallback dei modelli e gestione automatica del rate limit.
+- **Editor Rich-Text Integrato**: Editor TipTap completo con supporto markdown e formule LaTeX, indice dei contenuti (TOC) navigabile, funzione Trova e Sostituisci e immagini ridimensionabili.
+- **Player Audio Sincronizzato**: Riproduttore multimediale integrato con streaming locale, velocità regolabile (1.0x–3.0x), avanzamento rapido e memorizzazione della posizione d'ascolto per ogni sessione.
+- **Archivio e Ricerca Full-Text**: Ricerca istantanea su tutte le sbobine salvate con anteprima dei frammenti di testo e organizzazione in cartelle personalizzate.
+- **Esportazione e Portabilità**: Copia diretta formattata per Google Docs e Microsoft Word, esportazione in documenti HTML standalone e pacchetti compressi `.sbobina` per backup e condivisione rapida.
 - **Privacy e Sicurezza**: Elaborazione 100% locale. Le chiavi API sono memorizzate nel portachiavi sicuro del sistema operativo (Windows DPAPI / macOS Keychain) e i documenti esportati adottano rigide Content Security Policy.
 
 ---
@@ -53,7 +53,7 @@ L'applicazione include un sistema di aggiornamento automatico integrato che noti
 1. **Ottieni una Chiave API**: Crea una chiave API Gemini gratuita su [Google AI Studio](https://aistudio.google.com/app/apikey).
 2. **Configura le Impostazioni**: Apri El Sbobinator, accedi alle **Impostazioni** e incolla la chiave API (salvata in modo sicuro nel portachiavi di sistema).
 3. **Importa i File e Avvia**: Trascina i file audio o video nella coda e clicca su **Avvia Sbobinatura**.
-4. **Modifica ed Esporta**: Revisiona il testo nell'editor integrato ed esportalo in HTML, PDF, Google Docs o Word.
+4. **Modifica ed Esporta**: Revisiona il testo nell'editor integrato, copialo direttamente in Google Docs/Word oppure salvalo in formato HTML o pacchetto `.sbobina`.
 
 ### Formati Supportati
 
@@ -84,13 +84,14 @@ Audio/Video di input
 
 ## Requisiti di Sistema
 
-| Requisito | Windows | macOS |
+- **RAM**: Minimo 4 GB (8 GB consigliati)
+- **Spazio su Disco**: ~200 MB per l'applicazione + spazio temporaneo per i file audio
+- **Connessione di Rete**: Connessione internet attiva (richiesta per le chiamate API Gemini)
+
+| Piattaforma | Sistema Operativo Minimo | Componenti Aggiuntivi |
 | :--- | :--- | :--- |
-| **Sistema Operativo** | Windows 10 (64-bit) o successivo | macOS 11 (Big Sur) o successivo |
-| **Memoria RAM** | Minimo 4 GB (8 GB consigliati) | Minimo 4 GB (8 GB consigliati) |
-| **Spazio su Disco** | ~200 MB per l'applicazione + spazio temporaneo per i file audio | ~200 MB per l'applicazione + spazio temporaneo per i file audio |
-| **Componenti Aggiuntivi** | [Microsoft Edge WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703) (incluso di default in Windows 10/11) | Nessuno (utilizza WebKit nativo) |
-| **Connessione di Rete** | Connessione internet attiva richiesta durante l'elaborazione (chiamate API) | Connessione internet attiva richiesta durante l'elaborazione (chiamate API) |
+| **Windows** | Windows 10 (64-bit) o successivo | [Microsoft Edge WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703) *(incluso di default in Windows 10/11)* |
+| **macOS** | macOS 11 (Big Sur) o successivo | Nessuno *(utilizza WebKit nativo)* |
 
 ---
 
@@ -101,6 +102,8 @@ Per configurare l'ambiente locale, eseguire i test di integrazione (`ruff`, `pyt
 - [CONTRIBUTING.md](CONTRIBUTING.md) per i comandi di setup, test e compilazione dei binari.
 - [docs/architecture.md](docs/architecture.md) per l'architettura dettagliata dei moduli Python e React.
 - [docs/pipeline.md](docs/pipeline.md) per il funzionamento interno della pipeline e la gestione degli errori.
+- [docs/bridge_protocol.md](docs/bridge_protocol.md) per il protocollo di comunicazione IPC tra Python e React.
+- [SECURITY.md](SECURITY.md) per le linee guida e la segnalazione di vulnerabilità di sicurezza.
 
 ---
 
@@ -124,8 +127,6 @@ Per configurare l'ambiente locale, eseguire i test di integrazione (`ruff`, `pyt
 Se El Sbobinator ti è stato utile per preparare i tuoi esami e desideri supportare lo sviluppo del software:
 
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Offri%20un%20caffè-29abe0?style=flat-square&logo=kofi&logoColor=white)](https://ko-fi.com/vimuw)
-
-Puoi fare una donazione su [ko-fi.com/vimuw](https://ko-fi.com/vimuw).
 
 ---
 

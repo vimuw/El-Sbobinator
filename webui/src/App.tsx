@@ -162,6 +162,17 @@ export default function App() {
     return ts ? Date.now() < Number(ts) : false;
   });
 
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
+  const [hasOpenedSettings, setHasOpenedSettings] = useState(false);
+  const shouldRenderSettings = isSettingsOpen || hasOpenedSettings;
+
+  useEffect(() => {
+    if (isSettingsOpen) {
+      setHasOpenedSettings(true);
+    }
+  }, [isSettingsOpen]);
+
   const handleRetryFailedRevisionBlocksRef = useRef<(sessionDir: string, fileId?: string) => Promise<void>>(() => Promise.resolve());
   const installUpdateRef = useRef<(version: string) => Promise<void>>(() => Promise.resolve());
 
@@ -182,20 +193,10 @@ export default function App() {
     onDismissUpdate: dismissUpdate,
     updateAvailable,
     setIsPeakDismissed,
+    onOpenSettings: useCallback(() => setIsSettingsOpen(true), [setIsSettingsOpen]),
   });
   const warnedRevisionSessionsRef = useRef<Set<string>>(new Set());
   const prevSessionDirsRef = useRef<Map<string, string>>(new Map());
-
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
-  const [hasOpenedSettings, setHasOpenedSettings] = useState(false);
-  const shouldRenderSettings = isSettingsOpen || hasOpenedSettings;
-
-  useEffect(() => {
-    if (isSettingsOpen) {
-      setHasOpenedSettings(true);
-    }
-  }, [isSettingsOpen]);
 
   const [regeneratePrompt, setRegeneratePrompt] = useState<{ filename: string; mode?: 'completed' | 'resume'; sessionDir?: string } | null>(null);
   const [askNewKeyPrompt, setAskNewKeyPrompt] = useState(false);
@@ -524,15 +525,15 @@ export default function App() {
     if (!updateAvailable) return;
     if (updateToastShownVersionRef.current === updateAvailable) return;
     updateToastShownVersionRef.current = updateAvailable;
+    const cleanVer = updateAvailable.trim().replace(/^v+/, '');
     addNotification(
       'Aggiornamento disponibile',
-      `Nuova versione disponibile: ${updateAvailable}`,
+      `Nuova versione disponibile: v${cleanVer}`,
       'info',
       'update',
       {
         persistent: true,
         dedupeKey: 'update-available',
-        actionType: 'install_update',
         actionData: { version: updateAvailable },
       }
     );
@@ -1264,7 +1265,7 @@ export default function App() {
 
   const handleOpenSettings = useCallback(() => {
     setIsSettingsOpen(true);
-  }, []);
+  }, [setIsSettingsOpen]);
 
   const handleRemoveDoneFile = useCallback((id: string) => {
     const f = filesRef.current.find(item => item.id === id);
@@ -1617,6 +1618,12 @@ export default function App() {
         onMarkAllAsRead={markAllNotificationsAsRead}
         onDelete={deleteNotification}
         onClearAll={clearAllNotifications}
+        onNotificationClick={(notification) => {
+          if (notification.category === 'update' || notification.action?.type === 'open_settings') {
+            setIsNotificationsOpen(false);
+            setIsSettingsOpen(true);
+          }
+        }}
         align="left"
         leftOffset={72}
         valign="bottom"

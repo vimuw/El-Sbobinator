@@ -8,13 +8,20 @@ import { useQueuePersistence } from './hooks/useQueuePersistence';
 import { useUpdateChecker } from './hooks/useUpdateChecker';
 import type { FileDonePayload, ProcessingAction } from './appState';
 
+const motionCache = new Map<string, React.ForwardRefExoticComponent<React.PropsWithoutRef<Record<string, unknown>> & React.RefAttributes<unknown>>>();
 vi.mock('motion/react', () => ({
   motion: new Proxy({}, {
     get: (_: unknown, tag: string) => {
-      return React.forwardRef((props: Record<string, unknown>, ref: unknown) => {
-        const { initial: _i, animate: _a, exit: _e, transition: _t, layout: _l, variants: _v, layoutId: _li, whileTap: _wt, whileHover: _wh, ...rest } = props;
-        return React.createElement(tag, { ...rest, ref: ref as React.Ref<unknown> });
-      });
+      if (!motionCache.has(tag)) {
+        motionCache.set(
+          tag,
+          React.forwardRef((props: Record<string, unknown>, ref: unknown) => {
+            const { initial: _i, animate: _a, exit: _e, transition: _t, layout: _l, variants: _v, layoutId: _li, whileTap: _wt, whileHover: _wh, ...rest } = props;
+            return React.createElement(tag, { ...rest, ref: ref as React.Ref<unknown> });
+          })
+        );
+      }
+      return motionCache.get(tag);
     },
   }),
   AnimatePresence: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
@@ -793,7 +800,7 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       fireEvent.click(riprovaToastBtn);
     });
 
-    // The toast should show loading "Riprovo..."
+    // The notification action should show loading "Riprovo..."
     expect(await screen.findByText('Riprovo...')).toBeTruthy();
 
     // The queue card should now show loading/retrying spinner or disabled state
@@ -848,7 +855,7 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
 
       // Click "Segna come già lette"
       await act(async () => {
-        fireEvent.click(screen.getByText('Segna come già lette'));
+        fireEvent.click(screen.getByLabelText('Segna come già lette'));
       });
 
       // Dismiss the notification using the close button
@@ -859,6 +866,7 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       // Verify empty state again
       expect(screen.getByText('Nessuna notifica')).toBeTruthy();
       unmount();
+      vi.useRealTimers();
     });
   });
 

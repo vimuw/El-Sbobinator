@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { readAndOptimizeImageAsDataUrl, optimizeDataUrlImage } from './utils';
+import { readAndOptimizeImageAsDataUrl, optimizeDataUrlImage, convertWebpImagesInHtml } from './utils';
 
 describe('readAndOptimizeImageAsDataUrl (browser / jsdom environment)', () => {
   it('preserves SVG files without raster optimization', async () => {
@@ -44,9 +44,9 @@ describe('readAndOptimizeImageAsDataUrl (browser / jsdom environment)', () => {
     }
   });
 
-  it('optimizes standard image files using canvas when available', async () => {
+  it('optimizes standard image files to JPEG with white background for compatibility', async () => {
     const mockRawResult = 'data:image/png;base64,originalrawdata';
-    const mockWebpResult = 'data:image/webp;base64,compressedwebpdata';
+    const mockJpegResult = 'data:image/jpeg;base64,compressedjpegdata';
     const originalFileReader = (globalThis as unknown as { FileReader: unknown }).FileReader;
     const originalImage = (globalThis as unknown as { Image: unknown }).Image;
 
@@ -72,6 +72,7 @@ describe('readAndOptimizeImageAsDataUrl (browser / jsdom environment)', () => {
     }
     (globalThis as unknown as { Image: unknown }).Image = MockImage;
 
+    const fillRectMock = vi.fn();
     const originalCreateElement = document.createElement.bind(document);
     vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
       if (tagName === 'canvas') {
@@ -79,10 +80,12 @@ describe('readAndOptimizeImageAsDataUrl (browser / jsdom environment)', () => {
           width: 0,
           height: 0,
           getContext: () => ({
+            fillStyle: '',
+            fillRect: fillRectMock,
             drawImage: vi.fn(),
           }),
           toDataURL: (format: string) => {
-            if (format === 'image/webp') return mockWebpResult;
+            if (format === 'image/jpeg') return mockJpegResult;
             return 'data:image/jpeg;base64,fallback';
           },
         } as unknown as HTMLCanvasElement;
@@ -93,65 +96,8 @@ describe('readAndOptimizeImageAsDataUrl (browser / jsdom environment)', () => {
     try {
       const file = new File(['pngdata'], 'photo.png', { type: 'image/png' });
       const res = await readAndOptimizeImageAsDataUrl(file);
-      expect(res).toBe(mockWebpResult);
-    } finally {
-      (globalThis as unknown as { FileReader: unknown }).FileReader = originalFileReader;
-      (globalThis as unknown as { Image: unknown }).Image = originalImage;
-      vi.restoreAllMocks();
-    }
-  });
-
-  it('falls back to JPEG when WebP export returns non-webp data', async () => {
-    const mockRawResult = 'data:image/png;base64,originalrawdata';
-    const mockJpegResult = 'data:image/jpeg;base64,compressedjpegdata';
-    const originalFileReader = (globalThis as unknown as { FileReader: unknown }).FileReader;
-    const originalImage = (globalThis as unknown as { Image: unknown }).Image;
-
-    (globalThis as unknown as { FileReader: unknown }).FileReader = class {
-      result = mockRawResult;
-      onload: (() => void) | null = null;
-      readAsDataURL() {
-        if (this.onload) this.onload();
-      }
-    };
-
-    class MockImage {
-      naturalWidth = 2000;
-      naturalHeight = 1000;
-      width = 2000;
-      height = 1000;
-      onload: (() => void) | null = null;
-      set src(_val: string) {
-        setTimeout(() => {
-          if (this.onload) this.onload();
-        }, 0);
-      }
-    }
-    (globalThis as unknown as { Image: unknown }).Image = MockImage;
-
-    const originalCreateElement = document.createElement.bind(document);
-    vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
-      if (tagName === 'canvas') {
-        return {
-          width: 0,
-          height: 0,
-          getContext: () => ({
-            drawImage: vi.fn(),
-          }),
-          toDataURL: (format: string) => {
-            if (format === 'image/webp') return 'data:image/png;base64,unsupported';
-            if (format === 'image/jpeg') return mockJpegResult;
-            return 'data:image/png;base64,stub';
-          },
-        } as unknown as HTMLCanvasElement;
-      }
-      return originalCreateElement(tagName);
-    });
-
-    try {
-      const file = new File(['pngdata'], 'photo.png', { type: 'image/png' });
-      const res = await readAndOptimizeImageAsDataUrl(file);
       expect(res).toBe(mockJpegResult);
+      expect(fillRectMock).toHaveBeenCalled();
     } finally {
       (globalThis as unknown as { FileReader: unknown }).FileReader = originalFileReader;
       (globalThis as unknown as { Image: unknown }).Image = originalImage;
@@ -159,9 +105,9 @@ describe('readAndOptimizeImageAsDataUrl (browser / jsdom environment)', () => {
     }
   });
 
-  it('keeps rawDataUrl when image is already within bounds and smaller than canvas output', async () => {
-    const mockRawResult = 'data:image/png;base64,tiny';
-    const mockLargerWebpResult = 'data:image/webp;base64,largercompresseddataforverytinyinput';
+  it('keeps rawDataUrl when JPEG image is already within bounds and small', async () => {
+    const mockRawResult = 'data:image/jpeg;base64,tinyjpeg';
+    const mockLargerJpegResult = 'data:image/jpeg;base64,largercompresseddataforverytinyinput';
     const originalFileReader = (globalThis as unknown as { FileReader: unknown }).FileReader;
     const originalImage = (globalThis as unknown as { Image: unknown }).Image;
 
@@ -194,16 +140,17 @@ describe('readAndOptimizeImageAsDataUrl (browser / jsdom environment)', () => {
           width: 0,
           height: 0,
           getContext: () => ({
+            fillRect: vi.fn(),
             drawImage: vi.fn(),
           }),
-          toDataURL: () => mockLargerWebpResult,
+          toDataURL: () => mockLargerJpegResult,
         } as unknown as HTMLCanvasElement;
       }
       return originalCreateElement(tagName);
     });
 
     try {
-      const file = new File(['pngdata'], 'tiny.png', { type: 'image/png' });
+      const file = new File(['jpegdata'], 'tiny.jpg', { type: 'image/jpeg' });
       const res = await readAndOptimizeImageAsDataUrl(file);
       expect(res).toBe(mockRawResult);
     } finally {
@@ -247,14 +194,53 @@ describe('optimizeDataUrlImage (browser / jsdom environment)', () => {
     expect(await optimizeDataUrlImage(gifUrl)).toBe(gifUrl);
   });
 
-  it('preserves reasonably-sized WebP data URLs', async () => {
-    const smallWebp = 'data:image/webp;base64,smallwebp';
-    expect(await optimizeDataUrlImage(smallWebp)).toBe(smallWebp);
+  it('converts WebP data URLs to JPEG for Google Docs compatibility', async () => {
+    const inputWebp = 'data:image/webp;base64,smallwebp';
+    const mockJpegResult = 'data:image/jpeg;base64,convertedjpeg';
+    const originalImage = (globalThis as unknown as { Image: unknown }).Image;
+
+    class MockImage {
+      naturalWidth = 800;
+      naturalHeight = 600;
+      width = 800;
+      height = 600;
+      onload: (() => void) | null = null;
+      set src(_val: string) {
+        setTimeout(() => {
+          if (this.onload) this.onload();
+        }, 0);
+      }
+    }
+    (globalThis as unknown as { Image: unknown }).Image = MockImage;
+
+    const originalCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
+      if (tagName === 'canvas') {
+        return {
+          width: 0,
+          height: 0,
+          getContext: () => ({
+            fillRect: vi.fn(),
+            drawImage: vi.fn(),
+          }),
+          toDataURL: () => mockJpegResult,
+        } as unknown as HTMLCanvasElement;
+      }
+      return originalCreateElement(tagName);
+    });
+
+    try {
+      const res = await optimizeDataUrlImage(inputWebp);
+      expect(res).toBe(mockJpegResult);
+    } finally {
+      (globalThis as unknown as { Image: unknown }).Image = originalImage;
+      vi.restoreAllMocks();
+    }
   });
 
-  it('optimizes large uncompressed PNG data URLs', async () => {
+  it('optimizes large uncompressed PNG data URLs to JPEG', async () => {
     const largePng = 'data:image/png;base64,' + 'A'.repeat(300_000);
-    const mockWebpResult = 'data:image/webp;base64,compressed';
+    const mockJpegResult = 'data:image/jpeg;base64,compressedjpeg';
     const originalImage = (globalThis as unknown as { Image: unknown }).Image;
 
     class MockImage {
@@ -278,9 +264,10 @@ describe('optimizeDataUrlImage (browser / jsdom environment)', () => {
           width: 0,
           height: 0,
           getContext: () => ({
+            fillRect: vi.fn(),
             drawImage: vi.fn(),
           }),
-          toDataURL: () => mockWebpResult,
+          toDataURL: () => mockJpegResult,
         } as unknown as HTMLCanvasElement;
       }
       return originalCreateElement(tagName);
@@ -288,7 +275,59 @@ describe('optimizeDataUrlImage (browser / jsdom environment)', () => {
 
     try {
       const res = await optimizeDataUrlImage(largePng);
-      expect(res).toBe(mockWebpResult);
+      expect(res).toBe(mockJpegResult);
+    } finally {
+      (globalThis as unknown as { Image: unknown }).Image = originalImage;
+      vi.restoreAllMocks();
+    }
+  });
+});
+
+describe('convertWebpImagesInHtml', () => {
+  it('returns original HTML if no webp images are present', async () => {
+    const html = '<p>Test <img src="data:image/jpeg;base64,123" /></p>';
+    expect(await convertWebpImagesInHtml(html)).toBe(html);
+  });
+
+  it('converts webp images to JPEG inside HTML string', async () => {
+    const inputHtml = '<p>Intro</p><img src="data:image/webp;base64,webpdata" alt="test" /><p>Outro</p>';
+    const mockJpegResult = 'data:image/jpeg;base64,jpegdata';
+    const originalImage = (globalThis as unknown as { Image: unknown }).Image;
+
+    class MockImage {
+      naturalWidth = 400;
+      naturalHeight = 300;
+      width = 400;
+      height = 300;
+      onload: (() => void) | null = null;
+      set src(_val: string) {
+        setTimeout(() => {
+          if (this.onload) this.onload();
+        }, 0);
+      }
+    }
+    (globalThis as unknown as { Image: unknown }).Image = MockImage;
+
+    const originalCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
+      if (tagName === 'canvas') {
+        return {
+          width: 0,
+          height: 0,
+          getContext: () => ({
+            fillRect: vi.fn(),
+            drawImage: vi.fn(),
+          }),
+          toDataURL: () => mockJpegResult,
+        } as unknown as HTMLCanvasElement;
+      }
+      return originalCreateElement(tagName);
+    });
+
+    try {
+      const result = await convertWebpImagesInHtml(inputHtml);
+      expect(result).toContain('data:image/jpeg;base64,jpegdata');
+      expect(result).not.toContain('data:image/webp;base64,webpdata');
     } finally {
       (globalThis as unknown as { Image: unknown }).Image = originalImage;
       vi.restoreAllMocks();

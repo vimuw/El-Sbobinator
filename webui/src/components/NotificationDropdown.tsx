@@ -1,9 +1,22 @@
 import React, { useState } from 'react';
-import { AlertCircle, AlertTriangle, BellOff, Check, CheckCheck, CheckCircle2, Info, Loader2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  AlertCircle,
+  AlertTriangle,
+  ArrowRight,
+  BellOff,
+  Check,
+  CheckCheck,
+  CheckCircle2,
+  Info,
+  Loader2,
+  Sparkles,
+} from 'lucide-react';
+import { formatRelativeTime } from '../utils';
 
 export interface NotificationAction {
   label: string;
-  type: 'retry_failed_revision_blocks' | 'install_update' | 'open_github';
+  type: 'retry_failed_revision_blocks' | 'install_update' | 'open_github' | 'open_settings';
   data?: unknown;
   loadingLabel?: string;
   errorSuffix?: string;
@@ -32,7 +45,8 @@ interface NotificationDropdownProps {
   onMarkAsRead: (id: string) => void;
   onMarkAllAsRead: () => void;
   onDelete: (id: string) => void;
-  onClearAll: () => void;
+  onClearAll?: () => void;
+  onNotificationClick?: (notification: NotificationMessage) => void;
   align?: 'left' | 'right';
   leftOffset?: number;
   valign?: 'top' | 'bottom';
@@ -43,24 +57,99 @@ interface NotificationItemProps {
   notification: NotificationMessage;
   onMarkAsRead: (id: string) => void;
   onDelete: (id: string) => void;
+  onNotificationClick?: (notification: NotificationMessage) => void;
 }
 
-function formatTime(timestamp: number) {
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-
-  if (diffMins < 1) return 'Adesso';
-  if (diffMins < 60) return `${diffMins} min fa`;
-  if (diffHours < 24 && date.getDate() === now.getDate()) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+function getCategoryLabel(category: NotificationMessage['category']) {
+  switch (category) {
+    case 'processing':
+      return 'Elaborazione';
+    case 'update':
+      return 'Aggiornamento';
+    case 'system':
+    default:
+      return 'Sistema';
   }
-  return date.toLocaleDateString([], { day: 'numeric', month: 'short' }) + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function NotificationItem({ notification, onMarkAsRead, onDelete }: NotificationItemProps) {
+function getItemBackground(
+  type: NotificationMessage['type'],
+  category: NotificationMessage['category']
+) {
+  if (category === 'update' || type === 'info') {
+    return 'linear-gradient(135deg, rgba(59, 130, 246, 0.13) 0%, rgba(59, 130, 246, 0.035) 100%)';
+  }
+
+  switch (type) {
+    case 'success':
+      return 'linear-gradient(135deg, rgba(34, 197, 94, 0.13) 0%, rgba(34, 197, 94, 0.035) 100%)';
+    case 'warning':
+      return 'linear-gradient(135deg, rgba(245, 158, 11, 0.14) 0%, rgba(245, 158, 11, 0.035) 100%)';
+    case 'error':
+      return 'linear-gradient(135deg, rgba(239, 68, 68, 0.14) 0%, rgba(239, 68, 68, 0.035) 100%)';
+    default:
+      return 'linear-gradient(135deg, rgba(59, 130, 246, 0.13) 0%, rgba(59, 130, 246, 0.035) 100%)';
+  }
+}
+
+function getCategoryBadgeStyle(
+  category: NotificationMessage['category'],
+  type: NotificationMessage['type']
+) {
+  if (category === 'update' || type === 'info') {
+    return {
+      background: 'rgba(59, 130, 246, 0.12)',
+      color: '#2563eb',
+    };
+  }
+  switch (type) {
+    case 'success':
+      return {
+        background: 'var(--success-subtle)',
+        color: 'var(--success-text)',
+      };
+    case 'warning':
+      return {
+        background: 'var(--warning-subtle)',
+        color: 'var(--warning-text)',
+      };
+    case 'error':
+      return {
+        background: 'var(--error-subtle)',
+        color: 'var(--error-text)',
+      };
+    default:
+      return {
+        background: 'var(--border-subtle)',
+        color: 'var(--text-muted)',
+      };
+  }
+}
+
+function getActionColor(
+  category: NotificationMessage['category'],
+  type: NotificationMessage['type']
+) {
+  if (category === 'update' || type === 'info') {
+    return '#2563eb';
+  }
+  switch (type) {
+    case 'warning':
+      return 'var(--warning-text, #b45309)';
+    case 'error':
+      return 'var(--error-text, #dc2626)';
+    case 'success':
+    default:
+      return 'var(--accent-text)';
+  }
+}
+
+function NotificationItem({
+  notification,
+  onMarkAsRead,
+  onDelete,
+  onNotificationClick,
+}: NotificationItemProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
 
@@ -79,39 +168,177 @@ function NotificationItem({ notification, onMarkAsRead, onDelete }: Notification
     }
   };
 
-  const getIcon = () => {
+  const getIconBadge = () => {
+    if (notification.category === 'update' || notification.type === 'info') {
+      return (
+        <div
+          className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 shadow-2xs"
+          style={{
+            background: 'rgba(59, 130, 246, 0.12)',
+            color: '#2563eb',
+          }}
+        >
+          <Info className="w-4 h-4" />
+        </div>
+      );
+    }
+
     switch (notification.type) {
       case 'success':
-        return <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" style={{ color: 'var(--success-text)' }} />;
+        return (
+          <div
+            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 shadow-2xs"
+            style={{
+              background: 'var(--success-subtle)',
+              color: 'var(--success-text)',
+            }}
+          >
+            <CheckCircle2 className="w-4 h-4" />
+          </div>
+        );
       case 'warning':
-        return <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: 'var(--warning-text)' }} />;
+        return (
+          <div
+            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 shadow-2xs"
+            style={{
+              background: 'var(--warning-subtle)',
+              color: 'var(--warning-text)',
+            }}
+          >
+            <AlertTriangle className="w-4 h-4" />
+          </div>
+        );
       case 'error':
-        return <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: 'var(--error-text, #ef4444)' }} />;
+        return (
+          <div
+            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 shadow-2xs"
+            style={{
+              background: 'var(--error-subtle)',
+              color: 'var(--error-text)',
+            }}
+          >
+            <AlertCircle className="w-4 h-4" />
+          </div>
+        );
       default:
-        return <Info className="w-4 h-4 shrink-0 mt-0.5" style={{ color: 'var(--text-muted)' }} />;
+        return (
+          <div
+            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 shadow-2xs"
+            style={{
+              background: 'rgba(59, 130, 246, 0.12)',
+              color: '#2563eb',
+            }}
+          >
+            <Info className="w-4 h-4" />
+          </div>
+        );
     }
   };
 
+  const actionColor = getActionColor(notification.category, notification.type);
+
   return (
     <div
-      onClick={() => !notification.read && onMarkAsRead(notification.id)}
-      className="group relative flex flex-col gap-1 py-3 px-4.5 transition-all duration-150 border-b border-[var(--border-subtle)] hover:bg-neutral-800/5 dark:hover:bg-neutral-200/5 cursor-pointer last:border-b-0"
+      onClick={() => {
+        if (!notification.read) onMarkAsRead(notification.id);
+        onNotificationClick?.(notification);
+      }}
+      className="group relative flex items-start gap-3 px-4 py-3 border-b border-[var(--border-subtle)] last:border-b-0 cursor-pointer transition-all duration-150 hover:brightness-[0.98] dark:hover:brightness-[1.08]"
       style={{
-        background: 'transparent',
+        background: getItemBackground(notification.type, notification.category),
       }}
     >
-      {/* Left indicator bar for unread notifications */}
-      {!notification.read && (
-        <span
-          className="absolute left-0 top-0 bottom-0 w-1"
-          style={{
-            background: 'var(--accent-text, #3d6b3a)',
-            borderRadius: '0 2px 2px 0',
-          }}
-        />
-      )}
+      {/* Type icon in soft squircle badge */}
+      {getIconBadge()}
 
-      {/* Archive button (fades in on hover) */}
+      {/* Main content body */}
+      <div className="flex flex-1 flex-col gap-1 min-w-0 pr-6">
+        {/* Top line: unread dot + title + category */}
+        <div className="flex items-center gap-1.5 min-w-0">
+          {!notification.read && (
+            <span
+              className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
+              style={{
+                background:
+                  notification.category === 'update' || notification.type === 'info'
+                    ? '#2563eb'
+                    : notification.type === 'warning'
+                    ? 'var(--warning-text, #b45309)'
+                    : notification.type === 'error'
+                    ? 'var(--error-text, #dc2626)'
+                    : 'var(--accent-text)',
+              }}
+              title="Non letta"
+            />
+          )}
+          <h4 className="text-xs leading-snug truncate font-semibold text-[var(--text-primary)]">
+            {notification.title}
+          </h4>
+          <span
+            className="text-[9px] font-medium px-1.5 py-0.2 rounded shrink-0"
+            style={getCategoryBadgeStyle(notification.category, notification.type)}
+          >
+            {getCategoryLabel(notification.category)}
+          </span>
+        </div>
+
+        {/* Message body */}
+        <p className="text-xs leading-relaxed break-words" style={{ color: 'var(--text-secondary)' }}>
+          {notification.message}
+        </p>
+
+        {/* Inline error feedback if action failed */}
+        {errorText && (
+          <div className="flex items-center gap-1 text-[10px] mt-0.5" style={{ color: 'var(--error-text)' }}>
+            <AlertCircle className="w-3 h-3 shrink-0" />
+            <span>
+              {errorText}
+              {notification.action?.errorSuffix ? ` — ${notification.action.errorSuffix}` : ''}
+            </span>
+          </div>
+        )}
+
+        {/* Bottom line: Action link on Left, Timestamp aligned on Right */}
+        <div className="flex items-center justify-between mt-1 text-[11px] gap-2">
+          {notification.action ? (
+            <button
+              type="button"
+              onClick={handleAction}
+              disabled={isLoading}
+              className="text-[11px] font-medium inline-flex items-center gap-1 hover:underline transition-all"
+              style={{
+                color: actionColor,
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                cursor: isLoading ? 'default' : 'pointer',
+                opacity: isLoading ? 0.7 : 1,
+              }}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                  <span>{notification.action.loadingLabel ?? 'Caricamento…'}</span>
+                </>
+              ) : (
+                <>
+                  <span>{notification.action.label}</span>
+                  <ArrowRight className="w-2.5 h-2.5 opacity-70" />
+                </>
+              )}
+            </button>
+          ) : (
+            <div />
+          )}
+
+          {/* Timestamp aligned on the right */}
+          <span className="text-[11px] shrink-0 ml-auto" style={{ color: 'var(--text-faint)' }}>
+            {formatRelativeTime(notification.timestamp)}
+          </span>
+        </div>
+      </div>
+
+      {/* Quick Dismiss / Archive Button (hover) */}
       <button
         onClick={(e) => {
           e.stopPropagation();
@@ -119,71 +346,34 @@ function NotificationItem({ notification, onMarkAsRead, onDelete }: Notification
           onDelete(notification.id);
         }}
         disabled={isLoading}
-        className="absolute top-2.5 right-2.5 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-neutral-800/10 dark:hover:bg-neutral-200/10 transition-all duration-150 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+        className="absolute top-3 right-3 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-neutral-500/15 transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)]"
         title="Archivia"
         aria-label="Archivia notifica"
         style={{ cursor: isLoading ? 'default' : 'pointer' }}
       >
         <Check className="w-3.5 h-3.5" />
       </button>
-
-      <div className="flex items-start gap-2.5">
-        {getIcon()}
-        <div className="flex flex-1 flex-col gap-0.5 pr-6">
-          <span className="text-[9px] font-bold uppercase tracking-wider opacity-60" style={{ color: 'var(--text-muted)' }}>
-            {notification.category === 'processing'
-              ? 'Elaborazione'
-              : notification.category === 'update'
-              ? 'Aggiornamento'
-              : 'Sistema'}
-          </span>
-          <h4 className="text-xs font-bold leading-snug" style={{ color: 'var(--text-primary)' }}>
-            {notification.title}
-          </h4>
-          <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-            {notification.message}
-          </p>
-
-          {notification.action && (
-            <button
-              onClick={handleAction}
-              disabled={isLoading}
-              className="self-start mt-2 text-xs font-medium flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-all duration-150"
-              style={{
-                background: 'var(--accent-subtle, rgba(61, 107, 58, 0.08))',
-                borderColor: 'var(--accent-ring, rgba(61, 107, 58, 0.18))',
-                color: 'var(--accent-text, #3d6b3a)',
-                cursor: isLoading ? 'default' : 'pointer',
-              }}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-3 animate-spin" />
-                  {notification.action.loadingLabel ?? 'Caricamento…'}
-                </>
-              ) : (
-                notification.action.label
-              )}
-            </button>
-          )}
-
-          {errorText && (
-            <div className="flex items-center gap-1 text-[10px] mt-1" style={{ color: 'var(--error-text, #b91c1c)' }}>
-              <AlertCircle className="w-3 h-3 shrink-0" />
-              <span>
-                {errorText}
-                {notification.action?.errorSuffix ? ` — ${notification.action.errorSuffix}` : ''}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <span className="text-[9px] self-end opacity-50" style={{ color: 'var(--text-muted)' }}>
-        {formatTime(notification.timestamp)}
-      </span>
     </div>
   );
+}
+
+function getCaretColor(
+  type?: NotificationMessage['type'],
+  category?: NotificationMessage['category']
+) {
+  if (category === 'update' || type === 'info') {
+    return 'color-mix(in srgb, #3b82f6 13%, var(--bg-elevated, #ffffff))';
+  }
+  switch (type) {
+    case 'success':
+      return 'color-mix(in srgb, #22c55e 13%, var(--bg-elevated, #ffffff))';
+    case 'warning':
+      return 'color-mix(in srgb, #f59e0b 14%, var(--bg-elevated, #ffffff))';
+    case 'error':
+      return 'color-mix(in srgb, #ef4444 14%, var(--bg-elevated, #ffffff))';
+    default:
+      return 'var(--bg-elevated, #ffffff)';
+  }
 }
 
 export function NotificationDropdown({
@@ -194,6 +384,7 @@ export function NotificationDropdown({
   onMarkAllAsRead,
   onDelete,
   onClearAll: _,
+  onNotificationClick,
   align = 'right',
   leftOffset = 72,
   valign = 'top',
@@ -209,166 +400,271 @@ export function NotificationDropdown({
       return true;
     });
 
-  const maxHeightStyle = valign === 'bottom'
-    ? `min(480px, calc(100vh - ${bottomOffset + 16}px))`
-    : 'min(480px, calc(100vh - 88px))';
+  const dynamicHeightStyle =
+    valign === 'bottom'
+      ? `clamp(320px, 52vh, min(480px, calc(100vh - ${bottomOffset + 16}px)))`
+      : 'clamp(320px, 52vh, min(480px, calc(100vh - 88px)))';
+
+  const caretNotification =
+    filteredNotifications.length > 0
+      ? filteredNotifications[filteredNotifications.length - 1]
+      : null;
+
+  const caretColor = getCaretColor(caretNotification?.type, caretNotification?.category);
 
   return (
     <>
-      {/* Invisible Backdrop to close on click outside */}
-      <div
-        onClick={onClose}
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'transparent',
-          zIndex: 40,
-          display: isOpen ? 'block' : 'none',
+      {/* Backdrop to close on click outside */}
+      <motion.div
+        key="notification-backdrop"
+        initial={false}
+        animate={{
+          opacity: isOpen ? 1 : 0,
+          pointerEvents: isOpen ? 'auto' : 'none',
         }}
+        transition={{ duration: 0.15 }}
+        onClick={onClose}
+        className="fixed inset-0 z-40"
+        style={{ background: 'transparent' }}
       />
 
-      {/* Dropdown Container */}
-      <div
-        className="fixed z-50 w-96 rounded-2xl border flex flex-col overflow-hidden shadow-strong backdrop-blur-md"
-        style={{
-          background: 'var(--bg-elevated)',
-          borderColor: 'var(--border-subtle)',
-          maxHeight: maxHeightStyle,
-          top: valign === 'top' ? '72px' : 'auto',
-          bottom: valign === 'bottom' ? `${bottomOffset}px` : 'auto',
-          right: align === 'right' ? '24px' : 'auto',
-          left: align === 'left' ? `${leftOffset}px` : 'auto',
-          pointerEvents: isOpen ? 'auto' : 'none',
+      {/* Popover Dropdown Container with resolution-adaptive dynamic height & symmetrical spring pop */}
+      <motion.div
+        key="notification-popover"
+        role="dialog"
+        aria-label="Notifiche"
+        initial={false}
+        animate={{
           opacity: isOpen ? 1 : 0,
-          transform: isOpen
-            ? 'scale(1) translateY(0)'
-            : `scale(0.96) translateY(${valign === 'bottom' ? '10px' : '-10px'})`,
-          transition: 'opacity 0.15s cubic-bezier(0.16, 1, 0.3, 1), transform 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
-          transformOrigin: align === 'right'
-            ? (valign === 'bottom' ? 'bottom right' : 'top right')
-            : (valign === 'bottom' ? 'bottom left' : 'top left'),
+          scale: isOpen ? 1 : 0.88,
+          x: isOpen ? 0 : (align === 'left' ? -16 : 16),
+          y: isOpen ? 0 : (valign === 'bottom' ? 14 : -14),
+          pointerEvents: isOpen ? 'auto' : 'none',
+        }}
+        transition={{
+          scale: { type: 'spring', stiffness: 380, damping: 28, mass: 0.75 },
+          x: { type: 'spring', stiffness: 380, damping: 28, mass: 0.75 },
+          y: { type: 'spring', stiffness: 380, damping: 28, mass: 0.75 },
+          opacity: { duration: isOpen ? 0.2 : 0.18, ease: 'easeInOut' },
+        }}
+        className={`fixed z-50 flex flex-col origin-bottom-left ${
+          isOpen ? 'pointer-events-auto' : 'pointer-events-none'
+        }`}
+        style={{
+          transformOrigin: `${valign === 'bottom' ? 'bottom' : 'top'} ${align === 'left' ? 'left' : 'right'}`,
+          width: 380,
+          height: dynamicHeightStyle,
+          maxHeight: `calc(100vh - ${valign === 'bottom' ? bottomOffset + 16 : 88}px)`,
+          top: valign === 'bottom' ? undefined : 64,
+          bottom: valign === 'bottom' ? bottomOffset : undefined,
+          left: align === 'left' ? leftOffset : undefined,
+          right: align === 'right' ? 72 : undefined,
         }}
       >
-        {/* Header */}
-        <div
-          className="flex items-center justify-between px-4.5 py-3.5 border-b"
-          style={{ borderColor: 'var(--border-subtle)' }}
-        >
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
-              Notifiche
-            </h3>
-            {unreadCount > 0 && (
-              <span
-                className="px-1.5 py-0.5 rounded-md text-[10px] font-bold"
-                style={{
-                  background: 'var(--accent-subtle)',
-                  color: 'var(--accent-text)',
-                }}
-              >
-                {unreadCount}
-              </span>
-            )}
+        {/* Left pointer triangle pointing towards the sidebar trigger */}
+        {align === 'left' && valign === 'bottom' && (
+          <div
+            className="absolute -left-[8px] pointer-events-none z-30 flex items-center"
+            style={{ bottom: 48 }}
+          >
+            <svg
+              width="9"
+              height="18"
+              viewBox="0 0 9 18"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <polygon
+                points="8.5,0.5 0.5,9 8.5,17.5"
+                fill={caretColor}
+              />
+              <path
+                d="M 8.5 0.5 L 0.5 9 L 8.5 17.5"
+                stroke="var(--card-queued-border, var(--border-default))"
+                strokeWidth="1"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <line
+                x1="8.5"
+                y1="1"
+                x2="8.5"
+                y2="17"
+                stroke={caretColor}
+                strokeWidth="2"
+              />
+            </svg>
           </div>
-          <div className="flex items-center gap-1">
+        )}
+
+        {/* Inner bordered panel matching queue-card styling, zero shadow */}
+        <div
+          className="relative flex flex-col flex-1 overflow-hidden rounded-[10px] border bg-[var(--bg-elevated)]"
+          style={{
+            borderColor: 'var(--card-queued-border, var(--border-default))',
+            background: 'var(--bg-elevated, #ffffff)',
+            boxShadow: 'none',
+          }}
+        >
+          {/* Header Row: Title & Styled Icon Button for Mark All Read */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold tracking-tight text-[var(--text-primary)]">
+                Notifiche
+              </h3>
+              {unreadCount > 0 && (
+                <span
+                  className="px-1.5 py-0.2 text-[10px] rounded-full font-bold leading-tight"
+                  style={{
+                    background: 'var(--accent-subtle)',
+                    color: 'var(--accent-text)',
+                  }}
+                >
+                  {unreadCount}
+                </span>
+              )}
+            </div>
+
             {unreadCount > 0 && (
               <button
+                type="button"
                 onClick={onMarkAllAsRead}
-                className="flex items-center gap-1.5 transition-all duration-150 hover:opacity-80"
+                className="p-1 rounded-md transition-colors hover:bg-neutral-500/15 flex items-center justify-center text-[var(--accent-text)] hover:text-[var(--text-primary)]"
                 style={{
-                  background: 'none',
-                  border: 'none',
                   cursor: 'pointer',
-                  padding: '4px 6px',
-                  borderRadius: '6px',
-                  color: 'var(--accent-text, #3d6b3a)',
-                  fontSize: '11px',
-                  fontWeight: 500,
                 }}
+                title="Segna come già lette"
+                aria-label="Segna come già lette"
               >
-                <CheckCheck className="w-3.5 h-3.5" />
-                Segna come già lette
+                <CheckCheck className="w-4 h-4" />
               </button>
             )}
           </div>
-        </div>
 
-        {/* Tabs Filter */}
-        <div className="flex px-4.5 border-b border-[var(--border-subtle)] gap-4">
-          <button
-            onClick={() => setActiveTab('all')}
-            className="py-2 text-xs font-medium transition-all relative"
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: activeTab === 'all' ? 'var(--text-primary)' : 'var(--text-muted)',
-            }}
-          >
-            Tutte
-            {activeTab === 'all' && (
-              <span className="absolute bottom-0 left-0 right-0 h-[2px]" style={{ background: 'var(--accent-text)' }} />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab('unread')}
-            className="py-2 text-xs font-medium transition-all relative flex items-center gap-1.5"
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: activeTab === 'unread' ? 'var(--text-primary)' : 'var(--text-muted)',
-            }}
-          >
-            Non lette
-            {unreadCount > 0 && (
-              <span
-                className="px-1.5 py-0.2 text-[9px] rounded-md font-bold"
-                style={{
-                  background: 'var(--accent-subtle)',
-                  color: 'var(--accent-text)',
-                }}
-              >
-                {unreadCount}
-              </span>
-            )}
-            {activeTab === 'unread' && (
-              <span className="absolute bottom-0 left-0 right-0 h-[2px]" style={{ background: 'var(--accent-text)' }} />
-            )}
-          </button>
-        </div>
+          {/* Minimalist Sub-tabs: Tutte & Non lette with smooth layoutId indicator */}
+          <div className="flex items-center gap-4 px-4 border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
+            <button
+              type="button"
+              onClick={() => setActiveTab('all')}
+              className={`py-2 text-xs transition-colors relative flex items-center gap-1.5 ${
+                activeTab === 'all'
+                  ? 'font-medium text-[var(--text-primary)]'
+                  : 'font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+              }`}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '12px',
+              }}
+            >
+              <span>Tutte</span>
+              {activeTab === 'all' && (
+                <motion.span
+                  layoutId="activeNotificationTab"
+                  className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full"
+                  style={{ background: 'var(--accent-text)' }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                />
+              )}
+            </button>
 
-        {/* Content list */}
-        <div className="flex-1 overflow-y-auto flex flex-col scrollbar-thin py-1 pb-2">
-          {filteredNotifications.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2.5 py-12 text-center h-full">
-              <div
-                className="w-10 h-10 rounded-full flex items-center justify-center"
-                style={{ background: 'rgba(0, 0, 0, 0.02)', border: '1px dashed var(--border-subtle)' }}
-              >
-                <BellOff className="w-4 h-4 opacity-40" style={{ color: 'var(--text-muted)' }} />
-              </div>
-              <h4 className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-                {activeTab === 'unread' ? 'Nessuna notifica non letta' : 'Nessuna notifica'}
-              </h4>
-              <p className="text-[11px] max-w-xs leading-relaxed px-6" style={{ color: 'var(--text-muted)' }}>
-                {activeTab === 'unread'
-                  ? 'Tutte le notifiche sono state lette.'
-                  : 'Qui troverai le notifiche relative ad aggiornamenti, completamenti ed errori di elaborazione.'}
-              </p>
-            </div>
-          ) : (
-            filteredNotifications.map((n) => (
-              <NotificationItem
-                key={n.id}
-                notification={n}
-                onMarkAsRead={onMarkAsRead}
-                onDelete={onDelete}
-              />
-            ))
-          )}
+            <button
+              type="button"
+              onClick={() => setActiveTab('unread')}
+              className={`py-2 text-xs transition-colors relative flex items-center gap-1.5 ${
+                activeTab === 'unread'
+                  ? 'font-medium text-[var(--text-primary)]'
+                  : 'font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+              }`}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '12px',
+              }}
+            >
+              <span>Non lette</span>
+              {unreadCount > 0 && (
+                <span
+                  className="px-1.5 py-0.2 text-[10px] rounded-md font-bold leading-tight"
+                  style={{
+                    background: 'var(--accent-subtle)',
+                    color: 'var(--accent-text)',
+                  }}
+                >
+                  {unreadCount}
+                </span>
+              )}
+              {activeTab === 'unread' && (
+                <motion.span
+                  layoutId="activeNotificationTab"
+                  className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full"
+                  style={{ background: 'var(--accent-text)' }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                />
+              )}
+            </button>
+          </div>
+
+          {/* Notification items list with animated item dismissal & empty state */}
+          <div className="flex-1 overflow-y-auto flex flex-col scrollbar-thin">
+            <AnimatePresence mode="popLayout" initial={false}>
+              {filteredNotifications.length === 0 ? (
+                <motion.div
+                  key={`empty-${activeTab}`}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className="flex flex-col items-center justify-center gap-2.5 py-12 px-6 text-center h-full"
+                >
+                  <div
+                    className="w-9 h-9 rounded-xl flex items-center justify-center"
+                    style={{
+                      background: 'var(--accent-subtle)',
+                      color: 'var(--accent-text)',
+                    }}
+                  >
+                    {activeTab === 'unread' ? (
+                      <Sparkles className="w-4 h-4" />
+                    ) : (
+                      <BellOff className="w-4 h-4 opacity-70" />
+                    )}
+                  </div>
+                  <h4 className="text-xs font-semibold text-[var(--text-primary)]">
+                    {activeTab === 'unread' ? 'Nessuna notifica non letta' : 'Nessuna notifica'}
+                  </h4>
+                  <p className="text-[11px] leading-relaxed text-[var(--text-muted)] max-w-[240px]">
+                    {activeTab === 'unread'
+                      ? 'Tutte le notifiche sono state lette.'
+                      : 'Qui troverai gli avvisi su elaborazioni, aggiornamenti e stato del sistema.'}
+                  </p>
+                </motion.div>
+              ) : (
+                filteredNotifications.map((n) => (
+                  <motion.div
+                    key={n.id}
+                    layout="position"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, height: 0, transition: { duration: 0.16 } }}
+                    transition={{ duration: 0.18 }}
+                    className="overflow-hidden"
+                  >
+                    <NotificationItem
+                      notification={n}
+                      onMarkAsRead={onMarkAsRead}
+                      onDelete={onDelete}
+                      onNotificationClick={onNotificationClick}
+                    />
+                  </motion.div>
+                ))
+              )}
+            </AnimatePresence>
+          </div>
         </div>
-      </div>
+      </motion.div>
     </>
   );
 }

@@ -59,10 +59,10 @@ function FloatingImageView({ node, updateAttributes, selected, getPos, editor }:
       src.startsWith('data:image/') &&
       !src.startsWith('data:image/svg+xml') &&
       !src.startsWith('data:image/gif') &&
-      (!src.startsWith('data:image/webp') || src.length > 500_000)
+      (src.startsWith('data:image/webp') || !src.startsWith('data:image/jpeg') || src.length > 500_000)
     ) {
       let isMounted = true;
-      void optimizeDataUrlImage(src).then(optimizedSrc => {
+      void optimizeDataUrlImage(src, { format: 'image/jpeg' }).then(optimizedSrc => {
         if (isMounted && optimizedSrc && optimizedSrc !== src) {
           updateAttributes({ src: optimizedSrc });
         }

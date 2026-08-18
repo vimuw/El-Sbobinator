@@ -6,6 +6,7 @@ import type { SaveHtmlResult } from '../bridge';
 import { registerCollabSignalListener } from '../bridge';
 import { nextHtmlAutosaveGeneration, seedHtmlAutosaveGeneration } from '../autosaveGeneration';
 import { normalizePreviewHtmlContent } from '../previewHtml';
+import { convertWebpImagesInHtml } from '../utils';
 import { CollaborationModal } from './modals/CollaborationModal';
 import { useTheme } from '../hooks/useTheme';
 
@@ -276,11 +277,13 @@ export function EditorFullPage({
   }, [autosaveStatus]);
 
   const handleCopy = async () => {
-    const normalizedHtml = normalizePreviewHtmlContent(getHtmlRef.current?.() ?? lastPersistedRef.current);
+    const rawHtml = getHtmlRef.current?.() ?? lastPersistedRef.current;
+    const normalizedHtml = normalizePreviewHtmlContent(rawHtml);
+    const clipboardHtml = await convertWebpImagesInHtml(normalizedHtml);
     const temp = document.createElement('div');
-    temp.innerHTML = normalizedHtml;
+    temp.innerHTML = clipboardHtml;
     try {
-      const htmlBlob = new Blob([normalizedHtml], { type: 'text/html' });
+      const htmlBlob = new Blob([clipboardHtml], { type: 'text/html' });
       const textBlob = new Blob([temp.textContent || temp.innerText || ''], { type: 'text/plain' });
       await navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]);
     } catch (_) { navigator.clipboard.writeText(temp.textContent || temp.innerText || ''); }

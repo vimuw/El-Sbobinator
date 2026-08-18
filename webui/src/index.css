@@ -2948,7 +2948,7 @@ input[type="password"]::-ms-reveal {
   transform: translateY(-1px);
 }
 
-.folder-card:active {
+.folder-card:active:not(:has(button:active, a:active, [role="button"]:active)) {
   transform: scale(0.98);
 }
 
@@ -3021,7 +3021,7 @@ input[type="password"]::-ms-reveal {
   border-color: var(--border-strong);
 }
 
-.archive-session-card:active {
+.archive-session-card:active:not(:has(button:active, a:active, [role="button"]:active)) {
   transform: scale(0.99);
 }
 
@@ -3592,7 +3592,7 @@ input[type="password"]::-ms-reveal {
   transform: translateY(-1px);
 }
 
-.queue-card:active {
+.queue-card:active:not(:has(button:active, a:active, [role="button"]:active)) {
   transform: scale(0.99);
 }
 

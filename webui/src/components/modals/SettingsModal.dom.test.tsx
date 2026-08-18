@@ -185,7 +185,7 @@ describe('SettingsModal — save behavior', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('X button click while saving: onClose NOT called', async () => {
+  it('Annulla button click while saving: onClose NOT called', async () => {
     let resolveFirst!: (val: { ok: boolean }) => void;
     const firstPromise = new Promise<{ ok: boolean }>(res => { resolveFirst = res; });
     const mockSave = vi.fn().mockReturnValueOnce(firstPromise);
@@ -196,8 +196,8 @@ describe('SettingsModal — save behavior', () => {
 
     fireEvent.click(screen.getByText('Salva e Chiudi'));
 
-    const xButton = screen.getByLabelText('Chiudi impostazioni');
-    fireEvent.click(xButton);
+    const cancelButton = screen.getByRole('button', { name: 'Annulla' });
+    fireEvent.click(cancelButton);
     expect(onClose).not.toHaveBeenCalled();
 
     await act(async () => { resolveFirst({ ok: true }); });

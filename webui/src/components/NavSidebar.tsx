@@ -168,13 +168,13 @@ export const NavSidebar = memo(function NavSidebar({
               <Settings size={18} />
               {hasPendingUpdate && (
                 <span style={{ position: 'absolute', top: -3, right: -3, display: 'inline-flex' }}>
-                  <span className="animate-ping" style={{ position: 'absolute', width: 7, height: 7, borderRadius: '50%', background: 'var(--warning-text)', opacity: 0.6 }} />
-                  <span style={{ position: 'relative', width: 7, height: 7, borderRadius: '50%', background: 'var(--warning-text)', border: '1.5px solid var(--sidebar-bg)' }} />
+                  <span className="animate-ping" style={{ position: 'absolute', width: 7, height: 7, borderRadius: '50%', background: 'var(--accent-text)', opacity: 0.6 }} />
+                  <span style={{ position: 'relative', width: 7, height: 7, borderRadius: '50%', background: 'var(--accent-text)', border: '1.5px solid var(--sidebar-bg)' }} />
                 </span>
               )}
             </span>
           }
-          label="Impostazioni"
+          label={hasPendingUpdate ? 'Impostazioni (Nuova versione)' : 'Impostazioni'}
           ariaLabel="Apri impostazioni"
           active={false}
           onClick={() => setIsSettingsOpen(true)}
@@ -184,18 +184,21 @@ export const NavSidebar = memo(function NavSidebar({
   );
 });
 
-function SidebarTooltip({ label, children }: { label: string; children: ReactNode }) {
+function SidebarTooltip({ label, children, disabled }: { label: string; children: ReactNode; disabled?: boolean }) {
   const [visible, setVisible] = useState(false);
   return (
     <span
       className="sidebar-tooltip-anchor"
-      onMouseEnter={() => setVisible(true)}
+      onMouseEnter={() => {
+        if (!disabled) setVisible(true);
+      }}
       onMouseLeave={() => setVisible(false)}
+      onClick={() => setVisible(false)}
       style={{ position: 'relative', display: 'block' }}
     >
       {children}
       <AnimatePresence>
-        {visible && (
+        {visible && !disabled && (
           <motion.span
             className="sidebar-tooltip"
             initial={{ opacity: 0, x: -4 }}
@@ -222,7 +225,7 @@ function NavItem({
   ariaLabel?: string;
 }) {
   return (
-    <SidebarTooltip label={label}>
+    <SidebarTooltip label={label} disabled={active}>
       <button
         onClick={onClick}
         aria-label={ariaLabel || label}
@@ -260,7 +263,7 @@ function UtilityButton({
   disabled?: boolean;
 }) {
   return (
-    <SidebarTooltip label={disabled ? 'Console non disponibile' : label}>
+    <SidebarTooltip label={disabled ? 'Console non disponibile' : label} disabled={active}>
       <button
         onClick={onClick}
         aria-label={ariaLabel || label}

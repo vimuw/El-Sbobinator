@@ -97,6 +97,8 @@ export function KebabMenu({ items, align = 'right', buttonClassName }: KebabMenu
       <button
         ref={buttonRef}
         onClick={e => { e.stopPropagation(); setOpen(v => !v); }}
+        onPointerDown={e => e.stopPropagation()}
+        onMouseDown={e => e.stopPropagation()}
         className={`icon-button compact-icon-button ${buttonClassName ?? ''}`.trim()}
         style={{
           display: 'inline-flex',
