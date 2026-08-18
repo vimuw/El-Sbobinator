@@ -129,12 +129,12 @@ export const QueueSection = memo(function QueueSection({
               className="app-scroll overflow-y-auto overflow-x-hidden"
               style={{
                 maxHeight: 'clamp(260px, calc(100vh - 360px - var(--console-height, 0px)), 520px)',
-                padding: '4px 8px',
+                padding: '4px 6px',
                 overscrollBehavior: 'contain',
               }}
             >
             <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-              <div className="space-y-3" style={{ margin: '-4px -8px' }}>
+              <div className="space-y-3">
               <AnimatePresence>
                 {pendingFiles.map((file) => {
                   const isActive = file.status === 'processing';
