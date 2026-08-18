@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   AlertCircle,
@@ -240,6 +240,7 @@ function NotificationItem({
 
   return (
     <div
+      data-notification-id={notification.id}
       onClick={() => {
         if (!notification.read) onMarkAsRead(notification.id);
         onNotificationClick?.(notification);
@@ -358,22 +359,42 @@ function NotificationItem({
   );
 }
 
-function getCaretColor(
+interface CaretStyle {
+  fill: string;
+  stroke: string;
+}
+
+function getCaretStyle(
   type?: NotificationMessage['type'],
   category?: NotificationMessage['category']
-) {
+): CaretStyle {
   if (category === 'update' || type === 'info') {
-    return 'color-mix(in srgb, #3b82f6 13%, var(--bg-elevated, #ffffff))';
+    return {
+      fill: 'url(#caret-grad-info)',
+      stroke: 'color-mix(in srgb, #3b82f6 13%, var(--bg-elevated, #ffffff))',
+    };
   }
   switch (type) {
     case 'success':
-      return 'color-mix(in srgb, #22c55e 13%, var(--bg-elevated, #ffffff))';
+      return {
+        fill: 'url(#caret-grad-success)',
+        stroke: 'color-mix(in srgb, #22c55e 13%, var(--bg-elevated, #ffffff))',
+      };
     case 'warning':
-      return 'color-mix(in srgb, #f59e0b 14%, var(--bg-elevated, #ffffff))';
+      return {
+        fill: 'url(#caret-grad-warning)',
+        stroke: 'color-mix(in srgb, #f59e0b 14%, var(--bg-elevated, #ffffff))',
+      };
     case 'error':
-      return 'color-mix(in srgb, #ef4444 14%, var(--bg-elevated, #ffffff))';
+      return {
+        fill: 'url(#caret-grad-error)',
+        stroke: 'color-mix(in srgb, #ef4444 14%, var(--bg-elevated, #ffffff))',
+      };
     default:
-      return 'var(--bg-elevated, #ffffff)';
+      return {
+        fill: 'var(--bg-elevated, #ffffff)',
+        stroke: 'var(--bg-elevated, #ffffff)',
+      };
   }
 }
 
@@ -392,6 +413,9 @@ export function NotificationDropdown({
   bottomOffset = 16,
 }: NotificationDropdownProps) {
   const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all');
+  const [caretNotification, setCaretNotification] = useState<NotificationMessage | null>(null);
+  const caretRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const filteredNotifications = [...notifications]
@@ -406,12 +430,67 @@ export function NotificationDropdown({
       ? `clamp(320px, 52vh, min(480px, calc(100vh - ${bottomOffset + 16}px)))`
       : 'clamp(320px, 52vh, min(480px, calc(100vh - 88px)))';
 
-  const caretNotification =
-    filteredNotifications.length > 0
-      ? filteredNotifications[filteredNotifications.length - 1]
-      : null;
+  const updateCaretNotification = useCallback(() => {
+    if (!isOpen || align !== 'left' || valign !== 'bottom') {
+      setCaretNotification(null);
+      return;
+    }
 
-  const caretColor = getCaretColor(caretNotification?.type, caretNotification?.category);
+    const caretEl = caretRef.current;
+    const scrollEl = scrollContainerRef.current;
+    if (!caretEl || !scrollEl) {
+      setCaretNotification(null);
+      return;
+    }
+
+    const caretRect = caretEl.getBoundingClientRect();
+    const scrollRect = scrollEl.getBoundingClientRect();
+
+    // Guard against unmounted/0-size elements in headless/test environments
+    if (caretRect.height === 0 || scrollRect.height === 0) {
+      setCaretNotification(null);
+      return;
+    }
+
+    const caretCenterY = caretRect.top + caretRect.height / 2;
+
+    // If caret vertical position is outside the scroll container viewport
+    if (caretCenterY < scrollRect.top || caretCenterY > scrollRect.bottom) {
+      setCaretNotification(null);
+      return;
+    }
+
+    const itemEls = scrollEl.querySelectorAll<HTMLElement>('[data-notification-id]');
+    let found: NotificationMessage | null = null;
+    for (let i = 0; i < itemEls.length; i++) {
+      const itemEl = itemEls[i];
+      const rect = itemEl.getBoundingClientRect();
+      // Check if caret center Y falls within this notification item's visible bounds
+      if (caretCenterY >= rect.top && caretCenterY <= rect.bottom) {
+        const notifId = itemEl.getAttribute('data-notification-id');
+        found = filteredNotifications.find((n) => n.id === notifId) ?? null;
+        break;
+      }
+    }
+
+    setCaretNotification(found);
+  }, [isOpen, align, valign, filteredNotifications]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setCaretNotification(null);
+      return;
+    }
+    updateCaretNotification();
+    const frame = requestAnimationFrame(updateCaretNotification);
+    window.addEventListener('resize', updateCaretNotification);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', updateCaretNotification);
+    };
+  }, [isOpen, activeTab, filteredNotifications, updateCaretNotification]);
+
+  const caretStyle = getCaretStyle(caretNotification?.type, caretNotification?.category);
 
   return (
     <>
@@ -462,6 +541,7 @@ export function NotificationDropdown({
         {/* Left pointer triangle pointing towards the sidebar trigger */}
         {align === 'left' && valign === 'bottom' && (
           <div
+            ref={caretRef}
             className="absolute -left-[8px] pointer-events-none z-30 flex items-center"
             style={{ bottom: 48 }}
           >
@@ -472,9 +552,27 @@ export function NotificationDropdown({
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
             >
+              <defs>
+                <linearGradient id="caret-grad-info" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="color-mix(in srgb, #3b82f6 13%, var(--bg-elevated, #ffffff))" />
+                  <stop offset="100%" stopColor="color-mix(in srgb, #3b82f6 10%, var(--bg-elevated, #ffffff))" />
+                </linearGradient>
+                <linearGradient id="caret-grad-success" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="color-mix(in srgb, #22c55e 13%, var(--bg-elevated, #ffffff))" />
+                  <stop offset="100%" stopColor="color-mix(in srgb, #22c55e 10%, var(--bg-elevated, #ffffff))" />
+                </linearGradient>
+                <linearGradient id="caret-grad-warning" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="color-mix(in srgb, #f59e0b 14%, var(--bg-elevated, #ffffff))" />
+                  <stop offset="100%" stopColor="color-mix(in srgb, #f59e0b 10%, var(--bg-elevated, #ffffff))" />
+                </linearGradient>
+                <linearGradient id="caret-grad-error" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="color-mix(in srgb, #ef4444 14%, var(--bg-elevated, #ffffff))" />
+                  <stop offset="100%" stopColor="color-mix(in srgb, #ef4444 10%, var(--bg-elevated, #ffffff))" />
+                </linearGradient>
+              </defs>
               <polygon
                 points="8.5,0.5 0.5,9 8.5,17.5"
-                fill={caretColor}
+                fill={caretStyle.fill}
               />
               <path
                 d="M 8.5 0.5 L 0.5 9 L 8.5 17.5"
@@ -488,7 +586,7 @@ export function NotificationDropdown({
                 y1="1"
                 x2="8.5"
                 y2="17"
-                stroke={caretColor}
+                stroke={caretStyle.stroke}
                 strokeWidth="2"
               />
             </svg>
@@ -622,7 +720,11 @@ export function NotificationDropdown({
           </div>
 
           {/* Notification items list */}
-          <div className="flex-1 overflow-y-auto flex flex-col scrollbar-thin">
+          <div
+            ref={scrollContainerRef}
+            onScroll={updateCaretNotification}
+            className="flex-1 overflow-y-auto flex flex-col scrollbar-thin"
+          >
             {filteredNotifications.length === 0 ? (
               <div
                 key={`empty-${activeTab}`}

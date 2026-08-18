@@ -50,12 +50,11 @@ function QueueFileCardInner({
   return (
     <div ref={setNodeRef} style={sortableStyle} {...attributes}>
       <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: isDragging ? 0.4 : 1, y: 0 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: isDragging ? 0.4 : 1 }}
         exit={{ opacity: 0, transition: { duration: 0.11, ease: 'easeIn' } }}
         transition={{
           opacity: { duration: 0.18, ease: 'easeOut' },
-          y: { type: 'spring', stiffness: 400, damping: 32, mass: 0.7 },
         }}
         className={`queue-card relative transition-colors px-4 py-3 group/card ${
           file.status === 'processing'
@@ -211,12 +210,11 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
   };
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.11, ease: 'easeIn' } }}
       transition={{
         opacity: { duration: 0.2, ease: 'easeOut' },
-        y: { type: 'spring', stiffness: 380, damping: 30, mass: 0.8 },
       }}
       onClick={isClickable ? () => onPreview(file.outputHtml!, file.name, file.path, file.id, file.outputDir) : undefined}
       className={`queue-card relative px-4 py-3 transition-colors group/card ${isClickable ? 'cursor-pointer' : ''} is-completed ${
