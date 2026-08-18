@@ -420,12 +420,13 @@ class SessionControllerMixin:
         try:
             session_root = self._get_session_root()
             os.makedirs(session_root, exist_ok=True)
+            real_root = os.path.realpath(session_root)
             if sys.platform == "win32":
-                os.startfile(session_root)  # type: ignore[attr-defined]
+                os.startfile(real_root)  # type: ignore[attr-defined]
             elif sys.platform == "darwin":
-                subprocess.Popen(["open", session_root])
+                subprocess.Popen(["open", real_root])
             else:
-                subprocess.Popen(["xdg-open", session_root])
+                subprocess.Popen(["xdg-open", real_root])
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": redact_secrets(e)}
@@ -517,13 +518,19 @@ class SessionControllerMixin:
             return {"ok": False, "error": redact_secrets(e), "results": []}
 
     def get_archive_folders(self) -> dict:
-        """Return the user-defined archive folders."""
+        """Return the user-defined archive folders with auto-reconciled session paths."""
         try:
             from el_sbobinator.services.folders_service import (
                 get_folders as _get_archive_folders,
             )
+            from el_sbobinator.services.folders_service import (
+                reconcile_folders_with_session_root,
+            )
 
             folders = _get_archive_folders()
+            folders, _ = reconcile_folders_with_session_root(
+                folders, self._get_session_root()
+            )
             return {"ok": True, "folders": folders}
         except Exception as e:
             return {"ok": False, "error": redact_secrets(e), "folders": []}

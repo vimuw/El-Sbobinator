@@ -350,6 +350,58 @@ describe('SettingsModal — session folder and cleanup', () => {
     expect(cleanupCompletedFn).toHaveBeenCalledTimes(2);
     expect(cleanupCompletedFn).toHaveBeenLastCalledWith(30, false);
   });
+
+  it('triggers onSessionRootMoved when move completes successfully', async () => {
+    const onSessionRootMoved = vi.fn();
+    const askFolder = vi.fn().mockResolvedValue({ ok: true, path: 'D:\\new_sessions' });
+    const moveRoot = vi.fn().mockResolvedValue({ ok: true, started: true });
+    const moveStatus = vi.fn().mockResolvedValue({
+      status: 'done',
+      moved: 5,
+      total: 5,
+      old_root: 'C:\\old_sessions',
+      new_root: 'D:\\new_sessions',
+    });
+    const getStorageInfo = vi.fn().mockResolvedValue({
+      ok: true,
+      total_bytes: 1024,
+      total_sessions: 5,
+      session_root: 'D:\\new_sessions',
+    });
+
+    setPywebview({
+      ask_session_folder: askFolder,
+      move_session_root: moveRoot,
+      get_session_move_status: moveStatus,
+      get_session_storage_info: getStorageInfo,
+    });
+
+    render(<SettingsModal {...makeProps()} onSessionRootMoved={onSessionRootMoved} />);
+    await act(async () => {
+      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Cambia Cartella'));
+    });
+    expect(askFolder).toHaveBeenCalledTimes(1);
+
+    // Confirmation dialog appears
+    expect(await screen.findByText('Spostare la cartella sessioni?')).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Sposta'));
+    });
+
+    expect(moveRoot).toHaveBeenCalledWith('D:\\new_sessions');
+
+    await vi.waitFor(() => {
+      expect(onSessionRootMoved).toHaveBeenCalledWith({
+        oldRoot: 'C:\\old_sessions',
+        newRoot: 'D:\\new_sessions',
+      });
+    });
+  });
 });
 
 describe('SettingsModal — fallback models list', () => {

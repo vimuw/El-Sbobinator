@@ -15,6 +15,7 @@ export interface ArchivePageProps {
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string, searchTerm?: string) => void;
   onOpenFile: (path: string) => void;
   onDeleteSession: (sessionDir: string, name: string) => void;
+  onDeleteMultipleSessions?: (sessions: { sessionDir: string; name: string }[]) => void;
   onRefresh?: () => void;
   onLoadAll?: () => void;
   onRetryFailedRevisionBlocks?: (sessionDir: string) => Promise<void>;
@@ -22,10 +23,11 @@ export interface ArchivePageProps {
 }
 
 export type FolderModalState =
-  | { type: 'create' }
+  | { type: 'create'; pendingSessionDirs?: string[] }
   | { type: 'edit'; folder: ArchiveFolder };
 
 export type DeleteFolderConfirmState = { folder: ArchiveFolder };
+export type DeleteMultipleSessionsConfirmState = { sessions: { sessionDir: string; name: string }[] };
 
 export type SortOption = 'newest' | 'oldest' | 'recently_opened' | 'name';
 

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { FolderPlus, Pencil, Trash2 } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import type { ArchiveFolder, ArchiveSession } from '../../bridge';
+import { normalizeSessionPath } from '../../utils';
 import { KebabMenu, type KebabMenuItem } from '../KebabMenu';
 
 export interface FolderCardProps {
@@ -20,7 +21,7 @@ export function FolderCard({
   onDelete,
 }: FolderCardProps) {
   const count = useMemo(
-    () => folder.session_dirs.filter(d => sessionsByDir.has(d)).length,
+    () => folder.session_dirs.filter(d => sessionsByDir.has(normalizeSessionPath(d))).length,
     [folder.session_dirs, sessionsByDir],
   );
 
@@ -109,7 +110,7 @@ export function FolderCardOverlay({
   folder: ArchiveFolder;
   sessionsByDir: Map<string, ArchiveSession>;
 }) {
-  const count = folder.session_dirs.filter(d => sessionsByDir.has(d)).length;
+  const count = folder.session_dirs.filter(d => sessionsByDir.has(normalizeSessionPath(d))).length;
   return (
     <div
       className="folder-card shadow-lg opacity-95 pointer-events-none cursor-grabbing"

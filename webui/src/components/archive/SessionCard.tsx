@@ -1,6 +1,6 @@
 import { useState, type MouseEvent } from 'react';
 import {
-  AlertTriangle, ChevronLeft, ChevronRight, Download, ExternalLink,
+  AlertTriangle, Check, ChevronLeft, ChevronRight, Download, ExternalLink,
   Eye, FileText, FolderOpen, RefreshCw, Trash2, X,
 } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
@@ -17,6 +17,8 @@ export interface DraggableSessionCardProps {
   allFolders: ArchiveFolder[];
   currentFolder?: ArchiveFolder;
   editorSessionsMap?: Record<string, EditorSession>;
+  selected?: boolean;
+  onToggleSelect?: () => void;
   onAssignToFolder: (folderId: string) => void;
   onRemoveFromFolder: () => void;
   onPreview: ArchivePageProps['onPreview'];
@@ -31,6 +33,8 @@ export function DraggableSessionCard({
   allFolders,
   currentFolder,
   editorSessionsMap,
+  selected,
+  onToggleSelect,
   onAssignToFolder,
   onRemoveFromFolder,
   onPreview,
@@ -97,9 +101,30 @@ export function DraggableSessionCard({
     <div
       onClick={() => onPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir)}
       className="archive-session-card flex items-center justify-between gap-3 px-4 py-3 cursor-pointer group/card"
-      style={hasRevisionWarnings ? { borderColor: 'var(--warning-ring)', boxShadow: 'inset 3px 0 0 var(--warning-ring)', background: 'var(--warning-subtle)' } : undefined}
+      style={{
+        ...(hasRevisionWarnings ? { borderColor: 'var(--warning-ring)', boxShadow: 'inset 3px 0 0 var(--warning-ring)', background: 'var(--warning-subtle)' } : {}),
+        ...(selected ? { borderColor: 'var(--accent-text)', boxShadow: 'inset 3px 0 0 var(--accent-text)', background: 'var(--accent-subtle)' } : {}),
+      }}
     >
       <div className="flex items-center gap-3 min-w-0 flex-1">
+        {onToggleSelect && (
+          <button
+            type="button"
+            onClick={e => {
+              e.stopPropagation();
+              onToggleSelect();
+            }}
+            className={`w-4 h-4 rounded flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+              selected
+                ? 'bg-[var(--accent-text)] text-white shadow-xs'
+                : 'border border-[var(--border-strong)] bg-[var(--bg-input)] hover:border-[var(--accent-text)] opacity-70 group-hover/card:opacity-100'
+            }`}
+            aria-label={selected ? `Deseleziona ${session.name}` : `Seleziona ${session.name}`}
+            title={selected ? 'Deseleziona' : 'Seleziona'}
+          >
+            {selected && <Check className="w-3 h-3 stroke-[3]" />}
+          </button>
+        )}
         <FileText className="w-4 h-4 shrink-0 transition-transform duration-200 group-hover/card:scale-105" style={{ color: hasRevisionWarnings ? 'var(--warning-text)' : 'var(--text-muted)' }} />
 
         <div className="min-w-0 flex-1">
@@ -206,6 +231,8 @@ export interface SortableSessionCardProps {
   disabled: boolean;
   onRemove: () => void;
   editorSessionsMap?: Record<string, EditorSession>;
+  selected?: boolean;
+  onToggleSelect?: () => void;
   onPreview: ArchivePageProps['onPreview'];
   onOpenFile: ArchivePageProps['onOpenFile'];
   onDeleteSession: ArchivePageProps['onDeleteSession'];
@@ -223,6 +250,8 @@ export function SortableSessionCard({
   disabled,
   onRemove,
   editorSessionsMap,
+  selected,
+  onToggleSelect,
   onPreview,
   onOpenFile,
   onDeleteSession,
@@ -304,12 +333,30 @@ export function SortableSessionCard({
         opacity: isDragging ? 0.4 : 1,
         touchAction: disabled ? undefined : 'none',
         cursor: isDragging ? 'grabbing' : disabled ? 'pointer' : 'grab',
-        borderColor: hasRevisionWarnings ? 'var(--warning-ring)' : undefined,
-        boxShadow: hasRevisionWarnings ? 'inset 3px 0 0 var(--warning-ring)' : undefined,
-        background: hasRevisionWarnings ? 'var(--warning-subtle)' : undefined,
+        borderColor: selected ? 'var(--accent-text)' : (hasRevisionWarnings ? 'var(--warning-ring)' : undefined),
+        boxShadow: selected ? 'inset 3px 0 0 var(--accent-text)' : (hasRevisionWarnings ? 'inset 3px 0 0 var(--warning-ring)' : undefined),
+        background: selected ? 'var(--accent-subtle)' : (hasRevisionWarnings ? 'var(--warning-subtle)' : undefined),
       }}
     >
       <div className="flex items-center gap-3 min-w-0 flex-1">
+        {onToggleSelect && (
+          <button
+            type="button"
+            onClick={e => {
+              e.stopPropagation();
+              onToggleSelect();
+            }}
+            className={`w-4 h-4 rounded flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+              selected
+                ? 'bg-[var(--accent-text)] text-white shadow-xs'
+                : 'border border-[var(--border-strong)] bg-[var(--bg-input)] hover:border-[var(--accent-text)] opacity-70 group-hover/card:opacity-100'
+            }`}
+            aria-label={selected ? `Deseleziona ${session.name}` : `Seleziona ${session.name}`}
+            title={selected ? 'Deseleziona' : 'Seleziona'}
+          >
+            {selected && <Check className="w-3 h-3 stroke-[3]" />}
+          </button>
+        )}
         <span className="folder-color-dot is-large transition-transform duration-200 group-hover/card:scale-105" style={{ '--folder-color': folderColor } as React.CSSProperties} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{session.name}</p>

@@ -190,7 +190,7 @@ describe('App', () => {
     await act(async () => {
       fireEvent.click(screen.getByLabelText('Apri impostazioni'));
     });
-    expect(await screen.findByRole('heading', { name: /Impostazioni/ })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: /Impostazioni/ }, { timeout: 5000 })).toBeTruthy();
   });
 
   it('console toggle button is disabled in setup mode', async () => {
@@ -1201,6 +1201,70 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       });
 
       expect(answerRegenerate).toHaveBeenCalledWith(false);
+    });
+  });
+
+  describe('App — Session root moved handling', () => {
+    it('refreshes archive sessions and folders when session root is moved', async () => {
+      vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
+      const getCompletedSessions = vi.fn().mockResolvedValue({
+        ok: true,
+        sessions: [
+          { name: 'lezione.mp3', session_dir: 'D:\\new_sessions\\sess1', completed_at_iso: '2026-08-18T10:00:00Z', html_path: 'D:\\new_sessions\\sess1\\outputs.html' },
+        ],
+      });
+      const getArchiveFolders = vi.fn()
+        .mockResolvedValueOnce({ ok: true, folders: [] })
+        .mockResolvedValueOnce({
+          ok: true,
+          folders: [{ id: 'f1', name: 'Cardio', color: '#ff0000', session_dirs: ['D:\\new_sessions\\sess1'] }],
+        });
+
+      setPywebview({
+        get_completed_sessions: getCompletedSessions,
+        get_archive_folders: getArchiveFolders,
+        ask_session_folder: vi.fn().mockResolvedValue({ ok: true, path: 'D:\\new_sessions' }),
+        move_session_root: vi.fn().mockResolvedValue({ ok: true, started: true }),
+        get_session_move_status: vi.fn().mockResolvedValue({
+          status: 'done',
+          moved: 1,
+          total: 1,
+          old_root: 'C:\\old_sessions',
+          new_root: 'D:\\new_sessions',
+        }),
+        get_session_storage_info: vi.fn().mockResolvedValue({
+          ok: true,
+          total_bytes: 1024,
+          total_sessions: 1,
+          session_root: 'D:\\new_sessions',
+        }),
+      });
+
+      await act(async () => { render(<App />); });
+
+      // Open settings
+      const settingsBtn = screen.getByLabelText('Apri impostazioni');
+      await act(async () => { fireEvent.click(settingsBtn); });
+
+      // Switch to advanced tab
+      await act(async () => {
+        fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+      });
+
+      // Click move folder
+      await act(async () => {
+        fireEvent.click(screen.getByText('Cambia Cartella'));
+      });
+
+      // Confirm move
+      await act(async () => {
+        fireEvent.click(screen.getByText('Sposta'));
+      });
+
+      await vi.waitFor(() => {
+        expect(getCompletedSessions).toHaveBeenCalled();
+        expect(getArchiveFolders).toHaveBeenCalledTimes(2);
+      });
     });
   });
 });

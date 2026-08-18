@@ -203,3 +203,89 @@ export function DeleteFolderConfirmModal({
     </motion.div>
   );
 }
+
+interface DeleteMultipleSessionsConfirmModalProps {
+  sessions: { sessionDir: string; name: string }[];
+  onClose: () => void;
+  onConfirm: () => void;
+}
+
+export function DeleteMultipleSessionsConfirmModal({
+  sessions,
+  onClose,
+  onConfirm,
+}: DeleteMultipleSessionsConfirmModalProps) {
+  const count = sessions.length;
+  const previewList = sessions.slice(0, 5);
+  const remainingCount = count - previewList.length;
+
+  return (
+    <motion.div
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+    >
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="modal-overlay absolute inset-0"
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }}
+        exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14, ease: 'easeIn' } }}
+        className="modal-card relative w-full max-w-md max-h-[86vh] overflow-hidden flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3 px-5 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+          <div className="flex items-center gap-3 min-w-0">
+            <Trash2 className="w-5 h-5 shrink-0" style={{ color: 'var(--error-text)' }} />
+            <h2 className="text-lg font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+              {count === 1 ? 'Eliminare questa sbobina?' : `Eliminare ${count} sbobine?`}
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="icon-button modal-icon-button"
+            aria-label="Chiudi finestra"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-5 text-sm space-y-3" style={{ color: 'var(--text-secondary)' }}>
+          <div className="p-3 rounded-xl border space-y-1.5" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+            {previewList.map(s => (
+              <div key={s.sessionDir} className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                • {s.name}
+              </div>
+            ))}
+            {remainingCount > 0 && (
+              <div className="text-xs italic pt-1" style={{ color: 'var(--text-muted)' }}>
+                …e altre {remainingCount} {remainingCount === 1 ? 'sbobina' : 'sbobine'}
+              </div>
+            )}
+          </div>
+
+          <p style={{ color: 'var(--text-muted)' }}>
+            Tutti i file e i dati di sessione relativi verranno eliminati definitivamente dal disco.{' '}
+            <strong style={{ color: 'var(--error-text)' }}>L&apos;operazione è irreversibile.</strong>
+          </p>
+        </div>
+
+        <div className="px-5 py-4 flex gap-3 shrink-0" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+          <button onClick={onClose} className="modal-action-button flex-1">
+            Annulla
+          </button>
+          <button
+            onClick={onConfirm}
+            className="modal-action-button is-danger flex-1"
+          >
+            {count === 1 ? 'Elimina definitivamente' : `Elimina ${count} sbobine`}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}

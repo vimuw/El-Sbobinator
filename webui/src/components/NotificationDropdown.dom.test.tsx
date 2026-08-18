@@ -241,20 +241,23 @@ describe('NotificationDropdown component', () => {
     expect(screen.getByText(/Qui troverai gli avvisi su elaborazioni/i)).toBeTruthy();
   });
 
-  it('maintains fixed height container when empty or populated', () => {
-    const { container } = render(
+  it('handles "Cancella tutte le notifiche" action', () => {
+    const handleClearAll = vi.fn();
+
+    render(
       <NotificationDropdown
         isOpen={true}
         onClose={vi.fn()}
-        notifications={[]}
+        notifications={mockNotifications}
         onMarkAsRead={vi.fn()}
         onMarkAllAsRead={vi.fn()}
         onDelete={vi.fn()}
+        onClearAll={handleClearAll}
       />
     );
 
-    const popover = container.querySelector('.origin-bottom-left') as HTMLElement;
-    expect(popover).toBeTruthy();
-    expect(popover.style.height).not.toBe('');
+    const clearAllBtn = screen.getByRole('button', { name: /Cancella tutte le notifiche/i });
+    fireEvent.click(clearAllBtn);
+    expect(handleClearAll).toHaveBeenCalledTimes(1);
   });
 });

@@ -75,24 +75,37 @@ _last_set_legacy_session_root = _LEGACY_SESSION_ROOT
 def get_session_root() -> str:
     """Return the current session-storage root directory (may be overridden at runtime)."""
     global _last_set_session_root
+    root = SESSION_ROOT
     if "el_sbobinator.core.shared" in sys.modules:
         shared_mod = sys.modules["el_sbobinator.core.shared"]
         shared_root = getattr(shared_mod, "SESSION_ROOT", None)
         if shared_root is not None and shared_root != _last_set_session_root:
-            return shared_root
-    if SESSION_ROOT != _last_set_session_root:
-        return SESSION_ROOT
-    return SESSION_ROOT
+            root = shared_root
+    if os.path.exists(root):
+        try:
+            real_root = os.path.realpath(root)
+            if real_root != root:
+                set_session_root(real_root)
+                return real_root
+        except Exception:
+            pass
+    return root
 
 
 def set_session_root(path: str) -> None:
     """Override the session-storage root directory at runtime."""
     global SESSION_ROOT, _last_set_session_root
-    SESSION_ROOT = str(path)
+    p_str = str(path).strip()
+    if os.path.exists(p_str):
+        try:
+            p_str = os.path.realpath(p_str)
+        except Exception:
+            pass
+    SESSION_ROOT = p_str
     _last_set_session_root = SESSION_ROOT
     if "el_sbobinator.core.shared" in sys.modules:
         try:
-            setattr(sys.modules["el_sbobinator.core.shared"], "SESSION_ROOT", str(path))  # noqa: B010
+            setattr(sys.modules["el_sbobinator.core.shared"], "SESSION_ROOT", p_str)  # noqa: B010
         except Exception:
             pass
 

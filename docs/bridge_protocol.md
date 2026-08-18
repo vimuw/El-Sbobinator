@@ -84,7 +84,7 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
 | `open_session_folder()` | — | `{ok, error?}` | Opens `SESSION_ROOT` in the OS file manager. |
 | `ask_session_folder()` | — | `{ok, path?, cancelled?: bool, error?}` | Opens a folder-picker dialog and returns the selected path. |
 | `move_session_root(new_path)` | new absolute path | `{ok, started?, error?}` | Starts an asynchronous background move of all sessions to `new_path`. |
-| `get_session_move_status()` | — | `{status, moved?, total?, error?}` | Returns the current status of an ongoing or completed session move. |
+| `get_session_move_status()` | — | `{status, moved?, total?, error?, old_root?, new_root?}` | Returns the current status of an ongoing or completed session move. |
 | `get_archive_folders()` | — | `{ok, folders: ArchiveFolder[], error?}` | Returns user-defined folder list for sorting sessions. |
 | `save_archive_folders(folders)` | folder list | `{ok, error?}` | Persists the folder list to folders.json. |
 | `search_sessions(query, limit=10)` | query string, limit | `{ok, results: SearchSessionResult[], error?}` | Searches plain-text content of every completed session HTML. |
@@ -124,7 +124,14 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
 
 - `BridgeFileItem` — `el_sbobinator/bridge_types.py`:
   ```python
-  {"id": str, "path": str, "name": str, "size": int, "duration": float, "resume_session": bool}
+  {
+      "id": str,
+      "path": str,
+      "name": str,
+      "size": int,
+      "duration": float,
+      "resume_session": bool,
+  }
   ```
 - `FileDescriptor` — TS equivalent in `webui/src/appState.ts`. Same shape minus `id` being optional on intake.
 - `ValidationResult` — `{ok, summary, checks: ValidationCheck[]}`. Checks look like `{id, label, status: "ok"|"warning"|"error", message, details?}`.

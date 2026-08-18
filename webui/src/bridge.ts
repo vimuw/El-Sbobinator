@@ -166,7 +166,7 @@ export interface PywebviewApi {
   open_session_folder?: () => Promise<{ ok: boolean; error?: string }>;
   ask_session_folder?: () => Promise<{ ok: boolean; path?: string; cancelled?: boolean; error?: string }>;
   move_session_root?: (newPath: string) => Promise<{ ok: boolean; started?: boolean; error?: string }>;
-  get_session_move_status?: () => Promise<{ status: string; moved?: number; total?: number; error?: string | null }>;
+  get_session_move_status?: () => Promise<{ status: string; moved?: number; total?: number; error?: string | null; old_root?: string; new_root?: string }>;
   download_and_install_update?: (version: string) => Promise<{ ok: boolean; status?: string; error?: string }>;
   save_theme_preference?: (theme: 'light' | 'dark') => Promise<void>;
   get_archive_folders?: () => Promise<{ ok: boolean; folders: ArchiveFolder[]; error?: string }>;

@@ -46,6 +46,7 @@ export interface SettingsModalProps {
   updateInstallState?: SettingsUpdateInstallState;
   onInstallUpdate?: (version: string) => Promise<void>;
   onSettingsSaved?: () => Promise<unknown> | unknown;
+  onSessionRootMoved?: (payload?: { oldRoot?: string; newRoot?: string }) => void;
 }
 
 type TabType = 'general' | 'advanced';
@@ -72,6 +73,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   updateInstallState,
   onInstallUpdate,
   onSettingsSaved,
+  onSessionRootMoved,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('general');
   const [isSaving, setIsSaving] = useState(false);
@@ -166,6 +168,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             });
           }
         }
+        onSessionRootMoved?.({
+          oldRoot: res.old_root,
+          newRoot: res.new_root,
+        });
       } else if (res.status === 'error') {
         setIsMoveInProgress(false);
         setMoveProgress(null);

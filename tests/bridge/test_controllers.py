@@ -407,12 +407,18 @@ class TestSettingsController(unittest.TestCase):
             with open(os.path.join(old_root, "sess1.txt"), "w") as f:
                 f.write("content")
 
-            host = DummySettingsHost()
-            host._do_move_session_root(old_root, new_root)
-            status = host.get_session_move_status()
-            self.assertEqual(status["status"], "done")
-            self.assertTrue(os.path.isdir(new_root))
-            self.assertTrue(os.path.exists(os.path.join(new_root, "sess1.txt")))
+            with patch(
+                "el_sbobinator.services.folders_service.migrate_session_roots"
+            ) as mock_mig:
+                host = DummySettingsHost()
+                host._do_move_session_root(old_root, new_root)
+                status = host.get_session_move_status()
+                self.assertEqual(status["status"], "done")
+                self.assertEqual(status["old_root"], old_root)
+                self.assertEqual(status["new_root"], new_root)
+                self.assertTrue(os.path.isdir(new_root))
+                self.assertTrue(os.path.exists(os.path.join(new_root, "sess1.txt")))
+                mock_mig.assert_called_once_with(old_root, new_root)
 
 
 class TestMediaController(unittest.TestCase):

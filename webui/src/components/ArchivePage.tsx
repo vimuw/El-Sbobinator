@@ -13,13 +13,14 @@ import {
 } from '@dnd-kit/sortable';
 import type { ArchiveFolder, ArchiveSession, SearchSessionResult } from '../bridge';
 import { loadAllEditorSessions } from '../editorSessions';
-import { formatRelativeTime, shortModelName } from '../utils';
+import { formatRelativeTime, normalizeSessionPath, shortModelName } from '../utils';
 import { FolderIndicatorChip } from './FolderChip';
 import { ShareExportModal } from './modals/ShareExportModal';
 
 import {
   type ArchivePageProps,
   type DeleteFolderConfirmState,
+  type DeleteMultipleSessionsConfirmState,
   type FolderModalState,
   getOpenedAtMs,
   type SortOption,
@@ -28,20 +29,22 @@ import { SortMenu } from './archive/SortMenu';
 import { FolderCardOverlay, NewFolderCard, SortableFolderCard } from './archive/FolderCard';
 import { DraggableSessionCard } from './archive/SessionCard';
 import { FolderDetailView } from './archive/FolderDetailView';
-import { DeleteFolderConfirmModal, FolderModal } from './archive/FolderModals';
+import { DeleteFolderConfirmModal, DeleteMultipleSessionsConfirmModal, FolderModal } from './archive/FolderModals';
+import { ArchiveSelectionBar } from './archive/ArchiveSelectionBar';
 import { FullTextResultList } from './archive/FullTextResults';
 
-export type { ArchivePageProps, SortOption, FolderModalState, DeleteFolderConfirmState };
+export type { ArchivePageProps, SortOption, FolderModalState, DeleteFolderConfirmState, DeleteMultipleSessionsConfirmState };
 export { SortMenu } from './archive/SortMenu';
 export { FolderCard, SortableFolderCard, FolderCardOverlay, NewFolderCard } from './archive/FolderCard';
 export { DraggableSessionCard, SortableSessionCard, FolderSessionCardOverlay } from './archive/SessionCard';
 export { FolderDetailView } from './archive/FolderDetailView';
-export { FolderModal, DeleteFolderConfirmModal } from './archive/FolderModals';
+export { FolderModal, DeleteFolderConfirmModal, DeleteMultipleSessionsConfirmModal } from './archive/FolderModals';
+export { ArchiveSelectionBar } from './archive/ArchiveSelectionBar';
 export { FullTextResultList } from './archive/FullTextResults';
 
 export function ArchivePage({
   sessions, total, folders, onFoldersChange,
-  onPreview, onOpenFile, onDeleteSession, onRefresh,
+  onPreview, onOpenFile, onDeleteSession, onDeleteMultipleSessions, onRefresh,
   onRetryFailedRevisionBlocks, onOpenJoinRoom,
 }: ArchivePageProps) {
   const [search, setSearch] = useState('');
@@ -50,6 +53,8 @@ export function ArchivePage({
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [folderModal, setFolderModal] = useState<FolderModalState | null>(null);
   const [deleteFolderConfirm, setDeleteFolderConfirm] = useState<DeleteFolderConfirmState | null>(null);
+  const [deleteMultipleConfirm, setDeleteMultipleConfirm] = useState<DeleteMultipleSessionsConfirmState | null>(null);
+  const [selectedSessionDirs, setSelectedSessionDirs] = useState<Set<string>>(new Set());
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [searchFocused, setSearchFocused] = useState(false);
@@ -113,13 +118,13 @@ export function ArchivePage({
 
   const sessionsByDir = useMemo(() => {
     const map = new Map<string, ArchiveSession>();
-    for (const s of sessions) map.set(s.session_dir, s);
+    for (const s of sessions) map.set(normalizeSessionPath(s.session_dir), s);
     return map;
   }, [sessions]);
 
   const sessionFolderMap = useMemo(() => {
     const map = new Map<string, ArchiveFolder>();
-    for (const f of folders) for (const d of f.session_dirs) map.set(d, f);
+    for (const f of folders) for (const d of f.session_dirs) map.set(normalizeSessionPath(d), f);
     return map;
   }, [folders]);
 
@@ -161,7 +166,7 @@ export function ArchivePage({
       activityTimeMs: maxTime,
       isOpened: isOpenedRecently,
       isSaved: isSavedRecently,
-      folder: sessionFolderMap.get(bestSession.session_dir),
+      folder: sessionFolderMap.get(normalizeSessionPath(bestSession.session_dir)),
     };
   }, [sessions, editorSessionsMap, sessionFolderMap]);
 
@@ -241,23 +246,106 @@ export function ArchivePage({
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
+  useEffect(() => {
+    if (selectedSessionDirs.size === 0) return;
+    const existingDirs = new Set(sessions.map(s => normalizeSessionPath(s.session_dir)));
+    setSelectedSessionDirs(prev => {
+      const filtered = new Set([...prev].filter(d => existingDirs.has(normalizeSessionPath(d))));
+      return filtered.size === prev.size ? prev : filtered;
+    });
+  }, [sessions, selectedSessionDirs.size]);
+
   const assignToFolder = useCallback((sessionDir: string, folderId: string) => {
+    const normTarget = normalizeSessionPath(sessionDir);
     const next = folders.map(f => {
       if (f.id === folderId) {
-        if (f.session_dirs.includes(sessionDir)) return f;
+        if (f.session_dirs.some(d => normalizeSessionPath(d) === normTarget)) return f;
         return { ...f, session_dirs: [...f.session_dirs, sessionDir] };
       }
-      return { ...f, session_dirs: f.session_dirs.filter(d => d !== sessionDir) };
+      return { ...f, session_dirs: f.session_dirs.filter(d => normalizeSessionPath(d) !== normTarget) };
     });
     onFoldersChange(next);
   }, [folders, onFoldersChange]);
 
   const removeFromFolder = useCallback((sessionDir: string, folderId: string) => {
+    const normTarget = normalizeSessionPath(sessionDir);
     const next = folders.map(f =>
-      f.id === folderId ? { ...f, session_dirs: f.session_dirs.filter(d => d !== sessionDir) } : f,
+      f.id === folderId ? { ...f, session_dirs: f.session_dirs.filter(d => normalizeSessionPath(d) !== normTarget) } : f,
     );
     onFoldersChange(next);
   }, [folders, onFoldersChange]);
+
+  const prevManualSelectionRef = useRef<Set<string> | null>(null);
+
+  const toggleSelectSession = useCallback((dir: string) => {
+    setSelectedSessionDirs(prev => {
+      const next = new Set(prev);
+      if (next.has(dir)) next.delete(dir);
+      else next.add(dir);
+      prevManualSelectionRef.current = next.size > 0 ? new Set(next) : null;
+      return next;
+    });
+  }, []);
+
+  const selectAllSessions = useCallback(() => {
+    if (selectedSessionDirs.size < sessionPageData.length && selectedSessionDirs.size > 0) {
+      prevManualSelectionRef.current = new Set(selectedSessionDirs);
+    }
+    setSelectedSessionDirs(new Set(sessionPageData.map(s => s.session_dir)));
+  }, [sessionPageData, selectedSessionDirs]);
+
+  const handleDeselectOrRestore = useCallback(() => {
+    if (prevManualSelectionRef.current && prevManualSelectionRef.current.size > 0 && prevManualSelectionRef.current.size < sessionPageData.length) {
+      setSelectedSessionDirs(new Set(prevManualSelectionRef.current));
+      prevManualSelectionRef.current = null;
+    } else {
+      setSelectedSessionDirs(new Set());
+      prevManualSelectionRef.current = null;
+    }
+  }, [sessionPageData.length]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedSessionDirs(new Set());
+    prevManualSelectionRef.current = null;
+  }, []);
+
+  const bulkAssignToFolder = useCallback((folderId: string, customDirs?: string[]) => {
+    const targetDirs = customDirs ?? Array.from(selectedSessionDirs);
+    const normDirSet = new Set(targetDirs.map(d => normalizeSessionPath(d)));
+    const next = folders.map(f => {
+      if (f.id === folderId) {
+        const existingNorm = new Set(f.session_dirs.map(d => normalizeSessionPath(d)));
+        const toAdd = targetDirs.filter(d => !existingNorm.has(normalizeSessionPath(d)));
+        return { ...f, session_dirs: [...f.session_dirs, ...toAdd] };
+      }
+      return { ...f, session_dirs: f.session_dirs.filter(d => !normDirSet.has(normalizeSessionPath(d))) };
+    });
+    onFoldersChange(next);
+    if (!customDirs) clearSelection();
+  }, [folders, onFoldersChange, selectedSessionDirs, clearSelection]);
+
+  const bulkRemoveFromFolders = useCallback((customDirs?: string[]) => {
+    const targetDirs = customDirs ?? Array.from(selectedSessionDirs);
+    const normDirSet = new Set(targetDirs.map(d => normalizeSessionPath(d)));
+    const next = folders.map(f => ({
+      ...f,
+      session_dirs: f.session_dirs.filter(d => !normDirSet.has(normalizeSessionPath(d))),
+    }));
+    onFoldersChange(next);
+    if (!customDirs) clearSelection();
+  }, [folders, onFoldersChange, selectedSessionDirs, clearSelection]);
+
+  const handleOpenDeleteMultiple = useCallback((targets?: { sessionDir: string; name: string }[]) => {
+    const list = targets ?? sessionPageData
+      .filter(s => selectedSessionDirs.has(s.session_dir))
+      .map(s => ({ sessionDir: s.session_dir, name: s.name }));
+    if (list.length === 0) return;
+    if (onDeleteMultipleSessions) {
+      onDeleteMultipleSessions(list);
+    } else {
+      setDeleteMultipleConfirm({ sessions: list });
+    }
+  }, [sessionPageData, selectedSessionDirs, onDeleteMultipleSessions]);
 
   const selectedFolder = selectedFolderId ? folders.find(f => f.id === selectedFolderId) ?? null : null;
 
@@ -266,19 +354,25 @@ export function ArchivePage({
       <>
         <FolderDetailView
           folder={selectedFolder}
+          allFolders={folders}
           sessionsByDir={sessionsByDir}
           editorSessionsMap={editorSessionsMap}
           onBack={() => setSelectedFolderId(null)}
           onEdit={() => setFolderModal({ type: 'edit', folder: selectedFolder })}
           onDelete={() => setDeleteFolderConfirm({ folder: selectedFolder })}
           onRemoveSession={dir => removeFromFolder(dir, selectedFolder.id)}
+          onRemoveMultipleSessions={dirs => bulkRemoveFromFolders(dirs)}
           onAddSession={dir => assignToFolder(dir, selectedFolder.id)}
+          onAddMultipleSessions={dirs => bulkAssignToFolder(selectedFolder.id, dirs)}
           onReorderSessions={dirs => onFoldersChange(folders.map(f =>
             f.id === selectedFolder.id ? { ...f, session_dirs: dirs } : f,
           ))}
+          onAssignMultipleToFolder={(dirs, fId) => bulkAssignToFolder(fId, dirs)}
+          onNewFolder={() => setFolderModal({ type: 'create' })}
           onPreview={onPreview}
           onOpenFile={onOpenFile}
           onDeleteSession={onDeleteSession}
+          onDeleteMultipleSessions={handleOpenDeleteMultiple}
           onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
           onShareSession={setSharingSession}
         />
@@ -288,7 +382,22 @@ export function ArchivePage({
               state={folderModal}
               onClose={() => setFolderModal(null)}
               onSave={(name, color) => {
-                if (folderModal.type === 'edit') {
+                if (folderModal.type === 'create') {
+                  const pending = folderModal.pendingSessionDirs ?? [];
+                  const pendingNorm = new Set(pending.map(d => normalizeSessionPath(d)));
+                  const newFolder: ArchiveFolder = {
+                    id: crypto.randomUUID(),
+                    name: name.trim(),
+                    color,
+                    session_dirs: pending,
+                  };
+                  const updated = folders.map(f => ({
+                    ...f,
+                    session_dirs: f.session_dirs.filter(d => !pendingNorm.has(normalizeSessionPath(d))),
+                  }));
+                  onFoldersChange([...updated, newFolder]);
+                  clearSelection();
+                } else {
                   onFoldersChange(folders.map(f =>
                     f.id === folderModal.folder.id ? { ...f, name: name.trim(), color } : f,
                   ));
@@ -307,6 +416,19 @@ export function ArchivePage({
                 onFoldersChange(folders.filter(f => f.id !== deleteFolderConfirm.folder.id));
                 setDeleteFolderConfirm(null);
                 setSelectedFolderId(null);
+              }}
+            />
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {deleteMultipleConfirm && (
+            <DeleteMultipleSessionsConfirmModal
+              sessions={deleteMultipleConfirm.sessions}
+              onClose={() => setDeleteMultipleConfirm(null)}
+              onConfirm={() => {
+                deleteMultipleConfirm.sessions.forEach(s => onDeleteSession(s.sessionDir, s.name));
+                clearSelection();
+                setDeleteMultipleConfirm(null);
               }}
             />
           )}
@@ -592,11 +714,13 @@ export function ArchivePage({
                     key={session.session_dir}
                     session={session}
                     allFolders={folders}
-                    currentFolder={sessionFolderMap.get(session.session_dir)}
+                    currentFolder={sessionFolderMap.get(normalizeSessionPath(session.session_dir))}
                     editorSessionsMap={editorSessionsMap}
+                    selected={selectedSessionDirs.has(session.session_dir)}
+                    onToggleSelect={() => toggleSelectSession(session.session_dir)}
                     onAssignToFolder={fId => assignToFolder(session.session_dir, fId)}
                     onRemoveFromFolder={() => {
-                      const f = sessionFolderMap.get(session.session_dir);
+                      const f = sessionFolderMap.get(normalizeSessionPath(session.session_dir));
                       if (f) removeFromFolder(session.session_dir, f.id);
                     }}
                     onPreview={onPreview}
@@ -612,6 +736,25 @@ export function ArchivePage({
         </div>
       </div>
 
+      {/* Selection Action Bar */}
+      <AnimatePresence>
+        {selectedSessionDirs.size > 0 && (
+          <ArchiveSelectionBar
+            selectedCount={selectedSessionDirs.size}
+            totalCount={sessionPageData.length}
+            folders={folders}
+            onSelectAll={selectAllSessions}
+            onDeselectAll={handleDeselectOrRestore}
+            onAssignToFolder={fId => bulkAssignToFolder(fId)}
+            onNewFolder={() => setFolderModal({ type: 'create', pendingSessionDirs: Array.from(selectedSessionDirs) })}
+            hasAssignedFolder={Array.from(selectedSessionDirs).some(d => sessionFolderMap.has(normalizeSessionPath(d)))}
+            onRemoveFromFolder={() => bulkRemoveFromFolders()}
+            onDeleteSelected={() => handleOpenDeleteMultiple()}
+            onClose={clearSelection}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Folder modal */}
       <AnimatePresence>
         {folderModal && (
@@ -620,13 +763,20 @@ export function ArchivePage({
             onClose={() => setFolderModal(null)}
             onSave={(name, color) => {
               if (folderModal.type === 'create') {
+                const pending = folderModal.pendingSessionDirs ?? [];
+                const pendingNorm = new Set(pending.map(d => normalizeSessionPath(d)));
                 const newFolder: ArchiveFolder = {
                   id: crypto.randomUUID(),
                   name: name.trim(),
                   color,
-                  session_dirs: [],
+                  session_dirs: pending,
                 };
-                onFoldersChange([...folders, newFolder]);
+                const updated = folders.map(f => ({
+                  ...f,
+                  session_dirs: f.session_dirs.filter(d => !pendingNorm.has(normalizeSessionPath(d))),
+                }));
+                onFoldersChange([...updated, newFolder]);
+                clearSelection();
               } else {
                 onFoldersChange(folders.map(f =>
                   f.id === folderModal.folder.id ? { ...f, name: name.trim(), color } : f,
@@ -655,6 +805,21 @@ export function ArchivePage({
             onConfirm={() => {
               onFoldersChange(folders.filter(f => f.id !== deleteFolderConfirm.folder.id));
               setDeleteFolderConfirm(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Delete multiple sessions modal */}
+      <AnimatePresence>
+        {deleteMultipleConfirm && (
+          <DeleteMultipleSessionsConfirmModal
+            sessions={deleteMultipleConfirm.sessions}
+            onClose={() => setDeleteMultipleConfirm(null)}
+            onConfirm={() => {
+              deleteMultipleConfirm.sessions.forEach(s => onDeleteSession(s.sessionDir, s.name));
+              clearSelection();
+              setDeleteMultipleConfirm(null);
             }}
           />
         )}

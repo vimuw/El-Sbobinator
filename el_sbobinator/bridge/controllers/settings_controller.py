@@ -160,13 +160,20 @@ class SettingsControllerMixin:
         with self._move_lock:
             return dict(self._move_state)
 
-    def _finish_move(self, new_path: str) -> None:
-        """Persist new SESSION_ROOT and invalidate all caches after a move."""
+    def _finish_move(self, new_path: str, old_root: str | None = None) -> None:
+        """Persist new SESSION_ROOT, migrate folders, and invalidate all caches after a move."""
         set_session_root(new_path)
         try:
             save_session_root_to_config(new_path)
         except Exception:
             pass
+        if old_root:
+            try:
+                from el_sbobinator.services.folders_service import migrate_session_roots
+
+                migrate_session_roots(old_root, new_path)
+            except Exception:
+                pass
         invalidate_session_storage_cache()
         with self._sessions_cache_lock:
             self._sessions_cache = None
@@ -221,13 +228,15 @@ class SettingsControllerMixin:
         try:
             os.rmdir(new_path)
             os.rename(old_root, new_path)
-            self._finish_move(new_path)
+            self._finish_move(new_path, old_root)
             with self._move_lock:
                 self._move_state = {
                     "status": "done",
                     "moved": total,
                     "total": total,
                     "error": None,
+                    "old_root": old_root,
+                    "new_root": new_path,
                 }
             return
         except OSError:
@@ -249,7 +258,7 @@ class SettingsControllerMixin:
                 failed_item = name
                 break
 
-        self._finish_move(new_path)
+        self._finish_move(new_path, old_root)
 
         if error_msg is not None:
             remaining = total - moved
@@ -264,6 +273,8 @@ class SettingsControllerMixin:
                     "moved": moved,
                     "total": total,
                     "error": f"Errore spostamento {failed_item}: {error_msg}.{split_note}",
+                    "old_root": old_root,
+                    "new_root": new_path,
                 }
             return
 
@@ -277,4 +288,6 @@ class SettingsControllerMixin:
                 "moved": moved,
                 "total": total,
                 "error": None,
+                "old_root": old_root,
+                "new_root": new_path,
             }

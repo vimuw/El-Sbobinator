@@ -686,10 +686,16 @@ def save_config(
 def save_session_root_to_config(path: str) -> None:
     """Persist a custom session_root to config.json without touching credentials."""
     global _config_cache, _config_cache_gen
+    p_str = str(path).strip()
+    if os.path.exists(p_str):
+        try:
+            p_str = os.path.realpath(p_str)
+        except Exception:
+            pass
     with _write_lock:
         with _config_lock:
             _config_cache = None
             _config_cache_gen += 1
         current_cfg = _read_raw_existing_config()
-        current_cfg["session_root"] = str(path)
+        current_cfg["session_root"] = p_str
         _atomic_write_json(CONFIG_FILE, current_cfg)
