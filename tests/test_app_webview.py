@@ -3252,6 +3252,75 @@ class TestMoveSessionRoot(unittest.TestCase):
         self.assertIn("non vuota", state["error"])
         mock_set.assert_not_called()
 
+    def test_move_session_root_migrates_folders_json(self):
+        """Moving session root migrates session_dirs inside folders.json."""
+        import os as _os
+
+        from el_sbobinator.services.folders_service import get_folders, save_folders
+
+        with (
+            tempfile.TemporaryDirectory() as parent,
+            patch(self._SET_ROOT),
+            patch(self._SAVE_ROOT),
+            patch(self._INVALIDATE),
+            patch(
+                "el_sbobinator.services.folders_service.FOLDERS_FILE",
+                _os.path.join(parent, "folders.json"),
+            ),
+        ):
+            old_root = _os.path.join(parent, "old")
+            new_path = _os.path.join(parent, "new")
+            s1_old = _os.path.join(old_root, "sess_01")
+            s2_old = _os.path.join(old_root, "sess_02")
+            _os.makedirs(s1_old)
+            _os.makedirs(s2_old)
+
+            save_folders(
+                [
+                    {
+                        "id": "f1",
+                        "name": "Cardiologia",
+                        "color": "#FF0000",
+                        "session_dirs": [s1_old, s2_old],
+                    }
+                ]
+            )
+
+            self.api._do_move_session_root(old_root, new_path)
+
+            updated = get_folders()
+            s1_new = _os.path.normpath(_os.path.join(new_path, "sess_01"))
+            s2_new = _os.path.normpath(_os.path.join(new_path, "sess_02"))
+            self.assertEqual(updated[0]["session_dirs"], [s1_new, s2_new])
+
+    def test_get_archive_folders_reconciles_stale_paths(self):
+        """get_archive_folders auto-heals session_dirs pointing to old locations if present in current root."""
+        import os as _os
+
+        from el_sbobinator.services.folders_service import save_folders
+
+        with (
+            tempfile.TemporaryDirectory() as parent,
+            patch(
+                "el_sbobinator.services.folders_service.FOLDERS_FILE",
+                _os.path.join(parent, "folders.json"),
+            ),
+        ):
+            current_root = _os.path.join(parent, "current")
+            _os.makedirs(_os.path.join(current_root, "sess_01"))
+            old_dead_path = _os.path.join(parent, "dead_dir", "sess_01")
+
+            save_folders(
+                [{"id": "f1", "name": "Anatomia", "session_dirs": [old_dead_path]}]
+            )
+
+            with patch.object(self.api, "_get_session_root", return_value=current_root):
+                res = self.api.get_archive_folders()
+                self.assertTrue(res.get("ok"))
+                folders = res.get("folders", [])
+                expected_dir = _os.path.normpath(_os.path.join(current_root, "sess_01"))
+                self.assertEqual(folders[0]["session_dirs"], [expected_dir])
+
 
 class TestShowNotification(unittest.TestCase):
     """show_notification — Darwin osascript fallback and cross-platform error path."""

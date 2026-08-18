@@ -126,6 +126,7 @@ export type ProcessingAction =
   | { type: 'queue/clear_completed' }
   | { type: 'queue/retry_failed' }
   | { type: 'queue/retry_one'; id: string }
+  | { type: 'queue/remap_session_roots'; oldRoot: string; newRoot: string }
   | { type: 'queue/update_revision_failed_blocks'; fileId?: string; sessionDir: string; blocks: number[]; htmlPath?: string; effectiveModel?: string }
   | { type: 'queue/set_retrying_blocks'; id: string; value: boolean }
   | { type: 'queue/clear_all' }
@@ -186,6 +187,50 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
             : file,
         ),
       };
+    case 'queue/remap_session_roots': {
+      const { oldRoot, newRoot } = action;
+      if (!oldRoot || !newRoot) return state;
+      const normOld = normalizeSessionPath(oldRoot);
+      const cleanNew = newRoot.replace(/[/\\]+$/, '');
+      let changed = false;
+      const files = state.files.map(file => {
+        let nextOutputDir = file.outputDir;
+        let nextOutputHtml = file.outputHtml;
+        let fileChanged = false;
+
+        if (file.outputDir) {
+          const normDir = normalizeSessionPath(file.outputDir);
+          if (normDir === normOld) {
+            nextOutputDir = cleanNew;
+            fileChanged = true;
+          } else if (normDir.startsWith(normOld + '/')) {
+            const rel = normDir.slice(normOld.length + 1);
+            nextOutputDir = `${cleanNew}/${rel}`;
+            fileChanged = true;
+          }
+        }
+        if (file.outputHtml) {
+          const normHtml = normalizeSessionPath(file.outputHtml);
+          if (normHtml === normOld) {
+            nextOutputHtml = cleanNew;
+            fileChanged = true;
+          } else if (normHtml.startsWith(normOld + '/')) {
+            const rel = normHtml.slice(normOld.length + 1);
+            nextOutputHtml = `${cleanNew}/${rel}`;
+            fileChanged = true;
+          }
+        }
+        if (!fileChanged) return file;
+        changed = true;
+        return {
+          ...file,
+          outputDir: nextOutputDir,
+          outputHtml: nextOutputHtml,
+        };
+      });
+      if (!changed) return state;
+      return { ...state, structuralVersion: state.structuralVersion + 1, files };
+    }
     case 'queue/clear_completed':
       return { ...state, structuralVersion: state.structuralVersion + 1, files: state.files.filter(file => file.status !== 'done') };
     case 'queue/retry_failed':

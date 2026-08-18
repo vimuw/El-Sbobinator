@@ -75,6 +75,7 @@ type ConfirmActionState =
   | { type: 'clear-all' }
   | { type: 'low-disk-warning'; warning: LowDiskWarning }
   | { type: 'delete-archive-session'; sessionDir: string; name: string }
+  | { type: 'delete-multiple-archive-sessions'; sessions: { sessionDir: string; name: string }[] }
   | { type: 'retry-archive-session'; session: ArchiveSession };
 
 type PendingArchiveReplacement = {
@@ -546,6 +547,23 @@ export default function App() {
     } catch (_) {}
   }, []);
 
+  const handleSessionRootMoved = useCallback(async (payload?: { oldRoot?: string; newRoot?: string }) => {
+    if (payload?.oldRoot && payload?.newRoot) {
+      dispatch({
+        type: 'queue/remap_session_roots',
+        oldRoot: payload.oldRoot,
+        newRoot: payload.newRoot,
+      });
+    }
+    await refreshArchiveSessions();
+    try {
+      const res = await window.pywebview?.api?.get_archive_folders?.();
+      if (res?.ok && res.folders) {
+        setFolders(res.folders);
+      }
+    } catch (_) {}
+  }, [dispatch, refreshArchiveSessions]);
+
   const pendingFiles = useMemo(() => getPendingFiles(files), [files]);
   const doneFiles = useMemo(() => getDoneFiles(files), [files]);
   const { queuedCount } = useMemo(() => {
@@ -596,14 +614,17 @@ export default function App() {
         if (!result?.ok || !result.sessions) return;
         const newSessions: ArchiveSession[] = result.sessions;
         const newDirs = new Set<string>(newSessions.map(s => s.session_dir));
-        for (const [dir, name] of prevSessionDirsRef.current.entries()) {
-          if (!newDirs.has(dir)) {
-            addNotification(
-              'Sessione cancellata',
-              `La sessione "${name}" è stata cancellata e la sbobina non è più disponibile.`,
-              'warning',
-              'system'
-            );
+        if (newSessions.length > 0 || prevSessionDirsRef.current.size <= 2) {
+          for (const [dir, name] of prevSessionDirsRef.current.entries()) {
+            if (!newDirs.has(dir)) {
+              addNotification(
+                'Sessione cancellata',
+                `La sessione "${name}" è stata cancellata e la sbobina non è più disponibile.`,
+                'warning',
+                'system',
+                { dedupeKey: `session-deleted:${dir}` }
+              );
+            }
           }
         }
         setArchiveSessions(newSessions);
@@ -675,14 +696,14 @@ export default function App() {
         }
       }
       if (deletedSessionDirs.length > 0) {
-        const deletedSet = new Set(deletedSessionDirs);
-        setArchiveSessions(prev => prev.filter(s => !deletedSet.has(s.session_dir)));
+        const deletedNorm = new Set(deletedSessionDirs.map(d => normalizeSessionDir(d)));
+        setArchiveSessions(prev => prev.filter(s => !deletedNorm.has(normalizeSessionDir(s.session_dir))));
         setArchiveTotal(prev => Math.max(0, prev - deletedSessionDirs.length));
         // Also strip deleted session dirs from folder associations so the
         // re-elaborated file does not inherit the old folder tag.
         const updated = foldersRef.current.map(folder => ({
           ...folder,
-          session_dirs: folder.session_dirs.filter(d => !deletedSet.has(d)),
+          session_dirs: folder.session_dirs.filter(d => !deletedNorm.has(normalizeSessionDir(d))),
         }));
         setFolders(updated);
         void window.pywebview?.api?.save_archive_folders?.(updated).catch(() => {});
@@ -694,7 +715,7 @@ export default function App() {
       pendingArchiveReplacementsRef.current.delete(fileId);
       archiveReplacementCleanupInFlightRef.current.delete(fileId);
     }
-  }, [appendConsole, refreshArchiveSessions, setFolders]);
+  }, [appendConsole, refreshArchiveSessions, setFolders, normalizeSessionDir]);
 
   useEffect(() => {
     const currentFileIds = new Set(files.map(f => f.id));
@@ -1001,12 +1022,13 @@ export default function App() {
       setConfirmAction(null);
       window.pywebview?.api?.delete_session?.(sessionDir).then(res => {
         if (res?.ok) {
-          setArchiveSessions(prev => prev.filter(s => s.session_dir !== sessionDir));
+          const normTarget = normalizeSessionDir(sessionDir);
+          setArchiveSessions(prev => prev.filter(s => normalizeSessionDir(s.session_dir) !== normTarget));
           setArchiveTotal(prev => Math.max(0, prev - 1));
           // Strip deleted session from folders and persist
           const updated = foldersRef.current.map(folder => ({
             ...folder,
-            session_dirs: folder.session_dirs.filter(d => d !== sessionDir),
+            session_dirs: folder.session_dirs.filter(d => normalizeSessionDir(d) !== normTarget),
           }));
           setFolders(updated);
           void window.pywebview?.api?.save_archive_folders?.(updated).catch(() => {});
@@ -1018,6 +1040,25 @@ export default function App() {
       });
       return;
     }
+    if (confirmAction.type === 'delete-multiple-archive-sessions') {
+      const { sessions: targetSessions } = confirmAction;
+      setConfirmAction(null);
+      const dirs = targetSessions.map(s => s.sessionDir);
+      const normDirSet = new Set(dirs.map(d => normalizeSessionDir(d)));
+      Promise.all(dirs.map(d => window.pywebview?.api?.delete_session?.(d))).then(() => {
+        setArchiveSessions(prev => prev.filter(s => !normDirSet.has(normalizeSessionDir(s.session_dir))));
+        setArchiveTotal(prev => Math.max(0, prev - dirs.length));
+        const updated = foldersRef.current.map(folder => ({
+          ...folder,
+          session_dirs: folder.session_dirs.filter(d => !normDirSet.has(normalizeSessionDir(d))),
+        }));
+        setFolders(updated);
+        void window.pywebview?.api?.save_archive_folders?.(updated).catch(() => {});
+      }).catch((e: unknown) => {
+        appendConsole(`❌ Errore eliminazione sessioni: ${getErrorMessage(e)}`);
+      });
+      return;
+    }
     if (confirmAction.type === 'retry-archive-session') {
       const { session } = confirmAction;
       setConfirmAction(null);
@@ -1025,7 +1066,7 @@ export default function App() {
       return;
     }
     confirmClearCompleted();
-  }, [confirmAction, confirmClearCompleted, confirmStopProcessing, appendConsole, refreshArchiveSessions, executeRetryFromArchive]);
+  }, [confirmAction, confirmClearCompleted, confirmStopProcessing, appendConsole, refreshArchiveSessions, executeRetryFromArchive, normalizeSessionDir]);
 
   const handleRegenerateAnswer = async (ans: boolean | null) => {
     const currentPrompt = regeneratePrompt;
@@ -1229,6 +1270,15 @@ export default function App() {
     }
     if (confirmAction.type === 'delete-archive-session') {
       return { title: 'Eliminare questa sbobina?', description: `"${confirmAction.name}" e tutti i suoi dati di sessione verranno eliminati definitivamente dal disco. L'operazione è irreversibile.`, confirmLabel: 'Elimina definitivamente', cancelLabel: 'Annulla' };
+    }
+    if (confirmAction.type === 'delete-multiple-archive-sessions') {
+      const count = confirmAction.sessions.length;
+      return {
+        title: count === 1 ? 'Eliminare questa sbobina?' : `Eliminare ${count} sbobine?`,
+        description: `Tutti i file e i dati di sessione relativi alle ${count} sbobine selezionate verranno eliminati definitivamente dal disco. L'operazione è irreversibile.`,
+        confirmLabel: count === 1 ? 'Elimina definitivamente' : `Elimina ${count} sbobine`,
+        cancelLabel: 'Annulla',
+      };
     }
     if (confirmAction.type === 'retry-archive-session') {
       return {
@@ -1502,6 +1552,7 @@ export default function App() {
                     onPreview={openPreview}
                     onOpenFile={openFile}
                     onDeleteSession={(sessionDir, name) => setConfirmAction({ type: 'delete-archive-session', sessionDir, name })}
+                    onDeleteMultipleSessions={(sessionsList) => setConfirmAction({ type: 'delete-multiple-archive-sessions', sessions: sessionsList })}
                     onRefresh={refreshArchiveSessions}
                     onLoadAll={handleLoadAll}
                     onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
@@ -1577,6 +1628,7 @@ export default function App() {
             updateInstallState={updateInstallState}
             onInstallUpdate={installUpdate}
             onSettingsSaved={refreshSettings}
+            onSessionRootMoved={handleSessionRootMoved}
           />
         </React.Suspense>
       )}

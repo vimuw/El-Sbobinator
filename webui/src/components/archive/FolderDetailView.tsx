@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  ArrowLeft, ChevronDown, ChevronUp, FileSearch, FileText,
+  ArrowLeft, Check, ChevronDown, ChevronUp, FileSearch, FileText,
   FolderPlus, Loader2, Pencil, Plus, Search, Trash2, X,
 } from 'lucide-react';
 import {
@@ -13,42 +13,55 @@ import {
 } from '@dnd-kit/sortable';
 import type { ArchiveFolder, ArchiveSession, SearchSessionResult } from '../../bridge';
 import type { EditorSession } from '../../editorSessions';
-import { formatRelativeTime } from '../../utils';
+import { formatRelativeTime, normalizeSessionPath } from '../../utils';
 import { KebabMenu, type KebabMenuItem } from '../KebabMenu';
 import { FullTextResultList } from './FullTextResults';
 import { FolderSessionCardOverlay, SortableSessionCard } from './SessionCard';
+import { ArchiveSelectionBar } from './ArchiveSelectionBar';
 import type { ArchivePageProps } from './types';
 
 export interface FolderDetailViewProps {
   folder: ArchiveFolder;
+  allFolders?: ArchiveFolder[];
   sessionsByDir: Map<string, ArchiveSession>;
   editorSessionsMap?: Record<string, EditorSession>;
   onBack: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onRemoveSession: (dir: string) => void;
+  onRemoveMultipleSessions?: (dirs: string[]) => void;
   onAddSession: (dir: string) => void;
+  onAddMultipleSessions?: (dirs: string[]) => void;
   onReorderSessions: (dirs: string[]) => void;
+  onAssignMultipleToFolder?: (dirs: string[], targetFolderId: string) => void;
+  onNewFolder?: () => void;
   onPreview: ArchivePageProps['onPreview'];
   onOpenFile: ArchivePageProps['onOpenFile'];
   onDeleteSession: ArchivePageProps['onDeleteSession'];
+  onDeleteMultipleSessions?: ArchivePageProps['onDeleteMultipleSessions'];
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
   onShareSession?: (session: ArchiveSession) => void;
 }
 
 export function FolderDetailView({
   folder,
+  allFolders,
   sessionsByDir,
   editorSessionsMap,
   onBack,
   onEdit,
   onDelete,
   onRemoveSession,
+  onRemoveMultipleSessions,
   onAddSession,
+  onAddMultipleSessions,
   onReorderSessions,
+  onAssignMultipleToFolder,
+  onNewFolder,
   onPreview,
   onOpenFile,
   onDeleteSession,
+  onDeleteMultipleSessions,
   onRetryFailedRevisionBlocks,
   onShareSession,
 }: FolderDetailViewProps) {
@@ -60,19 +73,31 @@ export function FolderDetailView({
   const searchGenRef = useRef(0);
   const ftDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [selectedAddDirs, setSelectedAddDirs] = useState<Set<string>>(new Set());
+  const [selectedFolderSessionDirs, setSelectedFolderSessionDirs] = useState<Set<string>>(new Set());
+
   const folderSearchInputRef = useRef<HTMLInputElement>(null);
   const [folderSearchFocused, setFolderSearchFocused] = useState(false);
 
   const folderSessions = useMemo(() => {
-    const all = folder.session_dirs.map(d => sessionsByDir.get(d)).filter(Boolean) as ArchiveSession[];
+    const all = folder.session_dirs.map(d => sessionsByDir.get(normalizeSessionPath(d))).filter(Boolean) as ArchiveSession[];
     const q = search.trim().toLowerCase();
     return q ? all.filter(s => s.name.toLowerCase().includes(q)) : all;
   }, [folder.session_dirs, sessionsByDir, search]);
 
+  useEffect(() => {
+    if (selectedFolderSessionDirs.size === 0) return;
+    const existingDirs = new Set(folderSessions.map(s => normalizeSessionPath(s.session_dir)));
+    setSelectedFolderSessionDirs(prev => {
+      const filtered = new Set([...prev].filter(d => existingDirs.has(normalizeSessionPath(d))));
+      return filtered.size === prev.size ? prev : filtered;
+    });
+  }, [folderSessions, selectedFolderSessionDirs.size]);
+
   const filteredFtResults = useMemo(() => {
     if (!ftResults) return null;
-    const inFolder = new Set(folder.session_dirs);
-    return ftResults.filter(r => inFolder.has(r.session_dir));
+    const inFolder = new Set(folder.session_dirs.map(normalizeSessionPath));
+    return ftResults.filter(r => inFolder.has(normalizeSessionPath(r.session_dir)));
   }, [ftResults, folder.session_dirs]);
 
   const pageData = folderSessions;
@@ -95,19 +120,21 @@ export function FolderDetailView({
     setActiveSortId(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = folderSessions.findIndex(s => s.session_dir === String(active.id));
-    const newIndex = folderSessions.findIndex(s => s.session_dir === String(over.id));
+    const activeNorm = normalizeSessionPath(String(active.id));
+    const overNorm = normalizeSessionPath(String(over.id));
+    const oldIndex = folderSessions.findIndex(s => normalizeSessionPath(s.session_dir) === activeNorm);
+    const newIndex = folderSessions.findIndex(s => normalizeSessionPath(s.session_dir) === overNorm);
     if (oldIndex === -1 || newIndex === -1) return;
     const reorderedVisible = arrayMove(folderSessions, oldIndex, newIndex).map(s => s.session_dir);
-    const visibleSet = new Set(folderSessions.map(s => s.session_dir));
+    const visibleSet = new Set(folderSessions.map(s => normalizeSessionPath(s.session_dir)));
     let vi = 0;
-    const merged = folder.session_dirs.map(d => visibleSet.has(d) ? reorderedVisible[vi++] : d);
+    const merged = folder.session_dirs.map(d => visibleSet.has(normalizeSessionPath(d)) ? reorderedVisible[vi++] : d);
     onReorderSessions(merged);
   }, [folder.session_dirs, folderSessions, onReorderSessions]);
 
   const availableToAddAll = useMemo(() => {
-    const inFolder = new Set(folder.session_dirs);
-    return Array.from(sessionsByDir.values()).filter(s => !inFolder.has(s.session_dir));
+    const inFolder = new Set(folder.session_dirs.map(normalizeSessionPath));
+    return Array.from(sessionsByDir.values()).filter(s => !inFolder.has(normalizeSessionPath(s.session_dir)));
   }, [folder.session_dirs, sessionsByDir]);
 
   const availableToAdd = useMemo(() => {
@@ -119,6 +146,68 @@ export function FolderDetailView({
       return tb - ta;
     });
   }, [availableToAddAll, addSearch]);
+
+  const toggleSelectAdd = useCallback((dir: string) => {
+    setSelectedAddDirs(prev => {
+      const next = new Set(prev);
+      if (next.has(dir)) next.delete(dir);
+      else next.add(dir);
+      return next;
+    });
+  }, []);
+
+  const selectAllAdd = useCallback(() => {
+    setSelectedAddDirs(new Set(availableToAdd.map(s => s.session_dir)));
+  }, [availableToAdd]);
+
+  const clearSelectAdd = useCallback(() => {
+    setSelectedAddDirs(new Set());
+  }, []);
+
+  const handleBatchAdd = useCallback(() => {
+    if (selectedAddDirs.size === 0) return;
+    const dirs = Array.from(selectedAddDirs);
+    if (onAddMultipleSessions) {
+      onAddMultipleSessions(dirs);
+    } else {
+      dirs.forEach(d => onAddSession(d));
+    }
+    setSelectedAddDirs(new Set());
+  }, [selectedAddDirs, onAddMultipleSessions, onAddSession]);
+
+  const prevManualFolderSelectionRef = useRef<Set<string> | null>(null);
+
+  const toggleSelectFolderSession = useCallback((dir: string) => {
+    setSelectedFolderSessionDirs(prev => {
+      const next = new Set(prev);
+      if (next.has(dir)) next.delete(dir);
+      else next.add(dir);
+      prevManualFolderSelectionRef.current = next.size > 0 ? new Set(next) : null;
+      return next;
+    });
+  }, []);
+
+  const selectAllFolderSessions = useCallback(() => {
+    if (selectedFolderSessionDirs.size < folderSessions.length && selectedFolderSessionDirs.size > 0) {
+      prevManualFolderSelectionRef.current = new Set(selectedFolderSessionDirs);
+    }
+    setSelectedFolderSessionDirs(new Set(folderSessions.map(s => s.session_dir)));
+  }, [folderSessions, selectedFolderSessionDirs]);
+
+  const handleDeselectOrRestoreFolderSessions = useCallback(() => {
+    if (prevManualFolderSelectionRef.current && prevManualFolderSelectionRef.current.size > 0 && prevManualFolderSelectionRef.current.size < folderSessions.length) {
+      setSelectedFolderSessionDirs(new Set(prevManualFolderSelectionRef.current));
+      prevManualFolderSelectionRef.current = null;
+    } else {
+      setSelectedFolderSessionDirs(new Set());
+      prevManualFolderSelectionRef.current = null;
+    }
+  }, [folderSessions.length]);
+
+  const clearSelectFolderSessions = useCallback(() => {
+    setSelectedFolderSessionDirs(new Set());
+    prevManualFolderSelectionRef.current = null;
+  }, []);
 
   useEffect(() => {
     if (ftDebounceRef.current) clearTimeout(ftDebounceRef.current);
@@ -341,31 +430,79 @@ export function FolderDetailView({
                   </div>
                 )}
                 {(availableToAddAll.length > 0 || addSearch.trim().length > 0) && (
-                  <div className="notion-search-wrap">
-                    <Search className="notion-search-icon w-3.5 h-3.5" />
-                    <input
-                      type="text"
-                      value={addSearch}
-                      onChange={e => setAddSearch(e.target.value)}
-                      placeholder="Cerca sbobina per nome..."
-                      className="notion-search-input"
-                    />
-                    <AnimatePresence>
-                      {addSearch.trim().length > 0 && (
-                        <motion.button
-                          key="clear-add"
-                          initial={{ opacity: 0, scale: 0.7 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.7 }}
-                          transition={{ duration: 0.1 }}
-                          onClick={() => setAddSearch('')}
-                          className="notion-search-clear"
-                          aria-label="Cancella ricerca"
+                  <div className="flex items-center gap-2">
+                    <div className="notion-search-wrap flex-1">
+                      <Search className="notion-search-icon w-3.5 h-3.5" />
+                      <input
+                        type="text"
+                        value={addSearch}
+                        onChange={e => setAddSearch(e.target.value)}
+                        placeholder="Cerca sbobina per nome..."
+                        className="notion-search-input"
+                      />
+                      <AnimatePresence>
+                        {addSearch.trim().length > 0 && (
+                          <motion.button
+                            key="clear-add"
+                            initial={{ opacity: 0, scale: 0.7 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.7 }}
+                            transition={{ duration: 0.1 }}
+                            onClick={() => setAddSearch('')}
+                            className="notion-search-clear"
+                            aria-label="Cancella ricerca"
+                          >
+                            <X className="w-3 h-3" />
+                          </motion.button>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                )}
+                {availableToAdd.length > 0 && (
+                  <div className="flex items-center justify-between gap-2 px-1 text-xs">
+                    <span className="font-semibold" style={{ color: 'var(--text-muted)' }}>
+                      {availableToAdd.length} {availableToAdd.length === 1 ? 'sbobina disponibile' : 'sbobine disponibili'}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {selectedAddDirs.size > 0 && (
+                        <button
+                          type="button"
+                          onClick={clearSelectAdd}
+                          className="text-xs hover:underline cursor-pointer"
+                          style={{ color: 'var(--text-muted)' }}
                         >
-                          <X className="w-3 h-3" />
-                        </motion.button>
+                          Deseleziona
+                        </button>
                       )}
-                    </AnimatePresence>
+                      <button
+                        type="button"
+                        onClick={selectedAddDirs.size === availableToAdd.length ? clearSelectAdd : selectAllAdd}
+                        className="text-xs font-semibold flex items-center gap-1 cursor-pointer hover:underline"
+                        style={{ color: 'var(--accent-text)' }}
+                      >
+                        {selectedAddDirs.size === availableToAdd.length ? 'Deseleziona tutte' : `Seleziona tutte (${availableToAdd.length})`}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {selectedAddDirs.size > 0 && (
+                  <div
+                    className="flex items-center justify-between gap-2 p-2.5 rounded-xl border"
+                    style={{ background: 'var(--sidebar-active-bg)', borderColor: 'var(--border-subtle)' }}
+                  >
+                    <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+                      {selectedAddDirs.size} {selectedAddDirs.size === 1 ? 'lezione selezionata' : 'lezioni selezionate'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleBatchAdd}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-transform active:scale-95 cursor-pointer shadow-xs"
+                      style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-text)' }}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Aggiungi alla cartella ({selectedAddDirs.size})</span>
+                    </button>
                   </div>
                 )}
                 {availableToAdd.length === 0 && addSearch.trim() && (
@@ -380,13 +517,34 @@ export function FolderDetailView({
                   >
                     {availableToAdd.map(session => {
                       const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
+                      const isSelected = selectedAddDirs.has(session.session_dir);
                       return (
                         <div
                           key={session.session_dir}
-                          className="archive-session-card flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg border"
-                          style={{ borderColor: 'var(--border-subtle)' }}
+                          className="archive-session-card flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg border cursor-pointer"
+                          style={{
+                            borderColor: isSelected ? 'var(--accent-text)' : 'var(--border-subtle)',
+                            background: isSelected ? 'var(--accent-subtle)' : undefined,
+                          }}
+                          onClick={() => toggleSelectAdd(session.session_dir)}
                         >
                           <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.stopPropagation();
+                                toggleSelectAdd(session.session_dir);
+                              }}
+                              className={`w-4 h-4 rounded flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+                                isSelected
+                                  ? 'bg-[var(--accent-text)] text-white shadow-xs'
+                                  : 'border border-[var(--border-strong)] bg-[var(--bg-input)] hover:border-[var(--accent-text)] opacity-70 group-hover:opacity-100'
+                              }`}
+                              aria-label={isSelected ? `Deseleziona ${session.name}` : `Seleziona ${session.name}`}
+                              title={isSelected ? 'Deseleziona' : 'Seleziona'}
+                            >
+                              {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                            </button>
                             <FileText className="w-4 h-4 shrink-0" style={{ color: 'var(--accent-text)', opacity: 0.8 }} />
                             <div className="min-w-0 flex-1">
                               <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
@@ -401,7 +559,10 @@ export function FolderDetailView({
                           </div>
                           <button
                             type="button"
-                            onClick={() => onAddSession(session.session_dir)}
+                            onClick={e => {
+                              e.stopPropagation();
+                              onAddSession(session.session_dir);
+                            }}
                             className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all cursor-pointer hover:scale-105 active:scale-95"
                             style={{ background: 'var(--accent-subtle)', color: 'var(--accent-text)', border: '1px solid var(--accent-text)' }}
                             title="Aggiungi alla cartella"
@@ -450,6 +611,8 @@ export function FolderDetailView({
                       session={session}
                       folderColor={folder.color}
                       disabled={isFilteringName}
+                      selected={selectedFolderSessionDirs.has(session.session_dir)}
+                      onToggleSelect={() => toggleSelectFolderSession(session.session_dir)}
                       editorSessionsMap={editorSessionsMap}
                       onRemove={() => onRemoveSession(session.session_dir)}
                       onPreview={onPreview}
@@ -465,7 +628,8 @@ export function FolderDetailView({
           </div>
           <DragOverlay>
             {activeSortId ? (() => {
-              const s = folderSessions.find(x => x.session_dir === activeSortId);
+              const activeNorm = normalizeSessionPath(activeSortId);
+              const s = folderSessions.find(x => normalizeSessionPath(x.session_dir) === activeNorm);
               return s ? <FolderSessionCardOverlay session={s} folderColor={folder.color} /> : null;
             })() : null}
           </DragOverlay>
@@ -485,6 +649,42 @@ export function FolderDetailView({
           )}
         </div>
       )}
+
+      <AnimatePresence>
+        {selectedFolderSessionDirs.size > 0 && (
+          <ArchiveSelectionBar
+            selectedCount={selectedFolderSessionDirs.size}
+            totalCount={folderSessions.length}
+            folders={allFolders ?? [folder]}
+            onSelectAll={selectAllFolderSessions}
+            onDeselectAll={handleDeselectOrRestoreFolderSessions}
+            onAssignToFolder={targetFolderId => {
+              if (onAssignMultipleToFolder) {
+                onAssignMultipleToFolder(Array.from(selectedFolderSessionDirs), targetFolderId);
+              }
+              clearSelectFolderSessions();
+            }}
+            onNewFolder={onNewFolder ?? (() => {})}
+            hasAssignedFolder={true}
+            onRemoveFromFolder={() => {
+              const dirs = Array.from(selectedFolderSessionDirs);
+              if (onRemoveMultipleSessions) {
+                onRemoveMultipleSessions(dirs);
+              } else {
+                dirs.forEach(d => onRemoveSession(d));
+              }
+              clearSelectFolderSessions();
+            }}
+            onDeleteSelected={onDeleteMultipleSessions ? () => {
+              const targets = folderSessions
+                .filter(s => selectedFolderSessionDirs.has(s.session_dir))
+                .map(s => ({ sessionDir: s.session_dir, name: s.name }));
+              onDeleteMultipleSessions(targets);
+            } : undefined}
+            onClose={clearSelectFolderSessions}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

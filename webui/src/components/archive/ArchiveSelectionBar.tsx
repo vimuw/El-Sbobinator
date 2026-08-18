@@ -1,0 +1,236 @@
+import { useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  FolderMinus, FolderPlus,
+  Plus, Trash2, X,
+} from 'lucide-react';
+import type { ArchiveFolder } from '../../bridge';
+
+export interface ArchiveSelectionBarProps {
+  selectedCount: number;
+  totalCount: number;
+  folders: ArchiveFolder[];
+  onSelectAll: () => void;
+  onDeselectAll: () => void;
+  onAssignToFolder: (folderId: string) => void;
+  onNewFolder: () => void;
+  hasAssignedFolder?: boolean;
+  onRemoveFromFolder?: () => void;
+  onDeleteSelected?: () => void;
+  onClose?: () => void;
+}
+
+export function ArchiveSelectionBar({
+  selectedCount,
+  totalCount,
+  folders,
+  onSelectAll,
+  onDeselectAll,
+  onAssignToFolder,
+  onNewFolder,
+  hasAssignedFolder,
+  onRemoveFromFolder,
+  onDeleteSelected,
+  onClose,
+}: ArchiveSelectionBarProps) {
+  const [isFolderMenuOpen, setIsFolderMenuOpen] = useState(false);
+  const folderMenuRef = useRef<HTMLDivElement>(null);
+  const folderButtonRef = useRef<HTMLButtonElement>(null);
+
+  const allSelected = selectedCount > 0 && selectedCount >= totalCount;
+
+  useEffect(() => {
+    if (!isFolderMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (folderMenuRef.current?.contains(target) || folderButtonRef.current?.contains(target)) {
+        return;
+      }
+      setIsFolderMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isFolderMenuOpen]);
+
+  if (selectedCount <= 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 28, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 28, scale: 0.96 }}
+      transition={{ duration: 0.18, ease: 'easeOut' }}
+      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 p-1.5 sm:p-2 rounded-[10px] border max-w-[95vw] overflow-visible"
+      style={{
+        background: 'var(--bg-elevated)',
+        borderColor: 'var(--border-strong)',
+        boxShadow: 'none',
+      }}
+    >
+      {/* 1. Count & Toggle All (unified minimal button with micro-animation) */}
+      <button
+        type="button"
+        onClick={allSelected ? onDeselectAll : onSelectAll}
+        className="group/toggle flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--sidebar-active-bg)]"
+        style={{ color: 'var(--text-primary)' }}
+        title={allSelected ? 'Deseleziona tutte le sbobine' : `Seleziona tutte le ${totalCount} sbobine`}
+      >
+        <span
+          className="px-1.5 py-0.5 rounded text-[11px] font-bold shrink-0 transition-transform duration-200 group-hover/toggle:scale-110"
+          style={{
+            background: 'var(--accent-subtle)',
+            color: 'var(--accent-text)',
+            minWidth: '20px',
+            textAlign: 'center',
+          }}
+        >
+          {selectedCount}
+        </span>
+        <span>{allSelected ? 'Deseleziona' : 'Seleziona tutte'}</span>
+      </button>
+
+      <div className="w-px h-5 shrink-0" style={{ background: 'var(--border-subtle)' }} />
+
+      {/* 2. Assign to Folder Popover ("Aggiungi" with micro-animation) */}
+      <div className="relative">
+        <button
+          ref={folderButtonRef}
+          type="button"
+          onClick={() => setIsFolderMenuOpen(v => !v)}
+          className="group/add flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--sidebar-active-bg)]"
+          style={{
+            background: isFolderMenuOpen ? 'var(--accent-subtle)' : undefined,
+            color: 'var(--text-primary)',
+            border: isFolderMenuOpen ? '1px solid var(--accent-text)' : '1px solid transparent',
+          }}
+          title="Aggiungi le sbobine selezionate a una cartella"
+        >
+          <FolderPlus
+            className="w-4 h-4 shrink-0 transition-transform duration-200 group-hover/add:scale-110 group-hover/add:-translate-y-0.5"
+            style={{ color: 'var(--accent-text)' }}
+          />
+          <span>Aggiungi</span>
+        </button>
+
+        <AnimatePresence>
+          {isFolderMenuOpen && (
+            <motion.div
+              ref={folderMenuRef}
+              initial={{ opacity: 0, y: 8, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.95 }}
+              transition={{ duration: 0.14, ease: 'easeOut' }}
+              className="absolute bottom-full left-0 mb-2 w-56 rounded-[10px] border overflow-hidden z-50 p-1.5 flex flex-col gap-0.5"
+              style={{
+                background: 'var(--bg-elevated)',
+                borderColor: 'var(--border-strong)',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
+              }}
+            >
+              <div className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                Seleziona raccolta
+              </div>
+
+              {folders.length === 0 && (
+                <div className="px-2.5 py-2 text-xs text-center" style={{ color: 'var(--text-muted)' }}>
+                  Nessuna cartella creata
+                </div>
+              )}
+
+              <div className="max-h-48 overflow-y-auto app-scroll flex flex-col gap-0.5">
+                {folders.map(folder => (
+                  <button
+                    key={folder.id}
+                    type="button"
+                    onClick={() => {
+                      onAssignToFolder(folder.id);
+                      setIsFolderMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-semibold tracking-tight text-left transition-colors cursor-pointer hover:bg-[var(--sidebar-active-bg)]"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    <span className="w-3 h-3 rounded-full shrink-0" style={{ background: folder.color }} />
+                    <span className="truncate flex-1">{folder.name}</span>
+                    <span className="text-[10px] shrink-0 font-medium" style={{ color: 'var(--text-muted)' }}>
+                      {folder.session_dirs.length}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="my-1 border-t" style={{ borderColor: 'var(--border-subtle)' }} />
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsFolderMenuOpen(false);
+                  onNewFolder();
+                }}
+                className="group/newfolder w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold tracking-tight text-left transition-colors cursor-pointer hover:bg-[var(--sidebar-active-bg)]"
+                style={{ color: 'var(--accent-text)' }}
+              >
+                <Plus className="w-3.5 h-3.5 shrink-0 transition-transform duration-200 group-hover/newfolder:rotate-90 group-hover/newfolder:scale-110" />
+                <span>Nuova raccolta...</span>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* 3. Remove from folder action ("Rimuovi" with micro-animation) */}
+      {hasAssignedFolder && onRemoveFromFolder && (
+        <button
+          type="button"
+          onClick={onRemoveFromFolder}
+          className="group/remove flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--sidebar-active-bg)]"
+          style={{ color: 'var(--text-primary)' }}
+          title="Rimuovi le sbobine selezionate dalla cartella"
+        >
+          <FolderMinus
+            className="w-4 h-4 shrink-0 transition-transform duration-200 group-hover/remove:scale-110 group-hover/remove:-translate-y-0.5"
+            style={{ color: 'var(--text-primary)', opacity: 0.85 }}
+          />
+          <span>Rimuovi</span>
+        </button>
+      )}
+
+      {/* 4. Delete selected action ("Elimina" with micro-animation) */}
+      {onDeleteSelected && (
+        <button
+          type="button"
+          onClick={onDeleteSelected}
+          className="group/del flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--error-subtle)]"
+          style={{ color: 'var(--error-text)' }}
+          title="Elimina le sbobine selezionate dal disco"
+        >
+          <Trash2
+            className="w-4 h-4 shrink-0 transition-transform duration-200 group-hover/del:scale-110 group-hover/del:-rotate-12"
+            style={{ color: 'var(--error-text)' }}
+          />
+          <span>Elimina</span>
+        </button>
+      )}
+
+      {onClose && (
+        <>
+          <div className="w-px h-5 shrink-0" style={{ background: 'var(--border-subtle)' }} />
+
+          {/* 5. Close / Cancel Selection ("X" with micro-animation) */}
+          <button
+            type="button"
+            onClick={onClose}
+            className="group/close p-1.5 rounded-lg text-xs transition-colors cursor-pointer hover:bg-[var(--sidebar-active-bg)]"
+            style={{ color: 'var(--text-primary)' }}
+            aria-label="Annulla selezione"
+            title="Annulla selezione"
+          >
+            <X
+              className="w-4 h-4 shrink-0 transition-transform duration-200 group-hover/close:scale-110 group-hover/close:rotate-90"
+              style={{ color: 'var(--text-primary)', opacity: 0.8 }}
+            />
+          </button>
+        </>
+      )}
+    </motion.div>
+  );
+}

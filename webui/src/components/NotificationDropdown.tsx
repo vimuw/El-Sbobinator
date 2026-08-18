@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -11,6 +11,7 @@ import {
   Info,
   Loader2,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 import { formatRelativeTime } from '../utils';
 
@@ -383,7 +384,7 @@ export function NotificationDropdown({
   onMarkAsRead,
   onMarkAllAsRead,
   onDelete,
-  onClearAll: _,
+  onClearAll,
   onNotificationClick,
   align = 'right',
   leftOffset = 72,
@@ -422,13 +423,13 @@ export function NotificationDropdown({
           opacity: isOpen ? 1 : 0,
           pointerEvents: isOpen ? 'auto' : 'none',
         }}
-        transition={{ duration: 0.15 }}
+        transition={{ duration: 0.12 }}
         onClick={onClose}
         className="fixed inset-0 z-40"
         style={{ background: 'transparent' }}
       />
 
-      {/* Popover Dropdown Container with resolution-adaptive dynamic height & symmetrical spring pop */}
+      {/* Popover Dropdown Container with sleek, subtle ease-out animation */}
       <motion.div
         key="notification-popover"
         role="dialog"
@@ -436,16 +437,13 @@ export function NotificationDropdown({
         initial={false}
         animate={{
           opacity: isOpen ? 1 : 0,
-          scale: isOpen ? 1 : 0.88,
-          x: isOpen ? 0 : (align === 'left' ? -16 : 16),
-          y: isOpen ? 0 : (valign === 'bottom' ? 14 : -14),
+          scale: isOpen ? 1 : 0.98,
+          y: isOpen ? 0 : (valign === 'bottom' ? 4 : -4),
           pointerEvents: isOpen ? 'auto' : 'none',
         }}
         transition={{
-          scale: { type: 'spring', stiffness: 380, damping: 28, mass: 0.75 },
-          x: { type: 'spring', stiffness: 380, damping: 28, mass: 0.75 },
-          y: { type: 'spring', stiffness: 380, damping: 28, mass: 0.75 },
-          opacity: { duration: isOpen ? 0.2 : 0.18, ease: 'easeInOut' },
+          duration: isOpen ? 0.14 : 0.1,
+          ease: isOpen ? [0.16, 1, 0.3, 1] : 'easeIn',
         }}
         className={`fixed z-50 flex flex-col origin-bottom-left ${
           isOpen ? 'pointer-events-auto' : 'pointer-events-none'
@@ -506,7 +504,7 @@ export function NotificationDropdown({
             boxShadow: 'none',
           }}
         >
-          {/* Header Row: Title & Styled Icon Button for Mark All Read */}
+          {/* Header Row: Title & Action Buttons */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]">
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-semibold tracking-tight text-[var(--text-primary)]">
@@ -525,20 +523,36 @@ export function NotificationDropdown({
               )}
             </div>
 
-            {unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={onMarkAllAsRead}
-                className="p-1 rounded-md transition-colors hover:bg-neutral-500/15 flex items-center justify-center text-[var(--accent-text)] hover:text-[var(--text-primary)]"
-                style={{
-                  cursor: 'pointer',
-                }}
-                title="Segna come già lette"
-                aria-label="Segna come già lette"
-              >
-                <CheckCheck className="w-4 h-4" />
-              </button>
-            )}
+            <div className="flex items-center gap-1">
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={onMarkAllAsRead}
+                  className="p-1 rounded-md transition-colors hover:bg-neutral-500/15 flex items-center justify-center text-[var(--accent-text)] hover:text-[var(--text-primary)]"
+                  style={{
+                    cursor: 'pointer',
+                  }}
+                  title="Segna tutte come lette"
+                  aria-label="Segna come già lette"
+                >
+                  <CheckCheck className="w-4 h-4" />
+                </button>
+              )}
+              {notifications.length > 0 && onClearAll && (
+                <button
+                  type="button"
+                  onClick={onClearAll}
+                  className="p-1 rounded-md transition-colors hover:bg-neutral-500/15 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--error-text)]"
+                  style={{
+                    cursor: 'pointer',
+                  }}
+                  title="Cancella tutte le notifiche"
+                  aria-label="Cancella tutte le notifiche"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Minimalist Sub-tabs: Tutte & Non lette with smooth layoutId indicator */}
@@ -607,61 +621,46 @@ export function NotificationDropdown({
             </button>
           </div>
 
-          {/* Notification items list with animated item dismissal & empty state */}
+          {/* Notification items list */}
           <div className="flex-1 overflow-y-auto flex flex-col scrollbar-thin">
-            <AnimatePresence mode="popLayout" initial={false}>
-              {filteredNotifications.length === 0 ? (
-                <motion.div
-                  key={`empty-${activeTab}`}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.15 }}
-                  className="flex flex-col items-center justify-center gap-2.5 py-12 px-6 text-center h-full"
+            {filteredNotifications.length === 0 ? (
+              <div
+                key={`empty-${activeTab}`}
+                className="flex flex-col items-center justify-center gap-2.5 py-12 px-6 text-center h-full"
+              >
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center"
+                  style={{
+                    background: 'var(--accent-subtle)',
+                    color: 'var(--accent-text)',
+                  }}
                 >
-                  <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center"
-                    style={{
-                      background: 'var(--accent-subtle)',
-                      color: 'var(--accent-text)',
-                    }}
-                  >
-                    {activeTab === 'unread' ? (
-                      <Sparkles className="w-4 h-4" />
-                    ) : (
-                      <BellOff className="w-4 h-4 opacity-70" />
-                    )}
-                  </div>
-                  <h4 className="text-xs font-semibold text-[var(--text-primary)]">
-                    {activeTab === 'unread' ? 'Nessuna notifica non letta' : 'Nessuna notifica'}
-                  </h4>
-                  <p className="text-[11px] leading-relaxed text-[var(--text-muted)] max-w-[240px]">
-                    {activeTab === 'unread'
-                      ? 'Tutte le notifiche sono state lette.'
-                      : 'Qui troverai gli avvisi su elaborazioni, aggiornamenti e stato del sistema.'}
-                  </p>
-                </motion.div>
-              ) : (
-                filteredNotifications.map((n) => (
-                  <motion.div
-                    key={n.id}
-                    layout="position"
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, height: 0, transition: { duration: 0.16 } }}
-                    transition={{ duration: 0.18 }}
-                    className="overflow-hidden"
-                  >
-                    <NotificationItem
-                      notification={n}
-                      onMarkAsRead={onMarkAsRead}
-                      onDelete={onDelete}
-                      onNotificationClick={onNotificationClick}
-                    />
-                  </motion.div>
-                ))
-              )}
-            </AnimatePresence>
+                  {activeTab === 'unread' ? (
+                    <Sparkles className="w-4 h-4" />
+                  ) : (
+                    <BellOff className="w-4 h-4 opacity-70" />
+                  )}
+                </div>
+                <h4 className="text-xs font-semibold text-[var(--text-primary)]">
+                  {activeTab === 'unread' ? 'Nessuna notifica non letta' : 'Nessuna notifica'}
+                </h4>
+                <p className="text-[11px] leading-relaxed text-[var(--text-muted)] max-w-[240px]">
+                  {activeTab === 'unread'
+                    ? 'Tutte le notifiche sono state lette.'
+                    : 'Qui troverai gli avvisi su elaborazioni, aggiornamenti e stato del sistema.'}
+                </p>
+              </div>
+            ) : (
+              filteredNotifications.map((n) => (
+                <NotificationItem
+                  key={n.id}
+                  notification={n}
+                  onMarkAsRead={onMarkAsRead}
+                  onDelete={onDelete}
+                  onNotificationClick={onNotificationClick}
+                />
+              ))
+            )}
           </div>
         </div>
       </motion.div>

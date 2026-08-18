@@ -91,6 +91,13 @@ class ElSbobinatorApi(
             _custom_root = str(_cfg.get("session_root") or "").strip()
             if _custom_root and os.path.isabs(_custom_root):
                 set_session_root(_custom_root)
+                real_root = get_session_root()
+                if real_root != _custom_root:
+                    from el_sbobinator.services.config_service import (
+                        save_session_root_to_config,
+                    )
+
+                    save_session_root_to_config(real_root)
             else:
                 migrate_legacy_session_root()
         except Exception:
