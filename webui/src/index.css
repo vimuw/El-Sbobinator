@@ -218,61 +218,7 @@
     --header-bg: #191919;
 }
 
-/* ── Theme Mode Transition for Editor & UI ─────────── */
-:root,
-body,
-#root,
-.editor-fullpage,
-.editor-fullpage-header,
-.editor-fullpage-back,
-.editor-fullpage-title,
-.editor-fullpage-actions .icon-button,
-.editor-autosave-badge,
-.editor-shell,
-.editor-toolbar,
-.editor-select,
-.editor-button,
-.editor-separator,
-.editor-page-container,
-.editor-page-outer,
-.editor-page,
-.tiptap-editor,
-.tiptap-editor h1,
-.tiptap-editor h2,
-.tiptap-editor h3,
-.tiptap-editor h4,
-.tiptap-editor h5,
-.tiptap-editor p,
-.tiptap-editor li,
-.tiptap-editor blockquote,
-.tiptap-editor code,
-.tiptap-editor pre,
-.editor-toc-col,
-.toc-left-sidebar,
-.editor-toc-sticky,
-.editor-toc-header,
-.editor-toc-btn,
-.editor-toc-nav,
-.toc-item,
-.find-bar-float,
-.find-bar-input,
-.gdocs-context-menu,
-.gdocs-menu-item,
-.editor-dropdown-panel,
-.editor-dropdown-item,
-.editor-bubble-menu,
-.editor-bubble-btn,
-.gdocs-image-pill-toolbar,
-.gdocs-pill-btn {
-  transition:
-    background-color 250ms cubic-bezier(0.4, 0, 0.2, 1),
-    color 250ms cubic-bezier(0.4, 0, 0.2, 1),
-    border-color 250ms cubic-bezier(0.4, 0, 0.2, 1),
-    box-shadow 250ms cubic-bezier(0.4, 0, 0.2, 1),
-    fill 250ms cubic-bezier(0.4, 0, 0.2, 1),
-    stroke 250ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-
+/* ── Theme Mode Toggle Button Animation ─────────── */
 .theme-toggle-btn svg {
   transition: transform 300ms cubic-bezier(0.34, 1.2, 0.64, 1), color 250ms ease;
 }
@@ -283,6 +229,35 @@ body,
 
 .theme-toggle-btn:active svg {
   transform: rotate(-25deg) scale(0.92);
+}
+
+/* ── Theme Mode Transition for UI Shell & Surfaces ─── */
+.editor-fullpage,
+.editor-fullpage-header,
+.editor-fullpage-back,
+.editor-fullpage-title,
+.editor-autosave-badge,
+.editor-shell,
+.editor-toolbar,
+.editor-page-container,
+.editor-page-outer,
+.editor-page,
+.editor-toc-col,
+.toc-left-sidebar,
+.editor-toc-sticky,
+.editor-toc-header,
+.editor-toc-btn,
+.editor-toc-nav,
+.toc-item,
+.find-bar-float,
+.gdocs-context-menu,
+.editor-dropdown-panel,
+.editor-bubble-menu,
+.gdocs-image-pill-toolbar {
+  transition:
+    background-color 300ms ease,
+    border-color 300ms ease,
+    color 250ms ease;
 }
 
 /* ── Light mode component overrides ─────────────── */
@@ -516,7 +491,7 @@ body {
   font-family: "Manrope", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   background: var(--bg-base);
   color: var(--text-primary);
-  transition: background-color 300ms ease, color 200ms ease;
+  transition: background-color 300ms ease, color 250ms ease;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -552,6 +527,7 @@ button {
   background: var(--bg-base);
   color: var(--text-secondary);
   overflow: hidden;
+  transition: background-color 300ms ease, color 250ms ease;
 }
 
 
