@@ -112,7 +112,7 @@ jobs:
           node-version: '24'
 
       - name: Install pip-audit
-        run: pip install pip-audit==2.9.0
+        run: pip install pip-audit
 
       - name: Audit Python dependencies
         continue-on-error: true
@@ -249,7 +249,7 @@ jobs:
         run: |
           python scripts/generate_changelog.py \
             --tag "$RELEASE_TAG" \
-            --output changelog.md
+            --output release_changelog.md
         env:
           CUSTOM_RELEASE_BODY: ${{ inputs.release_body }}
           RELEASE_TAG: ${{ (startsWith(github.ref, 'refs/tags/') && github.ref_name) || inputs.release_tag }}
@@ -259,7 +259,7 @@ jobs:
         with:
           tag_name: ${{ (startsWith(github.ref, 'refs/tags/') && github.ref_name) || inputs.release_tag }}
           files: release_assets/*
-          body_path: changelog.md
+          body_path: release_changelog.md
           prerelease: ${{ contains(github.ref_name, '-') || (inputs.release_tag != '' && contains(inputs.release_tag, '-')) }}
         env:
           GITHUB_TOKEN: ${{ github.token }}

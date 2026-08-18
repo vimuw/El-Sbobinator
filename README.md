@@ -103,7 +103,7 @@ Per configurare l'ambiente locale, eseguire i test di integrazione (`ruff`, `pyt
 - [docs/architecture.md](docs/architecture.md) per l'architettura dettagliata dei moduli Python e React.
 - [docs/pipeline.md](docs/pipeline.md) per il funzionamento interno della pipeline e la gestione degli errori.
 - [docs/bridge_protocol.md](docs/bridge_protocol.md) per il protocollo di comunicazione IPC tra Python e React.
-- [SECURITY.md](SECURITY.md) per le linee guida e la segnalazione di vulnerabilità di sicurezza.
+- [docs/session_model.md](docs/session_model.md) per la persistenza su disco e il formato delle sessioni.
 
 ---
 

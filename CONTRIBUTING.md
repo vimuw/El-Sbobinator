@@ -1,13 +1,15 @@
 # Contributing to El Sbobinator
 
-## Costruire i pacchetti nativi
+Thank you for contributing to El Sbobinator! This document outlines development setup, testing, and packaging procedures.
 
-Se vuoi compilare i pacchetti nativi senza usare la riga di comando, usa gli script di automazione inclusi:
+## Building Native Packages
+
+To build native executable packages without using the command line, double-click the included automation scripts:
 
 - **Windows:** `packaging/Costruisci_EXE_Windows.bat`
 - **macOS:** `packaging/Costruisci_APP_Mac.command`
 
-La WebUI è l'unica interfaccia supportata per le release. I vecchi entrypoint desktop restano solo come alias di compatibilità.
+The WebUI is the only supported interface for releases. Legacy desktop entrypoints remain solely as compatibility aliases.
 
 ## Prerequisites
 
@@ -20,69 +22,60 @@ La WebUI è l'unica interfaccia supportata per le release. I vecchi entrypoint d
 
 No `.env` or API key is needed to develop or build. Keys are entered at runtime inside the app's Settings screen.
 
-## Install
+## Installation & Setup
 
 ```bash
-# Install all dependencies (runtime + dev tools: ruff, pyinstaller, …)
+# Install all dependencies (runtime + dev tools: ruff, pyinstaller, etc.)
 python scripts/build_release.py deps --ui webui --dev
 
-# Install git hooks (runs ruff, whitespace/EOF/YAML/JSON checks before every commit)
+# Install git hooks (runs ruff, whitespace, YAML, and JSON checks before every commit)
 pre-commit install
 ```
 
-## Test / check commands
+## Testing & Quality Checks
 
 ```bash
 # Verify all tooling and dependencies are present
 python scripts/build_release.py deps --ui webui --dev
 
-# Lint (ruff) + full test suite — skips npm install if already done
+# Run linter (ruff) + full test suite (pytest + Vitest) — skips npm install if already done
 python scripts/build_release.py check --skip-npm-install
 ```
 
-Run both before opening a PR. The CI gate runs the same commands.
+Run both before opening a PR. The GitHub Actions CI workflow runs these exact commands.
 
-## Build commands
+## Build Commands
 
 ```bash
-# Windows
+# Windows (creates standalone installer exe)
 python scripts/build_release.py build --target windows --ui webui --install-deps --dev-deps
 
-# macOS
+# macOS (creates standalone DMG)
 python scripts/build_release.py build --target macos --ui webui --install-deps --dev-deps
 ```
 
-## Where the code lives
+## Repository Structure
 
-| Path | What it is |
-|------|-----------|
-| `el_sbobinator/` | Python app and backend logic |
-| `webui/` | React + TypeScript frontend |
+| Path | Description |
+|------|-------------|
+| `el_sbobinator/` | Python package, pipeline orchestration, and PyWebView backend |
+| `webui/` | React + TypeScript frontend (Vite, Tailwind CSS, TipTap) |
 | `scripts/build_release.py` | Authoritative automation entrypoint (lint, test, build, packaging) |
-| `tests/` | unittest test suite |
-| `docs/architecture.md` | Module map (Python + frontend) and runtime flow |
-| `docs/pipeline.md` | Pipeline phases, model fallback chain and `last_error` values |
-| `docs/session_model.md` | On-disk session layout and `session.json` schema |
-| `docs/bridge_protocol.md` | Python ↔ React event/API contract |
+| `tests/` | Python unittest suite |
+| `launchers/` | PyInstaller desktop entrypoint (`El_Sbobinator_WebUI.pyw`) |
+| `packaging/` | Platform-specific installer scripts (Inno Setup for Windows, create-dmg for macOS) |
+| `docs/` | Developer architecture, IPC bridge protocol, and pipeline documentation |
 
-## PR expectations
+## Pull Request Guidelines
 
-- All checks must pass: `python scripts/build_release.py check --skip-npm-install` exits 0.
-- Keep commits focused; one logical change per PR.
-- If you add behaviour, add a test.
-- Do not weaken or delete existing tests.
+- All automated checks must pass: `python scripts/build_release.py check --skip-npm-install` exits 0.
+- Keep commits focused: one logical change per PR. Follow Conventional Commits format (`feat:`, `fix:`, `refactor:`, `chore:`).
+- When adding new features or fixing bugs, add corresponding unit or DOM tests.
+- Do not weaken or delete existing tests without justification.
 
-## Recommended commands (quick reference)
+## Developer Documentation
 
-```bash
-# One-shot: verify deps, lint, test
-python scripts/build_release.py deps --ui webui --dev
-python scripts/build_release.py check --skip-npm-install
-```
-
-## Documentazione per sviluppatori
-
-- [docs/architecture.md](docs/architecture.md) — mappa dei moduli Python/React e flusso a runtime.
-- [docs/pipeline.md](docs/pipeline.md) — fasi della pipeline, catena di fallback e valori di `last_error`.
-- [docs/session_model.md](docs/session_model.md) — layout su disco delle sessioni e schema `session.json`.
-- [docs/bridge_protocol.md](docs/bridge_protocol.md) — eventi Python→JS e API JS→Python.
+- [docs/architecture.md](docs/architecture.md) — Python/React module map, runtime flow, and threading model.
+- [docs/pipeline.md](docs/pipeline.md) — Pipeline phases, retry mechanisms, and Gemini model fallback chain.
+- [docs/session_model.md](docs/session_model.md) — On-disk session layout and `session.json` schema.
+- [docs/bridge_protocol.md](docs/bridge_protocol.md) — Python ↔ React IPC event and API contracts.
