@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, Folder, FolderInput, Loader2, Wrench, RefreshCw, Trash2 } from 'lucide-react';
+import { Database, Folder, FolderInput, Loader2, Trash2 } from 'lucide-react';
 
 function formatSize(bytes: number): string {
   if (bytes <= 0) return '0 B';
@@ -46,68 +46,84 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
   onAskCompletedCleanup,
 }) => {
   return (
-    <div className="space-y-6">
-      {/* Storage Information Card */}
-      <div className="p-4 rounded-xl border border-[var(--border-subtle)] space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-[var(--accent-subtle)] text-[var(--accent-color)]">
-            <Database className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-sm text-[var(--text-primary)]">Spazio Disco Sessioni</h3>
-            <p className="text-xs text-[var(--text-muted)]">
-              Sbobine salvate localmente e file temporanei.
+    <div className="p-4 rounded-xl border border-[var(--border-subtle)] space-y-4">
+      {/* Header */}
+      <div>
+        <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2 mb-0.5">
+          <Database className="w-4 h-4 text-[var(--accent-text)]" />
+          Spazio Disco e Sessioni
+        </h3>
+        <p className="text-xs text-[var(--text-muted)]">
+          Gestione dell&apos;archivio locale, cartella di salvataggio e pulizia dati.
+        </p>
+      </div>
+
+      {/* Stat Tiles */}
+      <div className="grid grid-cols-2 gap-3 pt-1">
+        <div className="p-3 rounded-lg bg-[var(--bg-input)] border border-[var(--border-subtle)] space-y-0.5">
+          <span className="text-[11px] text-[var(--text-muted)] block">
+            Dimensione Totale
+          </span>
+          <span className="text-base font-medium text-[var(--text-primary)] block">
+            {isLoadingSessionInfo ? 'Calcolo…' : sessionInfo ? formatSize(sessionInfo.total_bytes) : '—'}
+          </span>
+        </div>
+        <div className="p-3 rounded-lg bg-[var(--bg-input)] border border-[var(--border-subtle)] space-y-0.5">
+          <span className="text-[11px] text-[var(--text-muted)] block">
+            Totale Sbobine
+          </span>
+          <span className="text-base font-medium text-[var(--text-primary)] block">
+            {sessionInfo ? `${sessionInfo.total_sessions} ${sessionInfo.total_sessions === 1 ? 'sessione' : 'sessioni'}` : '—'}
+          </span>
+        </div>
+      </div>
+
+      {/* Row: Sessions Folder */}
+      <div className="pt-3 border-t border-[var(--border-subtle)] space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="space-y-0.5 min-w-0">
+            <span className="text-xs font-semibold text-[var(--text-primary)] block">
+              Cartella Sessioni
+            </span>
+            <p className="text-[11px] text-[var(--text-muted)]">
+              Posizione su disco delle trascrizioni e dei file di lavoro.
             </p>
           </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 pt-2 border-t border-[var(--border-subtle)] text-center">
-          <div>
-            <span className="text-xs text-[var(--text-muted)] block">Dimensione Totale</span>
-            <span className="text-lg font-bold text-[var(--text-primary)]">
-              {isLoadingSessionInfo ? 'Calcolo…' : sessionInfo ? formatSize(sessionInfo.total_bytes) : '—'}
-            </span>
-          </div>
-          <div>
-            <span className="text-xs text-[var(--text-muted)] block">Totale Sbobine</span>
-            <span className="text-lg font-bold text-[var(--text-primary)]">
-              {sessionInfo ? `${sessionInfo.total_sessions} ${sessionInfo.total_sessions === 1 ? 'sessione' : 'sessioni'}` : '—'}
-            </span>
-          </div>
-        </div>
-
-        <div className="pt-2 border-t border-[var(--border-subtle)] text-xs space-y-2">
-          <span className="text-[var(--text-muted)] block font-medium">Cartella Corrente:</span>
-          <div
-            onClick={onOpenSessionFolder}
-            title="Apri cartella sessioni"
-            className="p-2 rounded bg-[var(--bg-input)] font-mono text-[11px] break-all text-[var(--text-secondary)] border border-[var(--border-subtle)] cursor-pointer hover:underline"
-          >
-            {sessionInfo?.session_root || (isLoadingSessionInfo ? '…' : '—')}
-          </div>
-          <div className="flex items-center justify-center gap-2 pt-1">
+          <div className="flex items-center gap-1 shrink-0">
             <button
               type="button"
               onClick={onOpenSessionFolder}
-              className="app-button-secondary text-xs px-3 py-1.5 flex items-center gap-1.5"
+              aria-label="Apri cartella"
+              title="Apri cartella"
+              className="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--sidebar-active-bg)] transition-all shrink-0"
             >
-              <Folder className="w-3.5 h-3.5" />
-              Apri Cartella
+              <Folder className="w-4 h-4" />
+              <span className="sr-only">Apri Cartella</span>
             </button>
             <button
               type="button"
               onClick={onAskMoveFolder}
               disabled={isMoveInProgress}
-              className="app-button-secondary text-xs px-3 py-1.5 flex items-center gap-1.5"
+              aria-label="Cambia Cartella"
+              title="Cambia Cartella"
+              className="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--sidebar-active-bg)] transition-all disabled:opacity-40 shrink-0"
             >
               {isMoveInProgress ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-text)]" />
               ) : (
-                <FolderInput className="w-3.5 h-3.5" />
+                <FolderInput className="w-4 h-4" />
               )}
-              {isMoveInProgress ? 'Spostamento...' : 'Cambia Cartella'}
+              <span className="sr-only">Cambia Cartella</span>
             </button>
           </div>
+        </div>
+
+        <div
+          onClick={onOpenSessionFolder}
+          title="Apri cartella sessioni"
+          className="p-2 rounded-lg bg-[var(--bg-input)] font-mono text-[11px] break-all text-[var(--text-secondary)] border border-[var(--border-subtle)] cursor-pointer hover:border-[var(--accent-ring)] hover:underline transition-colors"
+        >
+          {sessionInfo?.session_root || (isLoadingSessionInfo ? '…' : '—')}
         </div>
 
         {isMoveInProgress && (
@@ -140,21 +156,75 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
         )}
       </div>
 
-      {/* Storage Cleanup Card */}
-      <div className="p-4 rounded-xl border border-[var(--border-subtle)] space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-[var(--accent-subtle)] text-[var(--accent-color)]">
-            <Wrench className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-sm text-[var(--text-primary)]">Manutenzione e Pulizia</h3>
-            <p className="text-xs text-[var(--text-muted)]">
-              Rimuovi file temporanei di elaborazioni incomplete o vecchie per liberare spazio.
-            </p>
-          </div>
+      {/* Section: Cleanup / Deletion */}
+      <div className="pt-3 border-t border-[var(--border-subtle)] space-y-3">
+        <div className="space-y-0.5">
+          <span className="text-xs font-semibold text-[var(--text-primary)] block">
+            Eliminazione e Pulizia Sbobine
+          </span>
+          <p className="text-[11px] text-[var(--text-muted)]">
+            Rimuovi bozze interrotte o vecchie sbobine per liberare spazio su disco.
+          </p>
         </div>
 
-        {(cleanupResult || completedCleanupResult) && (
+        <div className="space-y-2">
+          {/* Row: Incomplete Sessions */}
+          <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border-subtle)]">
+            <div className="space-y-0.5 min-w-0">
+              <span className="text-xs font-semibold text-[var(--text-primary)] block">
+                Sessioni incomplete
+              </span>
+              <p className="text-[11px] text-[var(--text-muted)]">
+                File temporanei e bozze interrotte
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onAskCleanup}
+              disabled={isCleaningSession}
+              aria-label="Pulisci sessioni incomplete"
+              title="Conta ed elimina tutte le elaborazioni incomplete"
+              className="p-2 rounded-lg text-[var(--error-text)] hover:bg-[var(--error-subtle)] transition-all disabled:opacity-40 shrink-0"
+            >
+              {isCleaningSession ? (
+                <Loader2 className="w-4 h-4 animate-spin text-[var(--error-text)]" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
+            </button>
+          </div>
+
+          {/* Row: Old Completed Sessions */}
+          <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border-subtle)]">
+            <div className="space-y-0.5 min-w-0">
+              <span className="text-xs font-semibold text-[var(--text-primary)] block">
+                Sbobine completate vecchie
+              </span>
+              <p className="text-[11px] text-[var(--text-muted)]">
+                Sbobine completate salvate da oltre {SESSION_CLEANUP_DAYS} giorni
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onAskCompletedCleanup}
+              disabled={isCleaningCompletedSessions}
+              aria-label={`Elimina sbobine completate vecchie di oltre ${SESSION_CLEANUP_DAYS} giorni`}
+              title={`Conta ed elimina sbobine completate vecchie di oltre ${SESSION_CLEANUP_DAYS} giorni`}
+              className="p-2 rounded-lg text-[var(--error-text)] hover:bg-[var(--error-subtle)] transition-all disabled:opacity-40 shrink-0"
+            >
+              {isCleaningCompletedSessions ? (
+                <Loader2 className="w-4 h-4 animate-spin text-[var(--error-text)]" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Cleanup Results Feedback */}
+      {(cleanupResult || completedCleanupResult) && (
+        <div className="pt-3 border-t border-[var(--border-subtle)]">
           <div className="space-y-1.5 bg-[var(--bg-input)] rounded-lg p-3 border border-[var(--border-subtle)]">
             {cleanupResult && (
               <>
@@ -183,31 +253,8 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
               </p>
             )}
           </div>
-        )}
-
-        <div className="flex flex-wrap items-center justify-center gap-3 pt-2 border-t border-[var(--border-subtle)]">
-          <button
-            type="button"
-            onClick={onAskCleanup}
-            disabled={isCleaningSession}
-            title="Conta ed elimina tutte le elaborazioni incomplete"
-            className="app-button-secondary text-xs px-3.5 py-2 flex items-center gap-1.5 font-medium"
-          >
-            {isCleaningSession ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-            Pulisci Sessioni Incomplete
-          </button>
-          <button
-            type="button"
-            onClick={onAskCompletedCleanup}
-            disabled={isCleaningCompletedSessions}
-            title={`Conta ed elimina sbobine completate vecchie di oltre ${SESSION_CLEANUP_DAYS} giorni`}
-            className="app-button-secondary text-xs px-3.5 py-2 flex items-center gap-1.5 font-medium text-[var(--error-text)] border-[var(--error-ring)]/30 hover:bg-[var(--error-subtle)]"
-          >
-            {isCleaningCompletedSessions ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-            Pulisci Sbobine Completate Vecchie
-          </button>
         </div>
-      </div>
+      )}
     </div>
   );
 });

@@ -74,7 +74,7 @@ export const ModelSection: React.FC<ModelSectionProps> = React.memo(({
   return (
     <div className="p-4 rounded-xl border border-[var(--border-subtle)] space-y-5">
       <div>
-        <h3 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2 mb-1">
+        <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2 mb-0.5">
           <Cpu className="w-4 h-4 text-[var(--accent-text)]" />
           Selezione Modello Gemini
         </h3>
@@ -122,7 +122,7 @@ export const ModelSection: React.FC<ModelSectionProps> = React.memo(({
               return (
                 <div
                   key={modelId}
-                  className="flex items-center justify-between p-2.5 rounded bg-[var(--bg-input)] border border-[var(--border-subtle)] text-xs"
+                  className="flex items-center justify-between p-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border-subtle)] text-xs"
                 >
                   <div>
                     <span className="font-semibold text-[var(--text-primary)] block">
@@ -137,7 +137,7 @@ export const ModelSection: React.FC<ModelSectionProps> = React.memo(({
                       type="button"
                       onClick={() => moveFallbackModel(index, -1)}
                       disabled={index === 0}
-                      className="p-1 hover:bg-[var(--sidebar-active-bg)] rounded disabled:opacity-30"
+                      className="p-1.5 hover:bg-[var(--sidebar-active-bg)] rounded-lg disabled:opacity-30 transition-colors"
                       title="Sposta su"
                     >
                       <ArrowUp className="w-3.5 h-3.5" />
@@ -146,7 +146,7 @@ export const ModelSection: React.FC<ModelSectionProps> = React.memo(({
                       type="button"
                       onClick={() => moveFallbackModel(index, 1)}
                       disabled={index === fallbackModels.length - 1}
-                      className="p-1 hover:bg-[var(--sidebar-active-bg)] rounded disabled:opacity-30"
+                      className="p-1.5 hover:bg-[var(--sidebar-active-bg)] rounded-lg disabled:opacity-30 transition-colors"
                       title="Sposta giù"
                     >
                       <ArrowDown className="w-3.5 h-3.5" />
@@ -154,7 +154,7 @@ export const ModelSection: React.FC<ModelSectionProps> = React.memo(({
                     <button
                       type="button"
                       onClick={() => removeFallbackModel(modelId)}
-                      className="p-1 hover:bg-[var(--sidebar-active-bg)] rounded text-[var(--error-text)]"
+                      className="p-1.5 hover:bg-[var(--error-subtle)] rounded-lg text-[var(--error-text)] transition-colors"
                       title="Rimuovi fallback"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
