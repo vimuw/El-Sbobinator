@@ -42,13 +42,13 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
             type="button"
             onClick={onRunValidation}
             disabled={isValidatingEnvironment}
-            className="icon-button shrink-0 p-2 rounded-lg bg-[var(--sidebar-active-bg)] hover:bg-[var(--accent-subtle)] text-[var(--text-primary)] transition-colors disabled:opacity-40"
+            className="p-1.5 rounded-lg hover:bg-[var(--sidebar-active-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 shrink-0"
             title="Verifica ambiente"
           >
             {isValidatingEnvironment ? (
-              <Loader2 className="w-4 h-4 animate-spin text-[var(--text-primary)]" />
+              <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-text)]" />
             ) : (
-              <FlaskConical className="w-4 h-4 text-[var(--text-secondary)]" />
+              <FlaskConical className="w-4 h-4" />
             )}
           </button>
         </div>

@@ -39,7 +39,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
           <button
             type="button"
             onClick={() => setShowPrimaryKey(prev => !prev)}
-            className="opacity-50 hover:opacity-100 transition-opacity"
+            className="p-1.5 rounded-lg hover:bg-[var(--sidebar-active-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
             title={showPrimaryKey ? 'Nascondi chiave' : 'Mostra chiave'}
           >
             {showPrimaryKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -107,7 +107,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
           <button
             type="button"
             onClick={() => setShowFallbackKeys(prev => !prev)}
-            className="opacity-50 hover:opacity-100 transition-opacity"
+            className="p-1.5 rounded-lg hover:bg-[var(--sidebar-active-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
             title={showFallbackKeys ? 'Nascondi chiavi' : 'Mostra chiavi'}
           >
             {showFallbackKeys ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -132,7 +132,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
           <div className="flex items-start gap-3">
             <Bell className="w-4 h-4 text-[var(--accent-text)] shrink-0 mt-0.5" />
             <div className="space-y-0.5">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+              <h3 className="text-sm font-bold text-[var(--text-primary)]">
                 Notifiche di sistema
               </h3>
               <p className="text-xs text-[var(--text-muted)]">
