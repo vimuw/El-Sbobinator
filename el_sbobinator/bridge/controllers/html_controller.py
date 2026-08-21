@@ -292,3 +292,29 @@ class HtmlControllerMixin:
             }
         except Exception as e:
             return {"ok": False, "error": redact_secrets(e)}
+
+    def create_collaboration_backup(self, path: str) -> dict:
+        """Crea una copia di backup su disco prima di avviare una sessione collaborativa."""
+        if not isinstance(path, str) or not path.lower().endswith(".html"):
+            return {"ok": False, "error": "Path non valido: deve essere un file .html."}
+        real_path = os.path.realpath(path)
+        allowed_roots = [
+            os.path.realpath(config_service.get_desktop_dir()),
+            os.path.realpath(self._get_session_root()),
+        ]
+        if not any(
+            _path_under_root(real_path, root) for root in allowed_roots
+        ) or not os.path.isfile(real_path):
+            return {"ok": False, "error": "File non valido o accesso negato."}
+        try:
+            import shutil
+
+            dirname, filename = os.path.split(real_path)
+            name, ext = os.path.splitext(filename)
+            backup_filename = f"{name}.collab-backup{ext}"
+            backup_path = os.path.join(dirname, backup_filename)
+            shutil.copy2(real_path, backup_path)
+            return {"ok": True, "backup_path": backup_path}
+        except Exception as e:
+            self._logger.exception("Impossibile creare backup di collaborazione.")
+            return {"ok": False, "error": redact_secrets(e)}

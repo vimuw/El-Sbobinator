@@ -512,6 +512,27 @@ class TestHtmlController(unittest.TestCase):
             self.assertTrue(res.get("ok"))
             self.assertIn("Hello", res.get("content", ""))
 
+    def test_create_collaboration_backup(self):
+        with tempfile.TemporaryDirectory() as td:
+            session_root = os.path.join(td, "sessions")
+            os.makedirs(session_root, exist_ok=True)
+            html_file = os.path.join(session_root, "lecture.html")
+            with open(html_file, "w", encoding="utf-8") as f:
+                f.write("<html><body><h1>Original Content</h1></body></html>")
+
+            host = DummyHtmlHost(session_root=session_root)
+            res = host.create_collaboration_backup(html_file)
+            self.assertTrue(res.get("ok"))
+            backup_path = res.get("backup_path", "")
+            self.assertTrue(os.path.isfile(backup_path))
+            self.assertTrue(backup_path.endswith("lecture.collab-backup.html"))
+            with open(backup_path, encoding="utf-8") as f:
+                self.assertIn("Original Content", f.read())
+
+            # Invalid file extension
+            res_inv = host.create_collaboration_backup("file.txt")
+            self.assertFalse(res_inv.get("ok"))
+
 
 class TestSessionController(unittest.TestCase):
     def test_get_session_storage_info(self):

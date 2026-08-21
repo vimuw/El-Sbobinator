@@ -116,6 +116,7 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
 | `open_url(url)` | URL with an allowed prefix | `{ok, error?}` | Allowlist: `github.com`, `ko-fi.com`, Microsoft's WebView2 install link, `aistudio.google.com`. |
 | `read_html_content(path)` | path under Desktop or `SESSION_ROOT` | `{ok, content?, error?}` | Path-traversal-checked; also caches the outer `<html>…<body>` shell for the matching `save_html_content`. |
 | `save_html_content(path, content, generation?)` | — | `{ok, error?}` | `generation` is a monotonic counter used to drop stale autosaves. Only the body is written; the cached shell is preserved. |
+| `create_collaboration_backup(path)` | path under Desktop or `SESSION_ROOT` | `{ok, backup_path?, error?}` | Path-traversal-checked; creates a `.collab-backup.html` snapshot on disk before entering live collaboration. |
 | `stream_media_file(path, session_dir?)` | audio/video path, optional session dir | `{ok, url?, error?}` | Starts a `LocalMediaServer` (Range-request capable) and returns a `http://127.0.0.1:<port>/stream.media?t=<ts>` URL. |
 | `show_notification(title, message)` | — | `void` | Best-effort OS notification. |
 | `download_and_install_update(version)` | version string without `v` prefix? (`updater.py` handles both) | `{ok, error?}` | Downloads the GitHub release asset for the current OS, launches it, and schedules the webview to close. |
