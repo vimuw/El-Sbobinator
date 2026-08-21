@@ -175,7 +175,7 @@ function MathNodeView({ node, updateAttributes, selected }: NodeViewProps) {
       { as: 'span', className: `math-node-wrapper ${selected ? 'is-selected' : ''}` },
       React.createElement(
         'span',
-        { className: 'math-inline-edit inline-flex items-center gap-1.5 bg-zinc-100 dark:bg-zinc-800 p-1 rounded-lg border border-blue-500' },
+        { className: 'math-inline-edit inline-flex items-center gap-1.5 bg-[var(--bg-elevated)] p-1 rounded-lg border border-blue-500' },
         React.createElement('span', { className: 'text-xs font-mono font-semibold text-blue-500' }, 'TeX:'),
         React.createElement('input', {
           type: 'text',
@@ -280,7 +280,7 @@ function MathBlockNodeView({ node, updateAttributes, selected }: NodeViewProps) 
   if (isEditing) {
     return React.createElement(
       NodeViewWrapper,
-      { as: 'div', className: `math-block-wrapper my-2 p-2 rounded border border-blue-500 bg-zinc-100 dark:bg-zinc-800 ${selected ? 'is-selected' : ''}` },
+      { as: 'div', className: `math-block-wrapper my-2 p-2 rounded border border-blue-500 bg-[var(--bg-elevated)] ${selected ? 'is-selected' : ''}` },
       React.createElement(
         'div',
         { className: 'flex flex-col gap-2' },
