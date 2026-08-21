@@ -101,6 +101,20 @@ class SettingsControllerMixin:
             os.makedirs(os.path.dirname(THEME_PREF_FILE), exist_ok=True)
             with open(THEME_PREF_FILE, "w", encoding="utf-8") as fh:
                 fh.write(theme)
+            import sys
+
+            if self._window is not None and sys.platform == "win32":
+                try:
+                    from el_sbobinator.webview_entry import (
+                        _apply_windows_dark_mode,
+                        _get_window_hwnd,
+                    )
+
+                    hwnd = _get_window_hwnd(self._window)
+                    if hwnd:
+                        _apply_windows_dark_mode(hwnd, theme == "dark")
+                except Exception:
+                    pass
         except Exception:
             pass
 

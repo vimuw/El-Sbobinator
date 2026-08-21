@@ -32,7 +32,7 @@ class RootErrorBoundary extends React.Component<React.PropsWithChildren, { hasEr
             alignItems: 'center',
             justifyContent: 'center',
             padding: '24px',
-            background: '#0f1115',
+            background: '#191919',
             color: '#e2e8f0',
             fontFamily: '"Manrope", "Segoe UI", sans-serif',
           }}
