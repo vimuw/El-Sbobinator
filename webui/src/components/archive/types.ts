@@ -19,7 +19,6 @@ export interface ArchivePageProps {
   onRefresh?: () => void;
   onLoadAll?: () => void;
   onRetryFailedRevisionBlocks?: (sessionDir: string) => Promise<void>;
-  onOpenJoinRoom?: () => void;
 }
 
 export type FolderModalState =
