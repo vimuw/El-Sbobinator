@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowRight, Clock, Eye, FileSearch, FileText,
-  Loader2, Pencil, RefreshCw, Search, Upload, Users, X,
+  Loader2, Pencil, RefreshCw, Search, Upload, X,
 } from 'lucide-react';
 import {
   DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -45,7 +45,7 @@ export { FullTextResultList } from './archive/FullTextResults';
 export function ArchivePage({
   sessions, total, folders, onFoldersChange,
   onPreview, onOpenFile, onDeleteSession, onDeleteMultipleSessions, onRefresh,
-  onRetryFailedRevisionBlocks, onOpenJoinRoom,
+  onRetryFailedRevisionBlocks,
 }: ArchivePageProps) {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortOption>('newest');
@@ -623,17 +623,6 @@ export function ArchivePage({
               <SortMenu sort={sort} onSortChange={setSort} />
             )}
             <div className="ml-auto flex items-center gap-2 shrink-0">
-              {onOpenJoinRoom && (
-                <button
-                  type="button"
-                  onClick={onOpenJoinRoom}
-                  className="notion-sort-chip w-9 p-0 flex items-center justify-center"
-                  title="Partecipa con codice (Stanza di collaborazione)"
-                  aria-label="Partecipa con codice"
-                >
-                  <Users className="w-4 h-4" style={{ opacity: 0.85 }} />
-                </button>
-              )}
               <button
                 type="button"
                 onClick={handleImportSbobina}
