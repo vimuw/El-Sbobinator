@@ -2244,7 +2244,7 @@ class BootBgColorTests(unittest.TestCase):
             pref_file = os.path.join(tmpdir, "theme_pref.txt")
             with open(pref_file, "w", encoding="utf-8") as fh:
                 fh.write("dark")
-            self.assertEqual(self._call_with_pref(pref_file), "#0f1115")
+            self.assertEqual(self._call_with_pref(pref_file), "#191919")
 
     def test_pref_file_light_returns_light_color(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2253,7 +2253,7 @@ class BootBgColorTests(unittest.TestCase):
             pref_file = os.path.join(tmpdir, "theme_pref.txt")
             with open(pref_file, "w", encoding="utf-8") as fh:
                 fh.write("light")
-            self.assertEqual(self._call_with_pref(pref_file), "#f3f4f6")
+            self.assertEqual(self._call_with_pref(pref_file), "#f7f6f3")
 
     def test_missing_pref_file_falls_back_to_default(self):
         from el_sbobinator.webview_entry import _boot_bg_color
@@ -2264,7 +2264,7 @@ class BootBgColorTests(unittest.TestCase):
             patch("sys.platform", "linux"),
         ):
             result = _boot_bg_color()
-        self.assertEqual(result, "#f3f4f6")
+        self.assertEqual(result, "#f7f6f3")
 
     def test_garbage_pref_file_falls_back_to_os_signal(self):
         import subprocess
@@ -2289,7 +2289,7 @@ class BootBgColorTests(unittest.TestCase):
                 from el_sbobinator.webview_entry import _boot_bg_color
 
                 result = _boot_bg_color()
-        self.assertEqual(result, "#0f1115")
+        self.assertEqual(result, "#191919")
 
 
 class TestReadHtmlContentPathValidation(unittest.TestCase):

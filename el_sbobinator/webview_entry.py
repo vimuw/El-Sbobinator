@@ -290,8 +290,66 @@ def build_missing_webview2_html() -> str:
 """
 
 
+def _apply_windows_dark_mode(hwnd: int | None, dark: bool) -> None:
+    """Set DWM immersive dark mode on Windows window handle to eliminate titlebar/frame flash."""
+    if sys.platform != "win32" or not hwnd:
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        # DWMWA_USE_IMMERSIVE_DARK_MODE: 20 on Win11/Win10 20H1+, 19 on earlier Win10
+        DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+        DWMWA_USE_IMMERSIVE_DARK_MODE_OLD = 19
+        value = ctypes.c_int(1 if dark else 0)
+        pv = ctypes.byref(value)
+        cb = ctypes.sizeof(value)
+        res = ctypes.windll.dwmapi.DwmSetWindowAttribute(
+            wintypes.HWND(hwnd),
+            wintypes.DWORD(DWMWA_USE_IMMERSIVE_DARK_MODE),
+            pv,
+            wintypes.DWORD(cb),
+        )
+        if res != 0:
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                wintypes.HWND(hwnd),
+                wintypes.DWORD(DWMWA_USE_IMMERSIVE_DARK_MODE_OLD),
+                pv,
+                wintypes.DWORD(cb),
+            )
+    except Exception:
+        pass
+
+
+def _get_window_hwnd(window: Any) -> int | None:
+    """Extract Win32 HWND from pywebview window instance."""
+    if sys.platform != "win32" or window is None:
+        return None
+    try:
+        if hasattr(window, "native") and window.native:
+            if hasattr(window.native, "Handle"):
+                return int(window.native.Handle.ToInt64())
+            if hasattr(window.native, "Dispatcher"):
+                from System.Windows.Interop import WindowInteropHelper  # type: ignore
+
+                helper = WindowInteropHelper(window.native)
+                return int(helper.Handle.ToInt64())
+    except Exception:
+        pass
+    try:
+        import ctypes
+
+        title = getattr(window, "title", "El Sbobinator")
+        hwnd = ctypes.windll.user32.FindWindowW(None, title)
+        if hwnd:
+            return int(hwnd)
+    except Exception:
+        pass
+    return None
+
+
 def _boot_bg_color() -> str:
-    """Native background matching the HTML boot skeleton (no flash).
+    """Native background matching the HTML boot skeleton and CSS base (no flash).
 
     Resolution order (mirrors index.html inline script):
       1. theme_pref.txt — written by save_theme_preference() whenever the user
@@ -305,9 +363,9 @@ def _boot_bg_color() -> str:
         with open(THEME_PREF_FILE, encoding="utf-8") as fh:
             pref = fh.read().strip()
         if pref == "dark":
-            return "#0f1115"
+            return "#191919"
         if pref == "light":
-            return "#f3f4f6"
+            return "#f7f6f3"
     except Exception:
         pass
     # Priority 2: OS-level signal
@@ -321,7 +379,7 @@ def _boot_bg_color() -> str:
             ) as key:
                 value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
             if value == 0:
-                return "#0f1115"  # dark  → matches --boot-bg dark
+                return "#191919"  # dark  → matches --boot-bg dark & --bg-base dark
         except Exception:
             pass
     elif sys.platform == "darwin":
@@ -335,10 +393,10 @@ def _boot_bg_color() -> str:
                 timeout=0.5,
             )
             if result.stdout.strip().lower() == "dark":
-                return "#0f1115"
+                return "#191919"
         except Exception:
             pass
-    return "#f3f4f6"  # light (default)
+    return "#f7f6f3"  # light (default)
 
 
 def _clear_webview2_cache(storage_dir: str, dist_path: str) -> None:
@@ -519,6 +577,15 @@ def main():
         _start_webview2_monitor(window, stop_event)
 
     api.set_window(window)
+
+    def _on_shown():
+        if sys.platform == "win32":
+            hwnd = _get_window_hwnd(window)
+            if hwnd:
+                is_dark = _boot_bg_color() == "#191919"
+                _apply_windows_dark_mode(hwnd, is_dark)
+
+    window.events.shown += _on_shown
 
     def _on_closing():
         if stop_event is not None:
