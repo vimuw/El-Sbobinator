@@ -101,6 +101,19 @@ export const formatDuration = (seconds: number, fallback = ''): string => {
   return `${s}s`;
 };
 
+export function generateRoomCode(): string {
+  const charset = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const array = new Uint8Array(8);
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    crypto.getRandomValues(array);
+  } else {
+    for (let i = 0; i < array.length; i++) array[i] = Math.floor(Math.random() * 256);
+  }
+  const token = Array.from(array, n => charset[n % charset.length]).join('');
+  return `sbobina-${token}`;
+}
+
+
 export interface ImageOptimizationOptions {
   maxWidth?: number;
   maxHeight?: number;

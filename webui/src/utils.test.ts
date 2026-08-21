@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { errorLabel, formatDuration, formatRelativeTime, formatSize, isQuotaError, isResumableError, readFileAsDataUrl, readAndOptimizeImageAsDataUrl, calculateOptimalDimensions, shortModelName } from './utils';
+import { errorLabel, formatDuration, formatRelativeTime, formatSize, generateRoomCode, isQuotaError, isResumableError, readFileAsDataUrl, readAndOptimizeImageAsDataUrl, calculateOptimalDimensions, shortModelName } from './utils';
 
 describe('isQuotaError', () => {
   it('returns false for undefined', () => {
@@ -309,6 +309,30 @@ describe('readAndOptimizeImageAsDataUrl (node environment)', () => {
       await expect(readAndOptimizeImageAsDataUrl(file)).rejects.toThrow('read error');
     } finally {
       (globalThis as unknown as { FileReader: unknown }).FileReader = originalFileReader;
+    }
+  });
+});
+
+describe('generateRoomCode', () => {
+  it('generates a formatted room code starting with sbobina- followed by 8 alphanumeric chars', () => {
+    const code = generateRoomCode();
+    expect(code).toMatch(/^sbobina-[a-z0-9]{8}$/);
+  });
+
+  it('generates distinct codes on subsequent calls', () => {
+    const code1 = generateRoomCode();
+    const code2 = generateRoomCode();
+    expect(code1).not.toBe(code2);
+  });
+
+  it('falls back to Math.random when crypto is undefined', () => {
+    const originalCrypto = globalThis.crypto;
+    try {
+      delete (globalThis as { crypto?: Crypto }).crypto;
+      const code = generateRoomCode();
+      expect(code).toMatch(/^sbobina-[a-z0-9]{8}$/);
+    } finally {
+      globalThis.crypto = originalCrypto;
     }
   });
 });
