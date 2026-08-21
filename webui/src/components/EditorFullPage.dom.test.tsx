@@ -146,34 +146,43 @@ describe('EditorFullPage autosave', () => {
     expect(secondGeneration).toBeGreaterThan(firstGeneration);
   });
 
-  it('renders top actions in order: theme toggle, inizia sessione, copy html, open html', async () => {
+  it('renders top actions in order: inizia sessione / collabora, copy html, open html, theme toggle', async () => {
     const setThemeMode = vi.fn();
     render(<EditorFullPage {...baseProps} themeMode="dark" setThemeMode={setThemeMode} />);
 
-    const themeBtn = screen.getByTitle('Tema chiaro');
     const collabBtn = screen.getByTitle('Inizia sessione (Collaborazione P2P)');
     const copyBtn = screen.getByTitle('Copia per Google Docs');
     const openBtn = screen.getByTitle('Apri file HTML');
+    const themeBtn = screen.getByTitle('Tema chiaro');
 
-    expect(themeBtn).toBeTruthy();
     expect(collabBtn).toBeTruthy();
+    expect(screen.getByText('Collabora')).toBeTruthy();
     expect(copyBtn).toBeTruthy();
     expect(openBtn).toBeTruthy();
+    expect(themeBtn).toBeTruthy();
 
-    // Verify order: themeBtn -> collabBtn -> copyBtn -> openBtn
+    // Verify order: collabBtn -> copyBtn -> openBtn -> themeBtn
     const buttons = screen.getAllByRole('button');
-    const themeIndex = buttons.indexOf(themeBtn);
     const collabIndex = buttons.indexOf(collabBtn);
     const copyIndex = buttons.indexOf(copyBtn);
     const openIndex = buttons.indexOf(openBtn);
+    const themeIndex = buttons.indexOf(themeBtn);
 
-    expect(themeIndex).toBeGreaterThan(-1);
-    expect(collabIndex).toBeGreaterThan(themeIndex);
+    expect(collabIndex).toBeGreaterThan(-1);
     expect(copyIndex).toBeGreaterThan(collabIndex);
     expect(openIndex).toBeGreaterThan(copyIndex);
+    expect(themeIndex).toBeGreaterThan(openIndex);
 
     // Toggling theme calls setThemeMode
     fireEvent.click(themeBtn);
     expect(setThemeMode).toHaveBeenCalled();
+  });
+
+  it('renders active room pill when collabRoom is set', async () => {
+    render(<EditorFullPage {...baseProps} initialRoom="anatomia-stanza-1" />);
+
+    const activeCollabBtn = screen.getByTitle('Collaborazione attiva: anatomia-stanza-1');
+    expect(activeCollabBtn).toBeTruthy();
+    expect(screen.getByText('anatomia-stanza-1')).toBeTruthy();
   });
 });
