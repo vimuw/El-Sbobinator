@@ -31,7 +31,7 @@ describe('DropZone', () => {
     expect(container.querySelector('.is-dragging')).toBeNull();
   });
 
-  it('renders compact mode with correct text and supports keyboard Enter', () => {
+  it('renders compact mode with correct text and supports keyboard Enter and Space', () => {
     const onClick = vi.fn();
     render(<DropZone {...baseProps} compact onClick={onClick} />);
     const compactDropZone = screen.getByRole('button');
@@ -45,6 +45,23 @@ describe('DropZone', () => {
     // trigger onKeyDown Enter
     fireEvent.keyDown(compactDropZone, { key: 'Enter' });
     expect(onClick).toHaveBeenCalledTimes(1);
+
+    // trigger onKeyDown Space
+    fireEvent.keyDown(compactDropZone, { key: ' ' });
+    expect(onClick).toHaveBeenCalledTimes(2);
+  });
+
+  it('supports keyboard navigation in standard card mode', () => {
+    const onClick = vi.fn();
+    render(<DropZone {...baseProps} onClick={onClick} />);
+    const dropZone = screen.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i });
+    expect(dropZone).toBeTruthy();
+
+    fireEvent.keyDown(dropZone, { key: 'Enter' });
+    expect(onClick).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyDown(dropZone, { key: ' ' });
+    expect(onClick).toHaveBeenCalledTimes(2);
   });
 
   it('renders compact mode in dragging state', () => {
