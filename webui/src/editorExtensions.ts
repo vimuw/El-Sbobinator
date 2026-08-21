@@ -175,7 +175,7 @@ function MathNodeView({ node, updateAttributes, selected }: NodeViewProps) {
       { as: 'span', className: `math-node-wrapper ${selected ? 'is-selected' : ''}` },
       React.createElement(
         'span',
-        { className: 'math-inline-edit inline-flex items-center gap-1.5 bg-zinc-100 dark:bg-zinc-800 p-1 rounded-lg border border-blue-500 shadow-xs' },
+        { className: 'math-inline-edit inline-flex items-center gap-1.5 bg-zinc-100 dark:bg-zinc-800 p-1 rounded-lg border border-blue-500' },
         React.createElement('span', { className: 'text-xs font-mono font-semibold text-blue-500' }, 'TeX:'),
         React.createElement('input', {
           type: 'text',
@@ -361,5 +361,91 @@ export const MathBlock = Node.create({
 
   addNodeView() {
     return ReactNodeViewRenderer(MathBlockNodeView);
+  },
+});
+
+import { defaultSelectionBuilder, yCursorPlugin } from '@tiptap/y-tiptap';
+import type { DecorationAttrs } from '@tiptap/pm/view';
+import type { Awareness } from 'y-protocols/awareness';
+
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    collaborationCursor: {
+      updateUser: (attributes: { name: string; color: string }) => ReturnType;
+    };
+  }
+}
+
+export interface CollaborationCursorOptions {
+  provider: { awareness?: Awareness } | null;
+  user: { name: string; color: string };
+  render?: (user: { name: string; color: string }) => HTMLElement;
+  selectionRender?: (user: { name: string; color: string }) => DecorationAttrs;
+}
+
+export const CollaborationCursor = Extension.create<CollaborationCursorOptions>({
+  name: 'collaborationCursor',
+
+  addOptions() {
+    return {
+      provider: null,
+      user: {
+        name: 'Studente',
+        color: '#3b82f6',
+      },
+      render: user => {
+        const cursor = document.createElement('span');
+        cursor.classList.add('collaboration-cursor__caret', 'ProseMirror-yjs-cursor');
+        const color = user.color || '#3b82f6';
+        cursor.style.borderLeftColor = color;
+        cursor.style.borderLeftStyle = 'solid';
+        cursor.style.borderLeftWidth = '2px';
+
+        const label = document.createElement('div');
+        label.classList.add('collaboration-cursor__label');
+        label.style.backgroundColor = color;
+        label.style.color = '#ffffff';
+        label.style.whiteSpace = 'nowrap';
+        label.style.width = 'max-content';
+        label.textContent = user.name || 'Studente';
+
+        const zeroWidth1 = document.createTextNode('\u2060');
+        const zeroWidth2 = document.createTextNode('\u2060');
+
+        cursor.appendChild(zeroWidth1);
+        cursor.appendChild(label);
+        cursor.appendChild(zeroWidth2);
+        return cursor;
+      },
+      selectionRender: defaultSelectionBuilder,
+    };
+  },
+
+  addCommands() {
+    return {
+      updateUser: (attributes: { name: string; color: string }) => () => {
+        this.options.user = attributes;
+        this.options.provider?.awareness?.setLocalStateField('user', attributes);
+        return true;
+      },
+    };
+  },
+
+  addProseMirrorPlugins() {
+    if (!this.options.provider?.awareness) {
+      return [];
+    }
+    return [
+      yCursorPlugin(
+        (() => {
+          this.options.provider.awareness.setLocalStateField('user', this.options.user);
+          return this.options.provider.awareness;
+        })(),
+        {
+          cursorBuilder: this.options.render,
+          selectionBuilder: this.options.selectionRender,
+        },
+      ),
+    ];
   },
 });

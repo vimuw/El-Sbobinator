@@ -173,7 +173,7 @@ function NotificationItem({
     if (notification.category === 'update' || notification.type === 'info') {
       return (
         <div
-          className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 shadow-2xs"
+          className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
           style={{
             background: 'rgba(59, 130, 246, 0.12)',
             color: '#2563eb',
@@ -188,7 +188,7 @@ function NotificationItem({
       case 'success':
         return (
           <div
-            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 shadow-2xs"
+            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
             style={{
               background: 'var(--success-subtle)',
               color: 'var(--success-text)',
@@ -200,7 +200,7 @@ function NotificationItem({
       case 'warning':
         return (
           <div
-            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 shadow-2xs"
+            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
             style={{
               background: 'var(--warning-subtle)',
               color: 'var(--warning-text)',
@@ -212,7 +212,7 @@ function NotificationItem({
       case 'error':
         return (
           <div
-            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 shadow-2xs"
+            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
             style={{
               background: 'var(--error-subtle)',
               color: 'var(--error-text)',
@@ -224,7 +224,7 @@ function NotificationItem({
       default:
         return (
           <div
-            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 shadow-2xs"
+            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
             style={{
               background: 'rgba(59, 130, 246, 0.12)',
               color: '#2563eb',

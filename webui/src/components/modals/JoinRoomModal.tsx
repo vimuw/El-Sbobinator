@@ -13,20 +13,39 @@ const COLORS = [
   '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1',
 ];
 
+const getStoredCollabName = () => {
+  try { return localStorage.getItem('collab_username') || 'Studente'; } catch { return 'Studente'; }
+};
+const getStoredCollabColor = () => {
+  try { return localStorage.getItem('collab_usercolor') || '#3b82f6'; } catch { return '#3b82f6'; }
+};
+
 export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
   isOpen,
   onClose,
   onJoinRoom,
 }) => {
   const [room, setRoom] = useState('');
-  const [name, setName] = useState('Studente');
-  const [color, setColor] = useState('#3b82f6');
+  const [name, setName] = useState(getStoredCollabName);
+  const [color, setColor] = useState(getStoredCollabColor);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setName(getStoredCollabName());
+      setColor(getStoredCollabColor());
+    }
+  }, [isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const cleanRoom = room.trim().toLowerCase();
     const cleanName = name.trim();
     if (!cleanRoom || !cleanName) return;
+
+    try {
+      localStorage.setItem('collab_username', cleanName);
+      localStorage.setItem('collab_usercolor', color);
+    } catch (_) {}
 
     onJoinRoom(cleanRoom, { name: cleanName, color });
     onClose();
@@ -127,7 +146,7 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
                         }}
                         className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 transition-all ${
                           color === c
-                            ? 'scale-105 shadow-xs'
+                            ? 'scale-105'
                             : 'hover:scale-105 opacity-80 hover:opacity-100'
                         }`}
                         aria-label={`Seleziona colore ${c}`}

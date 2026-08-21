@@ -55,14 +55,6 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
   const isError = updateInstallState?.status === 'error';
   const isInProgress = isDownloading || isVerifying || isInstalling;
 
-  const handleOpenGitHub = () => {
-    if (window.pywebview?.api?.open_url) {
-      void window.pywebview.api.open_url('https://github.com/vimuw/El-Sbobinator/releases/latest');
-    } else {
-      window.open('https://github.com/vimuw/El-Sbobinator/releases/latest', '_blank');
-    }
-  };
-
   return (
     <div className="space-y-4 pt-3 border-t border-[var(--border-subtle)]">
       {/* Header row: Version Info & Check Icon Button */}
@@ -177,33 +169,9 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
 
       {/* Error Banner */}
       {(isError || (hasChecked && checkFailed && !isCheckingUpdate)) && (
-        <div className="p-3 rounded-xl bg-[var(--error-subtle)] border border-[var(--error-ring)] text-xs text-[var(--error-text)] space-y-2">
-          <div className="flex items-center gap-2 font-medium">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{updateInstallState?.error || (checkFailed ? 'Verifica aggiornamenti non riuscita.' : 'Aggiornamento non riuscito.')}</span>
-          </div>
-          <div className="flex items-center gap-2 pt-0.5">
-            <button
-              type="button"
-              onClick={() => {
-                if (isError && onInstallUpdate && latestVersion) {
-                  void onInstallUpdate(latestVersion).catch(() => {});
-                } else {
-                  checkForUpdates(true);
-                }
-              }}
-              className="app-button-secondary text-xs px-2.5 py-1"
-            >
-              Riprova
-            </button>
-            <button
-              type="button"
-              onClick={handleOpenGitHub}
-              className="text-xs font-semibold underline hover:opacity-80 text-[var(--accent-text)] px-1"
-            >
-              Apri GitHub
-            </button>
-          </div>
+        <div className="p-3 rounded-xl bg-[var(--error-subtle)] border border-[var(--error-ring)] text-xs text-[var(--error-text)] flex items-center gap-2 font-medium">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{updateInstallState?.error || (checkFailed ? 'Verifica aggiornamenti non riuscita.' : 'Aggiornamento non riuscito.')}</span>
         </div>
       )}
 

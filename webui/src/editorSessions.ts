@@ -6,8 +6,6 @@ export type EditorSession = {
   playbackRate?: number;
   volume?: number;
   scrollTop?: number;
-  collaborationRoom?: string;
-  collaborationUser?: { name: string; color: string };
   savedAt?: number;
   openedAt?: number;
 };
@@ -19,7 +17,6 @@ const hasSessionState = (session: EditorSession): boolean =>
   || session.playbackRate !== undefined
   || session.volume !== undefined
   || session.scrollTop !== undefined
-  || session.collaborationRoom !== undefined
   || session.openedAt !== undefined;
 
 export const normalizeEditorSessions = (
@@ -33,12 +30,19 @@ export const normalizeEditorSessions = (
       if (!session || typeof session !== 'object' || !hasSessionState(session)) {
         return [];
       }
+      const cleanSession: EditorSession = {
+        ...(session.audioTime !== undefined ? { audioTime: session.audioTime } : {}),
+        ...(session.playbackRate !== undefined ? { playbackRate: session.playbackRate } : {}),
+        ...(session.volume !== undefined ? { volume: session.volume } : {}),
+        ...(session.scrollTop !== undefined ? { scrollTop: session.scrollTop } : {}),
+        ...(session.openedAt !== undefined ? { openedAt: session.openedAt } : {}),
+        savedAt: typeof session.savedAt === 'number' ? session.savedAt : now,
+      };
+
       if (typeof session.savedAt === 'number') {
-        return session.savedAt >= cutoff ? [[key, session]] : [];
+        return session.savedAt >= cutoff ? [[key, cleanSession]] : [];
       }
-      // Preserve pre-TTL sessions created before `savedAt` existed, and
-      // stamp them now so they can expire normally in the future.
-      return [[key, { ...session, savedAt: now }]];
+      return [[key, cleanSession]];
     }),
   );
 };

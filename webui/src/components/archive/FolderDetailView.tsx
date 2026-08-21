@@ -497,7 +497,7 @@ export function FolderDetailView({
                     <button
                       type="button"
                       onClick={handleBatchAdd}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-transform active:scale-95 cursor-pointer shadow-xs"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-transform active:scale-95 cursor-pointer"
                       style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-text)' }}
                     >
                       <Plus className="w-3.5 h-3.5" />
@@ -537,7 +537,7 @@ export function FolderDetailView({
                               }}
                               className={`w-4 h-4 rounded flex items-center justify-center transition-all shrink-0 cursor-pointer ${
                                 isSelected
-                                  ? 'bg-[var(--accent-text)] text-white shadow-xs'
+                                  ? 'bg-[var(--accent-text)] text-white'
                                   : 'border border-[var(--border-strong)] bg-[var(--bg-input)] hover:border-[var(--accent-text)] opacity-70 group-hover:opacity-100'
                               }`}
                               aria-label={isSelected ? `Deseleziona ${session.name}` : `Seleziona ${session.name}`}

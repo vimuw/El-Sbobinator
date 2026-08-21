@@ -88,7 +88,7 @@ export function SortMenu({ sort, onSortChange }: SortMenuProps) {
                 background: 'var(--bg-elevated)',
                 border: '1px solid var(--border-default)',
                 borderRadius: 12,
-                boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                boxShadow: 'var(--shadow-strong)',
                 minWidth: 200,
                 width: 200,
                 padding: 4,

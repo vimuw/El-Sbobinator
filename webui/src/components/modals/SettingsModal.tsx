@@ -690,7 +690,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <button
                       onClick={saveSettings}
                       disabled={isSaving}
-                      className="modal-action-button is-primary text-sm px-5 py-2.5 bg-[var(--btn-primary-bg)] hover:bg-[var(--btn-primary-hover)] text-white font-bold rounded-lg shadow-md transition-all disabled:opacity-40"
+                      className="modal-action-button is-primary text-sm px-5 py-2.5 bg-[var(--btn-primary-bg)] hover:bg-[var(--btn-primary-hover)] text-white font-bold rounded-lg transition-all disabled:opacity-40"
                     >
                       {isSaving ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : 'Salva e Chiudi'}
                     </button>

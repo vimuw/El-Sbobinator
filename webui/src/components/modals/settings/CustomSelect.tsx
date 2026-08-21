@@ -116,7 +116,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
       {isOpen && (
         <div
           role="listbox"
-          className="select-dropdown absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl bg-[var(--bg-panel)] border border-[var(--border-subtle)] shadow-xl shadow-black/25 overflow-hidden py-1 max-h-60 overflow-y-auto app-scroll"
+          className="select-dropdown absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl bg-[var(--bg-panel)] border border-[var(--border-subtle)] overflow-hidden py-1 max-h-60 overflow-y-auto app-scroll"
         >
           {options.map(opt => {
             const isSelected = opt.value === value;

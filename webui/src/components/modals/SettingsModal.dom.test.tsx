@@ -490,9 +490,7 @@ describe('SettingsModal — version status display', () => {
     expect(screen.queryByText(/non riuscita/i)).toBeNull();
   });
 
-  it('shows shared async install error with GitHub fallback action', () => {
-    const openUrl = vi.fn();
-    setPywebview({ open_url: openUrl });
+  it('shows shared async install error state', () => {
     render(
       <SettingsModal
         {...makeProps()}
@@ -508,8 +506,6 @@ describe('SettingsModal — version status display', () => {
     );
 
     expect(screen.getByText(/Verifica integrità fallita/i)).toBeTruthy();
-    fireEvent.click(screen.getByText('Apri GitHub'));
-    expect(openUrl).toHaveBeenCalledWith('https://github.com/vimuw/El-Sbobinator/releases/latest');
   });
 
   it('shows shared async install success state', () => {

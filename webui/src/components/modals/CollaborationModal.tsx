@@ -16,6 +16,13 @@ const COLORS = [
   '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1',
 ];
 
+const getStoredCollabName = (activeName?: string) => {
+  try { return activeName || localStorage.getItem('collab_username') || 'Studente'; } catch { return activeName || 'Studente'; }
+};
+const getStoredCollabColor = (activeColor?: string) => {
+  try { return activeColor || localStorage.getItem('collab_usercolor') || '#3b82f6'; } catch { return activeColor || '#3b82f6'; }
+};
+
 export const CollaborationModal: React.FC<CollaborationModalProps> = ({
   isOpen,
   onClose,
@@ -25,15 +32,15 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({
   onStopCollaboration,
 }) => {
   const [room, setRoom] = useState(activeRoom || '');
-  const [name, setName] = useState(activeUser?.name || 'Studente');
-  const [color, setColor] = useState(activeUser?.color || '#3b82f6');
+  const [name, setName] = useState(() => getStoredCollabName(activeUser?.name));
+  const [color, setColor] = useState(() => getStoredCollabColor(activeUser?.color));
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setRoom(activeRoom || '');
-      setName(activeUser?.name || 'Studente');
-      setColor(activeUser?.color || '#3b82f6');
+      setName(getStoredCollabName(activeUser?.name));
+      setColor(getStoredCollabColor(activeUser?.color));
     }
   }, [isOpen, activeRoom, activeUser]);
 
@@ -52,6 +59,10 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
     if (!room.trim() || !name.trim()) return;
+    try {
+      localStorage.setItem('collab_username', name.trim());
+      localStorage.setItem('collab_usercolor', color);
+    } catch (_) {}
     onStartCollaboration(room.trim().toLowerCase(), { name: name.trim(), color });
     onClose();
   };
@@ -200,7 +211,7 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({
                           }}
                           className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 transition-all ${
                             color === c
-                              ? 'scale-105 shadow-xs'
+                              ? 'scale-105'
                               : 'hover:scale-105 opacity-80 hover:opacity-100'
                           }`}
                           aria-label={`Seleziona colore ${c}`}
