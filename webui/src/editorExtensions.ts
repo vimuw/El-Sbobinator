@@ -383,6 +383,9 @@ export interface CollaborationCursorOptions {
   selectionRender?: (user: { name: string; color: string }) => DecorationAttrs;
 }
 
+export const MAX_COLLAB_USERNAME_LENGTH = 32;
+export const HEX_COLOR_REGEX = /^#(?:[0-9a-fA-F]{3}){1,2}$/;
+
 export const CollaborationCursor = Extension.create<CollaborationCursorOptions>({
   name: 'collaborationCursor',
 
@@ -396,18 +399,23 @@ export const CollaborationCursor = Extension.create<CollaborationCursorOptions>(
       render: user => {
         const cursor = document.createElement('span');
         cursor.classList.add('collaboration-cursor__caret', 'ProseMirror-yjs-cursor');
-        const color = user.color || '#3b82f6';
-        cursor.style.borderLeftColor = color;
+        const safeColor = typeof user.color === 'string' && HEX_COLOR_REGEX.test(user.color)
+          ? user.color
+          : '#3b82f6';
+        cursor.style.borderLeftColor = safeColor;
         cursor.style.borderLeftStyle = 'solid';
         cursor.style.borderLeftWidth = '2px';
 
         const label = document.createElement('div');
         label.classList.add('collaboration-cursor__label');
-        label.style.backgroundColor = color;
+        label.style.backgroundColor = safeColor;
         label.style.color = '#ffffff';
         label.style.whiteSpace = 'nowrap';
         label.style.width = 'max-content';
-        label.textContent = user.name || 'Studente';
+        const rawName = (user.name || 'Studente').trim();
+        label.textContent = (rawName.length > MAX_COLLAB_USERNAME_LENGTH
+          ? rawName.slice(0, MAX_COLLAB_USERNAME_LENGTH)
+          : rawName) || 'Studente';
 
         const zeroWidth1 = document.createTextNode('\u2060');
         const zeroWidth2 = document.createTextNode('\u2060');
