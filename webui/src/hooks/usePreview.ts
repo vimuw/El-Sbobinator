@@ -57,8 +57,7 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
         session.audioTime !== undefined
         || session.playbackRate !== undefined
         || session.volume !== undefined
-        || session.scrollTop !== undefined
-        || session.collaborationRoom !== undefined;
+        || session.scrollTop !== undefined;
       if (hasData) saveEditorSession(sessionKey, session);
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -120,8 +119,8 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
           initAudio: { time: savedSession.audioTime, playbackRate: savedSession.playbackRate, volume: savedSession.volume },
           initScrollTop: savedSession.scrollTop,
           initialSearchTerm: searchTerm || undefined,
-          initialRoom: savedSession.collaborationRoom,
-          initialUser: savedSession.collaborationUser,
+          initialRoom: undefined,
+          initialUser: undefined,
         });
         await loadPreviewAudio(sourcePath, sessionDir);
       } else {
@@ -141,8 +140,7 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
         session.audioTime !== undefined
         || session.playbackRate !== undefined
         || session.volume !== undefined
-        || session.scrollTop !== undefined
-        || session.collaborationRoom !== undefined;
+        || session.scrollTop !== undefined;
       if (hasData) saveEditorSession(sessionKey, session);
     }
     currentEditorSessionRef.current = {};
@@ -202,11 +200,11 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
   }, []);
 
   const handleCollaborationStateChange = useCallback((room?: string, user?: { name: string; color: string }) => {
-    currentEditorSessionRef.current = { ...currentEditorSessionRef.current, collaborationRoom: room, collaborationUser: user };
-    const sessionKey = currentPreviewSessionKeyRef.current;
-    if (sessionKey) {
-      saveEditorSession(sessionKey, currentEditorSessionRef.current);
-    }
+    setPreview(prev => ({
+      ...prev,
+      initialRoom: room,
+      initialUser: user,
+    }));
   }, []);
 
   const openSharedSession = useCallback((roomCode: string, userName: string, userColor: string) => {

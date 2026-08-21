@@ -20,11 +20,10 @@ import {
   Link2, Search, Calculator, Highlighter, Trash2
 } from 'lucide-react';
 import { FloatingImage } from './FloatingImage';
-import { type Heading, SearchHighlight, FontSize, MathInline, MathBlock, SmartArrows, extractHeadings } from '../editorExtensions';
+import { type Heading, SearchHighlight, FontSize, MathInline, MathBlock, SmartArrows, CollaborationCursor, extractHeadings } from '../editorExtensions';
 import Youtube from '@tiptap/extension-youtube';
 import Typography from '@tiptap/extension-typography';
 import Collaboration from '@tiptap/extension-collaboration';
-import CollaborationCursor from '@tiptap/extension-collaboration-cursor';
 import * as Y from 'yjs';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import { WebrtcProvider } from 'y-webrtc';

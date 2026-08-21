@@ -78,7 +78,7 @@ export function SetupPage({
             rotate: [0, -10, 10, -5, 5, 0],
             transition: { duration: 0.5 },
           }}
-          className="w-12 h-12 rounded-xl flex items-center justify-center shadow-sm cursor-default"
+          className="w-12 h-12 rounded-xl flex items-center justify-center cursor-default"
           style={{ background: 'var(--accent-subtle)', border: '1px solid var(--border-subtle)' }}
         >
           <Key className="w-5 h-5" style={{ color: 'var(--accent-text)' }} />

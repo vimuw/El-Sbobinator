@@ -57,6 +57,11 @@ export function EditorFullPage({
   const [detectedLocalRoom, setDetectedLocalRoom] = useState<string | null>(null);
 
   useEffect(() => {
+    setCollabRoom(initialRoom);
+    setCollabUser(initialUser);
+  }, [htmlPath, initialRoom, initialUser]);
+
+  useEffect(() => {
     if (!collabRoom) return;
     const roomClean = collabRoom.trim().toLowerCase();
     const sendAnnounce = () => {
@@ -204,6 +209,9 @@ export function EditorFullPage({
   }, []);
 
   const flushAndClose = useCallback(async () => {
+    setCollabRoom(undefined);
+    setCollabUser(undefined);
+    onCollaborationStateChange?.(undefined, undefined);
     if (isDirtyRef.current && !saveErrorOnCloseRef.current) {
       if (autosaveTimerRef.current) { window.clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
       const path = htmlPathRef.current;
@@ -223,7 +231,7 @@ export function EditorFullPage({
       }
     }
     onClose();
-  }, [onClose]);
+  }, [onClose, onCollaborationStateChange]);
 
   useEffect(() => {
     if (previewContent === null) return;
@@ -420,10 +428,16 @@ export function EditorFullPage({
               </div>
               <button
                 onClick={() => {
+                  let joinName = 'Partecipante';
+                  let joinColor = '#10b981';
+                  try {
+                    joinName = localStorage.getItem('collab_username') || 'Partecipante';
+                    joinColor = localStorage.getItem('collab_usercolor') || '#10b981';
+                  } catch (_) {}
                   setCollabRoom(detectedLocalRoom);
-                  setCollabUser({ name: 'Partecipante Desktop', color: '#10b981' });
+                  setCollabUser({ name: joinName, color: joinColor });
                   setDetectedLocalRoom(null);
-                  onCollaborationStateChange?.(detectedLocalRoom, { name: 'Partecipante Desktop', color: '#10b981' });
+                  onCollaborationStateChange?.(detectedLocalRoom, { name: joinName, color: joinColor });
                 }}
                 className="modal-action-button is-primary is-compact text-xs px-3 py-1 flex items-center gap-1.5 font-semibold"
               >

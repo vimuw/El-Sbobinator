@@ -142,6 +142,51 @@ describe('EditorBubbleMenu', () => {
     expect(chainMock.unsetHighlight).toHaveBeenCalled();
   });
 
+  it('renders remove highlight button when highlight mark is in selection range and unsets on click', () => {
+    const rangeHasMarkMock = vi.fn().mockReturnValue(true);
+    const { editor, chainMock } = createMockEditor({
+      isActive: vi.fn().mockReturnValue(false),
+      state: {
+        selection: { empty: false, from: 2, to: 8 },
+        doc: { rangeHasMark: rangeHasMarkMock },
+      },
+      schema: {
+        marks: { highlight: {} },
+      },
+    });
+
+    render(<EditorBubbleMenu editor={editor as unknown as TiptapEditor} />);
+    editor.emit('selectionUpdate');
+
+    const removeBtn = screen.getByTitle('Rimuovi evidenziatura');
+    expect(removeBtn).toBeTruthy();
+
+    act(() => {
+      fireEvent.mouseDown(removeBtn);
+    });
+
+    expect(chainMock.unsetHighlight).toHaveBeenCalled();
+  });
+
+  it('does not render remove highlight button when selection has no highlight', () => {
+    const rangeHasMarkMock = vi.fn().mockReturnValue(false);
+    const { editor } = createMockEditor({
+      isActive: vi.fn().mockReturnValue(false),
+      state: {
+        selection: { empty: false, from: 2, to: 8 },
+        doc: { rangeHasMark: rangeHasMarkMock },
+      },
+      schema: {
+        marks: { highlight: {} },
+      },
+    });
+
+    render(<EditorBubbleMenu editor={editor as unknown as TiptapEditor} />);
+    editor.emit('selectionUpdate');
+
+    expect(screen.queryByTitle('Rimuovi evidenziatura')).toBeNull();
+  });
+
   it('toggles heading level 1', () => {
     const { editor, chainMock } = createMockEditor();
     render(<EditorBubbleMenu editor={editor as unknown as TiptapEditor} />);

@@ -113,8 +113,11 @@ export function FolderCardOverlay({
   const count = folder.session_dirs.filter(d => sessionsByDir.has(normalizeSessionPath(d))).length;
   return (
     <div
-      className="folder-card shadow-lg opacity-95 pointer-events-none cursor-grabbing"
-      style={{ '--folder-color': folder.color } as React.CSSProperties}
+      className="folder-card opacity-95 pointer-events-none cursor-grabbing"
+      style={{
+        '--folder-color': folder.color,
+        boxShadow: 'var(--shadow-strong)',
+      } as React.CSSProperties}
     >
       <div className="flex items-center gap-3 px-4 pt-3 pb-1">
         <span className="folder-color-dot is-large" />

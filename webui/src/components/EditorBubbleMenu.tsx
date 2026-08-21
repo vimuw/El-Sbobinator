@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
-  Highlighter, Link2, Link2Off, Heading1, Heading2, Heading3,
+  Highlighter, Eraser, Link2, Link2Off, Heading1, Heading2, Heading3,
   RemoveFormatting
 } from 'lucide-react';
 import { getLastHighlightColor } from '../editorUtils';
@@ -62,7 +62,7 @@ export const EditorBubbleMenu: React.FC<EditorBubbleMenuProps> = ({ editor, isCo
         }
 
         // Clamp left coordinate so bubble menu is 100% visible without overflowing off-screen
-        const menuHalfWidth = 165;
+        const menuHalfWidth = 180;
         const minLeft = Math.max(paperRect.left + menuHalfWidth + 12, menuHalfWidth + 12);
         const maxLeft = Math.min(paperRect.right - menuHalfWidth - 12, window.innerWidth - menuHalfWidth - 12);
         const clampedLeft = Math.max(minLeft, Math.min(maxLeft, rawLeft));
@@ -134,6 +134,11 @@ export const EditorBubbleMenu: React.FC<EditorBubbleMenuProps> = ({ editor, isCo
   if (!editor || !coords) return null;
 
   const btn = (active: boolean) => `editor-bubble-btn${active ? ' is-active' : ''}`;
+
+  const { from, to } = editor.state.selection;
+  const hasHighlight =
+    editor.isActive('highlight') ||
+    Boolean(editor.schema?.marks?.highlight && editor.state?.doc?.rangeHasMark?.(from, to, editor.schema.marks.highlight));
 
   const activeHighlightColor = editor.getAttributes('highlight').color || getLastHighlightColor();
 
@@ -226,6 +231,20 @@ export const EditorBubbleMenu: React.FC<EditorBubbleMenuProps> = ({ editor, isCo
             />
           </span>
         </button>
+
+        {hasHighlight && (
+          <button
+            type="button"
+            onMouseDown={e => {
+              e.preventDefault();
+              editor.chain().focus().unsetHighlight().run();
+            }}
+            className="editor-bubble-btn"
+            title="Rimuovi evidenziatura"
+          >
+            <Eraser className="h-3.5 w-3.5 shrink-0" />
+          </button>
+        )}
 
         <div className="editor-bubble-divider" />
 

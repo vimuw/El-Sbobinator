@@ -309,8 +309,8 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
           </button>
           {showShortcuts && (
             <div
-              className="absolute bottom-full right-0 mb-2 z-50 rounded-lg border p-3 text-xs shadow-lg"
-              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--text-muted)', minWidth: '230px' }}
+              className="absolute bottom-full right-0 mb-2 z-50 rounded-lg border p-3 text-xs"
+              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--text-muted)', minWidth: '230px', boxShadow: 'var(--shadow-strong)' }}
             >
               <div className="mb-2 font-semibold text-[11px]" style={{ color: 'var(--text-primary)' }}>Scorciatoie da tastiera</div>
               {([

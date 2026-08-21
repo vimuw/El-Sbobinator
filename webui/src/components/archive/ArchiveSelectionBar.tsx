@@ -124,7 +124,7 @@ export function ArchiveSelectionBar({
               style={{
                 background: 'var(--bg-elevated)',
                 borderColor: 'var(--border-strong)',
-                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
+                boxShadow: 'var(--shadow-strong)',
               }}
             >
               <div className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>

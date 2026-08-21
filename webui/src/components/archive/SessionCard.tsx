@@ -116,7 +116,7 @@ export function DraggableSessionCard({
             }}
             className={`w-4 h-4 rounded flex items-center justify-center transition-all shrink-0 cursor-pointer ${
               selected
-                ? 'bg-[var(--accent-text)] text-white shadow-xs'
+                ? 'bg-[var(--accent-text)] text-white'
                 : 'border border-[var(--border-strong)] bg-[var(--bg-input)] hover:border-[var(--accent-text)] opacity-70 group-hover/card:opacity-100'
             }`}
             aria-label={selected ? `Deseleziona ${session.name}` : `Seleziona ${session.name}`}
@@ -199,7 +199,7 @@ export function FolderSessionCardOverlay({
       className="archive-session-card flex items-center justify-between gap-3 px-4 py-3"
       style={{
         pointerEvents: 'none',
-        boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+        boxShadow: 'var(--shadow-strong)',
         opacity: 0.95,
         cursor: 'grabbing',
         borderColor: hasRevisionWarnings ? 'var(--warning-ring)' : undefined,
@@ -348,7 +348,7 @@ export function SortableSessionCard({
             }}
             className={`w-4 h-4 rounded flex items-center justify-center transition-all shrink-0 cursor-pointer ${
               selected
-                ? 'bg-[var(--accent-text)] text-white shadow-xs'
+                ? 'bg-[var(--accent-text)] text-white'
                 : 'border border-[var(--border-strong)] bg-[var(--bg-input)] hover:border-[var(--accent-text)] opacity-70 group-hover/card:opacity-100'
             }`}
             aria-label={selected ? `Deseleziona ${session.name}` : `Seleziona ${session.name}`}
