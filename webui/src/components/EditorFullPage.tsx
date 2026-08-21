@@ -371,20 +371,23 @@ export function EditorFullPage({
 
             <div className="editor-fullpage-actions">
               <button
-                onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
-                className="icon-button theme-toggle-btn"
-                aria-label={themeMode === 'dark' ? 'Attiva tema chiaro' : 'Attiva tema scuro'}
-                title={themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro'}
-              >
-                {themeMode === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              </button>
-              <button
                 onClick={() => setIsCollabModalOpen(true)}
-                className={`icon-button${collabRoom ? ' icon-button--active' : ''}`}
+                className={`editor-collab-btn${collabRoom ? ' is-active' : ''}`}
                 title={collabRoom ? `Collaborazione attiva: ${collabRoom}` : 'Inizia sessione (Collaborazione P2P)'}
                 aria-label="Inizia sessione"
               >
-                <Users className="w-4 h-4" />
+                {collabRoom ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                    <Users className="w-3.5 h-3.5" />
+                    <span className="max-w-[120px] truncate">{collabRoom}</span>
+                  </>
+                ) : (
+                  <>
+                    <Users className="w-3.5 h-3.5 text-[var(--accent-text)]" />
+                    <span>Collabora</span>
+                  </>
+                )}
               </button>
               <button
                 onClick={() => void handleCopy()}
@@ -405,6 +408,14 @@ export function EditorFullPage({
                   <ExternalLink className="w-4 h-4" />
                 </button>
               )}
+              <button
+                onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
+                className="icon-button theme-toggle-btn"
+                aria-label={themeMode === 'dark' ? 'Attiva tema chiaro' : 'Attiva tema scuro'}
+                title={themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro'}
+              >
+                {themeMode === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 

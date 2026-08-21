@@ -3315,6 +3315,38 @@ input[type="password"]::-ms-reveal {
   border-color: var(--accent-ring);
 }
 
+.editor-collab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+
+.editor-collab-btn:hover {
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.editor-collab-btn.is-active {
+  background: var(--accent-subtle);
+  border-color: var(--accent-ring);
+  color: var(--accent-text);
+}
+
+.editor-collab-btn.is-active:hover {
+  background: color-mix(in srgb, var(--accent-subtle) 80%, var(--accent-bg));
+}
+
 .editor-autosave-badge {
   display: inline-flex;
   align-items: center;
