@@ -3358,7 +3358,7 @@ input[type="password"]::-ms-reveal {
 }
 
 .editor-collab-btn.is-active:hover {
-  background: color-mix(in srgb, var(--accent-subtle) 80%, var(--accent-bg));
+  background: var(--accent-ring);
 }
 
 .join-room-hero-card {
@@ -3419,7 +3419,7 @@ input[type="password"]::-ms-reveal {
 }
 
 .join-room-hero-card:hover .join-room-hero-action {
-  background: color-mix(in srgb, var(--accent-subtle) 70%, var(--accent-bg));
+  background: var(--accent-ring);
   border-color: var(--accent-bg);
 }
 
@@ -3429,6 +3429,84 @@ input[type="password"]::-ms-reveal {
 
 .join-room-hero-card:hover .join-room-hero-arrow {
   transform: translateX(3px);
+}
+
+.recent-session-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-ring);
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.archive-session-card:hover .recent-session-action,
+.recent-session-action:hover {
+  background: var(--accent-ring);
+  border-color: var(--accent-bg);
+}
+
+.recent-session-action:active {
+  transform: scale(0.96);
+}
+
+.recent-session-arrow {
+  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.archive-session-card:hover .recent-session-arrow,
+.recent-session-action:hover .recent-session-arrow {
+  transform: translateX(3px);
+}
+
+.folder-add-lessons-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-ring);
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.folder-add-lessons-btn:hover {
+  background: var(--accent-ring);
+  border-color: var(--accent-bg);
+}
+
+.folder-add-lessons-btn:active {
+  transform: scale(0.96);
+}
+
+.folder-add-lessons-plus {
+  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.folder-add-lessons-btn:hover .folder-add-lessons-plus {
+  transform: rotate(90deg) scale(1.1);
+}
+
+.folder-add-lessons-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-text);
+  color: white;
+  min-width: 16px;
 }
 
 .dropzone-compact-join-btn {
@@ -3696,7 +3774,7 @@ input[type="password"]::-ms-reveal {
 
 .dropzone-card:hover .dropzone-browse-button,
 .dropzone-browse-button:hover {
-  background: color-mix(in srgb, var(--accent-subtle) 70%, var(--accent-bg));
+  background: var(--accent-ring);
   border-color: var(--accent-bg);
 }
 

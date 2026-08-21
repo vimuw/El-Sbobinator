@@ -289,3 +289,5 @@ export function DeleteMultipleSessionsConfirmModal({
     </motion.div>
   );
 }
+
+export { AddSessionsToFolderModal, type AddSessionsToFolderModalProps } from './AddSessionsToFolderModal';
