@@ -31,7 +31,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
   const selectedOption = options.find(opt => opt.value === value);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: MouseEvent | PointerEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
@@ -41,10 +41,12 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
         setIsOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('pointerdown', handleClickOutside, true);
+    document.addEventListener('mousedown', handleClickOutside, true);
     document.addEventListener('keydown', handleKeyDownGlobal);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('pointerdown', handleClickOutside, true);
+      document.removeEventListener('mousedown', handleClickOutside, true);
       document.removeEventListener('keydown', handleKeyDownGlobal);
     };
   }, [isOpen]);

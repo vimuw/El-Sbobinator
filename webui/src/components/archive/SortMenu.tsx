@@ -39,17 +39,26 @@ export function SortMenu({ sort, onSortChange }: SortMenuProps) {
 
   useEffect(() => {
     if (!open) return;
-    const handleOutside = (e: globalThis.MouseEvent) => {
+    const handleOutside = (e: globalThis.MouseEvent | PointerEvent) => {
       const target = e.target as Node;
       if (buttonRef.current?.contains(target) || dropdownRef.current?.contains(target)) return;
       setOpen(false);
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+      }
+    };
     const handleClose = () => setOpen(false);
-    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('pointerdown', handleOutside, true);
+    document.addEventListener('mousedown', handleOutside, true);
+    document.addEventListener('keydown', handleKeyDown);
     window.addEventListener('scroll', handleClose, { capture: true, passive: true });
     window.addEventListener('resize', handleClose, { passive: true });
     return () => {
-      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('pointerdown', handleOutside, true);
+      document.removeEventListener('mousedown', handleOutside, true);
+      document.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('scroll', handleClose, { capture: true });
       window.removeEventListener('resize', handleClose);
     };
@@ -64,7 +73,7 @@ export function SortMenu({ sort, onSortChange }: SortMenuProps) {
         type="button"
         onClick={() => setOpen(o => !o)}
         className="notion-sort-chip w-9 p-0 flex items-center justify-center transition-colors group/sort"
-        style={open ? { background: 'var(--border-default)', color: 'var(--text-primary)' } : undefined}
+        style={open ? { color: 'var(--accent-text)', borderColor: 'var(--accent-text)', background: 'var(--accent-subtle)' } : undefined}
         title={`Ordinamento: ${currentOption?.label ?? ''}`}
         aria-label="Cambia ordinamento"
       >

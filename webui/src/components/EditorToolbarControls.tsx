@@ -64,13 +64,17 @@ export const ColorPickerButton = ({ editor }: { editor: TiptapEditor }) => {
 
   React.useEffect(() => {
     if (!isOpen) return;
-    const handler = (e: PointerEvent) => {
+    const handler = (e: PointerEvent | MouseEvent) => {
       const target = e.target as Node;
       if (buttonRef.current?.contains(target) || panelRef.current?.contains(target)) return;
       setIsOpen(false);
     };
-    document.addEventListener('pointerdown', handler);
-    return () => document.removeEventListener('pointerdown', handler);
+    document.addEventListener('pointerdown', handler, true);
+    document.addEventListener('mousedown', handler, true);
+    return () => {
+      document.removeEventListener('pointerdown', handler, true);
+      document.removeEventListener('mousedown', handler, true);
+    };
   }, [isOpen]);
 
   const applyColor = (color: string, close = true) => {
@@ -161,13 +165,17 @@ export const HighlightPickerButton = ({ editor }: { editor: TiptapEditor }) => {
 
   React.useEffect(() => {
     if (!isOpen) return;
-    const handler = (e: PointerEvent) => {
+    const handler = (e: PointerEvent | MouseEvent) => {
       const target = e.target as Node;
       if (buttonRef.current?.contains(target) || panelRef.current?.contains(target)) return;
       setIsOpen(false);
     };
-    document.addEventListener('pointerdown', handler);
-    return () => document.removeEventListener('pointerdown', handler);
+    document.addEventListener('pointerdown', handler, true);
+    document.addEventListener('mousedown', handler, true);
+    return () => {
+      document.removeEventListener('pointerdown', handler, true);
+      document.removeEventListener('mousedown', handler, true);
+    };
   }, [isOpen]);
 
   return (
@@ -356,13 +364,17 @@ export const LinkButton = ({ editor }: { editor: TiptapEditor }) => {
 
   React.useEffect(() => {
     if (!isOpen) return;
-    const handler = (e: PointerEvent) => {
+    const handler = (e: PointerEvent | MouseEvent) => {
       const target = e.target as Node;
       if (buttonRef.current?.contains(target) || panelRef.current?.contains(target)) return;
       setIsOpen(false);
     };
-    document.addEventListener('pointerdown', handler);
-    return () => document.removeEventListener('pointerdown', handler);
+    document.addEventListener('pointerdown', handler, true);
+    document.addEventListener('mousedown', handler, true);
+    return () => {
+      document.removeEventListener('pointerdown', handler, true);
+      document.removeEventListener('mousedown', handler, true);
+    };
   }, [isOpen]);
 
   const applyLink = () => {
@@ -471,13 +483,17 @@ export const InsertDropdownButton = ({
 
   React.useEffect(() => {
     if (!isOpen) return;
-    const handler = (e: PointerEvent) => {
+    const handler = (e: PointerEvent | MouseEvent) => {
       const target = e.target as Node;
       if (buttonRef.current?.contains(target) || panelRef.current?.contains(target)) return;
       setIsOpen(false);
     };
-    document.addEventListener('pointerdown', handler);
-    return () => document.removeEventListener('pointerdown', handler);
+    document.addEventListener('pointerdown', handler, true);
+    document.addEventListener('mousedown', handler, true);
+    return () => {
+      document.removeEventListener('pointerdown', handler, true);
+      document.removeEventListener('mousedown', handler, true);
+    };
   }, [isOpen]);
 
   return (
@@ -573,13 +589,17 @@ export const AlignDropdownButton = ({ editor }: { editor: TiptapEditor }) => {
 
   React.useEffect(() => {
     if (!isOpen) return;
-    const handler = (e: PointerEvent) => {
+    const handler = (e: PointerEvent | MouseEvent) => {
       const target = e.target as Node;
       if (buttonRef.current?.contains(target) || panelRef.current?.contains(target)) return;
       setIsOpen(false);
     };
-    document.addEventListener('pointerdown', handler);
-    return () => document.removeEventListener('pointerdown', handler);
+    document.addEventListener('pointerdown', handler, true);
+    document.addEventListener('mousedown', handler, true);
+    return () => {
+      document.removeEventListener('pointerdown', handler, true);
+      document.removeEventListener('mousedown', handler, true);
+    };
   }, [isOpen]);
 
   const CurrentIcon = isCenter ? AlignCenter : isRight ? AlignRight : isJustify ? AlignJustify : AlignLeft;
