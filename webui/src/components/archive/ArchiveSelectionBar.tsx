@@ -41,15 +41,26 @@ export function ArchiveSelectionBar({
 
   useEffect(() => {
     if (!isFolderMenuOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
+    const handleClickOutside = (e: MouseEvent | PointerEvent) => {
       const target = e.target as Node;
       if (folderMenuRef.current?.contains(target) || folderButtonRef.current?.contains(target)) {
         return;
       }
       setIsFolderMenuOpen(false);
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsFolderMenuOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', handleClickOutside, true);
+    document.addEventListener('mousedown', handleClickOutside, true);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handleClickOutside, true);
+      document.removeEventListener('mousedown', handleClickOutside, true);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, [isFolderMenuOpen]);
 
   if (selectedCount <= 0) return null;

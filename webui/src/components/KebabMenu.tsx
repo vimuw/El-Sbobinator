@@ -71,20 +71,29 @@ export function KebabMenu({ items, align = 'right', buttonClassName }: KebabMenu
 
   useEffect(() => {
     if (!open) return;
-    const handleOutside = (e: MouseEvent) => {
+    const handleOutside = (e: MouseEvent | PointerEvent) => {
       const target = e.target as Node;
       if (buttonRef.current && buttonRef.current.contains(target)) return;
       if (dropdownRef.current && dropdownRef.current.contains(target)) return;
       setOpen(false);
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+      }
+    };
     const handleClose = () => setOpen(false);
 
-    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('pointerdown', handleOutside, true);
+    document.addEventListener('mousedown', handleOutside, true);
+    document.addEventListener('keydown', handleKeyDown);
     window.addEventListener('scroll', handleClose, { capture: true, passive: true });
     window.addEventListener('resize', handleClose, { passive: true });
 
     return () => {
-      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('pointerdown', handleOutside, true);
+      document.removeEventListener('mousedown', handleOutside, true);
+      document.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('scroll', handleClose, { capture: true });
       window.removeEventListener('resize', handleClose);
     };
