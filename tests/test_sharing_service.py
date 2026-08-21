@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import zipfile
@@ -179,3 +180,79 @@ def test_api_import_sbobina_package_invalidates_cache(tmp_path):
         res = api.import_sbobina_package(package_path=str(pkg_path))
         assert res["ok"] is True
         assert api._sessions_cache is None
+
+
+def test_safe_zip_extract_rejects_symlink(tmp_path):
+    symlink_zip_path = tmp_path / "symlink.zip"
+    target_extract = tmp_path / "extract_dir"
+    target_extract.mkdir()
+
+    with zipfile.ZipFile(str(symlink_zip_path), "w") as zf:
+        zinfo = zipfile.ZipInfo("symlink_file")
+        # Set POSIX S_IFLNK attribute (0o120000) in external_attr
+        zinfo.external_attr = 0o120777 << 16
+        zf.writestr(zinfo, "/etc/passwd")
+
+    with zipfile.ZipFile(str(symlink_zip_path), "r") as zf:
+        with pytest.raises(ValueError, match="Link simbolici non consentiti"):
+            _safe_zip_extract(zf, str(target_extract))
+
+
+def test_safe_zip_extract_rejects_excessive_file_count(tmp_path):
+    zip_path = tmp_path / "many_files.zip"
+    target_extract = tmp_path / "extract_dir"
+    target_extract.mkdir()
+
+    with zipfile.ZipFile(str(zip_path), "w") as zf:
+        for i in range(505):
+            zf.writestr(f"file_{i}.txt", "x")
+
+    with zipfile.ZipFile(str(zip_path), "r") as zf:
+        with pytest.raises(ValueError, match=r"numero file .* supera il limite"):
+            _safe_zip_extract(zf, str(target_extract))
+
+
+def test_safe_zip_extract_rejects_zip_bomb_uncompressed_size(tmp_path):
+    zip_path = tmp_path / "huge.zip"
+    target_extract = tmp_path / "extract_dir"
+    target_extract.mkdir()
+
+    with zipfile.ZipFile(str(zip_path), "w") as zf:
+        zf.writestr("test.bin", "x")
+
+    with zipfile.ZipFile(str(zip_path), "r") as zf:
+        fake_info = zipfile.ZipInfo("fake.bin")
+        fake_info.file_size = 2000 * 1024 * 1024
+        with patch.object(zf, "infolist", return_value=[fake_info]):
+            with pytest.raises(
+                ValueError, match="Dimensione decompressa totale eccede"
+            ):
+                _safe_zip_extract(zf, str(target_extract))
+
+
+def test_unpack_text_only_clears_host_audio_path(tmp_path):
+    # Setup session with audio on creator PC
+    session_dir = tmp_path / "creator_session"
+    session_dir.mkdir()
+    (session_dir / "session.json").write_text(
+        '{"input": {"name": "lecture.mp3", "path": "/home/victim/Music/private.mp3", "path_rel_to_session": "audio/private.mp3"}}',
+        encoding="utf-8",
+    )
+    (session_dir / "Sbobina.html").write_text("<p>Sbobina</p>", encoding="utf-8")
+
+    pkg_path = tmp_path / "shared.sbobina"
+    create_sbobina_package(str(session_dir), str(pkg_path), include_mode="text_only")
+
+    session_root = tmp_path / "receiver_root"
+    session_root.mkdir()
+
+    res = unpack_and_import_package(str(pkg_path), str(session_root))
+    assert res["ok"] is True
+    assert res["has_audio"] is False
+
+    # Verify session.json in imported dir has cleared input.path
+    imported_session_file = os.path.join(res["session_dir"], "session.json")
+    with open(imported_session_file, encoding="utf-8") as f:
+        imported_session_json = json.load(f)
+    assert imported_session_json["input"]["path"] is None
+    assert imported_session_json["input"]["path_rel_to_session"] is None

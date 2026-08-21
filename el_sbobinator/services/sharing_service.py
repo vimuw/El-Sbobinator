@@ -23,19 +23,53 @@ from el_sbobinator.core.shared import (
     _safe_mkdir,
 )
 
+MAX_FILE_COUNT = 500
+MAX_TOTAL_UNCOMPRESSED_SIZE = 1500 * 1024 * 1024  # 1.5 GB
+
 
 def _safe_zip_extract(zip_file: zipfile.ZipFile, target_dir: str) -> None:
-    """Extract zip archive safely preventing zip-slip path traversal attacks."""
+    """Extract zip archive safely preventing zip-slip, symlinks, and resource exhaustion."""
     resolved_target = os.path.realpath(target_dir)
-    for member in zip_file.infolist():
-        member_path = os.path.realpath(os.path.join(target_dir, member.filename))
+    infolist = zip_file.infolist()
+
+    if len(infolist) > MAX_FILE_COUNT:
+        raise ValueError(
+            f"Archivio non valido: numero file ({len(infolist)}) supera il limite consentito ({MAX_FILE_COUNT})."
+        )
+
+    total_uncompressed_size = 0
+
+    for member in infolist:
+        # 1. Rifiuto Symlink (is_symlink() su Python 3.13+ o bitmask POSIX)
+        is_symlink = False
+        is_symlink_fn = getattr(member, "is_symlink", None)
+        if callable(is_symlink_fn) and is_symlink_fn():
+            is_symlink = True
+        elif (member.external_attr >> 16) & 0o170000 == 0o120000:
+            is_symlink = True
+
+        if is_symlink:
+            raise ValueError(
+                f"Link simbolici non consentiti nel pacchetto: {member.filename}"
+            )
+
+        # 2. Controllo dimensione decompressa totale
+        total_uncompressed_size += member.file_size
+        if total_uncompressed_size > MAX_TOTAL_UNCOMPRESSED_SIZE:
+            raise ValueError(
+                "Dimensione decompressa totale eccede la soglia massima consentita."
+            )
+
+        # 3. Path Traversal Check
+        destination_path = os.path.realpath(os.path.join(target_dir, member.filename))
         if (
-            not member_path.startswith(resolved_target + os.sep)
-            and member_path != resolved_target
+            not destination_path.startswith(resolved_target + os.sep)
+            and destination_path != resolved_target
         ):
             raise ValueError(
                 f"Attacco Zip Slip rilevato per il file: {member.filename}"
             )
+
     zip_file.extractall(target_dir)
 
 
@@ -258,6 +292,11 @@ def unpack_and_import_package(package_path: str, session_root: str) -> dict:
                 session_data["input"]["size"] = os.path.getsize(extracted_audio_path)
             except Exception:
                 pass
+        else:
+            # Se il pacchetto non contiene audio (es. text_only), azzeriamo i vecchi path del creatore
+            if "input" in session_data and isinstance(session_data["input"], dict):
+                session_data["input"]["path"] = None
+                session_data["input"]["path_rel_to_session"] = None
 
         _atomic_write_json(session_path, session_data)
 
@@ -311,6 +350,11 @@ def prepare_email_share(
         tempfile.gettempdir(), "el_sbobinator_exports"
     )
     _safe_mkdir(out_folder)
+    if os.name == "posix":
+        try:
+            os.chmod(out_folder, 0o700)
+        except OSError:
+            pass
 
     target_zip = os.path.join(out_folder, f"{nome_puro}_Sbobina.sbobina")
 
