@@ -1,6 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Check, Copy, ExternalLink, FileText, Loader2, Moon, Sun, Users } from 'lucide-react';
+import { ArrowLeft, Check, Copy, ExternalLink, FileText, Loader2, Moon, Sun, Users, AlertTriangle } from 'lucide-react';
 import type { Heading } from './RichTextEditor';
 import type { SaveHtmlResult } from '../bridge';
 import { registerCollabSignalListener } from '../bridge';
@@ -209,6 +209,7 @@ export function EditorFullPage({
   }, []);
 
   const flushAndClose = useCallback(async () => {
+    const isCollabActive = Boolean(collabRoom);
     setCollabRoom(undefined);
     setCollabUser(undefined);
     onCollaborationStateChange?.(undefined, undefined);
@@ -217,6 +218,11 @@ export function EditorFullPage({
       const path = htmlPathRef.current;
       const snap = getHtmlRef.current?.() ?? '';
       if (path && snap && snap !== lastPersistedRef.current && window.pywebview?.api?.save_html_content) {
+        if (isCollabActive && lastPersistedRef.current.length > 200 && snap.length < lastPersistedRef.current.length * 0.25) {
+          console.warn('Salvataggio di chiusura ignorato: rilevata riduzione drastica in sessione collaborativa.');
+          onClose();
+          return;
+        }
         setAutosaveStatus('saving');
         const gen = nextHtmlAutosaveGeneration(path);
         autosaveGenRef.current = gen;
@@ -231,7 +237,7 @@ export function EditorFullPage({
       }
     }
     onClose();
-  }, [onClose, onCollaborationStateChange]);
+  }, [onClose, onCollaborationStateChange, collabRoom]);
 
   useEffect(() => {
     if (previewContent === null) return;
@@ -254,6 +260,47 @@ export function EditorFullPage({
     return () => window.removeEventListener('keydown', handler);
   }, [previewContent, flushAndClose, handleZoomChange]);
 
+  const [isAutosaveSuspended, setIsAutosaveSuspended] = useState(false);
+
+  useEffect(() => {
+    if (collabRoom && htmlPath && !htmlPath.startsWith('collaboration://')) {
+      const currentContent = getHtmlRef.current?.() ?? lastPersistedRef.current;
+      if (currentContent) {
+        try {
+          sessionStorage.setItem(`collab_pre_backup_${htmlPath}`, JSON.stringify({
+            room: collabRoom,
+            timestamp: Date.now(),
+            content: currentContent,
+          }));
+        } catch (_) {}
+      }
+      // Backup fisico su disco locale tramite backend Python per resistere a crash
+      void window.pywebview?.api?.create_collaboration_backup?.(htmlPath);
+    }
+  }, [collabRoom, htmlPath]);
+
+  const handleForceSave = useCallback(async () => {
+    const path = htmlPathRef.current;
+    const snap = getHtmlRef.current?.() ?? '';
+    if (!path || !snap || !window.pywebview?.api?.save_html_content) return;
+    setAutosaveStatus('saving');
+    const gen = nextHtmlAutosaveGeneration(path);
+    autosaveGenRef.current = gen;
+    try {
+      const res = await window.pywebview.api.save_html_content(path, snap, gen);
+      if (isSaveCommitted(res)) {
+        lastPersistedRef.current = snap;
+        if (gen === autosaveGenRef.current) isDirtyRef.current = false;
+        setIsAutosaveSuspended(false);
+        setAutosaveStatus('saved');
+      } else {
+        setAutosaveStatus('error');
+      }
+    } catch {
+      setAutosaveStatus('error');
+    }
+  }, []);
+
   const scheduleAutosave = useCallback(() => {
     if (!htmlPath || previewContent === null || htmlPath.startsWith('collaboration://')) return;
     isDirtyRef.current = true;
@@ -266,6 +313,17 @@ export function EditorFullPage({
       if (!isDirtyRef.current || !window.pywebview?.api?.save_html_content) return;
       const snap = getHtmlRef.current?.() ?? '';
       if (snap === lastPersistedRef.current) { isDirtyRef.current = false; return; }
+
+      // Safeguard: se siamo in modalità collaborativa e il documento subisce una riduzione >75%,
+      // blocchiamo l'autosave per evitare la distruzione accidentale del file locale dell'host.
+      if (collabRoom && lastPersistedRef.current.length > 200 && snap.length < lastPersistedRef.current.length * 0.25) {
+        console.warn('Autosave sospeso in sessione collaborativa: rilevata riduzione drastica del testo.');
+        setAutosaveStatus('error');
+        setIsAutosaveSuspended(true);
+        return;
+      }
+      setIsAutosaveSuspended(false);
+
       setAutosaveStatus('saving');
       try {
         const res = await window.pywebview.api.save_html_content(savedForPath, snap, gen);
@@ -275,7 +333,7 @@ export function EditorFullPage({
         else setAutosaveStatus('error');
       } catch { setAutosaveStatus('error'); }
     }, 700);
-  }, [htmlPath, previewContent]);
+  }, [htmlPath, previewContent, collabRoom]);
 
   useEffect(() => {
     if (autosaveStatus !== 'saved') return;
@@ -453,6 +511,31 @@ export function EditorFullPage({
                 className="modal-action-button is-primary is-compact text-xs px-3 py-1 flex items-center gap-1.5 font-semibold"
               >
                 <span>Unisciti ora</span>
+              </button>
+            </div>
+          )}
+
+          {isAutosaveSuspended && (
+            <div
+              className="px-4 py-2 text-xs flex items-center justify-between shrink-0 border-b transition-colors"
+              style={{
+                background: 'var(--warning-subtle)',
+                borderColor: 'var(--warning-ring)',
+                color: 'var(--warning-text)',
+              }}
+            >
+              <div className="flex items-center gap-2 font-medium">
+                <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: 'var(--warning-text)' }} />
+                <span>
+                  Autosave sospeso: rilevata una riduzione drastica del testo in modalità collaborativa.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleForceSave()}
+                className="modal-action-button is-primary is-compact text-xs px-3 py-1 font-semibold shrink-0"
+              >
+                Forza salvataggio
               </button>
             </div>
           )}

@@ -177,12 +177,61 @@ describe('EditorFullPage autosave', () => {
     fireEvent.click(themeBtn);
     expect(setThemeMode).toHaveBeenCalled();
   });
-
   it('renders active room pill when collabRoom is set', async () => {
     render(<EditorFullPage {...baseProps} initialRoom="anatomia-stanza-1" />);
 
     const activeCollabBtn = screen.getByTitle('Collaborazione attiva: anatomia-stanza-1');
     expect(activeCollabBtn).toBeTruthy();
     expect(screen.getByText('anatomia-stanza-1')).toBeTruthy();
+  });
+
+  it('records pre-collaboration backup snapshot in sessionStorage and on-disk on collaboration start', async () => {
+    const longHtml = '<p>' + 'A'.repeat(500) + '</p>';
+    editorMockState.html = longHtml;
+    const createCollabBackup = vi.fn().mockResolvedValue({ ok: true, backup_path: '/sessions/out.collab-backup.html' });
+    setPywebview({ create_collaboration_backup: createCollabBackup });
+
+    render(<EditorFullPage {...baseProps} previewContent={longHtml} initialRoom="sbobina-test-room" />);
+    await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
+
+    const snapshot = sessionStorage.getItem('collab_pre_backup_/sessions/out.html');
+    expect(snapshot).toBeTruthy();
+    const parsed = JSON.parse(snapshot!);
+    expect(parsed.room).toBe('sbobina-test-room');
+    expect(parsed.content).toBe(longHtml);
+    expect(createCollabBackup).toHaveBeenCalledWith('/sessions/out.html');
+  });
+
+  it('blocks destructive autosave reduction (>75% drop) in active collaboration session and allows Forza salvataggio override', async () => {
+    const longHtml = '<p>' + 'A'.repeat(600) + '</p>';
+    editorMockState.html = longHtml;
+    const saveHtmlContent = vi.fn().mockResolvedValue({ ok: true, saved: true });
+    setPywebview({ save_html_content: saveHtmlContent });
+
+    render(<EditorFullPage {...baseProps} previewContent={longHtml} initialRoom="sbobina-safe-room" />);
+    await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
+
+    // Drastic drop from 600 chars to 5 chars (e.g. accidental wipe)
+    editorMockState.html = '<p></p>';
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('rich-text-editor'));
+    });
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 750));
+    });
+
+    // save_html_content should NOT be called with the wiped content
+    expect(saveHtmlContent).not.toHaveBeenCalled();
+    expect(screen.getByText('Errore salvataggio')).toBeTruthy();
+    expect(screen.getByText(/Autosave sospeso: rilevata una riduzione drastica del testo in modalità collaborativa/)).toBeTruthy();
+    expect(screen.getByText('Forza salvataggio')).toBeTruthy();
+
+    // Clicking Forza salvataggio manually forces the save
+    await act(async () => {
+      fireEvent.click(screen.getByText('Forza salvataggio'));
+    });
+    expect(saveHtmlContent).toHaveBeenCalledWith('/sessions/out.html', '<p></p>', expect.any(Number));
+    expect(screen.getByText('Salvato')).toBeTruthy();
   });
 });
