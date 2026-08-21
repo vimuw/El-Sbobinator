@@ -1516,9 +1516,9 @@ export default function App() {
                                     </div>
                                   </div>
                                 </div>
-                                <div className="text-xs font-semibold text-[var(--accent-text)] flex items-center gap-1 shrink-0 ml-2">
+                                <div className="join-room-hero-action">
                                   <span>Partecipa</span>
-                                  <ArrowRight className="w-3.5 h-3.5" />
+                                  <ArrowRight className="w-3.5 h-3.5 join-room-hero-arrow" />
                                 </div>
                               </button>
                             </>
@@ -1609,7 +1609,6 @@ export default function App() {
                     onRefresh={refreshArchiveSessions}
                     onLoadAll={handleLoadAll}
                     onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
-                    onOpenJoinRoom={() => setIsJoinRoomOpen(true)}
                   />
                 </React.Suspense>
               </div>
