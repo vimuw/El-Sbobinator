@@ -45,8 +45,15 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({
   }, [isOpen, activeRoom, activeUser]);
 
   const handleGenerateCode = () => {
-    const randomCode = `sbobina-${Math.random().toString(36).substring(2, 8)}`;
-    setRoom(randomCode);
+    const charset = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    const array = new Uint8Array(8);
+    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+      crypto.getRandomValues(array);
+    } else {
+      for (let i = 0; i < array.length; i++) array[i] = Math.floor(Math.random() * 256);
+    }
+    const token = Array.from(array, n => charset[n % charset.length]).join('');
+    setRoom(`sbobina-${token}`);
   };
 
   const handleCopyCode = () => {

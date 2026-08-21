@@ -107,11 +107,14 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
     const doc = new Y.Doc();
     let webrtc: WebrtcProvider | null = null;
     try {
-      webrtc = new WebrtcProvider(collaborationRoom, doc, {
+      const roomClean = collaborationRoom.trim().toLowerCase();
+      const internalRoom = `elsbob-v1-${roomClean}`;
+      webrtc = new WebrtcProvider(internalRoom, doc, {
         signaling: [
           'wss://y-webrtc.fly.dev',
           'wss://y-webrtc-signaling.onrender.com',
         ],
+        password: roomClean,
         filterBcConns: false,
         peerOpts: {
           config: {
@@ -120,6 +123,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
               { urls: 'stun:stun1.l.google.com:19302' },
               { urls: 'stun:stun2.l.google.com:19302' },
               { urls: 'stun:global.stun.twilio.com:3478' },
+              { urls: 'stun:stun.cloudflare.com:3478' },
             ],
           },
         },
@@ -806,14 +810,14 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
           </button>
 
           {!editor?.state.selection.empty && (
-            <button className="gdocs-menu-item text-red-600 dark:text-red-400" onClick={() => {
+            <button className="gdocs-menu-item" style={{ color: 'var(--error-text)' }} onClick={() => {
               editor?.chain().focus().deleteSelection().run();
             }}>
-              <span className="flex items-center gap-2.5 font-medium text-red-600 dark:text-red-400">
-                <Trash2 className="h-4 w-4 shrink-0 text-red-500" />
+              <span className="flex items-center gap-2.5 font-medium" style={{ color: 'var(--error-text)' }}>
+                <Trash2 className="h-4 w-4 shrink-0" style={{ color: 'var(--error-text)' }} />
                 <span>Elimina selezione</span>
               </span>
-              <kbd className="gdocs-kbd text-red-400 font-mono">Canc</kbd>
+              <kbd className="gdocs-kbd font-mono" style={{ color: 'var(--error-text)' }}>Canc</kbd>
             </button>
           )}
 
