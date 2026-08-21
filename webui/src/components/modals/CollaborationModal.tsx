@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Users, X, Copy, Check, Sparkles, Radio } from 'lucide-react';
+import { generateRoomCode } from '../../utils';
 
 interface CollaborationModalProps {
   isOpen: boolean;
@@ -31,29 +32,22 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({
   onStartCollaboration,
   onStopCollaboration,
 }) => {
-  const [room, setRoom] = useState(activeRoom || '');
+  const [room, setRoom] = useState(() => activeRoom || generateRoomCode());
   const [name, setName] = useState(() => getStoredCollabName(activeUser?.name));
   const [color, setColor] = useState(() => getStoredCollabColor(activeUser?.color));
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      setRoom(activeRoom || '');
+      setRoom(activeRoom || generateRoomCode());
       setName(getStoredCollabName(activeUser?.name));
       setColor(getStoredCollabColor(activeUser?.color));
+      setCopied(false);
     }
   }, [isOpen, activeRoom, activeUser]);
 
   const handleGenerateCode = () => {
-    const charset = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    const array = new Uint8Array(8);
-    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
-      crypto.getRandomValues(array);
-    } else {
-      for (let i = 0; i < array.length; i++) array[i] = Math.floor(Math.random() * 256);
-    }
-    const token = Array.from(array, n => charset[n % charset.length]).join('');
-    setRoom(`sbobina-${token}`);
+    setRoom(generateRoomCode());
   };
 
   const handleCopyCode = () => {
@@ -164,28 +158,48 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({
               <form onSubmit={handleJoin} className="flex flex-col flex-1 min-h-0">
                 <div className="modal-body space-y-4">
                   <div>
-                    <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
-                      Codice o Nome Stanza
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-semibold text-[var(--text-secondary)]">
+                        Codice Stanza Generato
+                      </label>
+                      <span className="text-[11px] text-[var(--accent-text)] font-medium">
+                        Univoco P2P
+                      </span>
+                    </div>
                     <div className="relative flex items-center">
                       <input
                         type="text"
                         required
-                        placeholder="es. sbobina-anatomia-05"
+                        placeholder="es. sbobina-8f7k2mq9"
                         value={room}
                         onChange={e => setRoom(e.target.value)}
-                        className="app-input font-mono text-sm pr-24"
+                        className="app-input font-mono text-sm pr-28 select-all"
+                        aria-label="Codice stanza generato"
                       />
-                      <button
-                        type="button"
-                        onClick={handleGenerateCode}
-                        className="absolute right-2 px-2.5 py-1.5 rounded-md text-xs font-semibold text-[var(--accent-color)] bg-[var(--accent-subtle)] hover:bg-[var(--accent-ring)] transition-colors flex items-center gap-1.5 shrink-0"
-                        title="Genera un codice casuale"
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        Genera
-                      </button>
+                      <div className="absolute right-1.5 flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={handleCopyCode}
+                          className="px-2 py-1 rounded-md text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-1"
+                          title="Copia codice"
+                        >
+                          {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                          {copied ? 'Copiato' : 'Copia'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleGenerateCode}
+                          className="px-2 py-1 rounded-md text-xs font-semibold text-[var(--accent-color)] bg-[var(--accent-subtle)] hover:bg-[var(--accent-ring)] transition-colors flex items-center gap-1 shrink-0"
+                          title="Rigenera un nuovo codice casuale"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          Rigenera
+                        </button>
+                      </div>
                     </div>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1.5">
+                      I tuoi compagni useranno questo codice per partecipare in tempo reale.
+                    </p>
                   </div>
 
                   <div>
@@ -241,9 +255,10 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({
                   </button>
                   <button
                     type="submit"
-                    className="modal-action-button is-primary flex-1"
+                    className="modal-action-button is-primary flex-1 flex items-center justify-center gap-2"
                   >
-                    Avvia / Partecipa
+                    <Radio className="w-4 h-4 animate-pulse" />
+                    Avvia Collaborazione
                   </button>
                 </div>
               </form>

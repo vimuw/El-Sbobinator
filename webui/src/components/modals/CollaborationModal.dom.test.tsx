@@ -15,7 +15,7 @@ describe('CollaborationModal', () => {
     expect(screen.queryByText('Lavora in Gruppo')).toBeNull();
   });
 
-  it('renders form fields when isOpen is true and no activeRoom', () => {
+  it('renders form fields with auto-generated room code when isOpen is true and no activeRoom', () => {
     render(
       <CollaborationModal
         isOpen={true}
@@ -26,13 +26,16 @@ describe('CollaborationModal', () => {
     );
     expect(screen.getByText('Lavora in Gruppo')).toBeTruthy();
     expect(screen.getByText('Collaborazione P2P in tempo reale')).toBeTruthy();
-    expect(screen.getByPlaceholderText('es. sbobina-anatomia-05')).toBeTruthy();
+    expect(screen.getByText('Codice Stanza Generato')).toBeTruthy();
+    const input = screen.getByLabelText('Codice stanza generato') as HTMLInputElement;
+    expect(input.value).toMatch(/^sbobina-[a-z0-9]+$/);
     expect(screen.getByPlaceholderText('es. Marco')).toBeTruthy();
-    expect(screen.getByText('Genera')).toBeTruthy();
-    expect(screen.getByText('Avvia / Partecipa')).toBeTruthy();
+    expect(screen.getByText('Rigenera')).toBeTruthy();
+    expect(screen.getByText('Copia')).toBeTruthy();
+    expect(screen.getByText('Avvia Collaborazione')).toBeTruthy();
   });
 
-  it('generates a random room code when Genera is clicked', () => {
+  it('generates a new random room code when Rigenera is clicked', () => {
     render(
       <CollaborationModal
         isOpen={true}
@@ -41,10 +44,33 @@ describe('CollaborationModal', () => {
         onStopCollaboration={vi.fn()}
       />
     );
-    const input = screen.getByPlaceholderText('es. sbobina-anatomia-05') as HTMLInputElement;
-    expect(input.value).toBe('');
-    fireEvent.click(screen.getByText('Genera'));
+    const input = screen.getByLabelText('Codice stanza generato') as HTMLInputElement;
+    const initialCode = input.value;
+    expect(initialCode).toMatch(/^sbobina-[a-z0-9]+$/);
+
+    fireEvent.click(screen.getByText('Rigenera'));
     expect(input.value).toMatch(/^sbobina-[a-z0-9]+$/);
+  });
+
+  it('copies the room code when Copia is clicked', () => {
+    const writeTextMock = vi.fn();
+    Object.assign(navigator, {
+      clipboard: { writeText: writeTextMock },
+    });
+
+    render(
+      <CollaborationModal
+        isOpen={true}
+        onClose={vi.fn()}
+        onStartCollaboration={vi.fn()}
+        onStopCollaboration={vi.fn()}
+      />
+    );
+    const input = screen.getByLabelText('Codice stanza generato') as HTMLInputElement;
+    fireEvent.click(screen.getByText('Copia'));
+
+    expect(writeTextMock).toHaveBeenCalledWith(input.value);
+    expect(screen.getByText('Copiato')).toBeTruthy();
   });
 
   it('submits form with lowercased room and user options', () => {
@@ -58,15 +84,15 @@ describe('CollaborationModal', () => {
         onStopCollaboration={vi.fn()}
       />
     );
-    fireEvent.change(screen.getByPlaceholderText('es. sbobina-anatomia-05'), {
-      target: { value: ' My-Room-123 ' },
+    fireEvent.change(screen.getByLabelText('Codice stanza generato'), {
+      target: { value: ' My-Custom-Room ' },
     });
     fireEvent.change(screen.getByPlaceholderText('es. Marco'), {
       target: { value: ' Mario Rossi ' },
     });
-    fireEvent.click(screen.getByText('Avvia / Partecipa'));
+    fireEvent.click(screen.getByText('Avvia Collaborazione'));
 
-    expect(onStartCollaboration).toHaveBeenCalledWith('my-room-123', {
+    expect(onStartCollaboration).toHaveBeenCalledWith('my-custom-room', {
       name: 'Mario Rossi',
       color: '#3b82f6',
     });
