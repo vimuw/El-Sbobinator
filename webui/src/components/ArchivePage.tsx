@@ -38,7 +38,7 @@ export { SortMenu } from './archive/SortMenu';
 export { FolderCard, SortableFolderCard, FolderCardOverlay, NewFolderCard } from './archive/FolderCard';
 export { DraggableSessionCard, SortableSessionCard, FolderSessionCardOverlay } from './archive/SessionCard';
 export { FolderDetailView } from './archive/FolderDetailView';
-export { FolderModal, DeleteFolderConfirmModal, DeleteMultipleSessionsConfirmModal } from './archive/FolderModals';
+export { FolderModal, DeleteFolderConfirmModal, DeleteMultipleSessionsConfirmModal, AddSessionsToFolderModal } from './archive/FolderModals';
 export { ArchiveSelectionBar } from './archive/ArchiveSelectionBar';
 export { FullTextResultList } from './archive/FullTextResults';
 
@@ -545,14 +545,10 @@ export function ArchivePage({
             </div>
             <button
               type="button"
-              className="px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-opacity hover:opacity-90"
-              style={{
-                background: 'var(--btn-primary-bg)',
-                color: 'var(--btn-primary-text)',
-              }}
+              className="recent-session-action cursor-pointer"
             >
               <span>Riprendi</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <ArrowRight className="w-3.5 h-3.5 recent-session-arrow" />
             </button>
           </div>
         </div>

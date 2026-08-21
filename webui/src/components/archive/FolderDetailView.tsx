@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  ArrowLeft, Check, ChevronDown, ChevronUp, FileSearch, FileText,
-  FolderPlus, Loader2, Pencil, Plus, Search, Trash2, X,
+  ArrowLeft, FileSearch, FileText,
+  Loader2, Pencil, Plus, Search, Trash2, X,
 } from 'lucide-react';
 import {
   DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -13,11 +13,12 @@ import {
 } from '@dnd-kit/sortable';
 import type { ArchiveFolder, ArchiveSession, SearchSessionResult } from '../../bridge';
 import type { EditorSession } from '../../editorSessions';
-import { formatRelativeTime, normalizeSessionPath } from '../../utils';
+import { normalizeSessionPath } from '../../utils';
 import { KebabMenu, type KebabMenuItem } from '../KebabMenu';
 import { FullTextResultList } from './FullTextResults';
 import { FolderSessionCardOverlay, SortableSessionCard } from './SessionCard';
 import { ArchiveSelectionBar } from './ArchiveSelectionBar';
+import { AddSessionsToFolderModal } from './AddSessionsToFolderModal';
 import type { ArchivePageProps } from './types';
 
 export interface FolderDetailViewProps {
@@ -73,7 +74,7 @@ export function FolderDetailView({
   const searchGenRef = useRef(0);
   const ftDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [selectedAddDirs, setSelectedAddDirs] = useState<Set<string>>(new Set());
+  const [showAddModal, setShowAddModal] = useState(false);
   const [selectedFolderSessionDirs, setSelectedFolderSessionDirs] = useState<Set<string>>(new Set());
 
   const folderSearchInputRef = useRef<HTMLInputElement>(null);
@@ -102,8 +103,6 @@ export function FolderDetailView({
 
   const pageData = folderSessions;
 
-  const [showAddPanel, setShowAddPanel] = useState(false);
-  const [addSearch, setAddSearch] = useState('');
   const [activeSortId, setActiveSortId] = useState<string | null>(null);
   const isFilteringName = !fullTextMode && search.trim().length > 0;
 
@@ -137,43 +136,13 @@ export function FolderDetailView({
     return Array.from(sessionsByDir.values()).filter(s => !inFolder.has(normalizeSessionPath(s.session_dir)));
   }, [folder.session_dirs, sessionsByDir]);
 
-  const availableToAdd = useMemo(() => {
-    const q = addSearch.trim().toLowerCase();
-    const filtered = q ? availableToAddAll.filter(s => s.name.toLowerCase().includes(q)) : availableToAddAll;
-    return [...filtered].sort((a, b) => {
-      const ta = a.completed_at_iso ? new Date(a.completed_at_iso).getTime() : 0;
-      const tb = b.completed_at_iso ? new Date(b.completed_at_iso).getTime() : 0;
-      return tb - ta;
-    });
-  }, [availableToAddAll, addSearch]);
-
-  const toggleSelectAdd = useCallback((dir: string) => {
-    setSelectedAddDirs(prev => {
-      const next = new Set(prev);
-      if (next.has(dir)) next.delete(dir);
-      else next.add(dir);
-      return next;
-    });
-  }, []);
-
-  const selectAllAdd = useCallback(() => {
-    setSelectedAddDirs(new Set(availableToAdd.map(s => s.session_dir)));
-  }, [availableToAdd]);
-
-  const clearSelectAdd = useCallback(() => {
-    setSelectedAddDirs(new Set());
-  }, []);
-
-  const handleBatchAdd = useCallback(() => {
-    if (selectedAddDirs.size === 0) return;
-    const dirs = Array.from(selectedAddDirs);
+  const handleAddSessions = useCallback((dirs: string[]) => {
     if (onAddMultipleSessions) {
       onAddMultipleSessions(dirs);
     } else {
       dirs.forEach(d => onAddSession(d));
     }
-    setSelectedAddDirs(new Set());
-  }, [selectedAddDirs, onAddMultipleSessions, onAddSession]);
+  }, [onAddMultipleSessions, onAddSession]);
 
   const prevManualFolderSelectionRef = useRef<Set<string> | null>(null);
 
@@ -286,7 +255,23 @@ export function FolderDetailView({
           </h2>
           <span className="status-pill">{folderSessions.length}</span>
         </div>
-        <KebabMenu items={headerKebabItems} />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowAddModal(true)}
+            className="folder-add-lessons-btn cursor-pointer"
+            title="Aggiungi lezioni a questa raccolta"
+          >
+            <Plus className="w-3.5 h-3.5 folder-add-lessons-plus" />
+            <span>Aggiungi lezioni</span>
+            {availableToAddAll.length > 0 && (
+              <span className="folder-add-lessons-badge">
+                {availableToAddAll.length}
+              </span>
+            )}
+          </button>
+          <KebabMenu items={headerKebabItems} />
+        </div>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -369,218 +354,6 @@ export function FolderDetailView({
         )}
       </div>
 
-      {/* Add lesson panel */}
-      <div
-        className="rounded-xl border transition-all overflow-hidden"
-        style={{
-          borderColor: showAddPanel ? 'var(--border-strong)' : 'var(--border-default)',
-          background: 'var(--bg-elevated)',
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => setShowAddPanel(v => !v)}
-          className="w-full flex items-center justify-between px-3.5 py-2.5 transition-colors cursor-pointer select-none group/add"
-          style={{
-            background: showAddPanel ? 'var(--sidebar-active-bg)' : 'var(--bg-input)',
-            borderBottom: showAddPanel ? '1px solid var(--border-subtle)' : 'none',
-          }}
-        >
-          <div className="flex items-center gap-2.5">
-            <span
-              className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-transform duration-200 group-hover/add:scale-105"
-              style={{ background: 'var(--accent-subtle)', color: 'var(--accent-text)' }}
-            >
-              <Plus className="w-3.5 h-3.5 transition-transform duration-200 group-hover/add:rotate-90" />
-            </span>
-            <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
-              Aggiungi lezione
-            </span>
-            {availableToAddAll.length > 0 && (
-              <span
-                className="text-[11px] font-medium px-2 py-0.5 rounded-full"
-                style={{ background: 'var(--border-subtle)', color: 'var(--text-muted)' }}
-              >
-                {availableToAddAll.length} disponibili
-              </span>
-            )}
-          </div>
-          {showAddPanel ? (
-            <ChevronUp className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
-          ) : (
-            <ChevronDown className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
-          )}
-        </button>
-
-        <AnimatePresence>
-          {showAddPanel && (
-            <motion.div
-              key="add-panel"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              style={{ overflow: 'hidden' }}
-            >
-              <div className="p-3 flex flex-col gap-3">
-                {availableToAddAll.length === 0 && !addSearch.trim() && (
-                  <div className="py-5 text-center flex flex-col items-center justify-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
-                    <FolderPlus className="w-7 h-7 opacity-35" />
-                    <p className="text-xs font-medium">Tutte le sbobine sono già in una cartella.</p>
-                  </div>
-                )}
-                {(availableToAddAll.length > 0 || addSearch.trim().length > 0) && (
-                  <div className="flex items-center gap-2">
-                    <div className="notion-search-wrap flex-1">
-                      <Search className="notion-search-icon w-3.5 h-3.5" />
-                      <input
-                        type="text"
-                        value={addSearch}
-                        onChange={e => setAddSearch(e.target.value)}
-                        placeholder="Cerca sbobina per nome..."
-                        className="notion-search-input"
-                      />
-                      <AnimatePresence>
-                        {addSearch.trim().length > 0 && (
-                          <motion.button
-                            key="clear-add"
-                            initial={{ opacity: 0, scale: 0.7 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.7 }}
-                            transition={{ duration: 0.1 }}
-                            onClick={() => setAddSearch('')}
-                            className="notion-search-clear"
-                            aria-label="Cancella ricerca"
-                          >
-                            <X className="w-3 h-3" />
-                          </motion.button>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  </div>
-                )}
-                {availableToAdd.length > 0 && (
-                  <div className="flex items-center justify-between gap-2 px-1 text-xs">
-                    <span className="font-semibold" style={{ color: 'var(--text-muted)' }}>
-                      {availableToAdd.length} {availableToAdd.length === 1 ? 'sbobina disponibile' : 'sbobine disponibili'}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      {selectedAddDirs.size > 0 && (
-                        <button
-                          type="button"
-                          onClick={clearSelectAdd}
-                          className="text-xs hover:underline cursor-pointer"
-                          style={{ color: 'var(--text-muted)' }}
-                        >
-                          Deseleziona
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={selectedAddDirs.size === availableToAdd.length ? clearSelectAdd : selectAllAdd}
-                        className="text-xs font-semibold flex items-center gap-1 cursor-pointer hover:underline"
-                        style={{ color: 'var(--accent-text)' }}
-                      >
-                        {selectedAddDirs.size === availableToAdd.length ? 'Deseleziona tutte' : `Seleziona tutte (${availableToAdd.length})`}
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {selectedAddDirs.size > 0 && (
-                  <div
-                    className="flex items-center justify-between gap-2 p-2.5 rounded-xl border"
-                    style={{ background: 'var(--sidebar-active-bg)', borderColor: 'var(--border-subtle)' }}
-                  >
-                    <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
-                      {selectedAddDirs.size} {selectedAddDirs.size === 1 ? 'lezione selezionata' : 'lezioni selezionate'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleBatchAdd}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-transform active:scale-95 cursor-pointer"
-                      style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-text)' }}
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Aggiungi alla cartella ({selectedAddDirs.size})</span>
-                    </button>
-                  </div>
-                )}
-                {availableToAdd.length === 0 && addSearch.trim() && (
-                  <p className="text-xs py-4 text-center" style={{ color: 'var(--text-muted)' }}>
-                    Nessun risultato per &ldquo;{addSearch}&rdquo;
-                  </p>
-                )}
-                {availableToAdd.length > 0 && (
-                  <div
-                    className="flex flex-col gap-2 overflow-y-auto app-scroll pr-1"
-                    style={{ maxHeight: 280 }}
-                  >
-                    {availableToAdd.map(session => {
-                      const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
-                      const isSelected = selectedAddDirs.has(session.session_dir);
-                      return (
-                        <div
-                          key={session.session_dir}
-                          className="archive-session-card flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg border cursor-pointer"
-                          style={{
-                            borderColor: isSelected ? 'var(--accent-text)' : 'var(--border-subtle)',
-                            background: isSelected ? 'var(--accent-subtle)' : undefined,
-                          }}
-                          onClick={() => toggleSelectAdd(session.session_dir)}
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                            <button
-                              type="button"
-                              onClick={e => {
-                                e.stopPropagation();
-                                toggleSelectAdd(session.session_dir);
-                              }}
-                              className={`w-4 h-4 rounded flex items-center justify-center transition-all shrink-0 cursor-pointer ${
-                                isSelected
-                                  ? 'bg-[var(--accent-text)] text-white'
-                                  : 'border border-[var(--border-strong)] bg-[var(--bg-input)] hover:border-[var(--accent-text)] opacity-70 group-hover:opacity-100'
-                              }`}
-                              aria-label={isSelected ? `Deseleziona ${session.name}` : `Seleziona ${session.name}`}
-                              title={isSelected ? 'Deseleziona' : 'Seleziona'}
-                            >
-                              {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                            </button>
-                            <FileText className="w-4 h-4 shrink-0" style={{ color: 'var(--accent-text)', opacity: 0.8 }} />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-                                {session.name}
-                              </p>
-                              {ts > 0 && (
-                                <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                                  {formatRelativeTime(ts)}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={e => {
-                              e.stopPropagation();
-                              onAddSession(session.session_dir);
-                            }}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all cursor-pointer hover:scale-105 active:scale-95"
-                            style={{ background: 'var(--accent-subtle)', color: 'var(--accent-text)', border: '1px solid var(--accent-text)' }}
-                            title="Aggiungi alla cartella"
-                            aria-label="Aggiungi alla cartella"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
       {!fullTextMode ? (
         <DndContext
           sensors={sortSensors}
@@ -589,9 +362,20 @@ export function FolderDetailView({
         >
           <div className="flex flex-col gap-2">
             {folderSessions.length === 0 && !search.trim() && (
-              <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>
-                <FileText className="w-8 h-8 mx-auto mb-3 opacity-30" />
+              <div className="py-12 text-center flex flex-col items-center justify-center gap-2" style={{ color: 'var(--text-muted)' }}>
+                <FileText className="w-8 h-8 opacity-30" />
                 <p className="text-sm">Nessuna sbobina in questa cartella.</p>
+                {availableToAddAll.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(true)}
+                    className="mt-1 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all hover:opacity-90 active:scale-95 cursor-pointer"
+                    style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-text)' }}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Aggiungi lezioni ({availableToAddAll.length} disponibili)</span>
+                  </button>
+                )}
               </div>
             )}
             {folderSessions.length === 0 && search.trim() && (
@@ -682,6 +466,17 @@ export function FolderDetailView({
               onDeleteMultipleSessions(targets);
             } : undefined}
             onClose={clearSelectFolderSessions}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showAddModal && (
+          <AddSessionsToFolderModal
+            folder={folder}
+            availableSessions={availableToAddAll}
+            onClose={() => setShowAddModal(false)}
+            onAdd={handleAddSessions}
           />
         )}
       </AnimatePresence>

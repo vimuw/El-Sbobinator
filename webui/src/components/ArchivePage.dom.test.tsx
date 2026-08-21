@@ -87,7 +87,7 @@ describe('ArchivePage', () => {
     expect(screen.getAllByText(/Aperto/).length).toBeGreaterThan(0);
   });
 
-  it('expands the unified add lesson panel and renders icon-only add button', () => {
+  it('opens the add lessons modal from folder header and renders available sessions', () => {
     const s1 = makeSession('s1', 'Lezione In Cartella');
     const s2 = makeSession('s2', 'Lezione Disponibile');
     const folder: ArchiveFolder = {
@@ -101,13 +101,14 @@ describe('ArchivePage', () => {
 
     fireEvent.click(screen.getAllByText('Corso A')[0]);
 
-    const toggleButton = screen.getByText('Aggiungi lezione').closest('button');
-    expect(toggleButton).toBeTruthy();
-    fireEvent.click(toggleButton!);
+    const openModalButton = screen.getByText('Aggiungi lezioni').closest('button');
+    expect(openModalButton).toBeTruthy();
+    fireEvent.click(openModalButton!);
 
-    const addButton = screen.getByTitle('Aggiungi alla cartella');
-    expect(addButton).toBeTruthy();
-    expect(addButton.textContent).not.toContain('Aggiungi');
+    // Modal title contains the folder name
+    expect(screen.getByText('Corso A', { selector: 'span' })).toBeTruthy();
+    // Modal displays available session
+    expect(screen.getByText('Lezione Disponibile')).toBeTruthy();
   });
 
   it('renders the last opened/modified sbobina mini section and triggers preview on click', () => {
@@ -176,7 +177,7 @@ describe('ArchivePage', () => {
     expect(updatedFolders[0].session_dirs).toContain('/sessions/s2');
   });
 
-  it('supports batch adding multiple sessions from the add lesson panel in FolderDetailView', () => {
+  it('supports batch adding multiple sessions from the add lessons modal in FolderDetailView', () => {
     const s1 = makeSession('s1', 'Lezione In Cartella');
     const s2 = makeSession('s2', 'Lezione Disp 1');
     const s3 = makeSession('s3', 'Lezione Disp 2');
@@ -193,16 +194,16 @@ describe('ArchivePage', () => {
     // Navigate to folder
     fireEvent.click(screen.getAllByText('Corso A')[0]);
 
-    // Open add panel
-    const toggleButton = screen.getByText('Aggiungi lezione').closest('button');
-    fireEvent.click(toggleButton!);
+    // Open add modal
+    const openModalButton = screen.getByText('Aggiungi lezioni').closest('button');
+    fireEvent.click(openModalButton!);
 
     // Click "Seleziona tutte (2)"
     const selectAllBtn = screen.getByText(/Seleziona tutte/);
     fireEvent.click(selectAllBtn);
 
-    // Click "Aggiungi alla cartella (2)"
-    const addBatchBtn = screen.getByText(/Aggiungi alla cartella \(2\)/).closest('button');
+    // Click "Aggiungi (2)"
+    const addBatchBtn = screen.getByText(/Aggiungi \(2\)/).closest('button');
     expect(addBatchBtn).toBeTruthy();
     fireEvent.click(addBatchBtn!);
 
