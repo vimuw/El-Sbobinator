@@ -553,11 +553,20 @@ button {
 }
 
 .stat-card {
-  transition: border-color 0.18s ease;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
 }
 
 .stat-card:hover {
   border-color: var(--accent-bg);
+  transform: translateY(-1px);
+}
+
+.stat-card-icon {
+  transition: transform 160ms ease;
+}
+
+.stat-card:hover .stat-card-icon {
+  transform: scale(1.06);
 }
 
 .premium-panel-strong,
@@ -1152,10 +1161,10 @@ button {
   border: 1.5px dashed var(--border-default);
   background: var(--bg-panel);
   transition:
-    transform 180ms ease,
-    background 180ms ease,
-    box-shadow 180ms ease,
-    border-color 180ms ease;
+    transform 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease;
 }
 
 .dropzone-card::before {
@@ -1176,6 +1185,11 @@ button {
 .dropzone-card:hover {
   border-color: var(--accent-bg);
   box-shadow: none;
+  transform: translateY(-1px);
+}
+
+.dropzone-card:active {
+  transform: scale(0.99);
 }
 
 .dropzone-card.is-dragging {
@@ -3362,9 +3376,13 @@ input[type="password"]::-ms-reveal {
 }
 
 .join-room-hero-card:hover {
-  border-color: var(--accent-ring);
-  background: color-mix(in srgb, var(--accent-subtle) 40%, var(--bg-surface));
+  border-color: var(--accent-bg);
+  background: var(--bg-surface);
   transform: translateY(-1px);
+}
+
+.join-room-hero-card:active {
+  transform: scale(0.98);
 }
 
 .join-room-hero-icon {
@@ -3382,6 +3400,35 @@ input[type="password"]::-ms-reveal {
 
 .join-room-hero-card:hover .join-room-hero-icon {
   transform: scale(1.06);
+}
+
+.join-room-hero-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-ring);
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-left: 8px;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.join-room-hero-card:hover .join-room-hero-action {
+  background: color-mix(in srgb, var(--accent-subtle) 70%, var(--accent-bg));
+  border-color: var(--accent-bg);
+}
+
+.join-room-hero-arrow {
+  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.join-room-hero-card:hover .join-room-hero-arrow {
+  transform: translateX(3px);
 }
 
 .dropzone-compact-join-btn {
@@ -3617,36 +3664,40 @@ input[type="password"]::-ms-reveal {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border-default) !important;
-  background: var(--bg-elevated) !important;
-  color: var(--text-muted) !important;
-  transition: background 180ms ease, color 180ms ease, transform 180ms ease-out;
+  border: 1px solid var(--accent-ring);
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease, transform 160ms ease;
 }
 
 .dropzone-card:hover .dropzone-icon-container {
-  transform: translateY(-2px) scale(1.04);
+  transform: scale(1.06);
+  border-color: var(--accent-bg);
 }
 
 .dropzone-icon-container.is-dragging {
-  background: var(--accent-subtle) !important;
-  color: var(--accent-bg) !important;
+  background: var(--accent-subtle);
+  color: var(--accent-bg);
+  border-color: var(--accent-bg);
+  transform: scale(1.10);
 }
 
 .dropzone-browse-button {
   margin-top: 16px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  background: var(--accent-subtle) !important;
-  color: var(--accent-text) !important;
-  border: 1px solid var(--accent-ring) !important;
-  transition: all 180ms ease-out;
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+  border: 1px solid var(--accent-ring);
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
 }
 
+.dropzone-card:hover .dropzone-browse-button,
 .dropzone-browse-button:hover {
-  background: color-mix(in srgb, var(--accent-bg) 18%, transparent) !important;
-  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--accent-subtle) 70%, var(--accent-bg));
+  border-color: var(--accent-bg);
 }
 
 .dropzone-browse-button:active {
