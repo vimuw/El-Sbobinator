@@ -1267,4 +1267,63 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       });
     });
   });
+
+  describe('Live collaboration entry points on Dashboard', () => {
+    beforeEach(() => {
+      vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
+      vi.mocked(useQueuePersistence).mockReset();
+    });
+
+    it('renders hero collaboration card on empty dashboard and opens JoinRoomModal when clicked', async () => {
+      await act(async () => {
+        render(<App />);
+      });
+
+      const heroCard = screen.getByLabelText('Partecipa alla sessione live');
+      expect(heroCard).toBeTruthy();
+      expect(screen.getByText('Hai un codice stanza?')).toBeTruthy();
+      expect(screen.getByText('Partecipa alla sessione di gruppo in tempo reale')).toBeTruthy();
+
+      await act(async () => {
+        fireEvent.click(heroCard);
+      });
+
+      expect(screen.getByText('Partecipa a una Stanza')).toBeTruthy();
+      expect(screen.getByPlaceholderText('es. sbobina-anatomia-05')).toBeTruthy();
+    });
+
+    it('renders compact join room button alongside compact dropzone when files are queued', async () => {
+      vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
+        React.useEffect(() => {
+          dispatch({
+            type: 'queue/add',
+            files: [{
+              id: 'file-1',
+              name: 'lesson.mp3',
+              size: 123,
+              duration: 60,
+              path: 'C:\\Media\\lesson.mp3',
+              status: 'queued',
+              progress: 0,
+              phase: 0,
+            }],
+          });
+        }, [dispatch]);
+      });
+
+      await act(async () => {
+        render(<App />);
+      });
+
+      const compactBtn = screen.getByLabelText('Partecipa a una sessione live con codice stanza');
+      expect(compactBtn).toBeTruthy();
+      expect(screen.getByText('Codice stanza')).toBeTruthy();
+
+      await act(async () => {
+        fireEvent.click(compactBtn);
+      });
+
+      expect(screen.getByText('Partecipa a una Stanza')).toBeTruthy();
+    });
+  });
 });
