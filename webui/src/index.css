@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 @import "katex/dist/katex.min.css";
 /* Optimized font imports to bundle ONLY the modern woff2 format (saving ~91kB of unused .woff assets) */
 
