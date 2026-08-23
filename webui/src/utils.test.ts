@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { errorLabel, formatDuration, formatRelativeTime, formatSize, generateRoomCode, isQuotaError, isResumableError, readFileAsDataUrl, readAndOptimizeImageAsDataUrl, calculateOptimalDimensions, shortModelName } from './utils';
+import { errorLabel, formatDuration, formatRelativeTime, formatSize, generateRoomCode, isPausedError, isQuotaError, isResumableError, readFileAsDataUrl, readAndOptimizeImageAsDataUrl, calculateOptimalDimensions, shortModelName } from './utils';
 
 describe('isQuotaError', () => {
   it('returns false for undefined', () => {
@@ -52,6 +52,27 @@ describe('isResumableError', () => {
   it('returns false for non-resumable errors', () => {
     expect(isResumableError('html_export_failed')).toBe(false);
     expect(isResumableError('processing_failed')).toBe(false);
+  });
+});
+
+describe('isPausedError', () => {
+  it('returns false for undefined and empty', () => {
+    expect(isPausedError(undefined)).toBe(false);
+    expect(isPausedError('')).toBe(false);
+  });
+
+  it('returns true for regenerate_prompt_timeout', () => {
+    expect(isPausedError('regenerate_prompt_timeout')).toBe(true);
+  });
+
+  it('returns true when detail is api_key_prompt_timeout', () => {
+    expect(isPausedError('quota_daily_limit_phase1', 'api_key_prompt_timeout')).toBe(true);
+  });
+
+  it('returns false for standard errors', () => {
+    expect(isPausedError('quota_daily_limit_phase1')).toBe(false);
+    expect(isPausedError('html_export_failed')).toBe(false);
+    expect(isPausedError('phase1_chunk_failed_3')).toBe(false);
   });
 });
 

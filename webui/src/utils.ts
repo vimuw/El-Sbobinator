@@ -50,6 +50,13 @@ export function isResumableError(raw: string | undefined): boolean {
   return _RESUMABLE_ERRORS.has(r);
 }
 
+export function isPausedError(raw: string | undefined, detail?: string): boolean {
+  if (!raw) return false;
+  const r = raw.trim();
+  const d = String(detail || '').trim();
+  return r === 'regenerate_prompt_timeout' || d === 'api_key_prompt_timeout';
+}
+
 export function errorLabel(raw: string | undefined, detail?: string): string {
   if (!raw) return 'Elaborazione non completata.';
   const r = raw.trim();
