@@ -1,6 +1,29 @@
+import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsModal } from './SettingsModal';
+
+const motionCache = new Map<string, React.ForwardRefExoticComponent<React.PropsWithoutRef<Record<string, unknown>> & React.RefAttributes<unknown>>>();
+vi.mock('motion/react', () => ({
+  motion: new Proxy({}, {
+    get: (_: unknown, tag: string | symbol) => {
+      if (typeof tag !== 'string') return undefined;
+      if (!motionCache.has(tag)) {
+        motionCache.set(
+          tag,
+          React.forwardRef((props: Record<string, unknown>, ref: unknown) => {
+            const { initial: _i, animate: _a, exit: _e, transition: _t, layout: _l, variants: _v, layoutId: _li, whileTap: _wt, whileHover: _wh, ...rest } = props;
+            return React.createElement(tag, { ...rest, ref: ref as React.Ref<unknown> });
+          })
+        );
+      }
+      return motionCache.get(tag);
+    },
+  }),
+  AnimatePresence: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+  useAnimation: () => ({ start: vi.fn(), stop: vi.fn() }),
+  useMotionValue: (v: unknown) => ({ get: () => v, set: vi.fn() }),
+}));
 
 function setPywebview(api: Record<string, unknown> | undefined) {
   Object.defineProperty(window, 'pywebview', {
@@ -351,6 +374,96 @@ describe('SettingsModal — session folder and cleanup', () => {
     expect(cleanupCompletedFn).toHaveBeenLastCalledWith(30, false);
   });
 
+  it('dismisses cleanup notification when close button is clicked', async () => {
+    const cleanupFn = vi.fn()
+      .mockResolvedValueOnce({ ok: true, removed: 0, candidates: 2, freed_bytes: 512 })
+      .mockResolvedValueOnce({ ok: true, removed: 2, candidates: 2, freed_bytes: 512 });
+    setPywebview({ cleanup_old_sessions: cleanupFn });
+    render(<SettingsModal {...makeProps()} />);
+    await act(async () => {
+      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTitle(/Conta ed elimina tutte le elaborazioni incomplete/));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Elimina incomplete'));
+    });
+    await vi.waitFor(() =>
+      expect(screen.getByText(/Rimosse 2 elaborazioni incomplete/)).toBeTruthy(),
+    );
+
+    const closeBtn = screen.getByRole('button', { name: 'Chiudi notifica' });
+    await act(async () => {
+      fireEvent.click(closeBtn);
+    });
+
+    expect(screen.queryByText(/Rimosse 2 elaborazioni incomplete/)).toBeNull();
+  });
+
+  it('auto-dismisses cleanup notification after 5 seconds', async () => {
+    vi.useFakeTimers();
+    try {
+      const cleanupFn = vi.fn()
+        .mockResolvedValueOnce({ ok: true, removed: 0, candidates: 1, freed_bytes: 256 })
+        .mockResolvedValueOnce({ ok: true, removed: 1, candidates: 1, freed_bytes: 256 });
+      setPywebview({ cleanup_old_sessions: cleanupFn });
+      render(<SettingsModal {...makeProps()} />);
+      await act(async () => {
+        fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByTitle(/Conta ed elimina tutte le elaborazioni incomplete/));
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText('Elimina incomplete'));
+      });
+      expect(screen.getByText(/Rimossa 1 elaborazione incompleta/)).toBeTruthy();
+
+      await act(async () => {
+        vi.advanceTimersByTime(5100);
+      });
+
+      expect(screen.queryByText(/Rimossa 1 elaborazione incompleta/)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('resets cleanup result when modal is closed and reopened', async () => {
+    const cleanupFn = vi.fn()
+      .mockResolvedValueOnce({ ok: true, removed: 0, candidates: 1, freed_bytes: 256 })
+      .mockResolvedValueOnce({ ok: true, removed: 1, candidates: 1, freed_bytes: 256 });
+    setPywebview({ cleanup_old_sessions: cleanupFn });
+    const props = { ...makeProps(), isOpen: true };
+    const { rerender } = render(<SettingsModal {...props} />);
+    await act(async () => {
+      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTitle(/Conta ed elimina tutte le elaborazioni incomplete/));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Elimina incomplete'));
+    });
+    await vi.waitFor(() =>
+      expect(screen.getByText(/Rimossa 1 elaborazione incompleta/)).toBeTruthy(),
+    );
+
+    // Close the modal
+    rerender(<SettingsModal {...props} isOpen={false} />);
+
+    // Reopen the modal
+    rerender(<SettingsModal {...props} isOpen={true} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+    });
+
+    // Cleanup result should be reset to null
+    expect(screen.queryByText(/Rimossa 1 elaborazione incompleta/)).toBeNull();
+  });
+
   it('triggers onSessionRootMoved when move completes successfully', async () => {
     const onSessionRootMoved = vi.fn();
     const askFolder = vi.fn().mockResolvedValue({ ok: true, path: 'D:\\new_sessions' });
@@ -598,7 +711,7 @@ describe('SettingsModal — validate environment', () => {
     expect(screen.queryByText('Ambiente OK')).toBeNull();
   });
 
-  it('keeps validation result when modal is closed and reopened if settings are unchanged', async () => {
+  it('resets validation result when modal is closed and reopened', async () => {
     const models = [
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast', default_chunk_minutes: 12 },
     ];
@@ -638,7 +751,9 @@ describe('SettingsModal — validate environment', () => {
       fireEvent.click(screen.getByText('Avanzati').closest('button')!);
     });
 
-    // Expect 'Ambiente OK' to still be present (because settings didn't change)
-    expect(screen.getByText('Ambiente OK')).toBeTruthy();
+    // Expect 'Ambiente OK' to be cleared and state reset
+    expect(screen.queryByText('Ambiente OK')).toBeNull();
+    const statusBadges = screen.getAllByText('da verificare');
+    expect(statusBadges.length).toBeGreaterThanOrEqual(4);
   });
 });
