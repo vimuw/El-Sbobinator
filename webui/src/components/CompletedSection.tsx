@@ -1,6 +1,6 @@
 import { memo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle, Search, Trash2 } from 'lucide-react';
+import { CheckCircle, Search, Trash2, X } from 'lucide-react';
 import type { AppStatus, FileItem } from '../appState';
 import type { ArchiveFolder } from '../bridge';
 import { CompletedFileCard } from './QueueFileCard';
@@ -44,12 +44,12 @@ export const CompletedSection = memo(function CompletedSection({ doneFiles, appS
                 Sbobine completate
               </h2>
               <span className="status-pill self-start sm:self-auto shrink-0 whitespace-nowrap" style={{ color: 'var(--success-text)', borderColor: 'var(--success-ring)', background: 'rgba(255,255,255,0.03)' }}>
-                {fullyCompletedCount} complete{warningCount > 0 ? ` · ${warningCount} con avvisi` : ''}
+                {fullyCompletedCount}{warningCount > 0 ? ` · ${warningCount} con avvisi` : ''}
               </span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {doneFiles.length >= 5 && (
-                <div className="notion-search-wrap" style={{ width: '140px' }}>
+                <div className="notion-search-wrap w-48 sm:w-64">
                   <Search className="notion-search-icon w-3.5 h-3.5" />
                   <input
                     type="text"
@@ -58,13 +58,23 @@ export const CompletedSection = memo(function CompletedSection({ doneFiles, appS
                     placeholder="Cerca..."
                     className="notion-search-input"
                   />
+                  {completedSearch.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setCompletedSearch('')}
+                      className="notion-search-clear"
+                      aria-label="Cancella ricerca"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
               )}
               {(appState === 'idle' || appState === 'processing') && (
                 <button
+                  type="button"
                   onClick={onClearAll}
-                  className="icon-button compact-icon-button"
-                  style={{ color: 'var(--text-muted)' }}
+                  className="icon-button compact-icon-button hover-danger transition-colors text-[var(--text-muted)] hover:!text-[var(--error-text)]"
                   title="Pulisci tutto"
                   aria-label="Pulisci tutto"
                 >

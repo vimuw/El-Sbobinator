@@ -33,13 +33,13 @@ describe('CompletedSection', () => {
   it('renders heading and file count when files are present', () => {
     render(<CompletedSection {...baseProps} doneFiles={[makeFile()]} />);
     expect(screen.getByText('Sbobine completate')).toBeTruthy();
-    expect(screen.getByText('1 complete')).toBeTruthy();
+    expect(screen.getByText('1')).toBeTruthy();
   });
 
-  it('uses plural count for multiple files', () => {
+  it('shows correct count for multiple files', () => {
     const files = [makeFile({ id: 'f1' }), makeFile({ id: 'f2' })];
     render(<CompletedSection {...baseProps} doneFiles={files} />);
-    expect(screen.getByText('2 complete')).toBeTruthy();
+    expect(screen.getByText('2')).toBeTruthy();
   });
 
   it('renders "Pulisci tutto" button when appState is idle', () => {
@@ -89,6 +89,17 @@ describe('CompletedSection', () => {
     render(<CompletedSection {...baseProps} doneFiles={files} />);
     fireEvent.change(screen.getByPlaceholderText('Cerca...'), { target: { value: 'xyz-nonexistent' } });
     expect(screen.getByText(/Nessun risultato per/)).toBeTruthy();
+  });
+
+  it('clears search input when clear button is clicked', () => {
+    const files = Array.from({ length: 5 }, (_, i) => makeFile({ id: `f${i}`, name: `file-${i}.mp3` }));
+    render(<CompletedSection {...baseProps} doneFiles={files} />);
+    const input = screen.getByPlaceholderText('Cerca...') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'file-1' } });
+    expect(input.value).toBe('file-1');
+    const clearButton = screen.getByLabelText('Cancella ricerca');
+    fireEvent.click(clearButton);
+    expect(input.value).toBe('');
   });
 
   it('passes folder indicators to completed cards by outputDir', () => {
