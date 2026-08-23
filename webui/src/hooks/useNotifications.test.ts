@@ -57,6 +57,27 @@ describe('useNotifications', () => {
       expect(result.current.unreadNotificationsCount).toBe(1);
     });
 
+    it('sanitizes legacy notifications containing regenerate_prompt_timeout on load', () => {
+      const legacy: PersistedNotification[] = [
+        {
+          id: 'old-1',
+          title: 'Errore elaborazione',
+          message: 'Errore per "Istologia lezione 9 parte 1.m4a": regenerate_prompt_timeout',
+          type: 'error',
+          category: 'processing',
+          timestamp: 1000,
+          read: false,
+        },
+      ];
+      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(legacy));
+
+      const { result } = renderHook(() => useNotifications());
+      expect(result.current.rawNotifications).toHaveLength(1);
+      expect(result.current.rawNotifications[0].title).toBe('Elaborazione in pausa');
+      expect(result.current.rawNotifications[0].type).toBe('warning');
+      expect(result.current.rawNotifications[0].message).toContain('Nessuna scelta ricevuta');
+    });
+
     it('gracefully handles corrupt JSON in localStorage', () => {
       localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, '{invalid json');
       const { result } = renderHook(() => useNotifications());

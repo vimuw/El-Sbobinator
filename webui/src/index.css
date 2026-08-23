@@ -788,6 +788,11 @@ button {
   border-color: var(--error-ring);
 }
 
+.icon-button.hover-danger:hover:not(:disabled),
+.icon-button.is-danger-hover:hover:not(:disabled) {
+  color: var(--error-text) !important;
+}
+
 .icon-button.icon-button--active,
 :root:not([data-theme="dark"]) .icon-button.icon-button--active {
   background: color-mix(in srgb, var(--processing-text) 12%, transparent);
@@ -3711,12 +3716,15 @@ input[type="password"]::-ms-reveal {
 
 .premium-button-secondary.is-warning {
   color: var(--warning-text) !important;
-  border-color: var(--warning-ring) !important;
-  background: var(--warning-subtle) !important;
+  border: 1px solid var(--warning-ring) !important;
+  background: var(--bg-elevated) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .premium-button-secondary.is-warning:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--warning-text) 14%, transparent) !important;
+  background: var(--warning-subtle) !important;
+  border-color: var(--warning-text) !important;
+  color: var(--warning-text) !important;
 }
 
 /* Badges */
@@ -3838,6 +3846,12 @@ input[type="password"]::-ms-reveal {
 .queue-card.is-error {
   box-shadow: inset 3px 0 0 var(--error-bg) !important;
   background: var(--error-subtle) !important;
+}
+
+.queue-card.is-warning {
+  box-shadow: inset 3px 0 0 var(--warning-bg) !important;
+  background: var(--warning-subtle) !important;
+  border-color: var(--warning-ring) !important;
 }
 
 .queue-card.is-completed {

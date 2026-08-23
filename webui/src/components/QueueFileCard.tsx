@@ -5,7 +5,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
 import type { ArchiveFolder } from '../bridge';
-import { errorLabel, formatDuration, formatRelativeTime, formatSize, isQuotaError, isResumableError, shortModelName } from '../utils';
+import { errorLabel, formatDuration, formatRelativeTime, formatSize, isPausedError, isQuotaError, isResumableError, shortModelName } from '../utils';
 import { KebabMenu, type KebabMenuItem } from './KebabMenu';
 import { FolderIndicatorChip } from './FolderChip';
 
@@ -35,6 +35,7 @@ function QueueFileCardInner({
   const isCanceling = appState === 'canceling' && file.status === 'processing';
   const isDraggable = file.status === 'queued' && appState === 'idle' && showDragHandle;
   const isPhase1ChunkFailure = Boolean(file.errorText?.startsWith('phase1_chunk_failed_'));
+  const isPaused = file.status === 'error' && isPausedError(file.errorText, file.errorDetail);
   const { attributes, listeners, setNodeRef, transform, transition: dndTransition, isDragging } = useSortable({
     id: file.id,
     disabled: !isDraggable,
@@ -60,7 +61,7 @@ function QueueFileCardInner({
           file.status === 'processing'
             ? isCanceling ? 'is-canceling' : 'is-processing'
             : file.status === 'error'
-              ? 'is-error'
+              ? isPaused ? 'is-warning' : 'is-error'
               : 'is-queued'
         }`}
       >
@@ -83,7 +84,7 @@ function QueueFileCardInner({
                 file.status === 'processing'
                   ? isCanceling ? 'text-[var(--error-text)]' : 'text-[var(--processing-text)]'
                   : file.status === 'error'
-                    ? 'text-[var(--error-text)]'
+                    ? isPaused ? 'text-[var(--warning-text)]' : 'text-[var(--error-text)]'
                     : 'text-[var(--text-muted)]'
               }`}
             >
@@ -92,7 +93,9 @@ function QueueFileCardInner({
                   ? <XCircle className="w-5 h-5" />
                   : <Clock className="w-5 h-5 animate-pulse" />
                 : file.status === 'error'
-                  ? <AlertCircle className="w-5 h-5" />
+                  ? isPaused
+                    ? <AlertTriangle className="w-5 h-5" />
+                    : <AlertCircle className="w-5 h-5" />
                   : <FileAudio className="w-5 h-5" />}
             </div>
             <div className="min-w-0 flex-1">
@@ -108,7 +111,12 @@ function QueueFileCardInner({
                 {file.status === 'error' && (
                   <>
                     <span className="w-1 h-1 rounded-full bg-[var(--border-default)]" />
-                    <span title={file.errorDetail || file.errorText} className="text-[var(--error-text)]">{errorLabel(file.errorText, file.errorDetail)}</span>
+                    <span
+                      title={file.errorDetail || file.errorText}
+                      className={isPaused ? 'text-[var(--warning-text)]' : 'text-[var(--error-text)]'}
+                    >
+                      {errorLabel(file.errorText, file.errorDetail)}
+                    </span>
                   </>
                 )}
               </div>
@@ -143,12 +151,11 @@ function QueueFileCardInner({
               isResumableError(file.errorText) || isPhase1ChunkFailure ? (
                 <button
                   onClick={() => onRetry(file.id)}
-                  className="premium-button compact-button"
+                  className="icon-button compact-icon-button"
                   title={isPhase1ChunkFailure ? 'I blocchi precedenti sono salvati: riprendi dal blocco fallito' : 'Il progresso è salvato: riprendi da dove è rimasto'}
                   aria-label="Riprendi"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  Riprendi
+                  <RotateCcw className="w-4 h-4" />
                 </button>
               ) : (
                 <button

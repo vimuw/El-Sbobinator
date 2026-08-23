@@ -113,14 +113,14 @@ describe('QueueFileCard', () => {
         />
       </QueueWrapper>,
     );
-    expect(screen.getByText('Riprendi')).toBeTruthy();
+    expect(screen.getByLabelText('Riprendi')).toBeTruthy();
     fireEvent.click(screen.getByLabelText('Riprendi'));
     expect(onRetry).toHaveBeenCalledWith('f1');
   });
 
-  it('shows Riprendi CTA for regenerate prompt timeout when idle', () => {
+  it('shows Riprendi CTA and warning badge styling for regenerate prompt timeout when idle', () => {
     const onRetry = vi.fn();
-    render(
+    const { container } = render(
       <QueueWrapper>
         <QueueFileCard
           file={makeFile({ status: 'error', errorText: 'regenerate_prompt_timeout' })}
@@ -130,6 +130,8 @@ describe('QueueFileCard', () => {
       </QueueWrapper>,
     );
     expect(screen.getByText(/Nessuna scelta/)).toBeTruthy();
+    expect(container.querySelector('.is-warning')).toBeTruthy();
+    expect(container.querySelector('.is-error')).toBeNull();
     fireEvent.click(screen.getByLabelText('Riprendi'));
     expect(onRetry).toHaveBeenCalledWith('f1');
   });
@@ -146,7 +148,7 @@ describe('QueueFileCard', () => {
       </QueueWrapper>,
     );
     expect(screen.getByText(/FFmpeg error: disk full/)).toBeTruthy();
-    expect(screen.getByText('Riprendi')).toBeTruthy();
+    expect(screen.getByLabelText('Riprendi')).toBeTruthy();
     fireEvent.click(screen.getByLabelText('Riprendi'));
     expect(onRetry).toHaveBeenCalledWith('f1');
     expect(screen.queryByLabelText('Riprova')).toBeNull();

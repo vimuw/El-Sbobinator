@@ -39,6 +39,28 @@ export interface UseNotificationsOptions {
   onOpenSettings?: () => void;
 }
 
+function sanitizePersistedNotifications(list: unknown): PersistedNotification[] {
+  if (!Array.isArray(list)) return [];
+  return list.map(item => {
+    const n = item as PersistedNotification;
+    if (n && typeof n.message === 'string' && n.message.includes('regenerate_prompt_timeout')) {
+      const cleanMessage = n.message
+        .replace(
+          'regenerate_prompt_timeout',
+          'Nessuna scelta ricevuta sulla ripresa entro 120 secondi. Sessione salvata: clicca Riprendi per continuare.'
+        )
+        .replace(/^Errore per /, 'Per ');
+      return {
+        ...n,
+        title: n.title === 'Errore elaborazione' ? 'Elaborazione in pausa' : n.title,
+        type: n.type === 'error' ? 'warning' : n.type,
+        message: cleanMessage,
+      };
+    }
+    return n;
+  });
+}
+
 export function useNotifications(options: UseNotificationsOptions = {}) {
   const optionsRef = useRef(options);
   optionsRef.current = options;
@@ -46,7 +68,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
   const [rawNotifications, setRawNotifications] = useState<PersistedNotification[]>(() => {
     try {
       const stored = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
-      return stored ? JSON.parse(stored) : [];
+      return stored ? sanitizePersistedNotifications(JSON.parse(stored)) : [];
     } catch (_) {
       return [];
     }
