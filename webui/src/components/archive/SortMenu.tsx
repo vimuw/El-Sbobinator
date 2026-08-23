@@ -7,9 +7,10 @@ import { type SortOption, SORT_OPTIONS } from './types';
 interface SortMenuProps {
   sort: SortOption;
   onSortChange: (sort: SortOption) => void;
+  options?: { id: SortOption; label: string }[];
 }
 
-export function SortMenu({ sort, onSortChange }: SortMenuProps) {
+export function SortMenu({ sort, onSortChange, options = SORT_OPTIONS }: SortMenuProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top?: number; bottom?: number; left?: number; right?: number; opensUp?: boolean } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -20,7 +21,7 @@ export function SortMenu({ sort, onSortChange }: SortMenuProps) {
     const computePos = () => {
       if (!buttonRef.current) return;
       const rect = buttonRef.current.getBoundingClientRect();
-      const menuHeight = 175;
+      const menuHeight = options.length * 36 + 20;
       const spaceBelow = window.innerHeight - rect.bottom - 12;
       const spaceAbove = rect.top - 12;
       const opensUp = spaceBelow < menuHeight && spaceAbove > spaceBelow;
@@ -29,13 +30,13 @@ export function SortMenu({ sort, onSortChange }: SortMenuProps) {
         opensUp,
         top: opensUp ? undefined : rect.bottom + 4,
         bottom: opensUp ? window.innerHeight - rect.top + 4 : undefined,
-        left: Math.max(8, Math.min(rect.left, window.innerWidth - 215)),
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - 245)),
       });
     };
     computePos();
     const rafId = requestAnimationFrame(computePos);
     return () => cancelAnimationFrame(rafId);
-  }, [open]);
+  }, [open, options.length]);
 
   useEffect(() => {
     if (!open) return;
@@ -64,7 +65,7 @@ export function SortMenu({ sort, onSortChange }: SortMenuProps) {
     };
   }, [open]);
 
-  const currentOption = SORT_OPTIONS.find(o => o.id === sort);
+  const currentOption = options.find(o => o.id === sort) ?? options[0];
 
   return (
     <>
@@ -99,12 +100,12 @@ export function SortMenu({ sort, onSortChange }: SortMenuProps) {
                 borderRadius: 12,
                 boxShadow: 'var(--shadow-strong)',
                 minWidth: 200,
-                width: 200,
+                width: 'max-content',
                 padding: 4,
               }}
               onClick={e => e.stopPropagation()}
             >
-              {SORT_OPTIONS.map(opt => {
+              {options.map(opt => {
                 const isSelected = sort === opt.id;
                 return (
                   <button

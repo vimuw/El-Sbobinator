@@ -193,7 +193,7 @@ export function FolderDetailView({
     const gen = ++searchGenRef.current;
     ftDebounceRef.current = setTimeout(async () => {
       try {
-        const res = await window.pywebview?.api?.search_sessions?.(q, 50);
+        const res = await window.pywebview?.api?.search_sessions?.(q, 100);
         if (searchGenRef.current !== gen) return;
         if (res?.ok) {
           setFtResults(res.results ?? []);
@@ -420,17 +420,19 @@ export function FolderDetailView({
         </DndContext>
       ) : (
         <div className="flex flex-col gap-2">
-          <FullTextResultList
-            query={search.trim()}
-            results={filteredFtResults}
-            isSearching={isSearching}
-            onPreview={(r) => onPreview(r.html_path, r.name, undefined, undefined, r.session_dir, search.trim())}
-          />
-          {filteredFtResults !== null && filteredFtResults.length === 0 && !isSearching && search.trim().length >= 3 && (
-            <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
-              Nessun risultato nel testo delle sbobine per &ldquo;{search}&rdquo;
-            </div>
-          )}
+          <div className="max-h-[calc(100vh-300px)] overflow-y-auto app-scroll pr-1 py-1">
+            <FullTextResultList
+              query={search.trim()}
+              results={filteredFtResults}
+              isSearching={isSearching}
+              onPreview={(r) => onPreview(r.html_path, r.name, undefined, undefined, r.session_dir, search.trim())}
+            />
+            {filteredFtResults !== null && filteredFtResults.length === 0 && !isSearching && search.trim().length >= 3 && !ftError && (
+              <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+                Nessun risultato nel testo delle sbobine per &ldquo;{search.trim()}&rdquo;
+              </div>
+            )}
+          </div>
         </div>
       )}
 

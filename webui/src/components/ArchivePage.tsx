@@ -22,7 +22,9 @@ import {
   type DeleteFolderConfirmState,
   type DeleteMultipleSessionsConfirmState,
   type FolderModalState,
+  FULL_TEXT_SORT_OPTIONS,
   getOpenedAtMs,
+  SORT_OPTIONS,
   type SortOption,
 } from './archive/types';
 import { SortMenu } from './archive/SortMenu';
@@ -61,7 +63,9 @@ export function ArchivePage({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeDragFolderId, setActiveDragFolderId] = useState<string | null>(null);
   const [fullTextMode, setFullTextMode] = useState(false);
+  const [ftSort, setFtSort] = useState<SortOption>('relevance');
   const [ftResults, setFtResults] = useState<SearchSessionResult[] | null>(null);
+  const [ftTotal, setFtTotal] = useState<number | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [ftError, setFtError] = useState<string | null>(null);
   const ftDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -194,12 +198,33 @@ export function ArchivePage({
   );
   const sessionPageData = allSortedSessions;
 
+  const sortedFtResults = useMemo(() => {
+    if (!ftResults) return null;
+    return [...ftResults].sort((a, b) => {
+      if (ftSort === 'relevance') {
+        return b.match_count - a.match_count;
+      }
+      if (ftSort === 'name') {
+        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+      }
+      if (ftSort === 'recently_opened') {
+        const oa = editorSessionsMap[a.session_dir]?.openedAt ?? editorSessionsMap[a.html_path]?.openedAt ?? (a.completed_at_iso ? new Date(a.completed_at_iso).getTime() : 0);
+        const ob = editorSessionsMap[b.session_dir]?.openedAt ?? editorSessionsMap[b.html_path]?.openedAt ?? (b.completed_at_iso ? new Date(b.completed_at_iso).getTime() : 0);
+        if (oa !== ob) return ob - oa;
+      }
+      const ta = a.completed_at_iso ? new Date(a.completed_at_iso).getTime() : 0;
+      const tb = b.completed_at_iso ? new Date(b.completed_at_iso).getTime() : 0;
+      return ftSort === 'oldest' ? ta - tb : tb - ta;
+    });
+  }, [ftResults, ftSort, editorSessionsMap]);
+
   useEffect(() => {
     if (ftDebounceRef.current) clearTimeout(ftDebounceRef.current);
     const q = search.trim();
     if (!fullTextMode || q.length < 3) {
       searchGenRef.current++;
       setFtResults(null);
+      setFtTotal(null);
       setFtError(null);
       setIsSearching(false);
       return;
@@ -209,18 +234,21 @@ export function ArchivePage({
     const gen = ++searchGenRef.current;
     ftDebounceRef.current = setTimeout(async () => {
       try {
-        const res = await window.pywebview?.api?.search_sessions?.(q, 20);
+        const res = await window.pywebview?.api?.search_sessions?.(q, 100);
         if (searchGenRef.current !== gen) return;
         if (res?.ok) {
           setFtResults(res.results ?? []);
+          setFtTotal(res.total ?? (res.results?.length ?? 0));
         } else {
           setFtError(res?.error ?? 'Errore durante la ricerca');
           setFtResults([]);
+          setFtTotal(null);
         }
       } catch {
         if (searchGenRef.current !== gen) return;
         setFtError('Errore durante la ricerca');
         setFtResults([]);
+        setFtTotal(null);
       } finally {
         if (searchGenRef.current === gen) setIsSearching(false);
       }
@@ -615,9 +643,17 @@ export function ArchivePage({
             >
               <FileSearch className="w-4 h-4 transition-transform duration-200 opacity-80 group-hover/ft:opacity-100 group-hover/ft:scale-110" />
             </button>
-            {!fullTextMode && (
-              <SortMenu sort={sort} onSortChange={setSort} />
-            )}
+            <SortMenu
+              sort={fullTextMode ? ftSort : sort}
+              onSortChange={s => {
+                if (fullTextMode) {
+                  setFtSort(s);
+                } else {
+                  setSort(s);
+                }
+              }}
+              options={fullTextMode ? FULL_TEXT_SORT_OPTIONS : SORT_OPTIONS}
+            />
             <div className="ml-auto flex items-center gap-2 shrink-0">
               <button
                 type="button"
@@ -658,9 +694,11 @@ export function ArchivePage({
                 ? ftError
                 : ftResults.length === 0
                   ? `Nessun risultato per «${search.trim()}»`
-                  : ftResults.length === 1
-                    ? '1 sbobina corrisponde'
-                    : `${ftResults.length} sbobine corrispondono`}
+                  : ftTotal !== null && ftTotal > ftResults.length
+                    ? `${ftResults.length}+ sbobine trovate`
+                    : ftResults.length === 1
+                      ? '1 sbobina corrisponde'
+                      : `${ftResults.length} sbobine corrispondono`}
             </span>
           )}
           {fullTextMode && search.trim().length > 0 && search.trim().length < 3 && (
@@ -683,12 +721,19 @@ export function ArchivePage({
           )}
 
           {fullTextMode && (
-            <FullTextResultList
-              query={search.trim()}
-              results={ftResults}
-              isSearching={isSearching}
-              onPreview={(r) => onPreview(r.html_path, r.name, undefined, undefined, r.session_dir, search.trim())}
-            />
+            <div className="max-h-[calc(100vh-380px)] overflow-y-auto app-scroll pr-1 py-1">
+              <FullTextResultList
+                query={search.trim()}
+                results={sortedFtResults}
+                isSearching={isSearching}
+                onPreview={(r) => onPreview(r.html_path, r.name, undefined, undefined, r.session_dir, search.trim())}
+              />
+              {ftResults !== null && ftResults.length === 0 && !isSearching && search.trim().length >= 3 && !ftError && (
+                <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+                  Nessun risultato nel testo delle sbobine per &ldquo;{search.trim()}&rdquo;
+                </div>
+              )}
+            </div>
           )}
 
           {!fullTextMode && (

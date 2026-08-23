@@ -56,4 +56,20 @@ describe('SortMenu component', () => {
       expect(screen.queryByText('Più recenti')).toBeNull();
     });
   });
+
+  it('renders custom options such as relevance for full-text mode', () => {
+    const handleSortChange = vi.fn();
+    const customOptions = [
+      { id: 'relevance' as const, label: 'Più occorrenze' },
+      { id: 'newest' as const, label: 'Più recenti' },
+    ];
+    render(<SortMenu sort="relevance" onSortChange={handleSortChange} options={customOptions} />);
+
+    const button = screen.getByRole('button', { name: 'Cambia ordinamento' });
+    fireEvent.click(button);
+
+    expect(screen.getByText('Più occorrenze')).toBeTruthy();
+    expect(screen.getByText('Più recenti')).toBeTruthy();
+    expect(screen.queryByText('Nome (A-Z)')).toBeNull();
+  });
 });

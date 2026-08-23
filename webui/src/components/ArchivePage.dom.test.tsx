@@ -306,4 +306,50 @@ describe('ArchivePage', () => {
     // 4. Inside FolderDetailView, the session is displayed and count is 1
     expect(screen.getByText('Lezione Istologia 1')).toBeTruthy();
   });
+
+  it('performs full-text search and formats count with plus when total exceeds results', async () => {
+    const s1 = makeSession('s1', 'Istologia 1');
+    const mockSearchSessions = vi.fn().mockResolvedValue({
+      ok: true,
+      results: [
+        {
+          session_dir: '/sessions/s1',
+          name: 'Istologia 1',
+          html_path: '/sessions/s1/out.html',
+          completed_at_iso: '2024-01-01T00:00:00Z',
+          snippets: [{ before: 'test', match: 'epitelio', after: 'tessuto' }],
+          match_count: 5,
+        },
+      ],
+      total: 10,
+    });
+
+    (window as unknown as { pywebview: { api: { search_sessions: unknown } } }).pywebview = {
+      api: { search_sessions: mockSearchSessions },
+    };
+
+    renderArchive({ sessions: [s1] });
+
+    // Switch to full-text search mode
+    const modeBtn = screen.getByTitle('Testo completo (Ricerca nel contenuto)');
+    fireEvent.click(modeBtn);
+
+    const input = screen.getByPlaceholderText('Cerca nel contenuto...');
+    fireEvent.change(input, { target: { value: 'epitelio' } });
+
+    // Wait for debounced search
+    await vi.waitFor(() => {
+      expect(mockSearchSessions).toHaveBeenCalledWith('epitelio', 100);
+    });
+
+    await vi.waitFor(() => {
+      expect(screen.getByText('1+ sbobine trovate')).toBeTruthy();
+    });
+
+    // SortMenu remains visible and includes full-text relevance option
+    const sortBtn = screen.getByRole('button', { name: 'Cambia ordinamento' });
+    expect(sortBtn).toBeTruthy();
+    fireEvent.click(sortBtn);
+    expect(screen.getByText('Più occorrenze')).toBeTruthy();
+  });
 });
