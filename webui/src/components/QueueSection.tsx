@@ -139,7 +139,7 @@ export const QueueSection = memo(function QueueSection({
             <div
               className="app-scroll overflow-y-auto overflow-x-hidden"
               style={{
-                maxHeight: 'clamp(260px, calc(100vh - 360px - var(--console-height, 0px)), 520px)',
+                maxHeight: 'clamp(260px, calc(100vh - 360px), 520px)',
                 padding: '4px 6px',
                 overscrollBehavior: 'contain',
               }}

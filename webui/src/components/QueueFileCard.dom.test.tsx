@@ -193,16 +193,14 @@ describe('QueueFileCard', () => {
 });
 
 describe('CompletedFileCard', () => {
-  it('renders file name with Nuovo badge for newest', () => {
+  it('renders completed file card with name and details', () => {
     render(
       <CompletedFileCard
         file={makeFile({ status: 'done', outputHtml: '/out/file.html' })}
-        isNewest
         onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
       />,
     );
     expect(screen.getByText('lezione.mp3')).toBeTruthy();
-    expect(screen.getByText('Nuovo')).toBeTruthy();
   });
 
   it('shows kebab menu button when outputHtml is set', () => {
