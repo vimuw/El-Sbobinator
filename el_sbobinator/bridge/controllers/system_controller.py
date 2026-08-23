@@ -92,8 +92,59 @@ class SystemControllerMixin:
         except Exception as e:
             return {"ok": False, "error": redact_secrets(e)}
 
+    def flash_window(self) -> dict:
+        """Fa lampeggiare l'icona dell'applicazione nella barra delle applicazioni per attirare l'attenzione dell'utente."""
+        try:
+            import sys
+
+            if sys.platform == "win32":
+                import ctypes
+                from ctypes import wintypes
+
+                from el_sbobinator.webview_entry import _get_window_hwnd
+
+                window = getattr(self, "_window", None)
+                hwnd = _get_window_hwnd(window)
+                if hwnd:
+
+                    class FLASHWINFO(ctypes.Structure):
+                        _fields_ = [
+                            ("cbSize", wintypes.UINT),
+                            ("hwnd", wintypes.HWND),
+                            ("dwFlags", wintypes.DWORD),
+                            ("uCount", wintypes.UINT),
+                            ("dwTimeout", wintypes.DWORD),
+                        ]
+
+                    finfo = FLASHWINFO(
+                        cbSize=ctypes.sizeof(FLASHWINFO),
+                        hwnd=hwnd,
+                        dwFlags=0x00000003 | 0x0000000C,
+                        uCount=0,
+                        dwTimeout=0,
+                    )
+                    ctypes.windll.user32.FlashWindowEx(ctypes.byref(finfo))
+                    return {"ok": True}
+            elif sys.platform == "darwin":
+                try:
+                    from AppKit import NSApplication, NSCriticalRequest  # type: ignore
+
+                    NSApplication.sharedApplication().requestUserAttention_(
+                        NSCriticalRequest
+                    )
+                    return {"ok": True}
+                except Exception:
+                    pass
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": redact_secrets(e)}
+
     def show_notification(self, title: str, message: str) -> dict:
-        """Mostra una notifica toast nativa di sistema tramite plyer."""
+        """Mostra una notifica toast nativa di sistema tramite plyer e attiva il lampeggio taskbar."""
+        try:
+            self.flash_window()
+        except Exception:
+            pass
         try:
             from plyer import notification
 

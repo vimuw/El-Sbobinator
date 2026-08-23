@@ -266,12 +266,33 @@ class TestSystemController(unittest.TestCase):
 
     def test_show_notification(self):
         host = DummySystemHost()
-        with patch("plyer.notification.notify") as mock_notify:
+        with (
+            patch("plyer.notification.notify") as mock_notify,
+            patch.object(host, "flash_window") as mock_flash,
+        ):
             res = host.show_notification("Title", "Message")
             self.assertTrue(res.get("ok"))
+            mock_flash.assert_called_once()
             mock_notify.assert_called_once_with(
                 title="Title", message="Message", app_name="El Sbobinator", timeout=5
             )
+
+    def test_flash_window_windows(self):
+        host = DummySystemHost()
+        with (
+            patch("sys.platform", "win32"),
+            patch("el_sbobinator.webview_entry._get_window_hwnd", return_value=12345),
+            patch("ctypes.windll.user32.FlashWindowEx") as mock_flash_ex,
+        ):
+            res = host.flash_window()
+            self.assertTrue(res.get("ok"))
+            mock_flash_ex.assert_called_once()
+
+    def test_flash_window_non_windows(self):
+        host = DummySystemHost()
+        with patch("sys.platform", "linux"):
+            res = host.flash_window()
+            self.assertTrue(res.get("ok"))
 
     def test_download_and_install_update(self):
         host = DummySystemHost()
