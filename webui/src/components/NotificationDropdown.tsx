@@ -640,7 +640,7 @@ export function NotificationDropdown({
                 <button
                   type="button"
                   onClick={onClearAll}
-                  className="p-1 rounded-md transition-colors hover:bg-neutral-500/15 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--error-text)]"
+                  className="p-1 rounded-md transition-colors hover:bg-[var(--error-subtle)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--error-text)]"
                   style={{
                     cursor: 'pointer',
                   }}
