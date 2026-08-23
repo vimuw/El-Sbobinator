@@ -26,7 +26,7 @@ export const DropZone = memo(function DropZone({ isDragging, onDragOver, onDragL
         }}
         aria-label="Aggiungi file audio o video"
       >
-        <Plus className={`w-4 h-4 shrink-0 transition-all duration-200 group-hover/compact:rotate-90 group-hover/compact:scale-105 ${isDragging ? 'text-[var(--accent-bg)]' : 'text-[var(--text-muted)] group-hover/compact:text-[var(--text-secondary)]'}`} />
+        <Plus className={`w-4 h-4 shrink-0 transition-colors ${isDragging ? 'text-[var(--accent-bg)]' : 'text-[var(--text-muted)] group-hover/compact:text-[var(--text-secondary)]'}`} />
         <span className={`text-sm transition-colors ${isDragging ? 'text-[var(--accent-bg)] font-medium' : 'text-[var(--text-secondary)] font-normal'}`}>
           {isDragging ? 'Rilascia qui per aggiungere' : 'Trascina file o clicca per aggiungere'}
         </span>

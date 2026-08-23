@@ -151,31 +151,31 @@ function QueueFileCardInner({
               isResumableError(file.errorText) || isPhase1ChunkFailure ? (
                 <button
                   onClick={() => onRetry(file.id)}
-                  className="icon-button compact-icon-button"
+                  className="icon-button compact-icon-button group/retry"
                   title={isPhase1ChunkFailure ? 'I blocchi precedenti sono salvati: riprendi dal blocco fallito' : 'Il progresso è salvato: riprendi da dove è rimasto'}
                   aria-label="Riprendi"
                 >
-                  <RotateCcw className="w-4 h-4" />
+                  <RotateCcw className="w-4 h-4 transition-transform duration-500 ease-out group-hover/retry:-rotate-180 group-hover/retry:scale-105" />
                 </button>
               ) : (
                 <button
                   onClick={() => onRetry(file.id)}
-                  className="icon-button compact-icon-button is-danger"
+                  className="icon-button compact-icon-button is-danger group/retry"
                   title="Riprova"
                   aria-label="Riprova"
                 >
-                  <RotateCcw className="w-4 h-4" />
+                  <RotateCcw className="w-4 h-4 transition-transform duration-500 ease-out group-hover/retry:-rotate-180 group-hover/retry:scale-105" />
                 </button>
               )
             )}
             {appState === 'idle' && (
               <button
                 onClick={() => onRemove(file.id)}
-                className="icon-button compact-icon-button"
+                className="icon-button compact-icon-button group/remove"
                 title="Rimuovi"
                 aria-label="Rimuovi"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4 transition-transform duration-200 group-hover/remove:scale-110 group-hover/remove:rotate-90" />
               </button>
             )}
           </div>
@@ -293,11 +293,11 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
                       type="button"
                       onClick={handleRetryBlocks}
                       disabled={isRetrying}
-                      className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold px-1.5 py-[2px] h-4 box-border rounded-full transition-opacity premium-button-secondary compact-button is-warning"
+                      className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold px-1.5 py-[2px] h-4 box-border rounded-full transition-opacity premium-button-secondary compact-button is-warning group/retry"
                       style={{ opacity: isRetrying ? 0.65 : 1 }}
                       title="Riprova solo i blocchi inclusi senza revisione"
                     >
-                      <RotateCcw className={`w-2.5 h-2.5 ${isRetrying ? 'animate-spin' : ''}`} />
+                      <RotateCcw className={`w-2.5 h-2.5 transition-transform duration-500 ease-out ${isRetrying ? 'animate-spin' : 'group-hover/retry:-rotate-180 group-hover/retry:scale-110'}`} />
                       {isRetrying ? 'Riprovo…' : 'Riprova revisione'}
                     </button>
                   )}
