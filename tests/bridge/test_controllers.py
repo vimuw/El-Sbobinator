@@ -649,6 +649,7 @@ class TestSessionController(unittest.TestCase):
             res = host.search_sessions("a")
             self.assertFalse(res["ok"])
             self.assertEqual(res["results"], [])
+            self.assertEqual(res["total"], 0)
 
 
 if __name__ == "__main__":

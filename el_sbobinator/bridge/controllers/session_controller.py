@@ -431,7 +431,7 @@ class SessionControllerMixin:
         except Exception as e:
             return {"ok": False, "error": redact_secrets(e)}
 
-    def search_sessions(self, query: str, limit: int = 10) -> dict:
+    def search_sessions(self, query: str, limit: int = 100) -> dict:
         """Search plain-text content of every completed session HTML."""
         import json as _json
 
@@ -446,11 +446,12 @@ class SessionControllerMixin:
                 "ok": False,
                 "error": "Query troppo corta o troppo lunga",
                 "results": [],
+                "total": 0,
             }
 
         session_root = self._get_session_root()
         if not os.path.isdir(session_root):
-            return {"ok": True, "results": []}
+            return {"ok": True, "results": [], "total": 0}
 
         try:
             results = []
@@ -513,9 +514,16 @@ class SessionControllerMixin:
                     continue
 
             results.sort(key=lambda r: r["match_count"], reverse=True)
-            return {"ok": True, "results": results[: max(0, int(limit))]}
+            total_matches = len(results)
+            try:
+                limit_int = int(limit)
+            except (ValueError, TypeError):
+                limit_int = 100
+
+            limited_results = results[:limit_int] if limit_int > 0 else results
+            return {"ok": True, "results": limited_results, "total": total_matches}
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e), "results": []}
+            return {"ok": False, "error": redact_secrets(e), "results": [], "total": 0}
 
     def get_archive_folders(self) -> dict:
         """Return the user-defined archive folders with auto-reconciled session paths."""

@@ -87,7 +87,7 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
 | `get_session_move_status()` | — | `{status, moved?, total?, error?, old_root?, new_root?}` | Returns the current status of an ongoing or completed session move. |
 | `get_archive_folders()` | — | `{ok, folders: ArchiveFolder[], error?}` | Returns user-defined folder list for sorting sessions. |
 | `save_archive_folders(folders)` | folder list | `{ok, error?}` | Persists the folder list to folders.json. |
-| `search_sessions(query, limit=10)` | query string, limit | `{ok, results: SearchSessionResult[], error?}` | Searches plain-text content of every completed session HTML. |
+| `search_sessions(query, limit=100)` | query string, limit (default 100, 0 for unlimited) | `{ok, results: SearchSessionResult[], total?: number, error?}` | Searches plain-text content of every completed session HTML. |
 | `retry_failed_revision_blocks(session_dir)` | session directory path | `{ok, retried_blocks?, remaining_failed_blocks?, html_path?, session_dir?, effective_model?, completion_status?, cancelled?, quota_exhausted?, conflict?, error?}` | Retries unrevised macro blocks from a done session using current API key. |
 
 ### File intake

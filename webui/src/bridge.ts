@@ -173,7 +173,7 @@ export interface PywebviewApi {
   save_theme_preference?: (theme: 'light' | 'dark') => Promise<void>;
   get_archive_folders?: () => Promise<{ ok: boolean; folders: ArchiveFolder[]; error?: string }>;
   save_archive_folders?: (folders: ArchiveFolder[]) => Promise<{ ok: boolean; error?: string }>;
-  search_sessions?: (query: string, limit?: number) => Promise<{ ok: boolean; results?: SearchSessionResult[]; error?: string }>;
+  search_sessions?: (query: string, limit?: number) => Promise<{ ok: boolean; results?: SearchSessionResult[]; total?: number; error?: string }>;
   retry_failed_revision_blocks?: (sessionDir: string) => Promise<{
     ok: boolean;
     error?: string;

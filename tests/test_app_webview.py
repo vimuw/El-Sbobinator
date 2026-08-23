@@ -2624,9 +2624,14 @@ class TestSearchSessions(unittest.TestCase):
 
             with patch.object(api, "_get_session_root", return_value=session_root):
                 result = api.search_sessions("mitosi", limit=2)
+                result_all = api.search_sessions("mitosi", limit=0)
 
         self.assertTrue(result["ok"])
-        self.assertLessEqual(len(result["results"]), 2)
+        self.assertEqual(len(result["results"]), 2)
+        self.assertEqual(result["total"], 5)
+        self.assertTrue(result_all["ok"])
+        self.assertEqual(len(result_all["results"]), 5)
+        self.assertEqual(result_all["total"], 5)
 
 
 class TestUpdateSessionInputPath(unittest.TestCase):
