@@ -119,6 +119,7 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
 | `create_collaboration_backup(path)` | path under Desktop or `SESSION_ROOT` | `{ok, backup_path?, error?}` | Path-traversal-checked; creates a `.collab-backup.html` snapshot on disk before entering live collaboration. |
 | `stream_media_file(path, session_dir?)` | audio/video path, optional session dir | `{ok, url?, error?}` | Starts a `LocalMediaServer` (Range-request capable) and returns a `http://127.0.0.1:<port>/stream.media?t=<ts>` URL. |
 | `show_notification(title, message)` | — | `void` | Best-effort OS notification. |
+| `flash_window()` | — | `{ok, error?}` | Flashes the application window in the taskbar (Windows/macOS) to request user attention. |
 | `download_and_install_update(version)` | version string without `v` prefix? (`updater.py` handles both) | `{ok, error?}` | Downloads the GitHub release asset for the current OS, launches it, and schedules the webview to close. |
 
 ### Shared type definitions
