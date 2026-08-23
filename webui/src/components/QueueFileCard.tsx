@@ -190,7 +190,7 @@ export const QueueFileCard = React.memo(QueueFileCardInner);
 
 interface CompletedFileCardProps {
   file: FileItem;
-  isNewest: boolean;
+  isNewest?: boolean;
   onRemove: (id: string) => void;
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string) => void;
   onOpenFile: (path: string) => void;
@@ -198,7 +198,7 @@ interface CompletedFileCardProps {
   currentFolder?: Pick<ArchiveFolder, 'name' | 'color'>;
 }
 
-function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFile, onRetryFailedRevisionBlocks, currentFolder }: CompletedFileCardProps) {
+function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetryFailedRevisionBlocks, currentFolder }: CompletedFileCardProps) {
   const isClickable = Boolean(file.outputHtml);
   const [isRetryingBlocks, setIsRetryingBlocks] = React.useState(false);
   const isRetrying = file.isRetryingBlocks || isRetryingBlocks;
@@ -225,30 +225,25 @@ function CompletedFileCardInner({ file, isNewest, onRemove, onPreview, onOpenFil
       }}
       onClick={isClickable ? () => onPreview(file.outputHtml!, file.name, file.path, file.id, file.outputDir) : undefined}
       className={`queue-card relative px-4 py-3 transition-colors group/card ${isClickable ? 'cursor-pointer' : ''} is-completed ${
-        hasRevisionWarnings
-          ? 'is-warning'
-          : isNewest
-            ? 'is-newest'
-            : ''
+        hasRevisionWarnings ? 'is-warning' : ''
       }`}
     >
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <div
-            className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-lg transition-transform duration-200 group-hover/card:scale-105 ${hasRevisionWarnings ? 'text-[var(--warning-text)]' : 'text-[var(--success-text)]'}`}
+            className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-lg transition-transform duration-200 group-hover/card:scale-105 ${
+              hasRevisionWarnings
+                ? 'bg-[var(--warning-subtle)] text-[var(--warning-text)] border border-[var(--warning-ring)]'
+                : 'bg-[var(--success-subtle)] text-[var(--success-text)] border border-[var(--success-ring)]'
+            }`}
           >
-            {hasRevisionWarnings ? <AlertTriangle className="w-4.5 h-4.5" /> : <CheckCircle className="w-4.5 h-4.5" />}
+            {hasRevisionWarnings ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 min-w-0">
               <h4 className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{file.name}</h4>
               {currentFolder && (
                 <FolderIndicatorChip folder={currentFolder} />
-              )}
-              {isNewest && (
-                <span className="shrink-0 whitespace-nowrap text-[10px] leading-none font-semibold uppercase tracking-wider px-1.5 py-[2px] h-4 box-border rounded-full badge-success">
-                  Nuovo
-                </span>
               )}
             </div>
             <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-[var(--text-muted)]">

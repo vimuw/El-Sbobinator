@@ -87,7 +87,7 @@ export const CompletedSection = memo(function CompletedSection({ doneFiles, appS
           <div
             className="app-scroll overflow-y-auto overflow-x-hidden"
             style={{
-              maxHeight: 'clamp(260px, calc(100vh - 360px - var(--console-height, 0px)), 520px)',
+              maxHeight: 'clamp(260px, calc(100vh - 360px), 520px)',
               padding: '4px 6px',
               overscrollBehavior: 'contain',
             }}
@@ -98,7 +98,6 @@ export const CompletedSection = memo(function CompletedSection({ doneFiles, appS
                   <CompletedFileCard
                     key={file.id}
                     file={file}
-                    isNewest={file.id === doneFiles[0]?.id}
                     onRemove={onRemove}
                     onPreview={onPreview}
                     onOpenFile={onOpenFile}

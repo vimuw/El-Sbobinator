@@ -798,6 +798,7 @@ button {
 
 .icon-button.hover-danger:hover:not(:disabled),
 .icon-button.is-danger-hover:hover:not(:disabled) {
+  background: var(--error-subtle);
   color: var(--error-text) !important;
 }
 
@@ -3906,17 +3907,10 @@ input[type="password"]::-ms-reveal {
 }
 
 .queue-card.is-completed {
-  box-shadow: inset 3px 0 0 var(--success-bg) !important;
   background: var(--card-queued-bg) !important;
 }
 
-.queue-card.is-completed.is-newest {
-  box-shadow: inset 3px 0 0 var(--success-bg), 0 0 0 2px rgba(22, 163, 74, 0.08) !important;
-  background: var(--success-subtle) !important;
-}
-
 .queue-card.is-completed.is-warning {
-  box-shadow: inset 3px 0 0 var(--warning-bg) !important;
   background: var(--warning-subtle) !important;
 }
 

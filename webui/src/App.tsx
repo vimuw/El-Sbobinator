@@ -1363,9 +1363,6 @@ export default function App() {
             <motion.main
               key="queue"
               className="flex-1 w-full flex flex-col overflow-y-auto hide-scrollbar"
-              style={{
-                '--console-height': showConsole ? (isConsoleExpanded ? '250px' : '50px') : '0px'
-              } as React.CSSProperties}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.15, ease: 'easeOut' }}
