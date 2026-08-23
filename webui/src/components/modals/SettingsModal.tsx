@@ -107,7 +107,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const isSavingRef = useRef(false);
   const sessionInfoReqIdRef = useRef(0);
   const moveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const cleanupDismissTimerRef = useRef<NodeJS.Timeout | null>(null);
   const prevSettingsKeyRef = useRef<string>('');
+
+  const handleDismissCleanupResult = useCallback(() => {
+    if (cleanupDismissTimerRef.current) {
+      clearTimeout(cleanupDismissTimerRef.current);
+      cleanupDismissTimerRef.current = null;
+    }
+    setCleanupResult(null);
+    setCompletedCleanupResult(null);
+  }, []);
+
+  const scheduleCleanupDismiss = useCallback(() => {
+    if (cleanupDismissTimerRef.current) {
+      clearTimeout(cleanupDismissTimerRef.current);
+    }
+    cleanupDismissTimerRef.current = setTimeout(() => {
+      if (isMountedRef.current) {
+        setCleanupResult(null);
+        setCompletedCleanupResult(null);
+      }
+      cleanupDismissTimerRef.current = null;
+    }, 5000);
+  }, []);
 
   useEffect(() => {
     const key = `${apiKey}|${preferredModel}|${fallbackModels.join(',')}`;
@@ -121,6 +144,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      if (cleanupDismissTimerRef.current) {
+        clearTimeout(cleanupDismissTimerRef.current);
+        cleanupDismissTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -188,13 +215,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   useEffect(() => {
     isOpenRef.current = isOpen;
+    if (cleanupDismissTimerRef.current) {
+      clearTimeout(cleanupDismissTimerRef.current);
+      cleanupDismissTimerRef.current = null;
+    }
+    setCleanupResult(null);
+    setCompletedCleanupResult(null);
+    setCleanupPreview(null);
+    setCompletedCleanupPreview(null);
+    setValidationResult(null);
+    setSaveError(null);
+    setMoveError(null);
+    setPendingMovePath(null);
+    setShowCleanupConfirm(false);
+    setShowCompletedCleanupConfirm(false);
+    setShowMoveConfirm(false);
+
     if (!isOpen) {
       ++sessionInfoReqIdRef.current;
       return;
     }
 
     let aborted = false;
-    setSaveError(null);
 
     if (window.pywebview?.api?.load_settings) {
       window.pywebview.api.load_settings()
@@ -230,6 +272,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       if (moveTimerRef.current) {
         clearTimeout(moveTimerRef.current);
         moveTimerRef.current = null;
+      }
+      if (cleanupDismissTimerRef.current) {
+        clearTimeout(cleanupDismissTimerRef.current);
+        cleanupDismissTimerRef.current = null;
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -310,6 +356,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           preserved_completed: res.preserved_completed ?? 0,
           missing_completed_html: res.missing_completed_html ?? 0,
         });
+        scheduleCleanupDismiss();
         if (window.pywebview?.api?.get_session_storage_info) {
           const info = await window.pywebview.api.get_session_storage_info();
           if (info?.ok && isMountedRef.current) {
@@ -367,6 +414,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           freed_bytes: res.freed_bytes ?? 0,
           candidates: res.candidates ?? res.removed ?? 0,
         });
+        scheduleCleanupDismiss();
         if (window.pywebview?.api?.get_session_storage_info) {
           const info = await window.pywebview.api.get_session_storage_info();
           if (info?.ok && isMountedRef.current) {
@@ -565,29 +613,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleTabChange('general')}
-                  className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-sm font-semibold tracking-wide transition-all ${
+                  className={`flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium tracking-wide transition-all duration-150 ${
                     activeTab === 'general'
-                      ? 'bg-[var(--accent-subtle)] text-[var(--accent-text)] border-l-4 md:border-l-4 border-b-2 md:border-b-0 border-[var(--accent-bg)]'
-                      : 'text-[var(--text-secondary)] hover:bg-[var(--sidebar-active-bg)] hover:text-[var(--text-primary)] border-l-4 border-transparent'
+                      ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-semibold ring-1 ring-[var(--border-subtle)]'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--sidebar-active-bg)] hover:text-[var(--text-primary)]'
                   }`}
                   style={{ textAlign: 'left' }}
                 >
-                  <Settings className="w-4 h-4 shrink-0" />
-                  <span>Generale</span>
+                  <div className="flex items-center gap-2.5">
+                    <Settings className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'general' ? 'text-[var(--accent-text)]' : 'text-[var(--text-muted)]'}`} />
+                    <span>Generale</span>
+                  </div>
+                  {activeTab === 'general' && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-text)] shrink-0 hidden md:block" />
+                  )}
                 </button>
 
                 <button
                   type="button"
                   onClick={() => handleTabChange('advanced')}
-                  className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-sm font-semibold tracking-wide transition-all ${
+                  className={`flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium tracking-wide transition-all duration-150 ${
                     activeTab === 'advanced'
-                      ? 'bg-[var(--accent-subtle)] text-[var(--accent-text)] border-l-4 md:border-l-4 border-b-2 md:border-b-0 border-[var(--accent-bg)]'
-                      : 'text-[var(--text-secondary)] hover:bg-[var(--sidebar-active-bg)] hover:text-[var(--text-primary)] border-l-4 border-transparent'
+                      ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-semibold ring-1 ring-[var(--border-subtle)]'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--sidebar-active-bg)] hover:text-[var(--text-primary)]'
                   }`}
                   style={{ textAlign: 'left' }}
                 >
-                  <SlidersHorizontal className="w-4 h-4 shrink-0" />
-                  <span>Avanzati</span>
+                  <div className="flex items-center gap-2.5">
+                    <SlidersHorizontal className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'advanced' ? 'text-[var(--accent-text)]' : 'text-[var(--text-muted)]'}`} />
+                    <span>Avanzati</span>
+                  </div>
+                  {activeTab === 'advanced' && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-text)] shrink-0 hidden md:block" />
+                  )}
                 </button>
               </div>
 
@@ -658,6 +716,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         onAskCompletedCleanup={handleAskCompletedCleanup}
                         cleanupResult={cleanupResult}
                         completedCleanupResult={completedCleanupResult}
+                        onDismissCleanupResult={handleDismissCleanupResult}
                       />
 
                       <DiagnosticsSection

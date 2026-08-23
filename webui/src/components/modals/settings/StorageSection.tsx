@@ -1,5 +1,6 @@
 import React from 'react';
-import { Database, Folder, FolderInput, Loader2, Trash2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { CheckCircle2, Database, Folder, FolderInput, Info, Loader2, Trash2, X } from 'lucide-react';
 
 function formatSize(bytes: number): string {
   if (bytes <= 0) return '0 B';
@@ -26,6 +27,7 @@ interface StorageSectionProps {
   completedCleanupResult?: { removed: number; freed_bytes: number; candidates?: number } | null;
   onAskCleanup: () => void;
   onAskCompletedCleanup: () => void;
+  onDismissCleanupResult?: () => void;
 }
 
 export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
@@ -44,6 +46,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
   completedCleanupResult,
   onAskCleanup,
   onAskCompletedCleanup,
+  onDismissCleanupResult,
 }) => {
   return (
     <div className="p-4 rounded-xl border border-[var(--border-subtle)] space-y-4">
@@ -222,39 +225,84 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
         </div>
       </div>
 
-      {/* Cleanup Results Feedback */}
-      {(cleanupResult || completedCleanupResult) && (
-        <div className="pt-3 border-t border-[var(--border-subtle)]">
-          <div className="space-y-1.5 bg-[var(--bg-input)] rounded-lg p-3 border border-[var(--border-subtle)]">
-            {cleanupResult && (
-              <>
-                <p className="text-xs font-medium" style={{ color: cleanupResult.removed > 0 ? 'var(--success-text)' : 'var(--text-muted)' }}>
-                  {cleanupResult.removed > 0
-                    ? `Rimossa ${cleanupResult.removed} elaborazione incompleta, liberati ${formatSize(cleanupResult.freed_bytes)}.`
-                    : 'Nessuna elaborazione incompleta da eliminare.'}
-                </p>
-                {(cleanupResult?.preserved_completed ?? 0) > 0 && (
-                  <p className="text-xs text-[var(--text-muted)]">
-                    {cleanupResult?.preserved_completed} sbobine completate preservate.
-                  </p>
+      {/* Cleanup Results Feedback Notification Banner */}
+      <AnimatePresence>
+        {(cleanupResult || completedCleanupResult) && (
+          <motion.div
+            initial={{ opacity: 0, y: -6, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: 'auto' }}
+            exit={{ opacity: 0, y: -6, height: 0 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="overflow-hidden"
+          >
+            <div
+              className={`p-3 rounded-lg border flex items-start justify-between gap-3 ${
+                (cleanupResult?.removed ?? 0) > 0 || (completedCleanupResult?.removed ?? 0) > 0
+                  ? 'bg-[var(--success-subtle)] border-[var(--success-ring)]'
+                  : 'bg-[var(--accent-subtle)] border-[var(--border-subtle)]'
+              }`}
+            >
+              <div className="flex items-start gap-2.5 min-w-0">
+                {(cleanupResult?.removed ?? 0) > 0 || (completedCleanupResult?.removed ?? 0) > 0 ? (
+                  <CheckCircle2 className="w-4 h-4 text-[var(--success-text)] shrink-0 mt-0.5" />
+                ) : (
+                  <Info className="w-4 h-4 text-[var(--accent-text)] shrink-0 mt-0.5" />
                 )}
-                {(cleanupResult?.missing_completed_html ?? 0) > 0 && (
-                  <p className="text-xs text-[var(--warning-text)]">
-                    {cleanupResult?.missing_completed_html} sessioni completate senza HTML finale trattate come incomplete.
-                  </p>
-                )}
-              </>
-            )}
-            {completedCleanupResult && (
-              <p className="text-xs font-medium" style={{ color: completedCleanupResult.removed > 0 ? 'var(--success-text)' : 'var(--text-muted)' }}>
-                {completedCleanupResult.removed > 0
-                  ? `Eliminate ${completedCleanupResult.removed} sbobine completate, liberati ${formatSize(completedCleanupResult.freed_bytes)}.`
-                  : 'Nessuna sbobina completata vecchia da eliminare.'}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+                <div className="space-y-0.5 min-w-0">
+                  {cleanupResult && (
+                    <>
+                      <p
+                        className="text-xs font-semibold"
+                        style={{ color: cleanupResult.removed > 0 ? 'var(--success-text)' : 'var(--text-primary)' }}
+                      >
+                        {cleanupResult.removed > 0
+                          ? cleanupResult.removed === 1
+                            ? `Rimossa 1 elaborazione incompleta, liberati ${formatSize(cleanupResult.freed_bytes)}.`
+                            : `Rimosse ${cleanupResult.removed} elaborazioni incomplete, liberati ${formatSize(cleanupResult.freed_bytes)}.`
+                          : 'Nessuna elaborazione incompleta da eliminare.'}
+                      </p>
+                      {(cleanupResult?.preserved_completed ?? 0) > 0 && (
+                        <p className="text-[11px] text-[var(--text-muted)]">
+                          {cleanupResult.preserved_completed} sbobine completate preservate.
+                        </p>
+                      )}
+                      {(cleanupResult?.missing_completed_html ?? 0) > 0 && (
+                        <p className="text-[11px] text-[var(--warning-text)]">
+                          {cleanupResult.missing_completed_html} sessioni completate senza HTML finale trattate come incomplete.
+                        </p>
+                      )}
+                    </>
+                  )}
+                  {completedCleanupResult && (
+                    <p
+                      className="text-xs font-semibold"
+                      style={{ color: completedCleanupResult.removed > 0 ? 'var(--success-text)' : 'var(--text-primary)' }}
+                    >
+                      {completedCleanupResult.removed > 0
+                        ? completedCleanupResult.removed === 1
+                          ? `Eliminata 1 sbobina completata, liberati ${formatSize(completedCleanupResult.freed_bytes)}.`
+                          : `Eliminate ${completedCleanupResult.removed} sbobine completate, liberati ${formatSize(completedCleanupResult.freed_bytes)}.`
+                        : 'Nessuna sbobina completata vecchia da eliminare.'}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {onDismissCleanupResult && (
+                <button
+                  type="button"
+                  onClick={onDismissCleanupResult}
+                  aria-label="Chiudi notifica"
+                  title="Chiudi notifica"
+                  className="p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--sidebar-active-bg)] transition-colors shrink-0 -mr-1 -mt-0.5"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 });
