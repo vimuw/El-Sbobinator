@@ -873,13 +873,16 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
   describe('onBatchFullyDone native OS notifications', () => {
     let capturedOptions: Parameters<typeof useBridgeCallbacks>[0] | null = null;
     const showNotification = vi.fn();
+    const flashWindow = vi.fn();
 
     beforeEach(() => {
       showNotification.mockClear();
+      flashWindow.mockClear();
       setPywebview({
         get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
         get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
         show_notification: showNotification,
+        flash_window: flashWindow,
       });
 
       vi.mocked(useBridgeCallbacks).mockImplementation((options) => {
@@ -895,7 +898,7 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       vi.restoreAllMocks();
     });
 
-    it('shows successful batch notification when all files completed successfully', async () => {
+    it('shows successful batch notification and flashes taskbar when all files completed successfully', async () => {
       await act(async () => { render(<App />); });
       expect(capturedOptions).not.toBeNull();
 
@@ -909,6 +912,7 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
         });
       });
 
+      expect(flashWindow).toHaveBeenCalled();
       expect(showNotification).toHaveBeenCalledWith(
         '✅ Batch completato — El Sbobinator',
         '3 sbobine elaborate con successo.',

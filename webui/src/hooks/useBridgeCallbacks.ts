@@ -2,7 +2,7 @@ import { type Dispatch, useEffect, useLayoutEffect, useRef } from 'react';
 import type React from 'react';
 import { createBridge, type ElSbobinatorBridge, type UpdateDownloadProgressPayload } from '../bridge';
 import type { AppStatus, FileDescriptor, FileDonePayload, FileItem, ProcessDonePayload, ProcessingAction } from '../appState';
-import { shortModelName } from '../utils';
+import { errorLabel, isPausedError, shortModelName } from '../utils';
 
 export function useBridgeCallbacks(options: {
   dispatch: Dispatch<ProcessingAction>;
@@ -82,7 +82,20 @@ export function useBridgeCallbacks(options: {
     window.elSbobinatorBridge = createBridge({
       dispatch: (...args) => dispatchRef.current(...args),
       appendConsole: msg => appendConsoleRef.current(msg),
-      onRegenerate: data => setRegeneratePromptRef.current(data),
+      onRegenerate: data => {
+        setRegeneratePromptRef.current(data);
+        if (!document.hasFocus()) {
+          void window.pywebview?.api?.flash_window?.();
+          if (localStorage.getItem('notifications_enabled') !== 'false' && window.pywebview?.api?.show_notification) {
+            const isCompleted = data.mode === 'completed';
+            const title = `⚠️ Conferma richiesta — ${data.filename}`;
+            const message = isCompleted
+              ? `Il file "${data.filename}" risulta già completato. Scegli se usare la versione pronta o rigenerare da zero.`
+              : `Ci sono progressi salvati per "${data.filename}". Scegli se riprendere o ricominciare da capo.`;
+            void window.pywebview.api.show_notification(title, message);
+          }
+        }
+      },
       onFilesDropped: (droppedFiles: FileDescriptor[]) => {
         if (appStateRef.current !== 'idle') return;
         const filesToAdd = droppedFiles.map(f => ({
@@ -109,11 +122,14 @@ export function useBridgeCallbacks(options: {
             'system'
           );
         }
-        if (localStorage.getItem('notifications_enabled') !== 'false' && !document.hasFocus() && window.pywebview?.api?.show_notification) {
-          void window.pywebview.api.show_notification(
-            '⚠️ Chiavi esaurite — El Sbobinator',
-            'Limite API raggiunto. Le tue chiavi Gemini hanno esaurito i crediti gratuiti o la capacità temporanea. Aggiungi una chiave nelle impostazioni per continuare.',
-          );
+        if (!document.hasFocus()) {
+          void window.pywebview?.api?.flash_window?.();
+          if (localStorage.getItem('notifications_enabled') !== 'false' && window.pywebview?.api?.show_notification) {
+            void window.pywebview.api.show_notification(
+              '⚠️ Chiavi esaurite — El Sbobinator',
+              'Limite API raggiunto. Le tue chiavi Gemini hanno esaurito i crediti gratuiti o la capacità temporanea. Aggiungi una chiave nelle impostazioni per continuare.',
+            );
+          }
         }
       },
       onDismissNewKey: () => {
@@ -159,29 +175,32 @@ export function useBridgeCallbacks(options: {
           // Note: revision warnings are already added via onRevisionWarning -> handleRevisionWarning inside App.tsx
         }
 
-        if (localStorage.getItem('notifications_enabled') === 'false') return;
-        if (batchTotalRef.current > 1) return; // Suppress individual success/warning OS notifications in batch mode
-        if (currentFile && window.pywebview?.api?.show_notification && !document.hasFocus()) {
-          if (isWarning) {
-            void window.pywebview.api.show_notification(
-              `⚠️ Sbobina pronta con avvisi — ${currentFile.name}`,
-              'Completata con alcune parti non revisionate. Apri l\'app per rivederle.',
-            );
-          } else {
-            const model = data.effective_model || currentFile.effectiveModel;
-            const modelPart = model ? ` con ${shortModelName(model)}` : '';
-            const elapsed = currentFile.startedAt ? Math.round((Date.now() - currentFile.startedAt) / 60000) : null;
-            const elapsedPart = elapsed !== null && elapsed > 0 ? ` · ${elapsed} min` : '';
-            void window.pywebview.api.show_notification(
-              `✅ Sbobina pronta — ${currentFile.name}`,
-              `Elaborata con successo${modelPart}${elapsedPart}. Disponibile nell'applicazione.`,
-            );
+        if (!document.hasFocus() && (batchTotalRef.current ?? 0) <= 1) {
+          void window.pywebview?.api?.flash_window?.();
+          if (localStorage.getItem('notifications_enabled') !== 'false' && currentFile && window.pywebview?.api?.show_notification) {
+            if (isWarning) {
+              void window.pywebview.api.show_notification(
+                `⚠️ Sbobina pronta con avvisi — ${currentFile.name}`,
+                'Completata con alcune parti non revisionate. Apri l\'app per rivederle.',
+              );
+            } else {
+              const model = data.effective_model || currentFile.effectiveModel;
+              const modelPart = model ? ` con ${shortModelName(model)}` : '';
+              const elapsed = currentFile.startedAt ? Math.round((Date.now() - currentFile.startedAt) / 60000) : null;
+              const elapsedPart = elapsed !== null && elapsed > 0 ? ` · ${elapsed} min` : '';
+              void window.pywebview.api.show_notification(
+                `✅ Sbobina pronta — ${currentFile.name}`,
+                `Elaborata con successo${modelPart}${elapsedPart}. Disponibile nell'applicazione.`,
+              );
+            }
           }
         }
       },
       onFileFailed: data => {
         const currentFile = filesRef.current?.find(file => file.id === data.id);
-        const isGoogleServerOverload = data.error?.includes('indisponibile') || data.error?.includes('unavailable');
+        const isGoogleServerOverload = data.error?.includes('indisponibile') || data.error?.includes('unavailable') || data.error === 'phase1_all_models_unavailable';
+        const isPaused = isPausedError(data.error, data.error_detail);
+        const friendlyError = errorLabel(data.error, data.error_detail);
 
         if (addNotificationRef.current && currentFile) {
           if (isGoogleServerOverload) {
@@ -191,28 +210,42 @@ export function useBridgeCallbacks(options: {
               'warning',
               'processing'
             );
+          } else if (isPaused) {
+            addNotificationRef.current(
+              'Elaborazione in pausa',
+              `Per "${currentFile.name}": ${friendlyError}`,
+              'warning',
+              'processing'
+            );
           } else {
             addNotificationRef.current(
               'Errore elaborazione',
-              `Errore per "${currentFile.name}": ${data.error || 'Si è verificato un errore imprevisto.'}`,
+              `Errore per "${currentFile.name}": ${friendlyError}`,
               'error',
               'processing'
             );
           }
         }
 
-        if (localStorage.getItem('notifications_enabled') === 'false') return;
-        if (currentFile && window.pywebview?.api?.show_notification && !document.hasFocus()) {
-          if (isGoogleServerOverload) {
-            void window.pywebview.api.show_notification(
-              `⚠️ Server occupati — ${currentFile.name}`,
-              "I server di Google Gemini sono temporaneamente sovraccarichi. L'app proverà a riprendere o puoi cliccare su 'Riprova' tra qualche minuto.",
-            );
-          } else {
-            void window.pywebview.api.show_notification(
-              `❌ Errore elaborazione — ${currentFile.name}`,
-              data.error || 'Si è verificato un errore imprevisto.',
-            );
+        if (!document.hasFocus()) {
+          void window.pywebview?.api?.flash_window?.();
+          if (localStorage.getItem('notifications_enabled') !== 'false' && currentFile && window.pywebview?.api?.show_notification) {
+            if (isGoogleServerOverload) {
+              void window.pywebview.api.show_notification(
+                `⚠️ Server occupati — ${currentFile.name}`,
+                "I server di Google Gemini sono temporaneamente sovraccarichi. L'app proverà a riprendere o puoi cliccare su 'Riprova' tra qualche minuto.",
+              );
+            } else if (isPaused) {
+              void window.pywebview.api.show_notification(
+                `⏸️ Elaborazione in pausa — ${currentFile.name}`,
+                friendlyError,
+              );
+            } else {
+              void window.pywebview.api.show_notification(
+                `❌ Errore elaborazione — ${currentFile.name}`,
+                friendlyError,
+              );
+            }
           }
         }
       },

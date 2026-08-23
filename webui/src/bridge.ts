@@ -151,6 +151,7 @@ export interface PywebviewApi {
   create_collaboration_backup?: (path: string) => Promise<{ ok: boolean; backup_path?: string; error?: string }>;
   stream_media_file?: (path: string, sessionDir?: string) => Promise<{ ok: boolean; url?: string; error?: string }>;
   show_notification?: (title: string, message: string) => Promise<void>;
+  flash_window?: () => Promise<{ ok: boolean; error?: string }>;
   validate_environment?: (
     apiKey?: string,
     checkApiKey?: boolean,

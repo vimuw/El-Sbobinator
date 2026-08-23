@@ -246,6 +246,46 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     expect(setRegeneratePrompt).toHaveBeenCalledWith(expect.objectContaining({ filename: 'test.mp3' }));
   });
 
+  it('askRegenerate callback shows native notification and flashes taskbar when window is in background', () => {
+    const showNotification = vi.fn();
+    const flashWindow = vi.fn();
+    setPywebview({ show_notification: showNotification, flash_window: flashWindow });
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    const setRegeneratePrompt = vi.fn();
+    const opts = makeMinimalHook({ setRegeneratePrompt });
+    renderHook(() => { useBridgeCallbacks(opts); });
+    localStorage.removeItem('notifications_enabled');
+    act(() => {
+      window.elSbobinatorBridge?.askRegenerate({ filename: 'test.mp3', mode: 'resume' });
+    });
+    expect(setRegeneratePrompt).toHaveBeenCalledWith(expect.objectContaining({ filename: 'test.mp3' }));
+    expect(flashWindow).toHaveBeenCalled();
+    expect(showNotification).toHaveBeenCalledWith(
+      '⚠️ Conferma richiesta — test.mp3',
+      expect.stringContaining('Ci sono progressi salvati'),
+    );
+    vi.restoreAllMocks();
+  });
+
+  it('askRegenerate flashes taskbar in background even when notifications are disabled', () => {
+    const showNotification = vi.fn();
+    const flashWindow = vi.fn();
+    setPywebview({ show_notification: showNotification, flash_window: flashWindow });
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    const setRegeneratePrompt = vi.fn();
+    const opts = makeMinimalHook({ setRegeneratePrompt });
+    renderHook(() => { useBridgeCallbacks(opts); });
+    localStorage.setItem('notifications_enabled', 'false');
+    act(() => {
+      window.elSbobinatorBridge?.askRegenerate({ filename: 'test.mp3', mode: 'resume' });
+    });
+    expect(setRegeneratePrompt).toHaveBeenCalledWith(expect.objectContaining({ filename: 'test.mp3' }));
+    expect(flashWindow).toHaveBeenCalled();
+    expect(showNotification).not.toHaveBeenCalled();
+    localStorage.removeItem('notifications_enabled');
+    vi.restoreAllMocks();
+  });
+
   it('askNewKey callback sets askNewKeyPrompt', () => {
     const setAskNewKeyPrompt = vi.fn();
     const opts = makeMinimalHook({ setAskNewKeyPrompt });
@@ -409,6 +449,19 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     expect(showNotification).toHaveBeenCalledWith(
       '⚠️ Server occupati — audio.mp3',
       expect.stringContaining('I server di Google Gemini sono temporaneamente sovraccarichi'),
+    );
+
+    showNotification.mockClear();
+
+    // Test paused timeout error
+    act(() => {
+      window.elSbobinatorBridge?.fileFailed({
+        id: 'file-1', index: 0, error: 'regenerate_prompt_timeout'
+      });
+    });
+    expect(showNotification).toHaveBeenCalledWith(
+      '⏸️ Elaborazione in pausa — audio.mp3',
+      expect.stringContaining('Nessuna scelta ricevuta'),
     );
 
     showNotification.mockClear();
