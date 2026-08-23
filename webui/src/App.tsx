@@ -918,6 +918,9 @@ export default function App() {
       if (!result?.ok) {
         if (result?.low_disk_warning) {
           setConfirmAction({ type: 'low-disk-warning', warning: result.low_disk_warning });
+          if (!document.hasFocus()) {
+            void window.pywebview?.api?.flash_window?.();
+          }
           return false;
         }
         appendConsole(`❌ ${result?.error || "Impossibile avviare l'elaborazione."}`);
@@ -1172,28 +1175,31 @@ export default function App() {
       setTimeout(() => setCompletionFlash(false), 5000);
     }
 
-    if (localStorage.getItem('notifications_enabled') !== 'false' && !document.hasFocus()) {
+    if (!document.hasFocus()) {
       const total = Number(data.total ?? 0);
       const completed = Number(data.completed ?? 0);
       const completed_with_warnings = Number(data.completed_with_warnings ?? 0);
       const failed = Number(data.failed ?? 0);
 
       if (total > 1 && !data.cancelled) {
-        if (failed > 0) {
-          void window.pywebview?.api?.show_notification?.(
-            '⚠️ Batch completato con errori — El Sbobinator',
-            `Elaborazione terminata. Riuscite: ${completed + completed_with_warnings}/${total}. Fallite: ${failed}. Apri l'app per i dettagli.`,
-          );
-        } else if (completed_with_warnings > 0) {
-          void window.pywebview?.api?.show_notification?.(
-            '⚠️ Batch completato con avvisi — El Sbobinator',
-            `Elaborazione terminata con avvisi. Sbobine con avvisi: ${completed_with_warnings}/${total}.`,
-          );
-        } else {
-          void window.pywebview?.api?.show_notification?.(
-            '✅ Batch completato — El Sbobinator',
-            `${completed} sbobine elaborate con successo.`,
-          );
+        void window.pywebview?.api?.flash_window?.();
+        if (localStorage.getItem('notifications_enabled') !== 'false') {
+          if (failed > 0) {
+            void window.pywebview?.api?.show_notification?.(
+              '⚠️ Batch completato con errori — El Sbobinator',
+              `Elaborazione terminata. Riuscite: ${completed + completed_with_warnings}/${total}. Fallite: ${failed}. Apri l'app per i dettagli.`,
+            );
+          } else if (completed_with_warnings > 0) {
+            void window.pywebview?.api?.show_notification?.(
+              '⚠️ Batch completato con avvisi — El Sbobinator',
+              `Elaborazione terminata con avvisi. Sbobine con avvisi: ${completed_with_warnings}/${total}.`,
+            );
+          } else {
+            void window.pywebview?.api?.show_notification?.(
+              '✅ Batch completato — El Sbobinator',
+              `${completed} sbobine elaborate con successo.`,
+            );
+          }
         }
       }
     }
