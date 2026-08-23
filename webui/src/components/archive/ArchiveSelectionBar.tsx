@@ -215,7 +215,7 @@ export function ArchiveSelectionBar({
           title="Elimina le sbobine selezionate dal disco"
         >
           <Trash2
-            className="w-4 h-4 shrink-0 transition-transform duration-200 group-hover/del:scale-110 group-hover/del:-rotate-12"
+            className="w-4 h-4 shrink-0 transition-transform duration-200 group-hover/del:scale-110 group-hover/del:-translate-y-0.5"
             style={{ color: 'var(--error-text)' }}
           />
           <span>Elimina</span>
