@@ -295,8 +295,8 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
             style={{ '--progress': `${volume * 100}%` } as React.CSSProperties}
           />
         </div>
-        <button type="button" onClick={() => skip(-duration)} className="player-control" aria-label="Torna all'inizio">
-          <RotateCcw className="h-4 w-4" />
+        <button type="button" onClick={() => skip(-duration)} className="player-control group/rewind" aria-label="Torna all'inizio">
+          <RotateCcw className="h-4 w-4 transition-transform duration-300 ease-out group-hover/rewind:-rotate-45 group-hover/rewind:scale-105" />
         </button>
         <div className="relative" ref={shortcutsRef}>
           <button

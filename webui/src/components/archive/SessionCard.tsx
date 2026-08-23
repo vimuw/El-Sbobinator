@@ -163,11 +163,11 @@ export function DraggableSessionCard({
                     type="button"
                     onClick={handleRetryBlocks}
                     disabled={isRetryingBlocks}
-                    className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold px-1.5 py-[2px] h-4 box-border rounded-full transition-opacity"
+                    className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold px-1.5 py-[2px] h-4 box-border rounded-full transition-opacity group/retry"
                     style={{ color: 'var(--warning-text)', border: '1px solid var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
                     title="Riprova solo i blocchi inclusi senza revisione"
                   >
-                    <RefreshCw className={`w-2.5 h-2.5 ${isRetryingBlocks ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`w-2.5 h-2.5 transition-transform duration-500 ease-out ${isRetryingBlocks ? 'animate-spin' : 'group-hover/retry:rotate-180 group-hover/retry:scale-110'}`} />
                     {isRetryingBlocks ? 'Riprovo…' : 'Riprova revisione'}
                   </button>
                 )}
@@ -388,11 +388,11 @@ export function SortableSessionCard({
                     type="button"
                     onClick={handleRetryBlocks}
                     disabled={isRetryingBlocks}
-                    className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold px-1.5 py-[2px] h-4 box-border rounded-full transition-opacity"
+                    className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold px-1.5 py-[2px] h-4 box-border rounded-full transition-opacity group/retry"
                     style={{ color: 'var(--warning-text)', border: '1px solid var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
                     title="Riprova solo i blocchi inclusi senza revisione"
                   >
-                    <RefreshCw className={`w-2.5 h-2.5 ${isRetryingBlocks ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`w-2.5 h-2.5 transition-transform duration-500 ease-out ${isRetryingBlocks ? 'animate-spin' : 'group-hover/retry:rotate-180 group-hover/retry:scale-110'}`} />
                     {isRetryingBlocks ? 'Riprovo…' : 'Riprova revisione'}
                   </button>
                 )}

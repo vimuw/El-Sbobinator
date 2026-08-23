@@ -75,9 +75,9 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
           disabled={isCheckingUpdate || isInProgress}
           aria-label="Cerca aggiornamenti"
           title={isCheckingUpdate ? 'Controllo in corso…' : 'Cerca aggiornamenti'}
-          className="p-1.5 rounded-lg hover:bg-[var(--sidebar-active-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40"
+          className="p-1.5 rounded-lg hover:bg-[var(--sidebar-active-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 group/check"
         >
-          <RefreshCw className={`w-4 h-4 ${isCheckingUpdate ? 'animate-spin text-[var(--accent-text)]' : ''}`} />
+          <RefreshCw className={`w-4 h-4 transition-transform duration-500 ease-out ${isCheckingUpdate ? 'animate-spin text-[var(--accent-text)]' : 'group-hover/check:rotate-180 group-hover/check:scale-105'}`} />
         </button>
       </div>
 

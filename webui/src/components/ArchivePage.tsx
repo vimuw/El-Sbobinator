@@ -608,12 +608,12 @@ export function ArchivePage({
             <button
               type="button"
               onClick={() => { setFullTextMode(m => !m); setSearch(''); }}
-              className="notion-sort-chip w-9 p-0 flex items-center justify-center"
+              className="notion-sort-chip w-9 p-0 flex items-center justify-center group/ft"
               style={fullTextMode ? { color: 'var(--accent-text)', borderColor: 'var(--accent-text)', background: 'var(--accent-subtle)' } : undefined}
               title={fullTextMode ? 'Testo completo (Attivo - Clicca per disattivare)' : 'Testo completo (Ricerca nel contenuto)'}
               aria-label="Testo completo"
             >
-              <FileSearch className="w-4 h-4" style={{ opacity: 0.85 }} />
+              <FileSearch className="w-4 h-4 transition-transform duration-200 opacity-80 group-hover/ft:opacity-100 group-hover/ft:scale-110" />
             </button>
             {!fullTextMode && (
               <SortMenu sort={sort} onSortChange={setSort} />
@@ -623,22 +623,22 @@ export function ArchivePage({
                 type="button"
                 onClick={handleImportSbobina}
                 disabled={isImporting}
-                className="notion-sort-chip w-9 p-0 flex items-center justify-center"
+                className="notion-sort-chip w-9 p-0 flex items-center justify-center group/import"
                 title="Importa Sbobina (.sbobina)"
                 aria-label="Importa Sbobina"
               >
-                {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" style={{ opacity: 0.85 }} />}
+                {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4 transition-transform duration-200 opacity-80 group-hover/import:opacity-100 group-hover/import:scale-110 group-hover/import:-translate-y-0.5" />}
               </button>
               {onRefresh && (
                 <button
                   type="button"
                   onClick={handleRefresh}
                   disabled={isRefreshing}
-                  className="notion-sort-chip w-9 p-0 flex items-center justify-center shrink-0"
+                  className="notion-sort-chip w-9 p-0 flex items-center justify-center shrink-0 group/refresh"
                   title="Aggiorna archivio"
                   aria-label="Aggiorna archivio"
                 >
-                  <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} style={{ opacity: 0.85 }} />
+                  <RefreshCw className={`w-4 h-4 transition-transform duration-500 ease-out ${isRefreshing ? 'animate-spin' : 'opacity-80 group-hover/refresh:opacity-100 group-hover/refresh:rotate-180 group-hover/refresh:scale-105'}`} />
                 </button>
               )}
             </div>
