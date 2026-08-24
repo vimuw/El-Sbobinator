@@ -4,7 +4,7 @@ import { Plus, UploadCloud } from 'lucide-react';
 interface DropZoneProps {
   isDragging: boolean;
   onDragOver: (e: React.DragEvent) => void;
-  onDragLeave: () => void;
+  onDragLeave: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
   onClick: () => void;
   compact?: boolean;

@@ -1,11 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { AlertTriangle, ArrowRight, Github, Loader2, Trash2, Users } from 'lucide-react';
+import { Github } from 'lucide-react';
 import { GITHUB_URL, KOFI_URL } from './branding';
-import { type ArchiveFolder, type ArchiveSession, type ElSbobinatorBridge, type LowDiskWarning, type PywebviewApi, type UpdateDownloadProgressPayload } from './bridge';
-import { getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type FileDescriptor, type FileDonePayload, type FileItem, type ProcessDonePayload } from './appState';
+import { type ElSbobinatorBridge, type PywebviewApi } from './bridge';
+import { initialProcessingState, processingReducer } from './appState';
 import { GEMINI_KEY_PATTERN } from './utils';
+import { STORAGE_KEYS } from './storageKeys';
 import { useConsole } from './hooks/useConsole';
 import { useTheme } from './hooks/useTheme';
 import { useUpdateChecker } from './hooks/useUpdateChecker';
@@ -14,24 +15,26 @@ import { useApiReady } from './hooks/useApiReady';
 import { useBridgeCallbacks } from './hooks/useBridgeCallbacks';
 import { useBodyScrollLock } from './hooks/useBodyScrollLock';
 import { usePreview } from './hooks/usePreview';
-import { ProcessingStatusBanner } from './components/ProcessingStatusBanner';
+import { useNotifications } from './hooks/useNotifications';
+import { useUpdateInstaller } from './hooks/useUpdateInstaller';
+import { useArchiveSync } from './hooks/useArchiveSync';
+import { useQueueIngest } from './hooks/useQueueIngest';
+import { useConfirmModal } from './hooks/useConfirmModal';
+import { useQueueProcessing } from './hooks/useQueueProcessing';
+import { useRevisionRetry } from './hooks/useRevisionRetry';
+import { useRegenerateDialog } from './hooks/useRegenerateDialog';
+import { useSystemNotificationTriggers } from './hooks/useSystemNotificationTriggers';
+import { QueuePage } from './components/QueuePage';
 import { RegenerateModal } from './components/modals/RegenerateModal';
 import { NewKeyModal } from './components/modals/NewKeyModal';
 import { ConfirmActionModal } from './components/modals/ConfirmActionModal';
-import { DuplicateFileModal, type AlreadyProcessedMatch, type DuplicatePrompt } from './components/modals/DuplicateFileModal';
-import { buildArchiveLookup, filterArchiveSessionsByInputPath, getArchiveMatchesForFile } from './duplicateDetection';
+import { DuplicateFileModal } from './components/modals/DuplicateFileModal';
 import { NavSidebar, type ActivePage } from './components/NavSidebar';
 import { NotificationDropdown } from './components/NotificationDropdown';
-import { useNotifications } from './hooks/useNotifications';
-import { DropZone } from './components/DropZone';
-import { WelcomeDashboard } from './components/WelcomeDashboard';
 import { JoinRoomModal } from './components/modals/JoinRoomModal';
-import { QueueSection } from './components/QueueSection';
-import { CompletedSection } from './components/CompletedSection';
-import { ConsolePanel } from './components/ConsolePanel';
+
 const EditorFullPage = React.lazy(() => import('./components/EditorFullPage').then(m => ({ default: m.EditorFullPage })));
 const SettingsModal = React.lazy(() => import('./components/modals/SettingsModal').then(m => ({ default: m.SettingsModal })));
-const SetupPage = React.lazy(() => import('./components/SetupPage').then(m => ({ default: m.SetupPage })));
 const archivePagePromise = import('./components/ArchivePage');
 const ArchivePage = React.lazy(() => archivePagePromise.then(m => ({ default: m.ArchivePage })));
 
@@ -40,91 +43,6 @@ declare global {
     pywebview?: { api?: PywebviewApi };
     elSbobinatorBridge?: ElSbobinatorBridge;
   }
-}
-
-type WebViewHostWindow = Window & {
-  chrome?: {
-    webview?: {
-      postMessageWithAdditionalObjects?: (message: string, additionalObjects: FileList) => void;
-    };
-  };
-};
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1_073_741_824) return `${(bytes / 1_073_741_824).toFixed(1)} GB`;
-  return `${Math.round(bytes / 1_048_576)} MB`;
-}
-
-const SUPPORTED_MEDIA_EXTENSIONS = new Set(['.mp3', '.m4a', '.wav', '.ogg', '.flac', '.aac', '.mp4', '.mkv', '.webm']);
-const UNSUPPORTED_MEDIA_ERROR = 'Formato non supportato. Seleziona un file audio/video: MP3, M4A, WAV, OGG, FLAC, AAC, MP4, MKV o WEBM.';
-
-function isSupportedMediaPath(path: string): boolean {
-  const match = String(path || '').trim().toLowerCase().match(/\.[^.\\/]+$/);
-  return Boolean(match && SUPPORTED_MEDIA_EXTENSIONS.has(match[0]));
-}
-
-type UiMode = 'loading' | 'setup' | 'ready-empty' | 'ready-with-files' | 'processing' | 'canceling';
-type ConfirmActionState =
-  | { type: 'stop-processing' }
-  | { type: 'remove-file'; fileId: string; fileName: string; isDone: boolean }
-  | { type: 'clear-completed'; count: number }
-  | { type: 'clear-all' }
-  | { type: 'low-disk-warning'; warning: LowDiskWarning }
-  | { type: 'delete-archive-session'; sessionDir: string; name: string }
-  | { type: 'delete-multiple-archive-sessions'; sessions: { sessionDir: string; name: string }[] }
-  | { type: 'retry-archive-session'; session: ArchiveSession };
-
-type PendingArchiveReplacement = {
-  fileName: string;
-  inputPath?: string;
-  sessions: ArchiveSession[];
-};
-
-type UpdateInstallStatus = UpdateDownloadProgressPayload['status'] | 'idle';
-type UpdateInstallState = {
-  version: string | null;
-  status: UpdateInstallStatus;
-  bytesDone: number;
-  bytesTotal: number;
-  error: string | null;
-};
-
-const UPDATE_INSTALL_IDLE: UpdateInstallState = {
-  version: null,
-  status: 'idle',
-  bytesDone: 0,
-  bytesTotal: 0,
-  error: null,
-};
-
-function formatUpdateInstallError(error?: string): string {
-  const raw = String(error || '').trim();
-  if (raw === 'uac_denied') {
-    return 'Installazione annullata: la richiesta UAC è stata rifiutata. L’app resta aperta; puoi riprovare o scaricare manualmente da GitHub.';
-  }
-  if (raw === 'permission_denied') {
-    return 'Permesso negato per /Applications: scarica il DMG da GitHub e trascina l’app in /Applications con Finder.';
-  }
-  if (/checksum|integrit/i.test(raw)) {
-    return raw || 'Verifica integrità fallita: scarica manualmente da GitHub.';
-  }
-  return raw || 'Aggiornamento fallito.';
-}
-
-function formatUpdateInstallStatus(state: UpdateInstallState): string {
-  if (state.status === 'downloading') {
-    const percent = state.bytesTotal > 0 ? ` ${Math.round((state.bytesDone / state.bytesTotal) * 100)}%` : '';
-    return `Download aggiornamento${percent}…`;
-  }
-  if (state.status === 'verifying') return 'Verifica integrità aggiornamento…';
-  if (state.status === 'installing') return 'Installazione aggiornamento…';
-  if (state.status === 'done') return 'Installer avviato. Segui le istruzioni per completare l’aggiornamento.';
-  if (state.status === 'error') return `Aggiornamento non riuscito: ${state.error ?? 'errore sconosciuto'}`;
-  return '';
 }
 
 export default function App() {
@@ -154,12 +72,10 @@ export default function App() {
     refreshSettings,
   } = useApiReady(appendConsole);
 
-  const [archiveSessions, setArchiveSessions] = useState<ArchiveSession[]>([]);
-  const [archiveTotal, setArchiveTotal] = useState(0);
-  const [isArchiveLoaded, setIsArchiveLoaded] = useState(false);
+  const [activePage, setActivePage] = useState<ActivePage>('queue');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isPeakDismissed, setIsPeakDismissed] = useState(() => {
-    const ts = localStorage.getItem('peakBannerDismissedUntil');
+    const ts = localStorage.getItem(STORAGE_KEYS.PEAK_BANNER_DISMISSED_UNTIL);
     return ts ? Date.now() < Number(ts) : false;
   });
 
@@ -176,6 +92,7 @@ export default function App() {
 
   const handleRetryFailedRevisionBlocksRef = useRef<(sessionDir: string, fileId?: string) => Promise<void>>(() => Promise.resolve());
   const installUpdateRef = useRef<(version: string) => Promise<void>>(() => Promise.resolve());
+  const startProcessingRef = useRef<(isContinuation?: boolean, overrideLowDisk?: boolean) => Promise<boolean>>(() => Promise.resolve(false));
 
   const {
     notifications,
@@ -196,180 +113,160 @@ export default function App() {
     setIsPeakDismissed,
     onOpenSettings: useCallback(() => setIsSettingsOpen(true), [setIsSettingsOpen]),
   });
-  const warnedRevisionSessionsRef = useRef<Set<string>>(new Set());
-  const prevSessionDirsRef = useRef<Map<string, string>>(new Map());
 
-  const [regeneratePrompt, setRegeneratePrompt] = useState<{ filename: string; mode?: 'completed' | 'resume'; sessionDir?: string } | null>(null);
   const [askNewKeyPrompt, setAskNewKeyPrompt] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<ConfirmActionState | null>(null);
-  const [duplicatePrompt, setDuplicatePrompt] = useState<DuplicatePrompt>(null);
-  const [regenDirtyConfirm, setRegenDirtyConfirm] = useState<{ filename: string } | null>(null);
-
-  const [activePage, setActivePage] = useState<ActivePage>('queue');
-  const [folders, setFolders] = useState<ArchiveFolder[]>([]);
-  const [isPeakHour, setIsPeakHour] = useState(() => { const h = new Date().getHours(); return h >= 15 && h < 20; });
-  const archiveLimitRef = useRef(0);
-
-  const [isDragging, setIsDragging] = useState(false);
-  const [showConsole, setShowConsole] = useState(() => localStorage.getItem('show_console') === 'true');
-  const [autoContinue, setAutoContinue] = useState(() => localStorage.getItem('auto_continue') !== 'false');
-  const [batchTotal, setBatchTotal] = useState(0);
-  const [batchCompleted, setBatchCompleted] = useState(0);
-  const [completionFlash, setCompletionFlash] = useState(false);
-  const [isRemovingInsecureKey, setIsRemovingInsecureKey] = useState(false);
-  const [updateInstallState, setUpdateInstallState] = useState<UpdateInstallState>(UPDATE_INSTALL_IDLE);
-  const updateInstallStateRef = useRef<UpdateInstallState>(UPDATE_INSTALL_IDLE);
+  const [showConsole, setShowConsole] = useState(() => localStorage.getItem(STORAGE_KEYS.SHOW_CONSOLE) === 'true');
+  const [autoContinue, setAutoContinue] = useState(() => localStorage.getItem(STORAGE_KEYS.AUTO_CONTINUE) !== 'false');
 
   const filesRef = useRef(files);
   const appStateRef = useRef(appState);
   const autoContinueRef = useRef(autoContinue);
-  const duplicatePromptRef = useRef<DuplicatePrompt>(duplicatePrompt);
-  const startProcessingRef = useRef<(isContinuation?: boolean, overrideLowDisk?: boolean) => Promise<boolean>>(() => Promise.resolve(false));
-  const archiveSessionsRef = useRef<ArchiveSession[]>(archiveSessions);
-  const foldersRef = useRef(folders);
-  const pendingArchiveReplacementsRef = useRef<Map<string, PendingArchiveReplacement>>(new Map());
-  const archiveReplacementCleanupInFlightRef = useRef<Set<string>>(new Set());
-  const downloadCompletionRef = useRef<{ version: string; resolve: () => void; reject: (e: Error) => void } | null>(null);
-  const updateInstallPromiseRef = useRef<Promise<void> | null>(null);
 
-  const normalizeSessionDir = useCallback((value?: string) =>
-    String(value || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase(), []);
+  const {
+    updateInstallState,
+    installUpdate,
+    handleDownloadProgress,
+  } = useUpdateInstaller({
+    latestVersion,
+    appendConsole,
+    upsertNotification,
+  });
+  installUpdateRef.current = installUpdate;
 
-  const refreshArchiveSessions = useCallback(async (limitOverride?: number) => {
-    const lim = limitOverride !== undefined ? limitOverride : archiveLimitRef.current;
-    try {
-      const result = await window.pywebview?.api?.get_completed_sessions?.(lim <= 0 ? 0 : lim);
-      if (result?.ok && result.sessions) {
-        setArchiveSessions(result.sessions);
-        setArchiveTotal(result.total ?? result.sessions.length);
-        prevSessionDirsRef.current = new Map(result.sessions.map((s: ArchiveSession) => [s.session_dir, s.name]));
-        try {
-          localStorage.setItem('el-sbobinator.has_sessions.v1', String(result.sessions.length > 0));
-        } catch (_) {}
-      }
-    } catch (_) {} finally {
-      setIsArchiveLoaded(true);
-    }
-  }, []);
+  const {
+    archiveSessions,
+    setArchiveSessions,
+    archiveTotal,
+    setArchiveTotal,
+    isArchiveLoaded,
+    folders,
+    setFolders,
+    archiveSessionsRef,
+    foldersRef,
+    pendingArchiveReplacementsRef,
+    normalizeSessionDir,
+    refreshArchiveSessions,
+    handleLoadAll,
+    handleOpenFailed,
+    handleFoldersChange,
+    handleSessionRootMoved,
+    executeRetryFromArchive,
+    archiveFiltered,
+    completedSessionFolderMap,
+  } = useArchiveSync({
+    files,
+    dispatch,
+    activePage,
+    setActivePage,
+    appState,
+    apiReady,
+    appendConsole,
+    addNotification,
+    handleRetryFailedRevisionBlocks: useCallback((sessionDir: string, fileId?: string) => handleRetryFailedRevisionBlocksRef.current(sessionDir, fileId), []),
+  });
 
-  useEffect(() => {
-    if (isArchiveLoaded) {
-      try {
-        localStorage.setItem('el-sbobinator.has_sessions.v1', String(archiveSessions.length > 0));
-      } catch (_) {}
-    }
-  }, [archiveSessions, isArchiveLoaded]);
+  const {
+    duplicatePrompt,
+    setDuplicatePrompt,
+    isDragging,
+    enqueueUniqueFiles,
+    handleDuplicateAddAgain,
+    handleBrowseClick,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+  } = useQueueIngest({
+    filesRef,
+    archiveSessionsRef,
+    pendingArchiveReplacementsRef,
+    setArchiveSessions,
+    setArchiveTotal,
+    dispatch,
+    appState,
+    appStateRef,
+    apiReady,
+    appendConsole,
+  });
 
-  const handleLoadAll = useCallback(() => {
-    archiveLimitRef.current = 0;
-    void refreshArchiveSessions(0);
-  }, [refreshArchiveSessions]);
+  const {
+    confirmAction,
+    setConfirmAction,
+    confirmModalCopy,
+    handleConfirmAction,
+  } = useConfirmModal({
+    dispatch,
+    filesRef,
+    foldersRef,
+    setFolders,
+    setArchiveSessions,
+    setArchiveTotal,
+    refreshArchiveSessions,
+    startProcessingRef,
+    executeRetryFromArchive,
+    normalizeSessionDir,
+    appendConsole,
+  });
 
-  const handleOpenFailed = useCallback((_htmlPath: string, sessionDir: string) => {
-    addNotification(
-      'File non disponibile',
-      'La sbobina non è più disponibile: il file è stato eliminato dal disco.',
-      'warning',
-      'system'
-    );
-    if (sessionDir) {
-      setArchiveSessions(prev => prev.filter(s => s.session_dir !== sessionDir));
-      setArchiveTotal(prev => Math.max(0, prev - 1));
-      prevSessionDirsRef.current.delete(sessionDir);
-    }
-  }, [addNotification]);
-
-  const handleRetryFailedRevisionBlocks = useCallback(async (sessionDir: string, _fileId?: string) => {
-    if (!sessionDir) throw new Error('Sessione non disponibile.');
-    if (!_fileId) {
-      const session = archiveSessionsRef.current.find(s => normalizeSessionDir(s.session_dir) === normalizeSessionDir(sessionDir));
-      if (session) {
-        setConfirmAction({ type: 'retry-archive-session', session });
-      }
-      return;
-    }
-
-    const existing = filesRef.current.find(f => f.id === _fileId);
-    if (existing?.isRetryingBlocks) {
-      addNotification('Retry in corso', 'Retry già in corso per questa sessione.', 'warning', 'processing');
-      return;
-    }
-
-    dispatch({ type: 'queue/set_retrying_blocks', id: _fileId, value: true });
-    try {
-      const res = await window.pywebview?.api?.retry_failed_revision_blocks?.(sessionDir);
-      if (!res?.ok) {
-        if (res?.conflict) {
-          addNotification('Retry annullato', 'La sbobina è stata modificata: retry annullato per evitare sovrascritture.', 'warning', 'processing');
-        } else if (res?.cancelled) {
-          addNotification('Retry annullato', 'Retry annullato.', 'info', 'processing');
-        } else if (res?.quota_exhausted) {
-          addNotification('Quota esaurita', 'Quota giornaliera esaurita: riprova domani.', 'warning', 'processing');
-        } else {
-          // Fallback for general errors (e.g. "API key mancante")
-          addNotification('Errore di revisione', res?.error ?? 'Impossibile completare la revisione dei blocchi.', 'error', 'processing');
-        }
-        throw new Error(res?.error ?? 'Retry non riuscito.');
-      }
-      const normalizedSessionDir = res.session_dir ?? sessionDir;
-      const remaining = Array.isArray(res.remaining_failed_blocks) ? res.remaining_failed_blocks : [];
-      dispatch({
-        type: 'queue/update_revision_failed_blocks',
-        fileId: _fileId,
-        sessionDir: normalizedSessionDir,
-        blocks: remaining,
-        htmlPath: res.html_path,
-        effectiveModel: res.effective_model,
-      });
-      setArchiveSessions(prev => prev.map(session =>
-        normalizeSessionDir(session.session_dir) === normalizeSessionDir(normalizedSessionDir)
-          ? {
-              ...session,
-              html_path: res.html_path ?? session.html_path,
-              effective_model: res.effective_model ?? session.effective_model,
-              completion_status: remaining.length > 0 ? 'completed_with_warnings' : 'completed',
-              revision_failed_blocks: remaining,
-            }
-          : session,
-      ));
-      if (remaining.length > 0) {
-        if (res.cancelled) {
-          addNotification('Retry annullato', `Retry annullato: ${remaining.length} ${remaining.length === 1 ? 'blocco resta non revisionato' : 'blocchi restano non revisionati'}.`, 'warning', 'processing');
-        } else if (res.quota_exhausted) {
-          addNotification('Quota esaurita', `Quota giornaliera esaurita: ${remaining.length} ${remaining.length === 1 ? 'blocco resta non revisionato' : 'blocchi restano non revisionati'}. Riprova domani.`, 'warning', 'processing');
-        } else {
-          addNotification('Elaborazione parziale', `${remaining.length} ${remaining.length === 1 ? 'blocco resta non revisionato' : 'blocchi restano non revisionati'}. Puoi riprovare più tardi.`, 'warning', 'processing');
-        }
-      } else {
-        addNotification('Elaborazione completata', 'Blocchi mancanti revisionati e HTML aggiornato.', 'success', 'processing');
-      }
-      void refreshArchiveSessions();
-    } finally {
-      dispatch({ type: 'queue/set_retrying_blocks', id: _fileId, value: false });
-    }
-  }, [normalizeSessionDir, refreshArchiveSessions, addNotification]);
+  const {
+    handleRetryFailedRevisionBlocks,
+    handleRevisionWarning,
+  } = useRevisionRetry({
+    filesRef,
+    archiveSessionsRef,
+    normalizeSessionDir,
+    dispatch,
+    setArchiveSessions,
+    refreshArchiveSessions,
+    addNotification,
+    setConfirmAction,
+  });
   handleRetryFailedRevisionBlocksRef.current = handleRetryFailedRevisionBlocks;
 
-  const handleRevisionWarning = useCallback((data: FileDonePayload) => {
-    const count = data.revision_failed_blocks?.length ?? 0;
-    if (count <= 0) return;
-    const key = normalizeSessionDir(data.output_dir || data.id);
-    if (key && warnedRevisionSessionsRef.current.has(key)) return;
-    if (key) warnedRevisionSessionsRef.current.add(key);
-    addNotification(
-      'Completata con avvisi',
-      `Completata con avvisi: ${count} ${count === 1 ? 'sezione è stata inclusa' : 'sezioni sono state incluse'} senza revisione AI.`,
-      'warning',
-      'processing',
-      {
-        dedupeKey: key || undefined,
-        actionType: 'retry_failed_revision_blocks',
-        actionData: { sessionDir: data.output_dir, fileId: data.id },
-      }
-    );
-  }, [normalizeSessionDir, addNotification]);
+  const {
+    batchTotal,
+    batchCompleted,
+    completionFlash,
+    setCompletionFlash,
+    startProcessing,
+    onFileContinued,
+    onBatchReset,
+    onBatchFullyDone,
+  } = useQueueProcessing({
+    filesRef,
+    appStateRef,
+    apiKey,
+    preferredModel,
+    fallbackModels,
+    dispatch,
+    appendConsole,
+    setConfirmAction,
+    refreshArchiveSessions,
+  });
+  startProcessingRef.current = startProcessing;
 
   const { preview, openPreview, openSharedSession, closePreview, relinkPreviewAudio, handleAudioStateChange, handleScrollTopChange, handleCollaborationStateChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
+
+  const {
+    regeneratePrompt,
+    setRegeneratePrompt,
+    regenDirtyConfirm,
+    handleRegenerateAnswer,
+    handleRegenDirtyConfirm,
+    handleRegenDirtyCancel,
+  } = useRegenerateDialog({
+    previewContent: preview.content,
+    previewSessionDir: preview.sessionDir,
+    closePreview,
+  });
+
+  useSystemNotificationTriggers({
+    configRecoveredFrom,
+    updateAvailable,
+    addNotification,
+    removeNotificationByDedupeKey,
+    isPeakDismissed,
+    setIsPeakDismissed,
+  });
 
   const [isJoinRoomOpen, setIsJoinRoomOpen] = useState(false);
   const [hasOpenedPreview, setHasOpenedPreview] = useState(false);
@@ -385,352 +282,15 @@ export default function App() {
     filesRef.current = files;
     appStateRef.current = appState;
     autoContinueRef.current = autoContinue;
-    duplicatePromptRef.current = duplicatePrompt;
-    archiveSessionsRef.current = archiveSessions;
-    foldersRef.current = folders;
   });
 
   useEffect(() => {
-    try { localStorage.setItem('auto_continue', String(autoContinue)); } catch (_) {}
+    try { localStorage.setItem(STORAGE_KEYS.AUTO_CONTINUE, String(autoContinue)); } catch (_) {}
   }, [autoContinue]);
 
-  useEffect(() => {
-    const check = () => { const h = new Date().getHours(); setIsPeakHour(h >= 15 && h < 20); };
-    const id = setInterval(check, 60_000);
-    return () => clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    if (isPeakHour) {
-      const ts = localStorage.getItem('peakBannerDismissedUntil');
-      setIsPeakDismissed(ts ? Date.now() < Number(ts) : false);
-    }
-  }, [isPeakHour]);
-
-  const configRecoveryToastPathRef = useRef<string | null>(null);
-  useEffect(() => {
-    const recoveredPath = configRecoveredFrom.trim();
-    if (!recoveredPath) return;
-    if (configRecoveryToastPathRef.current === recoveredPath) return;
-    const storageKey = `el-sbobinator.config-recovery-dismissed.v1:${recoveredPath}`;
-    try {
-      if (localStorage.getItem(storageKey) === '1') return;
-    } catch (_) {}
-    configRecoveryToastPathRef.current = recoveredPath;
-    addNotification(
-      'Configurazione ripristinata',
-      'Il file di configurazione era corrotto: ho ripristinato i valori predefiniti e salvato una copia di backup del file precedente.',
-      'warning',
-      'system',
-      {
-        persistent: true,
-        dedupeKey: `config-recovery:${recoveredPath}`,
-      }
-    );
-  }, [configRecoveredFrom, addNotification]);
-
-  useEffect(() => {
-    if (!isPeakHour) {
-      removeNotificationByDedupeKey('peak-hour-warning');
-      return;
-    }
-    if (isPeakDismissed) return;
-    addNotification(
-      'Fascia oraria di punta',
-      'Fascia oraria di punta (15:00–20:00): i modelli Gemini Flash possono subire rallentamenti o errori 503.',
-      'warning',
-      'system',
-      {
-        persistent: true,
-        dedupeKey: 'peak-hour-warning',
-      }
-    );
-  }, [isPeakHour, isPeakDismissed, addNotification, removeNotificationByDedupeKey]);
-
-  const upsertUpdateInstallNotification = useCallback((message: string, type: 'warning' | 'info', actionType?: 'install_update' | 'open_github', actionData?: unknown) => {
-    upsertNotification(
-      'Installazione aggiornamento',
-      message,
-      type,
-      'update',
-      {
-        persistent: true,
-        dedupeKey: 'update-install',
-        actionType,
-        actionData,
-      }
-    );
-  }, [upsertNotification]);
-
-  const applyUpdateInstallState = useCallback((next: UpdateInstallState) => {
-    updateInstallStateRef.current = next;
-    setUpdateInstallState(next);
-  }, []);
-
-  const installUpdate = useCallback(async (version: string) => {
-    if (updateInstallPromiseRef.current && downloadCompletionRef.current?.version === version) {
-      return updateInstallPromiseRef.current;
-    }
-    const api = window.pywebview?.api;
-    if (!api?.download_and_install_update) {
-      const message = 'Bridge aggiornamenti non disponibile.';
-      applyUpdateInstallState({ version, status: 'error', bytesDone: 0, bytesTotal: 0, error: message });
-      upsertUpdateInstallNotification(`Aggiornamento non riuscito: ${message}`, 'warning', 'open_github');
-      throw new Error(message);
-    }
-
-    applyUpdateInstallState({ version, status: 'downloading', bytesDone: 0, bytesTotal: 0, error: null });
-    upsertUpdateInstallNotification('Download aggiornamento…', 'info');
-
-    const completion = new Promise<void>((resolve, reject) => {
-      downloadCompletionRef.current = { version, resolve, reject };
-    });
-    const trackedCompletion = completion.finally(() => {
-      updateInstallPromiseRef.current = null;
-    });
-    updateInstallPromiseRef.current = trackedCompletion;
-
-    let result: Awaited<ReturnType<NonNullable<PywebviewApi['download_and_install_update']>>>;
-    try {
-      result = await api.download_and_install_update(version);
-    } catch (error: unknown) {
-      const message = formatUpdateInstallError(getErrorMessage(error));
-      if (downloadCompletionRef.current?.version === version) downloadCompletionRef.current = null;
-      updateInstallPromiseRef.current = null;
-      appendConsole(`❌ Aggiornamento fallito: ${message}`);
-      applyUpdateInstallState({
-        version,
-        status: 'error',
-        bytesDone: updateInstallStateRef.current.version === version ? updateInstallStateRef.current.bytesDone : 0,
-        bytesTotal: updateInstallStateRef.current.version === version ? updateInstallStateRef.current.bytesTotal : 0,
-        error: message,
-      });
-      upsertUpdateInstallNotification(`Aggiornamento non riuscito: ${message}`, 'warning', 'open_github');
-      throw new Error(message);
-    }
-    if (!result?.ok) {
-      const message = formatUpdateInstallError(result?.error);
-      downloadCompletionRef.current = null;
-      updateInstallPromiseRef.current = null;
-      applyUpdateInstallState({ version, status: 'error', bytesDone: 0, bytesTotal: 0, error: message });
-      appendConsole(`❌ Aggiornamento fallito: ${message}`);
-      upsertUpdateInstallNotification(`Aggiornamento non riuscito: ${message}`, 'warning', 'open_github');
-      throw new Error(message);
-    }
-    return trackedCompletion;
-  }, [appendConsole, applyUpdateInstallState, upsertUpdateInstallNotification]);
-  installUpdateRef.current = installUpdate;
-
-  const updateToastShownVersionRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!updateAvailable) return;
-    if (updateToastShownVersionRef.current === updateAvailable) return;
-    updateToastShownVersionRef.current = updateAvailable;
-    const cleanVer = updateAvailable.trim().replace(/^v+/, '');
-    addNotification(
-      'Aggiornamento disponibile',
-      `Nuova versione disponibile: v${cleanVer}`,
-      'info',
-      'update',
-      {
-        persistent: true,
-        dedupeKey: 'update-available',
-        actionData: { version: updateAvailable },
-      }
-    );
-  }, [updateAvailable, addNotification]);
-
-  const handleFoldersChange = useCallback(async (next: ArchiveFolder[]) => {
-    setFolders(next);
-    try {
-      await window.pywebview?.api?.save_archive_folders?.(next);
-    } catch (_) {}
-  }, []);
-
-  const handleSessionRootMoved = useCallback(async (payload?: { oldRoot?: string; newRoot?: string }) => {
-    if (payload?.oldRoot && payload?.newRoot) {
-      dispatch({
-        type: 'queue/remap_session_roots',
-        oldRoot: payload.oldRoot,
-        newRoot: payload.newRoot,
-      });
-    }
-    await refreshArchiveSessions();
-    try {
-      const res = await window.pywebview?.api?.get_archive_folders?.();
-      if (res?.ok && res.folders) {
-        setFolders(res.folders);
-      }
-    } catch (_) {}
-  }, [dispatch, refreshArchiveSessions]);
-
-  const pendingFiles = useMemo(() => getPendingFiles(files), [files]);
-  const doneFiles = useMemo(() => getDoneFiles(files), [files]);
-  const { queuedCount } = useMemo(() => {
-    let queuedCount = 0;
-    for (const f of files) { if (f.status === 'queued') queuedCount++; }
-    return { queuedCount };
-  }, [files]);
   const hasApiKey = Boolean(apiKey.trim());
   const isApiKeyValid = GEMINI_KEY_PATTERN.test(apiKey.trim());
-  const canStart = queuedCount > 0 && hasApiKey && isApiKeyValid;
-  const uiMode: UiMode =
-    !apiReady ? 'loading' :
-    appState === 'canceling' ? 'canceling' :
-    appState === 'processing' ? 'processing' :
-    (!hasApiKey || !isApiKeyValid) ? 'setup' :
-    queuedCount > 0 ? 'ready-with-files' : 'ready-empty';
-  const lastConsoleMessage = consoleLogs.length > 0 ? consoleLogs[consoleLogs.length - 1] : 'Pronto per iniziare.';
-  const showProcessingBanner = appState === 'processing' || appState === 'canceling' || completionFlash;
-  const apiKeyInsecureReasonLabel = apiKeyInsecureReason.trim() || 'DPAPI non disponibile.';
-  const bannerFile = useMemo(
-    () => files.find(f => f.status === 'processing') ?? (completionFlash ? doneFiles[0] : undefined),
-    [files, completionFlash, doneFiles],
-  );
-  const isConsoleDisabled = !hasApiKey || !isApiKeyValid || !(pendingFiles.length > 0 || doneFiles.length > 0 || showProcessingBanner);
-
-  useEffect(() => {
-    if (isConsoleDisabled && showConsole) {
-      setShowConsole(false);
-      localStorage.setItem('show_console', 'false');
-    }
-  }, [isConsoleDisabled, showConsole]);
-
-  useEffect(() => {
-    if (!apiReady) return;
-    void refreshArchiveSessions();
-    window.pywebview?.api?.get_archive_folders?.().then(res => {
-      if (res?.ok && res.folders) setFolders(res.folders);
-    }).catch(() => {});
-  }, [apiReady, refreshArchiveSessions]);
-
-  useEffect(() => {
-    if (activePage !== 'archive') return;
-    prevSessionDirsRef.current = new Map(archiveSessionsRef.current.map(s => [s.session_dir, s.name]));
-    const intervalId = setInterval(async () => {
-      try {
-        const lim = archiveLimitRef.current;
-        const result = await window.pywebview?.api?.get_completed_sessions?.(lim <= 0 ? 0 : lim);
-        if (!result?.ok || !result.sessions) return;
-        const newSessions: ArchiveSession[] = result.sessions;
-        const newDirs = new Set<string>(newSessions.map(s => s.session_dir));
-        if (newSessions.length > 0 || prevSessionDirsRef.current.size <= 2) {
-          for (const [dir, name] of prevSessionDirsRef.current.entries()) {
-            if (!newDirs.has(dir)) {
-              addNotification(
-                'Sessione cancellata',
-                `La sessione "${name}" è stata cancellata e la sbobina non è più disponibile.`,
-                'warning',
-                'system',
-                { dedupeKey: `session-deleted:${dir}` }
-              );
-            }
-          }
-        }
-        setArchiveSessions(newSessions);
-        setArchiveTotal(result.total ?? newSessions.length);
-        prevSessionDirsRef.current = new Map(newSessions.map(s => [s.session_dir, s.name]));
-      } catch (_) {}
-    }, 30_000);
-    return () => {
-      clearInterval(intervalId);
-      archiveLimitRef.current = 0;
-    };
-  }, [activePage, addNotification]);
-
-  const handleRemoveInsecureApiKey = useCallback(async () => {
-    if (isRemovingInsecureKey) return;
-    setIsRemovingInsecureKey(true);
-    try {
-      const result = await window.pywebview?.api?.save_settings?.('', fallbackKeys, preferredModel, fallbackModels);
-      if (!result?.ok) {
-        appendConsole(`❌ Errore rimozione chiave API: ${result?.error ?? 'errore sconosciuto'}`);
-        return;
-      }
-      setApiKey('');
-      setApiKeyInsecure(false);
-      setApiKeyInsecureReason('');
-      appendConsole('Chiave API rimossa dal disco.');
-    } catch (error: unknown) {
-      appendConsole(`❌ Errore rimozione chiave API: ${getErrorMessage(error)}`);
-    } finally {
-      setIsRemovingInsecureKey(false);
-    }
-  }, [
-    appendConsole,
-    fallbackKeys,
-    fallbackModels,
-    isRemovingInsecureKey,
-    preferredModel,
-    setApiKey,
-    setApiKeyInsecure,
-    setApiKeyInsecureReason,
-  ]);
-
-  const finalizeArchiveReplacement = useCallback(async (fileId: string) => {
-    const pendingReplacement = pendingArchiveReplacementsRef.current.get(fileId);
-    if (!pendingReplacement || archiveReplacementCleanupInFlightRef.current.has(fileId)) return;
-    archiveReplacementCleanupInFlightRef.current.add(fileId);
-    const deletedSessionDirs: string[] = [];
-    const currentFile = filesRef.current.find(file => file.id === fileId);
-    const deletableSessions = filterArchiveSessionsByInputPath(
-      pendingReplacement.inputPath || currentFile?.path,
-      pendingReplacement.sessions,
-    );
-    const rawNewDir = currentFile?.outputDir
-      || (currentFile?.outputHtml ? String(currentFile.outputHtml).replace(/[^/\\]+$/, '').replace(/[/\\]+$/, '') : undefined);
-    const newOutputDirNorm = rawNewDir ? String(rawNewDir).replace(/[/\\]+$/, '').toLowerCase() : null;
-    try {
-      for (const session of deletableSessions) {
-        const sessionDirNorm = String(session.session_dir).replace(/[/\\]+$/, '').toLowerCase();
-        if (newOutputDirNorm && sessionDirNorm === newOutputDirNorm) continue;
-        try {
-          const res = await window.pywebview?.api?.delete_session?.(session.session_dir);
-          if (res?.ok) {
-            deletedSessionDirs.push(session.session_dir);
-          } else {
-            appendConsole(`❌ Errore eliminazione sessione archiviata per ${pendingReplacement.fileName}: ${res?.error ?? 'errore sconosciuto'}`);
-          }
-        } catch (error) {
-          appendConsole(`❌ Errore eliminazione sessione archiviata per ${pendingReplacement.fileName}: ${getErrorMessage(error)}`);
-        }
-      }
-      if (deletedSessionDirs.length > 0) {
-        const deletedNorm = new Set(deletedSessionDirs.map(d => normalizeSessionDir(d)));
-        setArchiveSessions(prev => prev.filter(s => !deletedNorm.has(normalizeSessionDir(s.session_dir))));
-        setArchiveTotal(prev => Math.max(0, prev - deletedSessionDirs.length));
-        // Also strip deleted session dirs from folder associations so the
-        // re-elaborated file does not inherit the old folder tag.
-        const updated = foldersRef.current.map(folder => ({
-          ...folder,
-          session_dirs: folder.session_dirs.filter(d => !deletedNorm.has(normalizeSessionDir(d))),
-        }));
-        setFolders(updated);
-        void window.pywebview?.api?.save_archive_folders?.(updated).catch(() => {});
-      }
-      if (deletedSessionDirs.length !== deletableSessions.length) {
-        await refreshArchiveSessions();
-      }
-    } finally {
-      pendingArchiveReplacementsRef.current.delete(fileId);
-      archiveReplacementCleanupInFlightRef.current.delete(fileId);
-    }
-  }, [appendConsole, refreshArchiveSessions, setFolders, normalizeSessionDir]);
-
-  useEffect(() => {
-    const currentFileIds = new Set(files.map(f => f.id));
-    for (const fileId of pendingArchiveReplacementsRef.current.keys()) {
-      if (!currentFileIds.has(fileId)) {
-        pendingArchiveReplacementsRef.current.delete(fileId);
-        archiveReplacementCleanupInFlightRef.current.delete(fileId);
-      }
-    }
-    for (const file of files) {
-      if (file.status === 'done' && pendingArchiveReplacementsRef.current.has(file.id)) {
-        void finalizeArchiveReplacement(file.id);
-      }
-    }
-  }, [files, finalizeArchiveReplacement]);
+  const isConsoleDisabled = !hasApiKey || !isApiKeyValid || !(files.length > 0 || appState === 'processing' || appState === 'canceling' || completionFlash);
 
   useEffect(() => {
     document.title = appState === 'processing' ? '⏳ El Sbobinator' : 'El Sbobinator';
@@ -740,113 +300,7 @@ export default function App() {
     if (appState !== 'processing' && confirmAction?.type === 'stop-processing') {
       setConfirmAction(null);
     }
-  }, [appState, confirmAction]);
-
-  const getFileFingerprint = useCallback((file: Pick<FileItem, 'path' | 'name' | 'size' | 'duration'>) => {
-    const normalizedPath = String(file.path || '').trim().toLowerCase();
-    if (normalizedPath) return `path:${normalizedPath}`;
-    return `meta:${String(file.name || '').trim().toLowerCase()}::${Number(file.size || 0)}::${Math.round(Number(file.duration || 0))}`;
-  }, []);
-
-  const enqueueUniqueFiles = useCallback((incomingFiles: FileItem[]) => {
-    if (incomingFiles.length === 0) return;
-    if (duplicatePromptRef.current !== null) return;
-    const currentFiles = filesRef.current;
-    const currentArchive = archiveSessionsRef.current;
-    const pendingFingerprints = new Set(
-      currentFiles.filter(f => f.status !== 'done').map(f => getFileFingerprint(f)),
-    );
-    const doneFiles = currentFiles.filter(f => f.status === 'done');
-    const doneByFingerprint = new Map(doneFiles.map(f => [getFileFingerprint(f), f]));
-    const doneByMeta = new Map(
-      doneFiles
-        .filter(f => Number(f.duration) > 0)
-        .map(f => [
-          `${String(f.name || '').trim().toLowerCase()}::${Number(f.size || 0)}::${Math.round(Number(f.duration || 0))}`,
-          f,
-        ]),
-    );
-    const archiveLookup = buildArchiveLookup(currentArchive);
-    const uniqueFiles: FileItem[] = [];
-    const inQueueNames: string[] = [];
-    const alreadyProcessedMatches: AlreadyProcessedMatch[] = [];
-    const seenInBatch = new Set<string>();
-    for (const file of incomingFiles) {
-      const fp = getFileFingerprint(file);
-      if (pendingFingerprints.has(fp) || seenInBatch.has(fp)) {
-        inQueueNames.push(file.name);
-      } else if (doneByFingerprint.has(fp)) {
-        alreadyProcessedMatches.push({ source: 'done', existingFile: doneByFingerprint.get(fp)!, incoming: file });
-        seenInBatch.add(fp);
-      } else if (Number(file.duration) > 0) {
-        const metaKey = `${String(file.name || '').trim().toLowerCase()}::${Number(file.size || 0)}::${Math.round(Number(file.duration || 0))}`;
-        if (doneByMeta.has(metaKey)) {
-          alreadyProcessedMatches.push({ source: 'done', existingFile: doneByMeta.get(metaKey)!, incoming: file });
-          seenInBatch.add(fp);
-        } else {
-          const archiveMatches = getArchiveMatchesForFile(file, archiveLookup);
-          if (archiveMatches.length > 0) {
-            alreadyProcessedMatches.push({ source: 'archive', sessions: archiveMatches, incoming: file });
-            seenInBatch.add(fp);
-          } else {
-            seenInBatch.add(fp);
-            uniqueFiles.push(file);
-          }
-        }
-      } else {
-        const archiveMatches = getArchiveMatchesForFile(file, archiveLookup);
-        if (archiveMatches.length > 0) {
-          alreadyProcessedMatches.push({ source: 'archive', sessions: archiveMatches, incoming: file });
-          seenInBatch.add(fp);
-        } else {
-          seenInBatch.add(fp);
-          uniqueFiles.push(file);
-        }
-      }
-    }
-    if (uniqueFiles.length > 0) dispatch({ type: 'queue/add', files: uniqueFiles });
-    if (alreadyProcessedMatches.length > 0) {
-      setDuplicatePrompt({ kind: 'already-processed', matches: alreadyProcessedMatches, alsoInQueue: inQueueNames.length > 0 ? inQueueNames : undefined });
-    } else if (inQueueNames.length > 0) {
-      setDuplicatePrompt({ kind: 'in-queue', filenames: inQueueNames });
-    }
-  }, [dispatch, getFileFingerprint]);
-
-  const handleDuplicateAddAgain = useCallback(async (matches: AlreadyProcessedMatch[]) => {
-    setDuplicatePrompt(null);
-    const sessionDirsToHide = new Set<string>();
-    for (const match of matches) {
-      const replacementId = crypto.randomUUID();
-      if (match.source === 'done') {
-        const archiveMatches = filterArchiveSessionsByInputPath(
-          match.existingFile.path ?? match.incoming.path,
-          archiveSessionsRef.current,
-        );
-        if (archiveMatches.length > 0) {
-          pendingArchiveReplacementsRef.current.set(replacementId, {
-            fileName: match.incoming.name,
-            inputPath: match.incoming.path,
-            sessions: archiveMatches,
-          });
-          for (const s of archiveMatches) sessionDirsToHide.add(s.session_dir);
-        }
-        dispatch({ type: 'queue/remove', id: match.existingFile.id });
-        dispatch({ type: 'queue/add', files: [{ ...match.incoming, id: replacementId, resumeSession: false, allowCompletedDestroy: true }] });
-      } else {
-        pendingArchiveReplacementsRef.current.set(replacementId, {
-          fileName: match.incoming.name,
-          inputPath: match.incoming.path,
-          sessions: match.sessions,
-        });
-        for (const s of match.sessions) sessionDirsToHide.add(s.session_dir);
-        dispatch({ type: 'queue/add', files: [{ ...match.incoming, id: replacementId, resumeSession: false, allowCompletedDestroy: true }] });
-      }
-    }
-    if (sessionDirsToHide.size > 0) {
-      setArchiveSessions(prev => prev.filter(s => !sessionDirsToHide.has(s.session_dir)));
-      setArchiveTotal(prev => Math.max(0, prev - sessionDirsToHide.size));
-    }
-  }, [dispatch]);
+  }, [appState, confirmAction, setConfirmAction]);
 
   const requestRemoveFile = useCallback((id: string) => {
     const targetFile = filesRef.current.find(file => file.id === id);
@@ -866,346 +320,15 @@ export default function App() {
     dispatch({ type: 'queue/reorder', fromIndex, toIndex });
   }, [appState, files]);
 
-  const resolveQueuedFilesForProcessing = useCallback(async () => {
-    const api = window.pywebview?.api;
-    const queuedFiles = filesRef.current.filter(file => file.status === 'queued');
-    if (queuedFiles.length === 0) return [] as FileDescriptor[];
-    const file = queuedFiles[0];
-    const p = String(file.path || '').trim();
-    if (p && !isSupportedMediaPath(p)) {
-      appendConsole(`❌ ${UNSUPPORTED_MEDIA_ERROR}`);
-      return [];
-    }
-    const exists = p && api?.check_path_exists ? Boolean((await api.check_path_exists(p))?.exists) : Boolean(p);
-    let nextPath = p;
-    let nextName = file.name;
-    let nextSize = file.size;
-    let nextDuration = file.duration;
-    if (!exists) {
-      if (!api?.ask_media_file) { appendConsole(`Impossibile ricollegare l'audio per ${file.name}.`); return []; }
-      appendConsole(`Audio non trovato per ${file.name}. Selezionalo di nuovo per continuare.`);
-      const selectedFile = await api.ask_media_file();
-      if (!selectedFile?.path) { appendConsole(`Avvio annullato: audio non ricollegato per ${file.name}.`); return []; }
-      if (!isSupportedMediaPath(selectedFile.path)) { appendConsole(`❌ ${UNSUPPORTED_MEDIA_ERROR}`); return []; }
-      nextPath = selectedFile.path; nextName = selectedFile.name; nextSize = selectedFile.size; nextDuration = selectedFile.duration || 0;
-      dispatch({ type: 'queue/update_source', id: file.id, path: nextPath, name: nextName, size: nextSize, duration: nextDuration });
-      appendConsole(`Audio ricollegato: ${nextName}`);
-    }
-    return [{
-      id: file.id,
-      path: nextPath,
-      name: nextName,
-      size: nextSize,
-      duration: nextDuration,
-      ...(file.resumeSession !== undefined ? { resume_session: file.resumeSession } : {}),
-      allow_completed_destroy: file.allowCompletedDestroy,
-    }] as FileDescriptor[];
-  }, [appendConsole, dispatch]);
-
-  const startProcessing = async (isContinuation: boolean = false, overrideLowDisk: boolean = false) => {
-    const currentQueued = filesRef.current.filter(f => f.status === 'queued');
-    if (currentQueued.length === 0 || !apiKey.trim()) return false;
-    if (isContinuation && appStateRef.current === 'canceling') return false;
-    if (!window.pywebview?.api) return false;
-    if (!isContinuation) {
-      setBatchTotal(currentQueued.length);
-      setBatchCompleted(0);
-    }
-    try {
-      const fileDescriptors = await resolveQueuedFilesForProcessing();
-      if (!fileDescriptors || fileDescriptors.length === 0) return false;
-      const result = await window.pywebview.api.start_processing?.(fileDescriptors, apiKey.trim(), true, preferredModel, fallbackModels, overrideLowDisk);
-      if (!result?.ok) {
-        if (result?.low_disk_warning) {
-          setConfirmAction({ type: 'low-disk-warning', warning: result.low_disk_warning });
-          if (!document.hasFocus()) {
-            void window.pywebview?.api?.flash_window?.();
-          }
-          return false;
-        }
-        appendConsole(`❌ ${result?.error || "Impossibile avviare l'elaborazione."}`);
-        return false;
-      }
-      dispatch({ type: 'app/set_status', status: 'processing' });
-      return true;
-    } catch (e: unknown) {
-      appendConsole(`❌ Errore avvio: ${getErrorMessage(e)}`);
-      return false;
-    }
-  };
-
-  startProcessingRef.current = startProcessing;
-
-  const confirmStopProcessing = useCallback(async () => {
-    setConfirmAction(null);
-    dispatch({ type: 'app/set_status', status: 'canceling' });
-    appendConsole('[!] Annullamento in corso, attendere prego...');
-    if (window.pywebview?.api) await window.pywebview.api.stop_processing?.();
-  }, [appendConsole, setConfirmAction]);
-
   const handleClearAll = useCallback(() => {
     setConfirmAction({ type: 'clear-all' });
   }, [setConfirmAction]);
-
-  const confirmClearCompleted = useCallback(() => {
-    setConfirmAction(null);
-    dispatch({ type: 'queue/clear_completed' });
-    void refreshArchiveSessions();
-  }, [refreshArchiveSessions, setConfirmAction]);
-
-  const executeRetryFromArchive = useCallback(async (session: ArchiveSession) => {
-    if (appStateRef.current !== 'idle') {
-      addNotification('Elaborazione in corso', 'Elaborazione in corso: riprova al termine.', 'warning', 'processing');
-      return;
-    }
-    const normDir = normalizeSessionDir(session.session_dir);
-    const existing = filesRef.current.find(f => normalizeSessionDir(f.outputDir) === normDir);
-
-    // Guard against concurrent retry triggers
-    if (existing?.isRetryingBlocks) {
-      addNotification('Retry in corso', 'Retry già in corso per questa sessione.', 'warning', 'processing');
-      return;
-    }
-
-    setActivePage('queue');
-    const fileId = existing ? existing.id : `archive-${Date.now()}`;
-    if (!existing) {
-      const newFile: FileItem = {
-        id: fileId,
-        name: session.name,
-        size: session.input_size ?? 0,
-        duration: session.duration_sec ?? 0,
-        status: 'done',
-        progress: 100,
-        phase: 3,
-        path: session.input_path,
-        outputHtml: session.html_path,
-        outputDir: session.session_dir,
-        completedAt: session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : Date.now(),
-        effectiveModel: session.effective_model,
-        completionStatus: 'completed_with_warnings',
-        revisionFailedBlocks: session.revision_failed_blocks,
-        isRetryingBlocks: true,
-      };
-      dispatch({ type: 'queue/add', files: [newFile] });
-    } else {
-      dispatch({ type: 'queue/set_retrying_blocks', id: fileId, value: true });
-    }
-    try {
-      await handleRetryFailedRevisionBlocks(session.session_dir, fileId);
-    } catch (err) {
-      console.error('Archive retry error:', err);
-    } finally {
-      dispatch({ type: 'queue/set_retrying_blocks', id: fileId, value: false });
-    }
-  }, [handleRetryFailedRevisionBlocks, normalizeSessionDir, addNotification]);
-
-  const handleConfirmAction = useCallback(() => {
-    if (!confirmAction) return;
-    if (confirmAction.type === 'stop-processing') { void confirmStopProcessing(); return; }
-    if (confirmAction.type === 'remove-file') {
-      const removedFile = filesRef.current.find(f => f.id === confirmAction.fileId);
-      dispatch({ type: 'queue/remove', id: confirmAction.fileId });
-      setConfirmAction(null);
-      if (removedFile?.status === 'done') void refreshArchiveSessions();
-      return;
-    }
-    if (confirmAction.type === 'clear-all') {
-      setConfirmAction(null);
-      dispatch({ type: 'queue/clear_all' });
-      return;
-    }
-    if (confirmAction.type === 'low-disk-warning') {
-      setConfirmAction(null);
-      void startProcessingRef.current(false, true);
-      return;
-    }
-    if (confirmAction.type === 'delete-archive-session') {
-      const { sessionDir } = confirmAction;
-      setConfirmAction(null);
-      window.pywebview?.api?.delete_session?.(sessionDir).then(res => {
-        if (res?.ok) {
-          const normTarget = normalizeSessionDir(sessionDir);
-          setArchiveSessions(prev => prev.filter(s => normalizeSessionDir(s.session_dir) !== normTarget));
-          setArchiveTotal(prev => Math.max(0, prev - 1));
-          // Strip deleted session from folders and persist
-          const updated = foldersRef.current.map(folder => ({
-            ...folder,
-            session_dirs: folder.session_dirs.filter(d => normalizeSessionDir(d) !== normTarget),
-          }));
-          setFolders(updated);
-          void window.pywebview?.api?.save_archive_folders?.(updated).catch(() => {});
-        } else {
-          appendConsole(`❌ Errore eliminazione sessione: ${res?.error ?? 'errore sconosciuto'}`);
-        }
-      }).catch((e: unknown) => {
-        appendConsole(`❌ Errore eliminazione sessione: ${getErrorMessage(e)}`);
-      });
-      return;
-    }
-    if (confirmAction.type === 'delete-multiple-archive-sessions') {
-      const { sessions: targetSessions } = confirmAction;
-      setConfirmAction(null);
-      const dirs = targetSessions.map(s => s.sessionDir);
-      const normDirSet = new Set(dirs.map(d => normalizeSessionDir(d)));
-      Promise.all(dirs.map(d => window.pywebview?.api?.delete_session?.(d))).then(() => {
-        setArchiveSessions(prev => prev.filter(s => !normDirSet.has(normalizeSessionDir(s.session_dir))));
-        setArchiveTotal(prev => Math.max(0, prev - dirs.length));
-        const updated = foldersRef.current.map(folder => ({
-          ...folder,
-          session_dirs: folder.session_dirs.filter(d => !normDirSet.has(normalizeSessionDir(d))),
-        }));
-        setFolders(updated);
-        void window.pywebview?.api?.save_archive_folders?.(updated).catch(() => {});
-      }).catch((e: unknown) => {
-        appendConsole(`❌ Errore eliminazione sessioni: ${getErrorMessage(e)}`);
-      });
-      return;
-    }
-    if (confirmAction.type === 'retry-archive-session') {
-      const { session } = confirmAction;
-      setConfirmAction(null);
-      void executeRetryFromArchive(session);
-      return;
-    }
-    confirmClearCompleted();
-  }, [confirmAction, confirmClearCompleted, confirmStopProcessing, appendConsole, refreshArchiveSessions, executeRetryFromArchive, normalizeSessionDir]);
-
-  const handleRegenerateAnswer = async (ans: boolean | null) => {
-    const currentPrompt = regeneratePrompt;
-    setRegeneratePrompt(null);
-    try {
-      if (ans === true && preview.content !== null) {
-        const regenDir = (currentPrompt?.sessionDir ?? '').replace(/\\/g, '/').toLowerCase();
-        const previewDir = preview.sessionDir.replace(/\\/g, '/').toLowerCase();
-        if (regenDir && previewDir && regenDir === previewDir) {
-          const dirtyContent = (window as unknown as Record<string, () => unknown>).__elSbobinatorGetDirtyEditorContent?.();
-          if (dirtyContent) {
-            const flushFn = (window as unknown as Record<string, () => Promise<boolean>>).__elSbobinatorFlushPendingAutosave;
-            if (flushFn) {
-              const flushed = await flushFn();
-              if (!flushed) {
-                try {
-                  if (window.pywebview?.api?.answer_regenerate) await window.pywebview.api.answer_regenerate(false);
-                } catch (e) { console.error('Failed to send regen cancel after flush error:', e); }
-                return;
-              }
-            }
-            setRegenDirtyConfirm({ filename: currentPrompt?.filename ?? '' });
-            return;
-          }
-          const cancelFn = (window as unknown as Record<string, () => void>).__elSbobinatorCancelPendingAutosave;
-          cancelFn?.();
-          closePreview();
-        }
-      }
-      if (window.pywebview?.api?.answer_regenerate) await window.pywebview.api.answer_regenerate(ans);
-    } catch (e) { console.error('Failed to send answer to Python:', e); }
-  };
-
-  const handleRegenDirtyConfirm = useCallback(async () => {
-    setRegenDirtyConfirm(null);
-    const cancelFn = (window as unknown as Record<string, () => void>).__elSbobinatorCancelPendingAutosave;
-    cancelFn?.();
-    closePreview();
-    try {
-      if (window.pywebview?.api?.answer_regenerate) await window.pywebview.api.answer_regenerate(true);
-    } catch (e) { console.error('Failed to send regen answer:', e); }
-  }, [closePreview]);
-
-  const handleRegenDirtyCancel = useCallback(async () => {
-    setRegenDirtyConfirm(null);
-    try {
-      if (window.pywebview?.api?.answer_regenerate) await window.pywebview.api.answer_regenerate(false);
-    } catch (e) { console.error('Failed to send regen cancel:', e); }
-  }, []);
 
   const openFile = useCallback(async (path: string) => {
     if (!window.pywebview?.api) return;
     const res = await window.pywebview.api.open_file(path);
     if (res && !res.ok) appendConsole(`❌ Impossibile aprire il file: ${res.error ?? path}`);
   }, [appendConsole]);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    if (appState === 'idle') setIsDragging(true);
-  }, [appState]);
-  const handleDragLeave = useCallback(() => setIsDragging(false), []);
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    if (appStateRef.current !== 'idle') return;
-    try {
-      const w = window as WebViewHostWindow;
-      if (w.chrome?.webview?.postMessageWithAdditionalObjects) {
-        const names = Array.from(e.dataTransfer.files).map((f: File) => f.name);
-        w.chrome.webview.postMessageWithAdditionalObjects('FilesDropped', e.dataTransfer.files);
-        window.pywebview?.api?.collect_dropped_files?.(names);
-      }
-    } catch (_) {}
-  }, []);
-
-  const handleBrowseClick = async () => {
-    if (appState !== 'idle') return;
-    if (!apiReady || !window.pywebview || !window.pywebview.api) {
-      appendConsole('⚠ In attesa della connessione con Python... riprova tra un momento.');
-      return;
-    }
-    try {
-      const selectedFiles = await window.pywebview.api.ask_files?.();
-      if (selectedFiles?.length > 0) {
-        const filesToAdd: FileItem[] = selectedFiles.map((f: FileDescriptor) => ({
-          id: crypto.randomUUID(), name: f.name, size: f.size, duration: f.duration || 0,
-          path: f.path, status: 'queued' as const, progress: 0, phase: 0,
-        }));
-        enqueueUniqueFiles(filesToAdd);
-      }
-    } catch (e) { appendConsole(`❌ Errore selezione file: ${e}`); }
-  };
-
-  const onFileContinued = useCallback(() => { setBatchCompleted(prev => prev + 1); }, []);
-  const onBatchReset = useCallback(() => { setBatchTotal(0); setBatchCompleted(0); }, []);
-  const onBatchFullyDone = useCallback((data: ProcessDonePayload) => {
-    onBatchReset();
-
-    // Set flash if successful
-    if (isSuccessfulProcessDone(data)) {
-      setCompletionFlash(true);
-      setTimeout(() => setCompletionFlash(false), 5000);
-    }
-
-    if (!document.hasFocus()) {
-      const total = Number(data.total ?? 0);
-      const completed = Number(data.completed ?? 0);
-      const completed_with_warnings = Number(data.completed_with_warnings ?? 0);
-      const failed = Number(data.failed ?? 0);
-
-      if (total > 1 && !data.cancelled) {
-        void window.pywebview?.api?.flash_window?.();
-        if (localStorage.getItem('notifications_enabled') !== 'false') {
-          if (failed > 0) {
-            void window.pywebview?.api?.show_notification?.(
-              '⚠️ Batch completato con errori — El Sbobinator',
-              `Elaborazione terminata. Riuscite: ${completed + completed_with_warnings}/${total}. Fallite: ${failed}. Apri l'app per i dettagli.`,
-            );
-          } else if (completed_with_warnings > 0) {
-            void window.pywebview?.api?.show_notification?.(
-              '⚠️ Batch completato con avvisi — El Sbobinator',
-              `Elaborazione terminata con avvisi. Sbobine con avvisi: ${completed_with_warnings}/${total}.`,
-            );
-          } else {
-            void window.pywebview?.api?.show_notification?.(
-              '✅ Batch completato — El Sbobinator',
-              `${completed} sbobine elaborate con successo.`,
-            );
-          }
-        }
-      }
-    }
-
-    void refreshArchiveSessions();
-  }, [onBatchReset, refreshArchiveSessions]);
 
   useQueuePersistence(files, structuralVersion, dispatch, appendConsole);
   useBridgeCallbacks({
@@ -1225,87 +348,9 @@ export default function App() {
     onRevisionWarning: handleRevisionWarning,
     addNotification,
     batchTotal,
-    onDownloadProgress: useCallback((data: UpdateDownloadProgressPayload) => {
-      const currentDownload = downloadCompletionRef.current;
-      const version = currentDownload?.version ?? updateInstallStateRef.current.version ?? latestVersion;
-      const messageState: UpdateInstallState = {
-        version,
-        status: data.status,
-        bytesDone: data.bytes_done,
-        bytesTotal: data.bytes_total,
-        error: data.status === 'error' ? formatUpdateInstallError(data.error) : null,
-      };
-      applyUpdateInstallState(messageState);
-      if (data.status === 'done') {
-        upsertUpdateInstallNotification(formatUpdateInstallStatus(messageState), 'info');
-        currentDownload?.resolve();
-        downloadCompletionRef.current = null;
-      } else if (data.status === 'error') {
-        const message = messageState.error ?? 'Errore sconosciuto';
-        appendConsole(`❌ Aggiornamento fallito: ${message}`);
-        upsertUpdateInstallNotification(formatUpdateInstallStatus(messageState), 'warning', 'open_github');
-        currentDownload?.reject(new Error(message));
-        downloadCompletionRef.current = null;
-      } else {
-        upsertUpdateInstallNotification(formatUpdateInstallStatus(messageState), 'info');
-      }
-    }, [appendConsole, applyUpdateInstallState, latestVersion, upsertUpdateInstallNotification]),
+    onDownloadProgress: handleDownloadProgress,
   });
   useBodyScrollLock(isSettingsOpen || regeneratePrompt !== null || preview.content !== null || askNewKeyPrompt || confirmAction !== null || duplicatePrompt !== null || regenDirtyConfirm !== null);
-
-  const confirmModalCopy = useMemo(() => {
-    if (!confirmAction) return null;
-    if (confirmAction.type === 'stop-processing') {
-      return { title: 'Interrompere la sbobinatura?', description: "Stai per fermare l'elaborazione in corso. Il processo verrà interrotto e il file attuale tornerà in coda. Vuoi continuare?", confirmLabel: 'Conferma stop', cancelLabel: 'Continua elaborazione' };
-    }
-    if (confirmAction.type === 'remove-file') {
-      return { title: 'Rimuovere questo elemento?', description: confirmAction.isDone ? `"${confirmAction.fileName}" verrà spostata nell'archivio e rimossa dalla lista. Vuoi continuare?` : `"${confirmAction.fileName}" verrà rimossa dalla lista. Vuoi continuare?`, confirmLabel: 'Conferma rimozione', cancelLabel: 'Tieni elemento' };
-    }
-    if (confirmAction.type === 'clear-all') {
-      return { title: 'Svuotare tutta la coda?', description: "Tutti i file in coda verranno rimossi. L'operazione non può essere annullata.", confirmLabel: 'Svuota coda', cancelLabel: 'Annulla' };
-    }
-    if (confirmAction.type === 'low-disk-warning') {
-      const { warning } = confirmAction;
-      const fileLabel = warning.file_name ? ` per "${warning.file_name}"` : '';
-      return {
-        title: 'Spazio libero insufficiente',
-        description: `Lo spazio libero sembra insufficiente${fileLabel}. Stimato richiesto: ${formatBytes(warning.needed_bytes)} · disponibile: ${formatBytes(warning.free_bytes)} in ${warning.location}. Libera spazio prima di continuare, oppure procedi assumendoti il rischio di errore durante l'elaborazione.`,
-        confirmLabel: 'Continua comunque',
-        cancelLabel: 'Torna alla coda',
-      };
-    }
-    if (confirmAction.type === 'delete-archive-session') {
-      return { title: 'Eliminare questa sbobina?', description: `"${confirmAction.name}" e tutti i suoi dati di sessione verranno eliminati definitivamente dal disco. L'operazione è irreversibile.`, confirmLabel: 'Elimina definitivamente', cancelLabel: 'Annulla' };
-    }
-    if (confirmAction.type === 'delete-multiple-archive-sessions') {
-      const count = confirmAction.sessions.length;
-      return {
-        title: count === 1 ? 'Eliminare questa sbobina?' : `Eliminare ${count} sbobine?`,
-        description: `Tutti i file e i dati di sessione relativi alle ${count} sbobine selezionate verranno eliminati definitivamente dal disco. L'operazione è irreversibile.`,
-        confirmLabel: count === 1 ? 'Elimina definitivamente' : `Elimina ${count} sbobine`,
-        cancelLabel: 'Annulla',
-      };
-    }
-    if (confirmAction.type === 'retry-archive-session') {
-      return {
-        title: 'Ripristinare e riprovare la revisione?',
-        description: `La sbobina "${confirmAction.session.name}" verrà spostata nella schermata principale per elaborare i blocchi non revisionati. Vuoi procedere?`,
-        confirmLabel: 'Riprova revisione',
-        cancelLabel: 'Annulla',
-      };
-    }
-    return { title: 'Pulire le sbobine completate?', description: confirmAction.count === 1 ? "La sbobina completata verrà spostata nell'archivio e rimossa dalla lista. Vuoi continuare?" : `Le ${confirmAction.count} sbobine completate verranno spostate nell'archivio e rimosse dalla lista. Vuoi continuare?`, confirmLabel: 'Conferma pulizia', cancelLabel: 'Mantieni nella lista' };
-  }, [confirmAction]);
-
-  const archiveFiltered = useMemo(() => {
-    const activeHtmlPaths = new Set(files.map(f => f.outputHtml).filter(Boolean));
-    return archiveSessions.filter(s => !activeHtmlPaths.has(s.html_path));
-  }, [archiveSessions, files]);
-  const completedSessionFolderMap = useMemo(() => {
-    const map = new Map<string, ArchiveFolder>();
-    for (const folder of folders) for (const dir of folder.session_dirs) map.set(normalizeSessionDir(dir), folder);
-    return map;
-  }, [folders, normalizeSessionDir]);
 
   const handleQueueRetry = useCallback((id: string) => {
     dispatch({ type: 'queue/retry_one', id });
@@ -1317,7 +362,7 @@ export default function App() {
 
   const handleQueueStop = useCallback(() => {
     setConfirmAction({ type: 'stop-processing' });
-  }, []);
+  }, [setConfirmAction]);
 
   const handleOpenSettings = useCallback(() => {
     setIsSettingsOpen(true);
@@ -1328,11 +373,7 @@ export default function App() {
     if (!f) return;
     if (appStateRef.current !== 'idle' && f.status !== 'done') return;
     setConfirmAction({ type: 'remove-file', fileId: id, fileName: f.name, isDone: true });
-  }, []);
-
-  const handleClearCompleted = useCallback(() => {
-    setConfirmAction({ type: 'clear-completed', count: doneFiles.length });
-  }, [doneFiles.length]);
+  }, [setConfirmAction]);
 
   return (
     <div className="app-shell h-screen overflow-hidden font-sans flex flex-row bg-[var(--bg-base)] text-[var(--text-secondary)]">
@@ -1360,236 +401,60 @@ export default function App() {
       <div className="flex flex-col flex-1 min-w-0 h-screen overflow-hidden">
         <AnimatePresence mode="wait">
           {activePage === 'queue' ? (
-            <motion.main
-              key="queue"
-              className="flex-1 w-full flex flex-col overflow-y-auto hide-scrollbar"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.15, ease: 'easeOut' }}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            >
-              <div className="my-auto px-5 sm:px-6 py-8 flex flex-col gap-5 max-w-3xl w-full mx-auto">
-                {apiKeyInsecure && (
-                  <motion.div
-                    key="api-key-insecure-banner"
-                    initial={{ opacity: 0, y: -8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.18, ease: 'easeOut' }}
-                    className="w-full alert-card is-warning px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                  >
-                    <div className="flex items-start gap-3 text-sm leading-relaxed text-[var(--warning-text)]">
-                      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                      <span>
-                        La tua chiave API è salvata in chiaro su disco perché la protezione Windows (DPAPI) non è disponibile. Motivo: {apiKeyInsecureReasonLabel} Cancella e reinserisci la chiave, oppure conservala in un password manager.
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => void handleRemoveInsecureApiKey()}
-                      disabled={isRemovingInsecureKey}
-                      className="shrink-0 premium-button-secondary compact-button is-warning flex items-center justify-center gap-2"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      {isRemovingInsecureKey ? 'Rimozione...' : 'Rimuovi chiave'}
-                    </button>
-                  </motion.div>
-                )}
-                {uiMode === 'loading' ? (
-                  <motion.div
-                    key="connecting-loader"
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, ease: 'easeOut' }}
-                    className="premium-panel-strong py-12 px-6 flex flex-col items-center justify-center gap-4 text-center max-w-md mx-auto w-full"
-                  >
-                    <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent-text)' }} />
-                    <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
-                      Connessione in corso...
-                    </h3>
-                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      Inizializzazione dell'applicazione e caricamento delle impostazioni.
-                    </p>
-                    {bridgeDelayed && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="alert-card is-error p-3 rounded-lg text-xs leading-relaxed max-w-sm mt-2 text-[var(--error-text)]"
-                      >
-                        Il motore dell'applicazione sta impiegando più tempo del previsto.
-                        Verifica se l'app è bloccata o prova a riavviare.
-                      </motion.div>
-                    )}
-                  </motion.div>
-                ) : uiMode === 'setup' ? (
-                  <React.Suspense fallback={null}>
-                    <SetupPage
-                      hasProtectedKey={hasProtectedKey}
-                      onSaved={(key) => setApiKey(key)}
-                      preferredModel={preferredModel}
-                      fallbackKeys={fallbackKeys}
-                      fallbackModels={fallbackModels}
-                    />
-                  </React.Suspense>
-                ) : (
-                  <>
-                    {!(pendingFiles.length > 0 || doneFiles.length > 0 || showProcessingBanner) && (
-                      <WelcomeDashboard archiveSessions={archiveSessions} isArchiveLoaded={isArchiveLoaded} />
-                    )}
-                    <AnimatePresence>
-                      {showProcessingBanner ? (
-                        <motion.div
-                          key="processing-banner"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          transition={{ duration: 0.15, ease: 'easeOut' }}
-                        >
-                          <ProcessingStatusBanner
-                            appState={appState}
-                            currentPhase={completionFlash ? '__completed__' : currentPhase}
-                            currentModel={currentModel}
-                            activeProgress={completionFlash ? 100 : activeProgress}
-                            workTotals={workTotals}
-                            workDone={workDone}
-                            currentFileIndex={batchCompleted}
-                            currentBatchTotal={batchTotal}
-                            currentFileName={bannerFile?.name}
-                            startedAt={bannerFile?.startedAt}
-                          />
-                        </motion.div>
-                      ) : (
-                        <motion.div
-                          key="dropzone"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          transition={{ duration: 0.15, ease: 'easeOut' }}
-                          className={!(pendingFiles.length > 0 || doneFiles.length > 0) ? 'space-y-3' : undefined}
-                        >
-                          {pendingFiles.length > 0 || doneFiles.length > 0 ? (
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 min-w-0">
-                                <DropZone
-                                  compact={true}
-                                  isDragging={isDragging}
-                                  onDragOver={handleDragOver}
-                                  onDragLeave={handleDragLeave}
-                                  onDrop={handleDrop}
-                                  onClick={handleBrowseClick}
-                                />
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setIsJoinRoomOpen(true)}
-                                className="dropzone-compact-join-btn"
-                                title="Partecipa a una sessione live con codice stanza"
-                                aria-label="Partecipa a una sessione live con codice stanza"
-                              >
-                                <Users className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-                                <span className="hidden sm:inline">Codice stanza</span>
-                              </button>
-                            </div>
-                          ) : (
-                            <>
-                              <DropZone
-                                compact={false}
-                                isDragging={isDragging}
-                                onDragOver={handleDragOver}
-                                onDragLeave={handleDragLeave}
-                                onDrop={handleDrop}
-                                onClick={handleBrowseClick}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setIsJoinRoomOpen(true)}
-                                className="join-room-hero-card"
-                                title="Partecipa a una sessione collaborativa live con codice stanza"
-                                aria-label="Partecipa alla sessione live"
-                              >
-                                <div className="flex items-center gap-3 min-w-0">
-                                  <div className="join-room-hero-icon">
-                                    <Users className="w-4 h-4" />
-                                  </div>
-                                  <div className="min-w-0 text-left">
-                                    <div className="text-sm font-semibold text-[var(--text-primary)]">
-                                      Hai un codice stanza?
-                                    </div>
-                                    <div className="text-xs text-[var(--text-muted)] truncate">
-                                      Partecipa alla sessione di gruppo in tempo reale
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="join-room-hero-action">
-                                  <span>Partecipa</span>
-                                  <ArrowRight className="w-3.5 h-3.5 join-room-hero-arrow" />
-                                </div>
-                              </button>
-                            </>
-                          )}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </>
-                )}
-
-                {uiMode !== 'setup' && uiMode !== 'loading' && (
-                  <>
-                    <QueueSection
-                      pendingFiles={pendingFiles}
-                      appState={appState}
-                      autoContinue={autoContinue}
-                      setAutoContinue={setAutoContinue}
-                      preferredModel={preferredModel}
-                      currentModel={currentModel}
-                      queuedCount={queuedCount}
-                      canStart={canStart}
-                      hasApiKey={hasApiKey}
-                      isApiKeyValid={isApiKeyValid}
-                      currentPhase={currentPhase}
-                      dndSensors={dndSensors}
-                      onDragEnd={handleDragEnd}
-                      onRemove={requestRemoveFile}
-                      onClearAll={handleClearAll}
-                      onRetry={handleQueueRetry}
-                      onPreview={openPreview}
-                      onOpenFile={openFile}
-                      onStart={handleQueueStart}
-                      onStop={handleQueueStop}
-                      onOpenSettings={handleOpenSettings}
-                    />
-
-                    <CompletedSection
-                      doneFiles={doneFiles}
-                      appState={appState}
-                      onRemove={handleRemoveDoneFile}
-                      onPreview={openPreview}
-                      onOpenFile={openFile}
-                      onClearAll={handleClearCompleted}
-                      onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
-                      sessionFolderMap={completedSessionFolderMap}
-                    />
-                  </>
-                )}
-
-                {showConsole && uiMode !== 'setup' && uiMode !== 'loading' && (
-                  <ConsolePanel
-                    consoleLogs={consoleLogs}
-                    lastConsoleMessage={lastConsoleMessage}
-                    appState={appState}
-                    isConsoleExpanded={isConsoleExpanded}
-                    setIsConsoleExpanded={setIsConsoleExpanded}
-                  />
-                )}
-              </div>
-              <footer className="app-footer">
-                <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link">
-                  <Github className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
-                </a>
-                <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }} className="footer-link">
-                  ☕ Offrimi un caffè su Ko-fi!
-                </a>
-              </footer>
-            </motion.main>
+            <QueuePage
+              files={files}
+              appState={appState}
+              currentPhase={currentPhase}
+              currentModel={currentModel}
+              activeProgress={activeProgress}
+              workDone={workDone}
+              workTotals={workTotals}
+              batchCompleted={batchCompleted}
+              batchTotal={batchTotal}
+              completionFlash={completionFlash}
+              apiReady={apiReady}
+              bridgeDelayed={bridgeDelayed}
+              apiKey={apiKey}
+              setApiKey={setApiKey}
+              hasProtectedKey={hasProtectedKey}
+              apiKeyInsecure={apiKeyInsecure}
+              setApiKeyInsecure={setApiKeyInsecure}
+              apiKeyInsecureReason={apiKeyInsecureReason}
+              setApiKeyInsecureReason={setApiKeyInsecureReason}
+              fallbackKeys={fallbackKeys}
+              preferredModel={preferredModel}
+              fallbackModels={fallbackModels}
+              autoContinue={autoContinue}
+              setAutoContinue={setAutoContinue}
+              isDragging={isDragging}
+              handleDragOver={handleDragOver}
+              handleDragLeave={handleDragLeave}
+              handleDrop={handleDrop}
+              handleBrowseClick={handleBrowseClick}
+              setIsJoinRoomOpen={setIsJoinRoomOpen}
+              archiveSessions={archiveSessions}
+              isArchiveLoaded={isArchiveLoaded}
+              dndSensors={dndSensors}
+              handleDragEnd={handleDragEnd}
+              requestRemoveFile={requestRemoveFile}
+              handleClearAll={handleClearAll}
+              handleQueueRetry={handleQueueRetry}
+              openPreview={openPreview}
+              openFile={openFile}
+              handleQueueStart={handleQueueStart}
+              handleQueueStop={handleQueueStop}
+              handleOpenSettings={handleOpenSettings}
+              handleRemoveDoneFile={handleRemoveDoneFile}
+              setConfirmAction={setConfirmAction}
+              handleRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
+              completedSessionFolderMap={completedSessionFolderMap}
+              showConsole={showConsole}
+              setShowConsole={setShowConsole}
+              consoleLogs={consoleLogs}
+              isConsoleExpanded={isConsoleExpanded}
+              setIsConsoleExpanded={setIsConsoleExpanded}
+              appendConsole={appendConsole}
+            />
           ) : (
             <motion.main
               key="archive"
