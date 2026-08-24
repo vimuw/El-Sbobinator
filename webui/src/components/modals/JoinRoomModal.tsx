@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Users, X, Check, Radio } from 'lucide-react';
+import { STORAGE_KEYS } from '../../storageKeys';
 
 interface JoinRoomModalProps {
   isOpen: boolean;
@@ -14,10 +15,10 @@ const COLORS = [
 ];
 
 const getStoredCollabName = () => {
-  try { return localStorage.getItem('collab_username') || 'Studente'; } catch { return 'Studente'; }
+  try { return localStorage.getItem(STORAGE_KEYS.COLLAB_USERNAME) || 'Studente'; } catch { return 'Studente'; }
 };
 const getStoredCollabColor = () => {
-  try { return localStorage.getItem('collab_usercolor') || '#3b82f6'; } catch { return '#3b82f6'; }
+  try { return localStorage.getItem(STORAGE_KEYS.COLLAB_USERCOLOR) || '#3b82f6'; } catch { return '#3b82f6'; }
 };
 
 export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
@@ -43,8 +44,8 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
     if (!cleanRoom || !cleanName) return;
 
     try {
-      localStorage.setItem('collab_username', cleanName);
-      localStorage.setItem('collab_usercolor', color);
+      localStorage.setItem(STORAGE_KEYS.COLLAB_USERNAME, cleanName);
+      localStorage.setItem(STORAGE_KEYS.COLLAB_USERCOLOR, color);
     } catch (_) {}
 
     onJoinRoom(cleanRoom, { name: cleanName, color });

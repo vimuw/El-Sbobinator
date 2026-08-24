@@ -1,7 +1,8 @@
 import { type Dispatch, useEffect, useRef } from 'react';
 import type { FileItem, ProcessingAction } from '../appState';
+import { STORAGE_KEYS } from '../storageKeys';
 
-const QUEUE_STORAGE_KEY = 'el-sbobinator.queue.v1';
+const QUEUE_STORAGE_KEY = STORAGE_KEYS.QUEUE_V1;
 
 export function serializeQueueFile(file: FileItem): Record<string, unknown> {
   return {
