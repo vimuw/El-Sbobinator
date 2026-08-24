@@ -2,6 +2,7 @@ import { memo, useState, type Dispatch, type ReactNode, type SetStateAction } fr
 import { motion, AnimatePresence } from 'motion/react';
 import { Archive, Bell, Moon, Settings, Sun, Terminal } from 'lucide-react';
 import type { AppStatus } from '../appState';
+import { STORAGE_KEYS } from '../storageKeys';
 export type ActivePage = 'queue' | 'archive';
 
 const SIDEBAR_COLLAPSED_W = 54;
@@ -135,7 +136,7 @@ export const NavSidebar = memo(function NavSidebar({
           onClick={() => {
             const next = !showConsole;
             setShowConsole(next);
-            localStorage.setItem('show_console', String(next));
+            localStorage.setItem(STORAGE_KEYS.SHOW_CONSOLE, String(next));
           }}
           disabled={!hasApiKey || !isApiKeyValid || consoleDisabled}
         />

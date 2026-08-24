@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'reac
 import { motion, useAnimation, type TargetAndTransition } from 'motion/react';
 import { CalendarDays, FileText } from 'lucide-react';
 import type { ArchiveSession } from '../bridge';
+import { STORAGE_KEYS } from '../storageKeys';
 
 interface WelcomeDashboardProps {
   archiveSessions: ArchiveSession[];
@@ -73,7 +74,7 @@ function ClockIcon({ className }: { className?: string }) {
 export const WelcomeDashboard = memo(function WelcomeDashboard({ archiveSessions, isArchiveLoaded = true }: WelcomeDashboardProps) {
   const [cachedHasSessions] = useState(() => {
     try {
-      return localStorage.getItem('el-sbobinator.has_sessions.v1') === 'true';
+      return localStorage.getItem(STORAGE_KEYS.HAS_SESSIONS_V1) === 'true';
     } catch (_) {
       return false;
     }
