@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowRight, Clock, Eye, FileSearch, FileText,
@@ -11,7 +11,7 @@ import {
 import {
   SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
-import type { ArchiveFolder, ArchiveSession, SearchSessionResult } from '../bridge';
+import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { loadAllEditorSessions } from '../editorSessions';
 import { formatRelativeTime, normalizeSessionPath, shortModelName } from '../utils';
 import { FolderIndicatorChip } from './FolderChip';
@@ -35,6 +35,9 @@ import { DeleteFolderConfirmModal, DeleteMultipleSessionsConfirmModal, FolderMod
 import { ArchiveSelectionBar } from './archive/ArchiveSelectionBar';
 import { FullTextResultList } from './archive/FullTextResults';
 
+import { useArchiveSearch } from '../hooks/useArchiveSearch';
+import { useArchiveSelection } from '../hooks/useArchiveSelection';
+
 export type { ArchivePageProps, SortOption, FolderModalState, DeleteFolderConfirmState, DeleteMultipleSessionsConfirmState };
 export { SortMenu } from './archive/SortMenu';
 export { FolderCard, SortableFolderCard, FolderCardOverlay, NewFolderCard } from './archive/FolderCard';
@@ -49,27 +52,13 @@ export function ArchivePage({
   onPreview, onOpenFile, onDeleteSession, onDeleteMultipleSessions, onRefresh,
   onRetryFailedRevisionBlocks,
 }: ArchivePageProps) {
-  const [search, setSearch] = useState('');
-  const [sort, setSort] = useState<SortOption>('newest');
-
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [folderModal, setFolderModal] = useState<FolderModalState | null>(null);
   const [deleteFolderConfirm, setDeleteFolderConfirm] = useState<DeleteFolderConfirmState | null>(null);
   const [deleteMultipleConfirm, setDeleteMultipleConfirm] = useState<DeleteMultipleSessionsConfirmState | null>(null);
-  const [selectedSessionDirs, setSelectedSessionDirs] = useState<Set<string>>(new Set());
 
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const [searchFocused, setSearchFocused] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeDragFolderId, setActiveDragFolderId] = useState<string | null>(null);
-  const [fullTextMode, setFullTextMode] = useState(false);
-  const [ftSort, setFtSort] = useState<SortOption>('relevance');
-  const [ftResults, setFtResults] = useState<SearchSessionResult[] | null>(null);
-  const [ftTotal, setFtTotal] = useState<number | null>(null);
-  const [isSearching, setIsSearching] = useState(false);
-  const [ftError, setFtError] = useState<string | null>(null);
-  const ftDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const searchGenRef = useRef(0);
 
   const folderDndSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -174,206 +163,56 @@ export function ArchivePage({
     };
   }, [sessions, editorSessionsMap, sessionFolderMap]);
 
-  const sortSessions = useCallback((arr: ArchiveSession[]) => {
-    const q = search.trim().toLowerCase();
-    const filtered = q ? arr.filter(s => s.name.toLowerCase().includes(q)) : arr;
-    return [...filtered].sort((a, b) => {
-      if (sort === 'name') {
-        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
-      }
-      if (sort === 'recently_opened') {
-        const oa = getOpenedAtMs(a, editorSessionsMap);
-        const ob = getOpenedAtMs(b, editorSessionsMap);
-        if (oa !== ob) return ob - oa;
-      }
-      const ta = a.completed_at_iso ? new Date(a.completed_at_iso).getTime() : 0;
-      const tb = b.completed_at_iso ? new Date(b.completed_at_iso).getTime() : 0;
-      return sort === 'oldest' ? ta - tb : tb - ta;
-    });
-  }, [search, sort, editorSessionsMap]);
+  const {
+    search,
+    setSearch,
+    sort,
+    setSort,
+    searchFocused,
+    setSearchFocused,
+    searchInputRef,
+    fullTextMode,
+    setFullTextMode,
+    ftSort,
+    setFtSort,
+    ftResults,
+    sortedFtResults,
+    ftTotal,
+    isSearching,
+    ftError,
+    allSortedSessions,
+  } = useArchiveSearch({
+    sessions,
+    editorSessionsMap,
+  });
 
-  const allSortedSessions = useMemo(
-    () => sortSessions(sessions),
-    [sessions, sortSessions],
-  );
   const sessionPageData = allSortedSessions;
 
-  const sortedFtResults = useMemo(() => {
-    if (!ftResults) return null;
-    return [...ftResults].sort((a, b) => {
-      if (ftSort === 'relevance') {
-        return b.match_count - a.match_count;
-      }
-      if (ftSort === 'name') {
-        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
-      }
-      if (ftSort === 'recently_opened') {
-        const oa = editorSessionsMap[a.session_dir]?.openedAt ?? editorSessionsMap[a.html_path]?.openedAt ?? (a.completed_at_iso ? new Date(a.completed_at_iso).getTime() : 0);
-        const ob = editorSessionsMap[b.session_dir]?.openedAt ?? editorSessionsMap[b.html_path]?.openedAt ?? (b.completed_at_iso ? new Date(b.completed_at_iso).getTime() : 0);
-        if (oa !== ob) return ob - oa;
-      }
-      const ta = a.completed_at_iso ? new Date(a.completed_at_iso).getTime() : 0;
-      const tb = b.completed_at_iso ? new Date(b.completed_at_iso).getTime() : 0;
-      return ftSort === 'oldest' ? ta - tb : tb - ta;
-    });
-  }, [ftResults, ftSort, editorSessionsMap]);
-
-  useEffect(() => {
-    if (ftDebounceRef.current) clearTimeout(ftDebounceRef.current);
-    const q = search.trim();
-    if (!fullTextMode || q.length < 3) {
-      searchGenRef.current++;
-      setFtResults(null);
-      setFtTotal(null);
-      setFtError(null);
-      setIsSearching(false);
-      return;
-    }
-    setIsSearching(true);
-    setFtError(null);
-    const gen = ++searchGenRef.current;
-    ftDebounceRef.current = setTimeout(async () => {
-      try {
-        const res = await window.pywebview?.api?.search_sessions?.(q, 100);
-        if (searchGenRef.current !== gen) return;
-        if (res?.ok) {
-          setFtResults(res.results ?? []);
-          setFtTotal(res.total ?? (res.results?.length ?? 0));
-        } else {
-          setFtError(res?.error ?? 'Errore durante la ricerca');
-          setFtResults([]);
-          setFtTotal(null);
-        }
-      } catch {
-        if (searchGenRef.current !== gen) return;
-        setFtError('Errore durante la ricerca');
-        setFtResults([]);
-        setFtTotal(null);
-      } finally {
-        if (searchGenRef.current === gen) setIsSearching(false);
-      }
-    }, 400);
-    return () => { if (ftDebounceRef.current) clearTimeout(ftDebounceRef.current); };
-  }, [fullTextMode, search]);
+  const {
+    selectedSessionDirs,
+    assignToFolder,
+    removeFromFolder,
+    toggleSelectSession,
+    selectAllSessions,
+    handleDeselectOrRestore,
+    clearSelection,
+    bulkAssignToFolder,
+    bulkRemoveFromFolders,
+    handleOpenDeleteMultiple,
+  } = useArchiveSelection({
+    sessions,
+    folders,
+    onFoldersChange,
+    sessionPageData,
+    onDeleteMultipleSessions,
+    setDeleteMultipleConfirm,
+  });
 
   useEffect(() => {
     if (selectedFolderId && !folders.find(f => f.id === selectedFolderId)) {
       setSelectedFolderId(null);
     }
   }, [folders, selectedFolderId]);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key !== '/') return;
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable) return;
-      e.preventDefault();
-      searchInputRef.current?.focus();
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, []);
-
-  useEffect(() => {
-    if (selectedSessionDirs.size === 0) return;
-    const existingDirs = new Set(sessions.map(s => normalizeSessionPath(s.session_dir)));
-    setSelectedSessionDirs(prev => {
-      const filtered = new Set([...prev].filter(d => existingDirs.has(normalizeSessionPath(d))));
-      return filtered.size === prev.size ? prev : filtered;
-    });
-  }, [sessions, selectedSessionDirs.size]);
-
-  const assignToFolder = useCallback((sessionDir: string, folderId: string) => {
-    const normTarget = normalizeSessionPath(sessionDir);
-    const next = folders.map(f => {
-      if (f.id === folderId) {
-        if (f.session_dirs.some(d => normalizeSessionPath(d) === normTarget)) return f;
-        return { ...f, session_dirs: [...f.session_dirs, sessionDir] };
-      }
-      return { ...f, session_dirs: f.session_dirs.filter(d => normalizeSessionPath(d) !== normTarget) };
-    });
-    onFoldersChange(next);
-  }, [folders, onFoldersChange]);
-
-  const removeFromFolder = useCallback((sessionDir: string, folderId: string) => {
-    const normTarget = normalizeSessionPath(sessionDir);
-    const next = folders.map(f =>
-      f.id === folderId ? { ...f, session_dirs: f.session_dirs.filter(d => normalizeSessionPath(d) !== normTarget) } : f,
-    );
-    onFoldersChange(next);
-  }, [folders, onFoldersChange]);
-
-  const prevManualSelectionRef = useRef<Set<string> | null>(null);
-
-  const toggleSelectSession = useCallback((dir: string) => {
-    setSelectedSessionDirs(prev => {
-      const next = new Set(prev);
-      if (next.has(dir)) next.delete(dir);
-      else next.add(dir);
-      prevManualSelectionRef.current = next.size > 0 ? new Set(next) : null;
-      return next;
-    });
-  }, []);
-
-  const selectAllSessions = useCallback(() => {
-    if (selectedSessionDirs.size < sessionPageData.length && selectedSessionDirs.size > 0) {
-      prevManualSelectionRef.current = new Set(selectedSessionDirs);
-    }
-    setSelectedSessionDirs(new Set(sessionPageData.map(s => s.session_dir)));
-  }, [sessionPageData, selectedSessionDirs]);
-
-  const handleDeselectOrRestore = useCallback(() => {
-    if (prevManualSelectionRef.current && prevManualSelectionRef.current.size > 0 && prevManualSelectionRef.current.size < sessionPageData.length) {
-      setSelectedSessionDirs(new Set(prevManualSelectionRef.current));
-      prevManualSelectionRef.current = null;
-    } else {
-      setSelectedSessionDirs(new Set());
-      prevManualSelectionRef.current = null;
-    }
-  }, [sessionPageData.length]);
-
-  const clearSelection = useCallback(() => {
-    setSelectedSessionDirs(new Set());
-    prevManualSelectionRef.current = null;
-  }, []);
-
-  const bulkAssignToFolder = useCallback((folderId: string, customDirs?: string[]) => {
-    const targetDirs = customDirs ?? Array.from(selectedSessionDirs);
-    const normDirSet = new Set(targetDirs.map(d => normalizeSessionPath(d)));
-    const next = folders.map(f => {
-      if (f.id === folderId) {
-        const existingNorm = new Set(f.session_dirs.map(d => normalizeSessionPath(d)));
-        const toAdd = targetDirs.filter(d => !existingNorm.has(normalizeSessionPath(d)));
-        return { ...f, session_dirs: [...f.session_dirs, ...toAdd] };
-      }
-      return { ...f, session_dirs: f.session_dirs.filter(d => !normDirSet.has(normalizeSessionPath(d))) };
-    });
-    onFoldersChange(next);
-    if (!customDirs) clearSelection();
-  }, [folders, onFoldersChange, selectedSessionDirs, clearSelection]);
-
-  const bulkRemoveFromFolders = useCallback((customDirs?: string[]) => {
-    const targetDirs = customDirs ?? Array.from(selectedSessionDirs);
-    const normDirSet = new Set(targetDirs.map(d => normalizeSessionPath(d)));
-    const next = folders.map(f => ({
-      ...f,
-      session_dirs: f.session_dirs.filter(d => !normDirSet.has(normalizeSessionPath(d))),
-    }));
-    onFoldersChange(next);
-    if (!customDirs) clearSelection();
-  }, [folders, onFoldersChange, selectedSessionDirs, clearSelection]);
-
-  const handleOpenDeleteMultiple = useCallback((targets?: { sessionDir: string; name: string }[]) => {
-    const list = targets ?? sessionPageData
-      .filter(s => selectedSessionDirs.has(s.session_dir))
-      .map(s => ({ sessionDir: s.session_dir, name: s.name }));
-    if (list.length === 0) return;
-    if (onDeleteMultipleSessions) {
-      onDeleteMultipleSessions(list);
-    } else {
-      setDeleteMultipleConfirm({ sessions: list });
-    }
-  }, [sessionPageData, selectedSessionDirs, onDeleteMultipleSessions]);
 
   const selectedFolder = selectedFolderId ? folders.find(f => f.id === selectedFolderId) ?? null : null;
 
