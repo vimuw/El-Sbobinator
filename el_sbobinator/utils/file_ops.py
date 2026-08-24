@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import sys
 import threading
 import time
@@ -29,13 +30,25 @@ def _fsync_dir(path: str) -> None:
         pass
 
 
-def _atomic_write_text(path: str, text: str) -> None:
+def _atomic_write_text(path: str, text: str, mode: int | None = None) -> None:
+    parent_dir = os.path.dirname(path)
+    if parent_dir:
+        try:
+            os.makedirs(parent_dir, exist_ok=True)
+        except Exception:
+            pass
+
     tmp_path = path + ".tmp"
     try:
         with open(tmp_path, "w", encoding="utf-8") as f:
             f.write(text)
             f.flush()
-            os.fsync(f.fileno())
+            try:
+                fn = f.fileno()
+                if isinstance(fn, int):
+                    os.fsync(fn)
+            except Exception:
+                pass
         _replace = os.replace
         if "el_sbobinator.core.shared" in sys.modules:
             shared_mod = sys.modules["el_sbobinator.core.shared"]
@@ -49,16 +62,40 @@ def _atomic_write_text(path: str, text: str) -> None:
         except OSError:
             pass
         raise
+
+    if mode is not None and platform.system() != "Windows":
+        try:
+            os.chmod(path, mode)
+        except Exception:
+            pass
+
     _fsync_dir(path)
 
 
-def _atomic_write_json(path: str, data: Any) -> None:
+def _atomic_write_json(
+    path: str, data: Any, indent: int | None = 2, mode: int | None = None
+) -> None:
+    parent_dir = os.path.dirname(path)
+    if parent_dir:
+        try:
+            os.makedirs(parent_dir, exist_ok=True)
+        except Exception:
+            pass
+
     tmp_path = path + ".tmp"
     try:
         with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+            if indent is not None:
+                json.dump(data, f, ensure_ascii=False, indent=indent)
+            else:
+                json.dump(data, f, ensure_ascii=False)
             f.flush()
-            os.fsync(f.fileno())
+            try:
+                fn = f.fileno()
+                if isinstance(fn, int):
+                    os.fsync(fn)
+            except Exception:
+                pass
         _replace = os.replace
         if "el_sbobinator.core.shared" in sys.modules:
             shared_mod = sys.modules["el_sbobinator.core.shared"]
@@ -72,6 +109,13 @@ def _atomic_write_json(path: str, data: Any) -> None:
         except OSError:
             pass
         raise
+
+    if mode is not None and platform.system() != "Windows":
+        try:
+            os.chmod(path, mode)
+        except Exception:
+            pass
+
     _fsync_dir(path)
 
 
