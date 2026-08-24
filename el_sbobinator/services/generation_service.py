@@ -14,6 +14,7 @@ import threading
 import time
 from collections import Counter
 from collections.abc import Callable
+from typing import Any
 
 from google import genai
 from google.genai import types
@@ -24,6 +25,23 @@ from el_sbobinator.core.model_registry import (
     next_model_in_chain,
 )
 from el_sbobinator.services.config_service import load_config
+from el_sbobinator.services.gemini_errors import (
+    AllModelsUnavailableError,
+    DegenerateOutputError,
+    PermanentError,
+    QuotaDailyLimitError,
+    _error_code,
+    _error_text,
+    _is_daily_or_key_exhausted,
+    _is_invalid_key_probe_failure,
+    _is_minute_scoped_rate_limit,
+    _is_model_not_found,
+    _is_model_unavailable,
+    _is_quota_related,
+    _is_transient_key_probe_failure,
+    _normalize_guardrail_text,
+    detect_degenerate_output,
+)
 from el_sbobinator.utils.logging_utils import get_logger, redact_secrets
 
 # ---------------------------------------------------------------------------
@@ -52,200 +70,6 @@ _MODEL_UNAVAILABLE_RETRY_DELAYS: tuple[float, ...] = (
 # 65 s adds a small buffer to ensure the window has fully elapsed before retry.
 _RATE_LIMIT_SLEEP_SECONDS: float = 65.0
 _NEW_API_KEY_TIMEOUT_SECONDS: float = 600.0
-
-
-def _error_text(exc: Exception) -> str:
-    """Flatten structured SDK errors into a searchable lowercase string."""
-    parts: list[str] = []
-    for attr in ("message", "status"):
-        value = getattr(exc, attr, None)
-        if value:
-            parts.append(str(value))
-    details = getattr(exc, "details", None)
-    if details:
-        try:
-            parts.append(json.dumps(details, ensure_ascii=False, sort_keys=True))
-        except TypeError:
-            parts.append(str(details))
-    response = getattr(exc, "response", None)
-    if response is not None:
-        for attr in ("text", "reason_phrase", "reason"):
-            value = getattr(response, attr, None)
-            if value:
-                parts.append(str(value))
-    parts.append(str(exc))
-    return " ".join(part for part in parts if part).lower()
-
-
-def _error_code(exc: Exception) -> int | None:
-    raw_candidates = [
-        getattr(exc, "code", None),
-        getattr(getattr(exc, "response", None), "status_code", None),
-        getattr(getattr(exc, "response", None), "status", None),
-    ]
-    for raw in raw_candidates:
-        try:
-            if raw is None or raw == "":
-                continue
-            return int(raw)
-        except (TypeError, ValueError):
-            continue
-    return None
-
-
-def _is_minute_scoped_rate_limit(
-    error_text: str, error_code: int | None = None
-) -> bool:
-    markers = (
-        "per minute",
-        "per-minute",
-        "per_minute",
-        "rate limit",
-        "too many requests",
-        "requests_per_minute",
-        "requests per minute",
-        "retry-after",
-        "retry after",
-        "rpm",
-    )
-    return error_code == 429 or any(marker in error_text for marker in markers)
-
-
-def _is_daily_or_key_exhausted(error_text: str, error_code: int | None) -> bool:
-    hard_limit_markers = (
-        "per day",
-        "per-day",
-        "per_day",
-        "perday",
-        "daily",
-        "quota_exceeded",
-        "requests_per_day",
-        "requests per day",
-        "insufficient_quota",
-        "insufficient quota",
-        "insufficient_balance",
-        "insufficient balance",
-        "billing",
-        "credit",
-        "balance",
-    )
-    if any(marker in error_text for marker in hard_limit_markers):
-        return True
-
-    if _is_minute_scoped_rate_limit(error_text, error_code):
-        return False
-
-    token_markers = ("token", "tokens")
-    token_exhaustion_markers = (
-        "exhaust",
-        "exceeded",
-        "finished",
-        "ended",
-        "insufficient",
-        "unavailable",
-        "depleted",
-    )
-    if any(marker in error_text for marker in token_markers) and any(
-        marker in error_text for marker in token_exhaustion_markers
-    ):
-        return True
-
-    # Some Gemini quota failures are surfaced as plain HTTP 503 / UNAVAILABLE,
-    # but the structured payload still says RESOURCE_EXHAUSTED.
-    if error_code == 503 and "resource_exhausted" in error_text:
-        return True
-
-    return False
-
-
-def _is_model_unavailable(error_text: str, error_code: int | None) -> bool:
-    if error_code != 503:
-        return False
-    markers = (
-        "service unavailable",
-        "backend error",
-        "model is overloaded",
-        "overloaded",
-        "temporarily unavailable",
-    )
-    return any(marker in error_text for marker in markers)
-
-
-def _is_quota_related(error_text: str, error_code: int | None) -> bool:
-    return (
-        error_code == 429
-        or "resource_exhausted" in error_text
-        or "quota" in error_text
-        or "rate limit" in error_text
-        or "too many requests" in error_text
-    )
-
-
-def _is_model_not_found(error_text: str, error_code: int | None) -> bool:
-    if error_code != 404:
-        return False
-    markers = (
-        "not_found",
-        "not found",
-        "not supported for generatecontent",
-        "unsupported for generatecontent",
-        "models/",
-    )
-    return any(marker in error_text for marker in markers)
-
-
-def _is_invalid_key_probe_failure(error_text: str, error_code: int | None) -> bool:
-    if error_code in (401, 403):
-        return True
-    markers = (
-        "api key not valid",
-        "api_key_invalid",
-        "invalid api key",
-        "invalid_api_key",
-        "malformed api key",
-        "unauthenticated",
-        "permission_denied",
-        "permission denied",
-        "forbidden",
-        "access denied",
-        "does not have permission",
-        "not authorized",
-        "unauthorized",
-    )
-    return any(marker in error_text for marker in markers)
-
-
-def _is_transient_key_probe_failure(
-    error_text: str, error_code: int | None, exc: Exception
-) -> bool:
-    if isinstance(exc, TimeoutError | ConnectionError):
-        return True
-    if error_code in (408, 429, 500, 502, 503, 504):
-        if _is_daily_or_key_exhausted(error_text, error_code):
-            return False
-        return True
-    markers = (
-        "timeout",
-        "timed out",
-        "connection",
-        "network",
-        "temporary",
-        "temporarily",
-        "service unavailable",
-        "backend error",
-        "overloaded",
-        "try again",
-        "retry-after",
-        "retry after",
-        "rate limit",
-        "too many requests",
-        "per minute",
-        "per-minute",
-        "rpm",
-    )
-    if any(marker in error_text for marker in markers):
-        return not _is_daily_or_key_exhausted(error_text, error_code)
-    return False
 
 
 def current_model_name(model_state: ModelState | None, default_model: str) -> str:
@@ -451,89 +275,6 @@ def request_new_api_key(
     return result["new_key"]
 
 
-class QuotaDailyLimitError(Exception):
-    """Raised when the active API key is exhausted and no fallback key is available."""
-
-
-class PermanentError(Exception):
-    """Raised for non-retryable failures (e.g. HTTP 400 / INVALID_ARGUMENT)."""
-
-
-class DegenerateOutputError(RuntimeError):
-    """Raised when a model returns repetitive/runaway text that must be discarded."""
-
-    def __init__(self, reason: str, rejected_text: str = "") -> None:
-        super().__init__(reason)
-        self.rejected_text: str = (rejected_text or "")[:500]
-
-
-class AllModelsUnavailableError(RuntimeError):
-    """Raised when all models in the fallback chain are 503-unavailable."""
-
-
-def _normalize_guardrail_text(text: str) -> str:
-    normalized = str(text or "").replace("\u00a0", " ").strip().lower()
-    normalized = re.sub(r"\s+", " ", normalized)
-    normalized = re.sub(r"\s*([,.;:!?])\s*", r"\1", normalized)
-    return normalized
-
-
-def detect_degenerate_output(text: str) -> str | None:
-    raw = str(text or "").strip()
-    if not raw:
-        return None
-
-    paragraphs = [
-        segment.strip()
-        for segment in re.split(r"\n\s*\n+", raw)
-        if segment and segment.strip()
-    ]
-    if not paragraphs:
-        return None
-
-    if any(len(paragraph) > 12000 for paragraph in paragraphs):
-        longest = max(len(paragraph) for paragraph in paragraphs)
-        return f"paragrafo troppo lungo ({longest} caratteri)"
-
-    normalized_paragraphs = [
-        _normalize_guardrail_text(paragraph) for paragraph in paragraphs
-    ]
-    paragraph_candidates = [
-        paragraph for paragraph in normalized_paragraphs if len(paragraph) >= 80
-    ]
-    if paragraph_candidates:
-        paragraph_counts = Counter(paragraph_candidates)
-        repeated_paragraph = max(paragraph_counts.values(), default=0)
-        if repeated_paragraph >= 4:
-            return f"paragrafo ripetuto {repeated_paragraph} volte"
-        duplicate_paragraphs = sum(
-            count - 1 for count in paragraph_counts.values() if count > 1
-        )
-        if (
-            duplicate_paragraphs >= 8
-            and duplicate_paragraphs / max(1, len(paragraph_candidates)) >= 0.20
-        ):
-            return f"troppi paragrafi duplicati ({duplicate_paragraphs} duplicati)"
-
-    sentence_candidates: list[str] = []
-    for paragraph in paragraphs:
-        parts = re.split(r"(?<=[.!?])\s+|\n+", paragraph)
-        for sentence in parts:
-            normalized = _normalize_guardrail_text(sentence)
-            if len(normalized) >= 40:
-                sentence_candidates.append(normalized)
-    if sentence_candidates:
-        sentence_counts = Counter(sentence_candidates)
-        repeated_sentence = max(sentence_counts.values(), default=0)
-        if repeated_sentence >= 8:
-            return f"frase ripetuta {repeated_sentence} volte"
-
-    if len(raw) > 120000 and len(paragraphs) <= 5:
-        return f"output eccessivo e poco segmentato ({len(raw)} caratteri)"
-
-    return None
-
-
 def _switch_to_next_model(
     model_state: ModelState,
     *,
@@ -563,7 +304,144 @@ def _phase1_temperature(model_name: str) -> float:
     return 0.35
 
 
-def retry_with_quota(  # noqa: C901
+def _retry_on_model_unavailable(
+    callable_fn,
+    client,
+    model_state: ModelState,
+    current_model: str,
+    cancelled,
+    runtime,
+    restore_phase,
+    model_unavailable_retry_delays: tuple[float, ...],
+    on_model_switched,
+) -> tuple[bool, Any, Any, Exception | None]:
+    """Execute retry loop for 503 unavailable model.
+
+    Returns (switched, client, result, last_exc).
+    """
+    total = len(model_unavailable_retry_delays)
+    for retry_idx, wait in enumerate(model_unavailable_retry_delays, start=1):
+        print(
+            f"      [Modello {current_model} temporaneamente indisponibile."
+            f" Riprovo tra {int(wait)}s... (retry {retry_idx}/{total})]"
+        )
+        runtime.phase(f"Server Gemini occupato — ritento tra {int(wait)}s")
+        if not sleep_with_cancel(cancelled, wait):
+            print("   [*] Operazione annullata dall'utente.")
+            return False, client, None, None
+        restore_phase()
+        try:
+            result = callable_fn(client)
+            return False, client, result, None
+        except Exception as retry_exc:
+            if cancelled():
+                print("   [*] Operazione annullata dall'utente.")
+                return False, client, None, None
+            retry_error = _error_text(retry_exc)
+            retry_code = _error_code(retry_exc)
+            if _is_model_unavailable(retry_error, retry_code):
+                if retry_idx == total:
+                    _switch_to_next_model(
+                        model_state,
+                        on_model_switched=on_model_switched,
+                        error_message="Modello Gemini indisponibile.",
+                        cause=retry_exc,
+                        exc_type=AllModelsUnavailableError,
+                    )
+                    return True, client, None, None
+            else:
+                return False, client, None, retry_exc
+    return False, client, None, None
+
+
+def _retry_on_quota(
+    exc: Exception,
+    *,
+    client,
+    fallback_keys: list,
+    current_model: str,
+    model_state: ModelState | None,
+    cancelled,
+    runtime,
+    request_fallback_key,
+    on_key_rotated,
+    on_model_switched,
+    attempts: int,
+    max_attempts: int,
+    rate_limit_sleep_seconds: float,
+    error: str,
+    error_code: int | None,
+    log,
+    restore_phase,
+) -> tuple[bool, Any]:
+    """Handle minute rate limits, key rotation, dynamic key prompting, and model degradation.
+
+    Returns (should_retry, new_client).
+    """
+    is_minute_rate_limit = _is_minute_scoped_rate_limit(error, error_code)
+    is_exhausted_key = _is_daily_or_key_exhausted(error, error_code)
+    if is_minute_rate_limit and not is_exhausted_key and attempts < max_attempts - 1:
+        print(
+            "      [Rilevato limite temporaneo. Attesa di 65s per il reset quota al minuto...]"
+        )
+        runtime.phase("⏳ Rate limit: attesa 65s...")
+        if not sleep_with_cancel(cancelled, rate_limit_sleep_seconds):
+            print("   [*] Operazione annullata dall'utente.")
+            return False, client
+        restore_phase()
+        return True, client
+    if is_minute_rate_limit and not is_exhausted_key:
+        raise exc
+
+    print("\n[!!] CHIAVE API ESAURITA O QUOTA GIORNALIERA RAGGIUNTA!")
+    if cancelled():
+        print("   [*] Operazione annullata dall'utente.")
+        return False, client
+    new_c, rotated, rotated_key = try_rotate_key(
+        client,
+        fallback_keys,
+        current_model,
+        logger=log,
+        cancelled=cancelled,
+    )
+    if rotated:
+        client = new_c
+        runtime.set_effective_api_key(rotated_key)
+        if on_key_rotated is not None:
+            on_key_rotated(client)
+        return True, client
+
+    if cancelled():
+        print("   [*] Operazione annullata dall'utente.")
+        return False, client
+    new_api_key = request_fallback_key()
+    if new_api_key and new_api_key.strip():
+        try:
+            test_c = genai.Client(api_key=new_api_key.strip())
+            test_c.models.get(model=current_model)
+            client = test_c
+            runtime.set_effective_api_key(new_api_key.strip())
+            if on_key_rotated is not None:
+                on_key_rotated(client)
+            print("   [OK] Nuova API Key valida! Ripresa automatica...")
+            return True, client
+        except Exception as err:
+            print(f"   [!] Chiave non valida fornita: {redact_secrets(err)}")
+
+    if model_state is not None:
+        _switch_to_next_model(
+            model_state,
+            on_model_switched=on_model_switched,
+            error_message="Quota giornaliera esaurita su tutte le chiavi disponibili.",
+            cause=exc,
+            exc_type=QuotaDailyLimitError,
+        )
+        return True, client
+
+    raise QuotaDailyLimitError(str(exc)) from exc
+
+
+def retry_with_quota(
     callable_fn,
     *,
     client,
@@ -645,132 +523,60 @@ def retry_with_quota(  # noqa: C901
                 and _is_model_unavailable(error, error_code)
                 and model_state is not None
             ):
-                _switched = False
-                _total = len(model_unavailable_retry_delays)
-                for _retry_idx, _wait in enumerate(
-                    model_unavailable_retry_delays, start=1
-                ):
-                    print(
-                        f"      [Modello {current_model} temporaneamente indisponibile."
-                        f" Riprovo tra {int(_wait)}s... (retry {_retry_idx}/{_total})]"
-                    )
-                    runtime.phase(f"Server Gemini occupato — ritento tra {int(_wait)}s")
-                    if not sleep_with_cancel(cancelled, _wait):
-                        print("   [*] Operazione annullata dall'utente.")
-                        return client, None
-                    _restore_phase()
-                    try:
-                        result = callable_fn(client)
-                        return client, result
-                    except Exception as retry_exc:
-                        if cancelled():
-                            print("   [*] Operazione annullata dall'utente.")
-                            return client, None
-                        retry_error = _error_text(retry_exc)
-                        retry_code = _error_code(retry_exc)
-                        if _is_model_unavailable(retry_error, retry_code):
-                            if _retry_idx == _total:
-                                _switch_to_next_model(
-                                    model_state,
-                                    on_model_switched=on_model_switched,
-                                    error_message="Modello Gemini indisponibile.",
-                                    cause=retry_exc,
-                                    exc_type=AllModelsUnavailableError,
-                                )
-                                _switched = True
-                                break
-                            # not yet exhausted: inner for-loop continues to next delay
-                        else:
-                            exc = retry_exc
-                            error = retry_error
-                            error_code = retry_code
-                            is_quota_related = _is_quota_related(
-                                retry_error, retry_code
-                            )
-                            current_model = current_model_name(model_state, model_name)
-                            break
-                if _switched:
+                switched, client, result, other_exc = _retry_on_model_unavailable(
+                    callable_fn,
+                    client,
+                    model_state,
+                    current_model,
+                    cancelled,
+                    runtime,
+                    _restore_phase,
+                    model_unavailable_retry_delays,
+                    on_model_switched,
+                )
+                if result is not None or (cancelled() and other_exc is None):
+                    return client, result
+                if switched:
                     attempts = 0
                     continue
+                if other_exc is not None:
+                    exc = other_exc
+                    error = _error_text(exc)
+                    error_code = _error_code(exc)
+                    is_quota_related = _is_quota_related(error, error_code)
+                    current_model = current_model_name(model_state, model_name)
 
             if is_quota_related:
-                is_minute_rate_limit = _is_minute_scoped_rate_limit(error, error_code)
-                is_exhausted_key = _is_daily_or_key_exhausted(error, error_code)
-                if (
-                    is_minute_rate_limit
-                    and not is_exhausted_key
-                    and attempts < max_attempts - 1
-                ):
-                    print(
-                        "      [Rilevato limite temporaneo. Attesa di 65s per il reset quota al minuto...]"
-                    )
-                    runtime.phase("⏳ Rate limit: attesa 65s...")
-                    if not sleep_with_cancel(cancelled, rate_limit_sleep_seconds):
-                        print("   [*] Operazione annullata dall'utente.")
-                        return client, None
-                    _restore_phase()
-                    attempts += 1
-                    continue
-                elif is_minute_rate_limit and not is_exhausted_key:
-                    raise exc
-
-                print("\n[!!] CHIAVE API ESAURITA O QUOTA GIORNALIERA RAGGIUNTA!")
-                if cancelled():
-                    print("   [*] Operazione annullata dall'utente.")
-                    return client, None
-                new_c, rotated, rotated_key = try_rotate_key(
-                    client,
-                    fallback_keys,
-                    current_model,
-                    logger=log,
+                should_retry, client = _retry_on_quota(
+                    exc,
+                    client=client,
+                    fallback_keys=fallback_keys,
+                    current_model=current_model,
+                    model_state=model_state,
                     cancelled=cancelled,
+                    runtime=runtime,
+                    request_fallback_key=request_fallback_key,
+                    on_key_rotated=on_key_rotated,
+                    on_model_switched=on_model_switched,
+                    attempts=attempts,
+                    max_attempts=max_attempts,
+                    rate_limit_sleep_seconds=rate_limit_sleep_seconds,
+                    error=error,
+                    error_code=error_code,
+                    log=log,
+                    restore_phase=_restore_phase,
                 )
-                if rotated:
-                    client = new_c
-                    runtime.set_effective_api_key(rotated_key)
-                    if on_key_rotated is not None:
-                        on_key_rotated(client)
-                    attempts = 0
-                    continue
-
-                if cancelled():
-                    print("   [*] Operazione annullata dall'utente.")
-                    return client, None
-                new_api_key = request_fallback_key()
-                if new_api_key and new_api_key.strip():
-                    try:
-                        test_c = genai.Client(api_key=new_api_key.strip())
-                        test_c.models.get(model=current_model)
-                        client = test_c
-                        runtime.set_effective_api_key(new_api_key.strip())
-                        if on_key_rotated is not None:
-                            on_key_rotated(client)
+                if should_retry:
+                    if _is_daily_or_key_exhausted(error, error_code):
                         attempts = 0
-                        print("   [OK] Nuova API Key valida! Ripresa automatica...")
-                        continue
-                    except Exception as err:
-                        print(
-                            f"   [!] Chiave non valida fornita: {redact_secrets(err)}"
-                        )
-
-                if model_state is not None:
-                    _switch_to_next_model(
-                        model_state,
-                        on_model_switched=on_model_switched,
-                        error_message="Quota giornaliera esaurita su tutte le chiavi disponibili.",
-                        cause=exc,
-                        exc_type=QuotaDailyLimitError,
-                    )
-                    attempts = 0
+                    else:
+                        attempts += 1
                     continue
+                return client, None
 
-                raise QuotaDailyLimitError(str(exc)) from exc
-
-            # Non-retryable: propagate immediately
             if isinstance(exc, PermanentError):
                 raise
 
-            # Non-quota error: retry with sleep
             attempts += 1
             if attempts >= max_attempts:
                 raise
