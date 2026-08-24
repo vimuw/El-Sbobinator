@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GITHUB_RELEASES_URL } from '../branding';
 import type { NotificationMessage } from '../components/NotificationDropdown';
+import { STORAGE_KEYS } from '../storageKeys';
 
-export const NOTIFICATIONS_STORAGE_KEY = 'el-sbobinator.notifications.v1';
+export const NOTIFICATIONS_STORAGE_KEY = STORAGE_KEYS.NOTIFICATIONS_V1;
 
 export type NotificationType = 'info' | 'warning' | 'error' | 'success';
 export type NotificationCategory = 'processing' | 'update' | 'system';
