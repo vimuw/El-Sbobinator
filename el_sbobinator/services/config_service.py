@@ -52,6 +52,9 @@ from el_sbobinator.core.model_registry import (
     sanitize_fallback_models,
     sanitize_model_name,
 )
+from el_sbobinator.utils.file_ops import (
+    _atomic_write_json as _file_ops_atomic_write_json,
+)
 
 _config_lock = threading.Lock()
 _write_lock = threading.Lock()
@@ -599,28 +602,7 @@ def _preserve_extra_config_keys(current_cfg: dict, data: dict) -> None:
 
 
 def _atomic_write_json(file_path: str, data: dict) -> None:
-    try:
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    except Exception:
-        pass
-
-    tmp_path = file_path + ".tmp"
-    try:
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-        os.replace(tmp_path, file_path)
-    except Exception:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
-
-    if platform.system() != "Windows":
-        try:
-            os.chmod(file_path, 0o600)
-        except Exception:
-            pass
+    _file_ops_atomic_write_json(file_path, data, indent=None, mode=0o600)
 
 
 def _write_legacy_config_if_requested(data: dict) -> None:

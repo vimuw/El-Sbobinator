@@ -21,6 +21,33 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 
+from el_sbobinator.core.session_cleanup import (
+    _TEMP_CHUNK_AUDIO_EXTS,
+    SESSION_CLEANUP_MAX_AGE_DAYS,
+    _cleanup_legacy_temp_chunks,
+    _cleanup_session_temp_chunks,
+    _is_old_enough,
+    _resolve_session_html_path,
+    _session_cleanup_kind,
+    _session_completed_html_exists,
+    cleanup_completed_sessions,
+    cleanup_orphan_sessions,
+    cleanup_orphan_temp_chunks,
+)
+from el_sbobinator.core.session_storage import (
+    _STORAGE_INFO_TTL,
+    PRECONVERTED_AUDIO_PARTIAL,
+    _compute_session_storage_info,
+    _folder_newest_mtime,
+    _folder_size,
+    _storage_info_cache,
+    _storage_info_cache_time,
+    _storage_info_executor,
+    _storage_info_future,
+    _storage_info_lock,
+    get_session_storage_info,
+    invalidate_session_storage_cache,
+)
 from el_sbobinator.pipeline.pipeline_settings import build_default_pipeline_settings
 from el_sbobinator.services.config_service import USER_HOME
 from el_sbobinator.utils.file_ops import (
@@ -31,9 +58,7 @@ from el_sbobinator.utils.file_ops import (
     _safe_mkdir,
 )
 
-SESSION_CLEANUP_MAX_AGE_DAYS = 14
 PRECONVERTED_AUDIO_FINAL = "el_sbobinator_preconverted_mono16k.mp3"
-PRECONVERTED_AUDIO_PARTIAL = "el_sbobinator_preconverted_mono16k.partial.mp3"
 SESSION_SCHEMA_VERSION = 1
 
 _LEGACY_SESSION_ROOT = os.path.join(USER_HOME, ".el_sbobinator_sessions")
@@ -240,391 +265,6 @@ def _session_id_for_file(path: str) -> str:
 
 def _session_dir_for_file(path: str) -> str:
     return os.path.join(get_session_root(), _session_id_for_file(path))
-
-
-# ==========================================
-# STORAGE CALCULATION
-# ==========================================
-_storage_info_cache: dict | None = None
-_storage_info_cache_time: float = 0.0
-_storage_info_future: concurrent.futures.Future[dict] | None = None
-_STORAGE_INFO_TTL: float = 30.0
-_storage_info_lock = threading.Lock()
-_storage_info_executor = concurrent.futures.ThreadPoolExecutor(
-    max_workers=1, thread_name_prefix="storage_info"
-)
-
-
-def _folder_size(path: str) -> int:
-    """Recursively compute folder size in bytes. Best-effort: skips unreadable files."""
-    total = 0
-    try:
-        for dirpath, _, filenames in os.walk(path):
-            for fname in filenames:
-                if fname == PRECONVERTED_AUDIO_PARTIAL:
-                    continue
-                try:
-                    total += os.path.getsize(os.path.join(dirpath, fname))
-                except Exception:
-                    pass
-    except Exception:
-        pass
-    return total
-
-
-def _folder_newest_mtime(path: str) -> float:
-    """
-    Return the newest mtime of any file inside the folder (recursive).
-    Falls back to the directory mtime itself if no files found.
-    Cross-platform: on Windows, directory mtime is NOT updated when files inside
-    change, so scanning file mtimes is necessary for correctness.
-    """
-    newest = 0.0
-    try:
-        for dirpath, _, filenames in os.walk(path):
-            for fname in filenames:
-                try:
-                    mtime = os.path.getmtime(os.path.join(dirpath, fname))
-                    if mtime > newest:
-                        newest = mtime
-                except Exception:
-                    pass
-        if newest == 0.0:
-            try:
-                newest = os.path.getmtime(path)
-            except Exception:
-                pass
-    except Exception:
-        pass
-    return newest
-
-
-def _compute_session_storage_info() -> dict:
-    """
-    Blocking FS traversal - call via get_session_storage_info() which caches
-    the result and offloads the work to a background thread.
-    """
-    total_bytes = 0
-    total_sessions = 0
-    root = get_session_root()
-    try:
-        if not os.path.isdir(root):
-            return {"total_bytes": 0, "total_sessions": 0}
-        for name in os.listdir(root):
-            session_dir = os.path.join(root, name)
-            if not os.path.isdir(session_dir):
-                continue
-            total_sessions += 1
-            total_bytes += _folder_size(session_dir)
-    except Exception:
-        pass
-    return {"total_bytes": total_bytes, "total_sessions": total_sessions}
-
-
-def get_session_storage_info() -> dict:
-    """
-    Return total size in bytes and count of session folders in SESSION_ROOT.
-    Result is cached for _STORAGE_INFO_TTL seconds.  The FS traversal runs in
-    a dedicated single-worker thread so the caller is never blocked for longer
-    than the OS I/O takes (bounded by a 10-second timeout).
-    """
-    global _storage_info_cache, _storage_info_cache_time, _storage_info_future
-    now = time.time()
-    with _storage_info_lock:
-        if (
-            _storage_info_cache is not None
-            and (now - _storage_info_cache_time) < _STORAGE_INFO_TTL
-        ):
-            return dict(_storage_info_cache)
-        compute_fn = _compute_session_storage_info
-        if "el_sbobinator.core.shared" in sys.modules:
-            shared_mod = sys.modules["el_sbobinator.core.shared"]
-            if hasattr(shared_mod, "_compute_session_storage_info"):
-                if (
-                    shared_mod._compute_session_storage_info
-                    is not _compute_session_storage_info
-                ):
-                    compute_fn = shared_mod._compute_session_storage_info
-        if _storage_info_future is None or _storage_info_future.done():
-            _storage_info_future = _storage_info_executor.submit(compute_fn)
-        future = _storage_info_future
-    try:
-        result = future.result(timeout=10.0)
-    except Exception:
-        result = {"total_bytes": 0, "total_sessions": 0}
-    with _storage_info_lock:
-        _storage_info_cache = result
-        _storage_info_cache_time = time.time()
-    return dict(result)
-
-
-def invalidate_session_storage_cache() -> None:
-    """Bust the get_session_storage_info cache (call after deleting sessions)."""
-    global _storage_info_cache, _storage_info_cache_time, _storage_info_future
-    with _storage_info_lock:
-        _storage_info_cache = None
-        _storage_info_cache_time = 0.0
-        _storage_info_future = None
-
-
-# ==========================================
-# ORPHAN CLEANUP
-# ==========================================
-_TEMP_CHUNK_AUDIO_EXTS = (".mp3", ".wav", ".m4a")
-
-
-def _is_old_enough(path: str, now: float, max_age_seconds: int) -> bool:
-    try:
-        age = now - float(os.path.getmtime(path))
-        return age >= max(0, int(max_age_seconds))
-    except Exception:
-        return False
-
-
-def _cleanup_legacy_temp_chunks(tmpdir: str, now: float, max_age_seconds: int) -> int:
-    removed = 0
-    try:
-        for name in os.listdir(tmpdir):
-            low = name.lower()
-            if not low.startswith("el_sbobinator_temp_"):
-                continue
-            if not low.endswith(_TEMP_CHUNK_AUDIO_EXTS):
-                continue
-            path = os.path.join(tmpdir, name)
-            try:
-                if not _is_old_enough(path, now, max_age_seconds):
-                    continue
-                os.remove(path)
-                removed += 1
-            except Exception:
-                pass
-    except Exception:
-        pass
-    return removed
-
-
-def _cleanup_session_temp_chunks(now: float, max_age_seconds: int) -> int:
-    removed = 0
-    try:
-        session_root = get_session_root()
-        with os.scandir(session_root) as sessions:
-            for session_entry in sessions:
-                try:
-                    if not session_entry.is_dir():
-                        continue
-                    temp_chunks_dir = os.path.join(session_entry.path, "temp_chunks")
-                    if not os.path.isdir(temp_chunks_dir):
-                        continue
-                    with os.scandir(temp_chunks_dir) as run_dirs:
-                        for run_entry in run_dirs:
-                            try:
-                                name = run_entry.name.lower()
-                                if (
-                                    not name.startswith("run_")
-                                    or not run_entry.is_dir()
-                                ):
-                                    continue
-                                run_dir_old = _is_old_enough(
-                                    run_entry.path,
-                                    now,
-                                    max_age_seconds,
-                                )
-                                removed_in_run = 0
-                                with os.scandir(run_entry.path) as chunk_files:
-                                    for chunk_entry in chunk_files:
-                                        try:
-                                            chunk_name = chunk_entry.name.lower()
-                                            if not chunk_entry.is_file():
-                                                continue
-                                            if not chunk_name.startswith("chunk_"):
-                                                continue
-                                            if not chunk_name.endswith(
-                                                _TEMP_CHUNK_AUDIO_EXTS
-                                            ):
-                                                continue
-                                            if not _is_old_enough(
-                                                chunk_entry.path,
-                                                now,
-                                                max_age_seconds,
-                                            ):
-                                                continue
-                                            os.remove(chunk_entry.path)
-                                            removed += 1
-                                            removed_in_run += 1
-                                        except Exception:
-                                            pass
-                                if run_dir_old or removed_in_run > 0:
-                                    try:
-                                        os.rmdir(run_entry.path)
-                                    except Exception:
-                                        pass
-                            except Exception:
-                                pass
-                except Exception:
-                    pass
-    except Exception:
-        pass
-    return removed
-
-
-def cleanup_orphan_temp_chunks(max_age_seconds: int = 12 * 3600) -> int:
-    """
-    Best-effort cleanup of temp chunk files left behind by crashes/forced closes.
-    """
-    now = time.time()
-    removed = _cleanup_legacy_temp_chunks(tempfile.gettempdir(), now, max_age_seconds)
-    removed += _cleanup_session_temp_chunks(now, max_age_seconds)
-
-    # Clean up orphaned Inno Setup executables from system Temp directory
-    try:
-        tmpdir = tempfile.gettempdir()
-        for name in os.listdir(tmpdir):
-            if name.startswith("El-Sbobinator-Setup-") and name.endswith(".exe"):
-                path = os.path.join(tmpdir, name)
-                if _is_old_enough(path, now, max_age_seconds):
-                    try:
-                        os.remove(path)
-                        removed += 1
-                    except Exception:
-                        pass
-    except Exception:
-        pass
-
-    return removed
-
-
-def _resolve_session_html_path(session_dir: str, html_path: object) -> str:
-    value = str(html_path or "").strip()
-    if not value:
-        return ""
-    if os.path.isabs(value):
-        return value
-    return os.path.join(session_dir, value)
-
-
-def _session_completed_html_exists(session_dir: str, session: dict) -> bool:
-    outputs = session.get("outputs", {})
-    html_path = str(outputs.get("html", "") if isinstance(outputs, dict) else "")
-    resolved = _resolve_session_html_path(session_dir, html_path)
-    if resolved and os.path.isfile(resolved):
-        return True
-    if html_path:
-        fallback = os.path.join(session_dir, os.path.basename(html_path))
-        if os.path.isfile(fallback):
-            return True
-    return False
-
-
-def _session_cleanup_kind(session_dir: str) -> str:
-    session_path = os.path.join(session_dir, "session.json")
-    try:
-        session = _load_json(session_path)
-    except Exception:
-        return "incomplete"
-    if not isinstance(session, dict):
-        return "incomplete"
-    if str(session.get("stage", "")).strip().lower() != "done":
-        return "incomplete"
-    if _session_completed_html_exists(session_dir, session):
-        return "completed"
-    return "completed_missing_html"
-
-
-def cleanup_orphan_sessions(
-    max_age_days: int = 0,
-    *,
-    mode: str = "incomplete",
-    dry_run: bool = False,
-) -> dict:
-    """
-    Delete selected session folders in SESSION_ROOT. If max_age_days > 0, only folders
-    whose newest file mtime is older than max_age_days days are deleted. When max_age_days <= 0,
-    all matching folders are deleted regardless of age.
-    Returns a summary dict with keys:
-      removed     - number of folders successfully deleted
-      freed_bytes - total bytes freed
-      errors      - number of folders that could not be deleted
-    Best-effort: individual folder errors do not abort the whole sweep.
-    """
-    removed = 0
-    freed_bytes = 0
-    errors = 0
-    candidates = 0
-    preserved_completed = 0
-    missing_completed_html = 0
-    deleted_paths: list[str] = []
-    mode = str(mode or "incomplete").strip().lower()
-    if mode not in {"incomplete", "completed"}:
-        raise ValueError("cleanup mode non valida")
-    session_root = get_session_root()
-    try:
-        if not os.path.isdir(session_root):
-            return {
-                "removed": 0,
-                "freed_bytes": 0,
-                "errors": 0,
-                "candidates": 0,
-                "preserved_completed": 0,
-                "missing_completed_html": 0,
-                "deleted_paths": [],
-            }
-        now = time.time()
-        age_days = max(0, int(max_age_days))
-        cutoff = (now - age_days * 86400) if age_days > 0 else None
-        for name in os.listdir(session_root):
-            session_dir = os.path.join(session_root, name)
-            if not os.path.isdir(session_dir):
-                continue
-            try:
-                if cutoff is not None:
-                    newest_mtime = _folder_newest_mtime(session_dir)
-                    if newest_mtime >= cutoff:
-                        continue
-                kind = _session_cleanup_kind(session_dir)
-                if kind == "completed":
-                    if mode == "incomplete":
-                        preserved_completed += 1
-                        continue
-                elif kind == "completed_missing_html":
-                    missing_completed_html += 1
-                    if mode == "completed":
-                        continue
-                elif mode == "completed":
-                    continue
-                candidates += 1
-                size = _folder_size(session_dir)
-                if dry_run:
-                    freed_bytes += size
-                    continue
-                shutil.rmtree(session_dir)
-                removed += 1
-                freed_bytes += size
-                deleted_paths.append(session_dir)
-            except Exception:
-                errors += 1
-    except Exception:
-        pass
-    if removed > 0 and not dry_run:
-        invalidate_session_storage_cache()
-    return {
-        "removed": removed,
-        "freed_bytes": freed_bytes,
-        "errors": errors,
-        "candidates": candidates,
-        "preserved_completed": preserved_completed,
-        "missing_completed_html": missing_completed_html,
-        "deleted_paths": deleted_paths,
-    }
-
-
-def cleanup_completed_sessions(
-    max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS, *, dry_run: bool = False
-) -> dict:
-    return cleanup_orphan_sessions(
-        max_age_days,
-        mode="completed",
-        dry_run=dry_run,
-    )
 
 
 class SessionCollisionError(Exception):
