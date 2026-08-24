@@ -2,13 +2,13 @@ import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Check, Copy, ExternalLink, FileText, Loader2, Moon, Sun, Users, AlertTriangle } from 'lucide-react';
 import type { Heading } from './RichTextEditor';
-import type { SaveHtmlResult } from '../bridge';
 import { registerCollabSignalListener } from '../bridge';
-import { nextHtmlAutosaveGeneration, seedHtmlAutosaveGeneration } from '../autosaveGeneration';
 import { normalizePreviewHtmlContent } from '../previewHtml';
 import { convertWebpImagesInHtml } from '../utils';
 import { CollaborationModal } from './modals/CollaborationModal';
 import { useTheme } from '../hooks/useTheme';
+import { useEditorAutosave } from '../hooks/useEditorAutosave';
+import { STORAGE_KEYS } from '../storageKeys';
 
 const LazyAudioPlayer = React.lazy(() =>
   import('./AudioPlayer').then(m => ({ default: m.AudioPlayer }))
@@ -16,8 +16,6 @@ const LazyAudioPlayer = React.lazy(() =>
 const LazyRichTextEditor = React.lazy(() =>
   import('./RichTextEditor').then(m => ({ default: m.RichTextEditor }))
 );
-
-const isSaveCommitted = (res: SaveHtmlResult) => res.ok && res.saved !== false;
 
 interface EditorFullPageProps {
   previewContent: string | null;
@@ -94,22 +92,10 @@ export function EditorFullPage({
   const [isRelinking, setIsRelinking] = useState(false);
   const relinkTimerRef = useRef<number | null>(null);
   const copiedTimerRef = useRef<number | null>(null);
-  const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const getHtmlRef = useRef<(() => string) | null>(null);
-  const isDirtyRef = useRef(false);
-  const lastPersistedRef = useRef(previewContent ?? '');
-  const autosaveTimerRef = useRef<number | null>(null);
-  const [autosaveGenSeed] = useState(() => seedHtmlAutosaveGeneration(htmlPath));
-  const autosaveGenRef = useRef(autosaveGenSeed);
-  const saveErrorOnCloseRef = useRef(false);
-  const htmlPathRef = useRef(htmlPath);
-  useEffect(() => {
-    htmlPathRef.current = htmlPath;
-    autosaveGenRef.current = seedHtmlAutosaveGeneration(htmlPath);
-  }, [htmlPath]);
 
   const [zoomLevel, setZoomLevel] = useState<number>(() => {
-    const stored = localStorage.getItem('editor_zoom');
+    const stored = localStorage.getItem(STORAGE_KEYS.EDITOR_ZOOM);
     if (stored) {
       const n = parseInt(stored, 10);
       if (!isNaN(n) && n >= 50 && n <= 200) return n;
@@ -120,20 +106,16 @@ export function EditorFullPage({
   const handleZoomChange = useCallback((level: number) => {
     const clamped = Math.max(50, Math.min(200, level));
     setZoomLevel(clamped);
-    try { localStorage.setItem('editor_zoom', String(clamped)); } catch (_) {}
+    try { localStorage.setItem(STORAGE_KEYS.EDITOR_ZOOM, String(clamped)); } catch (_) {}
   }, []);
 
   const zoomLevelRef = useRef(zoomLevel);
   useEffect(() => { zoomLevelRef.current = zoomLevel; }, [zoomLevel]);
 
   useEffect(() => {
-    lastPersistedRef.current = previewContent ?? '';
-    isDirtyRef.current = false;
-    saveErrorOnCloseRef.current = false;
     if (copiedTimerRef.current) { window.clearTimeout(copiedTimerRef.current); copiedTimerRef.current = null; }
     setIsCopied(false);
     setRelinkSuccess(false);
-    setAutosaveStatus('idle');
     setIsTocOpen(false);
   }, [previewContent]);
 
@@ -144,100 +126,23 @@ export function EditorFullPage({
     };
   }, []);
 
-  useEffect(() => {
-    const autosaveGenRefAtCleanup = autosaveGenRef;
-    return () => {
-      if (!isDirtyRef.current || saveErrorOnCloseRef.current) return;
-      if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
-      const path = htmlPathRef.current;
-      const snap = getHtmlRef.current?.() ?? '';
-      if (path && snap && snap !== lastPersistedRef.current) {
-        const gen = nextHtmlAutosaveGeneration(path);
-        autosaveGenRefAtCleanup.current = gen;
-        void window.pywebview?.api?.save_html_content(path, snap, gen);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    (window as unknown as Record<string, unknown>).__elSbobinatorGetDirtyEditorContent = () => {
-      if (!isDirtyRef.current) return null;
-      const path = htmlPathRef.current;
-      if (!path) return null;
-      const snap = getHtmlRef.current?.() ?? '';
-      if (snap === lastPersistedRef.current) return null;
-      return { path, content: snap };
-    };
-    return () => {
-      delete (window as unknown as Record<string, unknown>).__elSbobinatorGetDirtyEditorContent;
-    };
-  }, []);
-
-  useEffect(() => {
-    (window as unknown as Record<string, unknown>).__elSbobinatorCancelPendingAutosave = () => {
-      if (autosaveTimerRef.current) {
-        window.clearTimeout(autosaveTimerRef.current);
-        autosaveTimerRef.current = null;
-      }
-      isDirtyRef.current = false;
-    };
-    (window as unknown as Record<string, unknown>).__elSbobinatorFlushPendingAutosave = async (): Promise<boolean> => {
-      if (!isDirtyRef.current) return true;
-      if (saveErrorOnCloseRef.current) return false;
-      if (autosaveTimerRef.current) { window.clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
-      const path = htmlPathRef.current;
-      const snap = getHtmlRef.current?.() ?? '';
-      if (path && snap && snap !== lastPersistedRef.current && window.pywebview?.api?.save_html_content) {
-        const gen = nextHtmlAutosaveGeneration(path);
-        autosaveGenRef.current = gen;
-        try {
-          const res = await window.pywebview.api.save_html_content(path, snap, gen);
-          if (isSaveCommitted(res)) {
-            lastPersistedRef.current = snap;
-            if (gen === autosaveGenRef.current) isDirtyRef.current = false;
-            return true;
-          }
-          saveErrorOnCloseRef.current = true; setAutosaveStatus('error'); return false;
-        } catch (_) { saveErrorOnCloseRef.current = true; setAutosaveStatus('error'); return false; }
-      }
-      return true;
-    };
-    return () => {
-      delete (window as unknown as Record<string, unknown>).__elSbobinatorCancelPendingAutosave;
-      delete (window as unknown as Record<string, unknown>).__elSbobinatorFlushPendingAutosave;
-    };
-  }, []);
-
-  const flushAndClose = useCallback(async () => {
-    const isCollabActive = Boolean(collabRoom);
-    setCollabRoom(undefined);
-    setCollabUser(undefined);
-    onCollaborationStateChange?.(undefined, undefined);
-    if (isDirtyRef.current && !saveErrorOnCloseRef.current) {
-      if (autosaveTimerRef.current) { window.clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
-      const path = htmlPathRef.current;
-      const snap = getHtmlRef.current?.() ?? '';
-      if (path && snap && snap !== lastPersistedRef.current && window.pywebview?.api?.save_html_content) {
-        if (isCollabActive && lastPersistedRef.current.length > 200 && snap.length < lastPersistedRef.current.length * 0.25) {
-          console.warn('Salvataggio di chiusura ignorato: rilevata riduzione drastica in sessione collaborativa.');
-          onClose();
-          return;
-        }
-        setAutosaveStatus('saving');
-        const gen = nextHtmlAutosaveGeneration(path);
-        autosaveGenRef.current = gen;
-        try {
-          const res = await window.pywebview.api.save_html_content(path, snap, gen);
-          if (isSaveCommitted(res)) {
-            lastPersistedRef.current = snap;
-            if (gen === autosaveGenRef.current) isDirtyRef.current = false;
-          }
-          else { saveErrorOnCloseRef.current = true; setAutosaveStatus('error'); return; }
-        } catch { saveErrorOnCloseRef.current = true; setAutosaveStatus('error'); return; }
-      }
-    }
-    onClose();
-  }, [onClose, onCollaborationStateChange, collabRoom]);
+  const {
+    autosaveStatus,
+    isAutosaveSuspended,
+    lastPersistedRef,
+    scheduleAutosave,
+    handleForceSave,
+    flushAndClose,
+  } = useEditorAutosave({
+    htmlPath,
+    previewContent,
+    collabRoom,
+    getHtmlRef,
+    onClose,
+    setCollabRoom,
+    setCollabUser,
+    onCollaborationStateChange,
+  });
 
   useEffect(() => {
     if (previewContent === null) return;
@@ -260,8 +165,6 @@ export function EditorFullPage({
     return () => window.removeEventListener('keydown', handler);
   }, [previewContent, flushAndClose, handleZoomChange]);
 
-  const [isAutosaveSuspended, setIsAutosaveSuspended] = useState(false);
-
   useEffect(() => {
     if (collabRoom && htmlPath && !htmlPath.startsWith('collaboration://')) {
       const currentContent = getHtmlRef.current?.() ?? lastPersistedRef.current;
@@ -277,70 +180,7 @@ export function EditorFullPage({
       // Backup fisico su disco locale tramite backend Python per resistere a crash
       void window.pywebview?.api?.create_collaboration_backup?.(htmlPath);
     }
-  }, [collabRoom, htmlPath]);
-
-  const handleForceSave = useCallback(async () => {
-    const path = htmlPathRef.current;
-    const snap = getHtmlRef.current?.() ?? '';
-    if (!path || !snap || !window.pywebview?.api?.save_html_content) return;
-    setAutosaveStatus('saving');
-    const gen = nextHtmlAutosaveGeneration(path);
-    autosaveGenRef.current = gen;
-    try {
-      const res = await window.pywebview.api.save_html_content(path, snap, gen);
-      if (isSaveCommitted(res)) {
-        lastPersistedRef.current = snap;
-        if (gen === autosaveGenRef.current) isDirtyRef.current = false;
-        setIsAutosaveSuspended(false);
-        setAutosaveStatus('saved');
-      } else {
-        setAutosaveStatus('error');
-      }
-    } catch {
-      setAutosaveStatus('error');
-    }
-  }, []);
-
-  const scheduleAutosave = useCallback(() => {
-    if (!htmlPath || previewContent === null || htmlPath.startsWith('collaboration://')) return;
-    isDirtyRef.current = true;
-    saveErrorOnCloseRef.current = false;
-    if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
-    const savedForPath = htmlPath;
-    const gen = nextHtmlAutosaveGeneration(savedForPath);
-    autosaveGenRef.current = gen;
-    autosaveTimerRef.current = window.setTimeout(async () => {
-      if (!isDirtyRef.current || !window.pywebview?.api?.save_html_content) return;
-      const snap = getHtmlRef.current?.() ?? '';
-      if (snap === lastPersistedRef.current) { isDirtyRef.current = false; return; }
-
-      // Safeguard: se siamo in modalità collaborativa e il documento subisce una riduzione >75%,
-      // blocchiamo l'autosave per evitare la distruzione accidentale del file locale dell'host.
-      if (collabRoom && lastPersistedRef.current.length > 200 && snap.length < lastPersistedRef.current.length * 0.25) {
-        console.warn('Autosave sospeso in sessione collaborativa: rilevata riduzione drastica del testo.');
-        setAutosaveStatus('error');
-        setIsAutosaveSuspended(true);
-        return;
-      }
-      setIsAutosaveSuspended(false);
-
-      setAutosaveStatus('saving');
-      try {
-        const res = await window.pywebview.api.save_html_content(savedForPath, snap, gen);
-        if (htmlPathRef.current !== savedForPath) return;
-        if (gen !== autosaveGenRef.current) return;
-        if (isSaveCommitted(res)) { lastPersistedRef.current = snap; isDirtyRef.current = false; setAutosaveStatus('saved'); }
-        else setAutosaveStatus('error');
-      } catch { setAutosaveStatus('error'); }
-    }, 700);
-  }, [htmlPath, previewContent, collabRoom]);
-
-  useEffect(() => {
-    if (autosaveStatus !== 'saved') return;
-    let cancelled = false;
-    const id = window.setTimeout(() => { if (!cancelled) setAutosaveStatus('idle'); }, 1500);
-    return () => { cancelled = true; window.clearTimeout(id); };
-  }, [autosaveStatus]);
+  }, [collabRoom, htmlPath, lastPersistedRef]);
 
   const handleCopy = async () => {
     const rawHtml = getHtmlRef.current?.() ?? lastPersistedRef.current;
@@ -500,8 +340,8 @@ export function EditorFullPage({
                   let joinName = 'Partecipante';
                   let joinColor = '#10b981';
                   try {
-                    joinName = localStorage.getItem('collab_username') || 'Partecipante';
-                    joinColor = localStorage.getItem('collab_usercolor') || '#10b981';
+                    joinName = localStorage.getItem(STORAGE_KEYS.COLLAB_USERNAME) || 'Partecipante';
+                    joinColor = localStorage.getItem(STORAGE_KEYS.COLLAB_USERCOLOR) || '#10b981';
                   } catch (_) {}
                   setCollabRoom(detectedLocalRoom);
                   setCollabUser({ name: joinName, color: joinColor });
