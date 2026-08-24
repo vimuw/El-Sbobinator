@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { STORAGE_KEYS } from '../storageKeys';
 
-const THEME_STORAGE_KEY = 'el-sbobinator.theme.v1';
+const THEME_STORAGE_KEY = STORAGE_KEYS.THEME_V1;
 
 export function useTheme() {
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {

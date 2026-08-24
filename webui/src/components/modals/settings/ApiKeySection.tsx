@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, Key, ShieldCheck, AlertCircle, AlertTriangle, Bell } from 'lucide-react';
 import { GEMINI_KEY_PATTERN } from '../../../utils';
+import { STORAGE_KEYS } from '../../../storageKeys';
 
 interface ApiKeySectionProps {
   apiKey: string;
@@ -23,7 +24,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
 }) => {
   const [showPrimaryKey, setShowPrimaryKey] = useState(false);
   const [showFallbackKeys, setShowFallbackKeys] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('notifications_enabled') !== 'false');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED) !== 'false');
 
   const isInvalidFormat = apiKey.trim() !== '' && !GEMINI_KEY_PATTERN.test(apiKey.trim());
 
@@ -147,7 +148,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
             onClick={() => {
               const next = !notificationsEnabled;
               setNotificationsEnabled(next);
-              localStorage.setItem('notifications_enabled', String(next));
+              localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED, String(next));
             }}
             className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
               notificationsEnabled ? 'bg-[var(--accent-bg)]' : 'bg-[var(--bg-input)]'

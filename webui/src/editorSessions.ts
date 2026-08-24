@@ -1,4 +1,6 @@
-export const EDITOR_SESSION_STORAGE_KEY = 'el-sbobinator.editor-sessions.v1';
+import { STORAGE_KEYS } from './storageKeys';
+
+export const EDITOR_SESSION_STORAGE_KEY = STORAGE_KEYS.EDITOR_SESSIONS_V1;
 const EDITOR_SESSION_TTL_DAYS = 30;
 
 export type EditorSession = {

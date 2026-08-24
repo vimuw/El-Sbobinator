@@ -17,6 +17,8 @@ export default defineConfig({
         'src/components/EditorFindReplace.tsx',
         'src/components/EditorToolbar.tsx',
         'src/components/EditorToolbarControls.tsx',
+        'src/components/EditorContextMenu.tsx',
+        'src/components/editor/**',
         'src/components/ArchivePage.tsx',
         'src/components/archive/**',
         'src/components/EditorFullPage.tsx',

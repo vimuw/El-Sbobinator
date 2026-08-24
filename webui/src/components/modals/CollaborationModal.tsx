@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Users, X, Copy, Check, Sparkles, Radio } from 'lucide-react';
 import { generateRoomCode } from '../../utils';
+import { STORAGE_KEYS } from '../../storageKeys';
 
 interface CollaborationModalProps {
   isOpen: boolean;
@@ -18,10 +19,10 @@ const COLORS = [
 ];
 
 const getStoredCollabName = (activeName?: string) => {
-  try { return activeName || localStorage.getItem('collab_username') || 'Studente'; } catch { return activeName || 'Studente'; }
+  try { return activeName || localStorage.getItem(STORAGE_KEYS.COLLAB_USERNAME) || 'Studente'; } catch { return activeName || 'Studente'; }
 };
 const getStoredCollabColor = (activeColor?: string) => {
-  try { return activeColor || localStorage.getItem('collab_usercolor') || '#3b82f6'; } catch { return activeColor || '#3b82f6'; }
+  try { return activeColor || localStorage.getItem(STORAGE_KEYS.COLLAB_USERCOLOR) || '#3b82f6'; } catch { return activeColor || '#3b82f6'; }
 };
 
 export const CollaborationModal: React.FC<CollaborationModalProps> = ({
@@ -61,8 +62,8 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({
     e.preventDefault();
     if (!room.trim() || !name.trim()) return;
     try {
-      localStorage.setItem('collab_username', name.trim());
-      localStorage.setItem('collab_usercolor', color);
+      localStorage.setItem(STORAGE_KEYS.COLLAB_USERNAME, name.trim());
+      localStorage.setItem(STORAGE_KEYS.COLLAB_USERCOLOR, color);
     } catch (_) {}
     onStartCollaboration(room.trim().toLowerCase(), { name: name.trim(), color });
     onClose();
