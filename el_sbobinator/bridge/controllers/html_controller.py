@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 from el_sbobinator.bridge.bridge_utils import (
     _normalize_revision_failed_blocks,
     _path_under_root,
+    bridge_error,
+    bridge_ok,
 )
 from el_sbobinator.core.session_store import save_session
 from el_sbobinator.core.shared import _atomic_write_json, _load_json
@@ -40,7 +42,7 @@ class HtmlControllerMixin:
     def read_html_content(self, path: str) -> dict:
         """Legge ed estrae il contenuto di un file HTML per l'anteprima."""
         if not isinstance(path, str) or not path.lower().endswith(".html"):
-            return {"ok": False, "error": "Path non valido: deve essere un file .html."}
+            return bridge_error("Path non valido: deve essere un file .html.")
         real_path = os.path.realpath(path)
         allowed_roots = [
             os.path.realpath(
@@ -52,10 +54,7 @@ class HtmlControllerMixin:
             _path_under_root(real_path, root) for root in allowed_roots
         )
         if not path_is_allowed and os.path.isfile(real_path):
-            return {
-                "ok": False,
-                "error": "Accesso negato: path fuori dai percorsi consentiti.",
-            }
+            return bridge_error("Accesso negato: path fuori dai percorsi consentiti.")
         requested_real_path = real_path
         if not path_is_allowed or not os.path.isfile(real_path):
             _basename = os.path.basename(real_path)
@@ -72,13 +71,12 @@ class HtmlControllerMixin:
                     if not any(
                         _path_under_root(real_path, root) for root in allowed_roots
                     ):
-                        return {
-                            "ok": False,
-                            "error": "Accesso negato: path fuori dai percorsi consentiti.",
-                        }
+                        return bridge_error(
+                            "Accesso negato: path fuori dai percorsi consentiti."
+                        )
                     self._resolved_path_cache[requested_real_path] = real_path
                 else:
-                    return {"ok": False, "error": "File non trovato."}
+                    return bridge_error("File non trovato.")
         else:
             with self._resolved_cache_lock:
                 self._resolved_path_cache[requested_real_path] = real_path
@@ -88,9 +86,9 @@ class HtmlControllerMixin:
             if shell is not None:
                 with self._resolved_cache_lock:
                     self._html_shell_cache[real_path] = shell
-            return {"ok": True, "content": content}
+            return bridge_ok(content=content)
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e)}
+            return bridge_error(e)
 
     def _find_html_in_session_dirs(self, basename: str) -> str | None:
         """Cerca un file HTML con lo stesso nome nelle cartelle di sessione."""
@@ -234,7 +232,7 @@ class HtmlControllerMixin:
     ) -> dict:
         """Aggiorna solo il contenuto del <body>, preservando head, stile e CSP dell'export originale."""
         if not isinstance(path, str) or not path.lower().endswith(".html"):
-            return {"ok": False, "error": "Path non valido: deve essere un file .html."}
+            return bridge_error("Path non valido: deve essere un file .html.")
         real_path = os.path.realpath(path)
         original_real_path = real_path
         allowed_roots = [
@@ -247,10 +245,7 @@ class HtmlControllerMixin:
             _path_under_root(real_path, root) for root in allowed_roots
         )
         if not path_is_allowed and os.path.isfile(real_path):
-            return {
-                "ok": False,
-                "error": "Accesso negato: path fuori dai percorsi consentiti.",
-            }
+            return bridge_error("Accesso negato: path fuori dai percorsi consentiti.")
         if not path_is_allowed or not os.path.isfile(real_path):
             _basename = os.path.basename(real_path)
             with self._resolved_cache_lock:
@@ -266,13 +261,12 @@ class HtmlControllerMixin:
                     if not any(
                         _path_under_root(real_path, root) for root in allowed_roots
                     ):
-                        return {
-                            "ok": False,
-                            "error": "Accesso negato: path fuori dai percorsi consentiti.",
-                        }
+                        return bridge_error(
+                            "Accesso negato: path fuori dai percorsi consentiti."
+                        )
                     self._resolved_path_cache[original_real_path] = real_path
                 else:
-                    return {"ok": False, "error": "File non trovato."}
+                    return bridge_error("File non trovato.")
         try:
             with self._resolved_cache_lock:
                 shell = self._html_shell_cache.get(
@@ -284,19 +278,18 @@ class HtmlControllerMixin:
             )
             if saved:
                 self._mark_session_user_edited_for_html(real_path)
-                return {"ok": True, "saved": True}
-            return {
-                "ok": False,
-                "saved": False,
-                "error": "Salvataggio ignorato perché più vecchio dell'ultima versione.",
-            }
+                return bridge_ok(saved=True)
+            return bridge_error(
+                "Salvataggio ignorato perché più vecchio dell'ultima versione.",
+                saved=False,
+            )
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e)}
+            return bridge_error(e)
 
     def create_collaboration_backup(self, path: str) -> dict:
         """Crea una copia di backup su disco prima di avviare una sessione collaborativa."""
         if not isinstance(path, str) or not path.lower().endswith(".html"):
-            return {"ok": False, "error": "Path non valido: deve essere un file .html."}
+            return bridge_error("Path non valido: deve essere un file .html.")
         real_path = os.path.realpath(path)
         allowed_roots = [
             os.path.realpath(config_service.get_desktop_dir()),
@@ -305,7 +298,7 @@ class HtmlControllerMixin:
         if not any(
             _path_under_root(real_path, root) for root in allowed_roots
         ) or not os.path.isfile(real_path):
-            return {"ok": False, "error": "File non valido o accesso negato."}
+            return bridge_error("File non valido o accesso negato.")
         try:
             import shutil
 
@@ -314,7 +307,7 @@ class HtmlControllerMixin:
             backup_filename = f"{name}.collab-backup{ext}"
             backup_path = os.path.join(dirname, backup_filename)
             shutil.copy2(real_path, backup_path)
-            return {"ok": True, "backup_path": backup_path}
+            return bridge_ok(backup_path=backup_path)
         except Exception as e:
             self._logger.exception("Impossibile creare backup di collaborazione.")
-            return {"ok": False, "error": redact_secrets(e)}
+            return bridge_error(e)

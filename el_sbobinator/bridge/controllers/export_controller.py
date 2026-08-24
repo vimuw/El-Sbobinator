@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import webview
 
+from el_sbobinator.bridge.bridge_utils import bridge_error, bridge_ok
 from el_sbobinator.core.shared import _load_json
 from el_sbobinator.services.sharing_service import (
     create_sbobina_package,
@@ -66,7 +67,7 @@ class ExportControllerMixin:
                         save_filename=default_name,
                     )
                 if not file_paths:
-                    return {"ok": False, "cancelled": True}
+                    return bridge_error("Operazione annullata.", cancelled=True)
                 target_path = str(
                     file_paths[0]
                     if isinstance(file_paths, list | tuple)
@@ -74,10 +75,7 @@ class ExportControllerMixin:
                 )
 
             if not target_path:
-                return {
-                    "ok": False,
-                    "error": "Percorso di destinazione non specificato.",
-                }
+                return bridge_error("Percorso di destinazione non specificato.")
 
             res = create_sbobina_package(
                 session_dir,
@@ -86,7 +84,7 @@ class ExportControllerMixin:
             )
             return res
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e)}
+            return bridge_error(e)
 
     def import_sbobina_package(self, package_path: str | None = None) -> dict:
         """Import a `.sbobina` package into the session store."""
@@ -107,7 +105,7 @@ class ExportControllerMixin:
                         allow_multiple=False,
                     )
                 if not file_paths:
-                    return {"ok": False, "cancelled": True}
+                    return bridge_error("Operazione annullata.", cancelled=True)
                 package_path = str(
                     file_paths[0]
                     if isinstance(file_paths, list | tuple)
@@ -115,14 +113,14 @@ class ExportControllerMixin:
                 )
 
             if not package_path:
-                return {"ok": False, "error": "Nessun pacchetto selezionato."}
+                return bridge_error("Nessun pacchetto selezionato.")
 
             res = unpack_and_import_package(package_path, self._get_session_root())
             if res.get("ok"):
                 self._invalidate_sessions_cache()
             return res
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e)}
+            return bridge_error(e)
 
     def share_sbobina_via_email(
         self,
@@ -141,4 +139,4 @@ class ExportControllerMixin:
             )
             return res
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e)}
+            return bridge_error(e)

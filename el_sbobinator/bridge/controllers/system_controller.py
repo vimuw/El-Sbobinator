@@ -9,7 +9,12 @@ from typing import TYPE_CHECKING
 
 import webview
 
-from el_sbobinator.bridge.bridge_utils import _ALLOWED_URL_PREFIXES, _path_under_root
+from el_sbobinator.bridge.bridge_utils import (
+    _ALLOWED_URL_PREFIXES,
+    _path_under_root,
+    bridge_error,
+    bridge_ok,
+)
 from el_sbobinator.services import config_service
 from el_sbobinator.utils import file_ops
 from el_sbobinator.utils.logging_utils import redact_secrets
@@ -48,17 +53,17 @@ class SystemControllerMixin:
                 preferred_model=preferred_model,
                 fallback_models=fallback_models,
             )
-            return {"ok": True, "result": result}
+            return bridge_ok(result=result)
         except Exception as e:
             self._logger.exception("Validazione ambiente fallita.")
-            return {"ok": False, "error": redact_secrets(e)}
+            return bridge_error(e)
 
     def open_file(self, path: str) -> dict:
         """Open a local file/folder with the system default handler."""
         if not isinstance(path, str):
-            return {"ok": False, "error": "Path non valido: deve essere una stringa."}
+            return bridge_error("Path non valido: deve essere una stringa.")
         if path.lower().startswith(("http://", "https://")):
-            return {"ok": False, "error": "Usa open_url per aprire URL."}
+            return bridge_error("Usa open_url per aprire URL.")
         try:
             real_path = os.path.realpath(path)
             allowed_roots = [
@@ -71,26 +76,25 @@ class SystemControllerMixin:
                 _path_under_root(real_path, root) for root in allowed_roots
             )
             if not path_is_allowed:
-                return {
-                    "ok": False,
-                    "error": "Accesso negato: path fuori dai percorsi consentiti.",
-                }
+                return bridge_error(
+                    "Accesso negato: path fuori dai percorsi consentiti."
+                )
             file_ops.open_path_with_default_app(real_path)
-            return {"ok": True}
+            return bridge_ok()
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e)}
+            return bridge_error(e)
 
     def open_url(self, url: str) -> dict:
         """Open an external URL in the system browser (allowlist only)."""
         if not isinstance(url, str) or not any(
             url.startswith(p) for p in _ALLOWED_URL_PREFIXES
         ):
-            return {"ok": False, "error": "URL non consentito."}
+            return bridge_error("URL non consentito.")
         try:
             file_ops.open_path_with_default_app(url)
-            return {"ok": True}
+            return bridge_ok()
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e)}
+            return bridge_error(e)
 
     def flash_window(self) -> dict:
         """Fa lampeggiare l'icona dell'applicazione nella barra delle applicazioni per attirare l'attenzione dell'utente."""
@@ -124,7 +128,7 @@ class SystemControllerMixin:
                         dwTimeout=0,
                     )
                     ctypes.windll.user32.FlashWindowEx(ctypes.byref(finfo))
-                    return {"ok": True}
+                    return bridge_ok()
             elif sys.platform == "darwin":
                 try:
                     from AppKit import NSApplication, NSCriticalRequest  # type: ignore
@@ -132,12 +136,12 @@ class SystemControllerMixin:
                     NSApplication.sharedApplication().requestUserAttention_(
                         NSCriticalRequest
                     )
-                    return {"ok": True}
+                    return bridge_ok()
                 except Exception:
                     pass
-            return {"ok": True}
+            return bridge_ok()
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e)}
+            return bridge_error(e)
 
     def show_notification(self, title: str, message: str) -> dict:
         """Mostra una notifica toast nativa di sistema tramite plyer e attiva il lampeggio taskbar."""
@@ -153,9 +157,9 @@ class SystemControllerMixin:
             notification.notify(  # type: ignore[operator]
                 title=title, message=message, app_name="El Sbobinator", timeout=5
             )
-            return {"ok": True}
+            return bridge_ok()
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e)}
+            return bridge_error(e)
 
     def download_and_install_update(self, version: str) -> dict:
         """Download the correct installer for this OS, launch it, then quit the app."""
@@ -168,7 +172,7 @@ class SystemControllerMixin:
     def send_collaboration_signal(self, room: str, payload: str) -> dict:
         """Relay a collaboration room signal/update across all local pywebview windows on the desktop for instant zero-latency testing."""
         if not room or not payload:
-            return {"ok": False, "error": "Parametri non validi"}
+            return bridge_error("Parametri non validi")
         room_clean = str(room).strip().lower()
         payload_str = str(payload)
         import json
@@ -180,4 +184,4 @@ class SystemControllerMixin:
                 )
             except Exception:
                 pass
-        return {"ok": True}
+        return bridge_ok()

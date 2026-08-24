@@ -6,10 +6,22 @@ from __future__ import annotations
 
 import os
 import threading
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+from el_sbobinator.utils.logging_utils import redact_secrets
 
 if TYPE_CHECKING:
     from el_sbobinator.pipeline.pipeline_adapter import PipelineAdapter
+
+
+def bridge_ok(**kwargs: Any) -> dict[str, Any]:
+    """Construct a standardized successful IPC bridge response."""
+    return {"ok": True, **kwargs}
+
+
+def bridge_error(error: Exception | str, **kwargs: Any) -> dict[str, Any]:
+    """Construct a standardized failed IPC bridge response with secrets redacted."""
+    return {"ok": False, "error": redact_secrets(error), **kwargs}
 
 
 def _path_under_root(path: str, root: str) -> bool:
