@@ -25,6 +25,8 @@ from el_sbobinator.bridge.bridge_utils import (
     _retry_zero_retried_response,
     _RetryRuntime,
     _safe_relpath,
+    bridge_error,
+    bridge_ok,
 )
 from el_sbobinator.core.session_store import (
     mark_html_exported,
@@ -112,66 +114,43 @@ class PipelineControllerMixin:
     def retry_failed_revision_blocks(self, session_dir: str) -> dict:
         """Retry only macro blocks that were included unrevised in a done session."""
         if self._adapter.is_running:
-            return {
-                "ok": False,
-                "error": "Elaborazione in corso: riprova al termine.",
-            }
+            return bridge_error("Elaborazione in corso: riprova al termine.")
         retry_lock: threading.Lock | None = None
         retry_global_lock_acquired = False
         retry_lock_acquired = False
         _retry_count_incremented = False
         try:
-            from google import genai
-
-            from el_sbobinator.core.model_registry import build_model_state
-            from el_sbobinator.core.prompts import PROMPT_REVISIONE
-            from el_sbobinator.pipeline.pipeline_session import read_text_file
-            from el_sbobinator.services import (
-                export_service,
-                generation_service,
-                revision_service,
-            )
-            from el_sbobinator.services.config_service import safe_output_basename
+            from el_sbobinator.services import revision_service
 
             abs_dir, session_path = self._resolve_retry_session(session_dir)
 
             retry_global_lock_acquired = self._retry_global_lock.acquire(blocking=False)
             if not retry_global_lock_acquired:
-                return {
-                    "ok": False,
-                    "error": "Retry gia' in corso: riprova al termine.",
-                }
+                return bridge_error("Retry gia' in corso: riprova al termine.")
 
             lock_key = os.path.normcase(abs_dir)
             with self._retry_locks_mutex:
                 retry_lock = self._retry_locks.setdefault(lock_key, threading.Lock())
             retry_lock_acquired = retry_lock.acquire(blocking=False)
             if not retry_lock_acquired:
-                return {
-                    "ok": False,
-                    "error": "Retry gia' in corso per questa sessione.",
-                }
+                return bridge_error("Retry gia' in corso per questa sessione.")
             with self._pipeline_lifecycle_lock:
                 if self._adapter.is_running:
-                    return {
-                        "ok": False,
-                        "error": "Elaborazione in corso: riprova al termine.",
-                    }
+                    return bridge_error("Elaborazione in corso: riprova al termine.")
                 self._retry_active_count += 1
             _retry_count_incremented = True
 
             session = _load_json(session_path)
             if not isinstance(session, dict) or session.get("stage") != "done":
-                return {"ok": False, "error": "Sessione non completata."}
+                return bridge_error("Sessione non completata.")
             if _retry_would_overwrite_user_html(
                 session, self._existing_html_for_session(session, abs_dir)
             ):
-                return {
-                    "ok": False,
-                    "conflict": True,
-                    "error": "HTML modificato dall'utente: retry annullato per evitare sovrascritture.",
-                    "session_dir": abs_dir,
-                }
+                return bridge_error(
+                    "HTML modificato dall'utente: retry annullato per evitare sovrascritture.",
+                    conflict=True,
+                    session_dir=abs_dir,
+                )
             failed_blocks = session.get("revision_failed_blocks", [])
             no_failed_blocks = _retry_no_failed_blocks_response(
                 session, failed_blocks, abs_dir
@@ -182,118 +161,32 @@ class PipelineControllerMixin:
             cfg = load_config()
             api_key = str(cfg.get("api_key") or "").strip()
             if not api_key:
-                return {
-                    "ok": False,
-                    "error": "API key mancante: aggiungila nelle impostazioni.",
-                }
+                return bridge_error("API key mancante: aggiungila nelle impostazioni.")
 
-            settings = session.get("settings", {}) if isinstance(session, dict) else {}
-            primary_model = str(
-                settings.get("model") or cfg.get("preferred_model") or DEFAULT_MODEL
-            ).strip()
-            fallback_models = settings.get("fallback_models") or cfg.get(
-                "fallback_models", []
-            )
-            model_state = build_model_state(primary_model, fallback_models)
-            client = genai.Client(api_key=api_key)
             retry_cancel_event = threading.Event()
             runtime = _RetryRuntime(self._adapter, retry_cancel_event)
-            fallback_keys = generation_service.load_fallback_keys()
 
-            def _save_session() -> bool:
-                try:
-                    save_session(session_path, session)
-                    return True
-                except Exception:
-                    return False
-
-            def _request_fallback_key() -> str | None:
-                key = generation_service.request_new_api_key(runtime, runtime.cancelled)
-                if not key or not str(key).strip():
-                    retry_cancel_event.set()
-                return key
-
-            def _on_model_switched(_old: str, new: str) -> None:
-                session.setdefault("settings", {})
-                session["settings"]["effective_model"] = new
-                _save_session()
-
-            phase2_revised_dir = os.path.join(abs_dir, "phase2_revised")
-            client, retry_result = revision_service.retry_failed_revision_blocks(
-                client=client,
-                model_name=primary_model,
-                model_state=model_state,
-                phase2_revised_dir=phase2_revised_dir,
+            result = revision_service.execute_failed_blocks_retry_workflow(
                 session=session,
-                save_session=_save_session,
-                runtime=runtime,
-                cancelled=runtime.cancelled,
-                fallback_keys=fallback_keys,
-                request_fallback_key=_request_fallback_key,
-                prompt_revisione=PROMPT_REVISIONE,
-                on_model_switched=_on_model_switched,
-            )
-
-            retried_blocks = list(retry_result.get("retried_blocks", []))
-            remaining = list(retry_result.get("failed_blocks", []))
-            cancelled = bool(retry_result.get("cancelled"))
-            quota_exhausted = bool(retry_result.get("quota_exhausted"))
-            zero_response = _retry_zero_retried_response(
-                retried_blocks=retried_blocks,
-                remaining=remaining,
-                cancelled=cancelled,
-                quota_exhausted=quota_exhausted,
+                session_path=session_path,
                 session_dir=abs_dir,
-                html_path=str(session.get("outputs", {}).get("html", "") or ""),
+                api_key=api_key,
+                runtime=runtime,
+                retry_cancel_event=retry_cancel_event,
+                on_push_completion_status=self._push_retry_completion_status,
             )
-            if zero_response is not None:
-                return zero_response
 
-            input_path = str(session.get("input", {}).get("path", "") or "")
-            _title, html_path = export_service.export_final_html_document(
-                input_path=input_path,
-                phase2_revised_dir=phase2_revised_dir,
-                fallback_body="",
-                read_text=read_text_file,
-                output_dir=abs_dir,
-                fallback_output_dir=abs_dir,
-                safe_output_basename=safe_output_basename,
-                revision_failed_blocks=remaining,
-            )
-            session.setdefault("outputs", {})
-            session["outputs"]["html"] = html_path
-            session.setdefault("settings", {})
-            session["settings"]["effective_model"] = model_state.current
-            mark_html_exported(session)
-            _save_session()
-            invalidate_session_storage_cache()
-            evict_html_paths_under(abs_dir + os.sep)
-            with self._text_cache_lock:
-                self._text_cache.pop(html_path, None)
+            html_path = result.get("html_path")
+            if html_path:
+                with self._text_cache_lock:
+                    self._text_cache.pop(html_path, None)
             with self._sessions_cache_lock:
                 self._sessions_cache = None
                 self._sessions_cache_gen += 1
 
-            self._push_retry_completion_status(
-                remaining=remaining,
-                cancelled=cancelled,
-                quota_exhausted=quota_exhausted,
-            )
-            return {
-                "ok": True,
-                "retried_blocks": retried_blocks,
-                "remaining_failed_blocks": remaining,
-                "completion_status": "completed_with_warnings"
-                if remaining
-                else "completed",
-                "html_path": html_path,
-                "session_dir": abs_dir,
-                "effective_model": model_state.current,
-                "cancelled": cancelled,
-                "quota_exhausted": quota_exhausted,
-            }
+            return result
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e)}
+            return bridge_error(e)
         finally:
             if _retry_count_incremented:
                 with self._pipeline_lifecycle_lock:
@@ -306,9 +199,9 @@ class PipelineControllerMixin:
     def _start_processing_guard(self, mark_running: bool = False) -> dict | None:
         with self._pipeline_lifecycle_lock:
             if self._adapter.is_running:
-                return {"ok": False, "error": "Elaborazione già in corso"}
+                return bridge_error("Elaborazione già in corso")
             if self._retry_active_count > 0:
-                return {"ok": False, "error": "Retry in corso: riprova al termine."}
+                return bridge_error("Retry in corso: riprova al termine.")
             if mark_running:
                 self._adapter.is_running = True
         return None
@@ -422,11 +315,9 @@ class PipelineControllerMixin:
         low_disk_warning = self._low_disk_warning_for_files(files)
         if low_disk_warning is None:
             return None
-        return {
-            "ok": False,
-            "error": "Spazio libero insufficiente.",
-            "low_disk_warning": low_disk_warning,
-        }
+        return bridge_error(
+            "Spazio libero insufficiente.", low_disk_warning=low_disk_warning
+        )
 
     def _prepare_start_processing(
         self,
@@ -441,7 +332,7 @@ class PipelineControllerMixin:
             return guard_error
         validation_error = self._validate_processing_files(files)
         if validation_error is not None:
-            return {"ok": False, "error": validation_error}
+            return bridge_error(validation_error)
         self._persist_processing_config(api_key, preferred_model, fallback_models)
         low_disk_response = self._low_disk_start_response(files, override_low_disk)
         if low_disk_response is not None:
@@ -459,7 +350,7 @@ class PipelineControllerMixin:
     ) -> dict:
         """Start the pipeline in a background thread."""
         if not files or not api_key:
-            return {"ok": False, "error": "File o API key mancanti"}
+            return bridge_error("File o API key mancanti")
         start_error = self._prepare_start_processing(
             files,
             api_key,
@@ -659,17 +550,17 @@ class PipelineControllerMixin:
 
         self._processing_thread = threading.Thread(target=_run, daemon=True)
         self._processing_thread.start()
-        return {"ok": True}
+        return bridge_ok()
 
     def answer_regenerate(self, regenerate: bool | None) -> dict:
         """Called by React when user clicks Use Saved or Regenerate."""
         self._adapter.answer_regenerate(regenerate)
-        return {"ok": True}
+        return bridge_ok()
 
     def answer_new_key(self, key: str | None) -> dict:
         """Called by React when user submits a replacement API key."""
         self._adapter.answer_new_key(key or "")
-        return {"ok": True}
+        return bridge_ok()
 
     def stop_processing(self) -> dict:
         """Request cancellation."""
@@ -684,4 +575,4 @@ class PipelineControllerMixin:
                 "total": 0,
             }
             self._adapter.emit("processDone", payload, batched=False)
-        return {"ok": True}
+        return bridge_ok()

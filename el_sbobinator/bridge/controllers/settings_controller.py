@@ -10,7 +10,11 @@ from typing import TYPE_CHECKING
 
 import webview
 
-from el_sbobinator.bridge.bridge_utils import _path_under_root
+from el_sbobinator.bridge.bridge_utils import (
+    _path_under_root,
+    bridge_error,
+    bridge_ok,
+)
 from el_sbobinator.core.model_registry import DEFAULT_FALLBACK_MODELS, MODEL_OPTIONS
 from el_sbobinator.core.shared import (
     DEFAULT_MODEL,
@@ -89,9 +93,9 @@ class SettingsControllerMixin:
                 preferred_model=preferred_model,
                 fallback_models=fallback_models,
             )
-            return {"ok": True}
+            return bridge_ok()
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e)}
+            return bridge_error(e)
 
     def save_theme_preference(self, theme: str) -> None:
         """Persist theme preference to disk so the native window gets the right background on next launch."""
@@ -122,38 +126,35 @@ class SettingsControllerMixin:
         """Open a folder-picker dialog and return the user-selected path."""
         try:
             if self._window is None:
-                return {"ok": False, "error": "Finestra non disponibile"}
+                return bridge_error("Finestra non disponibile")
             result = self._window.create_file_dialog(webview.FOLDER_DIALOG)
             if not result:
-                return {"ok": False, "cancelled": True}
+                return bridge_error("Operazione annullata.", cancelled=True)
             path = str(result[0]) if isinstance(result, list | tuple) else str(result)
-            return {"ok": True, "path": path}
+            return bridge_ok(path=path)
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e)}
+            return bridge_error(e)
 
     def move_session_root(self, new_path: str) -> dict:
         """Start an async move of the session-storage folder to new_path."""
         new_path = str(new_path or "").strip()
         if not new_path or not os.path.isabs(new_path):
-            return {"ok": False, "error": "Percorso non valido"}
+            return bridge_error("Percorso non valido")
         old_root = get_session_root()
         if os.path.normcase(os.path.realpath(new_path)) == os.path.normcase(
             os.path.realpath(old_root)
         ):
-            return {"ok": False, "error": "Percorso identico a quello attuale"}
+            return bridge_error("Percorso identico a quello attuale")
         if _path_under_root(
             os.path.normcase(os.path.realpath(new_path)),
             os.path.normcase(os.path.realpath(old_root)),
         ):
-            return {
-                "ok": False,
-                "error": "La destinazione è dentro la cartella attuale",
-            }
+            return bridge_error("La destinazione è dentro la cartella attuale")
         if self._processing_thread is not None and self._processing_thread.is_alive():
-            return {"ok": False, "error": "Impossibile spostare durante l'elaborazione"}
+            return bridge_error("Impossibile spostare durante l'elaborazione")
         with self._move_lock:
             if self._move_state.get("status") == "moving":
-                return {"ok": False, "error": "Spostamento già in corso"}
+                return bridge_error("Spostamento già in corso")
             self._move_state = {
                 "status": "moving",
                 "moved": 0,
@@ -167,7 +168,7 @@ class SettingsControllerMixin:
             name="session-move",
         )
         thread.start()
-        return {"ok": True, "started": True}
+        return bridge_ok(started=True)
 
     def get_session_move_status(self) -> dict:
         """Return the current status of an ongoing or completed session move."""

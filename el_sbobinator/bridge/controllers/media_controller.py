@@ -10,10 +10,15 @@ from typing import TYPE_CHECKING, ClassVar
 import webview
 
 from el_sbobinator.bridge.bridge_types import BridgeFileItem
-from el_sbobinator.bridge.bridge_utils import _candidate_from_relative
+from el_sbobinator.bridge.bridge_utils import (
+    _candidate_from_relative,
+    bridge_error,
+    bridge_ok,
+)
 from el_sbobinator.core.media_server import LocalMediaServer
 from el_sbobinator.core.shared import _atomic_write_json, _load_json
 from el_sbobinator.pipeline.pipeline_adapter import _drain_dnd_paths
+from el_sbobinator.services.archive_service import find_candidate_audio_path
 from el_sbobinator.utils.logging_utils import redact_secrets
 
 if TYPE_CHECKING:
@@ -63,43 +68,12 @@ class MediaControllerMixin:
         *,
         write_back: bool = True,
     ) -> str | None:
-        input_data = data.get("input", {})
-        if not isinstance(input_data, dict):
-            return None
-        current_path = str(input_data.get("path", "") or "").strip()
-        if current_path and os.path.isfile(current_path):
-            return current_path
-        candidates: list[str] = []
-        session_candidate = _candidate_from_relative(
-            session_dir, input_data.get("path_rel_to_session")
+        return find_candidate_audio_path(
+            data,
+            session_dir,
+            session_path,
+            write_back=write_back,
         )
-        if session_candidate:
-            candidates.append(session_candidate)
-        html_path = str(data.get("outputs", {}).get("html", "") or "")
-        if html_path:
-            html_candidate = _candidate_from_relative(
-                os.path.dirname(os.path.realpath(html_path)),
-                input_data.get("path_rel_to_html"),
-            )
-            if html_candidate:
-                candidates.append(html_candidate)
-        for candidate in candidates:
-            if not os.path.isfile(candidate):
-                continue
-            if write_back:
-                input_data["path"] = candidate
-                input_data["name"] = os.path.basename(candidate)
-                try:
-                    input_data["size"] = os.path.getsize(candidate)
-                except Exception:
-                    pass
-                if session_path:
-                    try:
-                        _atomic_write_json(session_path, data)
-                    except Exception:
-                        pass
-            return candidate
-        return None
 
     def _resolve_completed_session_audio_path(
         self, data: dict, session_dir: str, session_path: str | None = None
@@ -239,10 +213,9 @@ class MediaControllerMixin:
     def check_path_exists(self, path: str) -> dict:
         """Check whether a persisted source path still exists on disk."""
         normalized_path = str(path or "").strip()
-        return {
-            "ok": True,
-            "exists": bool(normalized_path and os.path.exists(normalized_path)),
-        }
+        return bridge_ok(
+            exists=bool(normalized_path and os.path.exists(normalized_path))
+        )
 
     def collect_dropped_files(self, names: list) -> dict:
         """Called by JS after postMessageWithAdditionalObjects('FilesDropped') to retrieve OS paths."""
@@ -254,7 +227,7 @@ class MediaControllerMixin:
                 descriptors.append(self._build_file_descriptor(fullpath))
         if descriptors:
             self._adapter.emit("filesDropped", descriptors, batched=False)
-        return {"ok": True}
+        return bridge_ok()
 
     def stream_media_file(self, file_path: str, session_dir: str | None = None) -> dict:
         """Avvia o riavvia un micro-server HTTP per inviare l'audio nativo a React via streaming byte-range."""
@@ -274,20 +247,13 @@ class MediaControllerMixin:
             except Exception:
                 pass
         if not resolved_file_path:
-            return {
-                "ok": False,
-                "error": "Nessun file audio trovato per questa sessione.",
-            }
+            return bridge_error("Nessun file audio trovato per questa sessione.")
         ext = os.path.splitext(resolved_file_path)[1].lower()
         if ext not in self._ALLOWED_STREAM_EXTS:
-            return {
-                "ok": False,
-                "error": "Tipo di file non supportato per lo streaming.",
-            }
+            return bridge_error("Tipo di file non supportato per lo streaming.")
         try:
-            return {
-                "ok": True,
-                "url": LocalMediaServer.stream_url_for_file(resolved_file_path),
-            }
+            return bridge_ok(
+                url=LocalMediaServer.stream_url_for_file(resolved_file_path)
+            )
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e)}
+            return bridge_error(e)

@@ -10,9 +10,10 @@ import time
 from typing import TYPE_CHECKING
 
 from el_sbobinator.bridge.bridge_utils import (
-    _normalize_revision_failed_blocks,
     _path_under_root,
     _safe_relpath,
+    bridge_error,
+    bridge_ok,
 )
 from el_sbobinator.core.shared import (
     _atomic_write_json,
@@ -21,8 +22,11 @@ from el_sbobinator.core.shared import (
     get_session_root,
     get_session_storage_info,
 )
+from el_sbobinator.services.archive_service import (
+    list_completed_sessions,
+    search_completed_sessions,
+)
 from el_sbobinator.utils.file_ops import evict_html_paths_under
-from el_sbobinator.utils.logging_utils import redact_secrets
 
 if TYPE_CHECKING:
     import threading
@@ -60,25 +64,21 @@ class SessionControllerMixin:
         """Return total size and count of session folders in SESSION_ROOT."""
         try:
             info = get_session_storage_info()
-            return {
-                "ok": True,
-                "total_bytes": info["total_bytes"],
-                "total_sessions": info["total_sessions"],
-                "session_root": get_session_root(),
-            }
+            return bridge_ok(
+                total_bytes=info["total_bytes"],
+                total_sessions=info["total_sessions"],
+                session_root=get_session_root(),
+            )
         except Exception as e:
-            return {
-                "ok": False,
-                "error": redact_secrets(e),
-                "total_bytes": 0,
-                "total_sessions": 0,
-                "session_root": "",
-            }
+            return bridge_error(
+                e,
+                total_bytes=0,
+                total_sessions=0,
+                session_root="",
+            )
 
     def get_completed_sessions(self, limit: int = 0) -> dict:
         """Return the most recent completed sessions for the archive UI."""
-        import json as _json
-
         load_all = int(limit) <= 0
         with self._sessions_cache_lock:
             if (
@@ -91,92 +91,13 @@ class SessionControllerMixin:
             gen_at_start = self._sessions_cache_gen
 
         session_root = self._get_session_root()
-        if not os.path.isdir(session_root):
-            return {"ok": True, "sessions": [], "total": 0}
         try:
-            candidates: list[tuple[str, dict, str]] = []
-            for entry in os.scandir(session_root):
-                if not entry.is_dir():
-                    continue
-                session_path = os.path.join(entry.path, "session.json")
-                if not os.path.isfile(session_path):
-                    continue
-                try:
-                    with open(session_path, encoding="utf-8") as fh:
-                        data = _json.load(fh)
-                    if data.get("stage") != "done":
-                        continue
-                    html_path = data.get("outputs", {}).get("html", "")
-                    if not html_path:
-                        continue
-                    candidates.append((data.get("updated_at", ""), data, entry.path))
-                except Exception:
-                    continue
-            candidates.sort(key=lambda c: c[0], reverse=True)
-            total = len(candidates)
-            sessions = []
-            effective_limit = len(candidates) if load_all else max(0, int(limit))
-            for _ts, data, session_dir in candidates[:effective_limit]:
-                html_path = data.get("outputs", {}).get("html", "")
-                if html_path and not os.path.isfile(str(html_path)):
-                    session_copy = os.path.join(
-                        session_dir, os.path.basename(str(html_path))
-                    )
-                    if not os.path.isfile(session_copy):
-                        continue
-                    html_path = session_copy
-                    try:
-                        data["outputs"]["html"] = html_path
-                        _atomic_write_json(
-                            os.path.join(session_dir, "session.json"), data
-                        )
-                    except Exception:
-                        pass
-                input_path = self._find_candidate_audio_path(
-                    data, session_dir, os.path.join(session_dir, "session.json")
-                ) or data.get("input", {}).get("path", "")
-                input_size = int(data.get("input", {}).get("size", 0) or 0)
-                name = (
-                    os.path.basename(input_path)
-                    if input_path
-                    else os.path.basename(str(html_path))
-                )
-                effective_model = data.get("settings", {}).get("effective_model", "")
-                duration_sec = data.get("phase1", {}).get("duration_seconds")
-                revision_failed_blocks = _normalize_revision_failed_blocks(
-                    data.get("revision_failed_blocks", [])
-                )
-                raw_status = str(data.get("completion_status") or "")
-                completion_status = (
-                    "completed_with_warnings"
-                    if raw_status == "completed_with_warnings" or revision_failed_blocks
-                    else "completed"
-                )
-                last_opened_at_iso = data.get("last_opened_at", "")
-                sessions.append(
-                    {
-                        "name": name,
-                        "completed_at_iso": data.get("updated_at", ""),
-                        "html_path": str(html_path),
-                        "effective_model": effective_model,
-                        "input_path": str(input_path),
-                        "input_size": input_size,
-                        "session_dir": str(session_dir),
-                        "revision_failed_blocks": revision_failed_blocks,
-                        "completion_status": completion_status,
-                        **(
-                            {"duration_sec": duration_sec}
-                            if duration_sec is not None
-                            else {}
-                        ),
-                        **(
-                            {"last_opened_at_iso": str(last_opened_at_iso)}
-                            if last_opened_at_iso
-                            else {}
-                        ),
-                    }
-                )
-            result = {"ok": True, "sessions": sessions, "total": total}
+            sessions, total = list_completed_sessions(
+                session_root,
+                limit=limit,
+                find_audio_path_fn=getattr(self, "_find_candidate_audio_path", None),
+            )
+            result = bridge_ok(sessions=sessions, total=total)
             if not load_all:
                 with self._sessions_cache_lock:
                     if self._sessions_cache_gen == gen_at_start:
@@ -184,12 +105,7 @@ class SessionControllerMixin:
                         self._sessions_cache_ts = time.time()
             return {**result, "sessions": list(sessions)}
         except Exception as e:
-            return {
-                "ok": False,
-                "error": redact_secrets(e),
-                "sessions": [],
-                "total": 0,
-            }
+            return bridge_error(e, sessions=[], total=0)
 
     def delete_session(self, session_dir: str) -> dict:
         """Permanently delete a single session folder from disk."""
@@ -198,17 +114,17 @@ class SessionControllerMixin:
             abs_dir = os.path.realpath(session_dir)
             abs_root = os.path.realpath(session_root)
             if not _path_under_root(abs_dir, abs_root):
-                return {"ok": False, "error": "Percorso non valido"}
+                return bridge_error("Percorso non valido")
             if not os.path.isdir(abs_dir):
-                return {"ok": False, "error": "Cartella non trovata"}
+                return bridge_error("Cartella non trovata")
             self._evict_deleted_session_caches(abs_dir)
             shutil.rmtree(abs_dir)
             with self._sessions_cache_lock:
                 self._sessions_cache = None
                 self._sessions_cache_gen += 1
-            return {"ok": True}
+            return bridge_ok()
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e)}
+            return bridge_error(e)
 
     def _invalidate_sessions_cache(self) -> None:
         with self._sessions_cache_lock:
@@ -242,17 +158,17 @@ class SessionControllerMixin:
             abs_dir = os.path.realpath(session_dir)
             abs_root = os.path.realpath(session_root)
             if not _path_under_root(abs_dir, abs_root):
-                return {"ok": False, "error": "Percorso non valido"}
+                return bridge_error("Percorso non valido")
             session_path = os.path.join(abs_dir, "session.json")
             if not os.path.isfile(session_path):
-                return {"ok": False, "error": "session.json non trovato"}
+                return bridge_error("session.json non trovato")
             with open(session_path, encoding="utf-8") as fh:
                 data = _json.load(fh)
             if not isinstance(data, dict):
-                return {"ok": False, "error": "session.json non valido"}
+                return bridge_error("session.json non valido")
             norm_path = str(new_path or "").strip()
             if not norm_path:
-                return {"ok": False, "error": "Percorso vuoto"}
+                return bridge_error("Percorso vuoto")
             if not isinstance(data.get("input"), dict):
                 data["input"] = {}
             data["input"]["path"] = norm_path
@@ -276,9 +192,9 @@ class SessionControllerMixin:
             with self._sessions_cache_lock:
                 self._sessions_cache = None
                 self._sessions_cache_gen += 1
-            return {"ok": True}
+            return bridge_ok()
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e)}
+            return bridge_error(e)
 
     def touch_session_opened(self, session_dir: str) -> dict:
         """Record the last opened ISO timestamp in session.json."""
@@ -290,14 +206,14 @@ class SessionControllerMixin:
             abs_dir = os.path.realpath(session_dir)
             abs_root = os.path.realpath(session_root)
             if not _path_under_root(abs_dir, abs_root):
-                return {"ok": False, "error": "Percorso non valido"}
+                return bridge_error("Percorso non valido")
             session_path = os.path.join(abs_dir, "session.json")
             if not os.path.isfile(session_path):
-                return {"ok": False, "error": "session.json non trovato"}
+                return bridge_error("session.json non trovato")
             with open(session_path, encoding="utf-8") as fh:
                 data = _json.load(fh)
             if not isinstance(data, dict):
-                return {"ok": False, "error": "session.json non valido"}
+                return bridge_error("session.json non valido")
 
             now_iso = datetime.now(UTC).isoformat()
             data["last_opened_at"] = now_iso
@@ -306,9 +222,9 @@ class SessionControllerMixin:
             with self._sessions_cache_lock:
                 self._sessions_cache = None
                 self._sessions_cache_gen += 1
-            return {"ok": True, "last_opened_at_iso": now_iso}
+            return bridge_ok(last_opened_at_iso=now_iso)
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e)}
+            return bridge_error(e)
 
     def cleanup_old_sessions(
         self,
@@ -319,16 +235,15 @@ class SessionControllerMixin:
         try:
             thread = getattr(self, "_processing_thread", None)
             if thread is not None and thread.is_alive():
-                return {
-                    "ok": False,
-                    "error": "Impossibile eseguire la pulizia durante un'elaborazione in corso.",
-                    "removed": 0,
-                    "freed_bytes": 0,
-                    "errors": 0,
-                    "candidates": 0,
-                    "preserved_completed": 0,
-                    "missing_completed_html": 0,
-                }
+                return bridge_error(
+                    "Impossibile eseguire la pulizia durante un'elaborazione in corso.",
+                    removed=0,
+                    freed_bytes=0,
+                    errors=0,
+                    candidates=0,
+                    preserved_completed=0,
+                    missing_completed_html=0,
+                )
             with self._cleanup_lock:
                 result = cleanup_orphan_sessions(
                     max(0, int(max_age_days)),
@@ -338,26 +253,24 @@ class SessionControllerMixin:
                     with self._sessions_cache_lock:
                         self._sessions_cache = None
                         self._sessions_cache_gen += 1
-                return {
-                    "ok": True,
-                    "removed": result["removed"],
-                    "freed_bytes": result["freed_bytes"],
-                    "errors": result["errors"],
-                    "candidates": result.get("candidates", result["removed"]),
-                    "preserved_completed": result.get("preserved_completed", 0),
-                    "missing_completed_html": result.get("missing_completed_html", 0),
-                }
+                return bridge_ok(
+                    removed=result["removed"],
+                    freed_bytes=result["freed_bytes"],
+                    errors=result["errors"],
+                    candidates=result.get("candidates", result["removed"]),
+                    preserved_completed=result.get("preserved_completed", 0),
+                    missing_completed_html=result.get("missing_completed_html", 0),
+                )
         except Exception as e:
-            return {
-                "ok": False,
-                "error": redact_secrets(e),
-                "removed": 0,
-                "freed_bytes": 0,
-                "errors": 0,
-                "candidates": 0,
-                "preserved_completed": 0,
-                "missing_completed_html": 0,
-            }
+            return bridge_error(
+                e,
+                removed=0,
+                freed_bytes=0,
+                errors=0,
+                candidates=0,
+                preserved_completed=0,
+                missing_completed_html=0,
+            )
 
     def cleanup_completed_sessions(
         self,
@@ -368,16 +281,15 @@ class SessionControllerMixin:
         try:
             thread = getattr(self, "_processing_thread", None)
             if thread is not None and thread.is_alive():
-                return {
-                    "ok": False,
-                    "error": "Impossibile eseguire la pulizia durante un'elaborazione in corso.",
-                    "removed": 0,
-                    "freed_bytes": 0,
-                    "errors": 0,
-                    "candidates": 0,
-                    "preserved_completed": 0,
-                    "missing_completed_html": 0,
-                }
+                return bridge_error(
+                    "Impossibile eseguire la pulizia durante un'elaborazione in corso.",
+                    removed=0,
+                    freed_bytes=0,
+                    errors=0,
+                    candidates=0,
+                    preserved_completed=0,
+                    missing_completed_html=0,
+                )
             with self._cleanup_lock:
                 result = cleanup_completed_sessions(
                     max(1, int(max_age_days)),
@@ -391,26 +303,24 @@ class SessionControllerMixin:
                         self._sessions_cache_gen += 1
                     with self._text_cache_lock:
                         self._text_cache.clear()
-                return {
-                    "ok": True,
-                    "removed": result["removed"],
-                    "freed_bytes": result["freed_bytes"],
-                    "errors": result["errors"],
-                    "candidates": result.get("candidates", result["removed"]),
-                    "preserved_completed": result.get("preserved_completed", 0),
-                    "missing_completed_html": result.get("missing_completed_html", 0),
-                }
+                return bridge_ok(
+                    removed=result["removed"],
+                    freed_bytes=result["freed_bytes"],
+                    errors=result["errors"],
+                    candidates=result.get("candidates", result["removed"]),
+                    preserved_completed=result.get("preserved_completed", 0),
+                    missing_completed_html=result.get("missing_completed_html", 0),
+                )
         except Exception as e:
-            return {
-                "ok": False,
-                "error": redact_secrets(e),
-                "removed": 0,
-                "freed_bytes": 0,
-                "errors": 0,
-                "candidates": 0,
-                "preserved_completed": 0,
-                "missing_completed_html": 0,
-            }
+            return bridge_error(
+                e,
+                removed=0,
+                freed_bytes=0,
+                errors=0,
+                candidates=0,
+                preserved_completed=0,
+                missing_completed_html=0,
+            )
 
     def open_session_folder(self) -> dict:
         """Open the session storage folder in the system file manager."""
@@ -427,103 +337,31 @@ class SessionControllerMixin:
                 subprocess.Popen(["open", real_root])
             else:
                 subprocess.Popen(["xdg-open", real_root])
-            return {"ok": True}
+            return bridge_ok()
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e)}
+            return bridge_error(e)
 
     def search_sessions(self, query: str, limit: int = 100) -> dict:
         """Search plain-text content of every completed session HTML."""
-        import json as _json
-
-        from el_sbobinator.services.search_service import (
-            extract_text_from_html,
-            find_snippets,
-        )
-
         query = str(query).strip()
         if len(query) < 3 or len(query) > 200:
-            return {
-                "ok": False,
-                "error": "Query troppo corta o troppo lunga",
-                "results": [],
-                "total": 0,
-            }
+            return bridge_error(
+                "Query troppo corta o troppo lunga", results=[], total=0
+            )
 
         session_root = self._get_session_root()
-        if not os.path.isdir(session_root):
-            return {"ok": True, "results": [], "total": 0}
-
         try:
-            results = []
-            for entry in os.scandir(session_root):
-                if not entry.is_dir():
-                    continue
-                session_path = os.path.join(entry.path, "session.json")
-                if not os.path.isfile(session_path):
-                    continue
-                try:
-                    with open(session_path, encoding="utf-8") as fh:
-                        data = _json.load(fh)
-                    if data.get("stage") != "done":
-                        continue
-                    html_path = str(data.get("outputs", {}).get("html", ""))
-                    if not html_path or not os.path.isfile(html_path):
-                        continue
-
-                    try:
-                        mtime = os.path.getmtime(html_path)
-                    except OSError:
-                        continue
-                    with self._text_cache_lock:
-                        cached = self._text_cache.get(html_path)
-                        if cached is not None and cached[0] == mtime:
-                            self._text_cache.move_to_end(html_path)
-                            text = cached[1]
-                        else:
-                            text = None
-                    if text is None:
-                        with open(html_path, encoding="utf-8", errors="replace") as fh:
-                            raw_html = fh.read()
-                        text = extract_text_from_html(raw_html)
-                        with self._text_cache_lock:
-                            self._text_cache[html_path] = (mtime, text)
-                            if len(self._text_cache) > _TEXT_CACHE_MAX:
-                                self._text_cache.popitem(last=False)
-
-                    snippets, match_count = find_snippets(text, query)
-                    if not snippets:
-                        continue
-
-                    input_path = data.get("input", {}).get("path", "")
-                    name = (
-                        os.path.basename(str(input_path))
-                        if input_path
-                        else os.path.basename(html_path)
-                    )
-                    results.append(
-                        {
-                            "session_dir": entry.path,
-                            "name": name,
-                            "html_path": html_path,
-                            "completed_at_iso": data.get("updated_at", ""),
-                            "snippets": snippets,
-                            "match_count": match_count,
-                        }
-                    )
-                except Exception:
-                    continue
-
-            results.sort(key=lambda r: r["match_count"], reverse=True)
-            total_matches = len(results)
-            try:
-                limit_int = int(limit)
-            except (ValueError, TypeError):
-                limit_int = 100
-
-            limited_results = results[:limit_int] if limit_int > 0 else results
-            return {"ok": True, "results": limited_results, "total": total_matches}
+            results, total_matches = search_completed_sessions(
+                session_root=session_root,
+                query=query,
+                limit=limit,
+                text_cache=getattr(self, "_text_cache", None),
+                text_cache_lock=getattr(self, "_text_cache_lock", None),
+                text_cache_max=_TEXT_CACHE_MAX,
+            )
+            return bridge_ok(results=results, total=total_matches)
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e), "results": [], "total": 0}
+            return bridge_error(e, results=[], total=0)
 
     def get_archive_folders(self) -> dict:
         """Return the user-defined archive folders with auto-reconciled session paths."""
@@ -539,20 +377,20 @@ class SessionControllerMixin:
             folders, _ = reconcile_folders_with_session_root(
                 folders, self._get_session_root()
             )
-            return {"ok": True, "folders": folders}
+            return bridge_ok(folders=folders)
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e), "folders": []}
+            return bridge_error(e, folders=[])
 
     def save_archive_folders(self, folders: list) -> dict:
         """Persist the archive folder list to disk."""
         try:
             if not isinstance(folders, list):
-                return {"ok": False, "error": "folders must be a list"}
+                return bridge_error("folders must be a list")
             from el_sbobinator.services.folders_service import (
                 save_folders as _save_archive_folders,
             )
 
             _save_archive_folders(folders)
-            return {"ok": True}
+            return bridge_ok()
         except Exception as e:
-            return {"ok": False, "error": redact_secrets(e)}
+            return bridge_error(e)
