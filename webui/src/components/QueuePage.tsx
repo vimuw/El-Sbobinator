@@ -241,7 +241,7 @@ export function QueuePage({
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, ease: 'easeOut' }}
-            className="premium-panel-strong py-12 px-6 flex flex-col items-center justify-center gap-4 text-center max-w-md mx-auto w-full"
+            className="premium-panel py-12 px-6 flex flex-col items-center justify-center gap-4 text-center max-w-md mx-auto w-full"
           >
             <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent-text)' }} />
             <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>

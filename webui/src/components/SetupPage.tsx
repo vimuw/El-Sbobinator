@@ -58,7 +58,7 @@ export function SetupPage({
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="premium-panel-strong relative overflow-hidden px-6 py-8 sm:px-8 sm:py-10 flex flex-col items-center gap-6 w-full max-w-lg mx-auto"
+      className="premium-panel setup-card relative overflow-hidden px-6 py-8 sm:px-8 sm:py-10 flex flex-col items-center gap-6 w-full max-w-lg mx-auto"
     >
       <div className="flex flex-col items-center gap-3 text-center">
         <motion.div
@@ -78,10 +78,14 @@ export function SetupPage({
             rotate: [0, -10, 10, -5, 5, 0],
             transition: { duration: 0.5 },
           }}
-          className="w-12 h-12 rounded-xl flex items-center justify-center cursor-default"
-          style={{ background: 'var(--accent-subtle)', border: '1px solid var(--border-subtle)' }}
+          className="flex items-center justify-center cursor-default select-none"
         >
-          <Key className="w-5 h-5" style={{ color: 'var(--accent-text)' }} />
+          <img
+            src="/icon.png"
+            alt="El Sbobinator"
+            className="w-14 h-14 object-contain pointer-events-none"
+            draggable={false}
+          />
         </motion.div>
         <h3
           className="text-xl font-bold tracking-tight mt-1"
@@ -184,11 +188,10 @@ export function SetupPage({
       </div>
 
       <div
-        className="w-full rounded-lg p-4 flex gap-3 text-left pl-5"
+        className="w-full rounded-lg p-4 flex gap-3 text-left"
         style={{
           background: 'var(--bg-panel)',
           border: '1px solid var(--border-subtle)',
-          borderLeft: '3px solid var(--accent-bg)',
         }}
       >
         <div className="flex flex-col gap-2">
