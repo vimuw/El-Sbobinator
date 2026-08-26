@@ -75,6 +75,7 @@ export function RichTextEditor({
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const lastKnownScrollTopRef = useRef<number>(initialScrollTop ?? 0);
   const hasRestoredScrollRef = useRef(false);
   const onScrollTopChangeRef = useRef(onScrollTopChange);
   useEffect(() => { onScrollTopChangeRef.current = onScrollTopChange; }, [onScrollTopChange]);
@@ -105,6 +106,7 @@ export function RichTextEditor({
       StarterKit.configure({
         link: false,
         underline: false,
+        horizontalRule: false,
         ...(collaborationRoom ? { undoRedo: false } : {}),
       }),
       FloatingImage,
@@ -270,15 +272,57 @@ export function RichTextEditor({
     if (hasRestoredScrollRef.current || !scrollContainerRef.current || !editor || !initialScrollTop) return;
     hasRestoredScrollRef.current = true;
     requestAnimationFrame(() => {
-      if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = initialScrollTop;
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = initialScrollTop;
+        lastKnownScrollTopRef.current = initialScrollTop;
+      }
     });
   }, [editor, initialScrollTop]);
 
+  // Adjust scroll on zoom level changes to keep the current viewport content anchored in place
+  const prevZoomLevelRef = useRef<number | undefined>(zoomLevel);
+  React.useLayoutEffect(() => {
+    const prevZoom = prevZoomLevelRef.current;
+    prevZoomLevelRef.current = zoomLevel;
+
+    if (prevZoom === undefined || zoomLevel === undefined || prevZoom === zoomLevel) return;
+
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const oldRatio = prevZoom / 100;
+    const newRatio = zoomLevel / 100;
+    const viewportWidth = container.clientWidth;
+
+    // Adjust vertical scroll proportionally so the top visible position is perfectly preserved
+    const prevScrollTop = lastKnownScrollTopRef.current;
+    if (prevScrollTop > 0) {
+      const newScrollTop = Math.round(prevScrollTop * (newRatio / oldRatio));
+      container.scrollTop = newScrollTop;
+      lastKnownScrollTopRef.current = newScrollTop;
+    } else {
+      container.scrollTop = 0;
+      lastKnownScrollTopRef.current = 0;
+    }
+
+    // Adjust horizontal scroll to keep paper centered
+    const outer = container.querySelector('.editor-page-outer') as HTMLElement | null;
+    if (outer) {
+      const contentWidth = outer.scrollWidth;
+      if (contentWidth > viewportWidth) {
+        container.scrollLeft = Math.max(0, (contentWidth - viewportWidth) / 2);
+      } else {
+        container.scrollLeft = 0;
+      }
+    }
+  }, [zoomLevel]);
+
+  // Center paper in viewport when TOC opens/closes or container resizes
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    const adjustScroll = (behavior: ScrollBehavior = 'auto') => {
+    const adjustScroll = () => {
       const outer = container.querySelector('.editor-page-outer') as HTMLElement;
       const tocCol = container.querySelector('.editor-toc-col') as HTMLElement;
       if (!outer || !tocCol) return;
@@ -286,13 +330,12 @@ export function RichTextEditor({
       const viewportWidth = container.clientWidth;
       const contentWidth = outer.scrollWidth;
       if (contentWidth <= viewportWidth) {
-        container.scrollTo({ left: 0, behavior });
+        container.scrollLeft = 0;
         return;
       }
 
-      const paperWidth = 816;
-      const targetLeft = Math.max(0, (paperWidth / 2) - (viewportWidth / 2));
-      container.scrollTo({ left: targetLeft, behavior });
+      const targetLeft = Math.max(0, (contentWidth - viewportWidth) / 2);
+      container.scrollLeft = targetLeft;
     };
 
     let transitionActive = true;
@@ -300,7 +343,7 @@ export function RichTextEditor({
     const duration = 250;
 
     const poll = () => {
-      adjustScroll('auto');
+      adjustScroll();
       if (transitionActive && performance.now() - startTime < duration) {
         requestAnimationFrame(poll);
       }
@@ -308,7 +351,7 @@ export function RichTextEditor({
     requestAnimationFrame(poll);
 
     const resizeObserver = new ResizeObserver(() => {
-      adjustScroll('auto');
+      adjustScroll();
     });
     resizeObserver.observe(container);
 
@@ -316,7 +359,7 @@ export function RichTextEditor({
       transitionActive = false;
       resizeObserver.disconnect();
     };
-  }, [isTocOpen, zoomLevel]);
+  }, [isTocOpen]);
 
   return (
     <div className={`editor-shell flex flex-1 min-h-0 w-full flex-col relative ${isTocOpen ? 'editor-toc-open' : ''}`} onContextMenu={handleContextMenu}>
@@ -339,7 +382,9 @@ export function RichTextEditor({
         onScroll={() => {
           setContextMenu(null);
           if (scrollContainerRef.current) {
-            onScrollTopChangeRef.current?.(scrollContainerRef.current.scrollTop);
+            const st = scrollContainerRef.current.scrollTop;
+            lastKnownScrollTopRef.current = st;
+            onScrollTopChangeRef.current?.(st);
           }
         }}
       >
