@@ -30,9 +30,9 @@ describe('CollaborationModal', () => {
     const input = screen.getByLabelText('Codice stanza generato') as HTMLInputElement;
     expect(input.value).toMatch(/^sbobina-[a-z0-9]+$/);
     expect(screen.getByPlaceholderText('es. Marco')).toBeTruthy();
-    expect(screen.getByText('Rigenera')).toBeTruthy();
-    expect(screen.getByText('Copia')).toBeTruthy();
-    expect(screen.getByText('Avvia Collaborazione')).toBeTruthy();
+    expect(screen.getByLabelText('Rigenera codice')).toBeTruthy();
+    expect(screen.getByLabelText('Copia codice')).toBeTruthy();
+    expect(screen.getByText('Avvia')).toBeTruthy();
   });
 
   it('generates a new random room code when Rigenera is clicked', () => {
@@ -48,7 +48,7 @@ describe('CollaborationModal', () => {
     const initialCode = input.value;
     expect(initialCode).toMatch(/^sbobina-[a-z0-9]+$/);
 
-    fireEvent.click(screen.getByText('Rigenera'));
+    fireEvent.click(screen.getByLabelText('Rigenera codice'));
     expect(input.value).toMatch(/^sbobina-[a-z0-9]+$/);
   });
 
@@ -67,10 +67,10 @@ describe('CollaborationModal', () => {
       />
     );
     const input = screen.getByLabelText('Codice stanza generato') as HTMLInputElement;
-    fireEvent.click(screen.getByText('Copia'));
+    fireEvent.click(screen.getByLabelText('Copia codice'));
 
     expect(writeTextMock).toHaveBeenCalledWith(input.value);
-    expect(screen.getByText('Copiato')).toBeTruthy();
+    expect(screen.getByLabelText('Codice copiato')).toBeTruthy();
   });
 
   it('submits form with lowercased room and user options', () => {
@@ -90,7 +90,7 @@ describe('CollaborationModal', () => {
     fireEvent.change(screen.getByPlaceholderText('es. Marco'), {
       target: { value: ' Mario Rossi ' },
     });
-    fireEvent.click(screen.getByText('Avvia Collaborazione'));
+    fireEvent.click(screen.getByText('Avvia'));
 
     expect(onStartCollaboration).toHaveBeenCalledWith('my-custom-room', {
       name: 'Mario Rossi',

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Users, X, Copy, Check, Sparkles, Radio } from 'lucide-react';
+import { Users, X, Copy, Check, Dices, Radio } from 'lucide-react';
 import { generateRoomCode } from '../../utils';
 import { STORAGE_KEYS } from '../../storageKeys';
 
@@ -174,27 +174,27 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({
                         placeholder="es. sbobina-8f7k2mq9"
                         value={room}
                         onChange={e => setRoom(e.target.value)}
-                        className="app-input font-mono text-sm pr-28 select-all"
+                        className="app-input font-mono text-sm pr-20 select-all"
                         aria-label="Codice stanza generato"
                       />
                       <div className="absolute right-1.5 flex items-center gap-1">
                         <button
                           type="button"
                           onClick={handleCopyCode}
-                          className="px-2 py-1 rounded-md text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-1"
-                          title="Copia codice"
+                          className="w-7 h-7 rounded-md text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-center shrink-0"
+                          title={copied ? 'Copiato!' : 'Copia codice'}
+                          aria-label={copied ? 'Codice copiato' : 'Copia codice'}
                         >
                           {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-                          {copied ? 'Copiato' : 'Copia'}
                         </button>
                         <button
                           type="button"
                           onClick={handleGenerateCode}
-                          className="px-2 py-1 rounded-md text-xs font-semibold text-[var(--accent-color)] bg-[var(--accent-subtle)] hover:bg-[var(--accent-ring)] transition-colors flex items-center gap-1 shrink-0"
-                          title="Rigenera un nuovo codice casuale"
+                          className="w-7 h-7 rounded-md text-xs font-semibold text-[var(--accent-color)] bg-[var(--accent-subtle)] hover:bg-[var(--accent-ring)] transition-colors flex items-center justify-center shrink-0"
+                          title="Rigenera codice"
+                          aria-label="Rigenera codice"
                         >
-                          <Sparkles className="w-3.5 h-3.5" />
-                          Rigenera
+                          <Dices className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
@@ -259,7 +259,7 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({
                     className="modal-action-button is-primary flex-1 flex items-center justify-center gap-2"
                   >
                     <Radio className="w-4 h-4 animate-pulse" />
-                    Avvia Collaborazione
+                    Avvia
                   </button>
                 </div>
               </form>
