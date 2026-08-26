@@ -85,7 +85,7 @@ export const FontFamilySelect = ({ editor }: { editor: TiptapEditor }) => {
         className={`editor-button font-family-dropdown-btn${isOpen ? ' is-active' : ''}`}
         title="Carattere"
       >
-        <span className="text-xs font-medium truncate max-w-[58px]">{currentLabel}</span>
+        <span className="text-xs font-medium truncate flex-1 text-left">{currentLabel}</span>
         <ChevronDown style={{ width: 10, height: 10, opacity: 0.6, marginLeft: 2, flexShrink: 0 }} />
       </button>
       {isOpen && createPortal(
@@ -186,7 +186,7 @@ export const FontSizeSelect = ({ editor }: { editor: TiptapEditor }) => {
         className={`editor-button font-size-dropdown-btn${isOpen ? ' is-active' : ''}`}
         title="Dimensione carattere"
       >
-        <span className="text-xs font-medium">{currentSize}</span>
+        <span className="text-xs font-medium flex-1 text-center">{currentSize}</span>
         <ChevronDown style={{ width: 10, height: 10, opacity: 0.6, marginLeft: 2, flexShrink: 0 }} />
       </button>
       {isOpen && createPortal(
@@ -280,8 +280,8 @@ export const HeadingSelect = ({ editor }: { editor: TiptapEditor }) => {
         className={`editor-button heading-dropdown-btn${isOpen ? ' is-active' : ''}`}
         title="Stile paragrafo"
       >
-        <span className="text-xs font-medium truncate">{current.label}</span>
-        <ChevronDown style={{ width: 10, height: 10, opacity: 0.6, marginLeft: 3, flexShrink: 0 }} />
+        <span className="text-xs font-medium truncate flex-1 text-left">{current.label}</span>
+        <ChevronDown style={{ width: 10, height: 10, opacity: 0.6, marginLeft: 2, flexShrink: 0 }} />
       </button>
       {isOpen && createPortal(
         <div
@@ -377,7 +377,7 @@ export const ZoomSelect = ({
         className={`editor-button zoom-dropdown-btn${isOpen ? ' is-active' : ''}`}
         title="Livello di zoom"
       >
-        <span className="text-xs font-medium">{zoomLevel}%</span>
+        <span className="text-xs font-medium flex-1 text-center">{zoomLevel}%</span>
         <ChevronDown style={{ width: 10, height: 10, opacity: 0.6, marginLeft: 2, flexShrink: 0 }} />
       </button>
       {isOpen && createPortal(
