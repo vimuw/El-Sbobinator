@@ -570,6 +570,14 @@ button {
   transform: scale(1.06);
 }
 
+.setup-card {
+  transition: border-color 200ms ease;
+}
+
+.setup-card:hover {
+  border-color: var(--accent-bg);
+}
+
 .premium-panel-strong,
 .modal-card {
   background: var(--glass-bg);
