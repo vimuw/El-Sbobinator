@@ -14,7 +14,7 @@ import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 import { Menu, X } from 'lucide-react';
 import { FloatingImage } from './FloatingImage';
-import { type Heading, SearchHighlight, FontSize, MathInline, MathBlock, SmartArrows, CollaborationCursor, extractHeadings } from '../editorExtensions';
+import { type Heading, SearchHighlight, FontSize, CustomHeading, CustomParagraph, MathInline, MathBlock, SmartArrows, CollaborationCursor, extractHeadings } from '../editorExtensions';
 import Youtube from '@tiptap/extension-youtube';
 import Typography from '@tiptap/extension-typography';
 import Collaboration from '@tiptap/extension-collaboration';
@@ -104,11 +104,15 @@ export function RichTextEditor({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
+        heading: false,
+        paragraph: false,
         link: false,
         underline: false,
         horizontalRule: false,
         ...(collaborationRoom ? { undoRedo: false } : {}),
       }),
+      CustomHeading,
+      CustomParagraph,
       FloatingImage,
       TextStyle,
       Color,

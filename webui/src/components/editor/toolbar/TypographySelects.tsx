@@ -265,9 +265,9 @@ export const HeadingSelect = ({ editor }: { editor: TiptapEditor }) => {
   const selectHeading = (option: typeof HEADING_OPTIONS[number]) => {
     setIsOpen(false);
     if (option.value === 'paragraph') {
-      editor.chain().focus().setParagraph().run();
+      editor.chain().focus().clearBlockFontSize().setParagraph().run();
     } else {
-      editor.chain().focus().setNode('heading', { level: option.level as 1 | 2 | 3 | 4 | 5 }).run();
+      editor.chain().focus().clearBlockFontSize().setHeading({ level: option.level as 1 | 2 | 3 | 4 | 5 }).run();
     }
   };
 

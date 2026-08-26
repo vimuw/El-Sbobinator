@@ -9,6 +9,8 @@ const createMockEditor = (attrs: Record<string, unknown> = {}, activeChecks: Rec
     focus: vi.fn().mockReturnThis(),
     setParagraph: vi.fn().mockReturnThis(),
     setNode: vi.fn().mockReturnThis(),
+    setHeading: vi.fn().mockReturnThis(),
+    clearBlockFontSize: vi.fn().mockReturnThis(),
     setFontFamily: vi.fn().mockReturnThis(),
     unsetFontFamily: vi.fn().mockReturnThis(),
     setMark: vi.fn().mockReturnThis(),
@@ -34,7 +36,7 @@ const createMockEditor = (attrs: Record<string, unknown> = {}, activeChecks: Rec
 
 describe('TypographySelects', () => {
   describe('HeadingSelect', () => {
-    it('renders default Testo normale and changes to Titolo 1 when clicked', () => {
+    it('renders default Testo normale and changes to Titolo 1 with clearBlockFontSize when clicked', () => {
       const { editor, chainMock } = createMockEditor();
       render(<HeadingSelect editor={editor as unknown as TiptapEditor} />);
 
@@ -45,16 +47,25 @@ describe('TypographySelects', () => {
       const h1Option = screen.getByRole('button', { name: 'Titolo 1' });
       fireEvent.click(h1Option);
 
-      expect(chainMock.setNode).toHaveBeenCalledWith('heading', { level: 1 });
+      expect(chainMock.clearBlockFontSize).toHaveBeenCalled();
+      expect(chainMock.setHeading).toHaveBeenCalledWith({ level: 1 });
       expect(chainMock.run).toHaveBeenCalled();
     });
 
-    it('renders active Titolo 2 when heading level 2 is active', () => {
-      const { editor } = createMockEditor({}, { h2: true });
+    it('changes to paragraph with clearBlockFontSize when Testo normale is selected', () => {
+      const { editor, chainMock } = createMockEditor({}, { h2: true });
       render(<HeadingSelect editor={editor as unknown as TiptapEditor} />);
 
       const button = screen.getByTitle('Stile paragrafo');
       expect(button.textContent).toContain('Titolo 2');
+
+      fireEvent.click(button);
+      const pOption = screen.getByRole('button', { name: 'Testo normale' });
+      fireEvent.click(pOption);
+
+      expect(chainMock.clearBlockFontSize).toHaveBeenCalled();
+      expect(chainMock.setParagraph).toHaveBeenCalled();
+      expect(chainMock.run).toHaveBeenCalled();
     });
   });
 

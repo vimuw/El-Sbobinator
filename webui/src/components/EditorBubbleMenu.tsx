@@ -250,7 +250,7 @@ export const EditorBubbleMenu: React.FC<EditorBubbleMenuProps> = ({ editor, isCo
 
         <button
           type="button"
-          onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleHeading({ level: 1 }).run(); }}
+          onMouseDown={e => { e.preventDefault(); editor.chain().focus().clearBlockFontSize().toggleHeading({ level: 1 }).run(); }}
           className={btn(editor.isActive('heading', { level: 1 }))}
           title="Titolo 1"
         >
@@ -259,7 +259,7 @@ export const EditorBubbleMenu: React.FC<EditorBubbleMenuProps> = ({ editor, isCo
 
         <button
           type="button"
-          onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleHeading({ level: 2 }).run(); }}
+          onMouseDown={e => { e.preventDefault(); editor.chain().focus().clearBlockFontSize().toggleHeading({ level: 2 }).run(); }}
           className={btn(editor.isActive('heading', { level: 2 }))}
           title="Titolo 2"
         >
@@ -268,7 +268,7 @@ export const EditorBubbleMenu: React.FC<EditorBubbleMenuProps> = ({ editor, isCo
 
         <button
           type="button"
-          onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleHeading({ level: 3 }).run(); }}
+          onMouseDown={e => { e.preventDefault(); editor.chain().focus().clearBlockFontSize().toggleHeading({ level: 3 }).run(); }}
           className={btn(editor.isActive('heading', { level: 3 }))}
           title="Titolo 3"
         >
