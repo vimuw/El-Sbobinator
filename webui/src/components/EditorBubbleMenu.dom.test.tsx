@@ -17,6 +17,7 @@ const createMockEditor = (overrideProps: Record<string, unknown> = {}) => {
     toggleStrike: vi.fn().mockReturnThis(),
     toggleHighlight: vi.fn().mockReturnThis(),
     unsetHighlight: vi.fn().mockReturnThis(),
+    clearBlockFontSize: vi.fn().mockReturnThis(),
     toggleHeading: vi.fn().mockReturnThis(),
     setLink: vi.fn().mockReturnThis(),
     unsetLink: vi.fn().mockReturnThis(),
@@ -195,6 +196,7 @@ describe('EditorBubbleMenu', () => {
     act(() => {
       fireEvent.mouseDown(screen.getByTitle('Titolo 1'));
     });
+    expect(chainMock.clearBlockFontSize).toHaveBeenCalled();
     expect(chainMock.toggleHeading).toHaveBeenCalledWith({ level: 1 });
   });
 
@@ -206,6 +208,7 @@ describe('EditorBubbleMenu', () => {
     act(() => {
       fireEvent.mouseDown(screen.getByTitle('Titolo 2'));
     });
+    expect(chainMock.clearBlockFontSize).toHaveBeenCalled();
     expect(chainMock.toggleHeading).toHaveBeenCalledWith({ level: 2 });
   });
 
@@ -217,6 +220,7 @@ describe('EditorBubbleMenu', () => {
     act(() => {
       fireEvent.mouseDown(screen.getByTitle('Titolo 3'));
     });
+    expect(chainMock.clearBlockFontSize).toHaveBeenCalled();
     expect(chainMock.toggleHeading).toHaveBeenCalledWith({ level: 3 });
   });
 

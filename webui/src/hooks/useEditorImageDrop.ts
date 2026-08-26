@@ -167,6 +167,9 @@ export function useEditorImageDrop({ editorRef }: UseEditorImageDropOptions) {
       s.removeProperty('color');
       s.removeProperty('background-color');
     });
+    doc.body.querySelectorAll('h1, h2, h3, h4, h5, h6, h1 *, h2 *, h3 *, h4 *, h5 *, h6 *').forEach(el => {
+      (el as HTMLElement).style?.removeProperty('font-size');
+    });
     return doc.body.innerHTML;
   }, []);
 

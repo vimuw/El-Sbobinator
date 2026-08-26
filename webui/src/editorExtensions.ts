@@ -6,10 +6,16 @@ import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 
+import HeadingExtension from '@tiptap/extension-heading';
+import ParagraphExtension from '@tiptap/extension-paragraph';
+
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     searchHighlight: {
       setSearchTerm: (term: string, currentIndex?: number, matchCase?: boolean) => ReturnType;
+    };
+    blockTypography: {
+      clearBlockFontSize: () => ReturnType;
     };
   }
 }
@@ -149,6 +155,94 @@ export const FontSize = Extension.create({
         },
       },
     }];
+  },
+  addCommands() {
+    return {
+      setFontSize: (fontSize: string) => ({ chain }) => {
+        return chain()
+          .setMark('textStyle', { fontSize })
+          .run();
+      },
+      unsetFontSize: () => ({ chain }) => {
+        return chain()
+          .setMark('textStyle', { fontSize: null })
+          .removeEmptyTextStyle()
+          .run();
+      },
+      clearBlockFontSize: () => ({ tr, state }) => {
+        const { from, to } = state.selection;
+        state.doc.nodesBetween(from, to, (node, pos) => {
+          if (node.isTextblock) {
+            const start = pos + 1;
+            const end = pos + node.nodeSize - 1;
+            if (start < end) {
+              node.nodesBetween(0, node.content.size, (child, childOffset) => {
+                if (child.isText && child.marks) {
+                  const textStyleMark = child.marks.find(m => m.type.name === 'textStyle' && m.attrs?.fontSize);
+                  if (textStyleMark) {
+                    const childFrom = start + childOffset;
+                    const childTo = childFrom + child.nodeSize;
+                    const remainingAttrs = { ...textStyleMark.attrs };
+                    delete remainingAttrs.fontSize;
+                    tr.removeMark(childFrom, childTo, state.schema.marks.textStyle);
+                    if (Object.values(remainingAttrs).some(v => v !== null && v !== undefined && v !== '')) {
+                      tr.addMark(childFrom, childTo, state.schema.marks.textStyle.create(remainingAttrs));
+                    }
+                  }
+                }
+              });
+            }
+          }
+        });
+        if (state.storedMarks) {
+          const storedTextStyle = state.storedMarks.find(m => m.type.name === 'textStyle' && m.attrs?.fontSize);
+          if (storedTextStyle) {
+            const remainingAttrs = { ...storedTextStyle.attrs };
+            delete remainingAttrs.fontSize;
+            const newStoredMarks = state.storedMarks.filter(m => m.type.name !== 'textStyle');
+            if (Object.values(remainingAttrs).some(v => v !== null && v !== undefined && v !== '')) {
+              newStoredMarks.push(state.schema.marks.textStyle.create(remainingAttrs));
+            }
+            tr.setStoredMarks(newStoredMarks);
+          }
+        }
+        return true;
+      },
+    };
+  },
+});
+
+export const CustomHeading = HeadingExtension.extend({
+  addCommands() {
+    return {
+      ...this.parent?.(),
+      setHeading: attributes => ({ chain }) => {
+        return chain()
+          .clearBlockFontSize()
+          .setNode(this.name, attributes)
+          .run();
+      },
+      toggleHeading: attributes => ({ chain }) => {
+        return chain()
+          .clearBlockFontSize()
+          .toggleNode(this.name, 'paragraph', attributes)
+          .run();
+      },
+    };
+  },
+});
+
+export const CustomParagraph = ParagraphExtension.extend({
+  addCommands() {
+    return {
+      ...this.parent?.(),
+      setParagraph: () => ({ chain }) => {
+        return chain()
+          .clearBlockFontSize()
+          .setNode(this.name)
+          .run();
+      },
+    };
   },
 });
 

@@ -26,6 +26,19 @@ describe('useEditorImageDrop Hook', () => {
     expect(outputHtml).toContain('Test text');
   });
 
+  it('transforms pasted HTML removing font-size from headings and nested spans', () => {
+    const editorRef = { current: null };
+    const { result } = renderHook(() => useEditorImageDrop({ editorRef }));
+
+    const inputHtml = '<h1 style="font-size: 14pt; color: red;"><span style="font-size: 11pt;">Heading Text</span></h1>';
+    const outputHtml = result.current.transformPastedHTML(inputHtml);
+
+    expect(outputHtml).not.toContain('font-size: 14pt');
+    expect(outputHtml).not.toContain('font-size: 11pt');
+    expect(outputHtml).not.toContain('color: red');
+    expect(outputHtml).toContain('Heading Text');
+  });
+
   it('handlePaste returns false if no image files present in clipboard', () => {
     const editorRef = { current: null };
     const { result } = renderHook(() => useEditorImageDrop({ editorRef }));
