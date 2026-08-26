@@ -10,6 +10,7 @@ export {
   FontFamilySelect,
   FontSizeSelect,
   HeadingSelect,
+  ZoomSelect,
 } from './editor/toolbar/TypographySelects';
 
 export {
@@ -17,9 +18,9 @@ export {
 } from './editor/toolbar/AlignDropdownButton';
 
 export {
+  InsertImageButton,
   InsertMathButton,
   InsertYoutubeButton,
-  InsertDropdownButton,
 } from './editor/toolbar/InsertDropdownButton';
 
 export {

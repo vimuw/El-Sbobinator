@@ -1,13 +1,15 @@
 import React, { useRef } from 'react';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import {
-  Bold, Italic, List, ListOrdered, Minus, Plus, Quote, Redo,
+  Bold, Italic, List, ListOrdered, Quote, Redo,
   RemoveFormatting, Search, Strikethrough,
   Underline as UnderlineIcon, Undo,
 } from 'lucide-react';
 import {
   ColorPickerButton, HighlightPickerButton, FontFamilySelect,
-  FontSizeSelect, HeadingSelect, LinkButton, InsertDropdownButton, AlignDropdownButton
+  FontSizeSelect, HeadingSelect, LinkButton, AlignDropdownButton,
+  InsertImageButton, InsertMathButton, InsertYoutubeButton,
+  ZoomSelect,
 } from './EditorToolbarControls';
 
 const menuBarStateKey = (editor: TiptapEditor): string => [
@@ -58,15 +60,19 @@ export const MenuBar = ({
 
   React.useEffect(() => {
     if (!editor) return;
-    const handleTransaction = () => {
+    const handleUpdate = () => {
       const key = menuBarStateKey(editor);
       if (key !== prevMenuKeyRef.current) {
         prevMenuKeyRef.current = key;
         forceUpdate({});
       }
     };
-    editor.on('transaction', handleTransaction);
-    return () => { editor.off('transaction', handleTransaction); };
+    editor.on('transaction', handleUpdate);
+    editor.on('selectionUpdate', handleUpdate);
+    return () => {
+      editor.off('transaction', handleUpdate);
+      editor.off('selectionUpdate', handleUpdate);
+    };
   }, [editor]);
 
   if (!editor) return null;
@@ -80,6 +86,14 @@ export const MenuBar = ({
       <button type="button" onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} className="editor-button" title="Ripeti (Ctrl+Y)">
         <Redo className="h-4 w-4" />
       </button>
+
+      {onZoomChange !== undefined && zoomLevel !== undefined && (
+        <>
+          <div className="editor-separator" />
+          <ZoomSelect zoomLevel={zoomLevel} onZoomChange={onZoomChange} />
+        </>
+      )}
+
       <div className="editor-separator" />
       <HeadingSelect editor={editor} />
       <FontFamilySelect editor={editor} />
@@ -108,7 +122,9 @@ export const MenuBar = ({
         <RemoveFormatting className="h-4 w-4" />
       </button>
       <div className="editor-separator" />
-      <InsertDropdownButton editor={editor} onOpenImagePicker={onOpenImagePicker} />
+      <InsertImageButton onOpenImagePicker={onOpenImagePicker} />
+      <InsertYoutubeButton editor={editor} />
+      <InsertMathButton editor={editor} />
       <LinkButton editor={editor} />
       <div className="editor-separator" />
       <AlignDropdownButton editor={editor} />
@@ -131,38 +147,6 @@ export const MenuBar = ({
       >
         <Search className="h-4 w-4" />
       </button>
-
-      {onZoomChange !== undefined && zoomLevel !== undefined && (
-        <>
-          <div className="editor-separator" />
-          <div className="editor-zoom-control">
-            <button
-              type="button"
-              onClick={() => onZoomChange(Math.max(50, zoomLevel - 10))}
-              className="editor-button"
-              title="Riduci zoom (Ctrl+-)"
-            >
-              <Minus className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => onZoomChange(100)}
-              className="editor-zoom-display"
-              title="Reimposta zoom 100% (Ctrl+0)"
-            >
-              {zoomLevel}%
-            </button>
-            <button
-              type="button"
-              onClick={() => onZoomChange(Math.min(200, zoomLevel + 10))}
-              className="editor-button"
-              title="Aumenta zoom (Ctrl+=)"
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </>
-      )}
     </div>
   );
 };
