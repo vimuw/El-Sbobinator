@@ -135,7 +135,7 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
                   <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-2">
                     Colore Cursore Visivo
                   </label>
-                  <div className="flex items-center gap-2.5 overflow-x-auto py-2 px-1">
+                  <div className="flex items-center gap-2.5 overflow-x-auto py-2.5 px-2.5 -mx-2.5">
                     {COLORS.map(c => (
                       <button
                         key={c}
