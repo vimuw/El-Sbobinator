@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Users, X, Copy, Check, Dices, Radio } from 'lucide-react';
+import { Users, X, Copy, Check, Sparkles, Radio } from 'lucide-react';
 import { generateRoomCode } from '../../utils';
 import { STORAGE_KEYS } from '../../storageKeys';
 
@@ -116,7 +116,7 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({
             {/* Modal Body */}
             {activeRoom ? (
               <div className="modal-body space-y-4">
-                <div className="p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-hover)] space-y-2">
+                <div className="p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--accent-color)] uppercase tracking-wider">
@@ -181,7 +181,7 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({
                         <button
                           type="button"
                           onClick={handleCopyCode}
-                          className="w-7 h-7 rounded-md text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-center shrink-0"
+                          className="w-7 h-7 rounded-md text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-center shrink-0 cursor-pointer"
                           title={copied ? 'Copiato!' : 'Copia codice'}
                           aria-label={copied ? 'Codice copiato' : 'Copia codice'}
                         >
@@ -190,11 +190,11 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({
                         <button
                           type="button"
                           onClick={handleGenerateCode}
-                          className="w-7 h-7 rounded-md text-xs font-semibold text-[var(--accent-color)] bg-[var(--accent-subtle)] hover:bg-[var(--accent-ring)] transition-colors flex items-center justify-center shrink-0"
+                          className="w-7 h-7 rounded-md text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-center shrink-0 cursor-pointer"
                           title="Rigenera codice"
                           aria-label="Rigenera codice"
                         >
-                          <Dices className="w-3.5 h-3.5" />
+                          <Sparkles className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
