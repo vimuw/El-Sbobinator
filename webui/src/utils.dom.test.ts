@@ -283,10 +283,63 @@ describe('optimizeDataUrlImage (browser / jsdom environment)', () => {
   });
 });
 
-describe('convertWebpImagesInHtml', () => {
-  it('returns original HTML if no webp images are present', async () => {
-    const html = '<p>Test <img src="data:image/jpeg;base64,123" /></p>';
+describe('prepareHtmlForClipboard / convertWebpImagesInHtml', () => {
+  it('returns original HTML if no images are present', async () => {
+    const html = '<p>Test text without images</p>';
     expect(await convertWebpImagesInHtml(html)).toBe(html);
+  });
+
+  it('resamples images to target pixel width based on data-width', async () => {
+    const inputHtml = '<div data-editor-image="true" data-width="35"><img src="data:image/jpeg;base64,largejpeg" /></div>';
+    const mockJpegResult = 'data:image/jpeg;base64,smalljpeg';
+    const originalImage = (globalThis as unknown as { Image: unknown }).Image;
+
+    class MockImage {
+      naturalWidth = 1200;
+      naturalHeight = 900;
+      width = 1200;
+      height = 900;
+      onload: (() => void) | null = null;
+      set src(_val: string) {
+        setTimeout(() => {
+          if (this.onload) this.onload();
+        }, 0);
+      }
+    }
+    (globalThis as unknown as { Image: unknown }).Image = MockImage;
+
+    let canvasWidth = 0;
+    const originalCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
+      if (tagName === 'canvas') {
+        const c = {
+          width: 0,
+          height: 0,
+          getContext: () => ({
+            fillRect: vi.fn(),
+            drawImage: vi.fn(),
+          }),
+          toDataURL: () => mockJpegResult,
+        };
+        Object.defineProperty(c, 'width', {
+          set(v: number) { canvasWidth = v; },
+          get() { return canvasWidth; },
+        });
+        return c as unknown as HTMLCanvasElement;
+      }
+      return originalCreateElement(tagName);
+    });
+
+    try {
+      const result = await convertWebpImagesInHtml(inputHtml);
+      expect(result).toContain('data:image/jpeg;base64,smalljpeg');
+      expect(result).toContain('width="222"');
+      expect(result).toMatch(/width:\s*35%/);
+      expect(canvasWidth).toBe(222);
+    } finally {
+      (globalThis as unknown as { Image: unknown }).Image = originalImage;
+      vi.restoreAllMocks();
+    }
   });
 
   it('converts webp images to JPEG inside HTML string', async () => {

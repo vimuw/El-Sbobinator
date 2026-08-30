@@ -4,7 +4,7 @@ import { ArrowLeft, Check, Copy, ExternalLink, FileText, Loader2, Moon, Sun, Use
 import type { Heading } from './RichTextEditor';
 import { registerCollabSignalListener } from '../bridge';
 import { normalizePreviewHtmlContent } from '../previewHtml';
-import { convertWebpImagesInHtml } from '../utils';
+import { prepareHtmlForClipboard } from '../utils';
 import { CollaborationModal } from './modals/CollaborationModal';
 import { useTheme } from '../hooks/useTheme';
 import { useEditorAutosave } from '../hooks/useEditorAutosave';
@@ -185,7 +185,7 @@ export function EditorFullPage({
   const handleCopy = async () => {
     const rawHtml = getHtmlRef.current?.() ?? lastPersistedRef.current;
     const normalizedHtml = normalizePreviewHtmlContent(rawHtml);
-    const clipboardHtml = await convertWebpImagesInHtml(normalizedHtml);
+    const clipboardHtml = await prepareHtmlForClipboard(normalizedHtml);
     const temp = document.createElement('div');
     temp.innerHTML = clipboardHtml;
     try {

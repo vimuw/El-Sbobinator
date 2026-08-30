@@ -41,6 +41,24 @@ export const normalizePreviewHtmlContent = (content: string) => {
       return;
     }
 
+    if (isEditorImageAsset) {
+      element.removeAttribute('class');
+      Array.from(element.attributes)
+        .filter(attribute => attribute.name.startsWith('data-'))
+        .forEach(attribute => element.removeAttribute(attribute.name));
+
+      const parentContainer = element.parentElement;
+      const widthAttr = element.getAttribute('width');
+      if (!widthAttr && parentContainer) {
+        const rawWidth = parentContainer.getAttribute('data-width') || parentContainer.style.width || '56';
+        const numeric = Number.parseFloat(rawWidth);
+        const validPercent = Number.isFinite(numeric) ? Math.min(100, Math.max(20, Math.round(numeric))) : 56;
+        const targetPx = Math.round((634 * validPercent) / 100);
+        element.setAttribute('width', String(targetPx));
+      }
+      return;
+    }
+
     element.removeAttribute('class');
     Array.from(element.attributes)
       .filter(attribute => attribute.name.startsWith('data-'))

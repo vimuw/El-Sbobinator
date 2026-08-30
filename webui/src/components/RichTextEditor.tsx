@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { TextSelection } from '@tiptap/pm/state';
+import { DOMSerializer } from '@tiptap/pm/model';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Color } from '@tiptap/extension-color';
@@ -26,6 +27,7 @@ import { useEditorCollaboration, type CollaborationUser } from '../hooks/useEdit
 import { useEditorImageDrop } from '../hooks/useEditorImageDrop';
 import { useTocScrollSpy } from '../hooks/useTocScrollSpy';
 import { EditorContextMenu } from './EditorContextMenu';
+import { prepareHtmlForClipboard } from '../utils';
 
 export type { Heading };
 
@@ -187,6 +189,28 @@ export function RichTextEditor({
       },
       handleDOMEvents: {
         dragstart: (view, event) => handleDragStart(view, event as DragEvent),
+        copy: (view) => {
+          const { from, to, empty } = view.state.selection;
+          if (empty) return false;
+          const slice = view.state.selection.content();
+          const serializer = DOMSerializer.fromSchema(view.state.schema);
+          const dom = document.createElement('div');
+          dom.appendChild(serializer.serializeFragment(slice.content));
+          const rawHtml = dom.innerHTML;
+          if (rawHtml.includes('<img') || rawHtml.includes('data-editor-image')) {
+            const plainText = view.state.doc.textBetween(from, to, '\n');
+            void prepareHtmlForClipboard(rawHtml).then(clipboardHtml => {
+              if (clipboardHtml && typeof ClipboardItem !== 'undefined') {
+                const htmlBlob = new Blob([clipboardHtml], { type: 'text/html' });
+                const textBlob = new Blob([plainText], { type: 'text/plain' });
+                navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]).catch(() => {
+                  navigator.clipboard.writeText(plainText);
+                });
+              }
+            });
+          }
+          return false;
+        },
       },
       handlePaste: (view, event) => handlePaste(view, event as ClipboardEvent),
       handleDrop: (view, event) => handleDrop(view, event as DragEvent),

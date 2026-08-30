@@ -259,8 +259,16 @@ export const optimizeDataUrlImage = async (
   });
 };
 
-export const convertWebpImagesInHtml = async (html: string): Promise<string> => {
-  if (!html || typeof html !== 'string' || !html.includes('data:image/webp')) {
+export const EDITOR_CONTENT_WIDTH_PX = 634;
+
+export const clampWidthPercent = (value: unknown): number => {
+  const numeric = typeof value === 'number' ? value : Number.parseFloat(String(value ?? '56'));
+  if (!Number.isFinite(numeric)) return 56;
+  return Math.min(100, Math.max(20, Math.round(numeric)));
+};
+
+export const prepareHtmlForClipboard = async (html: string): Promise<string> => {
+  if (!html || typeof html !== 'string') {
     return html;
   }
 
@@ -271,19 +279,57 @@ export const convertWebpImagesInHtml = async (html: string): Promise<string> => 
   try {
     const parser = new DOMParser();
     const doc = parser.parseFromString(`<body>${html}</body>`, 'text/html');
-    const images = Array.from(doc.body.querySelectorAll<HTMLImageElement>('img[src^="data:image/webp"]'));
+    const images = Array.from(doc.body.querySelectorAll<HTMLImageElement>('img'));
 
     if (!images.length) {
-      return html;
+      return doc.body.innerHTML;
     }
 
     await Promise.all(
       images.map(async (img) => {
+        const parentContainer = img.closest('[data-editor-image]') as HTMLElement | null;
+
+        let widthPercent = 56;
+        if (parentContainer?.hasAttribute('data-width')) {
+          widthPercent = clampWidthPercent(parentContainer.getAttribute('data-width'));
+        } else if (img.hasAttribute('data-width')) {
+          widthPercent = clampWidthPercent(img.getAttribute('data-width'));
+        } else if (img.getAttribute('width')) {
+          const px = Number.parseFloat(img.getAttribute('width') || '');
+          if (Number.isFinite(px) && px > 0) {
+            widthPercent = clampWidthPercent(Math.round((px / EDITOR_CONTENT_WIDTH_PX) * 100));
+          }
+        } else if (img.style.width && img.style.width.endsWith('%')) {
+          widthPercent = clampWidthPercent(img.style.width);
+        }
+
+        const targetPx = Math.round((EDITOR_CONTENT_WIDTH_PX * widthPercent) / 100);
+
+        img.setAttribute('width', String(targetPx));
+        img.setAttribute(
+          'style',
+          `display:block;width:${widthPercent}%;max-width:100%;height:auto;margin:0 auto;padding:0;text-align:center;`
+        );
+        img.setAttribute('align', 'center');
+
+        if (parentContainer) {
+          parentContainer.setAttribute(
+            'style',
+            'width:100%;max-width:100%;position:relative;float:none;margin:14px auto;margin-left:auto;margin-right:auto;display:block;clear:both;text-align:center;'
+          );
+          parentContainer.setAttribute('align', 'center');
+        }
+
         const src = img.getAttribute('src');
-        if (src && src.startsWith('data:image/webp')) {
-          const converted = await optimizeDataUrlImage(src, { format: 'image/jpeg' });
-          if (converted) {
-            img.setAttribute('src', converted);
+        if (src && src.startsWith('data:image/')) {
+          const resampled = await optimizeDataUrlImage(src, {
+            format: 'image/jpeg',
+            maxWidth: targetPx,
+            maxHeight: Math.round(targetPx * 3),
+            quality: 0.92,
+          });
+          if (resampled) {
+            img.setAttribute('src', resampled);
           }
         }
       })
@@ -293,6 +339,10 @@ export const convertWebpImagesInHtml = async (html: string): Promise<string> => 
   } catch {
     return html;
   }
+};
+
+export const convertWebpImagesInHtml = async (html: string): Promise<string> => {
+  return prepareHtmlForClipboard(html);
 };
 
 export const readAndOptimizeImageAsDataUrl = async (
