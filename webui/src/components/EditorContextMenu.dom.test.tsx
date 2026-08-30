@@ -49,4 +49,44 @@ describe('EditorContextMenu', () => {
     if (findBtn) fireEvent.click(findBtn);
     expect(onOpenFind).toHaveBeenCalled();
   });
+
+  it('handles Copia and Taglia clicks gracefully', async () => {
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: writeTextMock, write: vi.fn().mockResolvedValue(undefined) },
+      writable: true,
+      configurable: true,
+    });
+
+    const deleteSelectionMock = vi.fn().mockReturnValue({ run: vi.fn() });
+    const mockEditor = {
+      state: {
+        selection: { empty: false, from: 0, to: 5, content: () => ({ content: [] }) },
+        doc: { textBetween: () => 'Hello' },
+      },
+      schema: {},
+      chain: () => ({
+        focus: () => ({
+          deleteSelection: deleteSelectionMock,
+        }),
+      }),
+      commands: { insertContent: vi.fn() },
+    } as unknown as TiptapEditor;
+
+    render(
+      <EditorContextMenu
+        contextMenu={{ x: 50, y: 50 }}
+        onClose={vi.fn()}
+        editor={mockEditor}
+        onOpenImagePicker={vi.fn()}
+        onOpenFind={vi.fn()}
+      />,
+    );
+
+    const copyBtn = screen.getByText('Copia').closest('button');
+    if (copyBtn) fireEvent.click(copyBtn);
+
+    const cutBtn = screen.getByText('Taglia').closest('button');
+    if (cutBtn) fireEvent.click(cutBtn);
+  });
 });

@@ -1,6 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import type { Editor as TiptapEditor } from '@tiptap/core';
+import { DOMSerializer } from '@tiptap/pm/model';
 import {
   Bold,
   Calculator,
@@ -17,6 +18,8 @@ import {
   Underline as UnderlineIcon,
 } from 'lucide-react';
 import { getLastHighlightColor } from '../editorUtils';
+import { normalizePreviewHtmlContent } from '../previewHtml';
+import { prepareHtmlForClipboard } from '../utils';
 
 interface EditorContextMenuProps {
   contextMenu: { x: number; y: number } | null;
@@ -24,6 +27,35 @@ interface EditorContextMenuProps {
   editor: TiptapEditor | null;
   onOpenImagePicker: () => void;
   onOpenFind: () => void;
+}
+
+async function copySelectionToClipboard(editor: TiptapEditor) {
+  try {
+    const { from, to, empty } = editor.state.selection;
+    if (empty) return;
+    const plainText = editor.state.doc.textBetween(from, to, '\n');
+    let htmlContent = '';
+    try {
+      const slice = editor.state.selection.content();
+      const fragment = DOMSerializer.fromSchema(editor.schema).serializeFragment(slice.content);
+      const div = document.createElement('div');
+      div.appendChild(fragment);
+      const normalized = normalizePreviewHtmlContent(div.innerHTML);
+      htmlContent = await prepareHtmlForClipboard(normalized);
+    } catch (_) {
+      htmlContent = '';
+    }
+
+    if (htmlContent && typeof ClipboardItem !== 'undefined') {
+      const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
+      const textBlob = new Blob([plainText], { type: 'text/plain' });
+      await navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]);
+    } else {
+      await navigator.clipboard.writeText(plainText);
+    }
+  } catch (err) {
+    console.error('Clipboard error', err);
+  }
 }
 
 export function EditorContextMenu({
@@ -48,14 +80,8 @@ export function EditorContextMenu({
         type="button"
         className="gdocs-menu-item"
         onClick={async () => {
-          try {
-            const { from, to } = editor.state.selection;
-            const text = editor.state.doc.textBetween(from, to, '\n');
-            await navigator.clipboard.writeText(text);
-            editor.chain().focus().deleteSelection().run();
-          } catch (_) {
-            console.error('Clipboard error');
-          }
+          await copySelectionToClipboard(editor);
+          editor.chain().focus().deleteSelection().run();
         }}
       >
         <span className="flex items-center gap-2.5 font-medium">
@@ -69,13 +95,7 @@ export function EditorContextMenu({
         type="button"
         className="gdocs-menu-item"
         onClick={async () => {
-          try {
-            const { from, to } = editor.state.selection;
-            const text = editor.state.doc.textBetween(from, to, '\n');
-            await navigator.clipboard.writeText(text);
-          } catch (_) {
-            console.error('Clipboard error');
-          }
+          await copySelectionToClipboard(editor);
         }}
       >
         <span className="flex items-center gap-2.5 font-medium">

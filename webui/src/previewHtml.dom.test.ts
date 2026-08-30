@@ -76,6 +76,19 @@ describe('normalizePreviewHtmlContent', () => {
     expect(result).toContain('align="center"');
   });
 
+  it('preserves and computes width attribute for images inside editor image containers', () => {
+    const html = '<div data-editor-image data-width="35"><img src="img.png" /></div>';
+    const result = normalizePreviewHtmlContent(html);
+    expect(result).toContain('width="222"');
+    expect(result).toContain('src="img.png"');
+  });
+
+  it('keeps existing width attribute if present on img inside editor image container', () => {
+    const html = '<div data-editor-image data-width="50"><img src="img.png" width="317" /></div>';
+    const result = normalizePreviewHtmlContent(html);
+    expect(result).toContain('width="317"');
+  });
+
   it('exports ALLOWED_STYLE_PROPS with expected members', () => {
     expect(ALLOWED_STYLE_PROPS.has('color')).toBe(true);
     expect(ALLOWED_STYLE_PROPS.has('font-size')).toBe(true);

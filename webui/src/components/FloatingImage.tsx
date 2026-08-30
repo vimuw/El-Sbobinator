@@ -7,11 +7,16 @@ import { optimizeDataUrlImage } from '../utils';
 
 export type ImageAlignment = 'center';
 
-const clampWidth = (value: unknown) => {
+export const EDITOR_CONTENT_WIDTH_PX = 634;
+
+export const clampWidth = (value: unknown) => {
   const numeric = typeof value === 'number' ? value : Number.parseFloat(String(value ?? '56'));
   if (!Number.isFinite(numeric)) return 56;
   return Math.min(100, Math.max(20, Math.round(numeric)));
 };
+
+export const calculateImagePixelWidth = (widthPercent: unknown) =>
+  Math.round((EDITOR_CONTENT_WIDTH_PX * clampWidth(widthPercent)) / 100);
 
 const buildWrapperReactStyle = (width: number): React.CSSProperties => ({
   width: `${width}%`,
@@ -26,10 +31,11 @@ const buildWrapperReactStyle = (width: number): React.CSSProperties => ({
   textAlign: 'center',
 });
 
-const buildWrapperStyle = (width: number) =>
-  `width:${width}%;max-width:100%;position:relative;float:none;margin:14px auto;margin-left:auto;margin-right:auto;display:block;clear:both;text-align:center;`;
+const buildWrapperStyle = (_width: number) =>
+  'width:100%;max-width:100%;position:relative;float:none;margin:14px auto;margin-left:auto;margin-right:auto;display:block;clear:both;text-align:center;';
 
-const buildImageStyle = () => 'display:block;width:100%;height:auto;margin:0 auto;margin-left:auto;margin-right:auto;padding:0;text-align:center;';
+const buildImageStyle = (width: number) =>
+  `display:block;width:${width}%;max-width:100%;height:auto;margin:0 auto;margin-left:auto;margin-right:auto;padding:0;text-align:center;`;
 
 const extractImageAttrs = (element: HTMLElement) => {
   const img = element.tagName.toLowerCase() === 'img' ? (element as HTMLImageElement) : element.querySelector('img');
@@ -38,11 +44,28 @@ const extractImageAttrs = (element: HTMLElement) => {
   }
   const figcaption = element.querySelector('figcaption');
 
+  let widthVal = element.getAttribute('data-width') || img.getAttribute('data-width') || '';
+  if (!widthVal) {
+    const elementStyleWidth = element.style.width;
+    const imgStyleWidth = img.style.width;
+    const imgWidthAttr = img.getAttribute('width');
+    if (elementStyleWidth && elementStyleWidth.endsWith('%')) {
+      widthVal = elementStyleWidth;
+    } else if (imgStyleWidth && imgStyleWidth.endsWith('%')) {
+      widthVal = imgStyleWidth;
+    } else if (imgWidthAttr && Number.isFinite(Number(imgWidthAttr))) {
+      const px = Number(imgWidthAttr);
+      widthVal = String(Math.round((px / EDITOR_CONTENT_WIDTH_PX) * 100));
+    } else if (elementStyleWidth || imgStyleWidth) {
+      widthVal = elementStyleWidth || imgStyleWidth;
+    }
+  }
+
   return {
     src: img.getAttribute('src') || '',
     alt: img.getAttribute('alt') || '',
     title: img.getAttribute('title') || '',
-    width: clampWidth(element.getAttribute('data-width') || element.style.width || img.style.width || '56'),
+    width: clampWidth(widthVal || '56'),
     align: 'center',
     caption: figcaption ? figcaption.textContent || '' : element.getAttribute('data-caption') || '',
   };
@@ -197,12 +220,33 @@ export const FloatingImage = Node.create({
 
   addAttributes() {
     return {
-      src: { default: '' },
-      alt: { default: '' },
-      title: { default: '' },
+      src: {
+        default: '',
+        parseHTML: element => {
+          const attrs = extractImageAttrs(element as HTMLElement);
+          return attrs ? attrs.src : (element as HTMLElement).getAttribute('src') || '';
+        },
+      },
+      alt: {
+        default: '',
+        parseHTML: element => {
+          const attrs = extractImageAttrs(element as HTMLElement);
+          return attrs ? attrs.alt : (element as HTMLElement).getAttribute('alt') || '';
+        },
+      },
+      title: {
+        default: '',
+        parseHTML: element => {
+          const attrs = extractImageAttrs(element as HTMLElement);
+          return attrs ? attrs.title : (element as HTMLElement).getAttribute('title') || '';
+        },
+      },
       width: {
         default: 56,
-        parseHTML: element => clampWidth((element as HTMLElement).getAttribute('data-width') || (element as HTMLElement).style.width),
+        parseHTML: element => {
+          const attrs = extractImageAttrs(element as HTMLElement);
+          return attrs ? attrs.width : 56;
+        },
       },
       align: {
         default: 'center',
@@ -211,8 +255,8 @@ export const FloatingImage = Node.create({
       caption: {
         default: '',
         parseHTML: element => {
-          const figcap = (element as HTMLElement).querySelector('figcaption');
-          return figcap ? figcap.textContent || '' : (element as HTMLElement).getAttribute('data-caption') || '';
+          const attrs = extractImageAttrs(element as HTMLElement);
+          return attrs ? attrs.caption : '';
         },
       },
     };
@@ -238,6 +282,7 @@ export const FloatingImage = Node.create({
   renderHTML({ HTMLAttributes }) {
     const width = clampWidth(HTMLAttributes.width);
     const caption: string = HTMLAttributes.caption || '';
+    const pixelWidth = calculateImagePixelWidth(width);
 
     const children: Array<[string, Record<string, string>] | [string, Record<string, string>, string]> = [
       [
@@ -246,8 +291,9 @@ export const FloatingImage = Node.create({
           src: HTMLAttributes.src,
           alt: HTMLAttributes.alt || '',
           title: HTMLAttributes.title || '',
+          width: String(pixelWidth),
           align: 'center',
-          style: buildImageStyle(),
+          style: buildImageStyle(width),
         },
       ],
     ];
