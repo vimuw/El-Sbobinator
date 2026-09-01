@@ -155,7 +155,10 @@ class SharedCleanupTests(unittest.TestCase):
                 result = shared.cleanup_completed_sessions(dry_run=False)
 
             self.assertEqual(result["removed"], 1)
-            self.assertEqual(result["deleted_paths"], [completed_dir])
+            self.assertEqual(
+                [os.path.realpath(p) for p in result["deleted_paths"]],
+                [os.path.realpath(completed_dir)],
+            )
             self.assertFalse(os.path.exists(completed_dir))
             self.assertTrue(os.path.exists(incomplete_dir))
 
