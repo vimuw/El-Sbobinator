@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from el_sbobinator.utils.win32_window_utils import (
     apply_windows_dark_mode,
+    flash_window,
     get_window_hwnd,
     get_window_position,
 )
@@ -56,6 +57,37 @@ class Win32WindowUtilsTests(unittest.TestCase):
             ):
                 # Must not raise
                 apply_windows_dark_mode(12345, True)
+
+    def test_flash_window_non_windows(self):
+        with patch.object(sys, "platform", "linux"):
+            self.assertFalse(flash_window(12345))
+
+    def test_flash_window_no_hwnd(self):
+        with patch.object(sys, "platform", "win32"):
+            self.assertFalse(flash_window(None))
+            self.assertFalse(flash_window(0))
+
+    def test_flash_window_success(self):
+        with patch.object(sys, "platform", "win32"):
+            mock_ctypes = MagicMock()
+            mock_ctypes.sizeof.return_value = 20
+            with patch.dict(
+                sys.modules, {"ctypes": mock_ctypes, "ctypes.wintypes": MagicMock()}
+            ):
+                res = flash_window(12345)
+                self.assertTrue(res)
+                mock_ctypes.windll.user32.FlashWindowEx.assert_called_once()
+
+    def test_flash_window_exception(self):
+        with patch.object(sys, "platform", "win32"):
+            mock_ctypes = MagicMock()
+            mock_ctypes.windll.user32.FlashWindowEx.side_effect = RuntimeError(
+                "Flash failed"
+            )
+            with patch.dict(
+                sys.modules, {"ctypes": mock_ctypes, "ctypes.wintypes": MagicMock()}
+            ):
+                self.assertFalse(flash_window(12345))
 
     def test_get_window_hwnd_non_windows_or_none(self):
         with patch.object(sys, "platform", "darwin"):

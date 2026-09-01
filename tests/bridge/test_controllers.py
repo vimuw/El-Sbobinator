@@ -281,12 +281,15 @@ class TestSystemController(unittest.TestCase):
         host = DummySystemHost()
         with (
             patch("sys.platform", "win32"),
-            patch("el_sbobinator.webview_entry._get_window_hwnd", return_value=12345),
-            patch("ctypes.windll.user32.FlashWindowEx") as mock_flash_ex,
+            patch(
+                "el_sbobinator.utils.win32_window_utils.get_window_hwnd",
+                return_value=12345,
+            ),
+            patch("el_sbobinator.utils.win32_window_utils.flash_window") as mock_flash,
         ):
             res = host.flash_window()
             self.assertTrue(res.get("ok"))
-            mock_flash_ex.assert_called_once()
+            mock_flash.assert_called_once_with(12345)
 
     def test_flash_window_non_windows(self):
         host = DummySystemHost()
