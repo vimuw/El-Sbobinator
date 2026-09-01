@@ -77,11 +77,48 @@ describe('AudioPlayer', () => {
     expect(audio.src).toContain('test.mp3');
   });
 
-  it('displays all playback rate options', () => {
+  it('displays all playback rate options when dropdown is opened', () => {
     render(<AudioPlayer src="/audio/test.mp3" />);
-    expect(screen.getByText('1x')).toBeTruthy();
-    expect(screen.getByText('1.5x')).toBeTruthy();
-    expect(screen.getByText('2x')).toBeTruthy();
+    fireEvent.click(screen.getByTitle('Velocità di riproduzione'));
+    expect(screen.getByRole('option', { name: '1x' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: '1.5x' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: '2x' })).toBeTruthy();
+  });
+
+  it('changes playback rate when an option in custom dropdown is clicked', () => {
+    const onStateChange = vi.fn();
+    render(<AudioPlayer src="/audio/test.mp3" onStateChange={onStateChange} />);
+    fireEvent.click(screen.getByTitle('Velocità di riproduzione'));
+    fireEvent.click(screen.getByRole('option', { name: '1.5x' }));
+    expect(screen.getByTitle('Velocità di riproduzione').textContent).toContain('1.5x');
+  });
+
+  it('closes speed dropdown on outside click or Escape', () => {
+    render(<AudioPlayer src="/audio/test.mp3" />);
+    fireEvent.click(screen.getByTitle('Velocità di riproduzione'));
+    expect(screen.getByRole('option', { name: '2x' })).toBeTruthy();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.queryByRole('option', { name: '2x' })).toBeNull();
+  });
+
+  it('centers speed dropdown horizontally relative to the button', () => {
+    render(<AudioPlayer src="/audio/test.mp3" />);
+    const btn = screen.getByTitle('Velocità di riproduzione');
+    vi.spyOn(btn, 'getBoundingClientRect').mockReturnValue({
+      left: 100,
+      right: 152,
+      top: 500,
+      bottom: 532,
+      width: 52,
+      height: 32,
+      x: 100,
+      y: 500,
+      toJSON: () => {},
+    });
+    fireEvent.click(btn);
+    const panel = screen.getByRole('listbox', { name: 'Velocità di riproduzione' });
+    expect(panel).toBeTruthy();
+    expect(panel.style.left).toBe('96px');
   });
 
   it('clicking play button calls audio.play', () => {

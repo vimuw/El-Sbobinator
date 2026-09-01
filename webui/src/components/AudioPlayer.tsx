@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Keyboard, Link, Pause, Play, RotateCcw, SkipBack, SkipForward, Volume2 } from 'lucide-react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { ChevronDown, Keyboard, Link, Pause, Play, RotateCcw, SkipBack, SkipForward, Volume2 } from 'lucide-react';
 
 interface AudioPlayerProps {
   src: string;
@@ -35,6 +36,10 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
   const [playbackRate, setPlaybackRate] = useState(initialPlaybackRate ?? 1);
   const [volume, setVolume] = useState(initialVolume ?? 1);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [isSpeedOpen, setIsSpeedOpen] = useState(false);
+  const [speedPanelPos, setSpeedPanelPos] = useState({ bottom: 0, left: 0 });
+  const speedBtnRef = useRef<HTMLButtonElement>(null);
+  const speedPanelRef = useRef<HTMLDivElement>(null);
   const [isRelinking, setIsRelinking] = useState(false);
   const shortcutsRef = useRef<HTMLDivElement>(null);
   const pendingInitialTimeRef = useRef<number | null>(initialTime ?? null);
@@ -158,6 +163,71 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
     return () => document.removeEventListener('pointerdown', handler);
   }, [showShortcuts]);
 
+  const toggleSpeedOpen = () => {
+    if (!isSpeedOpen && speedBtnRef.current) {
+      const rect = speedBtnRef.current.getBoundingClientRect();
+      const estimatedWidth = 60;
+      const centeredLeft = rect.left + (rect.width - estimatedWidth) / 2;
+      setSpeedPanelPos({
+        bottom: Math.max(10, window.innerHeight - rect.top + 6),
+        left: Math.round(Math.max(8, Math.min(window.innerWidth - estimatedWidth - 8, centeredLeft))),
+      });
+    }
+    setIsSpeedOpen(prev => !prev);
+  };
+
+  useLayoutEffect(() => {
+    if (!isSpeedOpen || !speedBtnRef.current) return;
+    const btnRect = speedBtnRef.current.getBoundingClientRect();
+    const measuredWidth = speedPanelRef.current?.getBoundingClientRect().width;
+    const panelWidth = measuredWidth && measuredWidth > 0 ? measuredWidth : 60;
+    const centeredLeft = btnRect.left + (btnRect.width - panelWidth) / 2;
+    const clampedLeft = Math.max(8, Math.min(window.innerWidth - panelWidth - 8, centeredLeft));
+    const newBottom = Math.max(10, window.innerHeight - btnRect.top + 6);
+    const newLeft = Math.round(clampedLeft);
+    setSpeedPanelPos(prev => {
+      if (prev.bottom === newBottom && prev.left === newLeft) return prev;
+      return { bottom: newBottom, left: newLeft };
+    });
+  }, [isSpeedOpen]);
+
+  const handleSpeedSelect = (r: number) => {
+    setIsSpeedOpen(false);
+    playbackRateRef.current = r;
+    setPlaybackRate(r);
+    onStateChangeRef.current?.({ currentTime, playbackRate: r, volume: volumeRef.current });
+  };
+
+  useEffect(() => {
+    if (!isSpeedOpen) return;
+    const handler = (e: PointerEvent | MouseEvent) => {
+      const target = e.target as Node;
+      if (speedBtnRef.current?.contains(target) || speedPanelRef.current?.contains(target)) return;
+      setIsSpeedOpen(false);
+    };
+    const handleScroll = (e: Event) => {
+      if (speedPanelRef.current?.contains(e.target as Node)) return;
+      setIsSpeedOpen(false);
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsSpeedOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', handler, true);
+    document.addEventListener('mousedown', handler, true);
+    document.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleScroll, true);
+    return () => {
+      document.removeEventListener('pointerdown', handler, true);
+      document.removeEventListener('mousedown', handler, true);
+      document.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleScroll, true);
+    };
+  }, [isSpeedOpen]);
+
   const handleTimeUpdate = () => {
     if (!audioRef.current) return;
     const t = audioRef.current.currentTime;
@@ -269,11 +339,18 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
       </div>
 
       <div className="flex items-center gap-2">
-        <label className="player-speed-wrap" aria-label="Velocita di riproduzione">
+        <div className="player-speed-wrap relative" aria-label="Velocita di riproduzione">
           <select
             value={playbackRate}
-            onChange={e => { const r = parseFloat(e.target.value); playbackRateRef.current = r; setPlaybackRate(r); onStateChangeRef.current?.({ currentTime, playbackRate: r, volume: volumeRef.current }); }}
-            className="player-speed-select"
+            onChange={e => {
+              const r = parseFloat(e.target.value);
+              playbackRateRef.current = r;
+              setPlaybackRate(r);
+              onStateChangeRef.current?.({ currentTime, playbackRate: r, volume: volumeRef.current });
+            }}
+            className="sr-only"
+            tabIndex={-1}
+            aria-hidden="true"
           >
             {PLAYBACK_RATES.map(rate => (
               <option key={rate} value={rate}>
@@ -281,7 +358,57 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
               </option>
             ))}
           </select>
-        </label>
+          <button
+            ref={speedBtnRef}
+            type="button"
+            onClick={toggleSpeedOpen}
+            className={`player-speed-btn${isSpeedOpen ? ' is-active' : ''}`}
+            title="Velocità di riproduzione"
+            aria-haspopup="listbox"
+            aria-expanded={isSpeedOpen}
+          >
+            <span className="text-xs font-semibold">{playbackRate}x</span>
+            <ChevronDown
+              style={{ width: 10, height: 10, opacity: 0.6, marginLeft: 2, flexShrink: 0 }}
+              className={`transition-transform duration-150 ${isSpeedOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {isSpeedOpen && createPortal(
+            <div
+              ref={speedPanelRef}
+              role="listbox"
+              aria-label="Velocità di riproduzione"
+              className="editor-dropdown-panel player-speed-dropdown-panel open-up"
+              style={{
+                position: 'fixed',
+                bottom: `${speedPanelPos.bottom}px`,
+                left: `${speedPanelPos.left}px`,
+                zIndex: 9999,
+                minWidth: '60px',
+                maxHeight: '240px',
+                overflowY: 'auto',
+              }}
+            >
+              {PLAYBACK_RATES.map(rate => {
+                const isActive = playbackRate === rate;
+                return (
+                  <button
+                    key={rate}
+                    type="button"
+                    role="option"
+                    aria-selected={isActive}
+                    className={`editor-dropdown-item${isActive ? ' is-active' : ''}`}
+                    style={{ justifyContent: 'center', padding: '5px 8px', fontSize: '13px' }}
+                    onClick={() => handleSpeedSelect(rate)}
+                  >
+                    <span>{rate}x</span>
+                  </button>
+                );
+              })}
+            </div>,
+            document.body
+          )}
+        </div>
         <div className="flex items-center gap-1.5">
           <Volume2 className="h-3.5 w-3.5" style={{ color: 'var(--text-muted)' }} />
           <input
