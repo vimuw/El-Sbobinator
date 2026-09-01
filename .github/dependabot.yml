@@ -17,4 +17,3 @@ updates:
       tiptap:
         patterns:
           - "@tiptap/*"
-
