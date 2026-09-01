@@ -179,13 +179,24 @@ export const NavSidebar = memo(function NavSidebar({
           ariaLabel="Apri impostazioni"
           active={false}
           onClick={() => setIsSettingsOpen(true)}
+          placement="top"
         />
       </div>
     </nav>
   );
 });
 
-function SidebarTooltip({ label, children, disabled }: { label: string; children: ReactNode; disabled?: boolean }) {
+function SidebarTooltip({
+  label,
+  children,
+  disabled,
+  placement = 'right',
+}: {
+  label: string;
+  children: ReactNode;
+  disabled?: boolean;
+  placement?: 'right' | 'top';
+}) {
   const [visible, setVisible] = useState(false);
   return (
     <span
@@ -201,7 +212,7 @@ function SidebarTooltip({ label, children, disabled }: { label: string; children
       <AnimatePresence>
         {visible && !disabled && (
           <motion.span
-            className="sidebar-tooltip"
+            className={`sidebar-tooltip ${placement === 'top' ? 'placement-top' : ''}`.trim()}
             initial={{ opacity: 0, x: -4 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -4 }}
@@ -254,7 +265,7 @@ function NavItem({
 }
 
 function UtilityButton({
-  icon, label, ariaLabel, active, onClick, disabled,
+  icon, label, ariaLabel, active, onClick, disabled, placement = 'right',
 }: {
   icon: ReactNode;
   label: string;
@@ -262,9 +273,10 @@ function UtilityButton({
   active: boolean;
   onClick: () => void;
   disabled?: boolean;
+  placement?: 'right' | 'top';
 }) {
   return (
-    <SidebarTooltip label={disabled ? 'Console non disponibile' : label} disabled={active}>
+    <SidebarTooltip label={disabled ? 'Console non disponibile' : label} disabled={active} placement={placement}>
       <button
         onClick={onClick}
         aria-label={ariaLabel || label}
