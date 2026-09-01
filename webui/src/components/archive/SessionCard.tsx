@@ -103,7 +103,7 @@ export function DraggableSessionCard({
       className="archive-session-card flex items-center justify-between gap-3 px-4 py-3 cursor-pointer group/card"
       style={{
         ...(hasRevisionWarnings ? { borderColor: 'var(--warning-ring)', boxShadow: 'inset 3px 0 0 var(--warning-ring)', background: 'var(--warning-subtle)' } : {}),
-        ...(selected ? { borderColor: 'var(--accent-text)', boxShadow: 'inset 3px 0 0 var(--accent-text)', background: 'var(--accent-subtle)' } : {}),
+        ...(selected ? { borderColor: 'var(--accent-text)', boxShadow: 'none', background: 'transparent' } : {}),
       }}
     >
       <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -334,8 +334,8 @@ export function SortableSessionCard({
         touchAction: disabled ? undefined : 'none',
         cursor: isDragging ? 'grabbing' : disabled ? 'pointer' : 'grab',
         borderColor: selected ? 'var(--accent-text)' : (hasRevisionWarnings ? 'var(--warning-ring)' : undefined),
-        boxShadow: selected ? 'inset 3px 0 0 var(--accent-text)' : (hasRevisionWarnings ? 'inset 3px 0 0 var(--warning-ring)' : undefined),
-        background: selected ? 'var(--accent-subtle)' : (hasRevisionWarnings ? 'var(--warning-subtle)' : undefined),
+        boxShadow: selected ? 'none' : (hasRevisionWarnings ? 'inset 3px 0 0 var(--warning-ring)' : undefined),
+        background: selected ? 'transparent' : (hasRevisionWarnings ? 'var(--warning-subtle)' : undefined),
       }}
     >
       <div className="flex items-center gap-3 min-w-0 flex-1">

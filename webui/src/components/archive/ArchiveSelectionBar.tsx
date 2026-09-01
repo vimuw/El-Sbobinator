@@ -131,7 +131,7 @@ export function ArchiveSelectionBar({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.95 }}
               transition={{ duration: 0.14, ease: 'easeOut' }}
-              className="absolute bottom-full left-0 mb-2 w-56 rounded-[10px] border overflow-hidden z-50 p-1.5 flex flex-col gap-0.5"
+              className="absolute bottom-full left-0 mb-4 w-56 rounded-[10px] border overflow-hidden z-50 p-1.5 flex flex-col gap-0.5"
               style={{
                 background: 'var(--bg-elevated)',
                 borderColor: 'var(--border-strong)',

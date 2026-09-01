@@ -205,7 +205,6 @@ export function AddSessionsToFolderModal({
                         className="archive-session-card flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl border cursor-pointer select-none transition-all"
                         style={{
                           borderColor: isSelected ? 'var(--accent-text)' : 'var(--border-subtle)',
-                          background: isSelected ? 'var(--accent-subtle)' : 'var(--bg-input)',
                         }}
                         onClick={() => toggleSelect(session.session_dir)}
                       >
