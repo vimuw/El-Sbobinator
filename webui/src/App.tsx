@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { Github } from 'lucide-react';
+import { GithubIcon } from './components/icons/GithubIcon';
 import { GITHUB_URL, KOFI_URL } from './branding';
 import { type ElSbobinatorBridge, type PywebviewApi } from './bridge';
 import { initialProcessingState, processingReducer } from './appState';
@@ -482,7 +482,7 @@ export default function App() {
               </div>
               <footer className="app-footer">
                 <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link">
-                  <Github className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
+                  <GithubIcon className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
                 </a>
                 <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }} className="footer-link">
                   ☕ Offrimi un caffè su Ko-fi!

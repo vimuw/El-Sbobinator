@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { type DragEndEvent, type SensorDescriptor, type SensorOptions } from '@dnd-kit/core';
-import { AlertTriangle, ArrowRight, Github, Loader2, Trash2, Users } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Loader2, Trash2, Users } from 'lucide-react';
+import { GithubIcon } from './icons/GithubIcon';
 import { GITHUB_URL, KOFI_URL } from '../branding';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { type AppStatus, type FileItem, getDoneFiles, getPendingFiles } from '../appState';
@@ -422,7 +423,7 @@ export function QueuePage({
       </div>
       <footer className="app-footer">
         <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link">
-          <Github className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
+          <GithubIcon className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
         </a>
         <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }} className="footer-link">
           ☕ Offrimi un caffè su Ko-fi!
