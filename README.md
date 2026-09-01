@@ -2,11 +2,13 @@
 
 Applicazione desktop per trasformare registrazioni audio e video di lezioni universitarie in dispense di studio strutturate e formattate tramite i modelli Google Gemini.
 
-[![Release](https://img.shields.io/github/v/release/vimuw/El-Sbobinator?style=flat-square&color=blue)](https://github.com/vimuw/El-Sbobinator/releases/latest)
-[![CI](https://img.shields.io/github/actions/workflow/status/vimuw/El-Sbobinator/build.yml?branch=main&style=flat-square&label=CI)](https://github.com/vimuw/El-Sbobinator/actions/workflows/build.yml)
-[![codecov](https://codecov.io/gh/vimuw/El-Sbobinator/graph/badge.svg)](https://codecov.io/gh/vimuw/El-Sbobinator)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-informational?style=flat-square)](https://github.com/vimuw/El-Sbobinator/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
+<p align="center">
+  <a href="https://github.com/vimuw/El-Sbobinator/releases/latest"><img src="https://img.shields.io/github/v/release/vimuw/El-Sbobinator?style=flat-square&color=blue" alt="Release" /></a>
+  <a href="https://github.com/vimuw/El-Sbobinator/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/vimuw/El-Sbobinator/build.yml?branch=main&style=flat-square&label=CI" alt="CI" /></a>
+  <a href="https://codecov.io/gh/vimuw/El-Sbobinator"><img src="https://codecov.io/gh/vimuw/El-Sbobinator/graph/badge.svg" alt="codecov" /></a>
+  <a href="https://github.com/vimuw/El-Sbobinator/releases"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-informational?style=flat-square" alt="Platform" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License: MIT" /></a>
+</p>
 
 <p align="center">
   <img width="48%" alt="Interfaccia Principale" src="https://github.com/user-attachments/assets/cec7f84f-3a3f-4cd5-9d7c-938abbd32159" />
