@@ -13,3 +13,8 @@ updates:
       interval: weekly
     labels:
       - dependencies
+    groups:
+      tiptap:
+        patterns:
+          - "@tiptap/*"
+
