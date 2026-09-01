@@ -204,10 +204,10 @@ function StatCard({ icon, value, label, delay, iconIdleAnim }: StatCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 20, delay } }}
-      whileHover={{ y: -1 }}
+      animate={{ opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut', delay } }}
+      whileHover={{ y: -2 }}
       whileTap={{ scale: 0.98 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+      transition={{ duration: 0.12, ease: 'easeOut' }}
       className="premium-panel stat-card p-4 flex flex-col items-center gap-2 text-center"
       style={{
         cursor: 'default',

@@ -556,20 +556,19 @@ button {
 }
 
 .stat-card {
-  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
 }
 
 .stat-card:hover {
   border-color: var(--accent-bg);
-  transform: translateY(-1px);
 }
 
 .stat-card-icon {
-  transition: transform 160ms ease;
+  transition: transform 120ms cubic-bezier(0.2, 0.8, 0.4, 1);
 }
 
 .stat-card:hover .stat-card-icon {
-  transform: scale(1.06);
+  transform: scale(1.08);
 }
 
 .setup-card {
