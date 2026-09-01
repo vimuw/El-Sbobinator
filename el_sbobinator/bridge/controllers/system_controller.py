@@ -102,33 +102,16 @@ class SystemControllerMixin:
             import sys
 
             if sys.platform == "win32":
-                import ctypes
-                from ctypes import wintypes
-
-                from el_sbobinator.webview_entry import _get_window_hwnd
+                from el_sbobinator.utils.win32_window_utils import (
+                    flash_window,
+                    get_window_hwnd,
+                )
 
                 window = getattr(self, "_window", None)
-                hwnd = _get_window_hwnd(window)
+                hwnd = get_window_hwnd(window)
                 if hwnd:
-
-                    class FLASHWINFO(ctypes.Structure):
-                        _fields_ = [
-                            ("cbSize", wintypes.UINT),
-                            ("hwnd", wintypes.HWND),
-                            ("dwFlags", wintypes.DWORD),
-                            ("uCount", wintypes.UINT),
-                            ("dwTimeout", wintypes.DWORD),
-                        ]
-
-                    finfo = FLASHWINFO(
-                        cbSize=ctypes.sizeof(FLASHWINFO),
-                        hwnd=hwnd,
-                        dwFlags=0x00000003 | 0x0000000C,
-                        uCount=0,
-                        dwTimeout=0,
-                    )
-                    ctypes.windll.user32.FlashWindowEx(ctypes.byref(finfo))
-                    return bridge_ok()
+                    flash_window(hwnd)
+                return bridge_ok()
             elif sys.platform == "darwin":
                 try:
                     from AppKit import NSApplication, NSCriticalRequest  # type: ignore

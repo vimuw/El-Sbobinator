@@ -39,6 +39,36 @@ def apply_windows_dark_mode(hwnd: int | None, dark: bool) -> None:
         pass
 
 
+def flash_window(hwnd: int | None) -> bool:
+    """Flash the application taskbar icon on Windows."""
+    if sys.platform != "win32" or not hwnd:
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class FLASHWINFO(ctypes.Structure):
+            _fields_ = [
+                ("cbSize", wintypes.UINT),
+                ("hwnd", wintypes.HWND),
+                ("dwFlags", wintypes.DWORD),
+                ("uCount", wintypes.UINT),
+                ("dwTimeout", wintypes.DWORD),
+            ]
+
+        finfo = FLASHWINFO(
+            cbSize=ctypes.sizeof(FLASHWINFO),
+            hwnd=hwnd,
+            dwFlags=0x00000003 | 0x0000000C,  # FLASHW_ALL | FLASHW_TIMERNOFG
+            uCount=0,
+            dwTimeout=0,
+        )
+        ctypes.windll.user32.FlashWindowEx(ctypes.byref(finfo))
+        return True
+    except Exception:
+        return False
+
+
 def get_window_hwnd(window: Any) -> int | None:
     """Extract Win32 HWND from pywebview window instance."""
     if sys.platform != "win32" or window is None:
