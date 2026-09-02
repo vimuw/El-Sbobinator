@@ -30,7 +30,7 @@ Tutte le operazioni avvengono in locale sul computer dell'utente, con chiamate A
 - **Pipeline AI a Più Stadi**: Architettura a 2 fasi ottimizzata per i modelli Google Gemini (`gemini-2.5-flash`, `gemini-3.7-flash`, `gemini-3.5-flash`, `gemini-3.5-flash-lite`) con trascrizione a blocchi e revisione editoriale macro.
 - **Architettura BYOK e Resilienza**: Utilizza la tua chiave API gratuita di Google AI Studio. Supporta rotazione automatica multi-chiave, catene di fallback dei modelli e gestione automatica del rate limit.
 - **Editor Rich-Text Integrato**: Editor TipTap completo con supporto markdown e formule LaTeX, indice dei contenuti (TOC) navigabile, funzione Trova e Sostituisci e immagini ridimensionabili.
-- **Player Audio Sincronizzato**: Riproduttore multimediale integrato con streaming locale, velocità regolabile (1.0x–3.0x), avanzamento rapido e memorizzazione della posizione d'ascolto per ogni sessione.
+- **Player Audio Sincronizzato**: Riproduttore multimediale integrato con streaming locale e velocità regolabile (1.0x–3.0x).
 - **Archivio e Ricerca Full-Text**: Ricerca istantanea su tutte le sbobine salvate con anteprima dei frammenti di testo e organizzazione in cartelle personalizzate.
 - **Esportazione e Portabilità**: Copia diretta formattata per Google Docs e Microsoft Word, esportazione in documenti HTML standalone e pacchetti compressi `.sbobina` per backup e condivisione rapida.
 - **Privacy e Sicurezza**: Elaborazione 100% locale. Le chiavi API sono memorizzate nel portachiavi sicuro del sistema operativo (Windows DPAPI / macOS Keychain) e i documenti esportati adottano rigide Content Security Policy.
