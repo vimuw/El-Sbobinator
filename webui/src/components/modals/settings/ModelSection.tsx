@@ -72,9 +72,10 @@ export const ModelSection: React.FC<ModelSectionProps> = React.memo(({
   );
 
   return (
-    <div className="p-4 rounded-xl border border-[var(--border-subtle)] space-y-5">
-      <div>
-        <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2 mb-0.5">
+    <div className="p-4 sm:p-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] space-y-4">
+      {/* Header */}
+      <div className="space-y-1.5">
+        <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
           <Cpu className="w-4 h-4 text-[var(--accent-text)]" />
           Selezione Modello Gemini
         </h3>

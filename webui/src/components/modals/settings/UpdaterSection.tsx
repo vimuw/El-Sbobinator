@@ -56,29 +56,30 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
   const isInProgress = isDownloading || isVerifying || isInstalling;
 
   return (
-    <div className="space-y-4 pt-3 border-t border-[var(--border-subtle)]">
+    <div className="p-4 sm:p-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] space-y-4">
       {/* Header row: Version Info & Check Icon Button */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-start gap-3">
-          <Tag className="w-4 h-4 text-[var(--accent-text)] shrink-0 mt-0.5" />
-          <div className="space-y-0.5">
-            <h4 className="text-sm font-semibold text-[var(--text-primary)]">Versione Applicazione</h4>
-            <p className="text-xs text-[var(--text-muted)]">
-              Installata: <span className="font-mono font-medium text-[var(--text-secondary)]">{cleanAppVersion}</span>
-            </p>
-          </div>
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+            <Tag className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
+            Versione Applicazione
+          </h3>
+
+          <button
+            type="button"
+            onClick={() => checkForUpdates(true)}
+            disabled={isCheckingUpdate || isInProgress}
+            aria-label="Cerca aggiornamenti"
+            title={isCheckingUpdate ? 'Controllo in corso…' : 'Cerca aggiornamenti'}
+            className="p-1.5 rounded-lg hover:bg-[var(--sidebar-active-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 group/check shrink-0"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 transition-transform duration-500 ease-out ${isCheckingUpdate ? 'animate-spin text-[var(--accent-text)]' : 'group-hover/check:rotate-180 group-hover/check:scale-105'}`} />
+          </button>
         </div>
 
-        <button
-          type="button"
-          onClick={() => checkForUpdates(true)}
-          disabled={isCheckingUpdate || isInProgress}
-          aria-label="Cerca aggiornamenti"
-          title={isCheckingUpdate ? 'Controllo in corso…' : 'Cerca aggiornamenti'}
-          className="p-1.5 rounded-lg hover:bg-[var(--sidebar-active-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 group/check"
-        >
-          <RefreshCw className={`w-4 h-4 transition-transform duration-500 ease-out ${isCheckingUpdate ? 'animate-spin text-[var(--accent-text)]' : 'group-hover/check:rotate-180 group-hover/check:scale-105'}`} />
-        </button>
+        <p className="text-xs text-[var(--text-muted)]">
+          Versione corrente: <span className="font-mono font-medium text-[var(--text-secondary)]">{cleanAppVersion}</span>
+        </p>
       </div>
 
       {/* Update Available Banner Card */}
@@ -131,7 +132,7 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
                 const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : (updateInstallState?.percent ?? 0);
                 return (
                   <>
-                    <div className="w-full h-2 rounded-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] overflow-hidden">
+                    <div className="w-full h-1.5 rounded-full bg-[var(--bg-surface)] overflow-hidden">
                       <div
                         className="h-full bg-[var(--accent-bg)] rounded-full transition-all duration-200"
                         style={{ width: `${pct}%` }}

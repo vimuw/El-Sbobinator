@@ -72,9 +72,10 @@ describe('SettingsModal — model parameters chunk display', () => {
       <SettingsModal {...makeProps()} availableModels={models} preferredModel="gemini-3-flash-preview" />,
     );
     await act(async () => {
-      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+      fireEvent.click(screen.getByText('Generale').closest('button')!);
     });
     expect(screen.getByText('15 min')).toBeDefined();
+
 
     rerender(<SettingsModal {...makeProps()} availableModels={models} preferredModel="gemini-3.1-flash-lite-preview" />);
     expect(screen.getByText('10 min')).toBeDefined();
@@ -91,8 +92,9 @@ describe('SettingsModal — diagnostics environment pending checks', () => {
       />,
     );
     await act(async () => {
-      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+      fireEvent.click(screen.getByText('Quote & Diagnostica').closest('button')!);
     });
+
 
     expect(screen.getByText('API Key Gemini')).toBeDefined();
     expect(screen.getByText('FFmpeg')).toBeDefined();
@@ -241,14 +243,16 @@ describe('SettingsModal — session info race condition', () => {
 
     const { rerender } = render(<SettingsModal {...makeProps()} isOpen={true} />);
     await act(async () => {
-      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
     });
 
     rerender(<SettingsModal {...makeProps()} isOpen={false} />);
     rerender(<SettingsModal {...makeProps()} isOpen={true} />);
     await act(async () => {
-      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
     });
+
+
 
     await act(async () => { resolveFirst({ ok: true, total_bytes: 999999, total_sessions: 7777 }); });
 
@@ -315,7 +319,7 @@ describe('SettingsModal — session folder and cleanup', () => {
     setPywebview({ open_session_folder: openFolder });
     render(<SettingsModal {...makeProps()} />);
     await act(async () => {
-      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
     });
     fireEvent.click(screen.getByTitle('Apri cartella sessioni'));
     expect(openFolder).toHaveBeenCalledTimes(1);
@@ -328,7 +332,7 @@ describe('SettingsModal — session folder and cleanup', () => {
     setPywebview({ cleanup_old_sessions: cleanupFn });
     render(<SettingsModal {...makeProps()} />);
     await act(async () => {
-      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
     });
     await act(async () => {
       fireEvent.click(screen.getByTitle(/Conta ed elimina tutte le elaborazioni incomplete/));
@@ -355,7 +359,7 @@ describe('SettingsModal — session folder and cleanup', () => {
     setPywebview({ cleanup_completed_sessions: cleanupCompletedFn });
     render(<SettingsModal {...makeProps()} />);
     await act(async () => {
-      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
     });
     await act(async () => {
       fireEvent.click(screen.getByTitle(/Conta ed elimina sbobine completate/));
@@ -381,7 +385,7 @@ describe('SettingsModal — session folder and cleanup', () => {
     setPywebview({ cleanup_old_sessions: cleanupFn });
     render(<SettingsModal {...makeProps()} />);
     await act(async () => {
-      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
     });
     await act(async () => {
       fireEvent.click(screen.getByTitle(/Conta ed elimina tutte le elaborazioni incomplete/));
@@ -410,7 +414,7 @@ describe('SettingsModal — session folder and cleanup', () => {
       setPywebview({ cleanup_old_sessions: cleanupFn });
       render(<SettingsModal {...makeProps()} />);
       await act(async () => {
-        fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+        fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
       });
       await act(async () => {
         fireEvent.click(screen.getByTitle(/Conta ed elimina tutte le elaborazioni incomplete/));
@@ -438,7 +442,7 @@ describe('SettingsModal — session folder and cleanup', () => {
     const props = { ...makeProps(), isOpen: true };
     const { rerender } = render(<SettingsModal {...props} />);
     await act(async () => {
-      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
     });
     await act(async () => {
       fireEvent.click(screen.getByTitle(/Conta ed elimina tutte le elaborazioni incomplete/));
@@ -457,7 +461,7 @@ describe('SettingsModal — session folder and cleanup', () => {
     rerender(<SettingsModal {...props} isOpen={true} />);
 
     await act(async () => {
-      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
     });
 
     // Cleanup result should be reset to null
@@ -491,8 +495,9 @@ describe('SettingsModal — session folder and cleanup', () => {
 
     render(<SettingsModal {...makeProps()} onSessionRootMoved={onSessionRootMoved} />);
     await act(async () => {
-      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
     });
+
 
     await act(async () => {
       fireEvent.click(screen.getByText('Cambia Cartella'));
@@ -532,7 +537,7 @@ describe('SettingsModal — fallback models list', () => {
       />,
     );
     await act(async () => {
-      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+      fireEvent.click(screen.getByText('Generale').closest('button')!);
     });
     expect(screen.getAllByText('Gemini 3.1 Flash Lite (Preview)').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Lightweight').length).toBeGreaterThan(0);
@@ -554,7 +559,7 @@ describe('SettingsModal — fallback models list', () => {
       />,
     );
     await act(async () => {
-      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+      fireEvent.click(screen.getByText('Generale').closest('button')!);
     });
     fireEvent.click(screen.getByTitle('Rimuovi fallback'));
     expect(setFallbackModels).toHaveBeenCalled();
@@ -577,11 +582,12 @@ describe('SettingsModal — fallback models list', () => {
       />,
     );
     await act(async () => {
-      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+      fireEvent.click(screen.getByText('Generale').closest('button')!);
     });
     fireEvent.click(screen.getAllByTitle('Sposta giù')[0]);
     expect(setFallbackModels).toHaveBeenCalled();
   });
+
 });
 
 describe('SettingsModal — version status display', () => {
@@ -664,7 +670,7 @@ describe('SettingsModal — validate environment', () => {
       />,
     );
     await act(async () => {
-      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+      fireEvent.click(screen.getByText('Quote & Diagnostica').closest('button')!);
     });
     await act(async () => {
       fireEvent.click(screen.getByTitle('Verifica ambiente'));
@@ -697,7 +703,7 @@ describe('SettingsModal — validate environment', () => {
     };
     const { rerender } = render(<SettingsModal {...props} />);
     await act(async () => {
-      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+      fireEvent.click(screen.getByText('Quote & Diagnostica').closest('button')!);
     });
     await act(async () => {
       fireEvent.click(screen.getByTitle('Verifica ambiente'));
@@ -734,7 +740,7 @@ describe('SettingsModal — validate environment', () => {
     };
     const { rerender } = render(<SettingsModal {...props} />);
     await act(async () => {
-      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+      fireEvent.click(screen.getByText('Quote & Diagnostica').closest('button')!);
     });
     await act(async () => {
       fireEvent.click(screen.getByTitle('Verifica ambiente'));
@@ -748,7 +754,7 @@ describe('SettingsModal — validate environment', () => {
     rerender(<SettingsModal {...props} isOpen={true} />);
 
     await act(async () => {
-      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+      fireEvent.click(screen.getByText('Quote & Diagnostica').closest('button')!);
     });
 
     // Expect 'Ambiente OK' to be cleared and state reset

@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle2, Database, Folder, FolderInput, Info, Loader2, Trash2, X } from 'lucide-react';
+import { CheckCircle2, Database, FolderInput, FolderOpen, Info, Loader2, Trash2, X } from 'lucide-react';
 
 function formatSize(bytes: number): string {
   if (bytes <= 0) return '0 B';
@@ -49,17 +49,19 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
   onDismissCleanupResult,
 }) => {
   return (
-    <div className="p-4 rounded-xl border border-[var(--border-subtle)] space-y-4">
-      {/* Header */}
-      <div>
-        <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2 mb-0.5">
-          <Database className="w-4 h-4 text-[var(--accent-text)]" />
-          Spazio Disco e Sessioni
-        </h3>
-        <p className="text-xs text-[var(--text-muted)]">
-          Gestione dell&apos;archivio locale, cartella di salvataggio e pulizia dati.
-        </p>
-      </div>
+    <div className="space-y-5">
+      {/* 1. Spazio Disco e Posizione Cartella */}
+      <div className="p-4 sm:p-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] space-y-4">
+        {/* Header */}
+        <div className="space-y-1.5">
+          <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+            <Database className="w-4 h-4 text-[var(--accent-text)]" />
+            Spazio Disco e Sessioni
+          </h3>
+          <p className="text-xs text-[var(--text-muted)]">
+            Statistiche di utilizzo dell&apos;archivio locale e posizione della cartella di salvataggio.
+          </p>
+        </div>
 
       {/* Stat Tiles */}
       <div className="grid grid-cols-2 gap-3 pt-1">
@@ -67,7 +69,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
           <span className="text-[11px] text-[var(--text-muted)] block">
             Dimensione Totale
           </span>
-          <span className="text-base font-medium text-[var(--text-primary)] block">
+          <span className="text-base font-semibold text-[var(--text-primary)] block">
             {isLoadingSessionInfo ? 'Calcolo…' : sessionInfo ? formatSize(sessionInfo.total_bytes) : '—'}
           </span>
         </div>
@@ -75,7 +77,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
           <span className="text-[11px] text-[var(--text-muted)] block">
             Totale Sbobine
           </span>
-          <span className="text-base font-medium text-[var(--text-primary)] block">
+          <span className="text-base font-semibold text-[var(--text-primary)] block">
             {sessionInfo ? `${sessionInfo.total_sessions} ${sessionInfo.total_sessions === 1 ? 'sessione' : 'sessioni'}` : '—'}
           </span>
         </div>
@@ -92,54 +94,53 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
               Posizione su disco delle trascrizioni e dei file di lavoro.
             </p>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              type="button"
-              onClick={onOpenSessionFolder}
-              aria-label="Apri cartella"
-              title="Apri cartella"
-              className="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--sidebar-active-bg)] transition-all shrink-0"
-            >
-              <Folder className="w-4 h-4" />
-              <span className="sr-only">Apri Cartella</span>
-            </button>
-            <button
-              type="button"
-              onClick={onAskMoveFolder}
-              disabled={isMoveInProgress}
-              aria-label="Cambia Cartella"
-              title="Cambia Cartella"
-              className="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--sidebar-active-bg)] transition-all disabled:opacity-40 shrink-0"
-            >
-              {isMoveInProgress ? (
-                <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-text)]" />
-              ) : (
-                <FolderInput className="w-4 h-4" />
-              )}
-              <span className="sr-only">Cambia Cartella</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onAskMoveFolder}
+            disabled={isMoveInProgress}
+            aria-label="Cambia Cartella"
+            title="Cambia Cartella"
+            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--sidebar-active-bg)] transition-colors disabled:opacity-40 shrink-0"
+          >
+            {isMoveInProgress ? (
+              <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-text)]" />
+            ) : (
+              <FolderInput className="w-4 h-4" />
+            )}
+            <span className="sr-only">Cambia Cartella</span>
+          </button>
         </div>
 
         <div
           onClick={onOpenSessionFolder}
           title="Apri cartella sessioni"
-          className="p-2 rounded-lg bg-[var(--bg-input)] font-mono text-[11px] break-all text-[var(--text-secondary)] border border-[var(--border-subtle)] cursor-pointer hover:border-[var(--accent-ring)] hover:underline transition-colors"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onOpenSessionFolder();
+            }
+          }}
+          className="flex items-center justify-between gap-2 p-2 rounded-lg bg-[var(--bg-input)] font-mono text-[11px] break-all text-[var(--text-secondary)] border border-[var(--border-subtle)] cursor-pointer hover:border-[var(--accent-ring)] hover:text-[var(--text-primary)] group transition-colors"
         >
-          {sessionInfo?.session_root || (isLoadingSessionInfo ? '…' : '—')}
+          <span className="font-mono text-[11px] break-all group-hover:underline">
+            {sessionInfo?.session_root || (isLoadingSessionInfo ? '…' : '—')}
+          </span>
+          <FolderOpen className="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-colors" />
         </div>
 
         {isMoveInProgress && (
-          <div className="p-3 rounded-lg bg-[var(--accent-subtle)] border border-[var(--accent-color)]/20 text-xs space-y-1.5">
-            <div className="flex items-center justify-between text-[var(--accent-color)] font-medium">
+          <div className="p-3 rounded-lg bg-[var(--accent-subtle)] border border-[var(--accent-ring)] text-xs space-y-1.5">
+            <div className="flex items-center justify-between text-[var(--accent-text)] font-medium">
               <span>Spostamento cartella in corso...</span>
               {moveProgress && moveProgress.total > 0 && (
                 <span>{moveProgress.moved} / {moveProgress.total} file</span>
               )}
             </div>
-            <div className="w-full h-1.5 bg-[var(--bg-input)] rounded-full overflow-hidden">
+            <div className="w-full h-1.5 bg-[var(--bg-surface)] rounded-full overflow-hidden">
               <div
-                className="h-full bg-[var(--accent-color)] transition-all duration-300"
+                className="h-full bg-[var(--accent-bg)] transition-all duration-300"
                 style={{
                   width: `${
                     moveProgress && moveProgress.total > 0
@@ -158,19 +159,22 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
           </div>
         )}
       </div>
+    </div>
 
-      {/* Section: Cleanup / Deletion */}
-      <div className="pt-3 border-t border-[var(--border-subtle)] space-y-3">
-        <div className="space-y-0.5">
-          <span className="text-xs font-semibold text-[var(--text-primary)] block">
+      {/* 2. Eliminazione e Pulizia Sbobine */}
+      <div className="p-4 sm:p-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] space-y-4">
+        {/* Header */}
+        <div className="space-y-1.5">
+          <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+            <Trash2 className="w-4 h-4 text-[var(--accent-text)]" />
             Eliminazione e Pulizia Sbobine
-          </span>
-          <p className="text-[11px] text-[var(--text-muted)]">
+          </h3>
+          <p className="text-xs text-[var(--text-muted)]">
             Rimuovi bozze interrotte o vecchie sbobine per liberare spazio su disco.
           </p>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2 pt-1">
           {/* Row: Incomplete Sessions */}
           <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border-subtle)]">
             <div className="space-y-0.5 min-w-0">
@@ -187,7 +191,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
               disabled={isCleaningSession}
               aria-label="Pulisci sessioni incomplete"
               title="Conta ed elimina tutte le elaborazioni incomplete"
-              className="p-2 rounded-lg text-[var(--error-text)] hover:bg-[var(--error-subtle)] transition-all disabled:opacity-40 shrink-0"
+              className="p-1.5 rounded-lg text-[var(--error-text)] hover:bg-[var(--error-subtle)] transition-colors disabled:opacity-40 shrink-0"
             >
               {isCleaningSession ? (
                 <Loader2 className="w-4 h-4 animate-spin text-[var(--error-text)]" />
@@ -213,7 +217,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
               disabled={isCleaningCompletedSessions}
               aria-label={`Elimina sbobine completate vecchie di oltre ${SESSION_CLEANUP_DAYS} giorni`}
               title={`Conta ed elimina sbobine completate vecchie di oltre ${SESSION_CLEANUP_DAYS} giorni`}
-              className="p-2 rounded-lg text-[var(--error-text)] hover:bg-[var(--error-subtle)] transition-all disabled:opacity-40 shrink-0"
+              className="p-1.5 rounded-lg text-[var(--error-text)] hover:bg-[var(--error-subtle)] transition-colors disabled:opacity-40 shrink-0"
             >
               {isCleaningCompletedSessions ? (
                 <Loader2 className="w-4 h-4 animate-spin text-[var(--error-text)]" />
@@ -223,7 +227,6 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
             </button>
           </div>
         </div>
-      </div>
 
       {/* Cleanup Results Feedback Notification Banner */}
       <AnimatePresence>
@@ -303,6 +306,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
     </div>
   );
 });

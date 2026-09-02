@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, Key, ShieldCheck, AlertCircle, AlertTriangle, Bell } from 'lucide-react';
+import { Eye, EyeOff, Key, ShieldCheck, AlertCircle, AlertTriangle } from 'lucide-react';
 import { GEMINI_KEY_PATTERN } from '../../../utils';
-import { STORAGE_KEYS } from '../../../storageKeys';
 
 interface ApiKeySectionProps {
   apiKey: string;
@@ -24,26 +23,35 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
 }) => {
   const [showPrimaryKey, setShowPrimaryKey] = useState(false);
   const [showFallbackKeys, setShowFallbackKeys] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED) !== 'false');
 
   const isInvalidFormat = apiKey.trim() !== '' && !GEMINI_KEY_PATTERN.test(apiKey.trim());
 
   return (
-    <div className="space-y-6">
+    <div className="p-4 sm:p-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] space-y-4">
+      {/* Header */}
+      <div className="space-y-1.5">
+        <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+          <Key className="w-4 h-4 text-[var(--accent-text)]" />
+          Chiavi API Google Gemini
+        </h3>
+        <p className="text-xs text-[var(--text-muted)]">
+          Configura la chiave API principale e le chiavi di riserva per l&apos;elaborazione delle sbobinature.
+        </p>
+      </div>
+
       {/* Primary API Key */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
-            <Key className="w-4 h-4 text-[var(--accent-text)]" />
+          <label className="text-xs font-semibold text-[var(--text-primary)] block">
             Google Gemini API Key (Principale)
           </label>
           <button
             type="button"
             onClick={() => setShowPrimaryKey(prev => !prev)}
-            className="p-1.5 rounded-lg hover:bg-[var(--sidebar-active-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+            className="p-1 rounded-lg hover:bg-[var(--sidebar-active-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
             title={showPrimaryKey ? 'Nascondi chiave' : 'Mostra chiave'}
           >
-            {showPrimaryKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            {showPrimaryKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
           </button>
         </div>
         <div className="relative">
@@ -52,7 +60,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
             value={apiKey}
             onChange={e => setApiKey(e.target.value)}
             placeholder="AIzaSy... oppure AQ..."
-            className={`w-full app-input pr-10 text-sm font-mono ${
+            className={`w-full app-input pr-10 text-xs font-mono ${
               isInvalidFormat ? 'border-[var(--error-ring)]' : ''
             }`}
           />
@@ -84,7 +92,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
           </div>
         )}
 
-        <div className="flex flex-col gap-1 mt-1 text-xs text-[var(--text-muted)]">
+        <div className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
           <a
             href="#"
             onClick={e => {
@@ -92,7 +100,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
               const win = window as unknown as { pywebview?: { api?: { open_url?: (url: string) => void } } };
               win.pywebview?.api?.open_url?.('https://aistudio.google.com/apikey');
             }}
-            className="inline-flex items-center gap-1 hover:opacity-100 opacity-70 w-fit text-[var(--accent-text)]"
+            className="inline-flex items-center gap-1 hover:opacity-100 opacity-75 w-fit text-[var(--accent-text)] font-medium transition-opacity"
           >
             → Ottieni gratis su aistudio.google.com
           </a>
@@ -100,18 +108,18 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
       </div>
 
       {/* Fallback API Keys */}
-      <div className="space-y-3 pt-2 border-t border-[var(--border-subtle)]">
+      <div className="space-y-3 pt-3 border-t border-[var(--border-subtle)]">
         <div className="flex items-center justify-between">
-          <label className="text-sm font-bold text-[var(--text-primary)] block">
+          <label className="text-xs font-semibold text-[var(--text-primary)] block">
             API Keys di Riserva (Fallback)
           </label>
           <button
             type="button"
             onClick={() => setShowFallbackKeys(prev => !prev)}
-            className="p-1.5 rounded-lg hover:bg-[var(--sidebar-active-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+            className="p-1 rounded-lg hover:bg-[var(--sidebar-active-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
             title={showFallbackKeys ? 'Nascondi chiavi' : 'Mostra chiavi'}
           >
-            {showFallbackKeys ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            {showFallbackKeys ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
           </button>
         </div>
         <textarea
@@ -119,48 +127,11 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
           onChange={e => setFallbackKeys(e.target.value.split('\n'))}
           placeholder="Inserisci una API Key per riga..."
           rows={3}
-          className={`app-textarea font-mono text-sm w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-input)] text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-ring)] resize-none ${!showFallbackKeys ? 'obscured-text' : ''}`}
-          style={{ padding: '0.5rem 0.75rem', minHeight: '80px' }}
+          className={`app-textarea font-mono text-xs w-full px-3 py-2 min-h-[80px] rounded-lg border border-[var(--border-default)] bg-[var(--bg-input)] text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-ring)] resize-none ${!showFallbackKeys ? 'obscured-text' : ''}`}
         />
-        <p className="text-xs text-[var(--text-muted)]">
-          Usate automaticamente in caso di esaurimento quota (errore 429).
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+          Le chiavi di riserva vengono usate automaticamente in caso di errori temporanei o esaurimento della quota sulla chiave principale.
         </p>
-      </div>
-
-      {/* System Notifications */}
-      <div className="border-t border-[var(--border-subtle)] pt-4">
-        <div className="flex items-center justify-between gap-4 py-1">
-          <div className="flex items-start gap-3">
-            <Bell className="w-4 h-4 text-[var(--accent-text)] shrink-0 mt-0.5" />
-            <div className="space-y-0.5">
-              <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                Notifiche di sistema
-              </h3>
-              <p className="text-xs text-[var(--text-muted)]">
-                Ricevi un avviso di Windows al completamento dell&apos;elaborazione di ciascuna sbobina.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={notificationsEnabled}
-            onClick={() => {
-              const next = !notificationsEnabled;
-              setNotificationsEnabled(next);
-              localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED, String(next));
-            }}
-            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
-              notificationsEnabled ? 'bg-[var(--accent-bg)]' : 'bg-[var(--bg-input)]'
-            }`}
-          >
-            <span
-              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                notificationsEnabled ? 'translate-x-5' : 'translate-x-0'
-              }`}
-            />
-          </button>
-        </div>
       </div>
     </div>
   );

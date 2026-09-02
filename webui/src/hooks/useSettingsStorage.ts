@@ -14,10 +14,11 @@ export interface SessionStorageInfo {
 
 export interface UseSettingsStorageOptions {
   isOpen: boolean;
-  activeTab: 'general' | 'advanced';
+  activeTab: 'general' | 'models' | 'diagnostics' | 'advanced' | string;
   appendConsole: (msg: string) => void;
   onSessionRootMoved?: (payload?: { oldRoot?: string; newRoot?: string }) => void;
 }
+
 
 export interface CleanupResult {
   removed: number;
@@ -192,9 +193,11 @@ export function useSettingsStorage({
 
     let aborted = false;
 
-    if (activeTab === 'advanced') {
+    if (activeTab === 'storage' || activeTab === 'models' || activeTab === 'advanced') {
       fetchSessionStorageInfo();
     }
+
+
 
     if (window.pywebview?.api?.get_session_move_status) {
       window.pywebview.api

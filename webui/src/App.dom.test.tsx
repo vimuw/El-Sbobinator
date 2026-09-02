@@ -1250,10 +1250,12 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       const settingsBtn = screen.getByLabelText('Apri impostazioni');
       await act(async () => { fireEvent.click(settingsBtn); });
 
-      // Switch to advanced tab
+      // Switch to storage tab
       await act(async () => {
-        fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+        fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
       });
+
+
 
       // Click move folder
       await act(async () => {
