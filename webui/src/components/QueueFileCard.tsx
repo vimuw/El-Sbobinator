@@ -108,6 +108,15 @@ function QueueFileCardInner({
                     <span>{formatDuration(file.duration)}</span>
                   </>
                 )}
+                {file.status === 'processing' && (
+                  <>
+                    <span className="w-1 h-1 rounded-full bg-[var(--border-default)]" />
+                    <span className={`inline-flex items-center gap-1.5 font-medium ${isCanceling ? 'text-[var(--error-text)]' : 'text-[var(--processing-text)]'}`}>
+                      <span className={`inline-flex h-1.5 w-1.5 rounded-full animate-pulse ${isCanceling ? 'bg-[var(--error-text)]' : 'bg-[var(--processing-dot)]'}`} />
+                      {isCanceling ? 'Annullamento in corso' : 'In elaborazione'}
+                    </span>
+                  </>
+                )}
                 {file.status === 'error' && (
                   <>
                     <span className="w-1 h-1 rounded-full bg-[var(--border-default)]" />
@@ -120,18 +129,6 @@ function QueueFileCardInner({
                   </>
                 )}
               </div>
-              {file.status === 'processing' && (
-                <motion.div
-                  layout="position"
-                  className="mt-2 flex min-h-7 flex-wrap items-center gap-1.5"
-                  transition={{ layout: { duration: 0.2, ease: [0.22, 1, 0.36, 1] } }}
-                >
-                  <span className={`helper-chip processing-chip-compact ${isCanceling ? 'canceling-chip' : 'processing-chip'}`}>
-                    <span className={`inline-flex h-2 w-2 rounded-full animate-pulse ${isCanceling ? 'bg-[var(--error-text)]' : 'bg-[var(--processing-dot)]'}`} />
-                    {isCanceling ? 'Annullamento in corso' : 'In elaborazione'}
-                  </span>
-                </motion.div>
-              )}
             </div>
           </div>
 

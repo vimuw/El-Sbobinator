@@ -76,8 +76,8 @@ describe('QueueFileCard', () => {
     expect(removeBtn).toBeTruthy();
   });
 
-  it('shows "In elaborazione" chip when processing', () => {
-    render(
+  it('shows "In elaborazione" chip and is-processing class when processing', () => {
+    const { container } = render(
       <QueueWrapper>
         <QueueFileCard
           file={makeFile({ status: 'processing' })}
@@ -87,10 +87,11 @@ describe('QueueFileCard', () => {
       </QueueWrapper>,
     );
     expect(screen.getByText('In elaborazione')).toBeTruthy();
+    expect(container.querySelector('.is-processing')).toBeTruthy();
   });
 
-  it('shows "Annullamento in corso" chip when canceling', () => {
-    render(
+  it('shows "Annullamento in corso" chip and is-canceling class when canceling', () => {
+    const { container } = render(
       <QueueWrapper>
         <QueueFileCard
           file={makeFile({ status: 'processing' })}
@@ -100,6 +101,7 @@ describe('QueueFileCard', () => {
       </QueueWrapper>,
     );
     expect(screen.getByText('Annullamento in corso')).toBeTruthy();
+    expect(container.querySelector('.is-canceling')).toBeTruthy();
   });
 
   it('shows Riprendi CTA for resumable error (quota) when idle', () => {

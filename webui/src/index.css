@@ -290,21 +290,6 @@
   border-color: rgba(100, 116, 139, 0.65);
 }
 
-:root:not([data-theme="dark"]) .processing-card {
-  background: var(--card-queued-bg);
-  box-shadow: none;
-}
-
-
-:root:not([data-theme="dark"]) .canceling-card {
-  background: var(--card-queued-bg);
-  box-shadow: none;
-}
-
-:root:not([data-theme="dark"]) .canceling-card::after {
-  border-color: rgba(185, 28, 28, 0.26);
-}
-
 :root:not([data-theme="dark"]) .dropzone-card {
   background: #ffffff;
   border-color: rgba(100, 116, 139, 0.34);
@@ -1300,31 +1285,6 @@ button {
 :root[data-theme="dark"] .queue-card:hover {
   border-color: rgba(255, 255, 255, 0.28);
   background: #202020;
-}
-
-.processing-card,
-.canceling-card {
-  box-shadow: none;
-}
-
-.canceling-card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  border: 1px solid var(--error-ring);
-  pointer-events: none;
-  animation: processing-card-pulse 1.8s ease-in-out infinite;
-}
-
-.processing-card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  border: 1px solid var(--processing-ring);
-  pointer-events: none;
-  animation: processing-card-pulse 1.8s ease-in-out infinite;
 }
 
 /* ═══ STATUS BANNER ═══ */
@@ -2945,15 +2905,6 @@ input[type="password"]::-ms-reveal {
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.18));
 }
 
-@keyframes processing-card-pulse {
-  0%, 100% {
-    opacity: 0.35;
-  }
-  50% {
-    opacity: 0.9;
-  }
-}
-
 @keyframes processing-progress-sheen {
   to {
     transform: translateX(100%);
@@ -4022,25 +3973,33 @@ input[type="password"]::-ms-reveal {
   background: var(--card-queued-bg) !important;
 }
 
-.queue-card.is-processing {
-  box-shadow: inset 3px 0 0 var(--processing-dot) !important;
+.queue-card.is-processing,
+:root:not([data-theme="dark"]) .queue-card.is-processing,
+:root[data-theme="dark"] .queue-card.is-processing {
+  position: relative;
   background: var(--card-queued-bg) !important;
+  border-color: var(--processing-dot) !important;
+  box-shadow: none !important;
 }
 
-.queue-card.is-canceling {
-  box-shadow: inset 3px 0 0 var(--error-bg) !important;
+.queue-card.is-canceling,
+:root:not([data-theme="dark"]) .queue-card.is-canceling,
+:root[data-theme="dark"] .queue-card.is-canceling {
+  position: relative;
   background: var(--card-queued-bg) !important;
+  border-color: var(--error-text) !important;
+  box-shadow: none !important;
 }
 
 .queue-card.is-error {
-  box-shadow: inset 3px 0 0 var(--error-bg) !important;
   background: var(--error-subtle) !important;
+  box-shadow: none !important;
 }
 
 .queue-card.is-warning {
-  box-shadow: inset 3px 0 0 var(--warning-bg) !important;
   background: var(--warning-subtle) !important;
   border-color: var(--warning-ring) !important;
+  box-shadow: none !important;
 }
 
 .queue-card.is-completed {

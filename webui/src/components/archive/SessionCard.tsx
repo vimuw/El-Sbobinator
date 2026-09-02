@@ -102,7 +102,7 @@ export function DraggableSessionCard({
       onClick={() => onPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir)}
       className="archive-session-card flex items-center justify-between gap-3 px-4 py-3 cursor-pointer group/card"
       style={{
-        ...(hasRevisionWarnings ? { borderColor: 'var(--warning-ring)', boxShadow: 'inset 3px 0 0 var(--warning-ring)', background: 'var(--warning-subtle)' } : {}),
+        ...(hasRevisionWarnings ? { borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)' } : {}),
         ...(selected ? { borderColor: 'var(--accent-text)', boxShadow: 'none', background: 'transparent' } : {}),
       }}
     >
@@ -334,7 +334,7 @@ export function SortableSessionCard({
         touchAction: disabled ? undefined : 'none',
         cursor: isDragging ? 'grabbing' : disabled ? 'pointer' : 'grab',
         borderColor: selected ? 'var(--accent-text)' : (hasRevisionWarnings ? 'var(--warning-ring)' : undefined),
-        boxShadow: selected ? 'none' : (hasRevisionWarnings ? 'inset 3px 0 0 var(--warning-ring)' : undefined),
+        boxShadow: selected ? 'none' : undefined,
         background: selected ? 'transparent' : (hasRevisionWarnings ? 'var(--warning-subtle)' : undefined),
       }}
     >
