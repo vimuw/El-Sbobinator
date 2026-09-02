@@ -165,4 +165,31 @@ describe('createBridge', () => {
 
     expect(onFileFailed).toHaveBeenCalledWith({ id: 'abc', index: 0, error: 'Test error' });
   });
+
+  it('forwards apiUsageUpdated to onApiUsageUpdated option', () => {
+    const onApiUsageUpdated = vi.fn();
+    const bridge = createBridge({
+      dispatch: vi.fn(),
+      appendConsole: vi.fn(),
+      onRegenerate: vi.fn(),
+      onAskNewKey: vi.fn(),
+      onDismissNewKey: vi.fn(),
+      onBatchDone: vi.fn(),
+      onFileDone: vi.fn(),
+      onFilesDropped: vi.fn(),
+      onBatchStart: vi.fn(),
+      onApiUsageUpdated,
+    });
+
+    const dummyUsage = {
+      quota_date: '2026-09-02',
+      next_reset_info: 'Reset quote: ore 09:00',
+      keys: [],
+      estimated_sbobine_remaining: 3,
+      is_degraded_mode: false,
+    };
+
+    bridge.apiUsageUpdated?.(dummyUsage);
+    expect(onApiUsageUpdated).toHaveBeenCalledWith(dummyUsage);
+  });
 });

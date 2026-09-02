@@ -474,10 +474,12 @@ class PipelineControllerMixin:
                                 self._adapter.emit(
                                     "fileDone", fd_payload, batched=False
                                 )
+                                self._emit_api_usage()
                                 if completion_status == "completed_with_warnings":
                                     completed_with_warnings_count += 1
                                 else:
                                     completed_count += 1
+
                             else:
                                 ff_payload2: FileFailedPayload = {
                                     "index": idx,
@@ -547,6 +549,7 @@ class PipelineControllerMixin:
                 if quota_exhausted:
                     payload["quota_exhausted"] = True
                 self._adapter.emit("processDone", payload, batched=False)
+                self._emit_api_usage()
 
         self._processing_thread = threading.Thread(target=_run, daemon=True)
         self._processing_thread.start()
@@ -561,6 +564,22 @@ class PipelineControllerMixin:
         """Called by React when user submits a replacement API key."""
         self._adapter.answer_new_key(key or "")
         return bridge_ok()
+
+    def _emit_api_usage(self) -> None:
+        try:
+            from el_sbobinator.services.config_service import load_config
+            from el_sbobinator.services.usage_service import get_daily_usage
+
+            cfg = load_config()
+            usage = get_daily_usage(
+                primary_key=cfg.get("api_key"),
+                fallback_keys=cfg.get("fallback_keys", []),
+                primary_model=cfg.get("preferred_model", "gemini-2.5-flash"),
+                fallback_models=cfg.get("fallback_models", []),
+            )
+            self._adapter.emit("apiUsageUpdated", usage, batched=False)
+        except Exception:
+            pass
 
     def stop_processing(self) -> dict:
         """Request cancellation."""

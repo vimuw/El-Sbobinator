@@ -58,6 +58,99 @@ class SystemControllerMixin:
             self._logger.exception("Validazione ambiente fallita.")
             return bridge_error(e)
 
+    def get_api_usage(
+        self,
+        api_key: str | None = None,
+        fallback_keys: list[str] | None = None,
+        preferred_model: str | None = None,
+        fallback_models: list[str] | None = None,
+    ) -> dict:
+        """Get daily Gemini API request usage and quota stats per key and per model."""
+        try:
+            from el_sbobinator.services.config_service import load_config
+            from el_sbobinator.services.usage_service import get_daily_usage
+
+            cfg = load_config()
+            key_val = api_key if api_key is not None else cfg.get("api_key")
+            fb_keys = (
+                fallback_keys
+                if fallback_keys is not None
+                else cfg.get("fallback_keys", [])
+            )
+            pref_model = preferred_model or cfg.get(
+                "preferred_model", "gemini-2.5-flash"
+            )
+            fb_models = (
+                fallback_models
+                if fallback_models is not None
+                else cfg.get("fallback_models", [])
+            )
+
+            usage = get_daily_usage(
+                primary_key=key_val,
+                fallback_keys=fb_keys,
+                primary_model=pref_model,
+                fallback_models=fb_models,
+            )
+            return bridge_ok(result=usage)
+        except Exception as e:
+            self._logger.exception("Recupero quote API fallito.")
+            return bridge_error(e)
+
+    def get_diagnostic_report(
+        self,
+        api_key: str | None = None,
+        fallback_keys: list[str] | None = None,
+        preferred_model: str | None = None,
+        fallback_models: list[str] | None = None,
+    ) -> dict:
+        """Generate a complete, sanitized Markdown diagnostic report for technical support."""
+        try:
+            from el_sbobinator.services.config_service import load_config
+            from el_sbobinator.services.validation_service import (
+                generate_diagnostic_report,
+            )
+
+            cfg = load_config()
+            key_val = api_key if api_key is not None else cfg.get("api_key")
+            fb_keys = (
+                fallback_keys
+                if fallback_keys is not None
+                else cfg.get("fallback_keys", [])
+            )
+            pref_model = preferred_model or cfg.get(
+                "preferred_model", "gemini-2.5-flash"
+            )
+            fb_models = (
+                fallback_models
+                if fallback_models is not None
+                else cfg.get("fallback_models", [])
+            )
+
+            report = generate_diagnostic_report(
+                api_key=key_val,
+                fallback_keys=fb_keys,
+                preferred_model=pref_model,
+                fallback_models=fb_models,
+            )
+            return bridge_ok(report=report)
+        except Exception as e:
+            self._logger.exception("Generazione report diagnostico fallita.")
+            return bridge_error(e)
+
+    def open_logs_folder(self) -> dict:
+        """Open the local logs directory in the default system file manager."""
+        try:
+            from el_sbobinator.services.config_service import get_config_dir
+
+            log_dir = get_config_dir()
+            os.makedirs(log_dir, exist_ok=True)
+            file_ops.open_path_with_default_app(log_dir)
+            return bridge_ok()
+        except Exception as e:
+            self._logger.exception("Apertura cartella log fallita.")
+            return bridge_error(e)
+
     def open_file(self, path: str) -> dict:
         """Open a local file/folder with the system default handler."""
         if not isinstance(path, str):

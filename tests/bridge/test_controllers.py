@@ -655,5 +655,37 @@ class TestSessionController(unittest.TestCase):
             self.assertEqual(res["total"], 0)
 
 
+class TestSystemControllerDiagnostics(unittest.TestCase):
+    def test_get_api_usage(self):
+        host = DummySystemHost()
+        res = host.get_api_usage(
+            api_key="AIzaSyTestKey1234567890",
+            fallback_keys=[],
+            preferred_model="gemini-2.5-flash",
+            fallback_models=["gemini-2.5-flash-lite"],
+        )
+        self.assertTrue(res["ok"])
+        self.assertIn("result", res)
+        self.assertIn("keys", res["result"])
+        self.assertIn("estimated_sbobine_remaining", res["result"])
+
+    def test_get_diagnostic_report(self):
+        host = DummySystemHost()
+        res = host.get_diagnostic_report(
+            api_key="AIzaSyTestKey1234567890",
+            preferred_model="gemini-2.5-flash",
+        )
+        self.assertTrue(res["ok"])
+        self.assertIn("report", res)
+        self.assertIn("Report Diagnostico", res["report"])
+
+    @patch("el_sbobinator.utils.file_ops.open_path_with_default_app")
+    def test_open_logs_folder(self, mock_open_path):
+        host = DummySystemHost()
+        res = host.open_logs_folder()
+        self.assertTrue(res["ok"])
+        mock_open_path.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()

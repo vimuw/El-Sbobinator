@@ -24,6 +24,34 @@ export interface ValidationResult {
   checks: ValidationCheck[];
 }
 
+export interface ModelQuota {
+  model_id: string;
+  limit: number;
+  used_today: number;
+  remaining: number;
+  is_exhausted: boolean;
+}
+
+export interface KeyProfile {
+  id: string;
+  label: string;
+  masked_key: string;
+  is_primary: boolean;
+  models: Record<string, ModelQuota>;
+}
+
+export interface ApiUsageResult {
+  quota_date: string;
+  next_reset_info: string;
+  keys: KeyProfile[];
+  total_requests_remaining?: number;
+  estimated_sbobine_remaining: number;
+  is_degraded_mode: boolean;
+  degraded_reason?: string | null;
+}
+
+
+
 export interface ModelOption {
   id: string;
   label: string;
@@ -126,6 +154,7 @@ export interface BridgeCallbacks {
   dismissNewKey: () => void;
   filesDropped: (files: FileDescriptor[]) => void;
   updateDownloadProgress: (data: UpdateDownloadProgressPayload) => void;
+  apiUsageUpdated?: (data: ApiUsageResult) => void;
 }
 
 export interface PywebviewApi {
@@ -227,7 +256,21 @@ export interface PywebviewApi {
     body?: string;
   }>;
   send_collaboration_signal?: (room: string, payload: string) => Promise<{ ok: boolean; error?: string }>;
+  get_api_usage?: (
+    apiKey?: string,
+    fallbackKeys?: string[],
+    preferredModel?: string,
+    fallbackModels?: string[],
+  ) => Promise<{ ok: boolean; result?: ApiUsageResult; error?: string }>;
+  get_diagnostic_report?: (
+    apiKey?: string,
+    fallbackKeys?: string[],
+    preferredModel?: string,
+    fallbackModels?: string[],
+  ) => Promise<{ ok: boolean; report?: string; error?: string }>;
+  open_logs_folder?: () => Promise<{ ok: boolean; error?: string }>;
 }
+
 
 declare global {
   interface Window {
@@ -250,6 +293,7 @@ export function createBridge(options: {
   onFilesDropped: (files: FileDescriptor[]) => void;
   onBatchStart: () => void;
   onDownloadProgress?: (data: UpdateDownloadProgressPayload) => void;
+  onApiUsageUpdated?: (data: ApiUsageResult) => void;
 }): BridgeCallbacks {
   const {
     dispatch,
@@ -263,6 +307,7 @@ export function createBridge(options: {
     onFilesDropped,
     onBatchStart,
     onDownloadProgress,
+    onApiUsageUpdated,
   } = options;
 
   return {
@@ -291,6 +336,7 @@ export function createBridge(options: {
     dismissNewKey: onDismissNewKey,
     filesDropped: onFilesDropped,
     updateDownloadProgress: data => { onDownloadProgress?.(data); },
+    apiUsageUpdated: data => { onApiUsageUpdated?.(data); },
   };
 }
 

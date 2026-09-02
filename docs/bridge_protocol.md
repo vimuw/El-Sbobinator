@@ -59,6 +59,7 @@ Source: `_BridgeDispatcher` + `PipelineAdapter` in `el_sbobinator/app_webview.py
 | `dismissNewKey` | no | `{}` | `PipelineAdapter.dismiss_new_api_key_prompt` | Close the new-key prompt after backend timeout without treating it as a user cancellation. |
 | `filesDropped` | no | `FileDescriptor[]` | `ElSbobinatorApi.collect_dropped_files` | New files dropped on the window; front-end adds them to the queue. |
 | `updateDownloadProgress` | no | `{status: string, bytes_done: number, bytes_total: number, error?: string}` | `updater.py` via auto-update process | Native download/installation progress during auto-updates. |
+| `apiUsageUpdated` | no | `ApiUsageResult` | `PipelineControllerMixin._emit_api_usage` | Pushed after file or batch completion with latest daily quota tracking stats. |
 | `appendConsole` | no | `string` | `_ConsoleTee` (wraps `sys.stdout`/`stderr`) | Forwarded stdout/stderr for the in-app terminal. |
 
 The TypeScript-side payload shapes are the same ones declared in `webui/src/appState.ts` (`WorkTotalsPayload`, `WorkDonePayload`, `StepTimePayload`, `SetCurrentFilePayload`, `FileDonePayload`, `FileFailedPayload`, `ProcessDonePayload`) and `webui/src/bridge.ts` (`BridgeCallbacks`). The Python-side counterparts are `TypedDict`s in `el_sbobinator/bridge_types.py`.
@@ -75,6 +76,9 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
 | `save_settings(api_key, fallback_keys, preferred_model, fallback_models)` | API key (nullable), list of strings, model id, list of ids | `{ok, error?}` | Writes via `config_service.save_config`. |
 | `save_theme_preference(theme)` | theme string (`"light"` \| `"dark"`) | `None` | Persists theme preference to disk. |
 | `validate_environment(api_key?, check_api_key?, preferred_model?, fallback_models?)` | `{ok, result?: ValidationResult, error?}` | Cached environment check. | |
+| `get_api_usage(api_key?, fallback_keys?, preferred_model?, fallback_models?)` | API keys and models | `{ok, result?: ApiUsageResult, error?}` | Aggregated Gemini daily request count and quota headroom per key/model. |
+| `get_diagnostic_report(api_key?, fallback_keys?, preferred_model?, fallback_models?)` | API keys and models | `{ok, report?: string, error?}` | Sanitized technical support diagnostic report formatted in Markdown. |
+| `open_logs_folder()` | — | `{ok, error?}` | Opens the local configuration and logs directory in the OS file explorer. |
 | `get_session_storage_info()` | — | `{ok, total_bytes, total_sessions, session_root, error?}` | Wraps `shared.get_session_storage_info` (30 s cache). |
 | `cleanup_old_sessions(max_age_days=0)` | — | `{ok, removed, freed_bytes, errors, candidates, preserved_completed, missing_completed_html, error?}` | Deletes incomplete session folders (default: all incomplete sessions). |
 | `cleanup_completed_sessions(max_age_days=14)` | — | `{ok, removed, freed_bytes, errors, candidates, preserved_completed, missing_completed_html, error?}` | Counts or deletes completed session folders older than threshold. |

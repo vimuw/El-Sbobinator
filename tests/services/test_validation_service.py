@@ -416,6 +416,45 @@ class TestValidationKeyringCheck(unittest.TestCase):
         check_ids = [c["id"] for c in result["checks"]]
         self.assertNotIn("keyring", check_ids)
 
+    @patch(
+        "el_sbobinator.services.validation_service.resolve_ffmpeg",
+        return_value="ffmpeg",
+    )
+    @patch("el_sbobinator.services.validation_service.shutil.disk_usage")
+    def test_disk_space_warning_when_low_space(self, mock_disk, *_mocks):
+        from collections import namedtuple
+
+        DiskUsage = namedtuple("DiskUsage", ["total", "used", "free"])
+        mock_disk.return_value = DiskUsage(
+            total=100 * 1024 * 1024 * 1024,
+            used=99 * 1024 * 1024 * 1024,
+            free=500 * 1024 * 1024,
+        )
+
+        with patch(
+            "el_sbobinator.services.validation_service.get_session_root",
+            return_value=".",
+        ):
+            result = validate_environment(api_key=None, validate_api_key=False)
+
+        output_check = next(c for c in result["checks"] if c["id"] == "output")
+        self.assertEqual(output_check["status"], "warning")
+        self.assertIn("Spazio su disco quasi esaurito", output_check["message"])
+
+    def test_generate_diagnostic_report_redacts_api_keys(self):
+        from el_sbobinator.services.validation_service import generate_diagnostic_report
+
+        fake_key = "AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345"
+        report = generate_diagnostic_report(
+            api_key=fake_key,
+            preferred_model="gemini-2.5-flash",
+        )
+
+        self.assertIn("# 🩺 Report Diagnostico El Sbobinator", report)
+        self.assertIn("Quote & Utilizzo Google AI Studio", report)
+        self.assertNotIn(fake_key, report)
+        self.assertIn("AIzaSy...2345", report)
+
 
 if __name__ == "__main__":
     unittest.main()

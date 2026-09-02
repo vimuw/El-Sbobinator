@@ -20,6 +20,11 @@ class BridgeDispatcherTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             d.emit("nonExistentEvent", {})
 
+    def test_api_usage_updated_event_accepted(self):
+        d = self._make()
+        # Should not raise AssertionError
+        d.emit("apiUsageUpdated", {"quota_date": "2026-09-02"}, batched=False)
+
     # ------------------------------------------------------------------
     # Batching / coalescing
     # ------------------------------------------------------------------
