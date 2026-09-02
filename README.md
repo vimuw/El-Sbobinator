@@ -37,6 +37,19 @@ Tutte le operazioni avvengono in locale sul computer dell'utente, con chiamate A
 
 ---
 
+## Requisiti di Sistema
+
+- **RAM**: Minimo 4 GB (8 GB consigliati)
+- **Spazio su Disco**: ~200 MB per l'applicazione + spazio temporaneo per i file audio
+- **Connessione di Rete**: Connessione internet attiva (richiesta per le chiamate API Gemini)
+
+| Piattaforma | Sistema Operativo Minimo | Componenti Aggiuntivi |
+| :--- | :--- | :--- |
+| **Windows** | Windows 10 (64-bit) o successivo | [Microsoft Edge WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703) *(incluso di default in Windows 10/11)* |
+| **macOS** | macOS 11 (Big Sur) o successivo | Nessuno *(utilizza WebKit nativo)* |
+
+---
+
 ## Download
 
 I file binari precompilati sono disponibili nella sezione [Releases](https://github.com/vimuw/El-Sbobinator/releases/latest):
@@ -64,6 +77,14 @@ L'applicazione include un sistema di aggiornamento automatico integrato che noti
 
 ---
 
+## Risoluzione Problemi
+
+- **Avviso Windows SmartScreen / Antivirus**: Gli eseguibili open-source privi di certificato commerciale a pagamento possono generare falsi positivi. Clicca su *Ulteriori informazioni* -> *Esegui comunque*, oppure verifica il file su [VirusTotal](https://www.virustotal.com/).
+- **Finestra vuota su Windows**: Verifica che il runtime [Microsoft Edge WebView2](https://go.microsoft.com/fwlink/p/?LinkId=2124703) sia installato e aggiornato.
+- **Limiti di Quota API**: Il piano gratuito di Google AI Studio include limiti giornalieri di richieste e token. È possibile configurare chiavi di riserva nelle **Impostazioni** per abilitare la rotazione automatica.
+
+---
+
 ## Architettura
 
 ```
@@ -84,19 +105,6 @@ Audio/Video di input
 
 ---
 
-## Requisiti di Sistema
-
-- **RAM**: Minimo 4 GB (8 GB consigliati)
-- **Spazio su Disco**: ~200 MB per l'applicazione + spazio temporaneo per i file audio
-- **Connessione di Rete**: Connessione internet attiva (richiesta per le chiamate API Gemini)
-
-| Piattaforma | Sistema Operativo Minimo | Componenti Aggiuntivi |
-| :--- | :--- | :--- |
-| **Windows** | Windows 10 (64-bit) o successivo | [Microsoft Edge WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703) *(incluso di default in Windows 10/11)* |
-| **macOS** | macOS 11 (Big Sur) o successivo | Nessuno *(utilizza WebKit nativo)* |
-
----
-
 ## Sviluppo e Contributi
 
 Per configurare l'ambiente locale, eseguire i test di integrazione (`ruff`, `pytest`, `vitest`) o compilare i pacchetti di rilascio, consulta:
@@ -106,14 +114,6 @@ Per configurare l'ambiente locale, eseguire i test di integrazione (`ruff`, `pyt
 - [docs/pipeline.md](docs/pipeline.md) per il funzionamento interno della pipeline e la gestione degli errori.
 - [docs/bridge_protocol.md](docs/bridge_protocol.md) per il protocollo di comunicazione IPC tra Python e React.
 - [docs/session_model.md](docs/session_model.md) per la persistenza su disco e il formato delle sessioni.
-
----
-
-## Risoluzione Problemi
-
-- **Avviso Windows SmartScreen / Antivirus**: Gli eseguibili open-source privi di certificato commerciale a pagamento possono generare falsi positivi. Clicca su *Ulteriori informazioni* -> *Esegui comunque*, oppure verifica il file su [VirusTotal](https://www.virustotal.com/).
-- **Finestra vuota su Windows**: Verifica che il runtime [Microsoft Edge WebView2](https://go.microsoft.com/fwlink/p/?LinkId=2124703) sia installato e aggiornato.
-- **Limiti di Quota API**: Il piano gratuito di Google AI Studio include limiti giornalieri di richieste e token. È possibile configurare chiavi di riserva nelle **Impostazioni** per abilitare la rotazione automatica.
 
 ---
 
