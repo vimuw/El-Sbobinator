@@ -146,6 +146,7 @@ def try_rotate_key(
             if cancelled is not None and cancelled():
                 return current_client, False, None
             fallback_keys.pop(0)
+
             log.info(
                 "Chiave di fallback valida, rotazione completata.",
                 extra={"stage": "key_rotation"},
@@ -384,19 +385,32 @@ def _retry_on_quota(
         print(
             "      [Rilevato limite temporaneo. Attesa di 65s per il reset quota al minuto...]"
         )
-        runtime.phase("⏳ Rate limit: attesa 65s...")
+        if runtime is not None:
+            runtime.phase("⏳ Rate limit: attesa 65s...")
         if not sleep_with_cancel(cancelled, rate_limit_sleep_seconds):
             print("   [*] Operazione annullata dall'utente.")
             return False, client
         restore_phase()
+
         return True, client
     if is_minute_rate_limit and not is_exhausted_key:
         raise exc
 
     print("\n[!!] CHIAVE API ESAURITA O QUOTA GIORNALIERA RAGGIUNTA!")
+
+    if is_exhausted_key:
+        old_key = extract_client_api_key(client)
+        if old_key:
+            try:
+                from el_sbobinator.services import usage_service
+
+                usage_service.mark_model_exhausted(old_key, current_model)
+            except Exception:
+                pass
     if cancelled():
         print("   [*] Operazione annullata dall'utente.")
         return False, client
+
     new_c, rotated, rotated_key = try_rotate_key(
         client,
         fallback_keys,
@@ -441,6 +455,22 @@ def _retry_on_quota(
     raise QuotaDailyLimitError(str(exc)) from exc
 
 
+def _record_success_usage(
+    client, model_name: str, model_state: ModelState | None
+) -> None:
+    cur_key = extract_client_api_key(client)
+    if not cur_key:
+        return
+    try:
+        from el_sbobinator.services import usage_service
+
+        usage_service.record_request(
+            cur_key, current_model_name(model_state, model_name), 1
+        )
+    except Exception:
+        pass
+
+
 def retry_with_quota(
     callable_fn,
     *,
@@ -480,6 +510,7 @@ def retry_with_quota(
             return client, None
         try:
             result = callable_fn(client)
+            _record_success_usage(client, model_name, model_state)
             return client, result
         except Exception as exc:
             if cancelled():

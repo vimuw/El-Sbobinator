@@ -71,34 +71,25 @@ def _error_code(exc: Exception) -> int | None:
     return None
 
 
-def _is_minute_scoped_rate_limit(
-    error_text: str, error_code: int | None = None
-) -> bool:
-    markers = (
-        "per minute",
-        "per-minute",
-        "per_minute",
-        "rate limit",
-        "too many requests",
-        "requests_per_minute",
-        "requests per minute",
-        "retry-after",
-        "retry after",
-        "rpm",
-    )
-    return error_code == 429 or any(marker in error_text for marker in markers)
-
-
 def _is_daily_or_key_exhausted(error_text: str, error_code: int | None) -> bool:
+    norm_text = _normalize_guardrail_text(error_text)
+
+    # 1. Google Gemini specific daily / account quota exhaustion markers
     hard_limit_markers = (
         "per day",
         "per-day",
         "per_day",
         "perday",
         "daily",
-        "quota_exceeded",
+        "generaterequestsperday",
+        "generate_content_free_tier_requests",
+        "generatecontentfreetierrequests",
         "requests_per_day",
         "requests per day",
+        "requestsperday",
+        "exceeded your current quota",
+        "check your plan and billing",
+        "plan and billing",
         "insufficient_quota",
         "insufficient quota",
         "insufficient_balance",
@@ -107,12 +98,42 @@ def _is_daily_or_key_exhausted(error_text: str, error_code: int | None) -> bool:
         "credit",
         "balance",
     )
-    if any(marker in error_text for marker in hard_limit_markers):
+    if any(marker in norm_text for marker in hard_limit_markers):
+        # Exclude only if it specifically says per minute / rpm without mentioning daily
+        minute_only_markers = (
+            "per minute",
+            "per-minute",
+            "per_minute",
+            "requests_per_minute",
+            "requests per minute",
+            "requestsperminute",
+            "tokens_per_minute",
+            "tokens per minute",
+            "tokensperminute",
+            "tpm",
+            "rpm",
+            "generatecontenttokenspermodelperminute",
+            "generatecontentrequestspermodelperminute",
+        )
+        if any(m in norm_text for m in minute_only_markers) and not any(
+            d in norm_text
+            for d in (
+                "per day",
+                "per-day",
+                "per_day",
+                "perday",
+                "daily",
+                "generaterequestsperday",
+                "generate_content_free_tier_requests",
+                "requests_per_day",
+                "requests per day",
+                "exceeded your current quota",
+            )
+        ):
+            return False
         return True
 
-    if _is_minute_scoped_rate_limit(error_text, error_code):
-        return False
-
+    # 2. General token exhaustion markers
     token_markers = ("token", "tokens")
     token_exhaustion_markers = (
         "exhaust",
@@ -123,17 +144,44 @@ def _is_daily_or_key_exhausted(error_text: str, error_code: int | None) -> bool:
         "unavailable",
         "depleted",
     )
-    if any(marker in error_text for marker in token_markers) and any(
-        marker in error_text for marker in token_exhaustion_markers
+    if any(marker in norm_text for marker in token_markers) and any(
+        marker in norm_text for marker in token_exhaustion_markers
     ):
         return True
 
-    # Some Gemini quota failures are surfaced as plain HTTP 503 / UNAVAILABLE,
-    # but the structured payload still says RESOURCE_EXHAUSTED.
-    if error_code == 503 and "resource_exhausted" in error_text:
+    # 3. Some Gemini quota failures are surfaced as plain HTTP 503 / UNAVAILABLE with resource_exhausted
+    if error_code == 503 and "resource_exhausted" in norm_text:
         return True
 
     return False
+
+
+def _is_minute_scoped_rate_limit(
+    error_text: str, error_code: int | None = None
+) -> bool:
+    norm_text = _normalize_guardrail_text(error_text)
+    if _is_daily_or_key_exhausted(norm_text, error_code):
+        return False
+    markers = (
+        "per minute",
+        "per-minute",
+        "per_minute",
+        "rate limit",
+        "too many requests",
+        "requests_per_minute",
+        "requests per minute",
+        "requestsperminute",
+        "tokens_per_minute",
+        "tokens per minute",
+        "tokensperminute",
+        "tpm",
+        "rpm",
+        "generatecontenttokenspermodelperminute",
+        "generatecontentrequestspermodelperminute",
+        "retry-after",
+        "retry after",
+    )
+    return any(marker in norm_text for marker in markers)
 
 
 def _is_model_unavailable(error_text: str, error_code: int | None) -> bool:

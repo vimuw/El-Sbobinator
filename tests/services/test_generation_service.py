@@ -1300,6 +1300,23 @@ class ErrorHelperTests(unittest.TestCase):
 
         self.assertFalse(_is_daily_or_key_exhausted("rate limit per minute", 429))
 
+    def test_is_daily_exhausted_google_free_tier_official_error(self):
+        from el_sbobinator.services.generation_service import (
+            _is_daily_or_key_exhausted,
+            _is_minute_scoped_rate_limit,
+        )
+
+        err_msg = (
+            "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, "
+            "please check your plan and billing details. ... Quota exceeded for metric: "
+            "generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash "
+            "Please retry in 3.13297873s.', 'details': [{'violations': [{'quotaMetric': "
+            "'generativelanguage.googleapis.com/generate_content_free_tier_requests', "
+            "'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier', 'quotaValue': '20'}]}]}}"
+        )
+        self.assertTrue(_is_daily_or_key_exhausted(err_msg, 429))
+        self.assertFalse(_is_minute_scoped_rate_limit(err_msg, 429))
+
 
 class ExtractClientApiKeyTests(unittest.TestCase):
     def test_nested_api_client_path(self):
