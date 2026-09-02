@@ -216,6 +216,7 @@ def pyinstaller_command(target: str, ui: str) -> list[str]:
     if target == "windows":
         command.extend(["--clean", "--onedir", "--windowed"])
         command.extend(["--icon", str(ROOT / "assets" / "icon.ico")])
+        command.extend(["--collect-data", "tzdata"])
     else:
         command.extend(["--windowed"])
         command.extend(["--icon", str(ROOT / "assets" / "icon.icns")])
