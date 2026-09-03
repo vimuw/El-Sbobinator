@@ -224,6 +224,86 @@ export function ArchivePage({
 
   const selectedFolder = selectedFolderId ? folders.find(f => f.id === selectedFolderId) ?? null : null;
 
+  const handleFolderSave = (name: string, color?: string) => {
+    if (!folderModal) return;
+    const finalColor = color || DEFAULT_FOLDER_COLOR;
+    if (folderModal.type === 'create') {
+      const pending = folderModal.pendingSessionDirs ?? [];
+      const pendingNorm = new Set(pending.map(d => normalizeSessionPath(d)));
+      const newFolder: ArchiveFolder = {
+        id: crypto.randomUUID(),
+        name: name.trim(),
+        color: finalColor,
+        session_dirs: pending,
+      };
+      const updated = folders.map(f => ({
+        ...f,
+        session_dirs: f.session_dirs.filter(d => !pendingNorm.has(normalizeSessionPath(d))),
+      }));
+      onFoldersChange([...updated, newFolder]);
+      clearSelection();
+    } else {
+      onFoldersChange(folders.map(f =>
+        f.id === folderModal.folder.id ? { ...f, name: name.trim(), color: finalColor } : f,
+      ));
+    }
+    setFolderModal(null);
+  };
+
+  const handleFolderDelete = () => {
+    if (!deleteFolderConfirm) return;
+    onFoldersChange(folders.filter(f => f.id !== deleteFolderConfirm.folder.id));
+    if (selectedFolderId === deleteFolderConfirm.folder.id) {
+      setSelectedFolderId(null);
+    }
+    setDeleteFolderConfirm(null);
+  };
+
+  const handleBulkDeleteSessions = () => {
+    if (!deleteMultipleConfirm) return;
+    deleteMultipleConfirm.sessions.forEach(s => onDeleteSession(s.sessionDir, s.name));
+    clearSelection();
+    setDeleteMultipleConfirm(null);
+  };
+
+  const renderModals = () => (
+    <>
+      <AnimatePresence>
+        {folderModal && (
+          <FolderModal
+            state={folderModal}
+            onClose={() => setFolderModal(null)}
+            onSave={handleFolderSave}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {deleteFolderConfirm && (
+          <DeleteFolderConfirmModal
+            folder={deleteFolderConfirm.folder}
+            onClose={() => setDeleteFolderConfirm(null)}
+            onConfirm={handleFolderDelete}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {deleteMultipleConfirm && (
+          <DeleteMultipleSessionsConfirmModal
+            sessions={deleteMultipleConfirm.sessions}
+            onClose={() => setDeleteMultipleConfirm(null)}
+            onConfirm={handleBulkDeleteSessions}
+          />
+        )}
+      </AnimatePresence>
+      {sharingSession && (
+        <ShareExportModal
+          session={sharingSession}
+          onClose={() => setSharingSession(null)}
+        />
+      )}
+    </>
+  );
+
   if (selectedFolder) {
     return (
       <>
@@ -251,70 +331,7 @@ export function ArchivePage({
           onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
           onShareSession={setSharingSession}
         />
-        <AnimatePresence>
-          {folderModal && (
-            <FolderModal
-              state={folderModal}
-              onClose={() => setFolderModal(null)}
-              onSave={(name, color) => {
-                const finalColor = color || DEFAULT_FOLDER_COLOR;
-                if (folderModal.type === 'create') {
-                  const pending = folderModal.pendingSessionDirs ?? [];
-                  const pendingNorm = new Set(pending.map(d => normalizeSessionPath(d)));
-                  const newFolder: ArchiveFolder = {
-                    id: crypto.randomUUID(),
-                    name: name.trim(),
-                    color: finalColor,
-                    session_dirs: pending,
-                  };
-                  const updated = folders.map(f => ({
-                    ...f,
-                    session_dirs: f.session_dirs.filter(d => !pendingNorm.has(normalizeSessionPath(d))),
-                  }));
-                  onFoldersChange([...updated, newFolder]);
-                  clearSelection();
-                } else {
-                  onFoldersChange(folders.map(f =>
-                    f.id === folderModal.folder.id ? { ...f, name: name.trim(), color: finalColor } : f,
-                  ));
-                }
-                setFolderModal(null);
-              }}
-            />
-          )}
-        </AnimatePresence>
-        <AnimatePresence>
-          {deleteFolderConfirm && (
-            <DeleteFolderConfirmModal
-              folder={deleteFolderConfirm.folder}
-              onClose={() => setDeleteFolderConfirm(null)}
-              onConfirm={() => {
-                onFoldersChange(folders.filter(f => f.id !== deleteFolderConfirm.folder.id));
-                setDeleteFolderConfirm(null);
-                setSelectedFolderId(null);
-              }}
-            />
-          )}
-        </AnimatePresence>
-        <AnimatePresence>
-          {deleteMultipleConfirm && (
-            <DeleteMultipleSessionsConfirmModal
-              sessions={deleteMultipleConfirm.sessions}
-              onClose={() => setDeleteMultipleConfirm(null)}
-              onConfirm={() => {
-                deleteMultipleConfirm.sessions.forEach(s => onDeleteSession(s.sessionDir, s.name));
-                clearSelection();
-                setDeleteMultipleConfirm(null);
-              }}
-            />
-          )}
-        </AnimatePresence>
-        {sharingSession && (
-          <ShareExportModal
-            session={sharingSession}
-            onClose={() => setSharingSession(null)}
-          />
-        )}
+        {renderModals()}
       </>
     );
   }
@@ -633,76 +650,8 @@ export function ArchivePage({
         )}
       </AnimatePresence>
 
-      {/* Folder modal */}
-      <AnimatePresence>
-        {folderModal && (
-          <FolderModal
-            state={folderModal}
-            onClose={() => setFolderModal(null)}
-            onSave={(name, color) => {
-              const finalColor = color || DEFAULT_FOLDER_COLOR;
-              if (folderModal.type === 'create') {
-                const pending = folderModal.pendingSessionDirs ?? [];
-                const pendingNorm = new Set(pending.map(d => normalizeSessionPath(d)));
-                const newFolder: ArchiveFolder = {
-                  id: crypto.randomUUID(),
-                  name: name.trim(),
-                  color: finalColor,
-                  session_dirs: pending,
-                };
-                const updated = folders.map(f => ({
-                  ...f,
-                  session_dirs: f.session_dirs.filter(d => !pendingNorm.has(normalizeSessionPath(d))),
-                }));
-                onFoldersChange([...updated, newFolder]);
-                clearSelection();
-              } else {
-                onFoldersChange(folders.map(f =>
-                  f.id === folderModal.folder.id ? { ...f, name: name.trim(), color: finalColor } : f,
-                ));
-              }
-              setFolderModal(null);
-            }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Share/Export modal */}
-      {sharingSession && (
-        <ShareExportModal
-          session={sharingSession}
-          onClose={() => setSharingSession(null)}
-        />
-      )}
-
-      {/* Delete-folder confirmation modal (grid view) */}
-      <AnimatePresence>
-        {deleteFolderConfirm && (
-          <DeleteFolderConfirmModal
-            folder={deleteFolderConfirm.folder}
-            onClose={() => setDeleteFolderConfirm(null)}
-            onConfirm={() => {
-              onFoldersChange(folders.filter(f => f.id !== deleteFolderConfirm.folder.id));
-              setDeleteFolderConfirm(null);
-            }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Delete multiple sessions modal */}
-      <AnimatePresence>
-        {deleteMultipleConfirm && (
-          <DeleteMultipleSessionsConfirmModal
-            sessions={deleteMultipleConfirm.sessions}
-            onClose={() => setDeleteMultipleConfirm(null)}
-            onConfirm={() => {
-              deleteMultipleConfirm.sessions.forEach(s => onDeleteSession(s.sessionDir, s.name));
-              clearSelection();
-              setDeleteMultipleConfirm(null);
-            }}
-          />
-        )}
-      </AnimatePresence>
+      {/* Archive modals */}
+      {renderModals()}
 
     </div>
   );
