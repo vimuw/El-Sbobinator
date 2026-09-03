@@ -418,57 +418,67 @@ export default function App() {
           {activePage === 'queue' ? (
             <QueuePage
               files={files}
-              appState={appState}
-              currentPhase={currentPhase}
-              currentModel={currentModel}
-              activeProgress={activeProgress}
-              workDone={workDone}
-              workTotals={workTotals}
-              batchCompleted={batchCompleted}
-              batchTotal={batchTotal}
-              completionFlash={completionFlash}
-              apiReady={apiReady}
-              bridgeDelayed={bridgeDelayed}
-              apiKey={apiKey}
-              setApiKey={setApiKey}
-              hasProtectedKey={hasProtectedKey}
-              apiKeyInsecure={apiKeyInsecure}
-              setApiKeyInsecure={setApiKeyInsecure}
-              apiKeyInsecureReason={apiKeyInsecureReason}
-              setApiKeyInsecureReason={setApiKeyInsecureReason}
-              fallbackKeys={fallbackKeys}
-              preferredModel={preferredModel}
-              fallbackModels={fallbackModels}
+              progress={{
+                appState,
+                currentPhase,
+                currentModel,
+                activeProgress,
+                workDone,
+                workTotals,
+                batchCompleted,
+                batchTotal,
+                completionFlash,
+              }}
+              auth={{
+                apiReady,
+                bridgeDelayed,
+                apiKey,
+                setApiKey,
+                hasProtectedKey,
+                apiKeyInsecure,
+                setApiKeyInsecure,
+                apiKeyInsecureReason,
+                setApiKeyInsecureReason,
+                fallbackKeys,
+                preferredModel,
+                fallbackModels,
+              }}
+              ingest={{
+                isDragging,
+                handleDragOver,
+                handleDragLeave,
+                handleDrop,
+                handleBrowseClick,
+              }}
+              console={{
+                showConsole,
+                setShowConsole,
+                consoleLogs,
+                isConsoleExpanded,
+                setIsConsoleExpanded,
+                appendConsole,
+              }}
+              actions={{
+                requestRemoveFile,
+                handleClearAll,
+                handleQueueRetry,
+                openPreview,
+                openFile,
+                handleQueueStart,
+                handleQueueStop,
+                handleOpenSettings,
+                handleRemoveDoneFile,
+                setConfirmAction,
+                handleRetryFailedRevisionBlocks,
+              }}
               autoContinue={autoContinue}
               setAutoContinue={setAutoContinue}
-              isDragging={isDragging}
-              handleDragOver={handleDragOver}
-              handleDragLeave={handleDragLeave}
-              handleDrop={handleDrop}
-              handleBrowseClick={handleBrowseClick}
-              setIsJoinRoomOpen={setIsJoinRoomOpen}
               archiveSessions={archiveSessions}
               isArchiveLoaded={isArchiveLoaded}
+              completedSessionFolderMap={completedSessionFolderMap}
               dndSensors={dndSensors}
               handleDragEnd={handleDragEnd}
-              requestRemoveFile={requestRemoveFile}
-              handleClearAll={handleClearAll}
-              handleQueueRetry={handleQueueRetry}
-              openPreview={openPreview}
-              openFile={openFile}
-              handleQueueStart={handleQueueStart}
-              handleQueueStop={handleQueueStop}
-              handleOpenSettings={handleOpenSettings}
-              handleRemoveDoneFile={handleRemoveDoneFile}
-              setConfirmAction={setConfirmAction}
-              handleRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
-              completedSessionFolderMap={completedSessionFolderMap}
-              showConsole={showConsole}
-              setShowConsole={setShowConsole}
-              consoleLogs={consoleLogs}
-              isConsoleExpanded={isConsoleExpanded}
-              setIsConsoleExpanded={setIsConsoleExpanded}
-              appendConsole={appendConsole}
+              setIsJoinRoomOpen={setIsJoinRoomOpen}
             />
           ) : (
             <motion.main

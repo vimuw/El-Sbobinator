@@ -24,8 +24,7 @@ function getErrorMessage(error: unknown): string {
 
 export type UiMode = 'loading' | 'setup' | 'ready-empty' | 'ready-with-files' | 'processing' | 'canceling';
 
-export interface QueuePageProps {
-  files: FileItem[];
+export interface QueueProgressProps {
   appState: AppStatus;
   currentPhase: string;
   currentModel: string;
@@ -35,6 +34,9 @@ export interface QueuePageProps {
   batchCompleted: number;
   batchTotal: number;
   completionFlash: boolean;
+}
+
+export interface QueueAuthProps {
   apiReady: boolean;
   bridgeDelayed: boolean;
   apiKey: string;
@@ -47,18 +49,26 @@ export interface QueuePageProps {
   fallbackKeys: string[];
   preferredModel: string;
   fallbackModels: string[];
-  autoContinue: boolean;
-  setAutoContinue: React.Dispatch<React.SetStateAction<boolean>>;
+}
+
+export interface QueueIngestProps {
   isDragging: boolean;
   handleDragOver: (e: React.DragEvent) => void;
   handleDragLeave: (e: React.DragEvent) => void;
   handleDrop: (e: React.DragEvent) => void;
   handleBrowseClick: () => void;
-  setIsJoinRoomOpen: (val: boolean) => void;
-  archiveSessions: ArchiveSession[];
-  isArchiveLoaded: boolean;
-  dndSensors: SensorDescriptor<SensorOptions>[];
-  handleDragEnd: (event: DragEndEvent) => void;
+}
+
+export interface QueueConsoleProps {
+  showConsole: boolean;
+  setShowConsole: (val: boolean) => void;
+  consoleLogs: string[];
+  isConsoleExpanded: boolean;
+  setIsConsoleExpanded: React.Dispatch<React.SetStateAction<boolean>>;
+  appendConsole: (msg: string) => void;
+}
+
+export interface QueueActionProps {
   requestRemoveFile: (id: string) => void;
   handleClearAll: () => void;
   handleQueueRetry: (id: string) => void;
@@ -70,69 +80,98 @@ export interface QueuePageProps {
   handleRemoveDoneFile: (id: string) => void;
   setConfirmAction: (action: ConfirmAction | null) => void;
   handleRetryFailedRevisionBlocks: (sessionDir: string, fileId?: string) => Promise<void>;
+}
+
+export interface QueuePageProps {
+  files: FileItem[];
+  progress: QueueProgressProps;
+  auth: QueueAuthProps;
+  ingest: QueueIngestProps;
+  console: QueueConsoleProps;
+  actions: QueueActionProps;
+  autoContinue: boolean;
+  setAutoContinue: React.Dispatch<React.SetStateAction<boolean>>;
+  archiveSessions: ArchiveSession[];
+  isArchiveLoaded: boolean;
   completedSessionFolderMap: Map<string, ArchiveFolder>;
-  showConsole: boolean;
-  setShowConsole: (val: boolean) => void;
-  consoleLogs: string[];
-  isConsoleExpanded: boolean;
-  setIsConsoleExpanded: React.Dispatch<React.SetStateAction<boolean>>;
-  appendConsole: (msg: string) => void;
+  dndSensors: SensorDescriptor<SensorOptions>[];
+  handleDragEnd: (event: DragEndEvent) => void;
+  setIsJoinRoomOpen: (val: boolean) => void;
 }
 
 export function QueuePage({
   files,
-  appState,
-  currentPhase,
-  currentModel,
-  activeProgress,
-  workDone,
-  workTotals,
-  batchCompleted,
-  batchTotal,
-  completionFlash,
-  apiReady,
-  bridgeDelayed,
-  apiKey,
-  setApiKey,
-  hasProtectedKey,
-  apiKeyInsecure,
-  setApiKeyInsecure,
-  apiKeyInsecureReason,
-  setApiKeyInsecureReason,
-  fallbackKeys,
-  preferredModel,
-  fallbackModels,
+  progress,
+  auth,
+  ingest,
+  console: consoleState,
+  actions,
   autoContinue,
   setAutoContinue,
-  isDragging,
-  handleDragOver,
-  handleDragLeave,
-  handleDrop,
-  handleBrowseClick,
-  setIsJoinRoomOpen,
   archiveSessions,
   isArchiveLoaded,
+  completedSessionFolderMap,
   dndSensors,
   handleDragEnd,
-  requestRemoveFile,
-  handleClearAll,
-  handleQueueRetry,
-  openPreview,
-  openFile,
-  handleQueueStart,
-  handleQueueStop,
-  handleOpenSettings,
-  handleRemoveDoneFile,
-  setConfirmAction,
-  handleRetryFailedRevisionBlocks,
-  completedSessionFolderMap,
-  showConsole,
-  setShowConsole,
-  consoleLogs,
-  isConsoleExpanded,
-  setIsConsoleExpanded,
-  appendConsole,
+  setIsJoinRoomOpen,
 }: QueuePageProps) {
+  const {
+    appState,
+    currentPhase,
+    currentModel,
+    activeProgress,
+    workDone,
+    workTotals,
+    batchCompleted,
+    batchTotal,
+    completionFlash,
+  } = progress;
+
+  const {
+    apiReady,
+    bridgeDelayed,
+    apiKey,
+    setApiKey,
+    hasProtectedKey,
+    apiKeyInsecure,
+    setApiKeyInsecure,
+    apiKeyInsecureReason,
+    setApiKeyInsecureReason,
+    fallbackKeys,
+    preferredModel,
+    fallbackModels,
+  } = auth;
+
+  const {
+    isDragging,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+    handleBrowseClick,
+  } = ingest;
+
+  const {
+    showConsole,
+    setShowConsole,
+    consoleLogs,
+    isConsoleExpanded,
+    setIsConsoleExpanded,
+    appendConsole,
+  } = consoleState;
+
+  const {
+    requestRemoveFile,
+    handleClearAll,
+    handleQueueRetry,
+    openPreview,
+    openFile,
+    handleQueueStart,
+    handleQueueStop,
+    handleOpenSettings,
+    handleRemoveDoneFile,
+    setConfirmAction,
+    handleRetryFailedRevisionBlocks,
+  } = actions;
   const [isRemovingInsecureKey, setIsRemovingInsecureKey] = useState(false);
 
   const pendingFiles = useMemo(() => getPendingFiles(files), [files]);
