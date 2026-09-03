@@ -12,6 +12,8 @@ import threading
 import time
 import uuid
 from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 from google.genai import types
 
@@ -34,6 +36,19 @@ from el_sbobinator.services.generation_service import (
     sleep_with_cancel,
 )
 from el_sbobinator.utils.logging_utils import get_logger, redact_secrets
+
+
+@dataclass(slots=True)
+class Phase1ChunkIterationResult:
+    """Result of a single Phase 1 chunk transcription iteration."""
+
+    client: Any
+    full_transcript: str
+    prev_memory: str
+    success: bool
+    should_retry: bool
+    should_abort: bool
+    next_cut: dict | None = None
 
 
 def _sanitize_error_detail(error: object, max_len: int = 500) -> str:
@@ -552,12 +567,8 @@ def _process_single_phase1_chunk_iteration(
     save_session: Callable[[], bool],
     chain_exhaustion_recovery_used: bool,
     start_prefetch_fn: Callable[[int, int, float, str], dict | None],
-) -> tuple[object, str, str, bool, bool, bool, dict | None]:
-    """Execute one attempt of a Phase 1 chunk transcription.
-
-    Returns:
-      (client, full_transcript, prev_memory, success, should_retry_recovery, should_abort, next_cut)
-    """
+) -> Phase1ChunkIterationResult:
+    """Execute one attempt of a Phase 1 chunk transcription."""
     chunk_step_t0 = time.monotonic()
     chunk_path = _phase1_chunk_temp_path(
         temp_run_dir, chunk_idx, chunk_start_sec, chunk_end_sec
@@ -583,14 +594,14 @@ def _process_single_phase1_chunk_iteration(
         if not cut_ok:
             if str(cut_err or "").strip().lower() == "cancelled" or cancelled():
                 print("   [*] Operazione annullata dall'utente.")
-                return (
-                    client,
-                    full_transcript,
-                    prev_memory,
-                    False,
-                    False,
-                    True,
-                    next_cut,
+                return Phase1ChunkIterationResult(
+                    client=client,
+                    full_transcript=full_transcript,
+                    prev_memory=prev_memory,
+                    success=False,
+                    should_retry=False,
+                    should_abort=True,
+                    next_cut=next_cut,
                 )
             raise RuntimeError(
                 f"FFmpeg ha fallito l'estrazione audio:\n{cut_err}"
@@ -672,24 +683,24 @@ def _process_single_phase1_chunk_iteration(
                 save_session=save_session,
             )
             if should_retry:
-                return (
-                    client,
-                    full_transcript,
-                    prev_memory,
-                    False,
-                    True,
-                    False,
-                    next_cut,
+                return Phase1ChunkIterationResult(
+                    client=client,
+                    full_transcript=full_transcript,
+                    prev_memory=prev_memory,
+                    success=False,
+                    should_retry=True,
+                    should_abort=False,
+                    next_cut=next_cut,
                 )
             if should_abort:
-                return (
-                    client,
-                    full_transcript,
-                    prev_memory,
-                    False,
-                    False,
-                    True,
-                    next_cut,
+                return Phase1ChunkIterationResult(
+                    client=client,
+                    full_transcript=full_transcript,
+                    prev_memory=prev_memory,
+                    success=False,
+                    should_retry=False,
+                    should_abort=True,
+                    next_cut=next_cut,
                 )
 
         except Exception as e:
@@ -722,9 +733,25 @@ def _process_single_phase1_chunk_iteration(
         print(
             "   [!] Errore critico durante l'elaborazione del blocco. Interrompo (progressi salvati)."
         )
-        return client, full_transcript, prev_memory, False, False, True, next_cut
+        return Phase1ChunkIterationResult(
+            client=client,
+            full_transcript=full_transcript,
+            prev_memory=prev_memory,
+            success=False,
+            should_retry=False,
+            should_abort=True,
+            next_cut=next_cut,
+        )
 
-    return client, full_transcript, prev_memory, True, False, False, next_cut
+    return Phase1ChunkIterationResult(
+        client=client,
+        full_transcript=full_transcript,
+        prev_memory=prev_memory,
+        success=True,
+        should_retry=False,
+        should_abort=False,
+        next_cut=next_cut,
+    )
 
 
 def _process_phase1_transcription_impl(
@@ -835,15 +862,7 @@ def _process_phase1_transcription_impl(
         chain_exhaustion_recovery_used = False
 
         while True:
-            (
-                client,
-                full_transcript,
-                prev_memory,
-                chunk_success,
-                should_retry,
-                should_abort,
-                next_cut,
-            ) = _process_single_phase1_chunk_iteration(
+            chunk_res = _process_single_phase1_chunk_iteration(
                 temp_run_dir=temp_run_dir,
                 chunk_idx=chunk_idx,
                 chunk_start_sec=chunk_start_sec,
@@ -878,12 +897,16 @@ def _process_phase1_transcription_impl(
                 chain_exhaustion_recovery_used=chain_exhaustion_recovery_used,
                 start_prefetch_fn=_start_prefetch,
             )
-            if should_abort:
+            client = chunk_res.client
+            full_transcript = chunk_res.full_transcript
+            prev_memory = chunk_res.prev_memory
+            next_cut = chunk_res.next_cut
+            if chunk_res.should_abort:
                 return _finish((client, None, prev_memory))
-            if should_retry:
+            if chunk_res.should_retry:
                 chain_exhaustion_recovery_used = True
                 continue
-            if chunk_success:
+            if chunk_res.success:
                 break
 
         if chunk_start_sec + step_seconds < int(total_duration_sec):
