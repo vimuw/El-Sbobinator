@@ -100,10 +100,9 @@ export function DraggableSessionCard({
   return (
     <div
       onClick={() => onPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir)}
-      className="archive-session-card flex items-center justify-between gap-3 px-4 py-3 cursor-pointer group/card"
+      className={`archive-session-card flex items-center justify-between gap-3 px-4 py-3 cursor-pointer group/card ${selected ? 'is-selected' : ''}`}
       style={{
-        ...(hasRevisionWarnings ? { borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)' } : {}),
-        ...(selected ? { borderColor: 'var(--accent-text)', boxShadow: 'none', background: 'transparent' } : {}),
+        ...(hasRevisionWarnings && !selected ? { borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)' } : {}),
       }}
     >
       <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -326,16 +325,15 @@ export function SortableSessionCard({
       {...attributes}
       {...(!disabled ? listeners : {})}
       onClick={() => onPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir)}
-      className="archive-session-card flex items-center justify-between gap-3 px-4 py-3 group/card"
+      className={`archive-session-card flex items-center justify-between gap-3 px-4 py-3 group/card ${selected ? 'is-selected' : ''}`}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.4 : 1,
         touchAction: disabled ? undefined : 'none',
         cursor: isDragging ? 'grabbing' : disabled ? 'pointer' : 'grab',
-        borderColor: selected ? 'var(--accent-text)' : (hasRevisionWarnings ? 'var(--warning-ring)' : undefined),
-        boxShadow: selected ? 'none' : undefined,
-        background: selected ? 'transparent' : (hasRevisionWarnings ? 'var(--warning-subtle)' : undefined),
+        borderColor: hasRevisionWarnings && !selected ? 'var(--warning-ring)' : undefined,
+        background: hasRevisionWarnings && !selected ? 'var(--warning-subtle)' : undefined,
       }}
     >
       <div className="flex items-center gap-3 min-w-0 flex-1">

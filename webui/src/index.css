@@ -3197,6 +3197,20 @@ input[type="password"]::-ms-reveal {
   border-color: rgba(255, 255, 255, 0.35);
 }
 
+.archive-session-card.is-selected,
+:root:not([data-theme="dark"]) .archive-session-card.is-selected,
+:root[data-theme="dark"] .archive-session-card.is-selected {
+  background: var(--accent-subtle);
+  border-color: var(--accent-text);
+}
+
+.archive-session-card.is-selected:hover,
+:root:not([data-theme="dark"]) .archive-session-card.is-selected:hover,
+:root[data-theme="dark"] .archive-session-card.is-selected:hover {
+  background: color-mix(in srgb, var(--accent-text) 12%, var(--card-queued-bg));
+  border-color: var(--accent-text);
+}
+
 /* ═══ HOURGLASS BADGE ANIMATION ═══ */
 
 @keyframes hg-rotate {
