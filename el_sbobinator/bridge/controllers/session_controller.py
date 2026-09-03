@@ -110,11 +110,18 @@ class SessionControllerMixin:
     def delete_session(self, session_dir: str) -> dict:
         """Permanently delete a single session folder from disk."""
         try:
+            clean_dir = str(session_dir or "").strip()
+            if not clean_dir:
+                return bridge_error("Percorso non valido")
             session_root = self._get_session_root()
-            abs_dir = os.path.realpath(session_dir)
+            abs_dir = os.path.realpath(clean_dir)
             abs_root = os.path.realpath(session_root)
             if not _path_under_root(abs_dir, abs_root):
                 return bridge_error("Percorso non valido")
+            if os.path.normcase(abs_dir) == os.path.normcase(abs_root):
+                return bridge_error(
+                    "Impossibile eliminare la cartella principale delle sessioni."
+                )
             if not os.path.isdir(abs_dir):
                 return bridge_error("Cartella non trovata")
             self._evict_deleted_session_caches(abs_dir)

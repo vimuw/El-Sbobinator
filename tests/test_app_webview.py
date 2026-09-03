@@ -2017,6 +2017,30 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
             self.assertIn("Percorso non valido", result["error"])
             self.assertTrue(os.path.exists(victim))
 
+    def test_delete_session_rejects_session_root_itself(self):
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as session_root:
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                # Passing session_root directly
+                result = api.delete_session(session_root)
+                self.assertFalse(result["ok"])
+                self.assertIn("Impossibile eliminare", result["error"])
+                self.assertTrue(os.path.exists(session_root))
+
+                # Passing empty, whitespace, or None string rejects early without resolving cwd
+                result_empty = api.delete_session("")
+                self.assertFalse(result_empty["ok"])
+                self.assertIn("Percorso non valido", result_empty["error"])
+                self.assertTrue(os.path.exists(session_root))
+
+                result_ws = api.delete_session("   ")
+                self.assertFalse(result_ws["ok"])
+                self.assertIn("Percorso non valido", result_ws["error"])
+
+                result_none = api.delete_session(None)  # type: ignore
+                self.assertFalse(result_none["ok"])
+                self.assertIn("Percorso non valido", result_none["error"])
+
     def test_delete_session_evicts_resolved_path_cache(self):
         import os
 
