@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings, HardDrive, Activity, Key, Loader2 } from 'lucide-react';
+import { Settings, HardDrive, Activity, Key, Loader2, X } from 'lucide-react';
 import type { ApiUsageResult, ModelOption, ValidationResult } from '../../bridge';
 import { ConfirmActionModal } from './ConfirmActionModal';
 import { ApiKeySection } from './settings/ApiKeySection';
@@ -449,6 +449,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               <div className="flex-1 flex flex-col min-w-0 bg-[var(--bg-surface)] h-full relative">
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  disabled={isSaving}
+                  className="icon-button modal-icon-button absolute top-4 right-4 z-10"
+                  aria-label="Chiudi finestra"
+                >
+                  <X className="w-4 h-4" />
+                </button>
                 <div className="app-scroll flex-1 overflow-y-auto overflow-x-hidden p-6 md:p-8 space-y-6">
                   {activeTab === 'general' && (
                     <div className="space-y-5 animate-fade-in">
@@ -545,7 +554,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   )}
                 </div>
 
-                <div className="px-6 py-4 md:px-8 bg-[var(--bg-surface)] shrink-0 border-t border-[var(--border-subtle)] flex items-center justify-between gap-4">
+                <div className="modal-footer flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     {saveError && (
                       <p className="text-sm text-[var(--error-text)] font-semibold truncate">
@@ -558,7 +567,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       type="button"
                       onClick={handleClose}
                       disabled={isSaving}
-                      className="px-4 py-2 rounded-lg text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--sidebar-active-bg)] transition-colors disabled:opacity-40 cursor-pointer"
+                      className="modal-action-button"
                     >
                       Annulla
                     </button>
@@ -567,7 +576,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       type="button"
                       onClick={handleSave}
                       disabled={isSaving}
-                      className="px-5 py-2 rounded-lg text-sm font-semibold bg-[var(--accent-bg)] hover:bg-[var(--accent-bg-hover)] text-white transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                      className="modal-action-button is-primary"
                     >
                       {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                       Salva e Chiudi

@@ -22,18 +22,18 @@ export function getItemBackground(
   category: NotificationMessage['category']
 ) {
   if (category === 'update' || type === 'info') {
-    return 'linear-gradient(135deg, rgba(59, 130, 246, 0.13) 0%, rgba(59, 130, 246, 0.035) 100%)';
+    return 'var(--accent-subtle)';
   }
 
   switch (type) {
     case 'success':
-      return 'linear-gradient(135deg, rgba(34, 197, 94, 0.13) 0%, rgba(34, 197, 94, 0.035) 100%)';
+      return 'var(--success-subtle)';
     case 'warning':
-      return 'linear-gradient(135deg, rgba(245, 158, 11, 0.14) 0%, rgba(245, 158, 11, 0.035) 100%)';
+      return 'var(--warning-subtle)';
     case 'error':
-      return 'linear-gradient(135deg, rgba(239, 68, 68, 0.14) 0%, rgba(239, 68, 68, 0.035) 100%)';
+      return 'var(--error-subtle)';
     default:
-      return 'linear-gradient(135deg, rgba(59, 130, 246, 0.13) 0%, rgba(59, 130, 246, 0.035) 100%)';
+      return 'transparent';
   }
 }
 
@@ -43,8 +43,8 @@ export function getCategoryBadgeStyle(
 ) {
   if (category === 'update' || type === 'info') {
     return {
-      background: 'rgba(59, 130, 246, 0.12)',
-      color: '#2563eb',
+      background: 'var(--accent-subtle)',
+      color: 'var(--accent-text)',
     };
   }
   switch (type) {
@@ -76,13 +76,13 @@ export function getActionColor(
   type: NotificationMessage['type']
 ) {
   if (category === 'update' || type === 'info') {
-    return '#2563eb';
+    return 'var(--accent-text)';
   }
   switch (type) {
     case 'warning':
-      return 'var(--warning-text, #b45309)';
+      return 'var(--warning-text)';
     case 'error':
-      return 'var(--error-text, #dc2626)';
+      return 'var(--error-text)';
     case 'success':
     default:
       return 'var(--accent-text)';
@@ -96,24 +96,24 @@ export function getCaretStyle(
   if (category === 'update' || type === 'info') {
     return {
       fill: 'url(#caret-grad-info)',
-      stroke: 'color-mix(in srgb, #3b82f6 13%, var(--bg-elevated, #ffffff))',
+      stroke: 'color-mix(in srgb, var(--accent-bg) 14%, var(--bg-elevated, #ffffff))',
     };
   }
   switch (type) {
     case 'success':
       return {
         fill: 'url(#caret-grad-success)',
-        stroke: 'color-mix(in srgb, #22c55e 13%, var(--bg-elevated, #ffffff))',
+        stroke: 'color-mix(in srgb, var(--success-bg) 14%, var(--bg-elevated, #ffffff))',
       };
     case 'warning':
       return {
         fill: 'url(#caret-grad-warning)',
-        stroke: 'color-mix(in srgb, #f59e0b 14%, var(--bg-elevated, #ffffff))',
+        stroke: 'color-mix(in srgb, var(--warning-bg) 14%, var(--bg-elevated, #ffffff))',
       };
     case 'error':
       return {
         fill: 'url(#caret-grad-error)',
-        stroke: 'color-mix(in srgb, #ef4444 14%, var(--bg-elevated, #ffffff))',
+        stroke: 'color-mix(in srgb, var(--error-bg) 14%, var(--bg-elevated, #ffffff))',
       };
     default:
       return {

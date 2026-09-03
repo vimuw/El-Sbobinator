@@ -54,8 +54,8 @@ export function NotificationItem({
         <div
           className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
           style={{
-            background: 'rgba(59, 130, 246, 0.12)',
-            color: '#2563eb',
+            background: 'var(--accent-subtle)',
+            color: 'var(--accent-text)',
           }}
         >
           <Info className="w-4 h-4" />
@@ -105,8 +105,8 @@ export function NotificationItem({
           <div
             className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
             style={{
-              background: 'rgba(59, 130, 246, 0.12)',
-              color: '#2563eb',
+              background: 'var(--accent-subtle)',
+              color: 'var(--accent-text)',
             }}
           >
             <Info className="w-4 h-4" />
@@ -124,7 +124,7 @@ export function NotificationItem({
         if (!notification.read) onMarkAsRead(notification.id);
         onNotificationClick?.(notification);
       }}
-      className="group relative flex items-start gap-3 px-4 py-3 border-b border-[var(--border-subtle)] last:border-b-0 cursor-pointer transition-all duration-150 hover:brightness-[0.98] dark:hover:brightness-[1.08]"
+      className={`notification-item ${!notification.read ? 'is-unread ' : ''}group relative flex items-start gap-3 px-4 py-3 border-b border-[var(--border-subtle)] last:border-b-0 cursor-pointer transition-all duration-150 hover:brightness-[0.98] dark:hover:brightness-[1.08]`}
       style={{
         background: getItemBackground(notification.type, notification.category),
       }}
@@ -142,11 +142,11 @@ export function NotificationItem({
               style={{
                 background:
                   notification.category === 'update' || notification.type === 'info'
-                    ? '#2563eb'
+                    ? 'var(--accent-text)'
                     : notification.type === 'warning'
-                    ? 'var(--warning-text, #b45309)'
+                    ? 'var(--warning-text)'
                     : notification.type === 'error'
-                    ? 'var(--error-text, #dc2626)'
+                    ? 'var(--error-text)'
                     : 'var(--accent-text)',
               }}
               title="Non letta"

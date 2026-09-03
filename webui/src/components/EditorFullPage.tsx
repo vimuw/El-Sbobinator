@@ -276,7 +276,7 @@ export function EditorFullPage({
               >
                 {collabRoom ? (
                   <>
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                    <span className="w-2 h-2 rounded-full bg-[var(--accent-bg)] animate-pulse shrink-0" />
                     <Users className="w-3.5 h-3.5" />
                     <span className="max-w-[120px] truncate">{collabRoom}</span>
                   </>

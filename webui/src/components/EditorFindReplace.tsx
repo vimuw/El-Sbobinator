@@ -167,16 +167,16 @@ export const FindReplacePanel = ({
           {findText ? (matchCount > 0 ? `${currentMatch} di ${matchCount}` : 'Nessun risultato') : ''}
         </span>
         <button type="button" onClick={handlePrev} className="find-bar-btn" title="Precedente (Shift+Invio)" disabled={matchCount === 0}>
-          <ChevronDown style={{ transform: 'rotate(180deg)', width: 15, height: 15 }} />
+          <ChevronDown size={15} style={{ transform: 'rotate(180deg)' }} />
         </button>
         <button type="button" onClick={handleNext} className="find-bar-btn" title="Successivo (Invio)" disabled={matchCount === 0}>
-          <ChevronDown style={{ width: 15, height: 15 }} />
+          <ChevronDown size={15} />
         </button>
         <button type="button" onClick={() => setExpanded(true)} className="find-bar-btn" title="Trova e sostituisci">
-          <MoreVertical style={{ width: 15, height: 15 }} />
+          <MoreVertical size={15} />
         </button>
         <button type="button" onClick={onClose} className="find-bar-btn" title="Chiudi (Esc)">
-          <X style={{ width: 15, height: 15 }} />
+          <X size={15} />
         </button>
       </div>
     );
@@ -187,7 +187,7 @@ export const FindReplacePanel = ({
       <div className="find-replace-dialog-header">
         <span className="find-replace-dialog-title">Trova e sostituisci</span>
         <button type="button" onClick={onClose} className="find-bar-btn" title="Chiudi (Esc)">
-          <X style={{ width: 16, height: 16 }} />
+          <X size={16} />
         </button>
       </div>
       <div className="find-replace-dialog-body">

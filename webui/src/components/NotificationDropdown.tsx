@@ -152,20 +152,20 @@ export function NotificationDropdown({
             >
               <defs>
                 <linearGradient id="caret-grad-info" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor="color-mix(in srgb, #3b82f6 13%, var(--bg-elevated, #ffffff))" />
-                  <stop offset="100%" stopColor="color-mix(in srgb, #3b82f6 10%, var(--bg-elevated, #ffffff))" />
+                  <stop offset="0%" stopColor="color-mix(in srgb, var(--accent-bg) 14%, var(--bg-elevated, #ffffff))" />
+                  <stop offset="100%" stopColor="color-mix(in srgb, var(--accent-bg) 8%, var(--bg-elevated, #ffffff))" />
                 </linearGradient>
                 <linearGradient id="caret-grad-success" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor="color-mix(in srgb, #22c55e 13%, var(--bg-elevated, #ffffff))" />
-                  <stop offset="100%" stopColor="color-mix(in srgb, #22c55e 10%, var(--bg-elevated, #ffffff))" />
+                  <stop offset="0%" stopColor="color-mix(in srgb, var(--success-bg) 14%, var(--bg-elevated, #ffffff))" />
+                  <stop offset="100%" stopColor="color-mix(in srgb, var(--success-bg) 8%, var(--bg-elevated, #ffffff))" />
                 </linearGradient>
                 <linearGradient id="caret-grad-warning" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor="color-mix(in srgb, #f59e0b 14%, var(--bg-elevated, #ffffff))" />
-                  <stop offset="100%" stopColor="color-mix(in srgb, #f59e0b 10%, var(--bg-elevated, #ffffff))" />
+                  <stop offset="0%" stopColor="color-mix(in srgb, var(--warning-bg) 14%, var(--bg-elevated, #ffffff))" />
+                  <stop offset="100%" stopColor="color-mix(in srgb, var(--warning-bg) 8%, var(--bg-elevated, #ffffff))" />
                 </linearGradient>
                 <linearGradient id="caret-grad-error" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor="color-mix(in srgb, #ef4444 14%, var(--bg-elevated, #ffffff))" />
-                  <stop offset="100%" stopColor="color-mix(in srgb, #ef4444 10%, var(--bg-elevated, #ffffff))" />
+                  <stop offset="0%" stopColor="color-mix(in srgb, var(--error-bg) 14%, var(--bg-elevated, #ffffff))" />
+                  <stop offset="100%" stopColor="color-mix(in srgb, var(--error-bg) 8%, var(--bg-elevated, #ffffff))" />
                 </linearGradient>
               </defs>
               <polygon
@@ -191,14 +191,9 @@ export function NotificationDropdown({
           </div>
         )}
 
-        {/* Inner bordered panel matching queue-card styling, zero shadow */}
+        {/* Inner bordered panel matching design system .notification-dropdown-panel */}
         <div
-          className="relative flex flex-col flex-1 overflow-hidden rounded-[10px] border bg-[var(--bg-elevated)]"
-          style={{
-            borderColor: 'var(--card-queued-border, var(--border-default))',
-            background: 'var(--bg-elevated, #ffffff)',
-            boxShadow: 'none',
-          }}
+          className="notification-dropdown-panel relative flex flex-col flex-1 overflow-hidden"
         >
           {/* Header Row: Title & Action Buttons */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]">
@@ -224,7 +219,7 @@ export function NotificationDropdown({
                 <button
                   type="button"
                   onClick={onMarkAllAsRead}
-                  className="p-1 rounded-md transition-colors hover:bg-neutral-500/15 flex items-center justify-center text-[var(--accent-text)] hover:text-[var(--text-primary)]"
+                  className="p-1 rounded-md transition-colors hover:bg-[var(--accent-subtle)] flex items-center justify-center text-[var(--accent-text)] hover:text-[var(--text-primary)]"
                   style={{
                     cursor: 'pointer',
                   }}

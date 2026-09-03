@@ -48,7 +48,7 @@ export const AlignDropdownButton = ({ editor }: { editor: TiptapEditor }) => {
         title="Allineamento testo"
       >
         <CurrentIcon className="h-4 w-4" />
-        <ChevronDown style={{ width: 9, height: 9, opacity: 0.6, marginLeft: 2 }} />
+        <ChevronDown size={9} style={{ opacity: 0.6, marginLeft: 2 }} />
       </button>
       {isOpen && createPortal(
         <div

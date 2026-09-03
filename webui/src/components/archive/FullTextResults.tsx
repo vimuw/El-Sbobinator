@@ -53,7 +53,7 @@ export function FullTextResultList({
             {result.snippets.map((s, i) => (
               <p key={i} className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
                 {s.before && <span>…{s.before} </span>}
-                <mark style={{ background: 'var(--accent-subtle)', color: 'var(--accent-text)', borderRadius: 3, padding: '0 2px', fontWeight: 600 }}>{s.match}</mark>
+                <mark className="search-highlight px-0.5 font-semibold">{s.match}</mark>
                 {s.after && <span> {s.after}…</span>}
               </p>
             ))}

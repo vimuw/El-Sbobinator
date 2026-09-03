@@ -131,7 +131,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
         </div>
 
         {isMoveInProgress && (
-          <div className="p-3 rounded-lg bg-[var(--accent-subtle)] border border-[var(--accent-ring)] text-xs space-y-1.5">
+          <div className="alert-card is-info text-xs space-y-1.5">
             <div className="flex items-center justify-between text-[var(--accent-text)] font-medium">
               <span>Spostamento cartella in corso...</span>
               {moveProgress && moveProgress.total > 0 && (
@@ -154,7 +154,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
         )}
 
         {moveError && (
-          <div className="p-3 rounded-lg bg-[var(--error-subtle)] border border-[var(--error-ring)] text-xs text-[var(--error-text)] font-medium">
+          <div className="alert-card is-error text-xs font-medium">
             {moveError}
           </div>
         )}
@@ -239,13 +239,13 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
             className="overflow-hidden"
           >
             <div
-              className={`p-3 rounded-lg border flex items-start justify-between gap-3 ${
+              className={`relative alert-card ${
                 (cleanupResult?.removed ?? 0) > 0 || (completedCleanupResult?.removed ?? 0) > 0
-                  ? 'bg-[var(--success-subtle)] border-[var(--success-ring)]'
-                  : 'bg-[var(--accent-subtle)] border-[var(--border-subtle)]'
-              }`}
+                  ? 'is-success'
+                  : 'is-info'
+              } !flex-row items-start justify-between gap-3`}
             >
-              <div className="flex items-start gap-2.5 min-w-0">
+              <div className="flex items-start gap-2.5 min-w-0 pr-6">
                 {(cleanupResult?.removed ?? 0) > 0 || (completedCleanupResult?.removed ?? 0) > 0 ? (
                   <CheckCircle2 className="w-4 h-4 text-[var(--success-text)] shrink-0 mt-0.5" />
                 ) : (
@@ -297,9 +297,9 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
                   onClick={onDismissCleanupResult}
                   aria-label="Chiudi notifica"
                   title="Chiudi notifica"
-                  className="p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--sidebar-active-bg)] transition-colors shrink-0 -mr-1 -mt-0.5"
+                  className="group/close absolute top-2.5 right-2.5 p-1 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--sidebar-active-bg)] transition-colors cursor-pointer shrink-0"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-3.5 h-3.5 shrink-0 transition-transform duration-200 group-hover/close:scale-110 group-hover/close:rotate-90" />
                 </button>
               )}
             </div>

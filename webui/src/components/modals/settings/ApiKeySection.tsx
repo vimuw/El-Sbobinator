@@ -81,7 +81,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
         )}
 
         {apiKeyInsecure && (
-          <div className="p-3 rounded-lg bg-[var(--warning-subtle)] border border-[var(--warning-ring)] text-xs text-[var(--warning-text)] space-y-1">
+          <div className="alert-card is-warning text-xs space-y-1">
             <div className="font-semibold flex items-center gap-1.5">
               <AlertTriangle className="w-4 h-4 shrink-0" />
               Memorizzazione in chiaro

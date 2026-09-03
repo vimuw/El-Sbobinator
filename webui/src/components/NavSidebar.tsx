@@ -152,8 +152,8 @@ export const NavSidebar = memo(function NavSidebar({
               </motion.span>
               {unreadNotificationsCount > 0 && (
                 <span style={{ position: 'absolute', top: -3, right: -3, display: 'inline-flex' }}>
-                  <span className="animate-ping" style={{ position: 'absolute', width: 7, height: 7, borderRadius: '50%', background: '#b91c1c', opacity: 0.6 }} />
-                  <span style={{ position: 'relative', width: 7, height: 7, borderRadius: '50%', background: '#b91c1c', border: '1.5px solid var(--sidebar-bg)' }} />
+                  <span className="animate-ping" style={{ position: 'absolute', width: 7, height: 7, borderRadius: '50%', background: 'var(--error-bg)', opacity: 0.6 }} />
+                  <span style={{ position: 'relative', width: 7, height: 7, borderRadius: '50%', background: 'var(--error-bg)', border: '1.5px solid var(--sidebar-bg)' }} />
                 </span>
               )}
             </span>

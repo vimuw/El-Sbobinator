@@ -97,7 +97,7 @@ export const WelcomeDashboard = memo(function WelcomeDashboard({ archiveSessions
       className="space-y-4"
     >
       <div className="space-y-2 py-3">
-        <h1 className="text-4xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+        <h1 className="text-[1.75rem] font-semibold tracking-tight leading-tight" style={{ color: 'var(--text-primary)' }}>
           {hasSessions ? 'Bentornato 👋' : 'Benvenuto in El Sbobinator 👋'}
         </h1>
         <p className="text-base" style={{ color: 'var(--text-muted)' }}>

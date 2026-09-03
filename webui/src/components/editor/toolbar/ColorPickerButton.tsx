@@ -64,7 +64,7 @@ export const ColorPickerButton = ({ editor }: { editor: TiptapEditor }) => {
             style={{ background: currentColor ?? 'var(--text-primary)', opacity: currentColor ? 1 : 0.55 }}
           />
         </span>
-        <ChevronDown style={{ width: 9, height: 9, opacity: 0.55, flexShrink: 0 }} />
+        <ChevronDown size={9} style={{ opacity: 0.55, flexShrink: 0 }} />
       </button>
       {isOpen && createPortal(
         <div

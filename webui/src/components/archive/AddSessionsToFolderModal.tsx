@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Check, FileText, FolderPlus, Plus, Search, X } from 'lucide-react';
 import type { ArchiveFolder, ArchiveSession } from '../../bridge';
+import { DEFAULT_FOLDER_COLOR } from './types';
 import { formatRelativeTime } from '../../utils';
 
 export interface AddSessionsToFolderModalProps {
@@ -85,17 +86,14 @@ export function AddSessionsToFolderModal({
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div
-          className="flex items-center justify-between gap-3 px-5 py-4 shrink-0"
-          style={{ borderBottom: '1px solid var(--border-subtle)' }}
-        >
+        <div className="modal-header">
           <div className="flex items-center gap-3 min-w-0">
             <span
-              className="w-3.5 h-3.5 rounded-full shrink-0"
-              style={{ background: folder.color }}
+              className="folder-color-dot"
+              style={{ '--folder-color': folder.color || DEFAULT_FOLDER_COLOR } as React.CSSProperties}
             />
             <h2 className="text-lg font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-              Aggiungi lezioni a <span style={{ color: folder.color }}>{folder.name}</span>
+              Aggiungi lezioni a <span style={{ color: folder.color || DEFAULT_FOLDER_COLOR }}>{folder.name}</span>
             </h2>
           </div>
           <button
@@ -109,7 +107,7 @@ export function AddSessionsToFolderModal({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-hidden flex flex-col p-5 gap-3.5 min-h-[300px]">
+        <div className="modal-body flex flex-col gap-3.5 min-h-[300px]">
           {availableSessions.length === 0 ? (
             <div
               className="flex-1 flex flex-col items-center justify-center gap-2 py-12 text-center"
@@ -257,10 +255,7 @@ export function AddSessionsToFolderModal({
         </div>
 
         {/* Footer Actions */}
-        <div
-          className="px-5 py-4 flex items-center justify-between gap-3 shrink-0"
-          style={{ borderTop: '1px solid var(--border-subtle)' }}
-        >
+        <div className="modal-footer">
           <button
             type="button"
             onClick={onClose}

@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { Trash2, X } from 'lucide-react';
 import type { ArchiveFolder } from '../../bridge';
-import { FOLDER_COLORS, type FolderModalState } from './types';
+import { DEFAULT_FOLDER_COLOR, FOLDER_COLORS, type FolderModalState } from './types';
 
 interface FolderModalProps {
   state: FolderModalState;
@@ -12,8 +12,13 @@ interface FolderModalProps {
 
 export function FolderModal({ state, onClose, onSave }: FolderModalProps) {
   const [name, setName] = useState(state.type === 'edit' ? state.folder.name : '');
-  const [color, setColor] = useState(state.type === 'edit' ? state.folder.color : FOLDER_COLORS[0]);
+  const [color, setColor] = useState(state.type === 'edit' ? (state.folder.color || DEFAULT_FOLDER_COLOR) : DEFAULT_FOLDER_COLOR);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setName(state.type === 'edit' ? state.folder.name : '');
+    setColor(state.type === 'edit' ? (state.folder.color || DEFAULT_FOLDER_COLOR) : DEFAULT_FOLDER_COLOR);
+  }, [state]);
 
   useEffect(() => {
     const timer = setTimeout(() => inputRef.current?.focus(), 80);
@@ -23,7 +28,7 @@ export function FolderModal({ state, onClose, onSave }: FolderModalProps) {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onSave(name, color);
+    onSave(name.trim(), color || DEFAULT_FOLDER_COLOR);
   };
 
   return (
@@ -46,9 +51,9 @@ export function FolderModal({ state, onClose, onSave }: FolderModalProps) {
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 px-5 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+        <div className="modal-header">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="w-4 h-4 rounded-full shrink-0" style={{ background: color }} />
+            <span className="folder-color-dot" style={{ '--folder-color': color } as React.CSSProperties} />
             <h2 className="text-lg font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
               {state.type === 'create' ? 'Nuova cartella' : 'Modifica cartella'}
             </h2>
@@ -64,7 +69,7 @@ export function FolderModal({ state, onClose, onSave }: FolderModalProps) {
         </div>
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto flex flex-col">
-          <div className="px-5 py-5 space-y-4 text-sm flex-1">
+          <div className="modal-body space-y-4">
             <div>
               <label className="text-xs font-semibold block mb-1.5" style={{ color: 'var(--text-muted)' }}>
                 NOME RACCOLTA
@@ -76,8 +81,7 @@ export function FolderModal({ state, onClose, onSave }: FolderModalProps) {
                 onChange={e => setName(e.target.value)}
                 placeholder="es. Anatomia"
                 maxLength={48}
-                className="premium-button-secondary w-full px-3 py-2.5 rounded-xl text-sm outline-none"
-                style={{ borderColor: 'var(--border-default)', background: 'var(--bg-input)', color: 'var(--text-primary)', textAlign: 'left' }}
+                className="app-input w-full text-sm"
               />
             </div>
             <div>
@@ -85,26 +89,30 @@ export function FolderModal({ state, onClose, onSave }: FolderModalProps) {
                 COLORE IDENTIFICATIVO
               </label>
               <div className="flex flex-wrap gap-2">
-                {FOLDER_COLORS.map(c => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setColor(c)}
-                    className="w-7 h-7 rounded-full transition-transform hover:scale-105 focus:outline-none"
-                    style={{
-                      background: c,
-                      border: color === c ? '3px solid var(--text-primary)' : '3px solid transparent',
-                      outline: color === c ? `2px solid ${c}` : 'none',
-                      outlineOffset: 2,
-                    }}
-                    aria-label={`Colore ${c}`}
-                  />
-                ))}
+                {FOLDER_COLORS.map(c => {
+                  const isSelected = color.trim().toLowerCase() === c.trim().toLowerCase();
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setColor(c)}
+                      className="w-7 h-7 rounded-full transition-transform hover:scale-105 focus:outline-none"
+                      style={{
+                        background: c,
+                        border: isSelected ? '3px solid var(--text-primary)' : '3px solid transparent',
+                        outline: isSelected ? `2px solid ${c}` : 'none',
+                        outlineOffset: 2,
+                      }}
+                      aria-label={`Colore ${c}`}
+                      aria-pressed={isSelected}
+                    />
+                  );
+                })}
               </div>
             </div>
           </div>
           {/* Footer Actions */}
-          <div className="px-5 py-4 flex gap-3 shrink-0" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+          <div className="modal-footer">
             <button type="button" onClick={onClose} className="modal-action-button flex-1">
               Annulla
             </button>
@@ -154,7 +162,7 @@ export function DeleteFolderConfirmModal({
         className="modal-card relative w-full max-w-md max-h-[86vh] overflow-hidden flex flex-col"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-3 px-5 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+        <div className="modal-header">
           <div className="flex items-center gap-3 min-w-0">
             <Trash2 className="w-5 h-5 shrink-0" style={{ color: 'var(--error-text)' }} />
             <h2 className="text-lg font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
@@ -170,9 +178,16 @@ export function DeleteFolderConfirmModal({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-5 text-sm" style={{ color: 'var(--text-secondary)' }}>
-          <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-xl" style={{ background: `${folder.color}20`, border: `1px solid ${folder.color}50` }}>
-            <span className="w-3 h-3 rounded-full shrink-0" style={{ background: folder.color }} />
+        <div className="modal-body space-y-4">
+          <div
+            className="flex items-center gap-2 px-3 py-2 rounded-xl"
+            style={{
+              '--folder-color': folder.color || DEFAULT_FOLDER_COLOR,
+              background: 'color-mix(in srgb, var(--folder-color) 12%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--folder-color) 28%, transparent)',
+            } as React.CSSProperties}
+          >
+            <span className="folder-color-dot is-small" />
             <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{folder.name}</span>
             {sessionCount > 0 && (
               <span className="ml-auto text-xs shrink-0" style={{ color: 'var(--text-muted)' }}>
@@ -188,7 +203,7 @@ export function DeleteFolderConfirmModal({
           </p>
         </div>
 
-        <div className="px-5 py-4 flex gap-3 shrink-0" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+        <div className="modal-footer">
           <button onClick={onClose} className="modal-action-button flex-1">
             Annulla
           </button>
@@ -238,7 +253,7 @@ export function DeleteMultipleSessionsConfirmModal({
         className="modal-card relative w-full max-w-md max-h-[86vh] overflow-hidden flex flex-col"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-3 px-5 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+        <div className="modal-header">
           <div className="flex items-center gap-3 min-w-0">
             <Trash2 className="w-5 h-5 shrink-0" style={{ color: 'var(--error-text)' }} />
             <h2 className="text-lg font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
@@ -254,7 +269,7 @@ export function DeleteMultipleSessionsConfirmModal({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-5 text-sm space-y-3" style={{ color: 'var(--text-secondary)' }}>
+        <div className="modal-body space-y-3">
           <div className="p-3 rounded-xl border space-y-1.5" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
             {previewList.map(s => (
               <div key={s.sessionDir} className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
@@ -274,7 +289,7 @@ export function DeleteMultipleSessionsConfirmModal({
           </p>
         </div>
 
-        <div className="px-5 py-4 flex gap-3 shrink-0" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+        <div className="modal-footer">
           <button onClick={onClose} className="modal-action-button flex-1">
             Annulla
           </button>
@@ -290,4 +305,5 @@ export function DeleteMultipleSessionsConfirmModal({
   );
 }
 
+export { DEFAULT_FOLDER_COLOR, FOLDER_COLORS } from './types';
 export { AddSessionsToFolderModal, type AddSessionsToFolderModalProps } from './AddSessionsToFolderModal';

@@ -269,8 +269,8 @@ function MathNodeView({ node, updateAttributes, selected }: NodeViewProps) {
       { as: 'span', className: `math-node-wrapper ${selected ? 'is-selected' : ''}` },
       React.createElement(
         'span',
-        { className: 'math-inline-edit inline-flex items-center gap-1.5 bg-[var(--bg-elevated)] p-1 rounded-lg border border-blue-500' },
-        React.createElement('span', { className: 'text-xs font-mono font-semibold text-blue-500' }, 'TeX:'),
+        { className: 'math-inline-edit inline-flex items-center gap-1.5 bg-[var(--bg-elevated)] p-1 rounded-lg border border-[var(--accent-text)]' },
+        React.createElement('span', { className: 'text-xs font-mono font-semibold text-[var(--accent-text)]' }, 'TeX:'),
         React.createElement('input', {
           type: 'text',
           value: latex,
@@ -290,7 +290,7 @@ function MathNodeView({ node, updateAttributes, selected }: NodeViewProps) {
     NodeViewWrapper,
     { as: 'span', className: `math-node-wrapper ${selected ? 'is-selected' : ''}` },
     React.createElement('span', {
-      className: 'math-rendered cursor-pointer inline-block px-1.5 py-0.5 rounded transition-all hover:bg-blue-500/10 hover:ring-1 hover:ring-blue-500/30',
+      className: 'math-rendered cursor-pointer inline-block px-1.5 py-0.5 rounded transition-all hover:bg-[var(--accent-subtle)] hover:ring-1 hover:ring-[var(--accent-ring)]',
       onClick: () => setIsEditing(true),
       title: 'Clicca per modificare la formula LaTeX',
       dangerouslySetInnerHTML: { __html: html },
@@ -374,11 +374,11 @@ function MathBlockNodeView({ node, updateAttributes, selected }: NodeViewProps) 
   if (isEditing) {
     return React.createElement(
       NodeViewWrapper,
-      { as: 'div', className: `math-block-wrapper my-2 p-2 rounded border border-blue-500 bg-[var(--bg-elevated)] ${selected ? 'is-selected' : ''}` },
+      { as: 'div', className: `math-block-wrapper my-2 p-2 rounded border border-[var(--accent-text)] bg-[var(--bg-elevated)] ${selected ? 'is-selected' : ''}` },
       React.createElement(
         'div',
         { className: 'flex flex-col gap-2' },
-        React.createElement('span', { className: 'text-xs font-mono font-semibold text-blue-500' }, 'Formula LaTeX (Block):'),
+        React.createElement('span', { className: 'text-xs font-mono font-semibold text-[var(--accent-text)]' }, 'Formula LaTeX (Block):'),
         React.createElement('textarea', {
           value: latex,
           onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => setLatex(e.target.value),
@@ -395,7 +395,7 @@ function MathBlockNodeView({ node, updateAttributes, selected }: NodeViewProps) 
           {
             type: 'button',
             onClick: () => { updateAttributes({ latex }); setIsEditing(false); },
-            className: 'self-end px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded'
+            className: 'self-end px-3 py-1 bg-[var(--btn-primary-bg)] hover:bg-[var(--btn-primary-hover)] text-[var(--btn-primary-text)] text-xs rounded font-semibold transition-colors'
           },
           'Salva (Ctrl+Enter)'
         )
@@ -407,7 +407,7 @@ function MathBlockNodeView({ node, updateAttributes, selected }: NodeViewProps) 
     NodeViewWrapper,
     { as: 'div', className: `math-block-wrapper my-2 text-center ${selected ? 'is-selected' : ''}` },
     React.createElement('div', {
-      className: 'math-rendered cursor-pointer inline-block p-2 rounded transition-all hover:bg-blue-500/10 hover:ring-1 hover:ring-blue-500/30',
+      className: 'math-rendered cursor-pointer inline-block p-2 rounded transition-all hover:bg-[var(--accent-subtle)] hover:ring-1 hover:ring-[var(--accent-ring)]',
       onClick: () => setIsEditing(true),
       title: 'Clicca per modificare la formula LaTeX',
       dangerouslySetInnerHTML: { __html: html },

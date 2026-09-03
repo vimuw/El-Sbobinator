@@ -92,7 +92,7 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({
             {/* Modal Header */}
             <div className="modal-header">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-[var(--accent-subtle)] text-[var(--accent-color)]">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-[var(--accent-subtle)] text-[var(--accent-text)]">
                   <Users className="w-4.5 h-4.5" />
                 </div>
                 <div className="min-w-0">
@@ -119,7 +119,7 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({
                 <div className="p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--accent-color)] uppercase tracking-wider">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--accent-text)] uppercase tracking-wider">
                         <Radio className="w-3.5 h-3.5 animate-pulse" />
                         Sessione Attiva
                       </div>

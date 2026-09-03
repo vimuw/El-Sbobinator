@@ -10,7 +10,7 @@ import { loadAllEditorSessions, type EditorSession } from '../../editorSessions'
 import { formatRelativeTime, shortModelName } from '../../utils';
 import { KebabMenu, type KebabMenuItem } from '../KebabMenu';
 import { FolderIndicatorChip } from '../FolderChip';
-import { type ArchivePageProps, getOpenedAtMs } from './types';
+import { type ArchivePageProps, getOpenedAtMs, DEFAULT_FOLDER_COLOR } from './types';
 
 export interface DraggableSessionCardProps {
   session: ArchiveSession;
@@ -207,7 +207,7 @@ export function FolderSessionCardOverlay({
       }}
     >
       <div className="flex items-center gap-3 min-w-0 flex-1">
-        <span className="folder-color-dot is-large" style={{ '--folder-color': folderColor } as React.CSSProperties} />
+        <span className="folder-color-dot is-large" style={{ '--folder-color': folderColor || DEFAULT_FOLDER_COLOR } as React.CSSProperties} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{session.name}</p>
           <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -357,7 +357,7 @@ export function SortableSessionCard({
             {selected && <Check className="w-3 h-3 stroke-[3]" />}
           </button>
         )}
-        <span className="folder-color-dot is-large transition-transform duration-200 group-hover/card:scale-105" style={{ '--folder-color': folderColor } as React.CSSProperties} />
+        <span className="folder-color-dot is-large transition-transform duration-200 group-hover/card:scale-105" style={{ '--folder-color': folderColor || DEFAULT_FOLDER_COLOR } as React.CSSProperties} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{session.name}</p>
           <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>

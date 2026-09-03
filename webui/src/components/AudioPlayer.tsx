@@ -369,7 +369,8 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
           >
             <span className="text-xs font-semibold">{playbackRate}x</span>
             <ChevronDown
-              style={{ width: 10, height: 10, opacity: 0.6, marginLeft: 2, flexShrink: 0 }}
+              size={10}
+              style={{ opacity: 0.6, marginLeft: 2, flexShrink: 0 }}
               className={`transition-transform duration-150 ${isSpeedOpen ? 'rotate-180' : ''}`}
             />
           </button>

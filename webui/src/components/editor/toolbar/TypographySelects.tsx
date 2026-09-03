@@ -86,7 +86,7 @@ export const FontFamilySelect = ({ editor }: { editor: TiptapEditor }) => {
         title="Carattere"
       >
         <span className="text-xs font-medium truncate flex-1 text-left">{currentLabel}</span>
-        <ChevronDown style={{ width: 10, height: 10, opacity: 0.6, marginLeft: 2, flexShrink: 0 }} />
+        <ChevronDown size={10} style={{ opacity: 0.6, marginLeft: 2, flexShrink: 0 }} />
       </button>
       {isOpen && createPortal(
         <div
@@ -187,7 +187,7 @@ export const FontSizeSelect = ({ editor }: { editor: TiptapEditor }) => {
         title="Dimensione carattere"
       >
         <span className="text-xs font-medium flex-1 text-center">{currentSize}</span>
-        <ChevronDown style={{ width: 10, height: 10, opacity: 0.6, marginLeft: 2, flexShrink: 0 }} />
+        <ChevronDown size={10} style={{ opacity: 0.6, marginLeft: 2, flexShrink: 0 }} />
       </button>
       {isOpen && createPortal(
         <div
@@ -281,7 +281,7 @@ export const HeadingSelect = ({ editor }: { editor: TiptapEditor }) => {
         title="Stile paragrafo"
       >
         <span className="text-xs font-medium truncate flex-1 text-left">{current.label}</span>
-        <ChevronDown style={{ width: 10, height: 10, opacity: 0.6, marginLeft: 2, flexShrink: 0 }} />
+        <ChevronDown size={10} style={{ opacity: 0.6, marginLeft: 2, flexShrink: 0 }} />
       </button>
       {isOpen && createPortal(
         <div
@@ -378,7 +378,7 @@ export const ZoomSelect = ({
         title="Livello di zoom"
       >
         <span className="text-xs font-medium flex-1 text-center">{zoomLevel}%</span>
-        <ChevronDown style={{ width: 10, height: 10, opacity: 0.6, marginLeft: 2, flexShrink: 0 }} />
+        <ChevronDown size={10} style={{ opacity: 0.6, marginLeft: 2, flexShrink: 0 }} />
       </button>
       {isOpen && createPortal(
         <div

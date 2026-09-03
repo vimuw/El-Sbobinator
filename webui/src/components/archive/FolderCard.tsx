@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { FolderPlus, Pencil, Trash2 } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import type { ArchiveFolder, ArchiveSession } from '../../bridge';
+import { DEFAULT_FOLDER_COLOR } from './types';
 import { normalizeSessionPath } from '../../utils';
 import { KebabMenu, type KebabMenuItem } from '../KebabMenu';
 
@@ -42,7 +43,7 @@ export function FolderCard({
   return (
     <div
       className="folder-card cursor-pointer group/folder"
-      style={{ '--folder-color': folder.color } as React.CSSProperties}
+      style={{ '--folder-color': folder.color || DEFAULT_FOLDER_COLOR } as React.CSSProperties}
       onClick={onNavigate}
     >
       <div className="flex items-center gap-3 px-4 pt-3 pb-1">
@@ -115,7 +116,7 @@ export function FolderCardOverlay({
     <div
       className="folder-card opacity-95 pointer-events-none cursor-grabbing"
       style={{
-        '--folder-color': folder.color,
+        '--folder-color': folder.color || DEFAULT_FOLDER_COLOR,
         boxShadow: 'var(--shadow-strong)',
       } as React.CSSProperties}
     >

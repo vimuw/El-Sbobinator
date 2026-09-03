@@ -19,7 +19,7 @@ import { FullTextResultList } from './FullTextResults';
 import { FolderSessionCardOverlay, SortableSessionCard } from './SessionCard';
 import { ArchiveSelectionBar } from './ArchiveSelectionBar';
 import { AddSessionsToFolderModal } from './AddSessionsToFolderModal';
-import type { ArchivePageProps } from './types';
+import { DEFAULT_FOLDER_COLOR, type ArchivePageProps } from './types';
 
 export interface FolderDetailViewProps {
   folder: ArchiveFolder;
@@ -249,10 +249,10 @@ export function FolderDetailView({
           >
             <ArrowLeft className="w-4 h-4 transition-transform duration-200 group-hover/back:-translate-x-0.5" />
           </button>
-          <span className="folder-color-dot is-large" style={{ '--folder-color': folder.color } as React.CSSProperties} />
-          <h2 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+          <span className="folder-color-dot is-large" style={{ '--folder-color': folder.color || DEFAULT_FOLDER_COLOR } as React.CSSProperties} />
+          <h1 className="text-[1.75rem] font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
             {folder.name}
-          </h2>
+          </h1>
           <span className="status-pill">{folderSessions.length}</span>
         </div>
         <div className="flex items-center gap-2">
@@ -393,7 +393,7 @@ export function FolderDetailView({
                     <SortableSessionCard
                       key={session.session_dir}
                       session={session}
-                      folderColor={folder.color}
+                      folderColor={folder.color || DEFAULT_FOLDER_COLOR}
                       disabled={isFilteringName}
                       selected={selectedFolderSessionDirs.has(session.session_dir)}
                       onToggleSelect={() => toggleSelectFolderSession(session.session_dir)}
@@ -414,7 +414,7 @@ export function FolderDetailView({
             {activeSortId ? (() => {
               const activeNorm = normalizeSessionPath(activeSortId);
               const s = folderSessions.find(x => normalizeSessionPath(x.session_dir) === activeNorm);
-              return s ? <FolderSessionCardOverlay session={s} folderColor={folder.color} /> : null;
+              return s ? <FolderSessionCardOverlay session={s} folderColor={folder.color || DEFAULT_FOLDER_COLOR} /> : null;
             })() : null}
           </DragOverlay>
         </DndContext>

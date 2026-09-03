@@ -5,6 +5,7 @@ import {
   Plus, Trash2, X,
 } from 'lucide-react';
 import type { ArchiveFolder } from '../../bridge';
+import { DEFAULT_FOLDER_COLOR } from './types';
 
 export interface ArchiveSelectionBarProps {
   selectedCount: number;
@@ -71,12 +72,7 @@ export function ArchiveSelectionBar({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 28, scale: 0.96 }}
       transition={{ duration: 0.18, ease: 'easeOut' }}
-      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 p-1.5 sm:p-2 rounded-[10px] border max-w-[95vw] overflow-visible"
-      style={{
-        background: 'var(--bg-elevated)',
-        borderColor: 'var(--border-strong)',
-        boxShadow: 'none',
-      }}
+      className="archive-selection-bar fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 p-1.5 sm:p-2 max-w-[95vw] overflow-visible"
     >
       {/* 1. Count & Toggle All (unified minimal button with micro-animation) */}
       <button
@@ -160,7 +156,7 @@ export function ArchiveSelectionBar({
                     className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-semibold tracking-tight text-left transition-colors cursor-pointer hover:bg-[var(--sidebar-active-bg)]"
                     style={{ color: 'var(--text-primary)' }}
                   >
-                    <span className="w-3 h-3 rounded-full shrink-0" style={{ background: folder.color }} />
+                    <span className="folder-color-dot is-small" style={{ '--folder-color': folder.color || DEFAULT_FOLDER_COLOR } as React.CSSProperties} />
                     <span className="truncate flex-1">{folder.name}</span>
                     <span className="text-[10px] shrink-0 font-medium" style={{ color: 'var(--text-muted)' }}>
                       {folder.session_dirs.length}

@@ -19,6 +19,7 @@ import { ShareExportModal } from './modals/ShareExportModal';
 
 import {
   type ArchivePageProps,
+  DEFAULT_FOLDER_COLOR,
   type DeleteFolderConfirmState,
   type DeleteMultipleSessionsConfirmState,
   type FolderModalState,
@@ -43,7 +44,14 @@ export { SortMenu } from './archive/SortMenu';
 export { FolderCard, SortableFolderCard, FolderCardOverlay, NewFolderCard } from './archive/FolderCard';
 export { DraggableSessionCard, SortableSessionCard, FolderSessionCardOverlay } from './archive/SessionCard';
 export { FolderDetailView } from './archive/FolderDetailView';
-export { FolderModal, DeleteFolderConfirmModal, DeleteMultipleSessionsConfirmModal, AddSessionsToFolderModal } from './archive/FolderModals';
+export {
+  FolderModal,
+  DeleteFolderConfirmModal,
+  DeleteMultipleSessionsConfirmModal,
+  AddSessionsToFolderModal,
+  DEFAULT_FOLDER_COLOR,
+  FOLDER_COLORS,
+} from './archive/FolderModals';
 export { ArchiveSelectionBar } from './archive/ArchiveSelectionBar';
 export { FullTextResultList } from './archive/FullTextResults';
 
@@ -249,13 +257,14 @@ export function ArchivePage({
               state={folderModal}
               onClose={() => setFolderModal(null)}
               onSave={(name, color) => {
+                const finalColor = color || DEFAULT_FOLDER_COLOR;
                 if (folderModal.type === 'create') {
                   const pending = folderModal.pendingSessionDirs ?? [];
                   const pendingNorm = new Set(pending.map(d => normalizeSessionPath(d)));
                   const newFolder: ArchiveFolder = {
                     id: crypto.randomUUID(),
                     name: name.trim(),
-                    color,
+                    color: finalColor,
                     session_dirs: pending,
                   };
                   const updated = folders.map(f => ({
@@ -266,7 +275,7 @@ export function ArchivePage({
                   clearSelection();
                 } else {
                   onFoldersChange(folders.map(f =>
-                    f.id === folderModal.folder.id ? { ...f, name: name.trim(), color } : f,
+                    f.id === folderModal.folder.id ? { ...f, name: name.trim(), color: finalColor } : f,
                   ));
                 }
                 setFolderModal(null);
@@ -315,9 +324,9 @@ export function ArchivePage({
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <h2 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+          <h1 className="text-[1.75rem] font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
             Archivio Sbobine
-          </h2>
+          </h1>
           <span className="status-pill">{total != null && total > sessions.length ? total : sessions.length}</span>
         </div>
       </div>
@@ -631,13 +640,14 @@ export function ArchivePage({
             state={folderModal}
             onClose={() => setFolderModal(null)}
             onSave={(name, color) => {
+              const finalColor = color || DEFAULT_FOLDER_COLOR;
               if (folderModal.type === 'create') {
                 const pending = folderModal.pendingSessionDirs ?? [];
                 const pendingNorm = new Set(pending.map(d => normalizeSessionPath(d)));
                 const newFolder: ArchiveFolder = {
                   id: crypto.randomUUID(),
                   name: name.trim(),
-                  color,
+                  color: finalColor,
                   session_dirs: pending,
                 };
                 const updated = folders.map(f => ({
@@ -648,7 +658,7 @@ export function ArchivePage({
                 clearSelection();
               } else {
                 onFoldersChange(folders.map(f =>
-                  f.id === folderModal.folder.id ? { ...f, name: name.trim(), color } : f,
+                  f.id === folderModal.folder.id ? { ...f, name: name.trim(), color: finalColor } : f,
                 ));
               }
               setFolderModal(null);

@@ -7,6 +7,8 @@ export const FOLDER_COLORS = [
   '#748FFC', '#94A3B8',
 ];
 
+export const DEFAULT_FOLDER_COLOR = FOLDER_COLORS[0];
+
 export interface ArchivePageProps {
   sessions: ArchiveSession[];
   total?: number;

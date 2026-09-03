@@ -1,16 +1,18 @@
 import type { ArchiveFolder } from '../bridge';
+import { DEFAULT_FOLDER_COLOR } from './archive/types';
 
 // Tiny shared chip — kept separate so QueueFileCard can import it
 // without creating a QueueFileCard → ArchivePage circular dependency.
 export function FolderIndicatorChip({ folder }: { folder: Pick<ArchiveFolder, 'name' | 'color'> }) {
+  const folderColor = folder.color || DEFAULT_FOLDER_COLOR;
   return (
     <span
-      className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold px-1.5 py-[2px] rounded-full shrink-0 h-4 box-border"
-      style={{ background: `${folder.color}22`, color: folder.color, border: `1px solid ${folder.color}55` }}
+      className="folder-indicator-chip"
+      style={{ '--folder-color': folderColor } as React.CSSProperties}
       title={`Raccolta: ${folder.name}`}
     >
-      <span className="w-1.5 h-1.5 rounded-full" style={{ background: folder.color }} />
-      {folder.name}
+      <span className="folder-color-dot is-small" />
+      <span>{folder.name}</span>
     </span>
   );
 }

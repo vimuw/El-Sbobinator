@@ -11,7 +11,6 @@ import {
   FolderOpen,
   Activity,
   Clock,
-  Zap,
   RefreshCw,
 } from 'lucide-react';
 import type { ApiUsageResult, ValidationResult } from '../../../bridge';
@@ -165,9 +164,8 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
                 <span className="text-[11px] text-[var(--text-muted)] block">
                   Autonomia Stimata
                 </span>
-                <span className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
-                  <Zap className="w-4 h-4 text-[var(--brand-warm)] fill-[var(--brand-warm)] shrink-0" />
-                  <span>~{apiUsage.estimated_sbobine_remaining} lezioni (3h)</span>
+                <span className="text-base font-semibold text-[var(--text-primary)] block">
+                  ~{apiUsage.estimated_sbobine_remaining} lezioni (3h)
                 </span>
               </div>
             </div>
@@ -175,7 +173,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
         </div>
 
         {apiUsage?.is_degraded_mode && (
-          <div className="p-3 rounded-lg bg-[var(--warning-subtle)] border border-[var(--warning-ring)] text-xs text-[var(--warning-text)] flex items-start gap-2 animate-fade-in">
+          <div className="alert-card is-warning text-xs flex-row items-start gap-2 animate-fade-in">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
             <div className="space-y-0.5">
               <p className="font-semibold">Modalità Degradata Attiva</p>
@@ -347,7 +345,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
         {/* Validation Checks */}
         <div className="space-y-3">
           {validationResult && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-[var(--sidebar-active-bg)] border border-[var(--border-subtle)] animate-fade-in">
+            <div className={`alert-card ${validationResult.ok ? 'is-success' : 'is-error'} flex-row items-center gap-2 animate-fade-in`}>
               {validationResult.ok ? (
                 <Check className="w-4 h-4 text-[var(--success-text)] shrink-0" />
               ) : (
@@ -377,7 +375,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
                     </p>
                   )}
                   {(check.status === 'error' || check.status === 'warning') && check.errorMessage && (
-                    <div className="mt-2 p-2.5 rounded-lg bg-[var(--error-subtle)] border border-[var(--error-ring)] text-xs text-[var(--error-text)] space-y-1 animate-fade-in">
+                    <div className={`mt-2 alert-card ${check.status === 'error' ? 'is-error' : 'is-warning'} text-xs space-y-1 animate-fade-in`}>
                       <p className="font-semibold">{check.errorMessage}</p>
                       {check.errorDetails && (
                         <p className="font-mono break-all opacity-90">{check.errorDetails}</p>
