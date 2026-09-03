@@ -3,6 +3,7 @@ import os
 import re
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from typing import Any, ClassVar, cast
@@ -467,6 +468,81 @@ class AppWebviewTests(unittest.TestCase):
         self.assertTrue(new_key_event.wait(timeout=1))
         self.assertEqual(received["regenerate"], {"regenerate": False})
         self.assertEqual(received["new_key"], {"key": ""})
+
+    def test_is_busy_and_is_processing_active(self):
+        api = ElSbobinatorApi()
+        self.assertFalse(api.is_busy())
+        self.assertEqual(api.is_processing_active(), {"ok": True, "active": False})
+
+        # Pipeline running
+        api._adapter.is_running = True
+        self.assertTrue(api.is_busy())
+        self.assertEqual(api.is_processing_active(), {"ok": True, "active": True})
+        api._adapter.is_running = False
+
+        # Retry active
+        api._retry_active_count = 1
+        self.assertTrue(api.is_busy())
+        api._retry_active_count = 0
+
+        # Move active
+        api._move_state["status"] = "moving"
+        self.assertTrue(api.is_busy())
+        api._move_state["status"] = "idle"
+
+        # Worker thread active
+        dummy_event = threading.Event()
+        t = threading.Thread(target=dummy_event.wait)
+        t.start()
+        try:
+            api._processing_thread = t
+            self.assertTrue(api.is_busy())
+        finally:
+            dummy_event.set()
+            t.join()
+        self.assertFalse(api.is_busy())
+
+    def test_request_shutdown_cancels_pipeline_and_retry(self):
+        api = ElSbobinatorApi()
+        retry_event = threading.Event()
+        api._active_retry_cancel_event = retry_event
+
+        stop_called = False
+        orig_stop = api.stop_processing
+
+        def mock_stop():
+            nonlocal stop_called
+            stop_called = True
+            return orig_stop()
+
+        api.stop_processing = mock_stop
+        api.request_shutdown(timeout=0.5)
+
+        self.assertTrue(stop_called)
+        self.assertTrue(api._cancel_event.is_set())
+        self.assertTrue(retry_event.is_set())
+
+    def test_close_window_triggers_shutdown_and_destroy(self):
+        api = ElSbobinatorApi()
+        mock_window = MagicMock()
+        api.set_window(mock_window)
+
+        shutdown_called = False
+
+        def mock_shutdown(timeout=1.5):
+            nonlocal shutdown_called
+            shutdown_called = True
+
+        api.request_shutdown = mock_shutdown
+        res = api.close_window()
+
+        self.assertTrue(res["ok"])
+        self.assertTrue(getattr(api, "_force_close", False))
+        self.assertTrue(shutdown_called)
+        deadline = time.time() + 0.5
+        while not mock_window.destroy.called and time.time() < deadline:
+            time.sleep(0.02)
+        mock_window.destroy.assert_called_once()
 
     def test_answer_regenerate_none_cancels_processing_and_preserves_null(self):
         api = ElSbobinatorApi()

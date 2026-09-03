@@ -79,6 +79,8 @@ class ElSbobinatorApi(
         }
         self._move_lock = threading.Lock()
         self._retry_active_count: int = 0
+        self._active_retry_cancel_event: threading.Event | None = None
+        self._force_close: bool = False
         self._pipeline_lifecycle_lock = threading.Lock()
         self._cleanup_lock = threading.Lock()
 

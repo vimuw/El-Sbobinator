@@ -53,6 +53,8 @@ from el_sbobinator.utils.logging_utils import redact_secrets
 if TYPE_CHECKING:
     from collections import OrderedDict
 
+    import webview
+
 
 class PipelineControllerMixin:
     """Mixin providing pipeline execution, cancellation, retry, and low disk IPC methods."""
@@ -67,6 +69,11 @@ class PipelineControllerMixin:
         _cancel_event: threading.Event
         _pipeline_lifecycle_lock: threading.Lock
         _retry_active_count: int
+        _active_retry_cancel_event: threading.Event | None
+        _force_close: bool
+        _window: webview.Window | None
+        _move_state: dict
+        _move_lock: threading.Lock
         _sessions_cache: dict | None
         _sessions_cache_gen: int
         _sessions_cache_lock: threading.Lock
@@ -164,6 +171,8 @@ class PipelineControllerMixin:
                 return bridge_error("API key mancante: aggiungila nelle impostazioni.")
 
             retry_cancel_event = threading.Event()
+            with self._pipeline_lifecycle_lock:
+                self._active_retry_cancel_event = retry_cancel_event
             runtime = _RetryRuntime(self._adapter, retry_cancel_event)
 
             result = revision_service.execute_failed_blocks_retry_workflow(
@@ -188,8 +197,9 @@ class PipelineControllerMixin:
         except Exception as e:
             return bridge_error(e)
         finally:
-            if _retry_count_incremented:
-                with self._pipeline_lifecycle_lock:
+            with self._pipeline_lifecycle_lock:
+                self._active_retry_cancel_event = None
+                if _retry_count_incremented:
                     self._retry_active_count -= 1
             if retry_lock is not None and retry_lock_acquired:
                 retry_lock.release()
@@ -594,4 +604,86 @@ class PipelineControllerMixin:
                 "total": 0,
             }
             self._adapter.emit("processDone", payload, batched=False)
+        return bridge_ok()
+
+    def is_busy(self) -> bool:
+        """Internal helper: return True if a pipeline, retry, or session move is active."""
+        lifecycle_lock = getattr(self, "_pipeline_lifecycle_lock", None)
+        if lifecycle_lock is not None:
+            with lifecycle_lock:
+                if getattr(self._adapter, "is_running", False):
+                    return True
+                if getattr(self, "_retry_active_count", 0) > 0:
+                    return True
+        else:
+            if getattr(self._adapter, "is_running", False):
+                return True
+            if getattr(self, "_retry_active_count", 0) > 0:
+                return True
+
+        move_lock = getattr(self, "_move_lock", None)
+        if move_lock is not None:
+            with move_lock:
+                if getattr(self, "_move_state", {}).get("status") == "moving":
+                    return True
+        else:
+            if getattr(self, "_move_state", {}).get("status") == "moving":
+                return True
+
+        thread = getattr(self, "_processing_thread", None)
+        if thread is not None and thread.is_alive():
+            return True
+        return False
+
+    def is_processing_active(self) -> dict:
+        """IPC method returning active processing status."""
+        return bridge_ok(active=self.is_busy())
+
+    def request_shutdown(self, timeout: float = 1.5) -> None:
+        """Cleanly request pipeline/retry cancellation and wait briefly for threads to stop."""
+        try:
+            self.stop_processing()
+        except Exception:
+            pass
+        lifecycle_lock = getattr(self, "_pipeline_lifecycle_lock", None)
+        if lifecycle_lock is not None:
+            with lifecycle_lock:
+                retry_event = getattr(self, "_active_retry_cancel_event", None)
+                if retry_event is not None:
+                    try:
+                        retry_event.set()
+                    except Exception:
+                        pass
+        else:
+            retry_event = getattr(self, "_active_retry_cancel_event", None)
+            if retry_event is not None:
+                try:
+                    retry_event.set()
+                except Exception:
+                    pass
+        thread = getattr(self, "_processing_thread", None)
+        if (
+            thread is not None
+            and thread.is_alive()
+            and thread != threading.current_thread()
+        ):
+            try:
+                thread.join(timeout=timeout)
+            except Exception:
+                pass
+
+    def close_window(self) -> dict:
+        """Called by WebUI to force window close after user confirms quitting while busy."""
+        self._force_close = True
+        self.request_shutdown(timeout=1.5)
+        window = getattr(self, "_window", None)
+        if window is not None:
+
+            def _destroy():
+                try:
+                    window.destroy()
+                except Exception:
+                    pass
+
+            threading.Thread(target=_destroy, daemon=True).start()
         return bridge_ok()

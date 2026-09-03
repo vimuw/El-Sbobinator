@@ -60,6 +60,7 @@ Source: `_BridgeDispatcher` + `PipelineAdapter` in `el_sbobinator/app_webview.py
 | `filesDropped` | no | `FileDescriptor[]` | `ElSbobinatorApi.collect_dropped_files` | New files dropped on the window; front-end adds them to the queue. |
 | `updateDownloadProgress` | no | `{status: string, bytes_done: number, bytes_total: number, error?: string}` | `updater.py` via auto-update process | Native download/installation progress during auto-updates. |
 | `apiUsageUpdated` | no | `ApiUsageResult` | `PipelineControllerMixin._emit_api_usage` | Pushed after file or batch completion with latest daily quota tracking stats. |
+| `requestQuitConfirmation` | no | `{}` | `build_close_handler` in `webview_entry.py` | Emitted when user attempts to close the window while pipeline, retry, or move is active. Triggers the WebUI quit confirmation modal. |
 | `appendConsole` | no | `string` | `_ConsoleTee` (wraps `sys.stdout`/`stderr`) | Forwarded stdout/stderr for the in-app terminal. |
 
 The TypeScript-side payload shapes are the same ones declared in `webui/src/appState.ts` (`WorkTotalsPayload`, `WorkDonePayload`, `StepTimePayload`, `SetCurrentFilePayload`, `FileDonePayload`, `FileFailedPayload`, `ProcessDonePayload`) and `webui/src/bridge.ts` (`BridgeCallbacks`). The Python-side counterparts are `TypedDict`s in `el_sbobinator/bridge_types.py`.
@@ -111,6 +112,8 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
 | `stop_processing()` | — | `{ok}` | Sets the cancel event; pipeline exits at the next check. Also cancels any pending `ask_*` prompts. |
 | `answer_regenerate(regenerate)` | `true \| false \| null` | `{ok}` | `null` treats the prompt as cancelled. |
 | `answer_new_key(key)` | new API key string | `{ok}` | Empty string = refuse and abort. |
+| `is_processing_active()` | — | `{ok, active: bool}` | Returns whether pipeline, block retry, or session move is currently active. |
+| `close_window()` | — | `{ok}` | Called by WebUI after user confirms quitting while busy; sets `_force_close`, requests shutdown, and destroys window. |
 
 ### Filesystem helpers
 

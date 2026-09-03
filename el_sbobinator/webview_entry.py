@@ -11,7 +11,8 @@ import os
 import sys
 import threading
 import warnings
-from typing import Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import webview
 
@@ -102,6 +103,60 @@ def get_dist_path() -> str:
     )
 
 
+def build_close_handler(
+    api: Any,
+    window: webview.Window,
+    stop_event: threading.Event | None = None,
+) -> Callable[[], bool | None]:
+    """Return a closing event handler that prompts for confirmation if busy."""
+
+    def _on_closing() -> bool | None:
+        if getattr(api, "_force_close", False):
+            if stop_event is not None:
+                stop_event.set()
+            LocalMediaServer.shutdown_all()
+            return None
+
+        if getattr(api, "is_busy", lambda: False)():
+            adapter = getattr(api, "_adapter", None)
+            if adapter is not None and getattr(adapter, "window", None) is not None:
+                try:
+                    adapter.emit("requestQuitConfirmation", {}, batched=False)
+                    return False
+                except Exception:
+                    pass
+
+            # Fallback to native confirmation dialog if WebUI is not ready/available
+            confirmed = False
+            try:
+                confirmed = bool(
+                    window.create_confirmation_dialog(
+                        "El Sbobinator - Elaborazione in corso",
+                        "Un'elaborazione è attualmente in corso.\n\n"
+                        "Se chiudi l'applicazione, l'elaborazione verrà interrotta e i progressi correnti potrebbero andare persi.\n\n"
+                        "Vuoi davvero uscire?",
+                    )
+                )
+            except Exception:
+                confirmed = True
+
+            if not confirmed:
+                return False
+
+            if hasattr(api, "request_shutdown"):
+                try:
+                    api.request_shutdown(timeout=1.5)
+                except Exception:
+                    pass
+
+        if stop_event is not None:
+            stop_event.set()
+        LocalMediaServer.shutdown_all()
+        return None
+
+    return _on_closing
+
+
 def main():
     from el_sbobinator.app_webview import ElSbobinatorApi
 
@@ -170,12 +225,7 @@ def main():
 
     window.events.shown += _on_shown
 
-    def _on_closing():
-        if stop_event is not None:
-            stop_event.set()
-        LocalMediaServer.shutdown_all()
-
-    window.events.closing += _on_closing
+    window.events.closing += build_close_handler(api, window, stop_event)
 
     try:
         from webview.dom import _dnd_state

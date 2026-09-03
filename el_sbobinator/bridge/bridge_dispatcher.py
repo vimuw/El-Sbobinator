@@ -31,6 +31,7 @@ class _BridgeDispatcher:
         "dismissNewKey",
         "updateDownloadProgress",
         "apiUsageUpdated",
+        "requestQuitConfirmation",
     ]
     _ALL_EVENTS: frozenset[str] = frozenset(get_args(_BridgeEvent))
     BATCHABLE: frozenset[str] = frozenset(
