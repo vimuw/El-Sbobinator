@@ -246,6 +246,14 @@ export const CustomParagraph = ParagraphExtension.extend({
   },
 });
 
+export const escapeHtml = (text: string): string =>
+  String(text ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
 function MathNodeView({ node, updateAttributes, selected }: NodeViewProps) {
   const [isEditing, setIsEditing] = React.useState(false);
   const [latex, setLatex] = React.useState(node.attrs.latex || '');
@@ -259,7 +267,7 @@ function MathNodeView({ node, updateAttributes, selected }: NodeViewProps) {
     try {
       return katex.renderToString(raw, { displayMode: false, throwOnError: false });
     } catch {
-      return raw;
+      return `<span class="katex-error text-red-500 font-mono text-xs">${escapeHtml(raw)}</span>`;
     }
   }, [node.attrs.latex]);
 
@@ -324,7 +332,7 @@ export const MathInline = Node.create({
     try {
       katexHtml = katex.renderToString(HTMLAttributes.latex || '', { displayMode: false, throwOnError: false });
     } catch {
-      katexHtml = HTMLAttributes.latex || '';
+      katexHtml = HTMLAttributes.latex ? escapeHtml(HTMLAttributes.latex) : '';
     }
     return [
       'span',
@@ -367,7 +375,7 @@ function MathBlockNodeView({ node, updateAttributes, selected }: NodeViewProps) 
     try {
       return katex.renderToString(raw, { displayMode: true, throwOnError: false });
     } catch {
-      return raw;
+      return `<span class="katex-error text-red-500 font-mono text-xs">${escapeHtml(raw)}</span>`;
     }
   }, [node.attrs.latex]);
 
@@ -440,7 +448,7 @@ export const MathBlock = Node.create({
     try {
       katexHtml = katex.renderToString(HTMLAttributes.latex || '', { displayMode: true, throwOnError: false });
     } catch {
-      katexHtml = HTMLAttributes.latex || '';
+      katexHtml = HTMLAttributes.latex ? escapeHtml(HTMLAttributes.latex) : '';
     }
     return [
       'div',
