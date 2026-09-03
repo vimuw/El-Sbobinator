@@ -302,6 +302,14 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     expect(setAskNewKeyPrompt).toHaveBeenCalledWith(false);
   });
 
+  it('requestQuitConfirmation calls onRequestQuitConfirmation option', () => {
+    const onRequestQuitConfirmation = vi.fn();
+    const opts = makeMinimalHook({ onRequestQuitConfirmation });
+    renderHook(() => { useBridgeCallbacks(opts); });
+    act(() => { window.elSbobinatorBridge?.requestQuitConfirmation?.(); });
+    expect(onRequestQuitConfirmation).toHaveBeenCalled();
+  });
+
   it('filesDropped calls enqueueUniqueFiles when appState is idle', () => {
     const enqueueUniqueFiles = vi.fn();
     const opts = makeMinimalHook({ enqueueUniqueFiles });

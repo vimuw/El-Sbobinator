@@ -33,6 +33,7 @@ export function useBridgeCallbacks(options: {
       actionData?: unknown;
     }
   ) => void;
+  onRequestQuitConfirmation?: () => void;
 }) {
   const {
     dispatch,
@@ -61,6 +62,7 @@ export function useBridgeCallbacks(options: {
   const onDownloadProgressRef = useRef(options.onDownloadProgress);
   const addNotificationRef = useRef(addNotification);
   const batchTotalRef = useRef(batchTotal);
+  const onRequestQuitConfirmationRef = useRef(options.onRequestQuitConfirmation);
 
   useLayoutEffect(() => {
     dispatchRef.current = dispatch;
@@ -76,12 +78,14 @@ export function useBridgeCallbacks(options: {
     onDownloadProgressRef.current = options.onDownloadProgress;
     addNotificationRef.current = options.addNotification;
     batchTotalRef.current = options.batchTotal ?? 0;
+    onRequestQuitConfirmationRef.current = options.onRequestQuitConfirmation;
   });
 
   useEffect(() => {
     window.elSbobinatorBridge = createBridge({
       dispatch: (...args) => dispatchRef.current(...args),
       appendConsole: msg => appendConsoleRef.current(msg),
+      onRequestQuitConfirmation: () => { onRequestQuitConfirmationRef.current?.(); },
       onRegenerate: data => {
         setRegeneratePromptRef.current(data);
         if (!document.hasFocus()) {

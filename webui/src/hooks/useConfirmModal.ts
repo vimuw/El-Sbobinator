@@ -10,7 +10,8 @@ export type ConfirmActionState =
   | { type: 'low-disk-warning'; warning: LowDiskWarning }
   | { type: 'delete-archive-session'; sessionDir: string; name: string }
   | { type: 'delete-multiple-archive-sessions'; sessions: { sessionDir: string; name: string }[] }
-  | { type: 'retry-archive-session'; session: ArchiveSession };
+  | { type: 'retry-archive-session'; session: ArchiveSession }
+  | { type: 'quit-app' };
 
 export type ConfirmAction = ConfirmActionState;
 
@@ -128,6 +129,14 @@ export function useConfirmModal({
         cancelLabel: 'Annulla',
       };
     }
+    if (confirmAction.type === 'quit-app') {
+      return {
+        title: 'Elaborazione in corso',
+        description: "Un'elaborazione è attualmente in corso. Se chiudi l'applicazione, il processo verrà interrotto e i progressi non salvati andranno persi. Vuoi davvero uscire?",
+        confirmLabel: 'Interrompi ed esci',
+        cancelLabel: 'Continua elaborazione',
+      };
+    }
     return {
       title: 'Pulire le sbobine completate?',
       description:
@@ -141,6 +150,14 @@ export function useConfirmModal({
 
   const handleConfirmAction = useCallback(() => {
     if (!confirmAction) return;
+    if (confirmAction.type === 'quit-app') {
+      setConfirmAction(null);
+      (window as unknown as { __elSbobinatorQuitting?: boolean }).__elSbobinatorQuitting = true;
+      if (window.pywebview?.api?.close_window) {
+        void window.pywebview.api.close_window();
+      }
+      return;
+    }
     if (confirmAction.type === 'stop-processing') {
       void confirmStopProcessing();
       return;
@@ -227,6 +244,10 @@ export function useConfirmModal({
     setFolders,
   ]);
 
+  const requestQuitConfirmation = useCallback(() => {
+    setConfirmAction({ type: 'quit-app' });
+  }, []);
+
   return {
     confirmAction,
     setConfirmAction,
@@ -234,5 +255,6 @@ export function useConfirmModal({
     handleConfirmAction,
     confirmStopProcessing,
     confirmClearCompleted,
+    requestQuitConfirmation,
   };
 }

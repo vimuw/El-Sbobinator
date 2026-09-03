@@ -1331,5 +1331,37 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
 
       expect(screen.getByText('Partecipa a una Stanza')).toBeTruthy();
     });
+
+    it('prevents unload when busy with processing or block retry', async () => {
+      vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
+        React.useEffect(() => {
+          dispatch({
+            type: 'queue/add',
+            files: [{
+              id: 'file-retry',
+              name: 'lesson.mp3',
+              size: 123,
+              duration: 60,
+              path: 'C:\\Media\\lesson.mp3',
+              status: 'done',
+              progress: 100,
+              phase: 0,
+              isRetryingBlocks: true,
+            }],
+          });
+        }, [dispatch]);
+      });
+
+      await act(async () => {
+        render(<App />);
+      });
+
+      const event = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent;
+      const preventDefaultSpy = vi.spyOn(event, 'preventDefault');
+
+      window.dispatchEvent(event);
+
+      expect(preventDefaultSpy).toHaveBeenCalled();
+    });
   });
 });

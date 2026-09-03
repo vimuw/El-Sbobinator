@@ -122,6 +122,19 @@ export default function App() {
   const appStateRef = useRef(appState);
   const autoContinueRef = useRef(autoContinue);
 
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const isBusy = appStateRef.current === 'processing' || filesRef.current.some(f => f.isRetryingBlocks);
+      if (isBusy && !(window as unknown as { __elSbobinatorQuitting?: boolean }).__elSbobinatorQuitting) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
   const {
     updateInstallState,
     installUpdate,
@@ -193,6 +206,7 @@ export default function App() {
     setConfirmAction,
     confirmModalCopy,
     handleConfirmAction,
+    requestQuitConfirmation,
   } = useConfirmModal({
     dispatch,
     filesRef,
@@ -349,6 +363,7 @@ export default function App() {
     addNotification,
     batchTotal,
     onDownloadProgress: handleDownloadProgress,
+    onRequestQuitConfirmation: requestQuitConfirmation,
   });
   useBodyScrollLock(isSettingsOpen || regeneratePrompt !== null || preview.content !== null || askNewKeyPrompt || confirmAction !== null || duplicatePrompt !== null || regenDirtyConfirm !== null);
 

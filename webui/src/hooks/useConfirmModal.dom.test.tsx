@@ -109,4 +109,48 @@ describe('useConfirmModal', () => {
     });
     expect(result.current.confirmAction).toBeNull();
   });
+
+  it('handles quit-app confirmation and calls close_window', () => {
+    const filesRef = { current: [] as FileItem[] };
+    const foldersRef = { current: [] };
+    const startProcessingRef = { current: vi.fn() };
+    const closeWindowMock = vi.fn().mockResolvedValue({ ok: true });
+    window.pywebview = {
+      api: {
+        close_window: closeWindowMock,
+      },
+    };
+
+    const { result } = renderHook(() =>
+      useConfirmModal({
+        dispatch,
+        filesRef,
+        foldersRef,
+        setFolders,
+        setArchiveSessions,
+        setArchiveTotal,
+        refreshArchiveSessions,
+        startProcessingRef,
+        executeRetryFromArchive,
+        normalizeSessionDir,
+        appendConsole,
+      }),
+    );
+
+    act(() => {
+      result.current.requestQuitConfirmation();
+    });
+
+    expect(result.current.confirmAction).toEqual({ type: 'quit-app' });
+    expect(result.current.confirmModalCopy?.title).toBe('Elaborazione in corso');
+    expect(result.current.confirmModalCopy?.confirmLabel).toBe('Interrompi ed esci');
+    expect(result.current.confirmModalCopy?.cancelLabel).toBe('Continua elaborazione');
+
+    act(() => {
+      result.current.handleConfirmAction();
+    });
+
+    expect(closeWindowMock).toHaveBeenCalled();
+    expect(result.current.confirmAction).toBeNull();
+  });
 });

@@ -155,6 +155,7 @@ export interface BridgeCallbacks {
   filesDropped: (files: FileDescriptor[]) => void;
   updateDownloadProgress: (data: UpdateDownloadProgressPayload) => void;
   apiUsageUpdated?: (data: ApiUsageResult) => void;
+  requestQuitConfirmation?: () => void;
 }
 
 export interface PywebviewApi {
@@ -171,6 +172,8 @@ export interface PywebviewApi {
   collect_dropped_files?: (names: string[]) => Promise<{ ok: boolean }>;
   start_processing?: (files: FileDescriptor[], apiKey: string, resumeSession: boolean, preferredModel: string, fallbackModels: string[], overrideLowDisk?: boolean) => Promise<StartProcessingResult>;
   stop_processing?: () => Promise<{ ok: boolean }>;
+  close_window?: () => Promise<{ ok: boolean }>;
+  is_processing_active?: () => Promise<{ ok: boolean; active?: boolean }>;
   answer_regenerate?: (regenerate: boolean | null) => Promise<{ ok: boolean }>;
   answer_new_key?: (key: string) => Promise<{ ok: boolean }>;
   open_file?: (path: string) => Promise<{ ok: boolean; error?: string }>;
@@ -294,6 +297,7 @@ export function createBridge(options: {
   onBatchStart: () => void;
   onDownloadProgress?: (data: UpdateDownloadProgressPayload) => void;
   onApiUsageUpdated?: (data: ApiUsageResult) => void;
+  onRequestQuitConfirmation?: () => void;
 }): BridgeCallbacks {
   const {
     dispatch,
@@ -308,6 +312,7 @@ export function createBridge(options: {
     onBatchStart,
     onDownloadProgress,
     onApiUsageUpdated,
+    onRequestQuitConfirmation,
   } = options;
 
   return {
@@ -337,6 +342,7 @@ export function createBridge(options: {
     filesDropped: onFilesDropped,
     updateDownloadProgress: data => { onDownloadProgress?.(data); },
     apiUsageUpdated: data => { onApiUsageUpdated?.(data); },
+    requestQuitConfirmation: () => { onRequestQuitConfirmation?.(); },
   };
 }
 
