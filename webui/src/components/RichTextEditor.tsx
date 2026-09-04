@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { TextSelection } from '@tiptap/pm/state';
 import { DOMSerializer } from '@tiptap/pm/model';
@@ -75,6 +75,8 @@ export function RichTextEditor({
   const editorRef = useRef<TiptapEditor | null>(null);
   const onChangeRef = useRef(onChange);
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+  const userRef = useRef(collaborationUser);
+  useEffect(() => { userRef.current = collaborationUser; }, [collaborationUser]);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const lastKnownScrollTopRef = useRef<number>(initialScrollTop ?? 0);
@@ -103,48 +105,50 @@ export function RichTextEditor({
   const isPlaceholderContent = typeof initialContent === 'string' && initialContent.includes('Connessione in corso alla stanza');
   const effectiveInitialContent = collaborationRoom ? undefined : initialContent;
 
+  const extensions = useMemo(() => [
+    StarterKit.configure({
+      heading: false,
+      paragraph: false,
+      link: false,
+      underline: false,
+      horizontalRule: false,
+      ...(collaborationRoom ? { undoRedo: false } : {}),
+    }),
+    CustomHeading,
+    CustomParagraph,
+    FloatingImage,
+    TextStyle,
+    Color,
+    FontFamily.configure({ types: ['textStyle'] }),
+    FontSize,
+    Underline,
+    Highlight.configure({ multicolor: true }),
+    TextAlign.configure({ types: ['heading', 'paragraph'] }),
+    Link.configure({ openOnClick: false, markdownLinks: true }),
+    Subscript,
+    Superscript,
+    SearchHighlight,
+    Youtube.configure({
+      controls: true,
+      nocookie: true,
+      width: 640,
+      height: 360,
+    }),
+    Typography,
+    MathInline,
+    MathBlock,
+    SmartArrows,
+    ...(collaborationRoom && ydoc && provider ? [
+      Collaboration.configure({ document: ydoc }),
+      CollaborationCursor.configure({
+        provider,
+        user: userRef.current || { name: 'Studente', color: '#3b82f6' },
+      }),
+    ] : []),
+  ], [collaborationRoom, ydoc, provider]);
+
   const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        heading: false,
-        paragraph: false,
-        link: false,
-        underline: false,
-        horizontalRule: false,
-        ...(collaborationRoom ? { undoRedo: false } : {}),
-      }),
-      CustomHeading,
-      CustomParagraph,
-      FloatingImage,
-      TextStyle,
-      Color,
-      FontFamily.configure({ types: ['textStyle'] }),
-      FontSize,
-      Underline,
-      Highlight.configure({ multicolor: true }),
-      TextAlign.configure({ types: ['heading', 'paragraph'] }),
-      Link.configure({ openOnClick: false, markdownLinks: true }),
-      Subscript,
-      Superscript,
-      SearchHighlight,
-      Youtube.configure({
-        controls: true,
-        nocookie: true,
-        width: 640,
-        height: 360,
-      }),
-      Typography,
-      MathInline,
-      MathBlock,
-      SmartArrows,
-      ...(collaborationRoom && ydoc && provider ? [
-        Collaboration.configure({ document: ydoc }),
-        CollaborationCursor.configure({
-          provider,
-          user: collaborationUser || { name: 'Studente', color: '#3b82f6' },
-        }),
-      ] : []),
-    ],
+    extensions,
     content: effectiveInitialContent,
     onCreate: ({ editor }) => {
       editorRef.current = editor;
@@ -216,7 +220,7 @@ export function RichTextEditor({
       handleDrop: (view, event) => handleDrop(view, event as DragEvent),
       transformPastedHTML,
     },
-  });
+  }, [extensions]);
 
   useEffect(() => {
     if (editor && collaborationUser) {

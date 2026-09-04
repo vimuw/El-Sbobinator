@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as Y from 'yjs';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import { WebrtcProvider } from 'y-webrtc';
@@ -32,10 +32,31 @@ export function useEditorCollaboration(
   collaborationRoom?: string,
   collaborationUser?: CollaborationUser,
 ) {
-  const collabState = useMemo(() => {
-    if (!collaborationRoom) {
-      return { ydoc: null, provider: null };
+  const [collabState, setCollabState] = useState<{
+    ydoc: Y.Doc | null;
+    provider: WebrtcProvider | null;
+  }>({
+    ydoc: null,
+    provider: null,
+  });
+
+  const userRef = useRef(collaborationUser);
+  useEffect(() => {
+    userRef.current = collaborationUser;
+    if (collabState.provider?.awareness) {
+      collabState.provider.awareness.setLocalStateField(
+        'user',
+        collaborationUser || { name: 'Studente', color: '#3b82f6' },
+      );
     }
+  }, [collaborationUser, collabState.provider]);
+
+  useEffect(() => {
+    if (!collaborationRoom) {
+      setCollabState({ ydoc: null, provider: null });
+      return;
+    }
+
     const doc = new Y.Doc();
     let webrtc: WebrtcProvider | null = null;
     try {
@@ -63,7 +84,14 @@ export function useEditorCollaboration(
     } catch (err) {
       console.error('Errore inizializzazione WebRTC provider:', err);
     }
-    return { ydoc: doc, provider: webrtc };
+
+    setCollabState({ ydoc: doc, provider: webrtc });
+
+    return () => {
+      webrtc?.destroy();
+      doc.destroy();
+      setCollabState({ ydoc: null, provider: null });
+    };
   }, [collaborationRoom]);
 
   useEffect(() => {
@@ -72,7 +100,10 @@ export function useEditorCollaboration(
     const doc = collabState.ydoc;
     const awareness = collabState.provider?.awareness;
     if (awareness) {
-      awareness.setLocalStateField('user', collaborationUser || { name: 'Studente', color: '#3b82f6' });
+      awareness.setLocalStateField(
+        'user',
+        userRef.current || { name: 'Studente', color: '#3b82f6' },
+      );
     }
 
     let bc: BroadcastChannel | null = null;
@@ -162,10 +193,8 @@ export function useEditorCollaboration(
       doc.off('update', handleDocUpdate);
       awareness?.off('update', handleAwarenessUpdate);
       bc?.close();
-      collabState.provider?.destroy();
-      collabState.ydoc?.destroy();
     };
-  }, [collaborationRoom, collabState, collaborationUser]);
+  }, [collaborationRoom, collabState.ydoc, collabState.provider]);
 
   return collabState;
 }
