@@ -8,6 +8,8 @@ import os
 import re
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 from google.genai import types
 
@@ -24,6 +26,17 @@ from el_sbobinator.services.generation_service import (
 )
 from el_sbobinator.utils.dedup_utils import local_macro_cleanup
 from el_sbobinator.utils.logging_utils import get_logger
+
+
+@dataclass(slots=True)
+class MacroBlockProcessResult:
+    """Result of processing a single macro block in Phase 2."""
+
+    client: Any
+    appended_text: str | None
+    revised_done: int
+    pending_retry: tuple[int, str, str] | None = None
+    should_abort: bool = False
 
 
 def _normalize_block_indexes(value) -> list[int]:
@@ -302,12 +315,8 @@ def _process_macro_block_item(
     cancelled: Callable[[], bool],
     on_model_switched=None,
     logger=None,
-) -> tuple[object, str | None, int, tuple[int, str, str] | None, bool]:
-    """Process a single macro block in Phase 2.
-
-    Returns:
-      (client, appended_text, new_revised_done, pending_retry_tuple, should_abort)
-    """
+) -> MacroBlockProcessResult:
+    """Process a single macro block in Phase 2."""
     runtime.phase(f"Fase 2/3: revisione ({index}/{macro_total})")
     rev_path = os.path.join(phase2_revised_dir, f"rev_{index:03}.md")
     raw_path = os.path.join(phase2_revised_dir, f"rev_{index:03}.raw.md")
@@ -335,10 +344,19 @@ def _process_macro_block_item(
             )
             save_session()
             runtime.progress(0.7 + 0.2 * (new_revised_done / max(1, macro_total)))
-            return client, f"\n\n{existing}\n\n", new_revised_done, None, False
+            return MacroBlockProcessResult(
+                client=client,
+                appended_text=f"\n\n{existing}\n\n",
+                revised_done=new_revised_done,
+            )
 
     if os.path.exists(raw_path):
-        return client, None, revised_done, (index, raw_path, rev_path), False
+        return MacroBlockProcessResult(
+            client=client,
+            appended_text=None,
+            revised_done=revised_done,
+            pending_retry=(index, raw_path, rev_path),
+        )
 
     block_src = (block or "").strip()
     block_local, removed_exact, removed_adj, _, _ = local_macro_cleanup(block_src)
@@ -368,7 +386,12 @@ def _process_macro_block_item(
             resume_phase_text=f"Fase 2/3: revisione ({index}/{macro_total})",
         )
         if current_text is None:
-            return client, None, revised_done, None, True
+            return MacroBlockProcessResult(
+                client=client,
+                appended_text=None,
+                revised_done=revised_done,
+                should_abort=True,
+            )
 
         _atomic_write_text(rev_path, current_text + "\n")
         print(f"   [autosave] Revisione salvata: {os.path.basename(rev_path)}")
@@ -394,7 +417,11 @@ def _process_macro_block_item(
         record_step_metric(
             session, "macro", _macro_secs, done=new_revised_done, total=macro_total
         )
-        return client, f"\n\n{current_text}\n\n", new_revised_done, None, False
+        return MacroBlockProcessResult(
+            client=client,
+            appended_text=f"\n\n{current_text}\n\n",
+            revised_done=new_revised_done,
+        )
 
     except QuotaDailyLimitError:
         print("   Interruzione: progressi salvati. Potrai riprendere più tardi.")
@@ -402,7 +429,12 @@ def _process_macro_block_item(
         if session.get("last_error_detail") != "api_key_prompt_timeout":
             session["last_error_detail"] = None
         save_session()
-        return client, None, revised_done, None, True
+        return MacroBlockProcessResult(
+            client=client,
+            appended_text=None,
+            revised_done=revised_done,
+            should_abort=True,
+        )
 
     except Exception as exc:
         if logger is not None:
@@ -424,9 +456,16 @@ def _process_macro_block_item(
             session, "macro", _macro_secs, done=revised_done, total=macro_total
         )
         runtime.progress(0.7 + 0.2 * (revised_done / max(1, macro_total)))
-        return client, None, revised_done, (index, raw_path, rev_path), False
+        return MacroBlockProcessResult(
+            client=client,
+            appended_text=None,
+            revised_done=revised_done,
+            pending_retry=(index, raw_path, rev_path),
+        )
 
-    return client, None, revised_done, None, False
+    return MacroBlockProcessResult(
+        client=client, appended_text=None, revised_done=revised_done
+    )
 
 
 def process_macro_revision_phase(
@@ -467,13 +506,7 @@ def process_macro_revision_phase(
             print("   [*] Operazione annullata dall'utente.")
             return client, revised_text
 
-        (
-            client,
-            appended_text,
-            revised_done,
-            retry_item,
-            should_abort,
-        ) = _process_macro_block_item(
+        res = _process_macro_block_item(
             index=index,
             block=block,
             macro_total=macro_total,
@@ -492,11 +525,13 @@ def process_macro_revision_phase(
             on_model_switched=on_model_switched,
             logger=log,
         )
-        if appended_text:
-            revised_text += appended_text
-        if retry_item is not None:
-            pending_retry.append(retry_item)
-        if should_abort:
+        client = res.client
+        revised_done = res.revised_done
+        if res.appended_text:
+            revised_text += res.appended_text
+        if res.pending_retry is not None:
+            pending_retry.append(res.pending_retry)
+        if res.should_abort:
             return client, revised_text
 
         if not sleep_with_cancel(cancelled, 5):
