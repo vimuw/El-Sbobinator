@@ -26,6 +26,7 @@ interface TestOverrides {
   canStart?: boolean;
   hasApiKey?: boolean;
   isApiKeyValid?: boolean;
+  isOnline?: boolean;
   autoContinue?: boolean;
   setAutoContinue?: React.Dispatch<React.SetStateAction<boolean>>;
   onRemove?: (id: string) => void;
@@ -55,6 +56,7 @@ function makeProps(overrides: TestOverrides = {}): QueueSectionProps {
       canStart: overrides.canStart ?? true,
       hasApiKey: overrides.hasApiKey ?? true,
       isApiKeyValid: overrides.isApiKeyValid ?? true,
+      isOnline: overrides.isOnline ?? true,
       autoContinue: overrides.autoContinue ?? false,
       setAutoContinue: overrides.setAutoContinue ?? vi.fn(),
     },
@@ -147,6 +149,19 @@ describe('QueueSection', () => {
       />,
     );
     expect(screen.getByText(/API Key non valida/)).toBeTruthy();
+  });
+
+  it('shows offline warning when isOnline is false', () => {
+    render(
+      <QueueSection
+        {...makeProps({
+          pendingFiles: [makeFile()],
+          isOnline: false,
+          canStart: false,
+        })}
+      />,
+    );
+    expect(screen.getByText(/Connessione Internet assente/)).toBeTruthy();
   });
 
   it('shows Stop button when processing', () => {

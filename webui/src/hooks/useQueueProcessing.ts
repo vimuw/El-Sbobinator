@@ -81,6 +81,10 @@ export function useQueueProcessing({
   const startProcessing = useCallback(async (isContinuation: boolean = false, overrideLowDisk: boolean = false) => {
     const currentQueued = filesRef.current.filter(f => f.status === 'queued');
     if (currentQueued.length === 0 || !apiKey.trim()) return false;
+    if (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' && !navigator.onLine) {
+      appendConsole('❌ Nessuna connessione a Internet rilevata. Connettiti alla rete per iniziare la sbobinatura.');
+      return false;
+    }
     if (isContinuation && appStateRef.current === 'canceling') return false;
     if (!window.pywebview?.api) return false;
     if (!isContinuation) {

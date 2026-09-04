@@ -23,6 +23,7 @@ export interface QueueSectionStatusProps {
   canStart: boolean;
   hasApiKey: boolean;
   isApiKeyValid: boolean;
+  isOnline?: boolean;
   autoContinue: boolean;
   setAutoContinue: Dispatch<SetStateAction<boolean>>;
 }
@@ -67,6 +68,7 @@ export const QueueSection = memo(function QueueSection({
     canStart,
     hasApiKey,
     isApiKeyValid,
+    isOnline = true,
     autoContinue,
     setAutoContinue,
   } = status;
@@ -222,7 +224,7 @@ export const QueueSection = memo(function QueueSection({
                       className={`premium-button w-full text-lg${canStart ? ' premium-button--ready' : ''}`}
                       style={canStart ? {} : { cursor: 'not-allowed' }}>
                       <Play className="w-5 h-5 fill-current" />
-                      {!hasApiKey ? '⚠️ Inserisci API Key nelle impostazioni' : !isApiKeyValid ? '⚠️ API Key non valida' : `Avvia sbobinatura (${queuedCount} file)`}
+                      {!isOnline ? '⚠️ Connessione Internet assente' : !hasApiKey ? '⚠️ Inserisci API Key nelle impostazioni' : !isApiKeyValid ? '⚠️ API Key non valida' : `Avvia sbobinatura (${queuedCount} file)`}
                     </button>
                   </motion.div>
                 )}

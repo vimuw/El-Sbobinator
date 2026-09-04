@@ -15,6 +15,7 @@ import { QueueSection } from './QueueSection';
 import { CompletedSection } from './CompletedSection';
 import { ConsolePanel } from './ConsolePanel';
 import type { ConfirmAction } from '../hooks/useConfirmModal';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
 
 const SetupPage = React.lazy(() => import('./SetupPage').then(m => ({ default: m.SetupPage })));
 
@@ -184,7 +185,15 @@ export function QueuePage({
 
   const hasApiKey = Boolean(apiKey.trim());
   const isApiKeyValid = GEMINI_KEY_PATTERN.test(apiKey.trim());
-  const canStart = queuedCount > 0 && hasApiKey && isApiKeyValid;
+  const handleNetworkChange = useCallback((online: boolean) => {
+    if (online) {
+      appendConsole('Connessione a Internet ripristinata.');
+    } else {
+      appendConsole('⚠️ Connessione a Internet interrotta.');
+    }
+  }, [appendConsole]);
+  const isOnline = useOnlineStatus(handleNetworkChange);
+  const canStart = queuedCount > 0 && hasApiKey && isApiKeyValid && isOnline;
 
   const uiMode: UiMode =
     !apiReady ? 'loading' :
@@ -422,6 +431,7 @@ export function QueuePage({
                 canStart,
                 hasApiKey,
                 isApiKeyValid,
+                isOnline,
                 autoContinue,
                 setAutoContinue,
               }}
