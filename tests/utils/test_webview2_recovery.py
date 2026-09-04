@@ -48,6 +48,8 @@ class Webview2RecoveryTests(unittest.TestCase):
         self.assertIn("status-box", html)
         self.assertIn("status-dot", html)
         self.assertIn("Scarica WebView2 Runtime", html)
+        self.assertIn('target="_blank"', html)
+        self.assertIn('rel="noopener noreferrer"', html)
 
     def test_get_boot_bg_color_from_theme_file(self):
         with tempfile.TemporaryDirectory() as tmpdir:

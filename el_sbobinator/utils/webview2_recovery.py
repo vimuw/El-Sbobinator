@@ -179,15 +179,15 @@ def build_missing_webview2_html() -> str:
       <h1>Serve WebView2 per avviare l&apos;interfaccia</h1>
       <p>
         El Sbobinator sta usando il renderer Windows legacy <code>MSHTML</code>,
-        che non supporta la WebUI moderna. Per questo la finestra rimane nera.
+        che non supporta la WebUI moderna. Senza WebView2 l&apos;applicazione non pu&ograve; caricare l&apos;interfaccia.
       </p>
       <p>
         Installa <strong>Microsoft Edge WebView2 Runtime</strong>
         per avviare l&apos;app normalmente.
       </p>
       <div class="actions">
-        <a class="btn btn-primary" href="{escape(download_url)}">Scarica WebView2 Runtime</a>
-        <a class="btn btn-secondary" href="{escape(repo_url)}">Dettagli tecnici</a>
+        <a class="btn btn-primary" target="_blank" rel="noopener noreferrer" href="{escape(download_url)}">Scarica WebView2 Runtime</a>
+        <a class="btn btn-secondary" target="_blank" rel="noopener noreferrer" href="{escape(repo_url)}">Dettagli tecnici</a>
       </div>
       <hr />
       <ol>
