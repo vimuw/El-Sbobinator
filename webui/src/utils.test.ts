@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { errorLabel, formatDuration, formatRelativeTime, formatSize, generateRoomCode, isPausedError, isQuotaError, isResumableError, readFileAsDataUrl, readAndOptimizeImageAsDataUrl, calculateOptimalDimensions, shortModelName } from './utils';
+import { errorLabel, formatDuration, formatRelativeTime, formatSize, generateRoomCode, isNetworkError, isPausedError, isQuotaError, isResumableError, readFileAsDataUrl, readAndOptimizeImageAsDataUrl, calculateOptimalDimensions, shortModelName } from './utils';
 
 describe('isQuotaError', () => {
   it('returns false for undefined', () => {
@@ -102,6 +102,27 @@ describe('errorLabel', () => {
     expect(label).toContain('Errore al blocco 3');
     expect(label).toContain('Dettaglio: FFmpeg error: disk full.');
     expect(label).toContain('Riprendi');
+  });
+
+  it('maps phase1_chunk_failed_ with getaddrinfo / network detail to friendly Italian network message', () => {
+    const label = errorLabel('phase1_chunk_failed_1', 'ConnectError: [Errno 11001] getaddrinfo failed');
+    expect(label).toContain('Errore di connessione al blocco 1');
+    expect(label).toContain('impossibile raggiungere i server Google');
+    expect(label).toContain('Verifica la connessione a Internet e clicca Riprendi');
+  });
+
+  it('maps offline error key to friendly network message', () => {
+    expect(errorLabel('offline')).toContain('Nessuna connessione a Internet');
+  });
+
+  it('correctly identifies network errors via isNetworkError', () => {
+    expect(isNetworkError(undefined)).toBe(false);
+    expect(isNetworkError('')).toBe(false);
+    expect(isNetworkError('FFmpeg error: disk full')).toBe(false);
+    expect(isNetworkError('ConnectError: [Errno 11001] getaddrinfo failed')).toBe(true);
+    expect(isNetworkError('Connection refused')).toBe(true);
+    expect(isNetworkError('network is unreachable')).toBe(true);
+    expect(isNetworkError('connessione assente')).toBe(true);
   });
 
   it('returns API-key timeout label when quota detail marks prompt timeout', () => {

@@ -57,16 +57,50 @@ export function isPausedError(raw: string | undefined, detail?: string): boolean
   return r === 'regenerate_prompt_timeout' || d === 'api_key_prompt_timeout';
 }
 
+const _NETWORK_ERROR_PATTERNS = [
+  'getaddrinfo',
+  'connecterror',
+  'connection refused',
+  'connection reset',
+  'connection aborted',
+  'network is unreachable',
+  'network unreachable',
+  'connessione assente',
+  'connessione di rete non disponibile',
+  'nessuna connessione a internet',
+  'name or service not known',
+  'temporary failure in name resolution',
+  'enotfound',
+  'econnrefused',
+  'errno 11001',
+  'errno 10051',
+  'errno 10054',
+  'errno 10060',
+  'errno 10061',
+];
+
+export function isNetworkError(detail?: string): boolean {
+  if (!detail) return false;
+  const d = detail.toLowerCase();
+  return _NETWORK_ERROR_PATTERNS.some(marker => d.includes(marker));
+}
+
 export function errorLabel(raw: string | undefined, detail?: string): string {
   if (!raw) return 'Elaborazione non completata.';
   const r = raw.trim();
   const d = String(detail || '').trim();
+  if (r === 'offline' || (r === 'processing_failed' && isNetworkError(d))) {
+    return 'Nessuna connessione a Internet rilevata. Verifica la tua connessione di rete e riprova.';
+  }
   if ((r === 'quota_daily_limit_phase1' || r === 'quota_daily_limit_phase2') && d === 'api_key_prompt_timeout') {
     return 'Attesa chiave API scaduta. Sessione salvata — riprendi quando vuoi.';
   }
   if (r in _ERROR_MAP) return _ERROR_MAP[r];
   if (r.startsWith('phase1_chunk_failed_')) {
     const chunkNum = r.replace('phase1_chunk_failed_', '');
+    if (isNetworkError(d)) {
+      return `Errore di connessione al blocco ${chunkNum}: impossibile raggiungere i server Google. Verifica la connessione a Internet e clicca Riprendi.`;
+    }
     const detailText = d ? ` Dettaglio: ${sentence(d)}` : '';
     return `Errore al blocco ${chunkNum} dopo 4 tentativi.${detailText} Clicca Riprendi per continuare dal blocco ${chunkNum}.`;
   }
