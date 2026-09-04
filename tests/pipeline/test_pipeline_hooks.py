@@ -11,10 +11,10 @@ class _DummyTarget:
         self.cancel_event = threading.Event()
         self.file_temporanei = []
         self.events = []
-        self.last_run_status = "idle"
-        self.last_run_error = None
-        self.last_run_error_detail = None
-        self.effective_api_key = None
+        self.last_run_status: str | None = "idle"
+        self.last_run_error: str | None = None
+        self.last_run_error_detail: str | None = None
+        self.effective_api_key: str | None = None
 
     def winfo_exists(self):
         return True
@@ -355,6 +355,56 @@ class PipelineRuntimeMiscTests(unittest.TestCase):
         self.assertIsNone(target.last_run_error)  # type: ignore[attr-defined]
         self.assertIsNone(target.last_run_error_detail)  # type: ignore[attr-defined]
         self.assertIsNone(target.effective_api_key)  # type: ignore[attr-defined]
+
+    def test_revision_failed_blocks_get_and_set(self):
+        target = _DummyTarget()
+        runtime = PipelineRuntime(target)
+        self.assertEqual(runtime.get_revision_failed_blocks(), [])
+        runtime.set_revision_failed_blocks([1, 2, "3"])
+        self.assertEqual(runtime.get_revision_failed_blocks(), [1, 2, 3])
+
+    def test_revision_failed_blocks_target_with_methods(self):
+        class _MethodTarget(_DummyTarget):
+            def __init__(self):
+                super().__init__()
+                self.blocks = []
+
+            def set_revision_failed_blocks(self, blocks):
+                self.blocks = blocks
+
+            def get_revision_failed_blocks(self):
+                return self.blocks
+
+        target = _MethodTarget()
+        runtime = PipelineRuntime(target)
+        runtime.set_revision_failed_blocks([4, 5])
+        self.assertEqual(runtime.get_revision_failed_blocks(), [4, 5])
+
+    def test_get_last_run_status_and_error(self):
+        target = _DummyTarget()
+        target.last_run_status = "failed"
+        target.last_run_error = "custom_error"
+        target.effective_api_key = "key-xyz"
+        runtime = PipelineRuntime(target)
+        self.assertEqual(runtime.get_last_run_status(), "failed")
+        self.assertEqual(runtime.get_last_run_error(), "custom_error")
+        self.assertEqual(runtime.get_effective_api_key(), "key-xyz")
+
+    def test_get_last_run_status_and_error_with_methods(self):
+        class _MethodTarget:
+            def get_last_run_status(self):
+                return "completed"
+
+            def get_last_run_error(self):
+                return None
+
+            def get_effective_api_key(self):
+                return "method-key"
+
+        runtime = PipelineRuntime(_MethodTarget())
+        self.assertEqual(runtime.get_last_run_status(), "completed")
+        self.assertIsNone(runtime.get_last_run_error())
+        self.assertEqual(runtime.get_effective_api_key(), "method-key")
 
 
 if __name__ == "__main__":

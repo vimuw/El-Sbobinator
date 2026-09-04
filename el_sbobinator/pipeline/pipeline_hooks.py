@@ -8,7 +8,7 @@ into whichever UI implementation is currently attached.
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 
@@ -105,6 +105,36 @@ class PipelineRuntime:
                 self.target.last_run_error_detail = detail
         except Exception:
             pass
+
+    def set_revision_failed_blocks(self, blocks: Sequence[int | str] | None) -> None:
+        try:
+            cleaned = [int(idx) for idx in (blocks or [])]
+            if hasattr(self.target, "set_revision_failed_blocks"):
+                self.target.set_revision_failed_blocks(cleaned)
+            elif self.target is not None:
+                self.target.last_revision_failed_blocks = cleaned
+        except Exception:
+            pass
+
+    def get_revision_failed_blocks(self) -> list[int]:
+        if hasattr(self.target, "get_revision_failed_blocks"):
+            return self.target.get_revision_failed_blocks()
+        return list(getattr(self.target, "last_revision_failed_blocks", []))
+
+    def get_last_run_status(self) -> str | None:
+        if hasattr(self.target, "get_last_run_status"):
+            return self.target.get_last_run_status()
+        return getattr(self.target, "last_run_status", None)
+
+    def get_last_run_error(self) -> str | None:
+        if hasattr(self.target, "get_last_run_error"):
+            return self.target.get_last_run_error()
+        return getattr(self.target, "last_run_error", None)
+
+    def get_effective_api_key(self) -> str | None:
+        if hasattr(self.target, "get_effective_api_key"):
+            return self.target.get_effective_api_key()
+        return getattr(self.target, "effective_api_key", None)
 
     def update_model(self, model: str) -> None:
         self._safe_call("update_model", model)

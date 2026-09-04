@@ -244,15 +244,12 @@ def _handle_regeneration_flow(
                 "[*] File gia' completato, l'utente ha scelto di usare la versione pronta."
             )
             runtime.output_html(str(existing_html))
-            try:
-                app_instance.last_revision_failed_blocks = [
-                    int(idx) for idx in (session.get("revision_failed_blocks") or [])
-                ]
-            except Exception:
-                pass
+            runtime.set_revision_failed_blocks(
+                session.get("revision_failed_blocks") or []
+            )
             _completion_status = (
                 "completed_with_warnings"
-                if getattr(app_instance, "last_revision_failed_blocks", [])
+                if runtime.get_revision_failed_blocks()
                 else "completed"
             )
             runtime.set_run_result(_completion_status)
@@ -486,15 +483,10 @@ def _export_html_and_finish(
     print(f"Tempo totale: {minutes}m {seconds}s")
     print(f"File salvato in: {session_html_dir}")
     runtime.phase("Fase: completato")
-    try:
-        app_instance.last_revision_failed_blocks = [
-            int(idx) for idx in (session.get("revision_failed_blocks") or [])
-        ]
-    except Exception:
-        pass
+    runtime.set_revision_failed_blocks(session.get("revision_failed_blocks") or [])
     _completion_status = (
         "completed_with_warnings"
-        if getattr(app_instance, "last_revision_failed_blocks", [])
+        if runtime.get_revision_failed_blocks()
         else "completed"
     )
     runtime.set_run_result(_completion_status)
@@ -530,25 +522,26 @@ def _pipeline_finally_cleanup(
             pass
 
     runtime.set_effective_api_key(
-        extract_client_api_key(client)
-        or getattr(app_instance, "effective_api_key", None)
+        extract_client_api_key(client) or runtime.get_effective_api_key()
     )
     runtime.cleanup_temp_files()
+
+    last_run_error = runtime.get_last_run_error()
+    last_run_status = runtime.get_last_run_status()
 
     if (
         runtime.cancelled()
         and not regenerate_prompt_timeout_terminal
-        and getattr(app_instance, "last_run_error", None)
-        != _REGENERATE_PROMPT_TIMEOUT_ERROR
-    ) or getattr(app_instance, "last_run_status", None) == "cancelled":
+        and last_run_error != _REGENERATE_PROMPT_TIMEOUT_ERROR
+    ) or last_run_status == "cancelled":
         runtime.phase("Fase: annullato")
         runtime.set_run_result(
             "cancelled",
-            getattr(app_instance, "last_run_error", None) or "cancelled",
+            last_run_error or "cancelled",
         )
     else:
         runtime.progress(1.0)
-        if getattr(app_instance, "last_run_status", None) in {
+        if last_run_status in {
             "completed",
             "completed_with_warnings",
         }:
@@ -559,7 +552,7 @@ def _pipeline_finally_cleanup(
             )
             runtime.set_run_result(
                 "failed",
-                getattr(app_instance, "last_run_error", None)
+                last_run_error
                 or (session.get("last_error") if isinstance(session, dict) else None)
                 or "processing_failed",
             )
