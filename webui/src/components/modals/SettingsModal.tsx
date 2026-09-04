@@ -20,20 +20,23 @@ function getErrorMessage(error: unknown): string {
 }
 
 
-export interface SettingsModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+export interface SettingsAuthProps {
   apiKey: string;
   setApiKey: (key: string) => void;
   hasProtectedKey: boolean;
   fallbackKeys: string[];
   setFallbackKeys: React.Dispatch<React.SetStateAction<string[]>>;
+}
+
+export interface SettingsModelsProps {
   preferredModel: string;
   setPreferredModel: (model: string) => void;
   fallbackModels: string[];
   setFallbackModels: React.Dispatch<React.SetStateAction<string[]>>;
   availableModels: ModelOption[];
-  appendConsole: (msg: string) => void;
+}
+
+export interface SettingsUpdaterProps {
   latestVersion: string | null;
   checkForUpdates: (force?: boolean) => void;
   isCheckingUpdate: boolean;
@@ -41,8 +44,21 @@ export interface SettingsModalProps {
   checkFailed: boolean;
   updateInstallState?: SettingsUpdateInstallState;
   onInstallUpdate?: (version: string) => Promise<void>;
-  onSettingsSaved?: () => Promise<unknown> | unknown;
+}
+
+export interface SettingsStorageProps {
   onSessionRootMoved?: (payload?: { oldRoot?: string; newRoot?: string }) => void;
+}
+
+export interface SettingsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  appendConsole: (msg: string) => void;
+  onSettingsSaved?: () => Promise<unknown> | unknown;
+  auth: SettingsAuthProps;
+  models: SettingsModelsProps;
+  updater: SettingsUpdaterProps;
+  storage?: SettingsStorageProps;
 }
 
 type TabType = 'general' | 'storage' | 'diagnostics';
@@ -50,27 +66,17 @@ type TabType = 'general' | 'storage' | 'diagnostics';
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
-  apiKey,
-  setApiKey,
-  hasProtectedKey,
-  fallbackKeys,
-  setFallbackKeys,
-  preferredModel,
-  setPreferredModel,
-  fallbackModels,
-  setFallbackModels,
-  availableModels,
   appendConsole,
-  latestVersion,
-  checkForUpdates,
-  isCheckingUpdate,
-  hasChecked,
-  checkFailed,
-  updateInstallState,
-  onInstallUpdate,
   onSettingsSaved,
-  onSessionRootMoved,
+  auth,
+  models,
+  updater,
+  storage,
 }) => {
+  const { apiKey, setApiKey, hasProtectedKey, fallbackKeys, setFallbackKeys } = auth;
+  const { preferredModel, setPreferredModel, fallbackModels, setFallbackModels, availableModels } = models;
+  const { latestVersion, checkForUpdates, isCheckingUpdate, hasChecked, checkFailed, updateInstallState, onInstallUpdate } = updater;
+  const onSessionRootMoved = storage?.onSessionRootMoved;
   const [activeTab, setActiveTab] = useState<TabType>('general');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);

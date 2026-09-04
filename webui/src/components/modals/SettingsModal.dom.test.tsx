@@ -1,7 +1,16 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SettingsModal } from './SettingsModal';
+import {
+  SettingsModal,
+  type SettingsAuthProps,
+  type SettingsModelsProps,
+  type SettingsUpdaterProps,
+  type SettingsStorageProps,
+  type SettingsModalProps,
+  type SettingsUpdateInstallState,
+} from './SettingsModal';
+import type { ModelOption } from '../../bridge';
 
 const motionCache = new Map<string, React.ForwardRefExoticComponent<React.PropsWithoutRef<Record<string, unknown>> & React.RefAttributes<unknown>>>();
 vi.mock('motion/react', () => ({
@@ -33,25 +42,66 @@ function setPywebview(api: Record<string, unknown> | undefined) {
   });
 }
 
-const makeProps = () => ({
-  isOpen: true,
-  onClose: vi.fn(),
-  apiKey: 'AIzaSyTest123456',
-  setApiKey: vi.fn(),
-  hasProtectedKey: false,
-  fallbackKeys: [],
-  setFallbackKeys: vi.fn(),
-  preferredModel: 'gemini-3-flash-preview',
-  setPreferredModel: vi.fn(),
-  fallbackModels: [],
-  setFallbackModels: vi.fn(),
-  availableModels: [],
-  appendConsole: vi.fn(),
-  latestVersion: null,
-  checkForUpdates: vi.fn(),
-  isCheckingUpdate: false,
-  hasChecked: true,
-  checkFailed: false,
+interface MakePropsOverrides {
+  isOpen?: boolean;
+  onClose?: () => void;
+  appendConsole?: (msg: string) => void;
+  onSettingsSaved?: () => Promise<unknown> | unknown;
+  auth?: Partial<SettingsAuthProps>;
+  models?: Partial<SettingsModelsProps>;
+  updater?: Partial<SettingsUpdaterProps>;
+  storage?: Partial<SettingsStorageProps>;
+  apiKey?: string;
+  setApiKey?: (key: string) => void;
+  hasProtectedKey?: boolean;
+  fallbackKeys?: string[];
+  setFallbackKeys?: React.Dispatch<React.SetStateAction<string[]>>;
+  preferredModel?: string;
+  setPreferredModel?: (model: string) => void;
+  fallbackModels?: string[];
+  setFallbackModels?: React.Dispatch<React.SetStateAction<string[]>>;
+  availableModels?: ModelOption[];
+  latestVersion?: string | null;
+  checkForUpdates?: (force?: boolean) => void;
+  isCheckingUpdate?: boolean;
+  hasChecked?: boolean;
+  checkFailed?: boolean;
+  updateInstallState?: SettingsUpdateInstallState;
+  onInstallUpdate?: (version: string) => Promise<void>;
+  onSessionRootMoved?: (payload?: { oldRoot?: string; newRoot?: string }) => void;
+}
+
+const makeProps = (overrides: MakePropsOverrides = {}): SettingsModalProps => ({
+  isOpen: overrides.isOpen ?? true,
+  onClose: overrides.onClose ?? vi.fn(),
+  appendConsole: overrides.appendConsole ?? vi.fn(),
+  onSettingsSaved: overrides.onSettingsSaved,
+  auth: {
+    apiKey: overrides.apiKey ?? overrides.auth?.apiKey ?? 'AIzaSyTest123456',
+    setApiKey: overrides.setApiKey ?? overrides.auth?.setApiKey ?? vi.fn(),
+    hasProtectedKey: overrides.hasProtectedKey ?? overrides.auth?.hasProtectedKey ?? false,
+    fallbackKeys: overrides.fallbackKeys ?? overrides.auth?.fallbackKeys ?? [],
+    setFallbackKeys: overrides.setFallbackKeys ?? overrides.auth?.setFallbackKeys ?? vi.fn(),
+  },
+  models: {
+    preferredModel: overrides.preferredModel ?? overrides.models?.preferredModel ?? 'gemini-3-flash-preview',
+    setPreferredModel: overrides.setPreferredModel ?? overrides.models?.setPreferredModel ?? vi.fn(),
+    fallbackModels: overrides.fallbackModels ?? overrides.models?.fallbackModels ?? [],
+    setFallbackModels: overrides.setFallbackModels ?? overrides.models?.setFallbackModels ?? vi.fn(),
+    availableModels: overrides.availableModels ?? overrides.models?.availableModels ?? [],
+  },
+  updater: {
+    latestVersion: overrides.latestVersion !== undefined ? overrides.latestVersion : (overrides.updater?.latestVersion ?? null),
+    checkForUpdates: overrides.checkForUpdates ?? overrides.updater?.checkForUpdates ?? vi.fn(),
+    isCheckingUpdate: overrides.isCheckingUpdate ?? overrides.updater?.isCheckingUpdate ?? false,
+    hasChecked: overrides.hasChecked ?? overrides.updater?.hasChecked ?? true,
+    checkFailed: overrides.checkFailed ?? overrides.updater?.checkFailed ?? false,
+    updateInstallState: overrides.updateInstallState ?? overrides.updater?.updateInstallState,
+    onInstallUpdate: overrides.onInstallUpdate ?? overrides.updater?.onInstallUpdate,
+  },
+  storage: {
+    onSessionRootMoved: overrides.onSessionRootMoved ?? overrides.storage?.onSessionRootMoved,
+  },
 });
 
 beforeEach(() => {
@@ -69,7 +119,7 @@ describe('SettingsModal — model parameters chunk display', () => {
       { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite (Preview)', summary: '', default_chunk_minutes: 10 },
     ];
     const { rerender } = render(
-      <SettingsModal {...makeProps()} availableModels={models} preferredModel="gemini-3-flash-preview" />,
+      <SettingsModal {...makeProps({ availableModels: models, preferredModel: 'gemini-3-flash-preview' })} />,
     );
     await act(async () => {
       fireEvent.click(screen.getByText('Generale').closest('button')!);
@@ -77,7 +127,7 @@ describe('SettingsModal — model parameters chunk display', () => {
     expect(screen.getByText('15 min')).toBeDefined();
 
 
-    rerender(<SettingsModal {...makeProps()} availableModels={models} preferredModel="gemini-3.1-flash-lite-preview" />);
+    rerender(<SettingsModal {...makeProps({ availableModels: models, preferredModel: 'gemini-3.1-flash-lite-preview' })} />);
     expect(screen.getByText('10 min')).toBeDefined();
   });
 });
@@ -86,9 +136,10 @@ describe('SettingsModal — diagnostics environment pending checks', () => {
   it('shows pending environment checks with "da verificare" status initially', async () => {
     render(
       <SettingsModal
-        {...makeProps()}
-        apiKey="test-api-key"
-        preferredModel="gemini-2.5-flash"
+        {...makeProps({
+          apiKey: 'test-api-key',
+          preferredModel: 'gemini-2.5-flash',
+        })}
       />,
     );
     await act(async () => {
@@ -276,7 +327,7 @@ describe('SettingsModal — main-section interactions', () => {
 
   it('calls setApiKey when API key input changes', async () => {
     const setApiKey = vi.fn();
-    render(<SettingsModal {...makeProps()} setApiKey={setApiKey} />);
+    render(<SettingsModal {...makeProps({ setApiKey })} />);
     const input = screen.getByPlaceholderText(/AIzaSy/);
     fireEvent.change(input, { target: { value: 'AIzaSy123' } });
     expect(setApiKey).toHaveBeenCalledWith('AIzaSy123');
@@ -284,7 +335,7 @@ describe('SettingsModal — main-section interactions', () => {
 
   it('calls setFallbackKeys when fallback textarea changes', async () => {
     const setFallbackKeys = vi.fn();
-    render(<SettingsModal {...makeProps()} setFallbackKeys={setFallbackKeys} />);
+    render(<SettingsModal {...makeProps({ setFallbackKeys })} />);
     const textarea = screen.getByPlaceholderText(/Inserisci una API Key per riga/);
     fireEvent.change(textarea, { target: { value: 'key1\nkey2' } });
     expect(setFallbackKeys).toHaveBeenCalledWith(['key1', 'key2']);
@@ -493,7 +544,7 @@ describe('SettingsModal — session folder and cleanup', () => {
       get_session_storage_info: getStorageInfo,
     });
 
-    render(<SettingsModal {...makeProps()} onSessionRootMoved={onSessionRootMoved} />);
+    render(<SettingsModal {...makeProps({ onSessionRootMoved })} />);
     await act(async () => {
       fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
     });
@@ -530,10 +581,11 @@ describe('SettingsModal — fallback models list', () => {
     ];
     render(
       <SettingsModal
-        {...makeProps()}
-        availableModels={models}
-        preferredModel="gemini-2.5-flash"
-        fallbackModels={['gemini-3.1-flash-lite-preview']}
+        {...makeProps({
+          availableModels: models,
+          preferredModel: 'gemini-2.5-flash',
+          fallbackModels: ['gemini-3.1-flash-lite-preview'],
+        })}
       />,
     );
     await act(async () => {
@@ -551,11 +603,12 @@ describe('SettingsModal — fallback models list', () => {
     const setFallbackModels = vi.fn();
     render(
       <SettingsModal
-        {...makeProps()}
-        availableModels={models}
-        preferredModel="gemini-2.5-flash"
-        fallbackModels={['gemini-3.1-flash-lite-preview']}
-        setFallbackModels={setFallbackModels}
+        {...makeProps({
+          availableModels: models,
+          preferredModel: 'gemini-2.5-flash',
+          fallbackModels: ['gemini-3.1-flash-lite-preview'],
+          setFallbackModels,
+        })}
       />,
     );
     await act(async () => {
@@ -574,11 +627,12 @@ describe('SettingsModal — fallback models list', () => {
     const setFallbackModels = vi.fn();
     render(
       <SettingsModal
-        {...makeProps()}
-        availableModels={models}
-        preferredModel="gemini-2.5-flash"
-        fallbackModels={['gemini-3.1-flash-lite-preview', 'gemini-2.5-pro']}
-        setFallbackModels={setFallbackModels}
+        {...makeProps({
+          availableModels: models,
+          preferredModel: 'gemini-2.5-flash',
+          fallbackModels: ['gemini-3.1-flash-lite-preview', 'gemini-2.5-pro'],
+          setFallbackModels,
+        })}
       />,
     );
     await act(async () => {
@@ -592,19 +646,19 @@ describe('SettingsModal — fallback models list', () => {
 
 describe('SettingsModal — version status display', () => {
   it('checkFailed=true: shows network-error message, hides "✓ Sei aggiornato"', () => {
-    render(<SettingsModal {...makeProps()} checkFailed={true} latestVersion={null} hasChecked={true} isCheckingUpdate={false} />);
+    render(<SettingsModal {...makeProps({ checkFailed: true, latestVersion: null, hasChecked: true, isCheckingUpdate: false })} />);
     expect(screen.queryByText(/Sei aggiornato/)).toBeNull();
     expect(screen.getByText(/non riuscita/i)).toBeTruthy();
   });
 
   it('checkFailed=false, hasChecked=true: shows "✓ Sei aggiornato"', () => {
-    render(<SettingsModal {...makeProps()} checkFailed={false} latestVersion={null} hasChecked={true} isCheckingUpdate={false} />);
+    render(<SettingsModal {...makeProps({ checkFailed: false, latestVersion: null, hasChecked: true, isCheckingUpdate: false })} />);
     expect(screen.getByText(/Sei aggiornato/)).toBeTruthy();
     expect(screen.queryByText(/non riuscita/i)).toBeNull();
   });
 
   it('isCheckingUpdate=true: shows neither status row', () => {
-    render(<SettingsModal {...makeProps()} checkFailed={false} latestVersion={null} hasChecked={true} isCheckingUpdate={true} />);
+    render(<SettingsModal {...makeProps({ checkFailed: false, latestVersion: null, hasChecked: true, isCheckingUpdate: true })} />);
     expect(screen.queryByText(/Sei aggiornato/)).toBeNull();
     expect(screen.queryByText(/non riuscita/i)).toBeNull();
   });
@@ -612,15 +666,16 @@ describe('SettingsModal — version status display', () => {
   it('shows shared async install error state', () => {
     render(
       <SettingsModal
-        {...makeProps()}
-        latestVersion="v2.0.0"
-        updateInstallState={{
-          version: 'v2.0.0',
-          status: 'error',
-          bytesDone: 0,
-          bytesTotal: 0,
-          error: 'Verifica integrità fallita: il file scaricato non corrisponde al checksum atteso.',
-        }}
+        {...makeProps({
+          latestVersion: 'v2.0.0',
+          updateInstallState: {
+            version: 'v2.0.0',
+            status: 'error',
+            bytesDone: 0,
+            bytesTotal: 0,
+            error: 'Verifica integrità fallita: il file scaricato non corrisponde al checksum atteso.',
+          },
+        })}
       />,
     );
 
@@ -630,15 +685,16 @@ describe('SettingsModal — version status display', () => {
   it('shows shared async install success state', () => {
     render(
       <SettingsModal
-        {...makeProps()}
-        latestVersion="v2.0.0"
-        updateInstallState={{
-          version: 'v2.0.0',
-          status: 'done',
-          bytesDone: 10,
-          bytesTotal: 10,
-          error: null,
-        }}
+        {...makeProps({
+          latestVersion: 'v2.0.0',
+          updateInstallState: {
+            version: 'v2.0.0',
+            status: 'done',
+            bytesDone: 10,
+            bytesTotal: 10,
+            error: null,
+          },
+        })}
       />,
     );
 
@@ -664,9 +720,10 @@ describe('SettingsModal — validate environment', () => {
     setPywebview({ validate_environment: validateFn });
     render(
       <SettingsModal
-        {...makeProps()}
-        availableModels={models}
-        preferredModel="gemini-2.5-flash"
+        {...makeProps({
+          availableModels: models,
+          preferredModel: 'gemini-2.5-flash',
+        })}
       />,
     );
     await act(async () => {
@@ -695,12 +752,11 @@ describe('SettingsModal — validate environment', () => {
       },
     });
     setPywebview({ validate_environment: validateFn });
-    const props = {
-      ...makeProps(),
+    const props = makeProps({
       availableModels: models,
       preferredModel: 'gemini-2.5-flash',
       isOpen: true,
-    };
+    });
     const { rerender } = render(<SettingsModal {...props} />);
     await act(async () => {
       fireEvent.click(screen.getByText('Quote & Diagnostica').closest('button')!);
@@ -711,7 +767,7 @@ describe('SettingsModal — validate environment', () => {
     await vi.waitFor(() => expect(screen.getByText('Ambiente OK')).toBeTruthy());
 
     // Change preferredModel
-    rerender(<SettingsModal {...props} preferredModel="gemini-3.5-flash" />);
+    rerender(<SettingsModal {...props} models={{ ...props.models, preferredModel: 'gemini-3.5-flash' }} />);
 
     // Expect 'Ambiente OK' to be cleared (since validationResult is set to null)
     expect(screen.queryByText('Ambiente OK')).toBeNull();
@@ -732,12 +788,11 @@ describe('SettingsModal — validate environment', () => {
       },
     });
     setPywebview({ validate_environment: validateFn });
-    const props = {
-      ...makeProps(),
+    const props = makeProps({
       availableModels: models,
       preferredModel: 'gemini-2.5-flash',
       isOpen: true,
-    };
+    });
     const { rerender } = render(<SettingsModal {...props} />);
     await act(async () => {
       fireEvent.click(screen.getByText('Quote & Diagnostica').closest('button')!);

@@ -554,26 +554,34 @@ export default function App() {
             onClose={() => {
               setIsSettingsOpen(false);
             }}
-            apiKey={apiKey}
-            setApiKey={setApiKey}
-            hasProtectedKey={hasProtectedKey}
-            fallbackKeys={fallbackKeys}
-            setFallbackKeys={setFallbackKeys}
-            preferredModel={preferredModel}
-            setPreferredModel={setPreferredModel}
-            fallbackModels={fallbackModels}
-            setFallbackModels={setFallbackModels}
-            availableModels={availableModels}
             appendConsole={appendConsole}
-            latestVersion={latestVersion}
-            checkForUpdates={checkForUpdates}
-            isCheckingUpdate={isCheckingUpdate}
-            hasChecked={hasChecked}
-            checkFailed={checkFailed}
-            updateInstallState={updateInstallState}
-            onInstallUpdate={installUpdate}
             onSettingsSaved={refreshSettings}
-            onSessionRootMoved={handleSessionRootMoved}
+            auth={{
+              apiKey,
+              setApiKey,
+              hasProtectedKey,
+              fallbackKeys,
+              setFallbackKeys,
+            }}
+            models={{
+              preferredModel,
+              setPreferredModel,
+              fallbackModels,
+              setFallbackModels,
+              availableModels,
+            }}
+            updater={{
+              latestVersion,
+              checkForUpdates,
+              isCheckingUpdate,
+              hasChecked,
+              checkFailed,
+              updateInstallState,
+              onInstallUpdate: installUpdate,
+            }}
+            storage={{
+              onSessionRootMoved: handleSessionRootMoved,
+            }}
           />
         </React.Suspense>
       )}
