@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import type { ArchiveSession } from '../bridge';
 import type { FileDescriptor, FileItem, ProcessingAction } from '../appState';
 import {
@@ -45,7 +45,9 @@ export function useQueueIngest({
   const [duplicatePrompt, setDuplicatePrompt] = useState<DuplicatePrompt>(null);
   const [isDragging, setIsDragging] = useState(false);
   const duplicatePromptRef = useRef<DuplicatePrompt>(duplicatePrompt);
-  duplicatePromptRef.current = duplicatePrompt;
+  useLayoutEffect(() => {
+    duplicatePromptRef.current = duplicatePrompt;
+  }, [duplicatePrompt]);
 
   const getFileFingerprint = useCallback((file: Pick<FileItem, 'path' | 'name' | 'size' | 'duration'>) => {
     const normalizedPath = String(file.path || '').trim().toLowerCase();

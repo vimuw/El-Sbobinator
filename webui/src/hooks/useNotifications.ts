@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { GITHUB_RELEASES_URL } from '../branding';
 import type { NotificationMessage } from '../components/NotificationDropdown';
 import { STORAGE_KEYS } from '../storageKeys';
@@ -64,7 +64,9 @@ function sanitizePersistedNotifications(list: unknown): PersistedNotification[] 
 
 export function useNotifications(options: UseNotificationsOptions = {}) {
   const optionsRef = useRef(options);
-  optionsRef.current = options;
+  useLayoutEffect(() => {
+    optionsRef.current = options;
+  });
 
   const [rawNotifications, setRawNotifications] = useState<PersistedNotification[]>(() => {
     try {
@@ -176,7 +178,9 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
   }, []);
 
   const rawNotificationsRef = useRef(rawNotifications);
-  rawNotificationsRef.current = rawNotifications;
+  useLayoutEffect(() => {
+    rawNotificationsRef.current = rawNotifications;
+  }, [rawNotifications]);
 
   const upsertNotification = useCallback((
     title: string,

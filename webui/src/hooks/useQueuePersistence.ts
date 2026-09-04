@@ -1,4 +1,4 @@
-import { type Dispatch, useEffect, useRef } from 'react';
+import { type Dispatch, useEffect, useLayoutEffect, useRef } from 'react';
 import type { FileItem, ProcessingAction } from '../appState';
 import { STORAGE_KEYS } from '../storageKeys';
 
@@ -60,7 +60,9 @@ export function useQueuePersistence(
 ) {
   const hasRestoredQueueRef = useRef(false);
   const filesRef = useRef(files);
-  filesRef.current = files;
+  useLayoutEffect(() => {
+    filesRef.current = files;
+  }, [files]);
 
   useEffect(() => {
     if (hasRestoredQueueRef.current) return;

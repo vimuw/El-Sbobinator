@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { GithubIcon } from './components/icons/GithubIcon';
@@ -144,7 +144,6 @@ export default function App() {
     appendConsole,
     upsertNotification,
   });
-  installUpdateRef.current = installUpdate;
 
   const {
     archiveSessions,
@@ -234,7 +233,6 @@ export default function App() {
     addNotification,
     setConfirmAction,
   });
-  handleRetryFailedRevisionBlocksRef.current = handleRetryFailedRevisionBlocks;
 
   const {
     batchTotal,
@@ -256,7 +254,6 @@ export default function App() {
     setConfirmAction,
     refreshArchiveSessions,
   });
-  startProcessingRef.current = startProcessing;
 
   const { preview, openPreview, openSharedSession, closePreview, relinkPreviewAudio, handleAudioStateChange, handleScrollTopChange, handleCollaborationStateChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
 
@@ -292,11 +289,14 @@ export default function App() {
     }
   }, [preview.content]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    installUpdateRef.current = installUpdate;
+    handleRetryFailedRevisionBlocksRef.current = handleRetryFailedRevisionBlocks;
+    startProcessingRef.current = startProcessing;
     filesRef.current = files;
     appStateRef.current = appState;
     autoContinueRef.current = autoContinue;
-  });
+  }, [installUpdate, handleRetryFailedRevisionBlocks, startProcessing, files, appState, autoContinue]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEYS.AUTO_CONTINUE, String(autoContinue)); } catch (_) {}

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { type FileDescriptor, type FileItem, type ProcessDonePayload, type ProcessingAction, type ProcessingState, isSuccessfulProcessDone } from '../appState';
 import { type ConfirmActionState } from './useConfirmModal';
 import { STORAGE_KEYS } from '../storageKeys';
@@ -41,7 +41,6 @@ export function useQueueProcessing({
   const [batchTotal, setBatchTotal] = useState(0);
   const [batchCompleted, setBatchCompleted] = useState(0);
   const [completionFlash, setCompletionFlash] = useState(false);
-  const startProcessingRef = useRef<(isContinuation?: boolean, overrideLowDisk?: boolean) => Promise<boolean>>(() => Promise.resolve(false));
 
   const resolveQueuedFilesForProcessing = useCallback(async () => {
     const api = window.pywebview?.api;
@@ -111,8 +110,6 @@ export function useQueueProcessing({
     }
   }, [apiKey, appendConsole, appStateRef, dispatch, fallbackModels, filesRef, preferredModel, resolveQueuedFilesForProcessing, setConfirmAction]);
 
-  startProcessingRef.current = startProcessing;
-
   const onFileContinued = useCallback(() => { setBatchCompleted(prev => prev + 1); }, []);
   const onBatchReset = useCallback(() => { setBatchTotal(0); setBatchCompleted(0); }, []);
   const onBatchFullyDone = useCallback((data: ProcessDonePayload) => {
@@ -163,7 +160,6 @@ export function useQueueProcessing({
     completionFlash,
     setCompletionFlash,
     startProcessing,
-    startProcessingRef,
     onFileContinued,
     onBatchReset,
     onBatchFullyDone,

@@ -32,7 +32,6 @@ export function useRevisionRetry({
   setConfirmAction,
 }: UseRevisionRetryOptions) {
   const warnedRevisionSessionsRef = useRef<Set<string>>(new Set());
-  const handleRetryFailedRevisionBlocksRef = useRef<(sessionDir: string, fileId?: string) => Promise<void>>(() => Promise.resolve());
 
   const handleRetryFailedRevisionBlocks = useCallback(async (sessionDir: string, _fileId?: string) => {
     if (!sessionDir) throw new Error('Sessione non disponibile.');
@@ -103,8 +102,6 @@ export function useRevisionRetry({
     }
   }, [addNotification, archiveSessionsRef, dispatch, filesRef, normalizeSessionDir, refreshArchiveSessions, setArchiveSessions, setConfirmAction]);
 
-  handleRetryFailedRevisionBlocksRef.current = handleRetryFailedRevisionBlocks;
-
   const handleRevisionWarning = useCallback((data: FileDonePayload) => {
     const count = data.revision_failed_blocks?.length ?? 0;
     if (count <= 0) return;
@@ -126,7 +123,6 @@ export function useRevisionRetry({
 
   return {
     handleRetryFailedRevisionBlocks,
-    handleRetryFailedRevisionBlocksRef,
     handleRevisionWarning,
     warnedRevisionSessionsRef,
   };
