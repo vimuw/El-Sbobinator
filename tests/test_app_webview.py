@@ -711,6 +711,44 @@ class AppWebviewTests(unittest.TestCase):
         mock_pipeline_run.assert_not_called()
         self.assertFalse(api._adapter.is_running)
 
+    @patch(
+        "el_sbobinator.services.network_service.check_connectivity", return_value=False
+    )
+    @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
+    def test_start_processing_rejects_when_offline_before_pipeline(
+        self, mock_pipeline_run, _mock_connectivity
+    ):
+        api = ElSbobinatorApi()
+        with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            tmp.write(b"fake")
+            file_path = tmp.name
+
+        try:
+            with patch(
+                "el_sbobinator.services.audio_service.probe_media_duration",
+                return_value=(10.0, None),
+            ):
+                result = api.start_processing(
+                    [
+                        {
+                            "id": "file-offline",
+                            "path": file_path,
+                            "name": "audio.mp3",
+                            "size": 4,
+                            "duration": 10,
+                        }
+                    ],
+                    api_key="fake-key",
+                    resume_session=True,
+                )
+        finally:
+            os.unlink(file_path)
+
+        self.assertFalse(result["ok"])
+        self.assertIn("Nessuna connessione a Internet", result["error"])
+        mock_pipeline_run.assert_not_called()
+        self.assertFalse(api._adapter.is_running)
+
     @patch("el_sbobinator.services.audio_service.probe_media_duration")
     @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
     def test_start_processing_rejects_unprobeable_media_duration(
@@ -3536,6 +3574,29 @@ class TestRetryFailedRevisionBlocksBridge(unittest.TestCase):
 
         self.assertFalse(result["ok"])
         self.assertIn("Elaborazione in corso", result["error"])
+
+    @patch(
+        "el_sbobinator.services.network_service.check_connectivity", return_value=False
+    )
+    def test_retry_aborts_when_offline(self, _mock_connectivity):
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir, _ = self._make_done_session(
+                tmpdir, create_html=True, failed_blocks=[1]
+            )
+            with (
+                patch(
+                    "el_sbobinator.app_webview.get_session_root", return_value=tmpdir
+                ),
+                patch(
+                    "el_sbobinator.bridge.controllers.pipeline_controller.load_config",
+                    return_value={"api_key": "fake-key"},
+                ),
+            ):
+                result = api.retry_failed_revision_blocks(session_dir)
+
+        self.assertFalse(result["ok"])
+        self.assertIn("Nessuna connessione a Internet", result["error"])
 
     def test_retry_aborts_on_missing_user_edited_with_existing_html(self):
         """Legacy sessions without user_edited key must be treated as potentially

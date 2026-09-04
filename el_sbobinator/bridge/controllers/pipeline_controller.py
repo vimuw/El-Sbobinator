@@ -46,6 +46,7 @@ from el_sbobinator.pipeline.pipeline_settings import (
     build_default_pipeline_settings,
     load_and_sanitize_settings,
 )
+from el_sbobinator.services import network_service
 from el_sbobinator.services.config_service import load_config, save_config
 from el_sbobinator.utils.file_ops import evict_html_paths_under
 from el_sbobinator.utils.logging_utils import redact_secrets
@@ -169,6 +170,11 @@ class PipelineControllerMixin:
             api_key = str(cfg.get("api_key") or "").strip()
             if not api_key:
                 return bridge_error("API key mancante: aggiungila nelle impostazioni.")
+
+            if not network_service.check_connectivity():
+                return bridge_error(
+                    "Nessuna connessione a Internet rilevata. Verifica la tua connessione di rete."
+                )
 
             retry_cancel_event = threading.Event()
             with self._pipeline_lifecycle_lock:
@@ -343,6 +349,11 @@ class PipelineControllerMixin:
         validation_error = self._validate_processing_files(files)
         if validation_error is not None:
             return bridge_error(validation_error)
+
+        if not network_service.check_connectivity():
+            return bridge_error(
+                "Nessuna connessione a Internet rilevata. Verifica la tua connessione di rete prima di avviare la sbobinatura."
+            )
         self._persist_processing_config(api_key, preferred_model, fallback_models)
         low_disk_response = self._low_disk_start_response(files, override_low_disk)
         if low_disk_response is not None:

@@ -24,6 +24,7 @@ from el_sbobinator.core.model_registry import (
     ModelState,
     next_model_in_chain,
 )
+from el_sbobinator.services import network_service
 from el_sbobinator.services.config_service import load_config
 from el_sbobinator.services.gemini_errors import (
     AllModelsUnavailableError,
@@ -611,9 +612,15 @@ def retry_with_quota(
             attempts += 1
             if attempts >= max_attempts:
                 raise
-            print(
-                f"      [Errore: {redact_secrets(exc)}. Riprovo in {int(retry_sleep_seconds)}s...]"
-            )
+
+            if network_service.is_network_offline_error(exc):
+                print(
+                    f"      [Connessione assente: impossibile raggiungere i server Google. Tentativo {attempts}/{max_attempts} tra {int(retry_sleep_seconds)}s...]"
+                )
+            else:
+                print(
+                    f"      [Errore: {redact_secrets(exc)}. Riprovo in {int(retry_sleep_seconds)}s...]"
+                )
             if not sleep_with_cancel(cancelled, retry_sleep_seconds):
                 print("   [*] Operazione annullata dall'utente.")
                 return client, None
