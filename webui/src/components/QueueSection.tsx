@@ -1,5 +1,5 @@
 import { memo, useMemo, useRef, useState, useEffect, type Dispatch, type SetStateAction } from 'react';
-import { DndContext, closestCenter, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { DndContext, closestCenter, useSensors, type DragEndEvent, type SensorDescriptor, type SensorOptions } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { motion, AnimatePresence } from 'motion/react';
@@ -8,19 +8,31 @@ import type { AppStatus, FileItem } from '../appState';
 import { shortModelName } from '../utils';
 import { QueueFileCard } from './QueueFileCard';
 
-interface QueueSectionProps {
-  pendingFiles: FileItem[];
+export interface QueueSectionProgressProps {
   appState: AppStatus;
-  autoContinue: boolean;
-  setAutoContinue: Dispatch<SetStateAction<boolean>>;
+  currentPhase: string;
+  currentModel?: string;
+}
+
+export interface QueueSectionAuthProps {
   preferredModel: string;
+}
+
+export interface QueueSectionStatusProps {
   queuedCount: number;
   canStart: boolean;
   hasApiKey: boolean;
   isApiKeyValid: boolean;
-  currentPhase: string;
-  dndSensors: ReturnType<typeof useSensors>;
+  autoContinue: boolean;
+  setAutoContinue: Dispatch<SetStateAction<boolean>>;
+}
+
+export interface QueueSectionDndProps {
+  sensors: SensorDescriptor<SensorOptions>[] | ReturnType<typeof useSensors>;
   onDragEnd: (event: DragEndEvent) => void;
+}
+
+export interface QueueSectionActionProps {
   onRemove: (id: string) => void;
   onClearAll: () => void;
   onRetry: (id: string) => void;
@@ -29,15 +41,46 @@ interface QueueSectionProps {
   onStart: () => void;
   onStop: () => void;
   onOpenSettings?: () => void;
-  currentModel?: string;
+}
+
+export interface QueueSectionProps {
+  pendingFiles: FileItem[];
+  progress: QueueSectionProgressProps;
+  auth: QueueSectionAuthProps;
+  status: QueueSectionStatusProps;
+  dnd: QueueSectionDndProps;
+  actions: QueueSectionActionProps;
 }
 
 export const QueueSection = memo(function QueueSection({
-  pendingFiles, appState, autoContinue, setAutoContinue, preferredModel,
-  queuedCount, canStart, hasApiKey, isApiKeyValid, currentPhase,
-  dndSensors, onDragEnd, onRemove, onClearAll, onRetry, onPreview, onOpenFile,
-  onStart, onStop, onOpenSettings, currentModel,
+  pendingFiles,
+  progress,
+  auth,
+  status,
+  dnd,
+  actions,
 }: QueueSectionProps) {
+  const { appState, currentPhase, currentModel } = progress;
+  const { preferredModel } = auth;
+  const {
+    queuedCount,
+    canStart,
+    hasApiKey,
+    isApiKeyValid,
+    autoContinue,
+    setAutoContinue,
+  } = status;
+  const { sensors, onDragEnd } = dnd;
+  const {
+    onRemove,
+    onClearAll,
+    onRetry,
+    onPreview,
+    onOpenFile,
+    onStart,
+    onStop,
+    onOpenSettings,
+  } = actions;
   const sortableIds = useMemo(() => pendingFiles.map(f => f.id), [pendingFiles]);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -130,7 +173,7 @@ export const QueueSection = memo(function QueueSection({
           </div>
 
           <DndContext
-            sensors={dndSensors}
+            sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={onDragEnd}
             autoScroll={{ threshold: { x: 0, y: 0.2 }, acceleration: 10 }}

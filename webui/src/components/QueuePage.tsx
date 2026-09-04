@@ -415,26 +415,30 @@ export function QueuePage({
           <>
             <QueueSection
               pendingFiles={pendingFiles}
-              appState={appState}
-              autoContinue={autoContinue}
-              setAutoContinue={setAutoContinue}
-              preferredModel={preferredModel}
-              currentModel={currentModel}
-              queuedCount={queuedCount}
-              canStart={canStart}
-              hasApiKey={hasApiKey}
-              isApiKeyValid={isApiKeyValid}
-              currentPhase={currentPhase}
-              dndSensors={dndSensors}
-              onDragEnd={handleDragEnd}
-              onRemove={requestRemoveFile}
-              onClearAll={handleClearAll}
-              onRetry={handleQueueRetry}
-              onPreview={openPreview}
-              onOpenFile={openFile}
-              onStart={handleQueueStart}
-              onStop={handleQueueStop}
-              onOpenSettings={handleOpenSettings}
+              progress={progress}
+              auth={auth}
+              status={{
+                queuedCount,
+                canStart,
+                hasApiKey,
+                isApiKeyValid,
+                autoContinue,
+                setAutoContinue,
+              }}
+              dnd={{
+                sensors: dndSensors,
+                onDragEnd: handleDragEnd,
+              }}
+              actions={{
+                onRemove: requestRemoveFile,
+                onClearAll: handleClearAll,
+                onRetry: handleQueueRetry,
+                onPreview: openPreview,
+                onOpenFile: openFile,
+                onStart: handleQueueStart,
+                onStop: handleQueueStop,
+                onOpenSettings: handleOpenSettings,
+              }}
             />
 
             <CompletedSection
