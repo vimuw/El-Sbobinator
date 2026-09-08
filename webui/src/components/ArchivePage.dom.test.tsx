@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { ArchivePage } from './ArchivePage';
@@ -351,5 +351,65 @@ describe('ArchivePage', () => {
     expect(sortBtn).toBeTruthy();
     fireEvent.click(sortBtn);
     expect(screen.getByText('Più occorrenze')).toBeTruthy();
+  });
+
+  it('calls onNotification when importing sbobina package fails with error', async () => {
+    const onNotification = vi.fn();
+    (window as unknown as { pywebview: { api: { import_sbobina_package: unknown } } }).pywebview = {
+      api: {
+        import_sbobina_package: vi.fn().mockResolvedValue({ ok: false, error: 'File corrotto' }),
+      },
+    };
+
+    render(
+      <ArchivePage
+        sessions={[makeSession('s1')]}
+        folders={[]}
+        onFoldersChange={vi.fn()}
+        onPreview={vi.fn()}
+        onOpenFile={vi.fn()}
+        onDeleteSession={vi.fn()}
+        onNotification={onNotification}
+      />,
+    );
+
+    const importBtn = screen.getByTitle('Importa Sbobina (.sbobina)');
+    await act(async () => {
+      fireEvent.click(importBtn);
+    });
+
+    await vi.waitFor(() => {
+      expect(onNotification).toHaveBeenCalledWith('Importazione non riuscita', 'File corrotto', 'error');
+    });
+  });
+
+  it('calls onNotification when importing sbobina package throws unexpected exception', async () => {
+    const onNotification = vi.fn();
+    (window as unknown as { pywebview: { api: { import_sbobina_package: unknown } } }).pywebview = {
+      api: {
+        import_sbobina_package: vi.fn().mockRejectedValue(new Error('Network IPC failure')),
+      },
+    };
+
+    render(
+      <ArchivePage
+        sessions={[makeSession('s1')]}
+        folders={[]}
+        onFoldersChange={vi.fn()}
+        onPreview={vi.fn()}
+        onOpenFile={vi.fn()}
+        onDeleteSession={vi.fn()}
+        onNotification={onNotification}
+      />,
+    );
+
+    const importBtn = screen.getByTitle('Importa Sbobina (.sbobina)');
+    await act(async () => {
+      fireEvent.click(importBtn);
+    });
+
+    await vi.waitFor(() => {
+      expect(onNotification).toHaveBeenCalledWith('Importazione non riuscita', 'Error: Network IPC failure', 'error');
+    });
   });
 });

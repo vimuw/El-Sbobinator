@@ -502,6 +502,7 @@ export default function App() {
                     onRefresh={refreshArchiveSessions}
                     onLoadAll={handleLoadAll}
                     onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
+                    onNotification={addNotification}
                   />
                 </React.Suspense>
               </div>

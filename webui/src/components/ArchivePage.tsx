@@ -58,7 +58,7 @@ export { FullTextResultList } from './archive/FullTextResults';
 export function ArchivePage({
   sessions, total, folders, onFoldersChange,
   onPreview, onOpenFile, onDeleteSession, onDeleteMultipleSessions, onRefresh,
-  onRetryFailedRevisionBlocks,
+  onRetryFailedRevisionBlocks, onNotification,
 }: ArchivePageProps) {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [folderModal, setFolderModal] = useState<FolderModalState | null>(null);
@@ -99,13 +99,23 @@ export function ArchivePage({
         if (res.ok) {
           onRefresh?.();
         } else if (!res.cancelled && res.error) {
-          alert(res.error);
+          if (onNotification) {
+            onNotification('Importazione non riuscita', res.error, 'error');
+          } else {
+            console.error('Importazione non riuscita:', res.error);
+          }
         }
+      }
+    } catch (e) {
+      if (onNotification) {
+        onNotification('Importazione non riuscita', String(e), 'error');
+      } else {
+        console.error('Importazione non riuscita:', e);
       }
     } finally {
       setIsImporting(false);
     }
-  }, [isImporting, onRefresh]);
+  }, [isImporting, onNotification, onRefresh]);
 
   const handleRefresh = useCallback(async () => {
     if (isRefreshing || !onRefresh) return;

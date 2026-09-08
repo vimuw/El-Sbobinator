@@ -21,6 +21,11 @@ export interface ArchivePageProps {
   onRefresh?: () => void;
   onLoadAll?: () => void;
   onRetryFailedRevisionBlocks?: (sessionDir: string) => Promise<void>;
+  onNotification?: (
+    title: string,
+    message: string,
+    type?: 'info' | 'warning' | 'error' | 'success',
+  ) => void;
 }
 
 export type FolderModalState =
