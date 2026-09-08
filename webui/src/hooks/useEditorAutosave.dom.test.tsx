@@ -192,4 +192,47 @@ describe('useEditorAutosave', () => {
     expect(saveMock).toHaveBeenCalledWith('/path/to/test.html', '<p>Closing content</p>', expect.any(Number));
     expect(onClose).toHaveBeenCalled();
   });
+
+  it('exposes imperative dirty getter and flush through saveControllerRef', async () => {
+    const saveMock = vi.fn().mockResolvedValue({ ok: true, saved: true });
+    setPywebview({ save_html_content: saveMock });
+
+    let currentHtml = '<p>Initial</p>';
+    const getHtmlRef = { current: () => currentHtml };
+    const onClose = vi.fn();
+    const saveControllerRef = { current: null };
+
+    const { result, unmount } = renderHook(() =>
+      useEditorAutosave({
+        htmlPath: '/path/to/test.html',
+        previewContent: '<p>Initial</p>',
+        getHtmlRef,
+        onClose,
+        saveControllerRef,
+      })
+    );
+
+    expect(saveControllerRef.current).not.toBeNull();
+    expect(saveControllerRef.current?.getDirtyContent()).toBeNull();
+
+    currentHtml = '<p>Dirty</p>';
+    act(() => {
+      result.current.scheduleAutosave();
+    });
+
+    expect(saveControllerRef.current?.getDirtyContent()).toEqual({
+      path: '/path/to/test.html',
+      content: '<p>Dirty</p>',
+    });
+
+    let flushed = false;
+    await act(async () => {
+      flushed = await saveControllerRef.current!.flushPendingAutosave();
+    });
+    expect(flushed).toBe(true);
+    expect(saveMock).toHaveBeenCalledWith('/path/to/test.html', '<p>Dirty</p>', expect.any(Number));
+
+    unmount();
+    expect(saveControllerRef.current).toBeNull();
+  });
 });

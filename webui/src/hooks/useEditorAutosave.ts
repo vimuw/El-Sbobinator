@@ -6,6 +6,12 @@ const isSaveCommitted = (res: SaveHtmlResult) => res.ok && res.saved !== false;
 
 export type AutosaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
+export interface EditorSaveController {
+  getDirtyContent: () => { path: string; content: string } | null;
+  flushPendingAutosave: () => Promise<boolean>;
+  cancelPendingAutosave: () => void;
+}
+
 export interface UseEditorAutosaveOptions {
   htmlPath: string;
   previewContent: string | null;
@@ -15,6 +21,7 @@ export interface UseEditorAutosaveOptions {
   setCollabRoom?: (room: string | undefined) => void;
   setCollabUser?: (user: { name: string; color: string } | undefined) => void;
   onCollaborationStateChange?: (room?: string, user?: { name: string; color: string }) => void;
+  saveControllerRef?: React.RefObject<EditorSaveController | null>;
 }
 
 export function useEditorAutosave({
@@ -26,6 +33,7 @@ export function useEditorAutosave({
   setCollabRoom,
   setCollabUser,
   onCollaborationStateChange,
+  saveControllerRef,
 }: UseEditorAutosaveOptions) {
   const [autosaveStatus, setAutosaveStatus] = useState<AutosaveStatus>('idle');
   const [isAutosaveSuspended, setIsAutosaveSuspended] = useState(false);
@@ -65,60 +73,75 @@ export function useEditorAutosave({
     };
   }, [getHtmlRef]);
 
-  useEffect(() => {
-    (window as unknown as Record<string, unknown>).__elSbobinatorGetDirtyEditorContent = () => {
-      if (!isDirtyRef.current) return null;
-      const path = htmlPathRef.current;
-      if (!path) return null;
-      const snap = getHtmlRef.current?.() ?? '';
-      if (snap === lastPersistedRef.current) return null;
-      return { path, content: snap };
-    };
-    return () => {
-      delete (window as unknown as Record<string, unknown>).__elSbobinatorGetDirtyEditorContent;
-    };
+  const getDirtyContent = useCallback((): { path: string; content: string } | null => {
+    if (!isDirtyRef.current) return null;
+    const path = htmlPathRef.current;
+    if (!path) return null;
+    const snap = getHtmlRef.current?.() ?? '';
+    if (snap === lastPersistedRef.current) return null;
+    return { path, content: snap };
+  }, [getHtmlRef]);
+
+  const cancelPendingAutosave = useCallback(() => {
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    isDirtyRef.current = false;
+  }, []);
+
+  const flushPendingAutosave = useCallback(async (): Promise<boolean> => {
+    if (!isDirtyRef.current) return true;
+    if (saveErrorOnCloseRef.current) return false;
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    const path = htmlPathRef.current;
+    const snap = getHtmlRef.current?.() ?? '';
+    if (path && snap && snap !== lastPersistedRef.current && window.pywebview?.api?.save_html_content) {
+      const gen = nextHtmlAutosaveGeneration(path);
+      autosaveGenRef.current = gen;
+      try {
+        const res = await window.pywebview.api.save_html_content(path, snap, gen);
+        if (isSaveCommitted(res)) {
+          lastPersistedRef.current = snap;
+          if (gen === autosaveGenRef.current) isDirtyRef.current = false;
+          return true;
+        }
+        saveErrorOnCloseRef.current = true;
+        setAutosaveStatus('error');
+        return false;
+      } catch (_) {
+        saveErrorOnCloseRef.current = true;
+        setAutosaveStatus('error');
+        return false;
+      }
+    }
+    return true;
   }, [getHtmlRef]);
 
   useEffect(() => {
-    (window as unknown as Record<string, unknown>).__elSbobinatorCancelPendingAutosave = () => {
-      if (autosaveTimerRef.current) {
-        window.clearTimeout(autosaveTimerRef.current);
-        autosaveTimerRef.current = null;
-      }
-      isDirtyRef.current = false;
-    };
-    (window as unknown as Record<string, unknown>).__elSbobinatorFlushPendingAutosave = async (): Promise<boolean> => {
-      if (!isDirtyRef.current) return true;
-      if (saveErrorOnCloseRef.current) return false;
-      if (autosaveTimerRef.current) { window.clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
-      const path = htmlPathRef.current;
-      const snap = getHtmlRef.current?.() ?? '';
-      if (path && snap && snap !== lastPersistedRef.current && window.pywebview?.api?.save_html_content) {
-        const gen = nextHtmlAutosaveGeneration(path);
-        autosaveGenRef.current = gen;
-        try {
-          const res = await window.pywebview.api.save_html_content(path, snap, gen);
-          if (isSaveCommitted(res)) {
-            lastPersistedRef.current = snap;
-            if (gen === autosaveGenRef.current) isDirtyRef.current = false;
-            return true;
-          }
-          saveErrorOnCloseRef.current = true;
-          setAutosaveStatus('error');
-          return false;
-        } catch (_) {
-          saveErrorOnCloseRef.current = true;
-          setAutosaveStatus('error');
-          return false;
-        }
-      }
-      return true;
-    };
+    if (saveControllerRef) {
+      saveControllerRef.current = {
+        getDirtyContent,
+        flushPendingAutosave,
+        cancelPendingAutosave,
+      };
+    }
+    const win = window as unknown as Record<string, unknown>;
+    win.__elSbobinatorGetDirtyEditorContent = getDirtyContent;
+    win.__elSbobinatorFlushPendingAutosave = flushPendingAutosave;
+    win.__elSbobinatorCancelPendingAutosave = cancelPendingAutosave;
     return () => {
-      delete (window as unknown as Record<string, unknown>).__elSbobinatorCancelPendingAutosave;
-      delete (window as unknown as Record<string, unknown>).__elSbobinatorFlushPendingAutosave;
+      if (saveControllerRef) {
+        saveControllerRef.current = null;
+      }
+      delete win.__elSbobinatorGetDirtyEditorContent;
+      delete win.__elSbobinatorFlushPendingAutosave;
+      delete win.__elSbobinatorCancelPendingAutosave;
     };
-  }, [getHtmlRef]);
+  }, [saveControllerRef, getDirtyContent, flushPendingAutosave, cancelPendingAutosave]);
 
   const flushAndClose = useCallback(async () => {
     const isCollabActive = Boolean(collabRoom);

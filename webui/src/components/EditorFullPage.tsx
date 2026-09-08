@@ -7,7 +7,7 @@ import { normalizePreviewHtmlContent } from '../previewHtml';
 import { prepareHtmlForClipboard } from '../utils';
 import { CollaborationModal } from './modals/CollaborationModal';
 import { useTheme } from '../hooks/useTheme';
-import { useEditorAutosave } from '../hooks/useEditorAutosave';
+import { useEditorAutosave, type EditorSaveController } from '../hooks/useEditorAutosave';
 import { STORAGE_KEYS } from '../storageKeys';
 
 const LazyAudioPlayer = React.lazy(() =>
@@ -17,34 +17,103 @@ const LazyRichTextEditor = React.lazy(() =>
   import('./RichTextEditor').then(m => ({ default: m.RichTextEditor }))
 );
 
-interface EditorFullPageProps {
-  previewContent: string | null;
-  previewTitle: string;
+export interface EditorDocumentProps {
+  content: string | null;
+  title: string;
   htmlPath: string;
-  onClose: () => void;
-  audioSrc: string | null;
-  audioRelinkNeeded: boolean;
+  initScrollTop?: number;
+  initialSearchTerm?: string;
+}
+
+export interface EditorAudioProps {
+  src: string | null;
+  relinkNeeded: boolean;
   onRelink: () => Promise<boolean | undefined>;
-  previewInitAudio: { time?: number; playbackRate?: number; volume?: number };
-  previewInitScrollTop: number | undefined;
+  init: { time?: number; playbackRate?: number; volume?: number };
+  onStateChange: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
+}
+
+export interface EditorCollabProps {
+  initialRoom?: string;
+  initialUser?: { name: string; color: string };
+  onStateChange?: (room?: string, user?: { name: string; color: string }) => void;
+}
+
+export interface EditorThemeProps {
+  mode?: 'light' | 'dark';
+  setMode?: React.Dispatch<React.SetStateAction<'light' | 'dark'>>;
+}
+
+export interface EditorFullPageProps {
+  document?: EditorDocumentProps;
+  audio?: EditorAudioProps;
+  collab?: EditorCollabProps;
+  theme?: EditorThemeProps;
+  onClose: () => void;
+  onScrollTopChange?: (scrollTop: number) => void;
+  saveControllerRef?: React.RefObject<EditorSaveController | null>;
+
+  // Flat props for backwards compatibility
+  previewContent?: string | null;
+  previewTitle?: string;
+  htmlPath?: string;
+  audioSrc?: string | null;
+  audioRelinkNeeded?: boolean;
+  onRelink?: () => Promise<boolean | undefined>;
+  previewInitAudio?: { time?: number; playbackRate?: number; volume?: number };
+  previewInitScrollTop?: number | undefined;
   initialSearchTerm?: string;
   initialRoom?: string;
   initialUser?: { name: string; color: string };
   themeMode?: 'light' | 'dark';
   setThemeMode?: React.Dispatch<React.SetStateAction<'light' | 'dark'>>;
-  onAudioStateChange: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
-  onScrollTopChange: (scrollTop: number) => void;
+  onAudioStateChange?: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
   onCollaborationStateChange?: (room?: string, user?: { name: string; color: string }) => void;
 }
 
 export function EditorFullPage({
-  previewContent, previewTitle, htmlPath, onClose,
-  audioSrc, audioRelinkNeeded, onRelink,
-  previewInitAudio, previewInitScrollTop,
-  initialSearchTerm, initialRoom, initialUser,
-  themeMode: propThemeMode, setThemeMode: propSetThemeMode,
-  onAudioStateChange, onScrollTopChange, onCollaborationStateChange,
+  document: docProp,
+  audio: audioProp,
+  collab: collabProp,
+  theme: themeProp,
+  onClose,
+  onScrollTopChange: propOnScrollTopChange,
+  saveControllerRef,
+  previewContent: flatPreviewContent,
+  previewTitle: flatPreviewTitle,
+  htmlPath: flatHtmlPath,
+  audioSrc: flatAudioSrc,
+  audioRelinkNeeded: flatAudioRelinkNeeded,
+  onRelink: flatOnRelink,
+  previewInitAudio: flatPreviewInitAudio,
+  previewInitScrollTop: flatPreviewInitScrollTop,
+  initialSearchTerm: flatInitialSearchTerm,
+  initialRoom: flatInitialRoom,
+  initialUser: flatInitialUser,
+  themeMode: flatThemeMode,
+  setThemeMode: flatSetThemeMode,
+  onAudioStateChange: flatOnAudioStateChange,
+  onCollaborationStateChange: flatOnCollaborationStateChange,
 }: EditorFullPageProps) {
+  const previewContent = docProp?.content !== undefined ? docProp.content : (flatPreviewContent ?? null);
+  const previewTitle = docProp?.title ?? flatPreviewTitle ?? '';
+  const htmlPath = docProp?.htmlPath ?? flatHtmlPath ?? '';
+  const previewInitScrollTop = docProp?.initScrollTop ?? flatPreviewInitScrollTop;
+  const initialSearchTerm = docProp?.initialSearchTerm ?? flatInitialSearchTerm;
+
+  const audioSrc = audioProp?.src !== undefined ? audioProp.src : (flatAudioSrc ?? null);
+  const audioRelinkNeeded = audioProp?.relinkNeeded ?? flatAudioRelinkNeeded ?? false;
+  const onRelink = audioProp?.onRelink ?? flatOnRelink ?? (() => Promise.resolve(undefined));
+  const previewInitAudio = audioProp?.init ?? flatPreviewInitAudio ?? {};
+  const onAudioStateChange = audioProp?.onStateChange ?? flatOnAudioStateChange ?? (() => {});
+
+  const initialRoom = collabProp?.initialRoom ?? flatInitialRoom;
+  const initialUser = collabProp?.initialUser ?? flatInitialUser;
+  const onCollaborationStateChange = collabProp?.onStateChange ?? flatOnCollaborationStateChange;
+
+  const propThemeMode = themeProp?.mode ?? flatThemeMode;
+  const propSetThemeMode = themeProp?.setMode ?? flatSetThemeMode;
+  const onScrollTopChange = propOnScrollTopChange ?? (() => {});
   const fallbackTheme = useTheme();
   const themeMode = propThemeMode ?? fallbackTheme.themeMode;
   const setThemeMode = propSetThemeMode ?? fallbackTheme.setThemeMode;
@@ -142,6 +211,7 @@ export function EditorFullPage({
     setCollabRoom,
     setCollabUser,
     onCollaborationStateChange,
+    saveControllerRef,
   });
 
   useEffect(() => {

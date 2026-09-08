@@ -234,4 +234,33 @@ describe('EditorFullPage autosave', () => {
     expect(saveHtmlContent).toHaveBeenCalledWith('/sessions/out.html', '<p></p>', expect.any(Number));
     expect(screen.getByText('Salvato')).toBeTruthy();
   });
+
+  it('supports domain-grouped props and binds saveControllerRef', async () => {
+    const saveControllerRef = { current: null };
+    render(
+      <EditorFullPage
+        document={{
+          content: '<p>Initial text</p>',
+          title: 'Grouped Doc',
+          htmlPath: '/sessions/grouped.html',
+        }}
+        audio={{
+          src: null,
+          relinkNeeded: false,
+          onRelink: vi.fn().mockResolvedValue(false),
+          init: {},
+          onStateChange: vi.fn(),
+        }}
+        onClose={vi.fn()}
+        saveControllerRef={saveControllerRef}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
+    expect(saveControllerRef.current).not.toBeNull();
+    expect(typeof saveControllerRef.current?.getDirtyContent).toBe('function');
+    expect(typeof saveControllerRef.current?.flushPendingAutosave).toBe('function');
+    expect(typeof saveControllerRef.current?.cancelPendingAutosave).toBe('function');
+    expect(saveControllerRef.current?.getDirtyContent()).toBeNull();
+  });
 });

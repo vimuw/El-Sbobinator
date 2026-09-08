@@ -23,6 +23,7 @@ import { useConfirmModal } from './hooks/useConfirmModal';
 import { useQueueProcessing } from './hooks/useQueueProcessing';
 import { useRevisionRetry } from './hooks/useRevisionRetry';
 import { useRegenerateDialog } from './hooks/useRegenerateDialog';
+import type { EditorSaveController } from './hooks/useEditorAutosave';
 import { useSystemNotificationTriggers } from './hooks/useSystemNotificationTriggers';
 import { QueuePage } from './components/QueuePage';
 import { RegenerateModal } from './components/modals/RegenerateModal';
@@ -121,11 +122,13 @@ export default function App() {
   const filesRef = useRef(files);
   const appStateRef = useRef(appState);
   const autoContinueRef = useRef(autoContinue);
+  const editorControllerRef = useRef<EditorSaveController | null>(null);
+  const isQuittingRef = useRef(false);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       const isBusy = appStateRef.current === 'processing' || filesRef.current.some(f => f.isRetryingBlocks);
-      if (isBusy && !(window as unknown as { __elSbobinatorQuitting?: boolean }).__elSbobinatorQuitting) {
+      if (isBusy && !isQuittingRef.current && !(window as unknown as { __elSbobinatorQuitting?: boolean }).__elSbobinatorQuitting) {
         e.preventDefault();
         e.returnValue = '';
         return '';
@@ -218,6 +221,7 @@ export default function App() {
     executeRetryFromArchive,
     normalizeSessionDir,
     appendConsole,
+    isQuittingRef,
   });
 
   const {
@@ -268,6 +272,7 @@ export default function App() {
     previewContent: preview.content,
     previewSessionDir: preview.sessionDir,
     closePreview,
+    editorControllerRef,
   });
 
   useSystemNotificationTriggers({
@@ -589,23 +594,32 @@ export default function App() {
       {shouldRenderPreview && (
         <React.Suspense fallback={null}>
           <EditorFullPage
-            previewContent={preview.content}
-            previewTitle={preview.title}
-            htmlPath={preview.path}
+            document={{
+              content: preview.content,
+              title: preview.title,
+              htmlPath: preview.path,
+              initScrollTop: preview.initScrollTop,
+              initialSearchTerm: preview.initialSearchTerm,
+            }}
+            audio={{
+              src: preview.audioSrc,
+              relinkNeeded: preview.audioRelinkNeeded,
+              onRelink: relinkPreviewAudio,
+              init: preview.initAudio,
+              onStateChange: handleAudioStateChange,
+            }}
+            collab={{
+              initialRoom: preview.initialRoom,
+              initialUser: preview.initialUser,
+              onStateChange: handleCollaborationStateChange,
+            }}
+            theme={{
+              mode: themeMode,
+              setMode: setThemeMode,
+            }}
             onClose={closePreview}
-            audioSrc={preview.audioSrc}
-            audioRelinkNeeded={preview.audioRelinkNeeded}
-            onRelink={relinkPreviewAudio}
-            previewInitAudio={preview.initAudio}
-            previewInitScrollTop={preview.initScrollTop}
-            initialSearchTerm={preview.initialSearchTerm}
-            initialRoom={preview.initialRoom}
-            initialUser={preview.initialUser}
-            themeMode={themeMode}
-            setThemeMode={setThemeMode}
-            onAudioStateChange={handleAudioStateChange}
             onScrollTopChange={handleScrollTopChange}
-            onCollaborationStateChange={handleCollaborationStateChange}
+            saveControllerRef={editorControllerRef}
           />
         </React.Suspense>
       )}
