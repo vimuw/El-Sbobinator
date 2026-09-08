@@ -320,8 +320,14 @@ class PipelineControllerMixin:
                 if isinstance(fallback_models, list)
                 else None,
             )
-        except Exception:
-            pass
+        except OSError as e:
+            self._push_console(
+                f"[!] Impossibile salvare le impostazioni di configurazione: {e}"
+            )
+        except Exception as e:
+            self._push_console(
+                f"[!] Errore imprevisto durante il salvataggio della configurazione: {e}"
+            )
 
     def _low_disk_start_response(
         self, files: list[BridgeFileItem], override_low_disk: bool
