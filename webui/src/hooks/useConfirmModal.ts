@@ -36,6 +36,7 @@ interface UseConfirmModalOptions {
   executeRetryFromArchive: (session: ArchiveSession) => Promise<void>;
   normalizeSessionDir: (value?: string) => string;
   appendConsole: (msg: string) => void;
+  isQuittingRef?: React.RefObject<boolean>;
 }
 
 export function useConfirmModal({
@@ -50,6 +51,7 @@ export function useConfirmModal({
   executeRetryFromArchive,
   normalizeSessionDir,
   appendConsole,
+  isQuittingRef,
 }: UseConfirmModalOptions) {
   const [confirmAction, setConfirmAction] = useState<ConfirmActionState | null>(null);
 
@@ -152,6 +154,9 @@ export function useConfirmModal({
     if (!confirmAction) return;
     if (confirmAction.type === 'quit-app') {
       setConfirmAction(null);
+      if (isQuittingRef) {
+        isQuittingRef.current = true;
+      }
       (window as unknown as { __elSbobinatorQuitting?: boolean }).__elSbobinatorQuitting = true;
       if (window.pywebview?.api?.close_window) {
         void window.pywebview.api.close_window();
@@ -238,6 +243,7 @@ export function useConfirmModal({
     filesRef,
     dispatch,
     startProcessingRef,
+    isQuittingRef,
     setArchiveSessions,
     setArchiveTotal,
     foldersRef,

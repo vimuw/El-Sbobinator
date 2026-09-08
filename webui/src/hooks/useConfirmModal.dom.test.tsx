@@ -121,6 +121,7 @@ describe('useConfirmModal', () => {
       },
     };
 
+    const isQuittingRef = { current: false };
     const { result } = renderHook(() =>
       useConfirmModal({
         dispatch,
@@ -134,6 +135,7 @@ describe('useConfirmModal', () => {
         executeRetryFromArchive,
         normalizeSessionDir,
         appendConsole,
+        isQuittingRef,
       }),
     );
 
@@ -151,6 +153,7 @@ describe('useConfirmModal', () => {
     });
 
     expect(closeWindowMock).toHaveBeenCalled();
+    expect(isQuittingRef.current).toBe(true);
     expect(result.current.confirmAction).toBeNull();
   });
 });
