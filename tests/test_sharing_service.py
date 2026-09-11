@@ -112,7 +112,8 @@ def test_safe_zip_extract_prevents_zip_slip(tmp_path):
             _safe_zip_extract(zf, str(target_extract))
 
 
-def test_prepare_email_share_mailto_and_gmail(tmp_path):
+@patch("threading.Thread")
+def test_prepare_email_share_mailto_and_gmail(mock_thread, tmp_path):
     session_dir = tmp_path / "mock_email_session"
     session_dir.mkdir()
     (session_dir / "session.json").write_text(

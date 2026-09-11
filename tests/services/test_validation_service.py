@@ -6,6 +6,7 @@ from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 from el_sbobinator.services.validation_service import (
+    _check_ffmpeg_execution,
     _check_writable_dir,
     validate_environment,
 )
@@ -81,6 +82,10 @@ class _NoGenerateContentClient:
         self.models = _NoGenerateContentModels()
 
 
+@patch(
+    "el_sbobinator.services.validation_service._check_ffmpeg_execution",
+    return_value=(True, "ffmpeg version 7.0"),
+)
 class ValidationServiceTests(unittest.TestCase):
     @patch(
         "el_sbobinator.services.validation_service.get_session_root", return_value="."
@@ -314,6 +319,51 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertIn("Errore: no write", output_details)
         self.assertIn("Rimedio:", output_details)
 
+    @patch(
+        "el_sbobinator.services.validation_service.resolve_ffmpeg",
+        return_value="ffmpeg",
+    )
+    def test_validate_environment_reports_ffmpeg_failure(self, *_mocks):
+        with patch(
+            "el_sbobinator.services.validation_service._check_ffmpeg_execution",
+            return_value=(False, "binary not found"),
+        ):
+            result = validate_environment(api_key=None, validate_api_key=False)
+        self.assertFalse(result["ok"])
+        ffmpeg_check = next(c for c in result["checks"] if c["id"] == "ffmpeg")
+        self.assertEqual(ffmpeg_check["status"], "error")
+        self.assertEqual(
+            ffmpeg_check["message"], "FFmpeg non trovato o non utilizzabile."
+        )
+        self.assertIn("binary not found", ffmpeg_check.get("details", ""))
+
+
+class CheckFfmpegExecutionTests(unittest.TestCase):
+    @patch("subprocess.run")
+    def test_ffmpeg_execution_success(self, mock_run):
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout="ffmpeg version 7.0 Copyright\nExtra info"
+        )
+        ok, detail = _check_ffmpeg_execution("ffmpeg")
+        self.assertTrue(ok)
+        self.assertEqual(detail, "ffmpeg version 7.0 Copyright")
+
+    @patch("subprocess.run")
+    def test_ffmpeg_execution_nonzero_exit(self, mock_run):
+        mock_run.return_value = MagicMock(
+            returncode=1, stdout="", stderr="unrecognized option"
+        )
+        ok, detail = _check_ffmpeg_execution("ffmpeg")
+        self.assertFalse(ok)
+        self.assertIn("FFmpeg ha restituito codice 1", detail)
+        self.assertIn("unrecognized option", detail)
+
+    @patch("subprocess.run", side_effect=FileNotFoundError("not found"))
+    def test_ffmpeg_execution_exception(self, _mock_run):
+        ok, detail = _check_ffmpeg_execution("ffmpeg")
+        self.assertFalse(ok)
+        self.assertIn("not found", detail)
+
 
 class CheckWritableDirTests(unittest.TestCase):
     def test_returns_true_when_directory_is_writable(self):
@@ -340,6 +390,10 @@ class CheckWritableDirTests(unittest.TestCase):
         self.assertIn("no write", msg)
 
 
+@patch(
+    "el_sbobinator.services.validation_service._check_ffmpeg_execution",
+    return_value=(True, "ffmpeg version 7.0"),
+)
 class TestValidationKeyringCheck(unittest.TestCase):
     """validate_environment keyring check — only emitted on non-Windows."""
 
@@ -441,7 +495,7 @@ class TestValidationKeyringCheck(unittest.TestCase):
         self.assertEqual(output_check["status"], "warning")
         self.assertIn("Spazio su disco quasi esaurito", output_check["message"])
 
-    def test_generate_diagnostic_report_redacts_api_keys(self):
+    def test_generate_diagnostic_report_redacts_api_keys(self, *_mocks):
         from el_sbobinator.services.validation_service import generate_diagnostic_report
 
         fake_key = "AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345"
