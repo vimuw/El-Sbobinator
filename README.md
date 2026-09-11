@@ -19,73 +19,92 @@ Applicazione desktop per trasformare registrazioni audio e video di lezioni univ
 
 ## Panoramica
 
-El Sbobinator è un'applicazione desktop standalone sviluppata con Python e un'interfaccia React/TypeScript (ospitata tramite pywebview). Elabora registrazioni di lezioni attraverso una pipeline a più stadi basata su Gemini, generando dispense di studio pronte per la lettura e la revisione che eliminano disfluenze, ripetizioni e digressioni del parlato preservando il rigore tecnico.
+**El Sbobinator** è un'applicazione desktop pensata per studenti universitari: trasforma le registrazioni delle lezioni (audio o video, inclusi i memo vocali dello smartphone o le registrazioni da Teams/Meet) in **dispense di studio complete, ordinate e formattate**.
 
-Tutte le operazioni avvengono in locale sul computer dell'utente, con chiamate API inviate direttamente a Google AI Studio senza server intermediari.
+L'app pulisce il discorso parlato eliminando ripetizioni, intercalari e digressioni, e struttura gli argomenti con capitoli, paragrafi ed elenchi puntati preservando l'accuratezza del linguaggio tecnico e medico.
+
+> [!NOTE]
+> **Elaborazione 100% Locale e Privata**: Nessun server intermediario raccoglie i tuoi dati. I file audio e il testo rimangono sul tuo computer e comunicano unicamente con i modelli ufficiali di Google Gemini tramite la tua chiave personale gratuita.
 
 ---
 
 ## Caratteristiche Principali
 
-- **Pipeline AI a Più Stadi**: Architettura a 2 fasi ottimizzata per i modelli Google Gemini (`gemini-2.5-flash`, `gemini-3.7-flash`, `gemini-3.5-flash`, `gemini-3.5-flash-lite`) con trascrizione a blocchi e revisione editoriale macro.
-- **Architettura BYOK e Resilienza**: Utilizza la tua chiave API gratuita di Google AI Studio. Supporta rotazione automatica multi-chiave, catene di fallback dei modelli e gestione automatica del rate limit.
-- **Editor Rich-Text Integrato**: Editor TipTap completo con supporto markdown e formule LaTeX, indice dei contenuti (TOC) navigabile, funzione Trova e Sostituisci e immagini ridimensionabili.
-- **Player Audio Sincronizzato**: Riproduttore multimediale integrato con streaming locale e velocità regolabile (1.0x–3.0x).
-- **Archivio e Ricerca Full-Text**: Ricerca istantanea su tutte le sbobine salvate con anteprima dei frammenti di testo e organizzazione in cartelle personalizzate.
-- **Esportazione e Portabilità**: Copia diretta formattata per Google Docs e Microsoft Word, esportazione in documenti HTML standalone e pacchetti compressi `.sbobina` per backup e condivisione rapida.
-- **Privacy e Sicurezza**: Elaborazione 100% locale. Le chiavi API sono memorizzate nel portachiavi sicuro del sistema operativo (Windows DPAPI / macOS Keychain) e i documenti esportati adottano rigide Content Security Policy.
+- 📚 **Dispense Pronte per lo Studio**: Trascrive e riorganizza automaticamente il parlato in un testo coerente, fluido e pronto per preparare gli esami.
+- 🔑 **Completamente Gratuito (Google Gemini)**: Funziona con la tua chiave personale gratuita di Google AI Studio — senza abbonamenti, carte di credito o costi nascosti. Include la rotazione automatica di più chiavi se si raggiungono i limiti giornalieri.
+- ✍️ **Editor di Testo Integrato**: Rileggi e correggi la lezione all'interno dell'app con indice laterale navigabile, formule matematiche/chimiche, immagini e funzione Trova/Sostituisci.
+- 🎧 **Player Audio Sincronizzato**: Riascolta i passaggi della lezione mentre revisioni il testo, con regolazione della velocità (1.0x–3.0x) e memorizzazione automatica del minuto in cui ti eri fermato.
+- 🔍 **Archivio con Ricerca Istantanea**: Ritrova in un istante qualsiasi parola o concetto spiegato a lezione cercando all'interno di tutte le sbobine salvate.
+- 📋 **Esportazione e Condivisione con un Clic**: Copia il testo con formattazione preservata direttamente in Google Docs o Microsoft Word, oppure esporta in file HTML o pacchetti condivisibili `.sbobina`.
+- 🔒 **Massima Privacy e Sicurezza**: La tua chiave API è conservata nel portachiavi protetto del sistema operativo (Windows DPAPI / macOS Keychain) e non viene mai condivisa con terzi.
 
 ---
 
-## Requisiti di Sistema
+## Download e Installazione
 
-- **RAM**: Minimo 4 GB (8 GB consigliati)
-- **Spazio su Disco**: ~200 MB per l'applicazione + spazio temporaneo per i file audio
-- **Connessione di Rete**: Connessione internet attiva (richiesta per le chiamate API Gemini)
+Scarica la versione più recente dalla pagina [**Releases**](https://github.com/vimuw/El-Sbobinator/releases/latest):
 
-| Piattaforma | Sistema Operativo Minimo | Componenti Aggiuntivi |
+| Piattaforma | File da scaricare | Istruzioni rapide |
 | :--- | :--- | :--- |
-| **Windows** | Windows 10 (64-bit) o successivo | [Microsoft Edge WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703) *(incluso di default in Windows 10/11)* |
-| **macOS** | macOS 11 (Big Sur) o successivo | Nessuno *(utilizza WebKit nativo)* |
+| **Windows** | `El-Sbobinator-Setup-v*.exe` | Scarica il file `.exe`, avvialo e segui la procedura di installazione. |
+| **macOS** | `El-Sbobinator-v*.dmg` | Apri il file `.dmg` scaricato e trascina l'icona di *El Sbobinator* nella cartella **Applicazioni**. |
+
+> [!TIP]
+> L'app include un sistema di aggiornamento automatico: non dovrai riscaricarla manualmente ogni volta, ti avviserà direttamente quando è disponibile una nuova versione.
 
 ---
 
-## Download
+## Guida Rapida (Primi Passi)
 
-I file binari precompilati sono disponibili nella sezione [Releases](https://github.com/vimuw/El-Sbobinator/releases/latest):
+Segui questi 4 semplici passaggi per iniziare a sbobinare:
 
-| Piattaforma | Pacchetto | Note / Architettura |
-| :--- | :--- | :--- |
-| **Windows** | `El-Sbobinator-Setup-v*.exe` | Installer per Windows 10 / 11 (64-bit) |
-| **macOS** | `El-Sbobinator-v*.dmg` | Immagine disco per macOS 11 (Big Sur) o versioni successive |
+### 1. Ottieni la tua chiave Google Gemini gratuita (1 minuto)
+1. Vai su [**aistudio.google.com/apikey**](https://aistudio.google.com/apikey) e accedi con il tuo account Google.
+2. Clicca sul pulsante blu **"Create API key"** (oppure *"Get API key"*).
+3. Seleziona un progetto (o creane uno nuovo se richiesto) e clicca su **"Create API key in existing/new project"**.
+4. Copia il codice generato (una stringa che inizia per `AIzaSy...`).
+   *(Il servizio è gratuito e non richiede l'inserimento di carte di credito).*
 
-L'applicazione include un sistema di aggiornamento automatico integrato che notifica e installa le nuove versioni direttamente dall'interfaccia.
+### 2. Inserisci la chiave nell'applicazione
+Apri **El Sbobinator**: alla prima apertura vedrai una schermata di benvenuto. Incolla la tua chiave nel campo di testo e clicca su **Salva e inizia**.
 
----
+### 3. Trascina la lezione e avvia
+Trascina il file audio o video della lezione direttamente nella finestra del programma e clicca su **Avvia Sbobinatura**. Puoi anche inserire più lezioni in coda: verranno elaborate una dopo l'altra.
 
-## Guida Rapida
-
-1. **Ottieni una Chiave API**: Crea una chiave API Gemini gratuita su [Google AI Studio](https://aistudio.google.com/app/apikey).
-2. **Configura le Impostazioni**: Apri El Sbobinator, accedi alle **Impostazioni** e incolla la chiave API (salvata in modo sicuro nel portachiavi di sistema).
-3. **Importa i File e Avvia**: Trascina i file audio o video nella coda e clicca su **Avvia Sbobinatura**.
-4. **Modifica ed Esporta**: Revisiona il testo nell'editor integrato, copialo direttamente in Google Docs/Word oppure salvalo in formato HTML o pacchetto `.sbobina`.
+### 4. Rivedi ed Esporta
+Al termine, apri la sbobina nell'editor per leggerla o integrarla. Clicca su **Copia formattato** per incollarla direttamente su **Microsoft Word** o **Google Docs**, oppure salvala in file HTML.
 
 ### Formati Supportati
-
-- **Audio**: `.mp3`, `.m4a`, `.wav`, `.aac`, `.ogg`, `.flac`, `.opus`
-- **Video**: `.mp4`, `.mkv`, `.webm`, `.mov`, `.avi`
-
----
-
-## Risoluzione Problemi
-
-- **Avviso Windows SmartScreen / Antivirus**: Gli eseguibili open-source privi di certificato commerciale a pagamento possono generare falsi positivi. Clicca su *Ulteriori informazioni* -> *Esegui comunque*, oppure verifica il file su [VirusTotal](https://www.virustotal.com/).
-- **Finestra vuota su Windows**: Verifica che il runtime [Microsoft Edge WebView2](https://go.microsoft.com/fwlink/p/?LinkId=2124703) sia installato e aggiornato.
-- **Limiti di Quota API**: Il piano gratuito di Google AI Studio include limiti giornalieri di richieste e token. È possibile configurare chiavi di riserva nelle **Impostazioni** per abilitare la rotazione automatica.
+- **File Audio**: `.mp3`, `.m4a` (memo vocali iPhone/Android), `.wav`, `.aac`, `.ogg`, `.flac`, `.opus`
+- **File Video**: `.mp4` (lezioni registrate da Teams/Zoom), `.mkv`, `.webm`, `.mov`, `.avi`
 
 ---
 
-## Architettura
+## Risoluzione Problemi Comuni
+
+### ⚠️ Avviso al primo avvio su Windows ("PC protetto da Windows" / SmartScreen)
+I programmi gratuiti e open-source privi di certificato commerciale a pagamento possono essere temporaneamente segnalati da Windows SmartScreen o dall'antivirus:
+1. Nella schermata blu che appare, clicca sulla scritta **Ulteriori informazioni**.
+2. Clicca sul pulsante **Esegui comunque**.
+*(Puoi verificare in qualsiasi momento l'assoluta sicurezza del file caricandolo su [VirusTotal](https://www.virustotal.com/)).*
+
+### ⚠️ Avviso al primo avvio su Mac ("Sviluppatore non verificato" o "Impossibile aprire")
+Su macOS, i software scaricati da internet non distribuiti tramite App Store richiedono una conferma al primo avvio:
+1. Apri la cartella **Applicazioni**, fai **clic destro** (oppure premi `Control` e fai clic) sull'icona di *El Sbobinator* e scegli **Apri**.
+2. Nella finestra di dialogo che compare, conferma cliccando su **Apri**.
+3. *In alternativa*: se compare l'avviso di blocco, apri **Impostazioni di Sistema** -> **Privacy e Sicurezza**, scorri verso il basso fino alla sezione *Sicurezza* e clicca su **Apri comunque**.
+
+### ⚪ Finestra bianca o vuota su Windows
+Su sistemi Windows 10 datati potrebbe non essere aggiornato il componente Microsoft WebView2:
+- Scarica e installa il runtime ufficiale gratuito: [Microsoft Edge WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703) *(già presente di default su Windows 11 e sulla maggior parte dei Windows 10).*
+
+### ⏳ Limiti di Quota ("Quota giornaliera esaurita")
+Il piano gratuito di Google AI Studio offre limiti giornalieri di richieste per modello. Se hai molte ore di lezione da trascrivere nello stesso giorno:
+- Nelle **Impostazioni** dell'app puoi aggiungere **chiavi di riserva** (ad esempio create con un secondo account Google): l'applicazione passerà automaticamente alla chiave successiva quando la prima si esaurisce.
+
+---
+
+## Architettura del Sistema (Dettagli Tecnici)
 
 ```
 Audio/Video di input
@@ -98,29 +117,30 @@ Audio/Video di input
 └──────────────┘      └──────────────────────────┘      └──────────────────────────┘      └──────────────────┘
 ```
 
-- **Fase 0 (Pre-conversione)**: Converte i media in MP3 mono a 16 kHz per velocizzare il taglio dei blocchi tramite stream-copy.
-- **Fase 1 (Trascrizione a Blocchi)**: Suddivide l'audio in blocchi con memoria contestuale sovrapposta per garantire coerenza e continuità.
-- **Fase 2 (Revisione Macro-Blocchi)**: Unisce i testi in blocchi tematici coerenti per normalizzare la formattazione e correggere imprecisioni.
-- **Esportazione**: Genera documenti HTML sanitizzati e compatibili con i principali programmi di videoscrittura.
+- **Fase 0 (Pre-conversione)**: Converte i file multimediali in MP3 mono a 16 kHz per velocizzare il taglio dei blocchi audio.
+- **Fase 1 (Trascrizione a Blocchi)**: Suddivide l'audio in spezzoni con memoria contestuale per garantire continuità discorsiva e assenza di allucinazioni.
+- **Fase 2 (Revisione Macro-Blocchi)**: Unisce i testi in blocchi tematici coerenti per normalizzare la formattazione e correggere la punteggiatura e i termini tecnici.
+- **Esportazione**: Genera documenti HTML sanitizzati (tramite libreria `nh3`) con policy CSP rigide, completamente compatibili con i programmi di videoscrittura.
 
 ---
 
-## Sviluppo e Contributi
+## Per Sviluppatori e Contributori
 
-Per configurare l'ambiente locale, eseguire i test di integrazione (`ruff`, `pytest`, `vitest`) o compilare i pacchetti di rilascio, consulta:
+Se desideri consultare l'architettura del codice sorgente, eseguire i test o compilare l'app in autonomia:
 
-- [CONTRIBUTING.md](CONTRIBUTING.md) per i comandi di setup, test e compilazione dei binari.
-- [docs/architecture.md](docs/architecture.md) per l'architettura dettagliata dei moduli Python e React.
-- [docs/pipeline.md](docs/pipeline.md) per il funzionamento interno della pipeline e la gestione degli errori.
-- [docs/bridge_protocol.md](docs/bridge_protocol.md) per il protocollo di comunicazione IPC tra Python e React.
-- [docs/session_model.md](docs/session_model.md) per la persistenza su disco e il formato delle sessioni.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — Setup ambiente locale, test (`pytest`, `vitest`, `ruff`) e script di build.
+- [docs/architecture.md](docs/architecture.md) — Architettura dettagliata dei moduli Python e React.
+- [docs/pipeline.md](docs/pipeline.md) — Funzionamento interno della pipeline, gestione rate limit ed errori.
+- [docs/bridge_protocol.md](docs/bridge_protocol.md) — Protocollo di comunicazione IPC tra Python e React.
+- [docs/session_model.md](docs/session_model.md) — Modello di persistenza locale su disco delle sessioni.
 
 ---
 
 ## Disclaimer Legale ed Etico
 
-- **Uso per Studio Personale**: Le registrazioni delle lezioni universitarie costituiscono proprietà intellettuale dei rispettivi docenti. L'uso di questo strumento è inteso esclusivamente a fini di studio personale.
-- **Divieto per Dati Clinici e Sanitari (GDPR)**: È fatto divieto assoluto di elaborare registrazioni contenenti dati sanitari identificabili, conversazioni cliniche o informazioni personali sensibili.
+> [!IMPORTANT]
+> - **Uso per Studio Personale**: Le registrazioni delle lezioni universitarie costituiscono proprietà intellettuale dei docenti. L'uso di questo strumento è inteso esclusivamente a fini di studio personale e ripasso.
+> - **Divieto per Dati Clinici e Sanitari (GDPR)**: È fatto **divieto assoluto** di elaborare registrazioni contenenti dati sanitari identificabili di pazienti reali, cartelle cliniche, visite o conversazioni ospedaliere confidenziali.
 
 ---
 
