@@ -10,10 +10,15 @@ from unittest.mock import patch
 
 from scripts.generate_changelog import (
     categorize_commits,
+    classify_unprefixed_commit,
+    format_changelog,
     get_commits,
     get_previous_tag,
+    get_repo,
     main,
     run_git,
+    sanitize_commit_message,
+    should_ignore_commit,
     uncapitalize_first,
 )
 
@@ -228,6 +233,183 @@ class TestGenerateChangelog(unittest.TestCase):
                 content = f.read()
             # Should have exactly one "## Changes"
             self.assertEqual(content.count("## Changes"), 1)
+
+    def test_categorize_commits_deps_prefix(self) -> None:
+        commits = [
+            ("1111111", "deps-dev: bump ruff to 0.16.6"),
+            ("2222222", "dependencies: update requests"),
+        ]
+        categories = categorize_commits(commits, repo="owner/repo")
+        self.assertEqual(len(categories["Dependencies"]), 2)
+
+    def test_get_repo(self) -> None:
+        # CLI override takes precedence
+        self.assertEqual(get_repo("cli/repo"), "cli/repo")
+
+        # Fallback to env var
+        with patch.dict(os.environ, {"GITHUB_REPOSITORY": "env/repo"}, clear=False):
+            self.assertEqual(get_repo(), "env/repo")
+
+        # Fallback to git remote
+        with (
+            patch.dict(os.environ, {"GITHUB_REPOSITORY": ""}, clear=False),
+            patch(
+                "scripts.generate_changelog.run_git",
+                return_value="https://github.com/gitowner/gitrepo.git",
+            ),
+        ):
+            self.assertEqual(get_repo(), "gitowner/gitrepo")
+
+        # When git remote has SSH format
+        with (
+            patch.dict(os.environ, {"GITHUB_REPOSITORY": ""}, clear=False),
+            patch(
+                "scripts.generate_changelog.run_git",
+                return_value="git@github.com:gitowner/sshrepo.git",
+            ),
+        ):
+            self.assertEqual(get_repo(), "gitowner/sshrepo")
+
+    def test_format_changelog_collapsed_details(self) -> None:
+        categories = {
+            "Features": ["- feat item ([`123`](https://...))"],
+            "Bug Fixes": ["- fix item ([`456`](https://...))"],
+            "Documentation": [],
+            "Dependencies": [
+                "- dep 1 ([`789`](https://...))",
+                "- dep 2 ([`abc`](https://...))",
+            ],
+            "Maintenance & Refactoring": ["- maint 1 ([`def`](https://...))"],
+            "Other Changes": [],
+        }
+        output = format_changelog(
+            categories=categories,
+            repo="owner/repo",
+            prev_ref="v1.0.0",
+            clean_tag="v1.1.0",
+            custom_body="## 🌟 Highlights\n* Awesome update",
+            collapse_maintenance=True,
+        )
+
+        self.assertIn("## 🌟 Highlights\n* Awesome update", output)
+        self.assertIn("### 🚀 Features", output)
+        self.assertIn("### 🐛 Bug Fixes", output)
+        self.assertIn(
+            "<details>\n<summary>🛠️ <b>Maintenance & Dependencies</b> (3 changes)</summary>",
+            output,
+        )
+        self.assertIn("### 📦 Dependencies", output)
+        self.assertIn("### 🛠️ Maintenance & Refactoring", output)
+        self.assertIn("</details>", output)
+        self.assertIn(
+            "**Full Changelog**: https://github.com/owner/repo/compare/v1.0.0...v1.1.0",
+            output,
+        )
+
+    def test_format_changelog_no_collapse(self) -> None:
+        categories = {
+            "Features": ["- feat item"],
+            "Bug Fixes": [],
+            "Documentation": [],
+            "Dependencies": ["- dep 1"],
+            "Maintenance & Refactoring": [],
+            "Other Changes": [],
+        }
+        output = format_changelog(
+            categories=categories,
+            repo="owner/repo",
+            prev_ref="v1.0.0",
+            clean_tag="v1.1.0",
+            collapse_maintenance=False,
+        )
+
+        self.assertNotIn("<details>", output)
+        self.assertIn("### 📦 Dependencies", output)
+
+    def test_sanitize_commit_message(self) -> None:
+        self.assertEqual(
+            sanitize_commit_message("``` fix: resolve issue ```"),
+            "fix: resolve issue",
+        )
+        self.assertEqual(
+            sanitize_commit_message("`feat: add widget`"),
+            "feat: add widget",
+        )
+        self.assertEqual(
+            sanitize_commit_message('  "chore: clean code"  '),
+            "chore: clean code",
+        )
+
+    def test_should_ignore_commit(self) -> None:
+        self.assertTrue(
+            should_ignore_commit("Merge branch 'main' of https://github.com/...")
+        )
+        self.assertTrue(should_ignore_commit("Merge pull request #42 from foo/bar"))
+        self.assertTrue(should_ignore_commit("#"))
+        self.assertTrue(should_ignore_commit("---"))
+        self.assertTrue(should_ignore_commit("   "))
+        self.assertFalse(should_ignore_commit("fix: resolve bug in audio player"))
+
+    def test_classify_unprefixed_commit(self) -> None:
+        self.assertEqual(
+            classify_unprefixed_commit("Fix post-review regressions"), "Bug Fixes"
+        )
+        self.assertEqual(
+            classify_unprefixed_commit("Harden boundary revision"), "Bug Fixes"
+        )
+        self.assertEqual(
+            classify_unprefixed_commit("Update images in README.md"), "Documentation"
+        )
+        self.assertEqual(classify_unprefixed_commit("Revamp app pipeline"), "Features")
+        self.assertEqual(classify_unprefixed_commit("Preserve queue state"), "Features")
+        self.assertEqual(
+            classify_unprefixed_commit("Optimize react hot paths"),
+            "Performance Improvements",
+        )
+        self.assertEqual(
+            classify_unprefixed_commit("Bump vite from 6 to 8"), "Dependencies"
+        )
+        self.assertEqual(
+            classify_unprefixed_commit("Clean up temp files"),
+            "Maintenance & Refactoring",
+        )
+        self.assertEqual(
+            classify_unprefixed_commit("Random unknown title"), "Other Changes"
+        )
+
+    def test_categorize_commits_perf_and_ui(self) -> None:
+        commits = [
+            ("1111111", "perf(webui): memoize editor extensions"),
+            ("2222222", "ui: add floating TOC sidebar"),
+            ("3333333", "ux: prevent prompt overflow"),
+            ("4444444", "Fix post-review regressions"),
+        ]
+        categories = categorize_commits(commits, repo="owner/repo")
+        self.assertEqual(len(categories["Performance Improvements"]), 1)
+        self.assertEqual(len(categories["Features"]), 2)
+        self.assertEqual(len(categories["Bug Fixes"]), 1)
+
+    def test_format_changelog_maintenance_only_details_open(self) -> None:
+        categories = {
+            "Features": [],
+            "Bug Fixes": [],
+            "Performance Improvements": [],
+            "Documentation": [],
+            "Dependencies": ["- dep item"],
+            "Maintenance & Refactoring": ["- chore item"],
+            "Other Changes": [],
+        }
+        output = format_changelog(
+            categories=categories,
+            repo="owner/repo",
+            prev_ref="v1.0.0",
+            clean_tag="v1.0.1",
+            collapse_maintenance=True,
+        )
+        self.assertIn("<details open>", output)
+        self.assertIn(
+            "*This release contains maintenance and dependency updates only.*", output
+        )
 
 
 if __name__ == "__main__":
