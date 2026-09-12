@@ -43,7 +43,7 @@ export const CompletedSection = memo(function CompletedSection({ doneFiles, appS
                 <CheckCircle className="w-5 h-5" style={{ color: 'var(--success-text)' }} />
                 Sbobine completate
               </h2>
-              <span className="status-pill self-start sm:self-auto shrink-0 whitespace-nowrap" style={{ color: 'var(--success-text)', borderColor: 'var(--success-ring)', background: 'rgba(255,255,255,0.03)' }}>
+              <span className="status-pill self-start sm:self-auto shrink-0 whitespace-nowrap">
                 {fullyCompletedCount}{warningCount > 0 ? ` · ${warningCount} con avvisi` : ''}
               </span>
             </div>

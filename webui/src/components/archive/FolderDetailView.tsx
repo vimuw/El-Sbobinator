@@ -371,7 +371,7 @@ export function FolderDetailView({
                   <button
                     type="button"
                     onClick={() => setShowAddModal(true)}
-                    className="mt-1 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all hover:opacity-90 active:scale-95 cursor-pointer"
+                    className="mt-1 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:opacity-90 active:scale-95 cursor-pointer"
                     style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-text)' }}
                   >
                     <Plus className="w-3.5 h-3.5" />

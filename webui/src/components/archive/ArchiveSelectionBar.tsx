@@ -78,7 +78,7 @@ export function ArchiveSelectionBar({
       <button
         type="button"
         onClick={allSelected ? onDeselectAll : onSelectAll}
-        className="group/toggle flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--sidebar-active-bg)]"
+        className="group/toggle flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
         style={{ color: 'var(--text-primary)' }}
         title={allSelected ? 'Deseleziona tutte le sbobine' : `Seleziona tutte le ${totalCount} sbobine`}
       >
@@ -104,7 +104,7 @@ export function ArchiveSelectionBar({
           ref={folderButtonRef}
           type="button"
           onClick={() => setIsFolderMenuOpen(v => !v)}
-          className="group/add flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--sidebar-active-bg)]"
+          className="group/add flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
           style={{
             background: isFolderMenuOpen ? 'var(--accent-subtle)' : undefined,
             color: 'var(--text-primary)',
@@ -153,7 +153,7 @@ export function ArchiveSelectionBar({
                       onAssignToFolder(folder.id);
                       setIsFolderMenuOpen(false);
                     }}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-semibold tracking-tight text-left transition-colors cursor-pointer hover:bg-[var(--sidebar-active-bg)]"
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-semibold tracking-tight text-left transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
                     style={{ color: 'var(--text-primary)' }}
                   >
                     <span className="folder-color-dot is-small" style={{ '--folder-color': folder.color || DEFAULT_FOLDER_COLOR } as React.CSSProperties} />
@@ -173,7 +173,7 @@ export function ArchiveSelectionBar({
                   setIsFolderMenuOpen(false);
                   onNewFolder();
                 }}
-                className="group/newfolder w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold tracking-tight text-left transition-colors cursor-pointer hover:bg-[var(--sidebar-active-bg)]"
+                className="group/newfolder w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold tracking-tight text-left transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
                 style={{ color: 'var(--accent-text)' }}
               >
                 <Plus className="w-3.5 h-3.5 shrink-0 transition-transform duration-200 group-hover/newfolder:rotate-90 group-hover/newfolder:scale-110" />
@@ -189,7 +189,7 @@ export function ArchiveSelectionBar({
         <button
           type="button"
           onClick={onRemoveFromFolder}
-          className="group/remove flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--sidebar-active-bg)]"
+          className="group/remove flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
           style={{ color: 'var(--text-primary)' }}
           title="Rimuovi le sbobine selezionate dalla cartella"
         >
@@ -226,7 +226,7 @@ export function ArchiveSelectionBar({
           <button
             type="button"
             onClick={onClose}
-            className="group/close p-1.5 rounded-lg text-xs transition-colors cursor-pointer hover:bg-[var(--sidebar-active-bg)]"
+            className="group/close p-1.5 rounded-lg text-xs transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
             style={{ color: 'var(--text-primary)' }}
             aria-label="Annulla selezione"
             title="Annulla selezione"

@@ -221,7 +221,7 @@ export const QueueSection = memo(function QueueSection({
                 {appState === 'idle' && (
                   <motion.div key="idle" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
                     <button onClick={onStart} disabled={!canStart}
-                      className={`premium-button w-full text-lg${canStart ? ' premium-button--ready' : ''}`}
+                      className={`premium-button w-full${canStart ? ' premium-button--ready' : ''}`}
                       style={canStart ? {} : { cursor: 'not-allowed' }}>
                       <Play className="w-5 h-5 fill-current" />
                       {!isOnline ? '⚠️ Connessione Internet assente' : !hasApiKey ? '⚠️ Inserisci API Key nelle impostazioni' : !isApiKeyValid ? '⚠️ API Key non valida' : `Avvia sbobinatura (${queuedCount} file)`}
@@ -230,7 +230,7 @@ export const QueueSection = memo(function QueueSection({
                 )}
                 {appState === 'processing' && (
                   <motion.div key="processing" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                    <button onClick={onStop} className="premium-button is-danger w-full text-lg">
+                    <button onClick={onStop} className="premium-button is-danger w-full">
                       <Square className="w-5 h-5 fill-current" />
                       Interrompi elaborazione
                     </button>
@@ -238,7 +238,7 @@ export const QueueSection = memo(function QueueSection({
                 )}
                 {appState === 'canceling' && (
                   <motion.div key="canceling" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                    <button disabled className="premium-button is-danger w-full text-lg" style={{ opacity: 0.65, cursor: 'wait' }}>
+                    <button disabled className="premium-button is-danger w-full" style={{ opacity: 0.65, cursor: 'wait' }}>
                       <Square className="w-5 h-5 fill-current animate-pulse" />
                       Annullamento in corso...
                     </button>

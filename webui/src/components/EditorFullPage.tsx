@@ -395,17 +395,10 @@ export function EditorFullPage({
           </div>
 
           {detectedLocalRoom && !collabRoom && (
-            <div
-              className="px-4 py-2 text-xs flex items-center justify-between shrink-0 border-b transition-colors"
-              style={{
-                background: 'var(--accent-subtle)',
-                borderColor: 'var(--accent-ring)',
-                color: 'var(--text-primary)',
-              }}
-            >
+            <div className="notice-banner is-info shrink-0 !rounded-none !border-x-0 !border-t-0 text-xs py-2 px-4">
               <div className="flex items-center gap-2 font-medium">
                 <Users className="w-4 h-4" style={{ color: 'var(--accent-text)' }} />
-                <span>
+                <span className="text-[var(--text-primary)]">
                   Stanza di collaborazione attiva trovata:{' '}
                   <strong className="font-mono font-semibold px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
                     {detectedLocalRoom}
@@ -425,7 +418,7 @@ export function EditorFullPage({
                   setDetectedLocalRoom(null);
                   onCollaborationStateChange?.(detectedLocalRoom, { name: joinName, color: joinColor });
                 }}
-                className="modal-action-button is-primary is-compact text-xs px-3 py-1 flex items-center gap-1.5 font-semibold"
+                className="premium-button compact-button text-xs font-semibold shrink-0"
               >
                 <span>Unisciti ora</span>
               </button>
@@ -433,14 +426,7 @@ export function EditorFullPage({
           )}
 
           {isAutosaveSuspended && (
-            <div
-              className="px-4 py-2 text-xs flex items-center justify-between shrink-0 border-b transition-colors"
-              style={{
-                background: 'var(--warning-subtle)',
-                borderColor: 'var(--warning-ring)',
-                color: 'var(--warning-text)',
-              }}
-            >
+            <div className="notice-banner is-warning shrink-0 !rounded-none !border-x-0 !border-t-0 text-xs py-2 px-4">
               <div className="flex items-center gap-2 font-medium">
                 <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: 'var(--warning-text)' }} />
                 <span>
@@ -450,7 +436,7 @@ export function EditorFullPage({
               <button
                 type="button"
                 onClick={() => void handleForceSave()}
-                className="modal-action-button is-primary is-compact text-xs px-3 py-1 font-semibold shrink-0"
+                className="premium-button compact-button text-xs font-semibold shrink-0"
               >
                 Forza salvataggio
               </button>
@@ -479,7 +465,7 @@ export function EditorFullPage({
               />
             </Suspense>
 
-            <div className="shrink-0 border-t px-4 sm:px-5" style={{ borderColor: 'var(--border-subtle)' }}>
+            <div className="shrink-0 border-t px-4 sm:px-5" style={{ background: 'var(--editor-chrome-bg)', borderColor: 'var(--border-subtle)' }}>
               {audioSrc ? (
                 <Suspense fallback={<div className="p-4 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento player...</div>}>
                   <LazyAudioPlayer
@@ -506,7 +492,7 @@ export function EditorFullPage({
                         type="button"
                         onClick={() => setShowConfirmRemove(true)}
                         disabled={isRemovingAudio}
-                        className="modal-action-button is-secondary shrink-0"
+                        className="premium-button-secondary compact-button shrink-0"
                         title="Rimuovi audio dalla sbobina"
                         aria-label="Rimuovi audio dalla sbobina"
                       >
@@ -527,7 +513,7 @@ export function EditorFullPage({
                         } finally { setIsRelinking(false); }
                       }}
                       disabled={isRelinking}
-                      className="modal-action-button shrink-0"
+                      className="premium-button-secondary compact-button shrink-0"
                       style={relinkSuccess ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : {}}
                     >
                       {relinkSuccess ? <><Check className="w-3.5 h-3.5" /> Ricollegato</> : isRelinking ? 'Selezione...' : 'Ricollega audio'}
@@ -539,7 +525,7 @@ export function EditorFullPage({
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div
                       className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                      style={{ background: 'var(--surface-sunken)', color: 'var(--text-muted)' }}
+                      style={{ background: 'var(--bg-panel)', color: 'var(--text-muted)' }}
                     >
                       <Headphones className="w-4 h-4" />
                     </div>
@@ -568,7 +554,7 @@ export function EditorFullPage({
                         }
                       }}
                       disabled={isRelinking}
-                      className="modal-action-button is-primary shrink-0 flex items-center gap-1.5"
+                      className="premium-button compact-button shrink-0 flex items-center gap-1.5"
                     >
                       {isRelinking ? (
                         <>

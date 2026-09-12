@@ -1,7 +1,7 @@
 import { useState, type MouseEvent } from 'react';
 import {
   AlertTriangle, Check, ChevronLeft, ChevronRight, Download, ExternalLink,
-  Eye, FileText, FolderOpen, RefreshCw, Trash2, Unlink, X,
+  Eye, FileText, FolderOpen, RotateCcw, Trash2, Unlink, X,
 } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -107,7 +107,7 @@ export function DraggableSessionCard({
   return (
     <div
       onClick={() => onPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir)}
-      className={`archive-session-card flex items-center justify-between gap-3 px-4 py-3 cursor-pointer group/card ${selected ? 'is-selected' : ''}`}
+      className={`archive-session-card flex items-center justify-between gap-3 px-4 py-3 cursor-pointer group/card ${selected ? 'is-selected' : ''} ${hasRevisionWarnings && !selected ? 'is-warning' : ''}`.trim()}
       style={{
         ...(hasRevisionWarnings && !selected ? { borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)' } : {}),
       }}
@@ -122,7 +122,7 @@ export function DraggableSessionCard({
             }}
             className={`w-4 h-4 rounded flex items-center justify-center transition-all shrink-0 cursor-pointer ${
               selected
-                ? 'bg-[var(--accent-text)] text-white'
+                ? 'bg-[var(--accent-text)] text-[var(--btn-primary-text)]'
                 : 'border border-[var(--border-strong)] bg-[var(--bg-input)] hover:border-[var(--accent-text)] opacity-70 group-hover/card:opacity-100'
             }`}
             aria-label={selected ? `Deseleziona ${session.name}` : `Seleziona ${session.name}`}
@@ -173,7 +173,7 @@ export function DraggableSessionCard({
                     style={{ color: 'var(--warning-text)', border: '1px solid var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
                     title="Riprova solo i blocchi inclusi senza revisione"
                   >
-                    <RefreshCw className={`w-2.5 h-2.5 transition-transform duration-500 ease-out ${isRetryingBlocks ? 'animate-spin' : 'group-hover/retry:rotate-180 group-hover/retry:scale-110'}`} />
+                    <RotateCcw className={`w-2.5 h-2.5 transition-transform duration-500 ease-out ${isRetryingBlocks ? 'animate-spin' : 'group-hover/retry:-rotate-180 group-hover/retry:scale-110'}`} />
                     {isRetryingBlocks ? 'Riprovo…' : 'Riprova revisione'}
                   </button>
                 )}
@@ -213,7 +213,17 @@ export function FolderSessionCardOverlay({
       }}
     >
       <div className="flex items-center gap-3 min-w-0 flex-1">
-        <span className="folder-color-dot is-large" style={{ '--folder-color': folderColor || DEFAULT_FOLDER_COLOR } as React.CSSProperties} />
+        <div className="relative flex items-center justify-center shrink-0">
+          <FileText className="w-4 h-4" style={{ color: hasRevisionWarnings ? 'var(--warning-text)' : 'var(--text-muted)' }} />
+          <span
+            className="folder-color-dot absolute -bottom-0.5 -right-1"
+            style={{
+              '--folder-color': folderColor || DEFAULT_FOLDER_COLOR,
+              width: 7,
+              height: 7,
+            } as React.CSSProperties}
+          />
+        </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{session.name}</p>
           <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -360,7 +370,7 @@ export function SortableSessionCard({
             }}
             className={`w-4 h-4 rounded flex items-center justify-center transition-all shrink-0 cursor-pointer ${
               selected
-                ? 'bg-[var(--accent-text)] text-white'
+                ? 'bg-[var(--accent-text)] text-[var(--btn-primary-text)]'
                 : 'border border-[var(--border-strong)] bg-[var(--bg-input)] hover:border-[var(--accent-text)] opacity-70 group-hover/card:opacity-100'
             }`}
             aria-label={selected ? `Deseleziona ${session.name}` : `Seleziona ${session.name}`}
@@ -369,7 +379,17 @@ export function SortableSessionCard({
             {selected && <Check className="w-3 h-3 stroke-[3]" />}
           </button>
         )}
-        <span className="folder-color-dot is-large transition-transform duration-200 group-hover/card:scale-105" style={{ '--folder-color': folderColor || DEFAULT_FOLDER_COLOR } as React.CSSProperties} />
+        <div className="relative flex items-center justify-center shrink-0">
+          <FileText className="w-4 h-4 transition-transform duration-200 group-hover/card:scale-105" style={{ color: hasRevisionWarnings ? 'var(--warning-text)' : 'var(--text-muted)' }} />
+          <span
+            className="folder-color-dot absolute -bottom-0.5 -right-1"
+            style={{
+              '--folder-color': folderColor || DEFAULT_FOLDER_COLOR,
+              width: 7,
+              height: 7,
+            } as React.CSSProperties}
+          />
+        </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{session.name}</p>
           <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -404,7 +424,7 @@ export function SortableSessionCard({
                     style={{ color: 'var(--warning-text)', border: '1px solid var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
                     title="Riprova solo i blocchi inclusi senza revisione"
                   >
-                    <RefreshCw className={`w-2.5 h-2.5 transition-transform duration-500 ease-out ${isRetryingBlocks ? 'animate-spin' : 'group-hover/retry:rotate-180 group-hover/retry:scale-110'}`} />
+                    <RotateCcw className={`w-2.5 h-2.5 transition-transform duration-500 ease-out ${isRetryingBlocks ? 'animate-spin' : 'group-hover/retry:-rotate-180 group-hover/retry:scale-110'}`} />
                     {isRetryingBlocks ? 'Riprovo…' : 'Riprova revisione'}
                   </button>
                 )}

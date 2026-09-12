@@ -444,9 +444,6 @@ export function ArchivePage({
               lastOpenedOrModifiedSessionData.session.session_dir,
             )}
             className="archive-session-card flex items-center justify-between gap-4 p-4 cursor-pointer group/recent transition-all hover:border-[var(--border-strong)]"
-            style={{
-              borderRadius: '12px',
-            }}
           >
             <div className="flex items-center gap-3.5 min-w-0 flex-1">
               <div
@@ -498,7 +495,7 @@ export function ArchivePage({
 
       {/* Unfiled sessions */}
       <div className="flex flex-col gap-3 flex-1 min-h-0">
-        <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+        <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
           Tutte le sbobine
         </h3>
 

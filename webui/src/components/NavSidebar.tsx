@@ -1,6 +1,6 @@
 import { memo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Archive, Bell, Moon, Settings, Sun, Terminal } from 'lucide-react';
+import { Archive, Bell, Layers, Moon, Settings, Sun, Terminal } from 'lucide-react';
 import type { AppStatus } from '../appState';
 import { STORAGE_KEYS } from '../storageKeys';
 export type ActivePage = 'queue' | 'archive';
@@ -84,13 +84,7 @@ export const NavSidebar = memo(function NavSidebar({
       {/* Navigation items */}
       <div className="flex flex-col items-center gap-1.5 px-1.5 pt-2 pb-2 flex-1">
         <NavItem
-          icon={
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-              <path d="M2 17l10 5 10-5"/>
-              <path d="M2 12l10 5 10-5"/>
-            </svg>
-          }
+          icon={<Layers size={20} />}
           label="Dashboard"
           active={activePage === 'queue'}
           onClick={() => setActivePage('queue')}
@@ -110,7 +104,7 @@ export const NavSidebar = memo(function NavSidebar({
         <SidebarTooltip label={apiStatusLabel}>
           <div
             aria-label={apiStatusLabel}
-            className="flex items-center justify-center rounded-lg text-xs font-medium w-9 h-7 cursor-default"
+            className="flex items-center justify-center rounded-lg text-xs font-medium w-9 h-9 cursor-default"
             style={{ color: apiStatusColor }}
           >
             <span className="shrink-0 inline-flex items-center justify-center" style={{ width: 18, height: 18, lineHeight: 0 }}>
@@ -281,7 +275,7 @@ function UtilityButton({
         onClick={onClick}
         aria-label={ariaLabel || label}
         disabled={disabled}
-        className="sidebar-nav-item w-9 h-8 flex items-center justify-center rounded-lg group/util"
+        className="sidebar-nav-item w-9 h-9 flex items-center justify-center rounded-lg group/util"
         style={{
           background: active ? 'var(--sidebar-active-bg)' : 'transparent',
           color: disabled ? 'var(--text-muted)' : (active ? 'var(--sidebar-active-text)' : 'var(--text-secondary)'),

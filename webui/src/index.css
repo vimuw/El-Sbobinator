@@ -49,17 +49,17 @@
 :root {
   --font-display: "Manrope", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
 
-  --bg-base: #f7f6f3;
+  --bg-base: #f0ede6;
   --bg-surface: #ffffff;
-  --bg-panel: #f1f0ec;
+  --bg-panel: #faf8f5;
   --bg-elevated: #ffffff;
   --bg-input: #ffffff;
-  --bg-hover: rgba(0, 0, 0, 0.06);
+  --bg-hover: rgba(0, 0, 0, 0.05);
   --bg-overlay: rgba(15, 23, 42, 0.40);
 
-  --border-default: rgba(100, 116, 139, 0.26);
-  --border-subtle: rgba(100, 116, 139, 0.15);
-  --border-strong: rgba(100, 116, 139, 0.42);
+  --border-default: rgba(100, 116, 139, 0.24);
+  --border-subtle: rgba(100, 116, 139, 0.16);
+  --border-strong: rgba(100, 116, 139, 0.46);
 
   --text-primary: #191919;
   --text-secondary: #374151;
@@ -105,13 +105,13 @@
   --btn-disabled-bg: rgba(148, 163, 184, 0.22);
   --btn-disabled-text: rgba(100, 116, 139, 0.72);
 
-  --console-bg: #e5e3dc;
-  --console-header: #ebe8e1;
-  --console-heading: #111827;
+  --console-bg: #ffffff;
+  --console-header: #faf8f5;
+  --console-heading: #191919;
   --console-text: #374151;
   --console-muted: #6b7280;
-  --console-border: rgba(100, 116, 139, 0.20);
-  --console-shell-border: rgba(100, 116, 139, 0.26);
+  --console-border: var(--border-subtle);
+  --console-shell-border: var(--border-default);
   --console-error: #b91c1c;
   --console-success: #15803d;
   --console-warning: #a16207;
@@ -122,17 +122,17 @@
   --progress-bg: rgba(61, 107, 58, 0.12);
   --scrubber-rest: rgba(100, 116, 139, 0.35);
   --card-queued-bg: #ffffff;
-  --card-queued-border: rgba(100, 116, 139, 0.24);
+  --card-queued-border: rgba(100, 116, 139, 0.28);
   --glass-bg: #ffffff;
-  --glass-border: rgba(100, 116, 139, 0.20);
+  --glass-border: rgba(100, 116, 139, 0.24);
 
   --shadow-soft: none;
   --shadow-strong: 0 8px 32px rgba(15, 23, 42, 0.08);
 
   --glass-top-shimmer: rgba(255, 255, 255, 0.90);
 
-  --header-bg: #f7f6f3;
-  --editor-chrome-bg: #f7f6f3;
+  --header-bg: #f0ede6;
+  --editor-chrome-bg: #f0ede6;
 }
 
 :root[data-theme="dark"] {
@@ -144,9 +144,9 @@
     --bg-hover: rgba(255, 255, 255, 0.08);
     --bg-overlay: rgba(0, 0, 0, 0.72);
 
-    --border-default: rgba(255, 255, 255, 0.14);
-    --border-subtle: rgba(255, 255, 255, 0.08);
-    --border-strong: rgba(255, 255, 255, 0.24);
+    --border-default: rgba(255, 255, 255, 0.15);
+    --border-subtle: rgba(255, 255, 255, 0.09);
+    --border-strong: rgba(255, 255, 255, 0.28);
 
     --text-primary: #f1f1ef;
     --text-secondary: #d1d5db;
@@ -198,7 +198,7 @@
     --console-text: #d1d5db;
     --console-muted: #9ca3af;
     --console-border: rgba(255, 255, 255, 0.08);
-    --console-shell-border: rgba(255, 255, 255, 0.12);
+    --console-shell-border: var(--border-default);
     --console-error: #fca5a5;
     --console-success: #4ade80;
     --console-warning: #fcd34d;
@@ -209,13 +209,13 @@
     --progress-bg: rgba(90, 163, 86, 0.16);
     --scrubber-rest: rgba(255, 255, 255, 0.20);
     --card-queued-bg: #202020;
-    --card-queued-border: rgba(255, 255, 255, 0.12);
+    --card-queued-border: rgba(255, 255, 255, 0.17);
 
     --shadow-soft: none;
     --shadow-strong: 0 8px 48px rgba(0, 0, 0, 0.50);
 
     --glass-bg: #202020;
-    --glass-border: rgba(255, 255, 255, 0.12);
+    --glass-border: rgba(255, 255, 255, 0.15);
     --glass-top-shimmer: rgba(255, 255, 255, 0.04);
 
     --header-bg: #191919;
@@ -287,12 +287,12 @@
 
 :root:not([data-theme="dark"]) .queue-card:hover {
   box-shadow: none;
-  border-color: rgba(100, 116, 139, 0.65);
+  border-color: rgba(100, 116, 139, 0.52);
 }
 
 :root:not([data-theme="dark"]) .dropzone-card {
-  background: #ffffff;
-  border-color: rgba(100, 116, 139, 0.34);
+  background: var(--bg-surface);
+  border-color: var(--border-default);
 }
 
 :root:not([data-theme="dark"]) .dropzone-card:hover {
@@ -312,8 +312,8 @@
 }
 
 :root[data-theme="dark"] .dropzone-card {
-  background: #1a1a1a;
-  border-color: rgba(255, 255, 255, 0.10);
+  background: var(--bg-surface);
+  border-color: var(--border-default);
 }
 
 :root[data-theme="dark"] .dropzone-card:hover {
@@ -401,7 +401,7 @@
 
 :root:not([data-theme="dark"]) .editor-select:hover,
 :root:not([data-theme="dark"]) .editor-select:focus {
-  background: rgba(0, 0, 0, 0.07);
+  background: var(--bg-hover);
 }
 
 :root:not([data-theme="dark"]) .editor-button {
@@ -409,7 +409,7 @@
 }
 
 :root:not([data-theme="dark"]) .editor-button:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.07);
+  background: var(--bg-hover);
 }
 
 :root:not([data-theme="dark"]) .editor-button.is-active {
@@ -419,7 +419,7 @@
 
 :root:not([data-theme="dark"]) .color-reset:hover,
 :root:not([data-theme="dark"]) .color-custom:hover {
-  background: rgba(0, 0, 0, 0.07);
+  background: var(--bg-hover);
 }
 
 :root:not([data-theme="dark"]) .toc-left-sidebar {
@@ -545,7 +545,7 @@ button {
 }
 
 .stat-card:hover {
-  border-color: var(--accent-bg);
+  border-color: var(--border-strong);
 }
 
 .stat-card-icon {
@@ -556,13 +556,6 @@ button {
   transform: scale(1.08);
 }
 
-.setup-card {
-  transition: border-color 200ms ease;
-}
-
-.setup-card:hover {
-  border-color: var(--accent-bg);
-}
 
 .premium-panel-strong,
 .modal-card {
@@ -727,7 +720,7 @@ button {
 }
 
 .icon-button:hover {
-  background: var(--sidebar-active-bg);
+  background: var(--bg-hover);
   color: var(--text-primary);
 }
 
@@ -913,10 +906,9 @@ button {
 }
 
 .modal-action-button:hover:not(:disabled) {
-  background: var(--sidebar-active-bg);
+  background: var(--bg-hover);
   border-color: transparent;
   color: var(--text-primary);
-  transform: translateY(-1px);
 }
 
 .modal-action-button:focus-visible {
@@ -1094,7 +1086,7 @@ button {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-muted);
@@ -1107,7 +1099,7 @@ button {
 
 .player-control:hover {
   background: var(--accent-subtle);
-  color: var(--text-primary);
+  color: var(--accent-text);
 }
 
 .player-control:active {
@@ -1115,7 +1107,7 @@ button {
 }
 
 .player-control.is-active {
-  color: var(--text-primary);
+  color: var(--accent-text);
   background: color-mix(in srgb, var(--accent-subtle) 80%, transparent);
 }
 
@@ -1132,7 +1124,7 @@ button {
   min-width: 52px;
   height: 32px;
   padding: 0 6px 0 8px;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-secondary);
@@ -1148,7 +1140,7 @@ button {
 
 .player-speed-btn:hover {
   background: var(--accent-subtle);
-  color: var(--text-primary);
+  color: var(--accent-text);
 }
 
 .player-speed-btn:active {
@@ -1156,7 +1148,7 @@ button {
 }
 
 .player-speed-btn.is-active {
-  color: var(--text-primary);
+  color: var(--accent-text);
   background: color-mix(in srgb, var(--accent-subtle) 80%, transparent);
 }
 
@@ -1366,6 +1358,7 @@ button {
   scrollbar-color: var(--border-strong) transparent;
   overscroll-behavior: contain;
   overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
 }
 
 .console-scroll::-webkit-scrollbar {
@@ -1719,11 +1712,11 @@ button {
 
 
 .editor-page-container {
-  background: #edeae4;
+  background: var(--bg-base);
 }
 
 :root[data-theme="dark"] .editor-page-container {
-  background: #0a0a0a;
+  background: var(--bg-base);
 }
 
 .editor-page {
@@ -1732,7 +1725,7 @@ button {
   max-width: 794px;
   min-width: 794px;
   padding: 0;
-  box-shadow: 0 0 0 1px var(--border-subtle);
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05), 0 0 0 1px var(--border-subtle);
   cursor: text;
 }
 
@@ -1744,7 +1737,7 @@ button {
 
 :root[data-theme="dark"] .editor-page {
   background: #1e1e1e;
-  box-shadow: 0 0 0 1px var(--border-subtle);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.40), 0 0 0 1px var(--border-subtle);
 }
 
 @media (max-width: 640px) {
@@ -2918,8 +2911,8 @@ input[type="password"]::-ms-reveal {
 /* ═══ SIDEBAR ═══ */
 
 :root {
-  --sidebar-bg: #f1f0ec;
-  --sidebar-active-bg: rgba(61, 107, 58, 0.08);
+  --sidebar-bg: #e7e3db;
+  --sidebar-active-bg: rgba(61, 107, 58, 0.10);
   --sidebar-active-text: #2d5529;
 }
 
@@ -3034,8 +3027,7 @@ input[type="password"]::-ms-reveal {
 }
 
 .kebab-item:hover {
-  background: var(--sidebar-active-bg);
-  transform: translateX(2px);
+  background: var(--bg-hover);
 }
 
 .kebab-item:active {
@@ -3086,7 +3078,7 @@ input[type="password"]::-ms-reveal {
 
 .folder-card-new {
   border: 2px dashed var(--border-default);
-  background: transparent;
+  background: var(--bg-surface);
   min-height: 72px;
   display: flex;
   flex-direction: column;
@@ -3185,7 +3177,7 @@ input[type="password"]::-ms-reveal {
 
 :root:not([data-theme="dark"]) .archive-session-card:hover {
   box-shadow: none;
-  border-color: rgba(100, 116, 139, 0.65);
+  border-color: rgba(100, 116, 139, 0.52);
 }
 
 :root[data-theme="dark"] .archive-session-card {
@@ -3209,6 +3201,13 @@ input[type="password"]::-ms-reveal {
 :root[data-theme="dark"] .archive-session-card.is-selected:hover {
   background: color-mix(in srgb, var(--accent-text) 12%, var(--card-queued-bg));
   border-color: var(--accent-text);
+}
+
+.archive-session-card.is-warning:not(.is-selected),
+:root:not([data-theme="dark"]) .archive-session-card.is-warning:not(.is-selected),
+:root[data-theme="dark"] .archive-session-card.is-warning:not(.is-selected) {
+  background: var(--warning-subtle);
+  border-color: var(--warning-ring);
 }
 
 /* ═══ HOURGLASS BADGE ANIMATION ═══ */
@@ -3506,9 +3505,9 @@ input[type="password"]::-ms-reveal {
 }
 
 .editor-collab-btn:hover {
-  background: var(--bg-panel);
-  color: var(--text-primary);
-  border-color: var(--border-strong);
+  border-color: var(--accent-bg);
+  background: color-mix(in srgb, var(--accent-subtle) 60%, transparent);
+  color: var(--accent-text);
 }
 
 .editor-collab-btn.is-active {
@@ -3528,7 +3527,7 @@ input[type="password"]::-ms-reveal {
   justify-content: space-between;
   padding: 12px 16px;
   border-radius: 12px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-default);
   background: var(--bg-surface);
   transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
   cursor: pointer;
@@ -3596,7 +3595,7 @@ input[type="password"]::-ms-reveal {
   align-items: center;
   gap: 5px;
   padding: 4px 12px;
-  border-radius: 999px;
+  border-radius: 8px;
   border: 1px solid var(--accent-ring);
   background: var(--accent-subtle);
   color: var(--accent-text);
@@ -3630,7 +3629,7 @@ input[type="password"]::-ms-reveal {
   align-items: center;
   gap: 6px;
   padding: 4px 12px;
-  border-radius: 999px;
+  border-radius: 8px;
   border: 1px solid var(--accent-ring);
   background: var(--accent-subtle);
   color: var(--accent-text);
@@ -3898,9 +3897,9 @@ input[type="password"]::-ms-reveal {
 }
 
 .alert-card.is-info {
-  background: var(--accent-subtle) !important;
-  border: 1px solid var(--accent-ring) !important;
-  color: var(--accent-text) !important;
+  background: var(--bg-panel) !important;
+  border: 1px solid var(--border-default) !important;
+  color: var(--text-secondary) !important;
 }
 
 .notice-banner {
@@ -4018,7 +4017,7 @@ input[type="password"]::-ms-reveal {
 .dropzone-browse-button {
   margin-top: 16px;
   padding: 5px 14px;
-  border-radius: 999px;
+  border-radius: 8px;
   font-size: 0.78rem;
   font-weight: 600;
   background: var(--accent-subtle);
@@ -4053,7 +4052,7 @@ input[type="password"]::-ms-reveal {
 }
 
 .queue-card:hover {
-  border-color: var(--border-default);
+  border-color: var(--border-strong);
 }
 
 .queue-card:active:not(:has(button:active, a:active, [role="button"]:active)) {

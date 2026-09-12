@@ -212,7 +212,7 @@ export function AddSessionsToFolderModal({
                             }}
                             className={`w-4 h-4 rounded flex items-center justify-center transition-all shrink-0 cursor-pointer ${
                               isSelected
-                                ? 'bg-[var(--accent-text)] text-white'
+                                ? 'bg-[var(--accent-text)] text-[var(--btn-primary-text)]'
                                 : 'border border-[var(--border-strong)] bg-[var(--bg-elevated)] hover:border-[var(--accent-text)] opacity-70'
                             }`}
                             aria-label={

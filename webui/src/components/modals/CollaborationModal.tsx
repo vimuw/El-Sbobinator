@@ -132,7 +132,7 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({
                       onClick={handleCopyCode}
                       className="modal-action-button is-compact text-xs shrink-0 flex items-center gap-1.5"
                     >
-                      {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5 text-[var(--text-muted)]" />}
+                      {copied ? <Check className="w-3.5 h-3.5 text-[var(--success-text)]" /> : <Copy className="w-3.5 h-3.5 text-[var(--text-muted)]" />}
                       {copied ? 'Copiato!' : 'Copia Codice'}
                     </button>
                   </div>

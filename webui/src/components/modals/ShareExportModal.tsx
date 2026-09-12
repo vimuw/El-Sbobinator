@@ -80,8 +80,8 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
           {/* Header */}
           <div className="modal-header">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-8.5 h-8.5 rounded-lg flex items-center justify-center shrink-0 bg-[var(--accent-subtle)] text-[var(--accent-text)]">
-                <Package className="w-5 h-5" />
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-[var(--accent-subtle)] text-[var(--accent-text)]">
+                <Package className="w-4.5 h-4.5" />
               </div>
               <div className="min-w-0">
                 <h2 className="text-base font-semibold truncate text-[var(--text-primary)]">
@@ -119,7 +119,7 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
                 }}
               >
                 <div
-                  className="mt-0.5 w-4.5 h-4.5 rounded-full border flex items-center justify-center shrink-0"
+                  className="mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0"
                   style={{
                     borderColor: exportType === 'full' ? 'var(--accent-bg)' : 'var(--border-strong)',
                     background: exportType === 'full' ? 'var(--accent-bg)' : 'transparent',
@@ -134,7 +134,7 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
                     </span>
                     <span
                       className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md"
-                      style={{ background: 'var(--accent-bg)', color: '#ffffff' }}
+                      style={{ background: 'var(--accent-bg)', color: 'var(--btn-primary-text)' }}
                     >
                       Consigliato
                     </span>
@@ -155,7 +155,7 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
                 }}
               >
                 <div
-                  className="mt-0.5 w-4.5 h-4.5 rounded-full border flex items-center justify-center shrink-0"
+                  className="mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0"
                   style={{
                     borderColor: exportType === 'text_only' ? 'var(--accent-bg)' : 'var(--border-strong)',
                     background: exportType === 'text_only' ? 'var(--accent-bg)' : 'transparent',
@@ -186,7 +186,7 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
                 }}
               >
                 <div
-                  className="mt-0.5 w-4.5 h-4.5 rounded-full border flex items-center justify-center shrink-0"
+                  className="mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0"
                   style={{
                     borderColor: exportType === 'audio_only' ? 'var(--accent-bg)' : 'var(--border-strong)',
                     background: exportType === 'audio_only' ? 'var(--accent-bg)' : 'transparent',
@@ -210,14 +210,14 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
 
             {/* Error or Success notification */}
             {errorMsg && (
-              <div className="p-3 rounded-lg flex items-center gap-3 text-xs border bg-[var(--error-subtle)] border-[var(--error-ring)] text-[var(--error-text)]">
+              <div className="alert-card is-error text-xs flex items-center gap-2.5 p-3">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{errorMsg}</span>
               </div>
             )}
 
             {successMsg && (
-              <div className="p-3 rounded-lg flex flex-col gap-2.5 text-xs border bg-[var(--accent-subtle)] border-[var(--accent-ring)] text-[var(--text-primary)]">
+              <div className="alert-card is-success text-xs flex flex-col gap-2.5 p-3">
                 <div className="flex items-center gap-3">
                   <CheckCircle2 className="w-4 h-4 shrink-0 text-[var(--accent-text)]" />
                   <span>{successMsg}</span>
@@ -226,7 +226,7 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
                   <button
                     type="button"
                     onClick={handleOpenFolder}
-                    className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all cursor-pointer bg-[var(--bg-surface)] border-[var(--border-default)] text-[var(--accent-text)] hover:bg-[var(--sidebar-active-bg)]"
+                    className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all cursor-pointer bg-[var(--bg-surface)] border-[var(--border-default)] text-[var(--accent-text)] hover:bg-[var(--bg-hover)]"
                   >
                     <FolderOpen className="w-3.5 h-3.5" />
                     <span>Apri cartella del pacchetto</span>
@@ -251,7 +251,7 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
               disabled={isProcessing}
               className="modal-action-button is-primary flex-1 flex items-center justify-center gap-2"
             >
-              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : <Download className="w-4 h-4 text-white" />}
+              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               <span>Esporta Pacchetto (.sbobina)</span>
             </button>
           </div>
