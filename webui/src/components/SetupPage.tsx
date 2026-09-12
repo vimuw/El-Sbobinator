@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { Eye, EyeOff, Key } from 'lucide-react';
+import { AlertCircle, ArrowRight, CheckCircle2, ExternalLink, Eye, EyeOff, Key, Lightbulb, Loader2 } from 'lucide-react';
 import { GEMINI_KEY_PATTERN } from '../utils';
 
 interface SetupPageProps {
@@ -23,6 +23,10 @@ export function SetupPage({
   const [setupKeySaving, setSetupKeySaving] = useState(false);
   const [setupKeyError, setSetupKeyError] = useState<string | null>(null);
 
+  const trimmedKey = setupKeyInput.trim();
+  const isValidFormat = GEMINI_KEY_PATTERN.test(trimmedKey);
+  const canSave = trimmedKey.length > 0 && isValidFormat && !setupKeySaving;
+
   const handleSetupSave = async () => {
     setSetupKeySaving(true);
     setSetupKeyError(null);
@@ -34,7 +38,7 @@ export function SetupPage({
       let result;
       try {
         result = await window.pywebview.api.save_settings(
-          setupKeyInput.trim(),
+          trimmedKey,
           fallbackKeys,
           preferredModel,
           fallbackModels,
@@ -47,7 +51,7 @@ export function SetupPage({
         setSetupKeyError(`Errore salvataggio: ${result?.error || 'errore sconosciuto'}`);
         return;
       }
-      onSaved(setupKeyInput.trim());
+      onSaved(trimmedKey);
     } finally {
       setSetupKeySaving(false);
     }
@@ -55,184 +59,165 @@ export function SetupPage({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="premium-panel setup-card relative overflow-hidden px-6 py-8 sm:px-8 sm:py-10 flex flex-col items-center gap-6 w-full max-w-lg mx-auto"
+      transition={{ duration: 0.25, ease: 'easeOut' }}
+      className="w-full max-w-2xl mx-auto"
     >
-      <div className="flex flex-col items-center gap-3 text-center">
-        <motion.div
-          initial={{ rotate: 0 }}
-          animate={{
-            y: [0, -4, 0],
-            rotate: 0,
-          }}
-          transition={{
-            y: {
-              duration: 3.5,
-              repeat: Infinity,
-              ease: 'easeInOut',
-            },
-          }}
-          whileHover={{
-            rotate: [0, -10, 10, -5, 5, 0],
-            transition: { duration: 0.5 },
-          }}
-          className="flex items-center justify-center cursor-default select-none"
-        >
-          <img
-            src="/icon.png"
-            alt="El Sbobinator"
-            className="w-14 h-14 object-contain pointer-events-none"
-            draggable={false}
-          />
-        </motion.div>
-        <h3
-          className="text-xl font-bold tracking-tight mt-1"
-          style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}
-        >
-          {hasProtectedKey ? 'Chiave API non accessibile' : 'Configura la tua API Key'}
-        </h3>
-        <p className="text-sm leading-relaxed max-w-sm" style={{ color: 'var(--text-muted)' }}>
-          {hasProtectedKey
-            ? 'La tua chiave era salvata ma non è accessibile (errore di sistema). Reinseriscila per continuare.'
-            : 'El Sbobinator usa Google Gemini per trascrivere audio e video. Inserisci una chiave API gratuita per iniziare.'}
-        </p>
+      {/* Document Header */}
+      <div className="space-y-3 text-left">
+        <img
+          src="/icon.png"
+          alt="El Sbobinator"
+          className="w-11 h-11 object-contain select-none pointer-events-none"
+          draggable={false}
+        />
+        <div className="space-y-1.5">
+          <h1 className="text-[1.75rem] font-semibold tracking-tight leading-tight text-[var(--text-primary)] font-display">
+            {hasProtectedKey ? 'Chiave API non accessibile' : 'Configura la tua API Key'}
+          </h1>
+          <p className="text-base leading-relaxed text-[var(--text-muted)]">
+            {hasProtectedKey
+              ? 'La tua chiave era salvata ma non è accessibile (errore di sistema). Reinseriscila per continuare.'
+              : 'El Sbobinator usa Google Gemini per trascrivere audio e video. Inserisci una chiave API gratuita per iniziare.'}
+          </p>
+        </div>
       </div>
 
-      <div className="w-full flex flex-col gap-3">
-        <div className="flex flex-col">
+      {/* Main Setup Section */}
+      <div className="mt-5 space-y-1.5">
+        <div className="space-y-1.5">
           <label
-            className="text-[10px] font-bold uppercase tracking-wider mb-1.5 px-0.5 select-none"
-            style={{ color: 'var(--text-muted)', letterSpacing: '0.05em' }}
+            htmlFor="gemini-setup-api-key"
+            className="text-xs font-semibold text-[var(--text-secondary)] flex items-center gap-1.5 select-none"
           >
-            Chiave API Gemini
+            <Key className="w-3.5 h-3.5 text-[var(--accent-text)]" />
+            <span>Chiave API Gemini</span>
           </label>
-          <div className="relative">
-            <input
-              type={setupKeyShowRaw ? 'text' : 'password'}
-              value={setupKeyInput}
-              onChange={e => setSetupKeyInput(e.target.value)}
-              onKeyDown={async e => {
-                if (e.key !== 'Enter') return;
-                if (!GEMINI_KEY_PATTERN.test(setupKeyInput.trim())) return;
-                if (setupKeySaving) return;
-                await handleSetupSave();
-              }}
-              placeholder="Incolla qui la tua API Key (AIzaSy... o AQ...)"
-              className="app-input font-mono text-sm pr-10"
-              style={{
-                background: 'var(--bg-input)',
-                border: `1px solid ${
-                  setupKeyInput.trim() && GEMINI_KEY_PATTERN.test(setupKeyInput.trim())
-                    ? 'var(--success-ring)'
-                    : setupKeyInput.trim()
-                      ? 'var(--warning-ring)'
-                      : 'var(--border-default)'
-                }`,
-                color: 'var(--text-primary)',
-                borderRadius: '8px',
-                padding: '0.75rem 0.85rem',
-              }}
-            />
+
+          <div className="flex items-center gap-2.5">
+            <div className="relative flex-1">
+              <input
+                id="gemini-setup-api-key"
+                type={setupKeyShowRaw ? 'text' : 'password'}
+                value={setupKeyInput}
+                onChange={e => setSetupKeyInput(e.target.value)}
+                onKeyDown={async e => {
+                  if (e.key !== 'Enter') return;
+                  if (!GEMINI_KEY_PATTERN.test(setupKeyInput.trim())) return;
+                  if (setupKeySaving) return;
+                  await handleSetupSave();
+                }}
+                placeholder="Incolla qui la tua API Key (AIzaSy... o AQ...)"
+                className={`app-input w-full h-[42px] font-mono text-sm pl-3.5 pr-10 py-2.5 rounded-lg border outline-none bg-[var(--bg-input)] text-[var(--text-primary)] transition-all duration-150 ${
+                  trimmedKey && isValidFormat
+                    ? 'border-[var(--success-ring)] focus:border-[var(--success-text)] focus:ring-2 focus:ring-[var(--success-ring)]'
+                    : trimmedKey
+                      ? 'border-[var(--warning-ring)] focus:border-[var(--warning-text)] focus:ring-2 focus:ring-[var(--warning-ring)]'
+                      : 'border-[var(--border-default)] hover:border-[var(--border-strong)] focus:border-[var(--accent-bg)] focus:ring-2 focus:ring-[var(--accent-ring)]'
+                }`}
+              />
+              <button
+                type="button"
+                onClick={() => setSetupKeyShowRaw(v => !v)}
+                tabIndex={-1}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
+                aria-label={setupKeyShowRaw ? 'Nascondi chiave' : 'Mostra chiave'}
+              >
+                {setupKeyShowRaw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+
             <button
-              onClick={() => setSetupKeyShowRaw(v => !v)}
-              tabIndex={-1}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100 transition-opacity"
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                color: 'var(--text-muted)',
-                padding: '2px',
-                lineHeight: 1,
-              }}
-              aria-label={setupKeyShowRaw ? 'Nascondi chiave' : 'Mostra chiave'}
+              type="button"
+              disabled={!canSave}
+              onClick={handleSetupSave}
+              className={`shrink-0 h-[42px] px-4 rounded-lg font-semibold text-sm inline-flex items-center justify-center gap-2 transition-all duration-150 select-none whitespace-nowrap border ${
+                canSave
+                  ? 'border-transparent bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] hover:bg-[var(--btn-primary-hover)] active:scale-[0.98] cursor-pointer'
+                  : 'border-[var(--border-default)] bg-[var(--bg-panel)] text-[var(--text-muted)] cursor-not-allowed opacity-80'
+              }`}
             >
-              {setupKeyShowRaw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              {setupKeySaving ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <ArrowRight className={`w-4 h-4 transition-transform ${canSave ? 'translate-x-0.5' : ''}`} />
+              )}
+              <span>{setupKeySaving ? 'Salvataggio…' : 'Salva e inizia'}</span>
             </button>
           </div>
         </div>
 
-        {setupKeyInput.trim() && (
-          <p
-            className="text-xs px-0.5"
-            style={{
-              color: GEMINI_KEY_PATTERN.test(setupKeyInput.trim())
-                ? 'var(--success-text)'
-                : 'var(--warning-text)',
-            }}
+        {trimmedKey ? (
+          <div
+            className={`flex items-center gap-1.5 text-xs font-medium transition-opacity ${
+              isValidFormat ? 'text-[var(--success-text)]' : 'text-[var(--warning-text)]'
+            }`}
           >
-            {GEMINI_KEY_PATTERN.test(setupKeyInput.trim())
-              ? '✓ Formato valido — premi Salva per continuare'
-              : '⚠ Formato non valido — le chiavi iniziano con AIzaSy... o AQ.'}
-          </p>
-        )}
-
-        <motion.button
-          whileHover={GEMINI_KEY_PATTERN.test(setupKeyInput.trim()) && !setupKeySaving ? { scale: 1.01 } : {}}
-          whileTap={GEMINI_KEY_PATTERN.test(setupKeyInput.trim()) && !setupKeySaving ? { scale: 0.99 } : {}}
-          disabled={!GEMINI_KEY_PATTERN.test(setupKeyInput.trim()) || setupKeySaving}
-          onClick={handleSetupSave}
-          className="premium-button w-full mt-2"
-        >
-          <Key className="w-4 h-4" />
-          {setupKeySaving ? 'Salvataggio…' : 'Salva e inizia'}
-        </motion.button>
+            {isValidFormat ? (
+              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+            ) : (
+              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            )}
+            <span className="truncate">
+              {isValidFormat
+                ? 'Formato valido — premi Salva per continuare'
+                : 'Formato non valido — le chiavi iniziano con AIzaSy... o AQ.'}
+            </span>
+          </div>
+        ) : null}
 
         {setupKeyError && (
-          <p className="text-xs text-center mt-1" style={{ color: 'var(--error-text)' }}>
-            ❌ {setupKeyError}
-          </p>
+          <div className="alert-card is-error text-xs flex items-center gap-2 py-2 px-3 mt-1.5">
+            <AlertCircle className="w-4 h-4 shrink-0 text-[var(--error-text)]" />
+            <span className="text-[var(--error-text)] leading-snug">{setupKeyError}</span>
+          </div>
         )}
       </div>
 
-      <div
-        className="w-full rounded-lg p-4 flex gap-3 text-left"
-        style={{
-          background: 'var(--bg-panel)',
-          border: '1px solid var(--border-subtle)',
-        }}
-      >
-        <div className="flex flex-col gap-2">
-          <p
-            className="text-[10px] font-bold uppercase tracking-wider"
-            style={{ color: 'var(--text-secondary)', opacity: 0.8, letterSpacing: '0.05em' }}
-          >
-            Come ottenere la chiave in 1 minuto
-          </p>
-          <ol className="flex flex-col gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
-            <li className="flex items-start gap-2">
-              <span className="shrink-0 font-bold" style={{ color: 'var(--accent-text)' }}>1.</span>
-              <span>
-                Vai su{' '}
-                <a
-                  href="#"
-                  onClick={e => {
-                    e.preventDefault();
-                    window.pywebview?.api?.open_url?.('https://aistudio.google.com/apikey');
-                  }}
-                  className="underline hover:opacity-100 opacity-80 transition-opacity font-medium"
-                  style={{ color: 'var(--accent-text)' }}
-                >
-                  aistudio.google.com/apikey
-                </a>
-              </span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="shrink-0 font-bold" style={{ color: 'var(--accent-text)' }}>2.</span>
-              <span>
-                Clicca <strong>"Create API key"</strong> e copia la chiave
-              </span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="shrink-0 font-bold" style={{ color: 'var(--accent-text)' }}>3.</span>
-              <span>
-                Incollala nel campo qui sopra e premi <strong>Salva e inizia</strong>
-              </span>
-            </li>
-          </ol>
+      {/* Callout Guide */}
+      <div className="mt-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-default)] p-4 sm:p-5 text-left space-y-3">
+        <div className="flex items-center gap-2 text-xs font-semibold text-[var(--text-primary)]">
+          <Lightbulb className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
+          <span>Come ottenere la chiave in 1 minuto</span>
         </div>
+        <ol className="flex flex-col gap-2.5 text-xs text-[var(--text-secondary)]">
+          <li className="flex items-start gap-3">
+            <span className="shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-[var(--bg-panel)] border border-[var(--border-subtle)] text-[11px] font-semibold text-[var(--text-muted)] mt-0.5">
+              1
+            </span>
+            <span className="leading-snug pt-0.5">
+              Vai su{' '}
+              <a
+                href="https://aistudio.google.com/apikey"
+                onClick={e => {
+                  e.preventDefault();
+                  window.pywebview?.api?.open_url?.('https://aistudio.google.com/apikey');
+                }}
+                className="font-medium text-[var(--accent-text)] hover:underline inline-flex items-center gap-0.5"
+              >
+                <span>aistudio.google.com/apikey</span>
+                <ExternalLink className="w-3 h-3 shrink-0" />
+              </a>
+            </span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-[var(--bg-panel)] border border-[var(--border-subtle)] text-[11px] font-semibold text-[var(--text-muted)] mt-0.5">
+              2
+            </span>
+            <span className="leading-snug pt-0.5">
+              Clicca <strong className="font-semibold text-[var(--text-primary)]">&quot;Create API key&quot;</strong> e copia la chiave
+            </span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-[var(--bg-panel)] border border-[var(--border-subtle)] text-[11px] font-semibold text-[var(--text-muted)] mt-0.5">
+              3
+            </span>
+            <span className="leading-snug pt-0.5">
+              Incollala nel campo qui sopra e premi <strong className="font-semibold text-[var(--text-primary)]">Salva e inizia</strong>
+            </span>
+          </li>
+        </ol>
       </div>
     </motion.div>
   );
