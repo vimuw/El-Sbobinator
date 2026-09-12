@@ -278,10 +278,10 @@ export function FolderDetailView({
 
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-2">
-          <div className="notion-search-wrap">
+          <div className="search-pill-wrap">
             {isSearching
-              ? <Loader2 className="notion-search-icon w-3.5 h-3.5 animate-spin" />
-              : <Search className="notion-search-icon w-3.5 h-3.5" />}
+              ? <Loader2 className="search-pill-icon w-3.5 h-3.5 animate-spin" />
+              : <Search className="search-pill-icon w-3.5 h-3.5" />}
             <input
               ref={folderSearchInputRef}
               type="text"
@@ -290,7 +290,7 @@ export function FolderDetailView({
               onFocus={() => setFolderSearchFocused(true)}
               onBlur={() => setFolderSearchFocused(false)}
               placeholder={fullTextMode ? 'Cerca nel contenuto...' : 'Cerca per nome...'}
-              className="notion-search-input"
+              className="search-pill-input"
             />
             <AnimatePresence>
               {search.trim().length > 0 ? (
@@ -301,7 +301,7 @@ export function FolderDetailView({
                   exit={{ opacity: 0, scale: 0.7 }}
                   transition={{ duration: 0.1 }}
                   onClick={() => { setSearch(''); folderSearchInputRef.current?.focus(); }}
-                  className="notion-search-clear"
+                  className="search-pill-clear"
                   aria-label="Cancella ricerca"
                 >
                   <X className="w-3 h-3" />
@@ -309,7 +309,7 @@ export function FolderDetailView({
               ) : !folderSearchFocused ? (
                 <motion.span
                   key="hint"
-                  className="notion-search-hint"
+                  className="search-pill-hint"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
@@ -323,7 +323,7 @@ export function FolderDetailView({
           <button
             type="button"
             onClick={() => { setFullTextMode(m => !m); setSearch(''); }}
-            className="notion-sort-chip w-9 p-0 flex items-center justify-center group/ft"
+            className="filter-chip w-9 p-0 flex items-center justify-center group/ft"
             style={fullTextMode ? { color: 'var(--accent-text)', borderColor: 'var(--accent-text)', background: 'var(--accent-subtle)' } : undefined}
             title={fullTextMode ? 'Testo completo (Attivo - Clicca per disattivare)' : 'Testo completo (Ricerca nel contenuto)'}
             aria-label="Testo completo"
@@ -332,7 +332,7 @@ export function FolderDetailView({
           </button>
         </div>
         {!fullTextMode && search.trim().length > 0 && (
-          <span className="notion-results-count">
+          <span className="search-results-count">
             {folderSessions.length === 0
               ? 'Nessun risultato'
               : folderSessions.length === 1
@@ -341,7 +341,7 @@ export function FolderDetailView({
           </span>
         )}
         {fullTextMode && filteredFtResults !== null && !isSearching && (
-          <span className="notion-results-count">
+          <span className="search-results-count">
             {ftError
               ? ftError
               : filteredFtResults.length === 0
@@ -352,7 +352,7 @@ export function FolderDetailView({
           </span>
         )}
         {fullTextMode && search.trim().length > 0 && search.trim().length < 3 && (
-          <span className="notion-results-count">Digita almeno 3 caratteri</span>
+          <span className="search-results-count">Digita almeno 3 caratteri</span>
         )}
       </div>
 

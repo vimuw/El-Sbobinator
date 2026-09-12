@@ -119,15 +119,15 @@ export function AddSessionsToFolderModal({
           ) : (
             <>
               {/* Search Bar */}
-              <div className="notion-search-wrap shrink-0">
-                <Search className="notion-search-icon w-3.5 h-3.5" />
+              <div className="search-pill-wrap shrink-0">
+                <Search className="search-pill-icon w-3.5 h-3.5" />
                 <input
                   ref={searchInputRef}
                   type="text"
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   placeholder="Cerca sbobina per nome..."
-                  className="notion-search-input"
+                  className="search-pill-input"
                 />
                 <AnimatePresence>
                   {search.trim().length > 0 && (
@@ -141,7 +141,7 @@ export function AddSessionsToFolderModal({
                         setSearch('');
                         searchInputRef.current?.focus();
                       }}
-                      className="notion-search-clear"
+                      className="search-pill-clear"
                       aria-label="Cancella ricerca"
                     >
                       <X className="w-3 h-3" />

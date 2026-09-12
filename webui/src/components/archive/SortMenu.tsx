@@ -73,7 +73,7 @@ export function SortMenu({ sort, onSortChange, options = SORT_OPTIONS }: SortMen
         ref={buttonRef}
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="notion-sort-chip w-9 p-0 flex items-center justify-center transition-colors group/sort"
+        className="filter-chip w-9 p-0 flex items-center justify-center transition-colors group/sort"
         style={open ? { color: 'var(--accent-text)', borderColor: 'var(--accent-text)', background: 'var(--accent-subtle)' } : undefined}
         title={`Ordinamento: ${currentOption?.label ?? ''}`}
         aria-label="Cambia ordinamento"

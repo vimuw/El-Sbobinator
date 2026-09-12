@@ -49,20 +49,20 @@ export const CompletedSection = memo(function CompletedSection({ doneFiles, appS
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {doneFiles.length >= 5 && (
-                <div className="notion-search-wrap w-48 sm:w-64">
-                  <Search className="notion-search-icon w-3.5 h-3.5" />
+                <div className="search-pill-wrap w-48 sm:w-64">
+                  <Search className="search-pill-icon w-3.5 h-3.5" />
                   <input
                     type="text"
                     value={completedSearch}
                     onChange={e => setCompletedSearch(e.target.value)}
                     placeholder="Cerca..."
-                    className="notion-search-input"
+                    className="search-pill-input"
                   />
                   {completedSearch.trim() && (
                     <button
                       type="button"
                       onClick={() => setCompletedSearch('')}
-                      className="notion-search-clear"
+                      className="search-pill-clear"
                       aria-label="Cancella ricerca"
                     >
                       <X className="w-3 h-3" />

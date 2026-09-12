@@ -502,10 +502,10 @@ export function ArchivePage({
         {/* Search + Sort + Actions */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
-            <div className="notion-search-wrap">
+            <div className="search-pill-wrap">
               {isSearching
-                ? <Loader2 className="notion-search-icon w-3.5 h-3.5 animate-spin" />
-                : <Search className="notion-search-icon w-3.5 h-3.5" />}
+                ? <Loader2 className="search-pill-icon w-3.5 h-3.5 animate-spin" />
+                : <Search className="search-pill-icon w-3.5 h-3.5" />}
               <input
                 ref={searchInputRef}
                 type="text"
@@ -514,7 +514,7 @@ export function ArchivePage({
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setSearchFocused(false)}
                 placeholder={fullTextMode ? 'Cerca nel contenuto...' : 'Cerca per nome...'}
-                className="notion-search-input"
+                className="search-pill-input"
               />
               <AnimatePresence>
                 {search.trim().length > 0 ? (
@@ -525,7 +525,7 @@ export function ArchivePage({
                     exit={{ opacity: 0, scale: 0.7 }}
                     transition={{ duration: 0.1 }}
                     onClick={() => { setSearch(''); searchInputRef.current?.focus(); }}
-                    className="notion-search-clear"
+                    className="search-pill-clear"
                     aria-label="Cancella ricerca"
                   >
                     <X className="w-3 h-3" />
@@ -533,7 +533,7 @@ export function ArchivePage({
                 ) : !searchFocused ? (
                   <motion.span
                     key="hint"
-                    className="notion-search-hint"
+                    className="search-pill-hint"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
@@ -547,7 +547,7 @@ export function ArchivePage({
             <button
               type="button"
               onClick={() => { setFullTextMode(m => !m); setSearch(''); }}
-              className="notion-sort-chip w-9 p-0 flex items-center justify-center group/ft"
+              className="filter-chip w-9 p-0 flex items-center justify-center group/ft"
               style={fullTextMode ? { color: 'var(--accent-text)', borderColor: 'var(--accent-text)', background: 'var(--accent-subtle)' } : undefined}
               title={fullTextMode ? 'Testo completo (Attivo - Clicca per disattivare)' : 'Testo completo (Ricerca nel contenuto)'}
               aria-label="Testo completo"
@@ -570,7 +570,7 @@ export function ArchivePage({
                 type="button"
                 onClick={handleImportSbobina}
                 disabled={isImporting}
-                className="notion-sort-chip w-9 p-0 flex items-center justify-center group/import"
+                className="filter-chip w-9 p-0 flex items-center justify-center group/import"
                 title="Importa Sbobina (.sbobina)"
                 aria-label="Importa Sbobina"
               >
@@ -581,7 +581,7 @@ export function ArchivePage({
                   type="button"
                   onClick={handleRefresh}
                   disabled={isRefreshing}
-                  className="notion-sort-chip w-9 p-0 flex items-center justify-center shrink-0 group/refresh"
+                  className="filter-chip w-9 p-0 flex items-center justify-center shrink-0 group/refresh"
                   title="Aggiorna archivio"
                   aria-label="Aggiorna archivio"
                 >
@@ -591,7 +591,7 @@ export function ArchivePage({
             </div>
           </div>
           {!fullTextMode && search.trim().length > 0 && (
-            <span className="notion-results-count">
+            <span className="search-results-count">
               {allSortedSessions.length === 0
                 ? 'Nessun risultato'
                 : allSortedSessions.length === 1
@@ -600,7 +600,7 @@ export function ArchivePage({
             </span>
           )}
           {fullTextMode && ftResults !== null && !isSearching && (
-            <span className="notion-results-count">
+            <span className="search-results-count">
               {ftError
                 ? ftError
                 : ftResults.length === 0
@@ -613,7 +613,7 @@ export function ArchivePage({
             </span>
           )}
           {fullTextMode && search.trim().length > 0 && search.trim().length < 3 && (
-            <span className="notion-results-count">Digita almeno 3 caratteri</span>
+            <span className="search-results-count">Digita almeno 3 caratteri</span>
           )}
         </div>
 
