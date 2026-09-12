@@ -86,6 +86,7 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
 | `get_completed_sessions(limit=20)` | — | `{ok, sessions: ArchiveSession[], total, error?}` | 5 s internal cache; filters for `stage == "done"`. |
 | `delete_session(session_dir)` | absolute path under `SESSION_ROOT` | `{ok, error?}` | Path-traversal-checked. |
 | `update_session_input_path(session_dir, new_path)` | — | `{ok, error?}` | Relinks the audio path after the user moves the file. |
+| `remove_session_audio(session_dir)` | session directory path | `{ok, error?}` | Unlinks and removes the associated audio from session.json. |
 | `open_session_folder()` | — | `{ok, error?}` | Opens `SESSION_ROOT` in the OS file manager. |
 | `ask_session_folder()` | — | `{ok, path?, cancelled?: bool, error?}` | Opens a folder-picker dialog and returns the selected path. |
 | `move_session_root(new_path)` | new absolute path | `{ok, started?, error?}` | Starts an asynchronous background move of all sessions to `new_path`. |
@@ -124,7 +125,7 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
 | `read_html_content(path)` | path under Desktop or `SESSION_ROOT` | `{ok, content?, error?}` | Path-traversal-checked; also caches the outer `<html>…<body>` shell for the matching `save_html_content`. |
 | `save_html_content(path, content, generation?)` | — | `{ok, error?}` | `generation` is a monotonic counter used to drop stale autosaves. Only the body is written; the cached shell is preserved. |
 | `create_collaboration_backup(path)` | path under Desktop or `SESSION_ROOT` | `{ok, backup_path?, error?}` | Path-traversal-checked; creates a `.collab-backup.html` snapshot on disk before entering live collaboration. |
-| `stream_media_file(path, session_dir?)` | audio/video path, optional session dir | `{ok, url?, error?}` | Starts a `LocalMediaServer` (Range-request capable) and returns a `http://127.0.0.1:<port>/stream.media?t=<ts>` URL. |
+| `stream_media_file(path, session_dir?)` | audio/video path, optional session dir | `{ok, url?, has_audio?, error?}` | Starts a `LocalMediaServer` (Range-request capable) and returns a `http://127.0.0.1:<port>/stream.media?t=<ts>` URL. If no file is found, `has_audio` indicates if an audio source was recorded. |
 | `show_notification(title, message)` | — | `void` | Best-effort OS notification. |
 | `flash_window()` | — | `{ok, error?}` | Flashes the application window in the taskbar (Windows/macOS) to request user attention. |
 | `download_and_install_update(version)` | version string without `v` prefix? (`updater.py` handles both) | `{ok, error?}` | Downloads the GitHub release asset for the current OS, launches it, and schedules the webview to close. |

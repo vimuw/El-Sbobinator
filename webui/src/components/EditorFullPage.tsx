@@ -1,11 +1,12 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Check, Copy, ExternalLink, FileText, Loader2, Moon, Sun, Users, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Check, Copy, ExternalLink, FileText, Headphones, Loader2, Moon, Plus, Sun, Users, AlertTriangle } from 'lucide-react';
 import type { Heading } from './RichTextEditor';
 import { registerCollabSignalListener } from '../bridge';
 import { normalizePreviewHtmlContent } from '../previewHtml';
 import { prepareHtmlForClipboard } from '../utils';
 import { CollaborationModal } from './modals/CollaborationModal';
+import { ConfirmActionModal } from './modals/ConfirmActionModal';
 import { useTheme } from '../hooks/useTheme';
 import { useEditorAutosave, type EditorSaveController } from '../hooks/useEditorAutosave';
 import { STORAGE_KEYS } from '../storageKeys';
@@ -29,6 +30,7 @@ export interface EditorAudioProps {
   src: string | null;
   relinkNeeded: boolean;
   onRelink: () => Promise<boolean | undefined>;
+  onRemoveAudio?: () => Promise<boolean | undefined> | void;
   init: { time?: number; playbackRate?: number; volume?: number };
   onStateChange: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
 }
@@ -60,6 +62,7 @@ export interface EditorFullPageProps {
   audioSrc?: string | null;
   audioRelinkNeeded?: boolean;
   onRelink?: () => Promise<boolean | undefined>;
+  onRemoveAudio?: () => Promise<boolean | undefined> | void;
   previewInitAudio?: { time?: number; playbackRate?: number; volume?: number };
   previewInitScrollTop?: number | undefined;
   initialSearchTerm?: string;
@@ -85,6 +88,7 @@ export function EditorFullPage({
   audioSrc: flatAudioSrc,
   audioRelinkNeeded: flatAudioRelinkNeeded,
   onRelink: flatOnRelink,
+  onRemoveAudio: flatOnRemoveAudio,
   previewInitAudio: flatPreviewInitAudio,
   previewInitScrollTop: flatPreviewInitScrollTop,
   initialSearchTerm: flatInitialSearchTerm,
@@ -104,6 +108,7 @@ export function EditorFullPage({
   const audioSrc = audioProp?.src !== undefined ? audioProp.src : (flatAudioSrc ?? null);
   const audioRelinkNeeded = audioProp?.relinkNeeded ?? flatAudioRelinkNeeded ?? false;
   const onRelink = audioProp?.onRelink ?? flatOnRelink ?? (() => Promise.resolve(undefined));
+  const onRemoveAudio = audioProp?.onRemoveAudio ?? flatOnRemoveAudio;
   const previewInitAudio = audioProp?.init ?? flatPreviewInitAudio ?? {};
   const onAudioStateChange = audioProp?.onStateChange ?? flatOnAudioStateChange ?? (() => {});
 
@@ -159,6 +164,8 @@ export function EditorFullPage({
   const [isCopied, setIsCopied] = useState(false);
   const [relinkSuccess, setRelinkSuccess] = useState(false);
   const [isRelinking, setIsRelinking] = useState(false);
+  const [isRemovingAudio, setIsRemovingAudio] = useState(false);
+  const [showConfirmRemove, setShowConfirmRemove] = useState(false);
   const relinkTimerRef = useRef<number | null>(null);
   const copiedTimerRef = useRef<number | null>(null);
   const getHtmlRef = useRef<(() => string) | null>(null);
@@ -472,27 +479,40 @@ export function EditorFullPage({
               />
             </Suspense>
 
-            {(audioSrc || audioRelinkNeeded) && (
-              <div className="shrink-0 border-t px-4 sm:px-5" style={{ borderColor: 'var(--border-subtle)' }}>
-                {audioSrc ? (
-                  <Suspense fallback={<div className="p-4 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento player...</div>}>
-                    <LazyAudioPlayer
-                      src={audioSrc}
-                      initialTime={previewInitAudio.time}
-                      initialPlaybackRate={previewInitAudio.playbackRate}
-                      initialVolume={previewInitAudio.volume}
-                      onStateChange={onAudioStateChange}
-                      onRelink={onRelink}
-                    />
-                  </Suspense>
-                ) : (
-                  <div className="flex items-center justify-between gap-3 py-3.5">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Audio non trovato</p>
-                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                        Il file originale è stato spostato. Selezionalo di nuovo per riattivare il player.
-                      </p>
-                    </div>
+            <div className="shrink-0 border-t px-4 sm:px-5" style={{ borderColor: 'var(--border-subtle)' }}>
+              {audioSrc ? (
+                <Suspense fallback={<div className="p-4 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento player...</div>}>
+                  <LazyAudioPlayer
+                    src={audioSrc}
+                    initialTime={previewInitAudio.time}
+                    initialPlaybackRate={previewInitAudio.playbackRate}
+                    initialVolume={previewInitAudio.volume}
+                    onStateChange={onAudioStateChange}
+                    onRelink={onRelink}
+                    onRemoveAudio={onRemoveAudio}
+                  />
+                </Suspense>
+              ) : audioRelinkNeeded ? (
+                <div className="flex items-center justify-between gap-3 py-3.5">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Audio non trovato</p>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      Il file originale è stato spostato. Selezionalo di nuovo per riattivare il player.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {onRemoveAudio && (
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmRemove(true)}
+                        disabled={isRemovingAudio}
+                        className="modal-action-button is-secondary shrink-0"
+                        title="Rimuovi audio dalla sbobina"
+                        aria-label="Rimuovi audio dalla sbobina"
+                      >
+                        {isRemovingAudio ? 'Rimozione...' : 'Rimuovi audio'}
+                      </button>
+                    )}
                     <button
                       onClick={async () => {
                         if (isRelinking) return;
@@ -513,9 +533,59 @@ export function EditorFullPage({
                       {relinkSuccess ? <><Check className="w-3.5 h-3.5" /> Ricollegato</> : isRelinking ? 'Selezione...' : 'Ricollega audio'}
                     </button>
                   </div>
-                )}
-              </div>
-            )}
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3 py-3.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div
+                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ background: 'var(--surface-sunken)', color: 'var(--text-muted)' }}
+                    >
+                      <Headphones className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium leading-none mb-1" style={{ color: 'var(--text-primary)' }}>Nessun audio collegato</p>
+                      <p className="text-xs leading-none" style={{ color: 'var(--text-muted)' }}>
+                        Collega un file audio per sincronizzarlo con la sbobina.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (isRelinking) return;
+                        setIsRelinking(true);
+                        try {
+                          const ok = await onRelink();
+                          if (ok) {
+                            if (relinkTimerRef.current) window.clearTimeout(relinkTimerRef.current);
+                            setRelinkSuccess(true);
+                            relinkTimerRef.current = window.setTimeout(() => setRelinkSuccess(false), 3000);
+                          }
+                        } finally {
+                          setIsRelinking(false);
+                        }
+                      }}
+                      disabled={isRelinking}
+                      className="modal-action-button is-primary shrink-0 flex items-center gap-1.5"
+                    >
+                      {isRelinking ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Selezione...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Aggiungi audio</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <CollaborationModal
@@ -533,6 +603,25 @@ export function EditorFullPage({
               setCollabRoom(undefined);
               setCollabUser(undefined);
               onCollaborationStateChange?.(undefined, undefined);
+            }}
+          />
+
+          <ConfirmActionModal
+            isOpen={showConfirmRemove}
+            title="Rimuovere l'audio mancante?"
+            description="Il riferimento al file audio verrà rimosso dalla sbobina. Il file sul tuo computer non verrà toccato e potrai aggiungere un nuovo audio in qualsiasi momento."
+            confirmLabel={isRemovingAudio ? 'Rimozione...' : 'Rimuovi audio'}
+            cancelLabel="Annulla"
+            onClose={() => setShowConfirmRemove(false)}
+            onConfirm={async () => {
+              setShowConfirmRemove(false);
+              if (isRemovingAudio) return;
+              setIsRemovingAudio(true);
+              try {
+                await onRemoveAudio?.();
+              } finally {
+                setIsRemovingAudio(false);
+              }
             }}
           />
         </motion.div>

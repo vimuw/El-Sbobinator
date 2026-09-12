@@ -176,6 +176,31 @@ class SessionControllerMixin:
             norm_path = str(new_path or "").strip()
             if not norm_path:
                 return bridge_error("Percorso vuoto")
+
+            # Determine original document title from html_path or previous title
+            html_path = str(data.get("outputs", {}).get("html", "") or "")
+            html_title = ""
+            if html_path:
+                base = os.path.basename(html_path)
+                if base.endswith("_Sbobina.html"):
+                    html_title = base[: -len("_Sbobina.html")]
+                elif base.endswith(".html"):
+                    html_title = base[: -len(".html")]
+                else:
+                    html_title = base
+
+            current_title = str(data.get("title") or "").strip()
+            current_input_name = ""
+            if isinstance(data.get("input"), dict):
+                current_input_name = str(data["input"].get("name") or "").strip()
+
+            if html_title and (
+                not current_title or current_title == current_input_name
+            ):
+                data["title"] = html_title
+            elif not current_title:
+                data["title"] = current_input_name or html_title
+
             if not isinstance(data.get("input"), dict):
                 data["input"] = {}
             data["input"]["path"] = norm_path
@@ -195,6 +220,65 @@ class SessionControllerMixin:
                 data["input"]["size"] = os.path.getsize(norm_path)
             except Exception:
                 pass
+            _atomic_write_json(session_path, data)
+            with self._sessions_cache_lock:
+                self._sessions_cache = None
+                self._sessions_cache_gen += 1
+            return bridge_ok()
+        except Exception as e:
+            return bridge_error(e)
+
+    def remove_session_audio(self, session_dir: str) -> dict:
+        """Unlink and remove the associated audio from session.json."""
+        import json as _json
+
+        try:
+            session_root = self._get_session_root()
+            abs_dir = os.path.realpath(session_dir)
+            abs_root = os.path.realpath(session_root)
+            if not _path_under_root(abs_dir, abs_root):
+                return bridge_error("Percorso non valido")
+            session_path = os.path.join(abs_dir, "session.json")
+            if not os.path.isfile(session_path):
+                return bridge_error("session.json non trovato")
+            with open(session_path, encoding="utf-8") as fh:
+                data = _json.load(fh)
+            if not isinstance(data, dict):
+                return bridge_error("session.json non valido")
+
+            # Determine original document title from html_path or previous title
+            html_path = str(data.get("outputs", {}).get("html", "") or "")
+            html_title = ""
+            if html_path:
+                base = os.path.basename(html_path)
+                if base.endswith("_Sbobina.html"):
+                    html_title = base[: -len("_Sbobina.html")]
+                elif base.endswith(".html"):
+                    html_title = base[: -len(".html")]
+                else:
+                    html_title = base
+
+            current_title = str(data.get("title") or "").strip()
+            current_input_name = ""
+            if isinstance(data.get("input"), dict):
+                current_input_name = str(data["input"].get("name") or "").strip()
+
+            # If current title was empty or identical to the audio name being removed, restore html_title
+            if html_title and (
+                not current_title or current_title == current_input_name
+            ):
+                data["title"] = html_title
+            elif not current_title:
+                data["title"] = current_input_name or html_title
+
+            if not isinstance(data.get("input"), dict):
+                data["input"] = {}
+            data["input"]["path"] = ""
+            data["input"]["name"] = ""
+            data["input"].pop("path_rel_to_session", None)
+            data["input"].pop("path_rel_to_html", None)
+            data["input"]["size"] = 0
+
             _atomic_write_json(session_path, data)
             with self._sessions_cache_lock:
                 self._sessions_cache = None

@@ -16,6 +16,7 @@ import { loadAllEditorSessions } from '../editorSessions';
 import { formatRelativeTime, normalizeSessionPath, shortModelName } from '../utils';
 import { FolderIndicatorChip } from './FolderChip';
 import { ShareExportModal } from './modals/ShareExportModal';
+import { ConfirmActionModal } from './modals/ConfirmActionModal';
 
 import {
   type ArchivePageProps,
@@ -58,7 +59,7 @@ export { FullTextResultList } from './archive/FullTextResults';
 export function ArchivePage({
   sessions, total, folders, onFoldersChange,
   onPreview, onOpenFile, onDeleteSession, onDeleteMultipleSessions, onRefresh,
-  onRetryFailedRevisionBlocks, onNotification,
+  onRetryFailedRevisionBlocks, onNotification, onRemoveSessionAudio,
 }: ArchivePageProps) {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [folderModal, setFolderModal] = useState<FolderModalState | null>(null);
@@ -89,6 +90,34 @@ export function ArchivePage({
 
   const [sharingSession, setSharingSession] = useState<ArchiveSession | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [confirmRemoveAudioSessionDir, setConfirmRemoveAudioSessionDir] = useState<string | null>(null);
+
+  const handleRemoveSessionAudio = useCallback((sessionDir: string) => {
+    setConfirmRemoveAudioSessionDir(sessionDir);
+  }, []);
+
+  const handleExecuteRemoveSessionAudio = useCallback(async () => {
+    const sessionDir = confirmRemoveAudioSessionDir;
+    setConfirmRemoveAudioSessionDir(null);
+    if (!sessionDir) return;
+
+    if (onRemoveSessionAudio) {
+      await onRemoveSessionAudio(sessionDir);
+      return;
+    }
+    if (!window.pywebview?.api?.remove_session_audio) return;
+    try {
+      const res = await window.pywebview.api.remove_session_audio(sessionDir);
+      if (res?.ok) {
+        onRefresh?.();
+        onNotification?.('Audio rimosso', 'Il collegamento audio è stato rimosso dalla sbobina.', 'success');
+      } else {
+        onNotification?.('Errore', res?.error || 'Impossibile rimuovere il collegamento audio.', 'error');
+      }
+    } catch (e) {
+      onNotification?.('Errore', String(e), 'error');
+    }
+  }, [confirmRemoveAudioSessionDir, onNotification, onRefresh, onRemoveSessionAudio]);
 
   const handleImportSbobina = useCallback(async () => {
     if (isImporting) return;
@@ -311,6 +340,15 @@ export function ArchivePage({
           onClose={() => setSharingSession(null)}
         />
       )}
+      <ConfirmActionModal
+        isOpen={confirmRemoveAudioSessionDir !== null}
+        title="Rimuovere collegamento audio?"
+        description="L'audio verrà scollegato da questa sbobina. Il file originale sul tuo computer non verrà cancellato."
+        confirmLabel="Rimuovi audio"
+        cancelLabel="Annulla"
+        onClose={() => setConfirmRemoveAudioSessionDir(null)}
+        onConfirm={handleExecuteRemoveSessionAudio}
+      />
     </>
   );
 
@@ -340,6 +378,7 @@ export function ArchivePage({
           onDeleteMultipleSessions={handleOpenDeleteMultiple}
           onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
           onShareSession={setSharingSession}
+          onRemoveSessionAudio={handleRemoveSessionAudio}
         />
         {renderModals()}
       </>
@@ -633,6 +672,7 @@ export function ArchivePage({
                     onDeleteSession={onDeleteSession}
                     onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
                     onShareSession={setSharingSession}
+                    onRemoveSessionAudio={handleRemoveSessionAudio}
                   />
                 ))}
               </div>

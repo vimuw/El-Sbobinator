@@ -1,7 +1,7 @@
 import { useState, type MouseEvent } from 'react';
 import {
   AlertTriangle, Check, ChevronLeft, ChevronRight, Download, ExternalLink,
-  Eye, FileText, FolderOpen, RefreshCw, Trash2, X,
+  Eye, FileText, FolderOpen, RefreshCw, Trash2, Unlink, X,
 } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -26,6 +26,7 @@ export interface DraggableSessionCardProps {
   onDeleteSession: ArchivePageProps['onDeleteSession'];
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
   onShareSession?: (session: ArchiveSession) => void;
+  onRemoveSessionAudio?: ArchivePageProps['onRemoveSessionAudio'];
 }
 
 export function DraggableSessionCard({
@@ -42,6 +43,7 @@ export function DraggableSessionCard({
   onDeleteSession,
   onRetryFailedRevisionBlocks,
   onShareSession,
+  onRemoveSessionAudio,
 }: DraggableSessionCardProps) {
   const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
   const openedAtMs = getOpenedAtMs(session, editorSessionsMap ?? loadAllEditorSessions());
@@ -87,6 +89,11 @@ export function DraggableSessionCard({
       label: `Rimuovi da "${currentFolder.name}"`,
       icon: <X className="w-3.5 h-3.5" />,
       onClick: onRemoveFromFolder,
+    } as KebabMenuItem] : []),
+    ...(session.input_path && onRemoveSessionAudio ? [{
+      label: 'Rimuovi collegamento audio',
+      icon: <Unlink className="w-3.5 h-3.5" />,
+      onClick: () => onRemoveSessionAudio(session.session_dir),
     } as KebabMenuItem] : []),
     { separator: true },
     {
@@ -237,6 +244,7 @@ export interface SortableSessionCardProps {
   onDeleteSession: ArchivePageProps['onDeleteSession'];
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
   onShareSession?: (session: ArchiveSession) => void;
+  onRemoveSessionAudio?: ArchivePageProps['onRemoveSessionAudio'];
   canMoveToPreviousPage?: boolean;
   canMoveToNextPage?: boolean;
   onMoveToPreviousPage?: () => void;
@@ -256,6 +264,7 @@ export function SortableSessionCard({
   onDeleteSession,
   onRetryFailedRevisionBlocks,
   onShareSession,
+  onRemoveSessionAudio,
   canMoveToPreviousPage,
   canMoveToNextPage,
   onMoveToPreviousPage,
@@ -303,6 +312,11 @@ export function SortableSessionCard({
       label: 'Esporta Sbobina...',
       icon: <Download className="w-3.5 h-3.5" />,
       onClick: () => onShareSession(session),
+    } as KebabMenuItem] : []),
+    ...(session.input_path && onRemoveSessionAudio ? [{
+      label: 'Rimuovi collegamento audio',
+      icon: <Unlink className="w-3.5 h-3.5" />,
+      onClick: () => onRemoveSessionAudio(session.session_dir),
     } as KebabMenuItem] : []),
     { separator: true },
     {

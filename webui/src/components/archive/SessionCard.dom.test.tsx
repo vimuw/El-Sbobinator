@@ -120,6 +120,30 @@ describe('SessionCard components selection styling', () => {
       expect(card2.style.borderColor).toBe('');
       expect(card2.style.background).toBe('');
     });
+
+    it('shows Rimuovi collegamento audio in kebab menu and triggers onRemoveSessionAudio', async () => {
+      const onRemoveSessionAudio = vi.fn();
+      render(
+        <DraggableSessionCard
+          session={mockSession}
+          allFolders={mockFolders}
+          onAssignToFolder={vi.fn()}
+          onRemoveFromFolder={vi.fn()}
+          onPreview={vi.fn()}
+          onOpenFile={vi.fn()}
+          onDeleteSession={vi.fn()}
+          onRemoveSessionAudio={onRemoveSessionAudio}
+        />,
+      );
+
+      const kebabBtn = screen.getByLabelText('Altre opzioni');
+      fireEvent.click(kebabBtn);
+
+      const removeAudioOption = screen.getByText('Rimuovi collegamento audio');
+      expect(removeAudioOption).toBeTruthy();
+      fireEvent.click(removeAudioOption);
+      expect(onRemoveSessionAudio).toHaveBeenCalledWith(mockSession.session_dir);
+    });
   });
 
   describe('SortableSessionCard', () => {

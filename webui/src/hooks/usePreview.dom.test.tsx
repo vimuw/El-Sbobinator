@@ -4,6 +4,7 @@ import { usePreview } from './usePreview';
 import type { Dispatch } from 'react';
 import type { ProcessingAction } from '../appState';
 import type { ArchiveSession } from '../bridge';
+import { loadAllEditorSessions } from '../editorSessions';
 
 function setPywebview(api: Record<string, unknown> | undefined) {
   Object.defineProperty(window, 'pywebview', {
@@ -263,5 +264,152 @@ describe('usePreview', () => {
     // Neither the queue nor the stream should have been touched
     expect(dispatch).not.toHaveBeenCalled();
     expect(stream_media_file).toHaveBeenCalledTimes(1); // only the initial openPreview call
+  });
+
+  it('removePreviewAudio unlinks audio, resets preview audio state, and restores title', async () => {
+    const dispatch = vi.fn() as unknown as Dispatch<ProcessingAction>;
+    const setArchiveSessions = vi.fn() as unknown as Dispatch<React.SetStateAction<ArchiveSession[]>>;
+    const appendConsole = vi.fn();
+    const remove_session_audio = vi.fn().mockResolvedValue({ ok: true });
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<body>text</body>' }),
+      stream_media_file: vi.fn().mockResolvedValue({ ok: true, url: 'blob:audio' }),
+      remove_session_audio,
+    });
+
+    const { result } = renderHook(() => usePreview(makeOptions({ dispatch, setArchiveSessions, appendConsole })));
+    await act(async () => {
+      await result.current.openPreview('/session/cellule_staminali_Sbobina.html', 'cellule_staminali.mp3', '/audio/old.mp3', 'f1', '/session');
+    });
+
+    expect(result.current.preview.audioSrc).toBe('blob:audio');
+
+    let removeOk: boolean | undefined;
+    await act(async () => {
+      removeOk = await result.current.removePreviewAudio();
+    });
+
+    expect(removeOk).toBe(true);
+    expect(remove_session_audio).toHaveBeenCalledWith('/session');
+    expect(result.current.preview.audioSrc).toBeNull();
+    expect(result.current.preview.sourcePath).toBe('');
+    expect(result.current.preview.audioRelinkNeeded).toBe(false);
+    expect(result.current.preview.title).toBe('cellule_staminali');
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'queue/update_source', path: '', name: '', size: 0 }));
+    expect(setArchiveSessions).toHaveBeenCalled();
+    expect(appendConsole).toHaveBeenCalledWith('Audio rimosso dalla sbobina.');
+  });
+
+  it('removePreviewAudio aborts and logs error when remove_session_audio fails', async () => {
+    const dispatch = vi.fn() as unknown as Dispatch<ProcessingAction>;
+    const setArchiveSessions = vi.fn() as unknown as Dispatch<React.SetStateAction<ArchiveSession[]>>;
+    const appendConsole = vi.fn();
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<body>text</body>' }),
+      stream_media_file: vi.fn().mockResolvedValue({ ok: true, url: 'blob:audio' }),
+      remove_session_audio: vi.fn().mockResolvedValue({ ok: false, error: 'Permission denied' }),
+    });
+
+    const { result } = renderHook(() => usePreview(makeOptions({ dispatch, setArchiveSessions, appendConsole })));
+    await act(async () => {
+      await result.current.openPreview('/session/out.html', 'test', '/audio.mp3', 'f1', '/session');
+    });
+
+    let removeOk: boolean | undefined;
+    await act(async () => {
+      removeOk = await result.current.removePreviewAudio();
+    });
+
+    expect(removeOk).toBe(false);
+    expect(appendConsole).toHaveBeenCalledWith(expect.stringContaining('Impossibile rimuovere il link audio'));
+  });
+
+  it('removePreviewAudio strips supported media extensions like .flac and normalizes session path', async () => {
+    let currentArchive = [{ session_dir: 'C:\\session', input_path: '/audio/test.flac' } as ArchiveSession];
+    const setArchiveSessions = vi.fn().mockImplementation((updater) => {
+      currentArchive = typeof updater === 'function' ? updater(currentArchive) : updater;
+    }) as unknown as Dispatch<React.SetStateAction<ArchiveSession[]>>;
+    const appendConsole = vi.fn();
+    const remove_session_audio = vi.fn().mockResolvedValue({ ok: true });
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<body>text</body>' }),
+      stream_media_file: vi.fn().mockResolvedValue({ ok: true, url: 'blob:audio' }),
+      remove_session_audio,
+    });
+
+    const { result } = renderHook(() => usePreview(makeOptions({ setArchiveSessions, appendConsole })));
+    await act(async () => {
+      await result.current.openPreview('C:/session/lezione_Sbobina.html', 'lezione.flac', '/audio/test.flac', 'f1', 'c:/session');
+    });
+
+    await act(async () => {
+      await result.current.removePreviewAudio();
+    });
+
+    expect(result.current.preview.title).toBe('lezione');
+    expect(currentArchive[0].input_path).toBe('');
+  });
+
+  it('openPreview on an audio-less session sets audioRelinkNeeded to false when stream_media_file reports has_audio false', async () => {
+    const appendConsole = vi.fn();
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<body>text</body>' }),
+      stream_media_file: vi.fn().mockResolvedValue({ ok: false, has_audio: false, error: 'Nessun file audio' }),
+    });
+
+    const { result } = renderHook(() => usePreview(makeOptions({ appendConsole })));
+    await act(async () => {
+      await result.current.openPreview('/session/doc.html', 'doc', '', 'f1', '/session');
+    });
+
+    expect(result.current.preview.audioSrc).toBeNull();
+    expect(result.current.preview.audioRelinkNeeded).toBe(false);
+  });
+
+  it('openPreview on a session with missing audio sets audioRelinkNeeded to true when stream_media_file reports has_audio true', async () => {
+    const appendConsole = vi.fn();
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<body>text</body>' }),
+      stream_media_file: vi.fn().mockResolvedValue({ ok: false, has_audio: true, error: 'File non trovato' }),
+    });
+
+    const { result } = renderHook(() => usePreview(makeOptions({ appendConsole })));
+    await act(async () => {
+      await result.current.openPreview('/session/doc.html', 'doc', '', 'f1', '/session');
+    });
+
+    expect(result.current.preview.audioSrc).toBeNull();
+    expect(result.current.preview.audioRelinkNeeded).toBe(true);
+  });
+
+  it('removePreviewAudio clears in-memory audioTime so closing preview does not save stale audio timestamp', async () => {
+    const remove_session_audio = vi.fn().mockResolvedValue({ ok: true });
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<body>text</body>' }),
+      stream_media_file: vi.fn().mockResolvedValue({ ok: true, url: 'blob:audio' }),
+      remove_session_audio,
+    });
+
+    const { result } = renderHook(() => usePreview(makeOptions({})));
+    await act(async () => {
+      await result.current.openPreview('/session/doc_Sbobina.html', 'doc.mp3', '/audio/doc.mp3', 'f1', '/session');
+    });
+
+    act(() => {
+      result.current.handleAudioStateChange({ currentTime: 120, playbackRate: 1.5, volume: 0.8 });
+    });
+
+    await act(async () => {
+      await result.current.removePreviewAudio();
+    });
+
+    // Close preview to trigger saveEditorSession
+    act(() => {
+      result.current.closePreview();
+    });
+
+    const saved = loadAllEditorSessions();
+    expect(saved['f1']?.audioTime).toBeUndefined();
+    expect(saved['f1']?.playbackRate).toBe(1.5);
   });
 });

@@ -642,6 +642,65 @@ class TestSessionController(unittest.TestCase):
             self.assertEqual(len(res["sessions"]), 1)
             self.assertEqual(res["sessions"][0]["name"], "input.mp3")
 
+    def test_get_completed_sessions_respects_title(self):
+        with tempfile.TemporaryDirectory() as td:
+            session_root = os.path.join(td, "sessions")
+            os.makedirs(session_root, exist_ok=True)
+            host = DummySessionHost(session_root=session_root)
+            s1_dir = os.path.join(session_root, "sess1")
+            os.makedirs(s1_dir, exist_ok=True)
+            html_path = os.path.join(s1_dir, "doc.html")
+            with open(html_path, "w", encoding="utf-8") as f:
+                f.write("<html><body>Test Document</body></html>")
+
+            import json
+
+            s1_data = {
+                "stage": "done",
+                "title": "Biochimica",
+                "updated_at": "2026-08-01T12:00:00Z",
+                "outputs": {"html": html_path},
+                "input": {"path": "/fake/altro.mp3", "size": 1234},
+            }
+            with open(os.path.join(s1_dir, "session.json"), "w", encoding="utf-8") as f:
+                json.dump(s1_data, f)
+
+            res = host.get_completed_sessions()
+            self.assertTrue(res["ok"])
+            self.assertEqual(res["sessions"][0]["name"], "Biochimica")
+
+    def test_remove_session_audio(self):
+        with tempfile.TemporaryDirectory() as td:
+            session_root = os.path.join(td, "sessions")
+            os.makedirs(session_root, exist_ok=True)
+            host = DummySessionHost(session_root=session_root)
+            s1_dir = os.path.join(session_root, "sess1")
+            os.makedirs(s1_dir, exist_ok=True)
+            html_path = os.path.join(s1_dir, "Doc_Sbobina.html")
+            with open(html_path, "w", encoding="utf-8") as f:
+                f.write("<html><body>Test Document</body></html>")
+
+            import json
+
+            s1_data = {
+                "stage": "done",
+                "updated_at": "2026-08-01T12:00:00Z",
+                "outputs": {"html": html_path},
+                "input": {"path": "/fake/input.mp3", "name": "input.mp3", "size": 1234},
+            }
+            session_json_path = os.path.join(s1_dir, "session.json")
+            with open(session_json_path, "w", encoding="utf-8") as f:
+                json.dump(s1_data, f)
+
+            res = host.remove_session_audio(s1_dir)
+            self.assertTrue(res["ok"])
+
+            with open(session_json_path, encoding="utf-8") as f:
+                saved = json.load(f)
+            self.assertEqual(saved["input"]["path"], "")
+            self.assertEqual(saved["input"]["name"], "")
+            self.assertEqual(saved["title"], "Doc")
+
     def test_search_sessions(self):
         with tempfile.TemporaryDirectory() as td:
             session_root = os.path.join(td, "sessions")

@@ -3,6 +3,7 @@ import type { ProcessingAction } from '../appState';
 import type { ArchiveSession } from '../bridge';
 import { loadEditorSession, saveEditorSession, touchEditorSession, type EditorSession } from '../editorSessions';
 import { normalizePreviewHtmlContent } from '../previewHtml';
+import { normalizeSessionPath } from '../utils';
 
 export type PreviewState = {
   content: string | null;
@@ -76,7 +77,8 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
       setPreview(prev => ({ ...prev, audioSrc: streamRes.url, audioRelinkNeeded: false }));
       return true;
     }
-    setPreview(prev => ({ ...prev, audioSrc: null, audioRelinkNeeded: true }));
+    const relinkNeeded = streamRes.has_audio === false ? false : true;
+    setPreview(prev => ({ ...prev, audioSrc: null, audioRelinkNeeded: relinkNeeded }));
     return false;
   }, []);
 
@@ -163,7 +165,7 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
           const saveRes = await window.pywebview.api.update_session_input_path(preview.sessionDir, selectedFile.path);
           if (saveRes?.ok) {
             setArchiveSessions(prev => prev.map(s =>
-              s.session_dir === preview.sessionDir ? { ...s, input_path: selectedFile.path } : s,
+              normalizeSessionPath(s.session_dir) === normalizeSessionPath(preview.sessionDir) ? { ...s, input_path: selectedFile.path } : s,
             ));
             await onArchiveRefresh?.();
           } else {
@@ -190,6 +192,72 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
     }
     return false;
   }, [appendConsole, dispatch, loadPreviewAudio, onArchiveRefresh, preview.fileId, preview.sessionDir, setArchiveSessions]);
+
+  const removePreviewAudio = useCallback(async () => {
+    try {
+      let persistOk = true;
+      if (preview.sessionDir) {
+        if (!window.pywebview?.api?.remove_session_audio) {
+          persistOk = false;
+        } else {
+          const res = await window.pywebview.api.remove_session_audio(preview.sessionDir);
+          if (res?.ok) {
+            setArchiveSessions(prev => prev.map(s =>
+              normalizeSessionPath(s.session_dir) === normalizeSessionPath(preview.sessionDir) ? { ...s, input_path: '' } : s,
+            ));
+            await onArchiveRefresh?.();
+          } else {
+            persistOk = false;
+          }
+        }
+      }
+      if (!persistOk) {
+        appendConsole('❌ Impossibile rimuovere il link audio dalla sessione.');
+        return false;
+      }
+      if (preview.fileId || preview.sessionDir) {
+        dispatch({
+          type: 'queue/update_source',
+          id: preview.fileId ?? undefined,
+          sessionDir: preview.sessionDir || undefined,
+          path: '',
+          name: '',
+          size: 0,
+        });
+      }
+
+      let nextTitle = preview.title;
+      if (preview.path && /\.(mp3|m4a|wav|ogg|flac|aac|opus|mp4|mkv|webm)$/i.test(nextTitle)) {
+        const base = preview.path.split(/[/\\]/).pop() || '';
+        if (base.endsWith('_Sbobina.html')) {
+          nextTitle = base.slice(0, -'_Sbobina.html'.length);
+        } else if (base.endsWith('.html')) {
+          nextTitle = base.slice(0, -'.html'.length);
+        }
+      }
+
+      if (currentEditorSessionRef.current) {
+        delete currentEditorSessionRef.current.audioTime;
+        if (preview.fileId) {
+          saveEditorSession(preview.fileId, currentEditorSessionRef.current);
+        }
+      }
+
+      setPreview(prev => ({
+        ...prev,
+        title: nextTitle,
+        sourcePath: '',
+        audioSrc: null,
+        audioRelinkNeeded: false,
+        initAudio: {},
+      }));
+      appendConsole('Audio rimosso dalla sbobina.');
+      return true;
+    } catch (error: unknown) {
+      appendConsole(`❌ Impossibile rimuovere l'audio: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
+  }, [appendConsole, dispatch, onArchiveRefresh, preview.fileId, preview.path, preview.sessionDir, preview.title, setArchiveSessions]);
 
   const handleAudioStateChange = useCallback(({ currentTime, playbackRate, volume }: { currentTime: number; playbackRate: number; volume: number }) => {
     currentEditorSessionRef.current = { ...currentEditorSessionRef.current, audioTime: currentTime, playbackRate, volume };
@@ -234,6 +302,7 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
     openSharedSession,
     closePreview,
     relinkPreviewAudio,
+    removePreviewAudio,
     handleAudioStateChange,
     handleScrollTopChange,
     handleCollaborationStateChange,

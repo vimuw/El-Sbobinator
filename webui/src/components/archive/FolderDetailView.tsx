@@ -42,6 +42,7 @@ export interface FolderDetailViewProps {
   onDeleteMultipleSessions?: ArchivePageProps['onDeleteMultipleSessions'];
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
   onShareSession?: (session: ArchiveSession) => void;
+  onRemoveSessionAudio?: ArchivePageProps['onRemoveSessionAudio'];
 }
 
 export function FolderDetailView({
@@ -65,6 +66,7 @@ export function FolderDetailView({
   onDeleteMultipleSessions,
   onRetryFailedRevisionBlocks,
   onShareSession,
+  onRemoveSessionAudio,
 }: FolderDetailViewProps) {
   const [search, setSearch] = useState('');
   const [fullTextMode, setFullTextMode] = useState(false);
@@ -404,6 +406,7 @@ export function FolderDetailView({
                       onDeleteSession={onDeleteSession}
                       onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
                       onShareSession={onShareSession}
+                      onRemoveSessionAudio={onRemoveSessionAudio}
                     />
                   ))}
                 </div>

@@ -126,7 +126,7 @@ def list_completed_sessions(
         )
 
         input_size = int(data.get("input", {}).get("size", 0) or 0)
-        name = (
+        name = str(data.get("title") or "").strip() or (
             os.path.basename(input_path)
             if input_path
             else os.path.basename(str(html_path))
@@ -227,7 +227,7 @@ def search_completed_sessions(
                 continue
 
             input_path = data.get("input", {}).get("path", "")
-            name = (
+            name = str(data.get("title") or "").strip() or (
                 os.path.basename(str(input_path))
                 if input_path
                 else os.path.basename(html_path)

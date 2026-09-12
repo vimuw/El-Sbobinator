@@ -232,6 +232,7 @@ class MediaControllerMixin:
     def stream_media_file(self, file_path: str, session_dir: str | None = None) -> dict:
         """Avvia o riavvia un micro-server HTTP per inviare l'audio nativo a React via streaming byte-range."""
         resolved_file_path = str(file_path or "").strip()
+        has_audio = bool(resolved_file_path)
         if session_dir and (
             not resolved_file_path or not os.path.isfile(resolved_file_path)
         ):
@@ -239,6 +240,15 @@ class MediaControllerMixin:
                 abs_dir, session_path = self._resolve_retry_session(str(session_dir))
                 data = _load_json(session_path)
                 if isinstance(data, dict):
+                    input_data = data.get("input", {})
+                    if isinstance(input_data, dict):
+                        input_p = str(input_data.get("path") or "").strip()
+                        input_n = str(input_data.get("name") or "").strip()
+                        input_rel = str(
+                            input_data.get("path_rel_to_session") or ""
+                        ).strip()
+                        if input_p or input_n or input_rel:
+                            has_audio = True
                     fallback = self._resolve_completed_session_audio_path(
                         data, abs_dir, session_path
                     )
@@ -246,8 +256,16 @@ class MediaControllerMixin:
                         resolved_file_path = fallback
             except Exception:
                 pass
+            if not resolved_file_path or not os.path.isfile(resolved_file_path):
+                return bridge_error(
+                    "Nessun file audio trovato per questa sessione.",
+                    has_audio=has_audio,
+                )
         if not resolved_file_path:
-            return bridge_error("Nessun file audio trovato per questa sessione.")
+            return bridge_error(
+                "Nessun file audio trovato per questa sessione.",
+                has_audio=has_audio,
+            )
         ext = os.path.splitext(resolved_file_path)[1].lower()
         if ext not in self._ALLOWED_STREAM_EXTS:
             return bridge_error("Tipo di file non supportato per lo streaming.")

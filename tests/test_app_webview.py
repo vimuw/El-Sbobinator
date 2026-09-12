@@ -2699,6 +2699,41 @@ class TestSearchSessions(unittest.TestCase):
         self.assertEqual(result["results"][0]["name"], "lecture.mp3")
         self.assertGreater(result["results"][0]["match_count"], 0)
 
+    def test_search_sessions_respects_title(self):
+        """Sessions with a title set must display that title as their name."""
+        import json
+        import os
+
+        api = ElSbobinatorApi()
+        with (
+            tempfile.TemporaryDirectory() as session_root,
+            tempfile.TemporaryDirectory() as html_dir,
+        ):
+            session_dir = os.path.join(session_root, "biology_session")
+            os.makedirs(session_dir)
+
+            html_path = os.path.join(html_dir, "biology.html")
+            with open(html_path, "w", encoding="utf-8") as fh:
+                fh.write("<html><body><p>mitosi cellulare</p></body></html>")
+
+            session_data = {
+                "stage": "done",
+                "title": "Istologia Generale",
+                "input": {"path": "/audio/lecture.mp3"},
+                "outputs": {"html": html_path},
+            }
+            with open(
+                os.path.join(session_dir, "session.json"), "w", encoding="utf-8"
+            ) as fh:
+                json.dump(session_data, fh)
+
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                result = api.search_sessions("mitosi")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(len(result["results"]), 1)
+        self.assertEqual(result["results"][0]["name"], "Istologia Generale")
+
     def test_skips_non_done_session(self):
         """Sessions with stage != 'done' must not appear in results."""
         import json
@@ -2941,6 +2976,193 @@ class TestUpdateSessionInputPath(unittest.TestCase):
         self.assertNotIn("path_rel_to_session", updated["input"])
         self.assertNotIn("path_rel_to_html", updated["input"])
 
+    def test_update_preserves_document_title_when_relinking_different_audio(self):
+        import json
+        import os
+
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as session_root:
+            session_dir = os.path.join(session_root, "sess_biology")
+            os.makedirs(session_dir)
+            session_path = os.path.join(session_dir, "session.json")
+            html_path = os.path.join(session_dir, "cellule_staminali_Sbobina.html")
+            with open(html_path, "w", encoding="utf-8") as fh:
+                fh.write("<html><body>test</body></html>")
+            with open(session_path, "w", encoding="utf-8") as fh:
+                json.dump(
+                    {
+                        "input": {
+                            "path": "/old/cellule_staminali.mp3",
+                            "name": "cellule_staminali.mp3",
+                        },
+                        "outputs": {"html": html_path},
+                        "stage": "done",
+                    },
+                    fh,
+                )
+
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                result = api.update_session_input_path(
+                    session_dir, "/downloads/Statistica_Lezione_1.mp3"
+                )
+                sessions_result = api.get_completed_sessions(limit=0)
+
+            with open(session_path, encoding="utf-8") as fh:
+                updated = json.load(fh)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(updated["input"]["name"], "Statistica_Lezione_1.mp3")
+        self.assertEqual(updated["title"], "cellule_staminali")
+        self.assertTrue(sessions_result["ok"])
+        self.assertEqual(sessions_result["sessions"][0]["name"], "cellule_staminali")
+
+    def test_update_restores_html_title_if_previous_title_matched_old_audio_name(self):
+        import json
+        import os
+
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as session_root:
+            session_dir = os.path.join(session_root, "sess_biology")
+            os.makedirs(session_dir)
+            session_path = os.path.join(session_dir, "session.json")
+            html_path = os.path.join(session_dir, "cellule_staminali_Sbobina.html")
+            with open(html_path, "w", encoding="utf-8") as fh:
+                fh.write("<html><body>test</body></html>")
+            with open(session_path, "w", encoding="utf-8") as fh:
+                json.dump(
+                    {
+                        "title": "cellule_staminali.mp3",
+                        "input": {
+                            "path": "/old/cellule_staminali.mp3",
+                            "name": "cellule_staminali.mp3",
+                        },
+                        "outputs": {"html": html_path},
+                        "stage": "done",
+                    },
+                    fh,
+                )
+
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                result = api.update_session_input_path(
+                    session_dir, "/downloads/Statistica_Lezione_1.mp3"
+                )
+
+            with open(session_path, encoding="utf-8") as fh:
+                updated = json.load(fh)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(updated["input"]["name"], "Statistica_Lezione_1.mp3")
+        self.assertEqual(updated["title"], "cellule_staminali")
+
+
+class TestRemoveSessionAudio(unittest.TestCase):
+    """Tests for ElSbobinatorApi.remove_session_audio."""
+
+    def test_rejects_session_dir_outside_session_root(self):
+        api = ElSbobinatorApi()
+        with (
+            tempfile.TemporaryDirectory() as session_root,
+            tempfile.TemporaryDirectory() as outside_dir,
+        ):
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                result = api.remove_session_audio(outside_dir)
+
+        self.assertFalse(result["ok"])
+        self.assertIn("Percorso non valido", result["error"])
+
+    def test_rejects_missing_session_json(self):
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as session_root:
+            session_dir = os.path.join(session_root, "sess1")
+            os.makedirs(session_dir)
+
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                result = api.remove_session_audio(session_dir)
+
+        self.assertFalse(result["ok"])
+        self.assertIn("non trovato", result["error"])
+
+    def test_unlinks_audio_and_preserves_title(self):
+        import json
+        import os
+
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as session_root:
+            session_dir = os.path.join(session_root, "sess1")
+            os.makedirs(session_dir)
+            session_path = os.path.join(session_dir, "session.json")
+            html_path = os.path.join(session_dir, "anatomia_Sbobina.html")
+            with open(session_path, "w", encoding="utf-8") as fh:
+                json.dump(
+                    {
+                        "input": {
+                            "path": "/audio/anatomia.mp3",
+                            "name": "anatomia.mp3",
+                            "size": 5000,
+                            "path_rel_to_session": "../audio/anatomia.mp3",
+                            "path_rel_to_html": "../audio/anatomia.mp3",
+                        },
+                        "outputs": {"html": html_path},
+                        "stage": "done",
+                    },
+                    fh,
+                )
+
+            with api._sessions_cache_lock:
+                api._sessions_cache = {"sessions": []}
+            initial_gen = api._sessions_cache_gen
+
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                result = api.remove_session_audio(session_dir)
+
+            with open(session_path, encoding="utf-8") as fh:
+                updated = json.load(fh)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(updated["input"]["path"], "")
+        self.assertEqual(updated["input"]["name"], "")
+        self.assertEqual(updated["input"]["size"], 0)
+        self.assertNotIn("path_rel_to_session", updated["input"])
+        self.assertNotIn("path_rel_to_html", updated["input"])
+        self.assertEqual(updated["title"], "anatomia")
+        with api._sessions_cache_lock:
+            self.assertIsNone(api._sessions_cache)
+            self.assertEqual(api._sessions_cache_gen, initial_gen + 1)
+
+    def test_restores_html_title_if_audio_name_was_wrongly_assigned_as_title(self):
+        import json
+        import os
+
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as session_root:
+            session_dir = os.path.join(session_root, "sess_mismatch")
+            os.makedirs(session_dir)
+            session_path = os.path.join(session_dir, "session.json")
+            html_path = os.path.join(session_dir, "cellule_staminali_Sbobina.html")
+            with open(session_path, "w", encoding="utf-8") as fh:
+                json.dump(
+                    {
+                        "title": "Statistica_Lezione_1.mp3",
+                        "input": {
+                            "path": "/audio/Statistica_Lezione_1.mp3",
+                            "name": "Statistica_Lezione_1.mp3",
+                        },
+                        "outputs": {"html": html_path},
+                        "stage": "done",
+                    },
+                    fh,
+                )
+
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                result = api.remove_session_audio(session_dir)
+
+            with open(session_path, encoding="utf-8") as fh:
+                updated = json.load(fh)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(updated["input"]["path"], "")
+        self.assertEqual(updated["title"], "cellule_staminali")
+
 
 class TestStreamMediaFile(unittest.TestCase):
     """Tests for ElSbobinatorApi.stream_media_file."""
@@ -3064,6 +3286,64 @@ class TestStreamMediaFile(unittest.TestCase):
                 self.assertTrue(result["ok"])
                 self.assertEqual(result["url"], "http://127.0.0.1:8765/audio/rel")
                 mock_server.assert_called_once_with(os.path.realpath(audio_path))
+
+    def test_stream_media_file_returns_has_audio_false_when_session_has_no_audio(self):
+        import json
+        import os
+
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as session_root:
+            session_dir = os.path.join(session_root, "audio_less_session")
+            os.makedirs(session_dir)
+            session_data = {
+                "stage": "done",
+                "title": "Sbobina senza audio",
+                "input": {"path": "", "name": "", "size": 0},
+                "outputs": {"html": os.path.join(session_dir, "doc.html")},
+            }
+            with open(
+                os.path.join(session_dir, "session.json"), "w", encoding="utf-8"
+            ) as fh:
+                json.dump(session_data, fh)
+
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                result = api.stream_media_file("", session_dir)
+
+        self.assertFalse(result["ok"])
+        self.assertFalse(result.get("has_audio"))
+        self.assertIn("Nessun file audio", result.get("error", ""))
+
+    def test_stream_media_file_returns_has_audio_true_when_session_audio_missing(self):
+        import json
+        import os
+
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as session_root:
+            session_dir = os.path.join(session_root, "missing_audio_session")
+            os.makedirs(session_dir)
+            session_data = {
+                "stage": "done",
+                "title": "Sbobina con audio spostato",
+                "input": {"path": "/nonexistent/path/audio.mp3", "name": "audio.mp3"},
+                "outputs": {"html": os.path.join(session_dir, "doc.html")},
+            }
+            with open(
+                os.path.join(session_dir, "session.json"), "w", encoding="utf-8"
+            ) as fh:
+                json.dump(session_data, fh)
+
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                result = api.stream_media_file("", session_dir)
+                result_with_path = api.stream_media_file(
+                    "/nonexistent/path/audio.mp3", session_dir
+                )
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(result.get("has_audio"))
+        self.assertIn("Nessun file audio", result.get("error", ""))
+        self.assertFalse(result_with_path["ok"])
+        self.assertTrue(result_with_path.get("has_audio"))
+        self.assertIn("Nessun file audio", result_with_path.get("error", ""))
 
 
 class TestGetCompletedSessions(unittest.TestCase):

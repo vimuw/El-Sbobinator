@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AudioPlayer } from './AudioPlayer';
 
@@ -276,7 +276,10 @@ describe('AudioPlayer', () => {
     const onRelink = vi.fn().mockResolvedValue(undefined);
     render(<AudioPlayer src="/audio/test.mp3" onRelink={onRelink} />);
     await act(async () => {
-      fireEvent.click(screen.getByLabelText('Cambia audio collegato'));
+      fireEvent.click(screen.getByLabelText('Opzioni audio collegato'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Sostituisci file audio...'));
     });
     expect(onRelink).toHaveBeenCalledTimes(1);
   });
@@ -289,18 +292,27 @@ describe('AudioPlayer', () => {
     const onRelink = vi.fn().mockImplementation(() => onRelinkPromise);
     render(<AudioPlayer src="/audio/test.mp3" onRelink={onRelink} />);
 
-    const button = screen.getByLabelText('Cambia audio collegato') as HTMLButtonElement;
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Opzioni audio collegato'));
+    });
+    const item = screen.getByRole('button', { name: /Sostituisci file audio/i }) as HTMLButtonElement;
 
     // First click initiates the relink process
     await act(async () => {
-      fireEvent.click(button);
+      fireEvent.click(item);
     });
     expect(onRelink).toHaveBeenCalledTimes(1);
-    expect(button.disabled).toBe(true);
+
+    // Reopen menu while active
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Opzioni audio collegato'));
+    });
+    const item2 = screen.getByRole('button', { name: /Sostituisci file audio/i }) as HTMLButtonElement;
+    expect(item2.disabled).toBe(true);
 
     // Subsequent clicks should be guarded and ignored
     await act(async () => {
-      fireEvent.click(button);
+      fireEvent.click(item2);
     });
     expect(onRelink).toHaveBeenCalledTimes(1);
 
@@ -310,8 +322,8 @@ describe('AudioPlayer', () => {
       await onRelinkPromise;
     });
 
-    // After resolving, state should reset and the button should be enabled again
-    expect(button.disabled).toBe(false);
+    // After resolving, state should reset and the item should be enabled again
+    expect(item2.disabled).toBe(false);
   });
 
   it('guards against concurrent onRelink clicks even when the button disabled state is bypassed', async () => {
@@ -322,22 +334,31 @@ describe('AudioPlayer', () => {
     const onRelink = vi.fn().mockImplementation(() => onRelinkPromise);
     render(<AudioPlayer src="/audio/test.mp3" onRelink={onRelink} />);
 
-    const button = screen.getByLabelText('Cambia audio collegato') as HTMLButtonElement;
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Opzioni audio collegato'));
+    });
+    const item = screen.getByRole('button', { name: /Sostituisci file audio/i }) as HTMLButtonElement;
 
     // First click initiates the relink process
     await act(async () => {
-      fireEvent.click(button);
+      fireEvent.click(item);
     });
     expect(onRelink).toHaveBeenCalledTimes(1);
-    expect(button.disabled).toBe(true);
+
+    // Reopen menu while active
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Opzioni audio collegato'));
+    });
+    const item2 = screen.getByRole('button', { name: /Sostituisci file audio/i }) as HTMLButtonElement;
+    expect(item2.disabled).toBe(true);
 
     // Bypass disabled state by removing the disabled attribute manually
-    button.removeAttribute('disabled');
-    expect(button.disabled).toBe(false);
+    item2.removeAttribute('disabled');
+    expect(item2.disabled).toBe(false);
 
     // Subsequent clicks should still be ignored by the internal handler guard
     await act(async () => {
-      fireEvent.click(button);
+      fireEvent.click(item2);
     });
     expect(onRelink).toHaveBeenCalledTimes(1);
 
@@ -346,9 +367,6 @@ describe('AudioPlayer', () => {
       resolveRelink(true);
       await onRelinkPromise;
     });
-
-    // Wait for state update to complete
-    expect(button.disabled).toBe(false);
   });
 
   it('resets isRelinking state when onRelink throws an error / rejects', async () => {
@@ -360,14 +378,23 @@ describe('AudioPlayer', () => {
     const onRelink = vi.fn().mockImplementation(() => onRelinkPromise);
     render(<AudioPlayer src="/audio/test.mp3" onRelink={onRelink} />);
 
-    const button = screen.getByLabelText('Cambia audio collegato') as HTMLButtonElement;
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Opzioni audio collegato'));
+    });
+    const item = screen.getByRole('button', { name: /Sostituisci file audio/i }) as HTMLButtonElement;
 
     // First click initiates the relink process
     await act(async () => {
-      fireEvent.click(button);
+      fireEvent.click(item);
     });
     expect(onRelink).toHaveBeenCalledTimes(1);
-    expect(button.disabled).toBe(true);
+
+    // Reopen menu while active
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Opzioni audio collegato'));
+    });
+    const item2 = screen.getByRole('button', { name: /Sostituisci file audio/i }) as HTMLButtonElement;
+    expect(item2.disabled).toBe(true);
 
     // Reject the relink action to simulate an error
     await act(async () => {
@@ -376,8 +403,64 @@ describe('AudioPlayer', () => {
     });
 
     // Wait for the state update in finally block to complete
-    expect(button.disabled).toBe(false);
+    expect(item2.disabled).toBe(false);
     expect(consoleErrorSpy).toHaveBeenCalled();
     consoleErrorSpy.mockRestore();
+  });
+
+  it('opens audio options menu and calls onRemoveAudio when confirmed in modal', async () => {
+    const onRemoveAudio = vi.fn().mockResolvedValue(undefined);
+    render(<AudioPlayer src="/audio/test.mp3" onRemoveAudio={onRemoveAudio} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Opzioni audio collegato'));
+    });
+    expect(screen.getByText('Rimuovi audio collegato')).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Rimuovi audio collegato'));
+    });
+
+    expect(screen.getByText("Rimuovere l'audio collegato?")).toBeTruthy();
+    expect(screen.getByText(/L'audio verrà scollegato da questa sbobina/)).toBeTruthy();
+
+    const modal = screen.getByText("Rimuovere l'audio collegato?").closest('.modal-card') as HTMLElement;
+    const confirmBtn = within(modal).getByRole('button', { name: 'Rimuovi audio' });
+    await act(async () => {
+      fireEvent.click(confirmBtn);
+    });
+    expect(onRemoveAudio).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels removal when Annulla is clicked in modal', async () => {
+    const onRemoveAudio = vi.fn().mockResolvedValue(undefined);
+    render(<AudioPlayer src="/audio/test.mp3" onRemoveAudio={onRemoveAudio} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Opzioni audio collegato'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Rimuovi audio collegato'));
+    });
+
+    expect(screen.getByText("Rimuovere l'audio collegato?")).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Annulla' }));
+    });
+    expect(onRemoveAudio).not.toHaveBeenCalled();
+  });
+
+  it('calls onRelink from the options menu', async () => {
+    const onRelink = vi.fn().mockResolvedValue(true);
+    render(<AudioPlayer src="/audio/test.mp3" onRelink={onRelink} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Opzioni audio collegato'));
+    });
+    expect(screen.getByText('Sostituisci file audio...')).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByText('Sostituisci file audio...'));
+    });
+    expect(onRelink).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EditorFullPage } from './EditorFullPage';
 
@@ -262,5 +262,66 @@ describe('EditorFullPage autosave', () => {
     expect(typeof saveControllerRef.current?.flushPendingAutosave).toBe('function');
     expect(typeof saveControllerRef.current?.cancelPendingAutosave).toBe('function');
     expect(saveControllerRef.current?.getDirtyContent()).toBeNull();
+  });
+
+  it('renders Rimuovi audio button when audioRelinkNeeded is true and onRemoveAudio is provided', async () => {
+    const onRemoveAudio = vi.fn().mockResolvedValue(undefined);
+    render(
+      <EditorFullPage
+        {...baseProps}
+        audio={{
+          src: null,
+          relinkNeeded: true,
+          onRelink: vi.fn(),
+          onRemoveAudio,
+          init: {},
+          onStateChange: vi.fn(),
+        }}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Audio non trovato')).toBeTruthy();
+    const removeBtn = screen.getByText('Rimuovi audio');
+    expect(removeBtn).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(removeBtn);
+    });
+    expect(screen.getByText("Rimuovere l'audio mancante?")).toBeTruthy();
+
+    const modal = screen.getByText("Rimuovere l'audio mancante?").closest('.modal-card') as HTMLElement;
+    const confirmBtn = within(modal).getByRole('button', { name: 'Rimuovi audio' });
+    await act(async () => {
+      fireEvent.click(confirmBtn);
+    });
+    expect(onRemoveAudio).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders empty audio bar with "Nessun audio collegato" and "Aggiungi audio" button when no audio is present', async () => {
+    const onRelink = vi.fn().mockResolvedValue(true);
+    render(
+      <EditorFullPage
+        {...baseProps}
+        audio={{
+          src: null,
+          relinkNeeded: false,
+          onRelink,
+          init: {},
+          onStateChange: vi.fn(),
+        }}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Nessun audio collegato')).toBeTruthy();
+    expect(screen.getByText('Collega un file audio per sincronizzarlo con la sbobina.')).toBeTruthy();
+    const addBtn = screen.getByRole('button', { name: /Aggiungi audio/i });
+    expect(addBtn).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(addBtn);
+    });
+    expect(onRelink).toHaveBeenCalledTimes(1);
   });
 });

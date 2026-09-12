@@ -463,7 +463,10 @@ def _export_html_and_finish(
     try:
         _update_session(
             session,
-            {"outputs": {**session.get("outputs", {}), "html": html_path}},
+            {
+                "title": _title,
+                "outputs": {**session.get("outputs", {}), "html": html_path},
+            },
         )
         mark_html_exported(session)
         save_session()

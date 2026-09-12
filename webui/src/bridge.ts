@@ -181,7 +181,7 @@ export interface PywebviewApi {
   read_html_content?: (path: string) => Promise<{ ok: boolean; content?: string; error?: string }>;
   save_html_content?: (path: string, content: string, generation?: number) => Promise<SaveHtmlResult>;
   create_collaboration_backup?: (path: string) => Promise<{ ok: boolean; backup_path?: string; error?: string }>;
-  stream_media_file?: (path: string, sessionDir?: string) => Promise<{ ok: boolean; url?: string; error?: string }>;
+  stream_media_file?: (path: string, sessionDir?: string) => Promise<{ ok: boolean; url?: string; has_audio?: boolean; error?: string }>;
   show_notification?: (title: string, message: string) => Promise<void>;
   flash_window?: () => Promise<{ ok: boolean; error?: string }>;
   validate_environment?: (
@@ -196,6 +196,7 @@ export interface PywebviewApi {
   get_completed_sessions?: (limit?: number) => Promise<{ ok: boolean; sessions?: ArchiveSession[]; total?: number; error?: string }>;
   delete_session?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;
   update_session_input_path?: (sessionDir: string, newPath: string) => Promise<{ ok: boolean; error?: string }>;
+  remove_session_audio?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;
   touch_session_opened?: (sessionDir: string) => Promise<{ ok: boolean; last_opened_at_iso?: string; error?: string }>;
   open_session_folder?: () => Promise<{ ok: boolean; error?: string }>;
   ask_session_folder?: () => Promise<{ ok: boolean; path?: string; cancelled?: boolean; error?: string }>;

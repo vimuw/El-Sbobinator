@@ -259,7 +259,7 @@ export default function App() {
     refreshArchiveSessions,
   });
 
-  const { preview, openPreview, openSharedSession, closePreview, relinkPreviewAudio, handleAudioStateChange, handleScrollTopChange, handleCollaborationStateChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
+  const { preview, openPreview, openSharedSession, closePreview, relinkPreviewAudio, removePreviewAudio, handleAudioStateChange, handleScrollTopChange, handleCollaborationStateChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
 
   const {
     regeneratePrompt,
@@ -348,6 +348,28 @@ export default function App() {
     const res = await window.pywebview.api.open_file(path);
     if (res && !res.ok) appendConsole(`❌ Impossibile aprire il file: ${res.error ?? path}`);
   }, [appendConsole]);
+
+  const handleRemoveSessionAudio = useCallback(async (sessionDir: string) => {
+    if (!window.pywebview?.api?.remove_session_audio) return;
+    try {
+      const res = await window.pywebview.api.remove_session_audio(sessionDir);
+      if (res?.ok) {
+        dispatch({
+          type: 'queue/update_source',
+          sessionDir,
+          path: '',
+          name: '',
+          size: 0,
+        });
+        await refreshArchiveSessions();
+        addNotification('Audio rimosso', 'Il collegamento audio è stato rimosso dalla sbobina.', 'success', 'system');
+      } else {
+        addNotification('Errore', res?.error || 'Impossibile rimuovere il collegamento audio.', 'error', 'system');
+      }
+    } catch (e) {
+      addNotification('Errore', String(e), 'error', 'system');
+    }
+  }, [addNotification, dispatch, refreshArchiveSessions]);
 
   useQueuePersistence(files, structuralVersion, dispatch, appendConsole);
   useBridgeCallbacks({
@@ -508,6 +530,7 @@ export default function App() {
                     onLoadAll={handleLoadAll}
                     onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
                     onNotification={addNotification}
+                    onRemoveSessionAudio={handleRemoveSessionAudio}
                   />
                 </React.Suspense>
               </div>
@@ -605,6 +628,7 @@ export default function App() {
               src: preview.audioSrc,
               relinkNeeded: preview.audioRelinkNeeded,
               onRelink: relinkPreviewAudio,
+              onRemoveAudio: removePreviewAudio,
               init: preview.initAudio,
               onStateChange: handleAudioStateChange,
             }}

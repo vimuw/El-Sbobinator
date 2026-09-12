@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Keyboard, Link, Pause, Play, RotateCcw, SkipBack, SkipForward, Volume2 } from 'lucide-react';
+import { ChevronDown, Keyboard, Link, Pause, Play, RefreshCw, RotateCcw, SkipBack, SkipForward, Unlink, Volume2 } from 'lucide-react';
+import { ConfirmActionModal } from './modals/ConfirmActionModal';
 
 interface AudioPlayerProps {
   src: string;
@@ -9,6 +10,7 @@ interface AudioPlayerProps {
   initialVolume?: number;
   onStateChange?: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
   onRelink?: () => Promise<boolean | undefined>;
+  onRemoveAudio?: () => Promise<boolean | undefined> | void;
 }
 
 const PLAYBACK_RATES = [1, 1.25, 1.5, 1.75, 2, 2.5, 3];
@@ -28,7 +30,7 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
   return role !== null && INTERACTIVE_ARIA_ROLES.has(role);
 };
 
-export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolume, onStateChange, onRelink }: AudioPlayerProps) {
+export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolume, onStateChange, onRelink, onRemoveAudio }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -41,6 +43,9 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
   const speedBtnRef = useRef<HTMLButtonElement>(null);
   const speedPanelRef = useRef<HTMLDivElement>(null);
   const [isRelinking, setIsRelinking] = useState(false);
+  const [showAudioMenu, setShowAudioMenu] = useState(false);
+  const [showConfirmRemove, setShowConfirmRemove] = useState(false);
+  const audioMenuRef = useRef<HTMLDivElement>(null);
   const shortcutsRef = useRef<HTMLDivElement>(null);
   const pendingInitialTimeRef = useRef<number | null>(initialTime ?? null);
   const playbackRateRef = useRef(initialPlaybackRate ?? 1);
@@ -163,6 +168,17 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
     return () => document.removeEventListener('pointerdown', handler);
   }, [showShortcuts]);
 
+  useEffect(() => {
+    if (!showAudioMenu) return;
+    const handler = (e: PointerEvent) => {
+      if (audioMenuRef.current && !audioMenuRef.current.contains(e.target as Node)) {
+        setShowAudioMenu(false);
+      }
+    };
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
+  }, [showAudioMenu]);
+
   const toggleSpeedOpen = () => {
     if (!isSpeedOpen && speedBtnRef.current) {
       const rect = speedBtnRef.current.getBoundingClientRect();
@@ -283,6 +299,24 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
       console.error('Failed to relink audio:', e);
     } finally {
       setIsRelinking(false);
+    }
+  };
+
+  const [isRemovingAudio, setIsRemovingAudio] = useState(false);
+
+  const handleRemoveAudio = async () => {
+    if (isRemovingAudio) return;
+    setIsRemovingAudio(true);
+    try {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      }
+      await onRemoveAudio?.();
+    } catch (e) {
+      console.error('Failed to remove audio:', e);
+    } finally {
+      setIsRemovingAudio(false);
     }
   };
 
@@ -461,19 +495,74 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
             </div>
           )}
         </div>
-        {onRelink && (
-          <button
-            type="button"
-            onClick={handleRelink}
-            disabled={isRelinking}
-            className="player-control"
-            aria-label="Cambia audio collegato"
-            title="Cambia audio collegato"
-          >
-            <Link className="h-3.5 w-3.5" />
-          </button>
+        {(onRelink || onRemoveAudio) && (
+          <div className="relative" ref={audioMenuRef}>
+            <button
+              type="button"
+              className={`player-control ${showAudioMenu ? 'is-active' : ''}`}
+              aria-label="Opzioni audio collegato"
+              title="Opzioni audio"
+              onClick={() => setShowAudioMenu(v => !v)}
+            >
+              <Link className="h-3.5 w-3.5" />
+            </button>
+            {showAudioMenu && (
+              <div
+                className="absolute bottom-full right-0 mb-2 z-50 rounded-lg border p-1 text-xs min-w-[200px]"
+                style={{
+                  background: 'var(--bg-elevated)',
+                  borderColor: 'var(--border-subtle)',
+                  boxShadow: 'var(--shadow-strong)',
+                }}
+              >
+                {onRelink && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAudioMenu(false);
+                      void handleRelink();
+                    }}
+                    disabled={isRelinking}
+                    className="kebab-item text-xs"
+                    style={{ padding: '6px 10px', fontSize: '13px' }}
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+                    <span>Sostituisci file audio...</span>
+                  </button>
+                )}
+                {onRemoveAudio && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAudioMenu(false);
+                      setShowConfirmRemove(true);
+                    }}
+                    disabled={isRemovingAudio}
+                    className="kebab-item is-danger text-xs"
+                    style={{ padding: '6px 10px', fontSize: '13px' }}
+                  >
+                    <Unlink className="w-3.5 h-3.5 shrink-0" />
+                    <span>Rimuovi audio collegato</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </div>
+
+      <ConfirmActionModal
+        isOpen={showConfirmRemove}
+        title="Rimuovere l'audio collegato?"
+        description="L'audio verrà scollegato da questa sbobina. Il file originale sul tuo computer non verrà cancellato."
+        confirmLabel={isRemovingAudio ? 'Rimozione...' : 'Rimuovi audio'}
+        cancelLabel="Annulla"
+        onClose={() => setShowConfirmRemove(false)}
+        onConfirm={async () => {
+          setShowConfirmRemove(false);
+          await handleRemoveAudio();
+        }}
+      />
     </div>
   );
 }
