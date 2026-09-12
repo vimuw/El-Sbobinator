@@ -144,7 +144,7 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
   }
   ```
 - `FileDescriptor` — TS equivalent in `webui/src/appState.ts`. Same shape minus `id` being optional on intake.
-- `ValidationResult` — `{ok, summary, checks: ValidationCheck[]}`. Checks look like `{id, label, status: "ok"|"warning"|"error", message, details?}`.
+- `ValidationResult` — `{ok, summary, checks: ValidationCheck[], has_warnings?: bool}`. Checks look like `{id, label, status: "ok"|"warning"|"error", message, details?}`.
 - `ArchiveSession` — `{name, completed_at_iso, html_path, effective_model, input_path, session_dir}`.
 - `ModelOption` — `{id, label, summary, default_chunk_minutes, phase1_temperature?}`.
 

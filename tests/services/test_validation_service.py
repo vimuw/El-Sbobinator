@@ -509,6 +509,53 @@ class TestValidationKeyringCheck(unittest.TestCase):
         self.assertNotIn(fake_key, report)
         self.assertIn("AIzaSy...2345", report)
 
+    @patch(
+        "el_sbobinator.services.validation_service.get_session_root",
+        return_value=".",
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.resolve_ffmpeg",
+        return_value="ffmpeg.exe",
+    )
+    def test_validate_environment_with_missing_api_key_returns_warning_summary(
+        self, *_mocks
+    ):
+        result = validate_environment(
+            api_key="",
+            validate_api_key=True,
+        )
+        self.assertTrue(result["ok"])
+        self.assertTrue(result.get("has_warnings"))
+        self.assertEqual(
+            result["summary"],
+            "Ambiente pronto con avvisi: verifica le segnalazioni.",
+        )
+        api_check = next(c for c in result["checks"] if c["id"] == "api_key")
+        self.assertEqual(api_check["status"], "warning")
+        self.assertEqual(
+            api_check["message"], "API key assente: controllo remoto saltato."
+        )
+
+    @patch(
+        "el_sbobinator.services.validation_service.get_session_root",
+        return_value=".",
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.resolve_ffmpeg",
+        return_value="ffmpeg.exe",
+    )
+    @patch("google.genai.Client", _AlwaysOkClient)
+    def test_validate_environment_all_ok_has_no_warnings(self, *_mocks):
+        result = validate_environment(
+            api_key="fake",
+            validate_api_key=True,
+            preferred_model="gemini-2.5-flash",
+            fallback_models=[],
+        )
+        self.assertTrue(result["ok"])
+        self.assertFalse(result.get("has_warnings"))
+        self.assertEqual(result["summary"], "Ambiente pronto.")
+
 
 if __name__ == "__main__":
     unittest.main()

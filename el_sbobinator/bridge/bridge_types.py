@@ -84,6 +84,7 @@ class ValidationResult(TypedDict):
     ok: bool
     summary: str
     checks: list[ValidationCheck]
+    has_warnings: NotRequired[bool]
 
 
 class UpdateDownloadProgressPayload(TypedDict):

@@ -309,13 +309,21 @@ def validate_environment(
             }
         )
 
-    ok = all(check["status"] != "error" for check in checks)
-    summary = (
-        "Ambiente pronto."
-        if ok
-        else "Ambiente incompleto: correggi gli errori segnalati."
-    )
-    return {"ok": ok, "summary": summary, "checks": checks}
+    has_errors = any(check["status"] == "error" for check in checks)
+    has_warnings = any(check["status"] == "warning" for check in checks)
+    ok = not has_errors
+    if has_errors:
+        summary = "Ambiente incompleto: correggi gli errori segnalati."
+    elif has_warnings:
+        summary = "Ambiente pronto con avvisi: verifica le segnalazioni."
+    else:
+        summary = "Ambiente pronto."
+    return {
+        "ok": ok,
+        "summary": summary,
+        "checks": checks,
+        "has_warnings": has_warnings,
+    }
 
 
 def get_recent_log_tail(max_lines: int = 40) -> list[str]:
@@ -384,9 +392,13 @@ def generate_diagnostic_report(
 
     lines.append("")
     lines.append("## 🔍 Esito Controlli di Sistema")
-    lines.append(
-        f"**Stato Generale**: {'✅ PRONTO' if val_result['ok'] else '⚠️ DA RISOLVERE'} ({val_result['summary']})"
-    )
+    if not val_result["ok"]:
+        general_status = "❌ DA RISOLVERE"
+    elif val_result.get("has_warnings"):
+        general_status = "⚠️ CON AVVISI"
+    else:
+        general_status = "✅ PRONTO"
+    lines.append(f"**Stato Generale**: {general_status} ({val_result['summary']})")
     lines.append("")
     for check in val_result["checks"]:
         icon = (

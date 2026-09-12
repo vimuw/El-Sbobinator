@@ -22,6 +22,7 @@ export interface ValidationResult {
   ok: boolean;
   summary: string;
   checks: ValidationCheck[];
+  has_warnings?: boolean;
 }
 
 export interface ModelQuota {
