@@ -91,24 +91,24 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         onClick={() => setIsOpen(prev => !prev)}
-        className="w-full flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border-default)] hover:border-[var(--accent-bg)] text-left text-sm font-medium transition-all duration-180 focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)] disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full flex items-center justify-between gap-3 px-3.5 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--border-strong)] hover:border-[var(--accent-bg)] text-left text-sm font-semibold transition-all duration-180 focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)] disabled:opacity-50 disabled:cursor-not-allowed min-h-[40px]"
       >
-        <span className="truncate text-sm text-[var(--text-primary)]">
+        <span className="truncate text-sm text-[var(--text-primary)] font-semibold">
           {selectedOption ? (
             <>
               {selectedOption.label}
               {selectedOption.sublabel && (
-                <span className="text-xs text-[var(--text-muted)] font-normal ml-1.5 opacity-80">
+                <span className="text-xs text-[var(--text-secondary)] font-normal ml-1.5">
                   ({selectedOption.sublabel})
                 </span>
               )}
             </>
           ) : (
-            <span className="text-[var(--text-muted)] font-normal">{placeholder}</span>
+            <span className="text-[var(--text-secondary)] font-normal">{placeholder}</span>
           )}
         </span>
         <ChevronDown
-          className={`w-4 h-4 text-[var(--text-muted)] shrink-0 transition-transform duration-200 ${
+          className={`w-4 h-4 text-[var(--text-secondary)] shrink-0 transition-transform duration-200 ${
             isOpen ? 'rotate-180 text-[var(--accent-text)]' : ''
           }`}
         />
@@ -118,7 +118,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
       {isOpen && (
         <div
           role="listbox"
-          className="select-dropdown absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl bg-[var(--bg-panel)] border border-[var(--border-subtle)] overflow-hidden py-1 max-h-60 overflow-y-auto app-scroll"
+          className="select-dropdown absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-default)] overflow-hidden py-1 max-h-60 overflow-y-auto app-scroll"
         >
           {options.map(opt => {
             const isSelected = opt.value === value;
@@ -135,18 +135,18 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
                     setIsOpen(false);
                   }
                 }}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 text-sm text-left transition-all duration-140 ${
+                className={`w-full flex items-center justify-between px-3.5 py-2 text-sm text-left transition-all duration-140 ${
                   opt.disabled
-                    ? 'opacity-40 cursor-not-allowed text-[var(--text-muted)]'
+                    ? 'opacity-50 cursor-not-allowed text-[var(--text-secondary)] line-through decoration-[var(--border-strong)]'
                     : isSelected
-                    ? 'bg-[var(--accent-subtle)] text-[var(--accent-text)] font-semibold'
-                    : 'text-[var(--text-primary)] hover:bg-[var(--sidebar-active-bg)] hover:translate-x-0.5'
+                    ? 'bg-[var(--accent-subtle)] text-[var(--accent-text)] font-bold'
+                    : 'text-[var(--text-primary)] font-medium hover:bg-[var(--bg-hover)]'
                 }`}
               >
                 <div className="truncate pr-2">
                   <span>{opt.label}</span>
                   {opt.sublabel && (
-                    <span className="text-xs text-[var(--text-muted)] font-normal ml-1.5 opacity-80">
+                    <span className="text-xs text-[var(--text-secondary)] font-normal ml-1.5">
                       ({opt.sublabel})
                     </span>
                   )}

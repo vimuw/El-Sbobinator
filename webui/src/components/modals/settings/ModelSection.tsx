@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback } from 'react';
-import { Cpu, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { Cpu, Trash2, ArrowUp, ArrowDown, ChevronRight } from 'lucide-react';
 import type { ModelOption } from '../../../bridge';
 import { CustomSelect } from './CustomSelect';
 
@@ -23,13 +23,11 @@ export const ModelSection: React.FC<ModelSectionProps> = React.memo(({
     [availableModels, preferredModel],
   );
   const primaryModelSummary = primaryModel?.summary;
-  const defaultChunkMinutes = primaryModel?.default_chunk_minutes ?? '—';
-  const defaultTemperature = primaryModel?.phase1_temperature ?? '—';
 
   const handlePrimaryModelChange = useCallback((nextPrimary: string) => {
     setPreferredModel(nextPrimary);
-    setFallbackModels(fallbackModels.filter(modelId => modelId !== nextPrimary));
-  }, [fallbackModels, setPreferredModel, setFallbackModels]);
+    setFallbackModels(prev => prev.filter(modelId => modelId !== nextPrimary));
+  }, [setPreferredModel, setFallbackModels]);
 
   const handleAddFallbackModel = useCallback((nextFallback: string) => {
     if (!nextFallback || nextFallback === preferredModel || fallbackModels.includes(nextFallback)) return;
@@ -72,22 +70,12 @@ export const ModelSection: React.FC<ModelSectionProps> = React.memo(({
   );
 
   return (
-    <div className="p-4 sm:p-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] space-y-4">
-      {/* Header */}
+    <div className="space-y-3">
+      {/* Primary Model Field */}
       <div className="space-y-1.5">
-        <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+        <label className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
           <Cpu className="w-4 h-4 text-[var(--accent-text)]" />
-          Selezione Modello Gemini
-        </h3>
-        <p className="text-xs text-[var(--text-muted)]">
-          Scegli il modello primario per l&apos;elaborazione delle sbobinature e configura i modelli di riserva.
-        </p>
-      </div>
-
-      {/* Primary Model */}
-      <div className="space-y-2">
-        <label className="text-xs font-semibold text-[var(--text-primary)] block">
-          Modello Primario
+          <span>Modello di Trascrizione (Primario)</span>
         </label>
         <CustomSelect
           value={preferredModel}
@@ -96,90 +84,93 @@ export const ModelSection: React.FC<ModelSectionProps> = React.memo(({
         />
 
         {primaryModelSummary && (
-          <p className="text-xs text-[var(--text-muted)] italic">{primaryModelSummary}</p>
+          <p className="text-xs text-[var(--text-secondary)] italic">{primaryModelSummary}</p>
         )}
 
-        {/* Small discreet parameters */}
-        <div className="flex items-center gap-3 text-[11px] text-[var(--text-muted)] pt-1">
-          <span>Durata blocco: <span className="font-medium text-[var(--text-secondary)]">{defaultChunkMinutes} min</span></span>
-          <span>•</span>
-          <span>Temperatura fase 1: <span className="font-medium text-[var(--text-secondary)]">{defaultTemperature}</span></span>
+      </div>
+
+      {/* Fallback Models List - Collapsible disclosure toggle, collapsed by default */}
+      <details className="group/model pt-0.5 text-sm">
+        <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-center justify-between text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors min-h-[28px] py-1 select-none">
+          <span className="font-semibold flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+            <ChevronRight className="w-4 h-4 transition-transform duration-200 group-open/model:rotate-90 text-[var(--text-secondary)]" />
+            <span>Opzioni avanzate: Modelli di riserva (Fallback)</span>
+            {fallbackModels.length > 0 && (
+              <span className="ml-1.5 px-1.5 h-5 inline-flex items-center justify-center rounded-full bg-[var(--bg-surface)] border border-[var(--border-default)] text-[11px] font-mono font-bold text-[var(--text-secondary)] leading-none">
+                {fallbackModels.length}
+              </span>
+            )}
+          </span>
+        </summary>
+
+        <div className="mt-2 pl-5 space-y-2.5">
+          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+            Se il modello primario fallisce, il sistema tenterà automaticamente i modelli di riserva in questo ordine.
+          </p>
+
+          {availableFallbackOptions.length > 0 && (
+            <div>
+              <CustomSelect
+                value=""
+                onChange={handleAddFallbackModel}
+                options={fallbackSelectOptions}
+                placeholder="Aggiungi modello di riserva..."
+              />
+            </div>
+          )}
+
+          {fallbackModels.length > 0 && (
+            <div className="space-y-1.5">
+              {fallbackModels.map((modelId, index) => {
+                const modelObj = availableModels.find(m => m.id === modelId);
+                return (
+                  <div
+                    key={modelId}
+                    className="flex items-center justify-between p-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] text-sm"
+                  >
+                    <div className="min-w-0 pr-2">
+                      <span className="font-semibold text-sm text-[var(--text-primary)] block truncate">
+                        {index + 1}. {modelObj?.label || modelId}
+                      </span>
+                      {modelObj?.summary && (
+                        <p className="text-xs text-[var(--text-secondary)] truncate">{modelObj.summary}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => moveFallbackModel(index, -1)}
+                        disabled={index === 0}
+                        className="p-1 hover:bg-[var(--bg-hover)] rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-30 transition-colors cursor-pointer"
+                        title="Sposta su"
+                      >
+                        <ArrowUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveFallbackModel(index, 1)}
+                        disabled={index === fallbackModels.length - 1}
+                        className="p-1 hover:bg-[var(--bg-hover)] rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-30 transition-colors cursor-pointer"
+                        title="Sposta giù"
+                      >
+                        <ArrowDown className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeFallbackModel(modelId)}
+                        className="p-1 hover:bg-[var(--error-subtle)] rounded text-[var(--error-text)] transition-colors cursor-pointer"
+                        title="Rimuovi fallback"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
-      </div>
-
-      {/* Fallback Models List */}
-      <div className="space-y-3 pt-3 border-t border-[var(--border-subtle)]">
-        <label className="text-xs font-semibold text-[var(--text-primary)] block">
-          Modelli di Riserva (Fallback Order)
-        </label>
-        <p className="text-xs text-[var(--text-muted)]">
-          Se il modello primario fallisce o esaurisce la quota, il sistema tenterà automaticamente i modelli di riserva in questo ordine.
-        </p>
-
-        {fallbackModels.length > 0 ? (
-          <div className="space-y-2">
-            {fallbackModels.map((modelId, index) => {
-              const modelObj = availableModels.find(m => m.id === modelId);
-              return (
-                <div
-                  key={modelId}
-                  className="flex items-center justify-between p-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border-subtle)] text-xs"
-                >
-                  <div>
-                    <span className="font-semibold text-[var(--text-primary)] block">
-                      {index + 1}. {modelObj?.label || modelId}
-                    </span>
-                    {modelObj?.summary && (
-                      <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{modelObj.summary}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => moveFallbackModel(index, -1)}
-                      disabled={index === 0}
-                      className="p-1.5 hover:bg-[var(--sidebar-active-bg)] rounded-lg disabled:opacity-30 transition-colors"
-                      title="Sposta su"
-                    >
-                      <ArrowUp className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moveFallbackModel(index, 1)}
-                      disabled={index === fallbackModels.length - 1}
-                      className="p-1.5 hover:bg-[var(--sidebar-active-bg)] rounded-lg disabled:opacity-30 transition-colors"
-                      title="Sposta giù"
-                    >
-                      <ArrowDown className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeFallbackModel(modelId)}
-                      className="p-1.5 hover:bg-[var(--error-subtle)] rounded-lg text-[var(--error-text)] transition-colors"
-                      title="Rimuovi fallback"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="text-xs text-[var(--text-muted)] italic">Nessun modello di riserva configurato.</p>
-        )}
-
-        {availableFallbackOptions.length > 0 && (
-          <div className="flex gap-2">
-            <CustomSelect
-              value=""
-              onChange={handleAddFallbackModel}
-              options={fallbackSelectOptions}
-              placeholder="Aggiungi modello di riserva..."
-            />
-          </div>
-        )}
-      </div>
+      </details>
     </div>
   );
 });

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowDownToLine, CheckCircle, RefreshCw, Tag, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowDownToLine, CheckCircle2, RefreshCw, Tag, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
 import { APP_VERSION, GITHUB_RELEASES_URL } from '../../../branding';
 
 export interface SettingsUpdateInstallState {
@@ -56,44 +56,54 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
   const isInProgress = isDownloading || isVerifying || isInstalling;
 
   return (
-    <div className="p-4 sm:p-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] space-y-4">
-      {/* Header row: Version Info & Check Icon Button */}
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+    <div className="space-y-3">
+      {/* Header row: Version Info & Check Button */}
+      <div className="flex items-center justify-between gap-4 py-0.5">
+        <div className="space-y-0.5 min-w-0">
+          <span className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
             <Tag className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-            Versione Applicazione
-          </h3>
-
-          <button
-            type="button"
-            onClick={() => checkForUpdates(true)}
-            disabled={isCheckingUpdate || isInProgress}
-            aria-label="Cerca aggiornamenti"
-            title={isCheckingUpdate ? 'Controllo in corso…' : 'Cerca aggiornamenti'}
-            className="p-1.5 rounded-lg hover:bg-[var(--sidebar-active-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 group/check shrink-0"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 transition-transform duration-500 ease-out ${isCheckingUpdate ? 'animate-spin text-[var(--accent-text)]' : 'group-hover/check:rotate-180 group-hover/check:scale-105'}`} />
-          </button>
+            <span>Versione applicazione</span>
+          </span>
+          <p className="text-xs text-[var(--text-secondary)]">
+            Installata:{' '}
+            <span className="font-mono font-bold text-[var(--text-primary)]">{cleanAppVersion}</span>
+            {!isUpdateAvailable && (
+              <a
+                href={GITHUB_RELEASES_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-2 hover:underline text-[var(--accent-text)] font-semibold inline-flex items-center gap-0.5"
+              >
+                Note di rilascio ↗
+              </a>
+            )}
+          </p>
         </div>
 
-        <p className="text-xs text-[var(--text-muted)]">
-          Versione corrente: <span className="font-mono font-medium text-[var(--text-secondary)]">{cleanAppVersion}</span>
-        </p>
+        <button
+          type="button"
+          onClick={() => checkForUpdates(true)}
+          disabled={isCheckingUpdate || isInProgress}
+          aria-label="Cerca aggiornamenti"
+          title={isCheckingUpdate ? 'Controllo in corso…' : 'Cerca aggiornamenti'}
+          className="p-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 shrink-0 cursor-pointer"
+        >
+          <RefreshCw className={`w-4 h-4 transition-transform duration-500 ease-out ${isCheckingUpdate ? 'animate-spin text-[var(--accent-text)]' : ''}`} />
+        </button>
       </div>
 
       {/* Update Available Banner Card */}
       {isUpdateAvailable && !isDone && (
-        <div className="p-3.5 rounded-xl bg-[var(--accent-subtle)] border border-[var(--accent-ring)] space-y-3">
+        <div className="p-3.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] space-y-3">
           {/* Top/Inline Content */}
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[var(--accent-bg)] text-white tracking-wide uppercase shrink-0">
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)] tracking-wide uppercase shrink-0">
                   Nuovo
                 </span>
-                <span className="text-xs font-semibold text-[var(--text-primary)]">
-                  Disponibile: <span className="font-mono text-[var(--accent-text)]">{cleanLatestVersion}</span>
+                <span className="text-xs text-[var(--text-secondary)]">
+                  Disponibile: <span className="font-mono font-bold text-[var(--text-primary)]">{cleanLatestVersion}</span>
                 </span>
               </div>
               <div>
@@ -101,10 +111,10 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
                   href={GITHUB_RELEASES_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[11px] font-medium text-[var(--accent-text)] hover:underline inline-flex items-center gap-1 opacity-90 hover:opacity-100 transition-opacity"
+                  className="text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--accent-text)] hover:underline inline-flex items-center gap-1 transition-colors"
                 >
                   Note di rilascio su GitHub
-                  <ExternalLink className="w-3 h-3" />
+                  <ExternalLink className="w-3.5 h-3.5" />
                 </a>
               </div>
             </div>
@@ -113,9 +123,9 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
             {!isInProgress && onInstallUpdate && (
               <button
                 type="button"
-                onClick={() => { void onInstallUpdate(latestVersion!).catch(() => {}); }}
+                onClick={() => { void Promise.resolve(onInstallUpdate(latestVersion!)).catch(() => {}); }}
                 aria-label="Installa aggiornamento"
-                className="modal-action-button is-primary is-compact cursor-pointer shrink-0 font-semibold"
+                className="premium-button compact-button cursor-pointer shrink-0 font-bold text-xs flex items-center gap-1.5"
               >
                 <ArrowDownToLine className="w-3.5 h-3.5" />
                 Aggiorna
@@ -132,18 +142,18 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
                 const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : (updateInstallState?.percent ?? 0);
                 return (
                   <>
-                    <div className="w-full h-1.5 rounded-full bg-[var(--bg-surface)] overflow-hidden">
+                    <div className="w-full h-1.5 rounded-full bg-[var(--bg-panel)] border border-[var(--border-subtle)] overflow-hidden">
                       <div
                         className="h-full bg-[var(--accent-bg)] rounded-full transition-all duration-200"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
-                      <span className="flex items-center gap-1.5 font-medium text-[var(--text-secondary)]">
-                        <Loader2 className="w-3 h-3 animate-spin text-[var(--accent-text)]" />
+                    <div className="flex items-center justify-between text-xs text-[var(--text-secondary)]">
+                      <span className="flex items-center gap-1.5 font-bold text-[var(--text-primary)]">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent-text)]" />
                         Download aggiornamento…
                       </span>
-                      <span className="font-mono">{total > 0 ? `${formatBytes(done)} / ${formatBytes(total)} (${pct}%)` : `${pct}%`}</span>
+                      <span className="font-mono font-medium">{total > 0 ? `${formatBytes(done)} / ${formatBytes(total)} (${pct}%)` : `${pct}%`}</span>
                     </div>
                   </>
                 );
@@ -152,7 +162,7 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
           )}
 
           {(isVerifying || isInstalling) && (
-            <div className="flex items-center gap-2 text-xs font-medium text-[var(--text-primary)] pt-1">
+            <div className="flex items-center gap-2 text-xs font-bold text-[var(--text-primary)] pt-1">
               <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-text)]" />
               <span>{isVerifying ? 'Verifica integrità aggiornamento…' : 'Installazione aggiornamento…'}</span>
             </div>
@@ -162,15 +172,15 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
 
       {/* Done / Installer Launched Banner */}
       {isDone && (
-        <div className="p-3 rounded-xl bg-[var(--success-subtle)] border border-[var(--success-ring)] text-xs text-[var(--success-text)] flex items-center gap-2 font-medium">
-          <CheckCircle className="w-4 h-4 shrink-0" />
+        <div className="alert-card is-success text-xs flex-row items-center gap-2 p-3 font-bold animate-fade-in">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
           <span>Installer avviato. Segui le istruzioni a schermo.</span>
         </div>
       )}
 
       {/* Error Banner */}
       {(isError || (hasChecked && checkFailed && !isCheckingUpdate)) && (
-        <div className="p-3 rounded-xl bg-[var(--error-subtle)] border border-[var(--error-ring)] text-xs text-[var(--error-text)] flex items-center gap-2 font-medium">
+        <div className="alert-card is-error text-xs flex-row items-center gap-2 p-3 font-bold animate-fade-in">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{updateInstallState?.error || (checkFailed ? 'Verifica aggiornamenti non riuscita.' : 'Aggiornamento non riuscito.')}</span>
         </div>
@@ -178,24 +188,9 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
 
       {/* Up to date Banner */}
       {hasChecked && !isCheckingUpdate && !isUpdateAvailable && !checkFailed && !isError && !isDone && (
-        <div className="flex items-center gap-1.5 text-xs text-[var(--success-text)] font-medium">
-          <CheckCircle className="w-4 h-4 shrink-0" />
-          <span>✓ Sei aggiornato alla versione più recente.</span>
-        </div>
-      )}
-
-      {/* Fallback GitHub link if no update is available */}
-      {!isUpdateAvailable && (
-        <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-1">
-          <a
-            href={GITHUB_RELEASES_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:underline text-[var(--accent-text)] inline-flex items-center gap-1 opacity-80 hover:opacity-100 transition-opacity"
-          >
-            Vedi note di rilascio su GitHub
-            <ExternalLink className="w-3 h-3" />
-          </a>
+        <div className="flex items-center gap-2 text-xs text-[var(--success-text)] font-bold">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>Sei aggiornato alla versione più recente.</span>
         </div>
       )}
     </div>

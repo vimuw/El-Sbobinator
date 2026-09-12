@@ -20,15 +20,15 @@ describe('StorageSection component', () => {
     onAskCompletedCleanup: vi.fn(),
   };
 
-  it('renders session root path with FolderOpen icon and uses design system alert-card classes', () => {
-    const { container } = render(<StorageSection {...baseProps} />);
+  it('renders session root path and triggers onOpenSessionFolder when clicked', () => {
+    render(<StorageSection {...baseProps} />);
 
     // Verify session root is displayed
     expect(screen.getByText('/home/user/sessions')).toBeTruthy();
 
-    // Verify FolderOpen icon is rendered within the folder button
-    const folderOpenIcon = container.querySelector('.lucide-folder-open');
-    expect(folderOpenIcon).toBeTruthy();
+    // Verify clicking opens session folder
+    fireEvent.click(screen.getByTitle('Apri cartella sessioni'));
+    expect(baseProps.onOpenSessionFolder).toHaveBeenCalledTimes(1);
   });
 
   it('renders move progress with .alert-card.is-info', () => {

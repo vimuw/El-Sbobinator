@@ -1,92 +1,151 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { DiagnosticsSection } from './DiagnosticsSection';
-import type { ApiUsageResult } from '../../../bridge';
+import { DiagnosticsSection, type DisplayCheck } from './DiagnosticsSection';
 
 describe('DiagnosticsSection', () => {
-  const dummyUsage: ApiUsageResult = {
-    quota_date: '2026-09-02',
-    total_requests_remaining: 95,
-    estimated_sbobine_remaining: 5,
-    next_reset_info: 'Reset quote: ore 09:00 (fuso Google PT)',
-    is_degraded_mode: false,
-    degraded_reason: null,
-    keys: [
-      {
-        id: 'key-1',
-        label: 'Chiave Principale',
-        masked_key: 'AIza...dbtI',
-        is_primary: true,
-        models: {
-          'gemini-2.5-flash': {
-            model_id: 'gemini-2.5-flash',
-            used_today: 5,
-            limit: 20,
-            remaining: 15,
-            is_exhausted: false,
-          },
-        },
-      },
-      {
-        id: 'key-2',
-        label: 'Chiave Riserva 1',
-        masked_key: 'AIza...Tih4',
-        is_primary: false,
-        models: {
-          'gemini-2.5-flash': {
-            model_id: 'gemini-2.5-flash',
-            used_today: 0,
-            limit: 20,
-            remaining: 20,
-            is_exhausted: false,
-          },
-        },
-      },
-    ],
-  };
+  const dummyChecks: DisplayCheck[] = [
+    {
+      id: 'api_key',
+      label: 'API Key Gemini',
+      status: 'ok',
+      message: 'Chiave API valida',
+    },
+    {
+      id: 'ffmpeg',
+      label: 'FFmpeg',
+      status: 'pending',
+      message: 'In attesa di verifica',
+    },
+  ];
 
-  it('renders quota tracker with keys and remaining counts', () => {
-    const onRefreshUsage = vi.fn();
+  it('renders diagnostics checks and handles run validation', () => {
+    const onRunValidation = vi.fn();
     render(
       <DiagnosticsSection
         isValidatingEnvironment={false}
-        onRunValidation={vi.fn()}
+        onRunValidation={onRunValidation}
         validationResult={null}
-        displayChecks={[]}
-        apiUsage={dummyUsage}
-        isLoadingUsage={false}
-        onRefreshUsage={onRefreshUsage}
+        displayChecks={dummyChecks}
       />
     );
 
-    expect(screen.getByText('Quote & Utilizzo Google AI Studio')).toBeTruthy();
-    expect(screen.getByText('95 chiamate rimaste')).toBeTruthy();
-    expect(screen.getByText('~5 lezioni (3h)')).toBeTruthy();
-    expect(screen.getByText('Chiave Principale')).toBeTruthy();
-    expect(screen.getByText('Chiave Riserva 1')).toBeTruthy();
-    expect(screen.getByText('5/20')).toBeTruthy();
-    expect(screen.getByText('(15 rimaste)')).toBeTruthy();
+    expect(screen.getByText('Verifica Ambiente e Integrità')).toBeTruthy();
+    expect(screen.getByText('API Key Gemini')).toBeTruthy();
+    expect(screen.getByText('Chiave API valida')).toBeTruthy();
+    expect(screen.getByText('FFmpeg')).toBeTruthy();
+    expect(screen.getByText('da verificare')).toBeTruthy();
+    expect(screen.queryByText('In attesa di verifica')).toBeNull();
 
-    const refreshBtn = screen.getByLabelText('Aggiorna conteggio quote');
-    fireEvent.click(refreshBtn);
-    expect(onRefreshUsage).toHaveBeenCalled();
+    const validateBtn = screen.getByLabelText('Verifica ambiente');
+    fireEvent.click(validateBtn);
+    expect(onRunValidation).toHaveBeenCalled();
   });
 
-  it('renders fallback text when no apiUsage is provided', () => {
+  it('renders validation summary banner when validationResult is present', () => {
+    const { container } = render(
+      <DiagnosticsSection
+        isValidatingEnvironment={false}
+        onRunValidation={vi.fn()}
+        validationResult={{ ok: true, summary: 'Tutti i controlli superati con successo', checks: [] }}
+        displayChecks={dummyChecks}
+      />
+    );
+
+    expect(screen.getByText('Tutti i controlli superati con successo')).toBeTruthy();
+    expect(container.querySelector('.alert-card.is-success')).toBeTruthy();
+  });
+
+  it('renders warning summary banner when validationResult has warnings', () => {
+    const { container } = render(
+      <DiagnosticsSection
+        isValidatingEnvironment={false}
+        onRunValidation={vi.fn()}
+        validationResult={{
+          ok: true,
+          has_warnings: true,
+          summary: 'Ambiente pronto con avvisi: verifica le segnalazioni.',
+          checks: [{ id: 'api_key', label: 'API Key Gemini', status: 'warning', message: 'API key assente' }],
+        }}
+        displayChecks={dummyChecks}
+      />
+    );
+
+    expect(screen.getByText('Ambiente pronto con avvisi: verifica le segnalazioni.')).toBeTruthy();
+    expect(container.querySelector('.alert-card.is-warning')).toBeTruthy();
+  });
+
+  it('renders error summary banner when validationResult has errors', () => {
+    const { container } = render(
+      <DiagnosticsSection
+        isValidatingEnvironment={false}
+        onRunValidation={vi.fn()}
+        validationResult={{
+          ok: false,
+          summary: 'Ambiente incompleto: correggi gli errori segnalati.',
+          checks: [{ id: 'ffmpeg', label: 'FFmpeg', status: 'error', message: 'FFmpeg mancante' }],
+        }}
+        displayChecks={dummyChecks}
+      />
+    );
+
+    expect(screen.getByText('Ambiente incompleto: correggi gli errori segnalati.')).toBeTruthy();
+    expect(container.querySelector('.alert-card.is-error')).toBeTruthy();
+  });
+
+  it('calls onCopyReport and shows success toast when copy succeeds', async () => {
+    const onCopyReport = vi.fn().mockResolvedValue(undefined);
     render(
       <DiagnosticsSection
         isValidatingEnvironment={false}
         onRunValidation={vi.fn()}
         validationResult={null}
-        displayChecks={[]}
-        apiUsage={null}
-        isLoadingUsage={false}
+        displayChecks={dummyChecks}
+        onCopyReport={onCopyReport}
       />
     );
 
-    expect(
-      screen.getByText(/Inserisci una chiave API per monitorare le quote giornaliere/i)
-    ).toBeTruthy();
+    const copyBtn = screen.getByLabelText('Copia report diagnostico');
+    fireEvent.click(copyBtn);
+
+    expect(onCopyReport).toHaveBeenCalledTimes(1);
+    expect(await screen.findByTitle('Report copiato!')).toBeTruthy();
+  });
+
+  it('does not show success toast when onCopyReport fails', async () => {
+    const onCopyReport = vi.fn().mockRejectedValue(new Error('Generation failed'));
+    render(
+      <DiagnosticsSection
+        isValidatingEnvironment={false}
+        onRunValidation={vi.fn()}
+        validationResult={null}
+        displayChecks={dummyChecks}
+        onCopyReport={onCopyReport}
+      />
+    );
+
+    const copyBtn = screen.getByLabelText('Copia report diagnostico');
+    fireEvent.click(copyBtn);
+
+    expect(onCopyReport).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTitle('Report copiato!')).toBeNull();
+  });
+
+  it('calls onOpenLogs when clicking open logs button', () => {
+    const onOpenLogs = vi.fn();
+    render(
+      <DiagnosticsSection
+        isValidatingEnvironment={false}
+        onRunValidation={vi.fn()}
+        validationResult={null}
+        displayChecks={dummyChecks}
+        onOpenLogs={onOpenLogs}
+      />
+    );
+
+    const openLogsBtn = screen.getByLabelText('Apri cartella log');
+    fireEvent.click(openLogsBtn);
+
+    expect(onOpenLogs).toHaveBeenCalledTimes(1);
   });
 });

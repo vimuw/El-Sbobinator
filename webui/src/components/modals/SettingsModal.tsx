@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings, HardDrive, Activity, Key, Loader2, X } from 'lucide-react';
+import { Settings, HardDrive, Activity, SlidersHorizontal, Loader2, X, FlaskConical } from 'lucide-react';
 import type { ApiUsageResult, ModelOption, ValidationResult } from '../../bridge';
 import { ConfirmActionModal } from './ConfirmActionModal';
 import { ApiKeySection } from './settings/ApiKeySection';
@@ -8,6 +8,7 @@ import { ModelSection } from './settings/ModelSection';
 import { NotificationSection } from './settings/NotificationSection';
 import { StorageSection } from './settings/StorageSection';
 import { DiagnosticsSection, type DisplayCheck } from './settings/DiagnosticsSection';
+import { QuotasSection } from './settings/QuotasSection';
 import { UpdaterSection, type SettingsUpdateInstallState } from './settings/UpdaterSection';
 
 import { useSettingsStorage, SESSION_CLEANUP_DAYS } from '../../hooks/useSettingsStorage';
@@ -61,7 +62,7 @@ export interface SettingsModalProps {
   storage?: SettingsStorageProps;
 }
 
-type TabType = 'general' | 'storage' | 'diagnostics';
+type TabType = 'general' | 'storage' | 'quotas' | 'diagnostics';
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
@@ -166,7 +167,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      if (activeTab === 'diagnostics') {
+      if (activeTab === 'quotas') {
         void fetchApiUsage();
       }
       if (activeTab === 'storage') {
@@ -197,6 +198,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     setSaveError(null);
+    if (tab === 'quotas') {
+      void fetchApiUsage();
+    }
   };
 
   const runEnvironmentValidation = async () => {
@@ -239,6 +243,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (res?.ok && res.report) {
       await navigator.clipboard.writeText(res.report);
       appendConsole('📋 Report diagnostico copiato negli appunti.');
+    } else {
+      appendConsole(`❌ Generazione report diagnostico fallita: ${res?.error || 'errore sconosciuto'}`);
+      throw new Error(res?.error || 'Errore generazione report diagnostico');
     }
   };
 
@@ -255,28 +262,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         id: 'api_key',
         label: 'API Key Gemini',
         status: 'pending',
-        message: 'In attesa di verifica',
+        message: '',
         details: '',
       },
       {
         id: 'ffmpeg',
         label: 'FFmpeg',
         status: 'pending',
-        message: 'In attesa di verifica',
+        message: '',
         details: '',
       },
       {
         id: 'config',
         label: 'Config locale',
         status: 'pending',
-        message: 'In attesa di verifica',
+        message: '',
         details: '',
       },
       {
         id: 'output',
         label: 'Cartella sessioni/output',
         status: 'pending',
-        message: 'In attesa di verifica',
+        message: '',
         details: sessionInfo?.session_root || '',
       },
     ];
@@ -286,7 +293,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         id: 'keyring',
         label: 'Keyring',
         status: 'pending',
-        message: 'In attesa di verifica',
+        message: '',
         details: '',
       });
     }
@@ -385,7 +392,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.12, ease: 'easeIn' } }}
               className="modal-card relative w-full max-w-md md:max-w-4xl h-[85vh] md:h-[80vh] overflow-hidden flex flex-col md:flex-row"
             >
-              <div className="w-full md:w-64 md:shrink-0 flex flex-row md:flex-col border-b md:border-b-0 md:border-r border-[var(--border-subtle)] bg-[var(--bg-panel)] overflow-x-auto md:overflow-x-visible md:overflow-y-auto shrink-0 py-4 px-3 gap-1">
+              <div className="w-full md:w-64 md:shrink-0 flex flex-row md:flex-col border-b md:border-b-0 md:border-r border-[var(--border-subtle)] bg-[var(--sidebar-bg)] overflow-x-auto md:overflow-x-visible md:overflow-y-auto shrink-0 py-4 px-3 gap-1">
                 <div className="hidden md:flex items-center gap-2 px-3 py-2.5 mb-3 border-b border-[var(--border-subtle)]">
                   <Settings className="w-5 h-5 text-[var(--accent-text)] shrink-0" />
                   <span role="heading" aria-level={2} className="font-bold text-base tracking-wide uppercase text-[var(--text-primary)]">
@@ -396,14 +403,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleTabChange('general')}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium tracking-wide text-left transition-all duration-150 whitespace-nowrap h-10 ${
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-semibold tracking-wide text-left transition-all duration-150 whitespace-nowrap h-10 ${
                     activeTab === 'general'
-                      ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-semibold ring-1 ring-[var(--border-subtle)]'
-                      : 'text-[var(--text-secondary)] hover:bg-[var(--sidebar-active-bg)] hover:text-[var(--text-primary)]'
+                      ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-bold ring-1 ring-[var(--border-default)]'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <Key className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'general' ? 'text-[var(--accent-text)]' : 'text-[var(--text-muted)]'}`} />
+                    <SlidersHorizontal className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'general' ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)]'}`} />
                     <span className="truncate">Generale</span>
                   </div>
                   <span
@@ -416,14 +423,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleTabChange('storage')}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium tracking-wide text-left transition-all duration-150 whitespace-nowrap h-10 ${
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-semibold tracking-wide text-left transition-all duration-150 whitespace-nowrap h-10 ${
                     activeTab === 'storage'
-                      ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-semibold ring-1 ring-[var(--border-subtle)]'
-                      : 'text-[var(--text-secondary)] hover:bg-[var(--sidebar-active-bg)] hover:text-[var(--text-primary)]'
+                      ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-bold ring-1 ring-[var(--border-default)]'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <HardDrive className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'storage' ? 'text-[var(--accent-text)]' : 'text-[var(--text-muted)]'}`} />
+                    <HardDrive className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'storage' ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)]'}`} />
                     <span className="truncate">Archiviazione</span>
                   </div>
                   <span
@@ -435,16 +442,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => handleTabChange('diagnostics')}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium tracking-wide text-left transition-all duration-150 whitespace-nowrap h-10 ${
-                    activeTab === 'diagnostics'
-                      ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-semibold ring-1 ring-[var(--border-subtle)]'
-                      : 'text-[var(--text-secondary)] hover:bg-[var(--sidebar-active-bg)] hover:text-[var(--text-primary)]'
+                  onClick={() => handleTabChange('quotas')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-semibold tracking-wide text-left transition-all duration-150 whitespace-nowrap h-10 ${
+                    activeTab === 'quotas'
+                      ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-bold ring-1 ring-[var(--border-default)]'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <Activity className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'diagnostics' ? 'text-[var(--accent-text)]' : 'text-[var(--text-muted)]'}`} />
-                    <span className="truncate">Quote & Diagnostica</span>
+                    <Activity className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'quotas' ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)]'}`} />
+                    <span className="truncate">Quote API</span>
+                  </div>
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full bg-[var(--accent-text)] shrink-0 hidden md:block transition-opacity duration-150 ${
+                      activeTab === 'quotas' ? 'opacity-100' : 'opacity-0'
+                    }`}
+                  />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('diagnostics')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-semibold tracking-wide text-left transition-all duration-150 whitespace-nowrap h-10 ${
+                    activeTab === 'diagnostics'
+                      ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-bold ring-1 ring-[var(--border-default)]'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <FlaskConical className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'diagnostics' ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)]'}`} />
+                    <span className="truncate">Diagnostica</span>
                   </div>
                   <span
                     className={`w-1.5 h-1.5 rounded-full bg-[var(--accent-text)] shrink-0 hidden md:block transition-opacity duration-150 ${
@@ -464,13 +491,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 >
                   <X className="w-4 h-4" />
                 </button>
-                <div className="app-scroll flex-1 overflow-y-auto overflow-x-hidden p-6 md:p-8 space-y-6">
+                <div className="app-scroll flex-1 overflow-y-auto overflow-x-hidden p-6 md:p-8 space-y-6 [scrollbar-gutter:stable]">
                   {activeTab === 'general' && (
-                    <div className="space-y-5 animate-fade-in">
+                    <div className="space-y-6 animate-fade-in">
                       <div>
-                        <h2 className="text-xl font-bold text-[var(--text-primary)]">Generale & Intelligenza Artificiale</h2>
-                        <p className="text-sm text-[var(--text-muted)] mt-1">
-                          Configura la chiave API principale e di riserva, seleziona il modello Gemini preferito e controlla gli aggiornamenti dell&apos;applicazione.
+                        <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Generale</h2>
+                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                          Chiave API Google Gemini, modello di trascrizione e preferenze di sistema.
                         </p>
                       </div>
 
@@ -484,6 +511,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         setFallbackKeys={setFallbackKeys}
                       />
 
+                      <div className="border-t border-[var(--border-default)]" />
+
                       <ModelSection
                         preferredModel={preferredModel}
                         setPreferredModel={setPreferredModel}
@@ -492,7 +521,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         availableModels={availableModels}
                       />
 
+                      <div className="border-t border-[var(--border-default)]" />
+
                       <NotificationSection />
+
+                      <div className="border-t border-[var(--border-default)]" />
 
                       <UpdaterSection
                         latestVersion={latestVersion}
@@ -507,11 +540,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   )}
 
                   {activeTab === 'storage' && (
-                    <div className="space-y-5 animate-fade-in">
+                    <div className="space-y-6 animate-fade-in">
                       <div>
-                        <h2 className="text-xl font-bold text-[var(--text-primary)]">Archiviazione & Dati</h2>
-                        <p className="text-sm text-[var(--text-muted)] mt-1">
-                          Controlla lo spazio su disco occupato dalle sbobine, gestisci la cartella delle sessioni ed esegui la pulizia delle elaborazioni incomplete.
+                        <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Archiviazione</h2>
+                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                          Spazio su disco occupato dalle sbobine e gestione della cartella di lavoro.
                         </p>
                       </div>
 
@@ -536,12 +569,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   )}
 
-                  {activeTab === 'diagnostics' && (
-                    <div className="space-y-5 animate-fade-in">
+                  {activeTab === 'quotas' && (
+                    <div className="space-y-6 animate-fade-in">
                       <div>
-                        <h2 className="text-xl font-bold text-[var(--text-primary)]">Quote & Diagnostica Sistema</h2>
-                        <p className="text-sm text-[var(--text-muted)] mt-1">
-                          Monitora in tempo reale il consumo delle quote giornaliere di Google AI Studio, verifica l&apos;integrità del sistema e genera report per l&apos;assistenza.
+                        <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Quote API</h2>
+                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                          Consumo giornaliero delle quote Google AI Studio e autonomia stimata.
+                        </p>
+                      </div>
+
+                      <QuotasSection
+                        apiUsage={apiUsage}
+                        isLoadingUsage={isLoadingUsage}
+                        onRefreshUsage={fetchApiUsage}
+                      />
+                    </div>
+                  )}
+
+                  {activeTab === 'diagnostics' && (
+                    <div className="space-y-6 animate-fade-in">
+                      <div>
+                        <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Diagnostica</h2>
+                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                          Verifica requisiti di sistema (FFmpeg, API, disco) e report di assistenza.
                         </p>
                       </div>
 
@@ -550,9 +600,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         onRunValidation={runEnvironmentValidation}
                         validationResult={validationResult}
                         displayChecks={getDisplayChecks()}
-                        apiUsage={apiUsage}
-                        isLoadingUsage={isLoadingUsage}
-                        onRefreshUsage={fetchApiUsage}
                         onCopyReport={handleCopyReport}
                         onOpenLogs={handleOpenLogs}
                       />

@@ -113,22 +113,19 @@ afterEach(() => {
 });
 
 describe('SettingsModal — model parameters chunk display', () => {
-  it('shows default_chunk_minutes from availableModels registry for the primary model', async () => {
+  it('does not display technical chunk duration or temperature parameters in UI', async () => {
     const models = [
       { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash (Preview)', summary: '', default_chunk_minutes: 15 },
       { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite (Preview)', summary: '', default_chunk_minutes: 10 },
     ];
-    const { rerender } = render(
+    render(
       <SettingsModal {...makeProps({ availableModels: models, preferredModel: 'gemini-3-flash-preview' })} />,
     );
     await act(async () => {
-      fireEvent.click(screen.getByText('Generale').closest('button')!);
+      fireEvent.click(screen.getAllByText('Generale')[0].closest('button')!);
     });
-    expect(screen.getByText('15 min')).toBeDefined();
-
-
-    rerender(<SettingsModal {...makeProps({ availableModels: models, preferredModel: 'gemini-3.1-flash-lite-preview' })} />);
-    expect(screen.getByText('10 min')).toBeDefined();
+    expect(screen.queryByText('15 min')).toBeNull();
+    expect(screen.queryByText(/Durata blocco/i)).toBeNull();
   });
 });
 
@@ -143,7 +140,7 @@ describe('SettingsModal — diagnostics environment pending checks', () => {
       />,
     );
     await act(async () => {
-      fireEvent.click(screen.getByText('Quote & Diagnostica').closest('button')!);
+      fireEvent.click(screen.getByText('Diagnostica').closest('button')!);
     });
 
 
@@ -154,6 +151,7 @@ describe('SettingsModal — diagnostics environment pending checks', () => {
 
     const statusBadges = screen.getAllByText('da verificare');
     expect(statusBadges.length).toBeGreaterThanOrEqual(4);
+    expect(screen.queryByText('In attesa di verifica')).toBeNull();
   });
 });
 
@@ -328,17 +326,18 @@ describe('SettingsModal — main-section interactions', () => {
   it('calls setApiKey when API key input changes', async () => {
     const setApiKey = vi.fn();
     render(<SettingsModal {...makeProps({ setApiKey })} />);
-    const input = screen.getByPlaceholderText(/AIzaSy/);
+    const input = screen.getByPlaceholderText(/oppure AQ/);
     fireEvent.change(input, { target: { value: 'AIzaSy123' } });
     expect(setApiKey).toHaveBeenCalledWith('AIzaSy123');
   });
 
-  it('calls setFallbackKeys when fallback textarea changes', async () => {
+  it('calls setFallbackKeys when a fallback key is added', async () => {
     const setFallbackKeys = vi.fn();
     render(<SettingsModal {...makeProps({ setFallbackKeys })} />);
-    const textarea = screen.getByPlaceholderText(/Inserisci una API Key per riga/);
-    fireEvent.change(textarea, { target: { value: 'key1\nkey2' } });
-    expect(setFallbackKeys).toHaveBeenCalledWith(['key1', 'key2']);
+    const input = screen.getByLabelText('Nuova chiave di riserva');
+    fireEvent.change(input, { target: { value: 'AIzaSyFallbackKey123456789' } });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    expect(setFallbackKeys).toHaveBeenCalledWith(['AIzaSyFallbackKey123456789']);
   });
 
   it('toggles notifications when switch is clicked', async () => {
@@ -589,7 +588,7 @@ describe('SettingsModal — fallback models list', () => {
       />,
     );
     await act(async () => {
-      fireEvent.click(screen.getByText('Generale').closest('button')!);
+      fireEvent.click(screen.getAllByText('Generale')[0].closest('button')!);
     });
     expect(screen.getAllByText('Gemini 3.1 Flash Lite (Preview)').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Lightweight').length).toBeGreaterThan(0);
@@ -612,7 +611,7 @@ describe('SettingsModal — fallback models list', () => {
       />,
     );
     await act(async () => {
-      fireEvent.click(screen.getByText('Generale').closest('button')!);
+      fireEvent.click(screen.getAllByText('Generale')[0].closest('button')!);
     });
     fireEvent.click(screen.getByTitle('Rimuovi fallback'));
     expect(setFallbackModels).toHaveBeenCalled();
@@ -636,7 +635,7 @@ describe('SettingsModal — fallback models list', () => {
       />,
     );
     await act(async () => {
-      fireEvent.click(screen.getByText('Generale').closest('button')!);
+      fireEvent.click(screen.getAllByText('Generale')[0].closest('button')!);
     });
     fireEvent.click(screen.getAllByTitle('Sposta giù')[0]);
     expect(setFallbackModels).toHaveBeenCalled();
@@ -727,7 +726,7 @@ describe('SettingsModal — validate environment', () => {
       />,
     );
     await act(async () => {
-      fireEvent.click(screen.getByText('Quote & Diagnostica').closest('button')!);
+      fireEvent.click(screen.getByText('Diagnostica').closest('button')!);
     });
     await act(async () => {
       fireEvent.click(screen.getByTitle('Verifica ambiente'));
@@ -759,7 +758,7 @@ describe('SettingsModal — validate environment', () => {
     });
     const { rerender } = render(<SettingsModal {...props} />);
     await act(async () => {
-      fireEvent.click(screen.getByText('Quote & Diagnostica').closest('button')!);
+      fireEvent.click(screen.getByText('Diagnostica').closest('button')!);
     });
     await act(async () => {
       fireEvent.click(screen.getByTitle('Verifica ambiente'));
@@ -795,7 +794,7 @@ describe('SettingsModal — validate environment', () => {
     });
     const { rerender } = render(<SettingsModal {...props} />);
     await act(async () => {
-      fireEvent.click(screen.getByText('Quote & Diagnostica').closest('button')!);
+      fireEvent.click(screen.getByText('Diagnostica').closest('button')!);
     });
     await act(async () => {
       fireEvent.click(screen.getByTitle('Verifica ambiente'));
@@ -809,12 +808,27 @@ describe('SettingsModal — validate environment', () => {
     rerender(<SettingsModal {...props} isOpen={true} />);
 
     await act(async () => {
-      fireEvent.click(screen.getByText('Quote & Diagnostica').closest('button')!);
+      fireEvent.click(screen.getByText('Diagnostica').closest('button')!);
     });
 
     // Expect 'Ambiente OK' to be cleared and state reset
     expect(screen.queryByText('Ambiente OK')).toBeNull();
     const statusBadges = screen.getAllByText('da verificare');
     expect(statusBadges.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('allows switching to Quote API tab', async () => {
+    render(
+      <SettingsModal
+        {...makeProps({
+          apiKey: 'test-api-key',
+        })}
+      />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByText('Quote API').closest('button')!);
+    });
+
+    expect(screen.getByRole('heading', { name: 'Quote API' })).toBeTruthy();
   });
 });
