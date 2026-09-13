@@ -147,4 +147,134 @@ describe('KebabMenu component', () => {
     expect(screen.queryByText('Menu 1 Item')).toBeNull();
     expect(screen.getByText('Menu 3 Item')).toBeTruthy();
   });
+
+  it('opens and closes submenu with children items on click', async () => {
+    const handleChild1 = vi.fn();
+    const items: KebabMenuItem[] = [
+      { label: 'Action 1', onClick: vi.fn() },
+      {
+        label: 'Submenu Trigger',
+        children: [
+          { label: 'Child Option 1', onClick: handleChild1 },
+          { separator: true },
+          { label: 'Child Option 2', checked: true, onClick: vi.fn() },
+        ],
+      },
+    ];
+
+    render(<KebabMenu items={items} />);
+
+    // Open main kebab menu
+    const kebabButton = screen.getByRole('button', { name: 'Altre opzioni' });
+    fireEvent.click(kebabButton);
+
+    const trigger = screen.getByText('Submenu Trigger');
+    expect(trigger).toBeTruthy();
+    expect(screen.queryByText('Child Option 1')).toBeNull();
+
+    // Click trigger to open submenu
+    fireEvent.click(trigger);
+    expect(screen.getByText('Child Option 1')).toBeTruthy();
+    expect(screen.getByText('Child Option 2')).toBeTruthy();
+
+    // Click child option
+    fireEvent.click(screen.getByText('Child Option 1'));
+    expect(handleChild1).toHaveBeenCalledTimes(1);
+
+    // Menu and submenu should be closed
+    await waitFor(() => {
+      expect(screen.queryByText('Child Option 1')).toBeNull();
+      expect(screen.queryByText('Submenu Trigger')).toBeNull();
+    });
+  });
+
+  it('closes submenu first on Escape before closing the main menu', async () => {
+    const items: KebabMenuItem[] = [
+      {
+        label: 'Parent Option',
+        children: [{ label: 'Nested Option', onClick: vi.fn() }],
+      },
+    ];
+
+    render(<KebabMenu items={items} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Altre opzioni' }));
+    fireEvent.click(screen.getByText('Parent Option'));
+    expect(screen.getByText('Nested Option')).toBeTruthy();
+
+    // First Escape closes submenu
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByText('Nested Option')).toBeNull();
+    });
+    expect(screen.getByText('Parent Option')).toBeTruthy();
+
+    // Second Escape closes parent menu
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByText('Parent Option')).toBeNull();
+    });
+  });
+
+  it('does not close menu when scrolling inside dropdown or submenu, but closes when scrolling outside', async () => {
+    const items: KebabMenuItem[] = [
+      {
+        label: 'Parent Option',
+        children: [{ label: 'Child Option', onClick: vi.fn() }],
+      },
+    ];
+
+    render(<KebabMenu items={items} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Altre opzioni' }));
+    fireEvent.click(screen.getByText('Parent Option'));
+
+    const parentBtn = screen.getByText('Parent Option');
+    const childBtn = screen.getByText('Child Option');
+    expect(parentBtn).toBeTruthy();
+    expect(childBtn).toBeTruthy();
+
+    // Scroll inside parent dropdown
+    const dropdownEl = parentBtn.closest('div');
+    expect(dropdownEl).toBeTruthy();
+    fireEvent.scroll(dropdownEl!);
+    expect(screen.getByText('Parent Option')).toBeTruthy();
+    expect(screen.getByText('Child Option')).toBeTruthy();
+
+    // Scroll inside submenu
+    const submenuEl = childBtn.closest('div');
+    expect(submenuEl).toBeTruthy();
+    fireEvent.scroll(submenuEl!);
+    expect(screen.getByText('Parent Option')).toBeTruthy();
+    expect(screen.getByText('Child Option')).toBeTruthy();
+
+    // Scroll outside (e.g. document/window)
+    fireEvent.scroll(window);
+    await waitFor(() => {
+      expect(screen.queryByText('Parent Option')).toBeNull();
+      expect(screen.queryByText('Child Option')).toBeNull();
+    });
+  });
+
+  it('does not open submenu or fire onClick when parent item or child is disabled', async () => {
+    const handleChild = vi.fn();
+    const items: KebabMenuItem[] = [
+      {
+        label: 'Disabled Parent',
+        disabled: true,
+        children: [{ label: 'Sub Child', disabled: true, onClick: handleChild }],
+      },
+    ];
+
+    render(<KebabMenu items={items} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Altre opzioni' }));
+
+    const disabledParent = screen.getByText('Disabled Parent');
+    // Hovering disabled parent
+    fireEvent.mouseEnter(disabledParent);
+    expect(screen.queryByText('Sub Child')).toBeNull();
+
+    // Clicking disabled parent
+    fireEvent.click(disabledParent);
+    expect(screen.queryByText('Sub Child')).toBeNull();
+  });
 });
