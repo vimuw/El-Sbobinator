@@ -349,28 +349,6 @@ export default function App() {
     if (res && !res.ok) appendConsole(`❌ Impossibile aprire il file: ${res.error ?? path}`);
   }, [appendConsole]);
 
-  const handleRemoveSessionAudio = useCallback(async (sessionDir: string) => {
-    if (!window.pywebview?.api?.remove_session_audio) return;
-    try {
-      const res = await window.pywebview.api.remove_session_audio(sessionDir);
-      if (res?.ok) {
-        dispatch({
-          type: 'queue/update_source',
-          sessionDir,
-          path: '',
-          name: '',
-          size: 0,
-        });
-        await refreshArchiveSessions();
-        addNotification('Audio rimosso', 'Il collegamento audio è stato rimosso dalla sbobina.', 'success', 'system');
-      } else {
-        addNotification('Errore', res?.error || 'Impossibile rimuovere il collegamento audio.', 'error', 'system');
-      }
-    } catch (e) {
-      addNotification('Errore', String(e), 'error', 'system');
-    }
-  }, [addNotification, dispatch, refreshArchiveSessions]);
-
   useQueuePersistence(files, structuralVersion, dispatch, appendConsole);
   useBridgeCallbacks({
     dispatch,
@@ -530,7 +508,6 @@ export default function App() {
                     onLoadAll={handleLoadAll}
                     onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
                     onNotification={addNotification}
-                    onRemoveSessionAudio={handleRemoveSessionAudio}
                   />
                 </React.Suspense>
               </div>

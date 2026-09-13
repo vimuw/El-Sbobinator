@@ -18,7 +18,6 @@ export interface ArchivePageProps {
   onOpenFile: (path: string) => void;
   onDeleteSession: (sessionDir: string, name: string) => void;
   onDeleteMultipleSessions?: (sessions: { sessionDir: string; name: string }[]) => void;
-  onRemoveSessionAudio?: (sessionDir: string) => Promise<void> | void;
   onRefresh?: () => void;
   onLoadAll?: () => void;
   onRetryFailedRevisionBlocks?: (sessionDir: string) => Promise<void>;

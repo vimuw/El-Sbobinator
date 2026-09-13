@@ -1,7 +1,7 @@
 import { useState, type MouseEvent } from 'react';
 import {
   AlertTriangle, Check, ChevronLeft, ChevronRight, Download, ExternalLink,
-  Eye, FileText, FolderOpen, RotateCcw, Trash2, Unlink, X,
+  Eye, FileText, Folder, FolderOpen, RotateCcw, Trash2, X,
 } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -26,7 +26,6 @@ export interface DraggableSessionCardProps {
   onDeleteSession: ArchivePageProps['onDeleteSession'];
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
   onShareSession?: (session: ArchiveSession) => void;
-  onRemoveSessionAudio?: ArchivePageProps['onRemoveSessionAudio'];
 }
 
 export function DraggableSessionCard({
@@ -43,7 +42,6 @@ export function DraggableSessionCard({
   onDeleteSession,
   onRetryFailedRevisionBlocks,
   onShareSession,
-  onRemoveSessionAudio,
 }: DraggableSessionCardProps) {
   const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
   const openedAtMs = getOpenedAtMs(session, editorSessionsMap ?? loadAllEditorSessions());
@@ -63,6 +61,21 @@ export function DraggableSessionCard({
     }
   };
 
+  const folderChildren: KebabMenuItem[] = [
+    ...(currentFolder ? [{
+      label: `Rimuovi da "${currentFolder.name}"`,
+      icon: <X className="w-3.5 h-3.5" />,
+      onClick: onRemoveFromFolder,
+    } as KebabMenuItem] : []),
+    ...(currentFolder && allFolders.length > 0 ? [{ separator: true } as KebabMenuItem] : []),
+    ...allFolders.map(f => ({
+      label: f.name,
+      icon: <span className="w-3 h-3 rounded-full inline-block" style={{ background: f.color || DEFAULT_FOLDER_COLOR }} />,
+      checked: currentFolder?.id === f.id,
+      onClick: () => onAssignToFolder(f.id),
+    })),
+  ];
+
   const kebabItems: KebabMenuItem[] = [
     {
       label: 'Apri cartella',
@@ -79,22 +92,14 @@ export function DraggableSessionCard({
       icon: <Download className="w-3.5 h-3.5" />,
       onClick: () => onShareSession(session),
     } as KebabMenuItem] : []),
-    ...(allFolders.length > 0 || currentFolder ? [{ separator: true } as KebabMenuItem] : []),
-    ...allFolders.map(f => ({
-      label: f.name,
-      icon: <span className="w-3 h-3 rounded-full inline-block" style={{ background: f.color }} />,
-      onClick: () => onAssignToFolder(f.id),
-    })),
-    ...(currentFolder ? [{
-      label: `Rimuovi da "${currentFolder.name}"`,
-      icon: <X className="w-3.5 h-3.5" />,
-      onClick: onRemoveFromFolder,
-    } as KebabMenuItem] : []),
-    ...(session.input_path && onRemoveSessionAudio ? [{
-      label: 'Rimuovi collegamento audio',
-      icon: <Unlink className="w-3.5 h-3.5" />,
-      onClick: () => onRemoveSessionAudio(session.session_dir),
-    } as KebabMenuItem] : []),
+    ...(folderChildren.length > 0 ? [
+      { separator: true } as KebabMenuItem,
+      {
+        label: 'Raccolta',
+        icon: <Folder className="w-3.5 h-3.5" />,
+        children: folderChildren,
+      } as KebabMenuItem,
+    ] : []),
     { separator: true },
     {
       label: 'Elimina',
@@ -254,7 +259,6 @@ export interface SortableSessionCardProps {
   onDeleteSession: ArchivePageProps['onDeleteSession'];
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
   onShareSession?: (session: ArchiveSession) => void;
-  onRemoveSessionAudio?: ArchivePageProps['onRemoveSessionAudio'];
   canMoveToPreviousPage?: boolean;
   canMoveToNextPage?: boolean;
   onMoveToPreviousPage?: () => void;
@@ -274,7 +278,6 @@ export function SortableSessionCard({
   onDeleteSession,
   onRetryFailedRevisionBlocks,
   onShareSession,
-  onRemoveSessionAudio,
   canMoveToPreviousPage,
   canMoveToNextPage,
   onMoveToPreviousPage,
@@ -322,11 +325,6 @@ export function SortableSessionCard({
       label: 'Esporta Sbobina...',
       icon: <Download className="w-3.5 h-3.5" />,
       onClick: () => onShareSession(session),
-    } as KebabMenuItem] : []),
-    ...(session.input_path && onRemoveSessionAudio ? [{
-      label: 'Rimuovi collegamento audio',
-      icon: <Unlink className="w-3.5 h-3.5" />,
-      onClick: () => onRemoveSessionAudio(session.session_dir),
     } as KebabMenuItem] : []),
     { separator: true },
     {

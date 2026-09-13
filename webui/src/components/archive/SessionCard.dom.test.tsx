@@ -121,8 +121,7 @@ describe('SessionCard components selection styling', () => {
       expect(card2.style.background).toBe('');
     });
 
-    it('shows Rimuovi collegamento audio in kebab menu and triggers onRemoveSessionAudio', async () => {
-      const onRemoveSessionAudio = vi.fn();
+    it('does not show Rimuovi collegamento audio in kebab menu', () => {
       render(
         <DraggableSessionCard
           session={mockSession}
@@ -132,17 +131,86 @@ describe('SessionCard components selection styling', () => {
           onPreview={vi.fn()}
           onOpenFile={vi.fn()}
           onDeleteSession={vi.fn()}
-          onRemoveSessionAudio={onRemoveSessionAudio}
         />,
       );
 
       const kebabBtn = screen.getByLabelText('Altre opzioni');
       fireEvent.click(kebabBtn);
 
-      const removeAudioOption = screen.getByText('Rimuovi collegamento audio');
-      expect(removeAudioOption).toBeTruthy();
-      fireEvent.click(removeAudioOption);
-      expect(onRemoveSessionAudio).toHaveBeenCalledWith(mockSession.session_dir);
+      expect(screen.queryByText('Rimuovi collegamento audio')).toBeNull();
+    });
+
+    it('groups folders under Raccolta submenu and assigns to folder on click', () => {
+      const onAssignToFolder = vi.fn();
+      render(
+        <DraggableSessionCard
+          session={mockSession}
+          allFolders={mockFolders}
+          onAssignToFolder={onAssignToFolder}
+          onRemoveFromFolder={vi.fn()}
+          onPreview={vi.fn()}
+          onOpenFile={vi.fn()}
+          onDeleteSession={vi.fn()}
+        />,
+      );
+
+      fireEvent.click(screen.getByLabelText('Altre opzioni'));
+
+      // Raccolta submenu trigger is visible, folders are not yet visible before opening submenu
+      const raccoltaBtn = screen.getByText('Raccolta');
+      expect(raccoltaBtn).toBeTruthy();
+      expect(screen.queryByText('Istologia')).toBeNull();
+
+      // Click Raccolta to open submenu
+      fireEvent.click(raccoltaBtn);
+      const folderOption = screen.getByText('Istologia');
+      expect(folderOption).toBeTruthy();
+
+      // Click folder option
+      fireEvent.click(folderOption);
+      expect(onAssignToFolder).toHaveBeenCalledWith('f1');
+    });
+
+    it('shows Rimuovi da folder in Raccolta submenu when currentFolder is set', () => {
+      const onRemoveFromFolder = vi.fn();
+      render(
+        <DraggableSessionCard
+          session={mockSession}
+          allFolders={mockFolders}
+          currentFolder={mockFolders[0]}
+          onAssignToFolder={vi.fn()}
+          onRemoveFromFolder={onRemoveFromFolder}
+          onPreview={vi.fn()}
+          onOpenFile={vi.fn()}
+          onDeleteSession={vi.fn()}
+        />,
+      );
+
+      fireEvent.click(screen.getByLabelText('Altre opzioni'));
+      fireEvent.click(screen.getByText('Raccolta'));
+
+      const removeOption = screen.getByText('Rimuovi da "Istologia"');
+      expect(removeOption).toBeTruthy();
+
+      fireEvent.click(removeOption);
+      expect(onRemoveFromFolder).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not display Raccolta item when allFolders is empty and no currentFolder is set', () => {
+      render(
+        <DraggableSessionCard
+          session={mockSession}
+          allFolders={[]}
+          onAssignToFolder={vi.fn()}
+          onRemoveFromFolder={vi.fn()}
+          onPreview={vi.fn()}
+          onOpenFile={vi.fn()}
+          onDeleteSession={vi.fn()}
+        />,
+      );
+
+      fireEvent.click(screen.getByLabelText('Altre opzioni'));
+      expect(screen.queryByText('Raccolta')).toBeNull();
     });
   });
 
