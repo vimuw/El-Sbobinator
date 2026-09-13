@@ -85,11 +85,9 @@ export const CompletedSection = memo(function CompletedSection({ doneFiles, appS
           </div>
 
           <div
-            className="app-scroll overflow-y-auto overflow-x-hidden"
+            className="overflow-x-hidden"
             style={{
-              maxHeight: 'clamp(260px, calc(100vh - 360px), 520px)',
               padding: '4px 6px',
-              overscrollBehavior: 'contain',
             }}
           >
             <div className="space-y-3">

@@ -250,7 +250,7 @@ export function QueuePage({
   return (
     <motion.main
       key="queue"
-      className="flex-1 w-full flex flex-col overflow-y-auto hide-scrollbar"
+      className="flex-1 w-full flex flex-col overflow-y-auto app-scroll"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.15, ease: 'easeOut' }}

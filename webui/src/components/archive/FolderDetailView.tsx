@@ -274,7 +274,7 @@ export function FolderDetailView({
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <div className="sticky top-0 z-20 py-2 -my-2 bg-[var(--bg-base)]/95 backdrop-blur-md flex flex-col gap-1.5">
         <div className="flex items-center gap-2">
           <div className="search-pill-wrap">
             {isSearching
@@ -383,7 +383,7 @@ export function FolderDetailView({
                 Nessun risultato per &ldquo;{search}&rdquo;
               </div>
             )}
-            <div className="max-h-[calc(100vh-300px)] overflow-y-auto app-scroll pr-1 py-1">
+            <div className="py-1">
               <SortableContext
                 items={pageData.map(s => s.session_dir)}
                 strategy={verticalListSortingStrategy}
@@ -420,7 +420,7 @@ export function FolderDetailView({
         </DndContext>
       ) : (
         <div className="flex flex-col gap-2">
-          <div className="max-h-[calc(100vh-300px)] overflow-y-auto app-scroll pr-1 py-1">
+          <div className="py-1">
             <FullTextResultList
               query={search.trim()}
               results={filteredFtResults}

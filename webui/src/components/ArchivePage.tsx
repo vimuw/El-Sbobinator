@@ -461,7 +461,7 @@ export function ArchivePage({
         </h3>
 
         {/* Search + Sort + Actions */}
-        <div className="flex flex-col gap-1.5">
+        <div className="sticky top-0 z-20 py-2 -my-2 bg-[var(--bg-base)]/95 backdrop-blur-md flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
             <div className="search-pill-wrap">
               {isSearching
@@ -593,7 +593,7 @@ export function ArchivePage({
           )}
 
           {fullTextMode && (
-            <div className="max-h-[calc(100vh-380px)] overflow-y-auto app-scroll pr-1 py-1">
+            <div className="py-1">
               <FullTextResultList
                 query={search.trim()}
                 results={sortedFtResults}
@@ -609,7 +609,7 @@ export function ArchivePage({
           )}
 
           {!fullTextMode && (
-            <div className="max-h-[calc(100vh-380px)] overflow-y-auto app-scroll pr-1 py-1">
+            <div className="py-1">
               <div className="flex flex-col gap-3">
                 {sessionPageData.map(session => (
                   <DraggableSessionCard

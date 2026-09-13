@@ -182,11 +182,9 @@ export const QueueSection = memo(function QueueSection({
             modifiers={[restrictToVerticalAxis, restrictToParentElement]}
           >
             <div
-              className="app-scroll overflow-y-auto overflow-x-hidden"
+              className="overflow-x-hidden"
               style={{
-                maxHeight: 'clamp(260px, calc(100vh - 360px), 520px)',
                 padding: '4px 6px',
-                overscrollBehavior: 'contain',
               }}
             >
             <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
