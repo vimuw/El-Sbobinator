@@ -4,6 +4,8 @@ Client desktop open source per trasformare lezioni audio e video in dispense di 
 
 <p align="center">
   <a href="https://github.com/vimuw/El-Sbobinator/releases/latest"><img src="https://img.shields.io/github/v/release/vimuw/El-Sbobinator?style=flat-square&color=blue&label=Versione" alt="Ultima Versione" /></a>
+  <a href="https://github.com/vimuw/El-Sbobinator/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/vimuw/El-Sbobinator/build.yml?branch=main&style=flat-square&label=CI" alt="Build Status" /></a>
+  <a href="https://codecov.io/gh/vimuw/El-Sbobinator"><img src="https://img.shields.io/codecov/c/github/vimuw/El-Sbobinator?style=flat-square&label=Coverage" alt="Coverage" /></a>
   <a href="https://github.com/vimuw/El-Sbobinator/releases"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-informational?style=flat-square" alt="Platform" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License: MIT" /></a>
 </p>
@@ -19,6 +21,7 @@ Client desktop open source per trasformare lezioni audio e video in dispense di 
 - **Trascrizione e Sintesi**: Converte registrazioni audio e video in dispense di studio strutturate, ripulendo il parlato da intercalari e ripetizioni e organizzando i contenuti in capitoli, paragrafi ed elenchi puntati.
 - **Modello BYOK (Bring Your Own Key)**: L'applicazione è un client desktop autonomo e gratuito, senza abbonamenti né server intermediari gestiti dallo sviluppatore. La comunicazione avviene in forma diretta e cifrata tra il computer locale e le API ufficiali di Google Gemini.
 - **Editor Sincronizzato**: Permette di riascoltare la lezione con il player audio sincronizzato (velocità da 1.0x a 3.0x) mentre si corregge la bozza, con supporto per formule scientifiche (LaTeX) e copia rapida formattata per Google Docs e Microsoft Word.
+- **Collaborazione P2P in Tempo Reale**: Supporta sessioni di studio condivise con compagni di corso tramite stanze collaborative peer-to-peer (WebRTC + CRDT Yjs), senza memorizzare testi su server esterni.
 - **Archivio Locale & Ricerca Istantanea**: Conserva lo storico delle lezioni elaborate sul computer in cartelle organizzabili, con ricerca testuale full-text ad alta velocità tra tutte le sbobine salvate.
 
 ---
