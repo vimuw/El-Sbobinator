@@ -18,38 +18,79 @@ El Sbobinator is a Windows/macOS desktop application that turns audio lectures i
 | `.github/` | Issue/PR templates, GitHub Actions build workflow |
 | `assets/` | Platform icons (`.ico`, `.icns`) |
 
-## Python module map (`el_sbobinator/`)
+## Python architecture and package map (`el_sbobinator/`)
+
+The Python backend is organized into five modular subpackages under `el_sbobinator/`, cleanly separating IPC bridge controllers, core domain persistence, the multi-phase pipeline, external services, and low-level utilities.
+
+### Entrypoints & API Facade
 
 | Module | Responsibility | Key symbols |
 |---|---|---|
-| `app_webview.py` | pywebview entrypoint, JS API, `PipelineAdapter`, `_BridgeDispatcher`, WebView2 runtime detection, cache-bust on update | `main`, `ElSbobinatorApi`, `PipelineAdapter`, `_BridgeDispatcher` |
-| `app.py` | Legacy compatibility shim — delegates to `app_webview.main` | `main`, `ElSbobinatorApp` |
-| `bridge_dispatcher.py` | Buffered event emitter flushing events via `evaluate_js` with collapsing/batching | `_BridgeDispatcher` |
-| `bridge_types.py` | `TypedDict` payload shapes shared with the frontend (`WorkTotalsPayload`, `FileDonePayload`, `ValidationResult`, …) | — |
-| `pipeline.py` | Pipeline orchestrator — probes duration, runs phases 1/2/3, exports HTML | `esegui_sbobinatura`, `_esegui_sbobinatura_impl` |
-| `pipeline_hooks.py` | Duck-typed indirection between pipeline code and whatever UI is attached | `PipelineRuntime` |
-| `pipeline_session.py` | Bootstrap/resume: session init, stage normalization, phase-1 progress restore, pre-conversion, step-time metrics | `initialize_session_context`, `PipelineSessionContext`, `restore_phase1_progress`, `ensure_preconverted_audio`, `record_step_metric` |
-| `pipeline_settings.py` | Loading + clamping settings from `session.json` (per-model defaults, legacy `macro_char_limit` migration) | `PipelineSettings`, `load_and_sanitize_settings`, `build_default_pipeline_settings` |
-| `phase1_service.py` | Phase 1: chunked transcription loop with FFmpeg prefetch + chain-exhaustion recovery | `process_phase1_transcription` |
-| `revision_service.py` | Phase 2 (macro revision with two-pass retry via `.raw.md`) and phase 3 (boundary AI fallback) | `build_macro_blocks`, `process_macro_revision_phase`, `process_boundary_revision_phase` |
-| `generation_service.py` | Gemini transport: `retry_with_quota`, key rotation, model fallback, degenerate-output guardrail | `retry_with_quota`, `try_rotate_key`, `DegenerateOutputError`, `QuotaDailyLimitError`, `AllModelsUnavailableError`, `PermanentError`, `detect_degenerate_output`, `_phase1_temperature` |
-| `model_registry.py` | Supported Gemini models, per-model defaults (`default_chunk_minutes`, `default_macro_char_limit`, `phase1_temperature`), fallback-chain helpers | `MODEL_OPTIONS`, `ModelState`, `build_model_state`, `next_model_in_chain`, `sanitize_model_name`, `sanitize_fallback_models` |
-| `prompts.py` | The three Gemini prompts (`PROMPT_SISTEMA`, `PROMPT_REVISIONE`, `PROMPT_REVISIONE_CONFINE`) | — |
-| `session_store.py` | On-disk session layout: `SessionPaths`, `new_session`, `load_session`, `save_session`, `resolve_session_paths`, `reset_session_dirs` | — |
-| `shared.py` | Fingerprint-based session IDs, `SESSION_ROOT`, atomic-write helpers, orphan-session cleanup, session-storage info cache | `_session_id_for_file`, `_session_dir_for_file`, `_atomic_write_json`, `_atomic_write_text`, `cleanup_orphan_sessions`, `get_session_storage_info` |
-| `config_service.py` | OS-aware config file paths, DPAPI (Windows) and keyring (macOS/Linux) helpers, desktop path resolution, filename sanitization | `load_config`, `save_config`, `get_desktop_dir`, `safe_output_basename` |
-| `folders_service.py` | Archive folder storage/management persisted in folders.json | `get_folders`, `save_folders` |
-| `search_service.py` | Full-text search snippet generation and match counting | `extract_text_from_html`, `count_matches`, `find_snippets` |
-| `validation_service.py` | Environment checks used by the WebUI "Validate environment" action and by the release smoke test | `validate_environment` |
-| `audio_service.py` | Thin facade over `ffmpeg_utils` (`resolve_ffmpeg`, `probe_media_duration`, `preconvert_media_to_mp3`, `cut_audio_chunk_to_mp3`) | — |
-| `ffmpeg_utils.py` | FFmpeg subprocess helpers: cancellable runner, duration probe, mono-16 kHz MP3 pre-conversion, chunk cut (stream-copy or reencode) | `get_ffmpeg_exe`, `probe_duration_seconds`, `preconvert_to_mono16k_mp3`, `cut_chunk_to_mp3` |
-| `dedup_utils.py` | Conservative pre-AI cleanup for macro blocks (exact + near-adjacent duplicates) | `local_macro_cleanup` |
-| `export_service.py` | Final assembly: load `rev_NNN.md` files, build title + markdown, write final HTML | `export_final_html_document`, `load_revised_blocks`, `resolve_output_html_path` |
-| `html_export.py` | Markdown → HTML with `markdown` + `nh3` sanitizer, list/heading normalization, CSP-locked document template | `build_html_document`, `sanitize_html_basic`, `normalize_inline_star_lists`, `normalize_heading_levels` |
-| `file_ops.py` | FS helpers used by the pywebview bridge: open_path_with_default_app, HTML body save with generation-counter concurrency guard | `open_path_with_default_app`, `read_html_content`, `save_html_body_content`, `extract_html_shell` |
-| `media_server.py` | Tiny local HTTP server with Range support so the React audio player can stream session audio | `LocalMediaServer` |
-| `logging_utils.py` | Structured logger with session-scoped context (`run_id`, `session_dir`, `stage`, `input_file`) + per-session file handler | `get_logger`, `configure_logging`, `attach_file_handler`, `detach_file_handler` |
-| `updater.py` | Auto-update: downloads the OS-specific release asset from GitHub and launches it (Windows installer / macOS DMG) | `download_and_install_update` |
+| `app_webview.py` | Primary pywebview entrypoint. Hosts `ElSbobinatorApi`, which composes domain controller mixins (`Settings`, `Session`, `Pipeline`, `Export`, `System`, `Media`, `Html`) to form the single JS-callable API boundary. | `main`, `ElSbobinatorApi` |
+| `app.py` | Legacy compatibility shim — delegates to `app_webview.main`. | `main`, `ElSbobinatorApp` |
+| `webview_entry.py` | WebView2 runtime detection on Windows, fallback installation dialog, and window instantiation. | `has_webview2_runtime`, `main` |
+
+### `bridge/` — PyWebView IPC Layer
+
+| Module | Responsibility | Key symbols |
+|---|---|---|
+| `bridge/bridge_dispatcher.py` | Buffered event emitter flushing events via `evaluate_js` with event collapsing, batching, and ~80 ms throttling. | `_BridgeDispatcher` |
+| `bridge/bridge_types.py` | Shared `TypedDict` payload schemas (`WorkTotalsPayload`, `FileDonePayload`, `ValidationResult`, …). | — |
+| `bridge/bridge_utils.py` | Shared bridge helpers and containment checks (`_path_under_root`, `_safe_relpath`, `_ALLOWED_URL_PREFIXES`). | `_path_under_root`, `_safe_relpath` |
+| `bridge/controllers/` | Domain controller mixins composed into `ElSbobinatorApi` (`ExportControllerMixin`, `HtmlControllerMixin`, `MediaControllerMixin`, `PipelineControllerMixin`, `SessionControllerMixin`, `SettingsControllerMixin`, `SystemControllerMixin`). | `*ControllerMixin` |
+
+### `pipeline/` — Transcription & Revision Orchestration
+
+| Module | Responsibility | Key symbols |
+|---|---|---|
+| `pipeline/pipeline.py` | Core pipeline runner (`esegui_sbobinatura`): orchestrates probe, phase 1 chunks, phase 2 revision, boundary passes, and final HTML export. | `esegui_sbobinatura`, `_esegui_sbobinatura_impl` |
+| `pipeline/pipeline_adapter.py` | Bridges pipeline events and worker lifecycle to `_BridgeDispatcher` for UI event broadcasting. | `PipelineAdapter` |
+| `pipeline/pipeline_hooks.py` | Duck-typed runtime wrapper decoupling pipeline execution from the concrete UI host. | `PipelineRuntime` |
+| `pipeline/pipeline_session.py` | Context bootstrap, stage normalization, crash resume, progress restore, pre-conversion management. | `initialize_session_context`, `PipelineSessionContext`, `restore_phase1_progress` |
+| `pipeline/pipeline_settings.py` | Settings sanitization, validation, per-model parameter clamping, and legacy migration. | `PipelineSettings`, `load_and_sanitize_settings` |
+
+### `services/` — Business Logic & External Integrations
+
+| Module | Responsibility | Key symbols |
+|---|---|---|
+| `services/generation_service.py` | Gemini transport: `retry_with_quota`, fallback model rotation, explicit key confirmation on exhaustion, and degenerate output guardrail. | `retry_with_quota`, `try_rotate_key`, `detect_degenerate_output` |
+| `services/gemini_errors.py` | Domain error hierarchy distinguishing transient rate limits, daily quota exhaustion, model unavailability, and unrecoverable errors. | `DegenerateOutputError`, `QuotaDailyLimitError`, `AllModelsUnavailableError`, `PermanentError` |
+| `services/phase1_service.py` | Chunked transcription loop with background FFmpeg prefetching and model chain fallback. | `process_phase1_transcription` |
+| `services/revision_service.py` | Phase 2 macro-revision with two-pass retry via `.raw.md`, and phase 3 boundary stitching. | `build_macro_blocks`, `process_macro_revision_phase`, `process_boundary_revision_phase` |
+| `services/audio_service.py` | Audio processing facade over FFmpeg (`probe_media_duration`, `preconvert_media_to_mp3`, `cut_audio_chunk_to_mp3`). | `probe_media_duration`, `resolve_ffmpeg` |
+| `services/export_service.py` | Assembles revised markdown blocks into the final titled document and coordinates HTML output. | `export_final_html_document`, `resolve_output_html_path` |
+| `services/archive_service.py` | Local session indexing, metadata aggregation, and full-text search integration across sessions. | `list_archived_sessions`, `query_archive` |
+| `services/search_service.py` | Full-text search snippet generation and keyword match counting in study notes. | `extract_text_from_html`, `find_snippets` |
+| `services/folders_service.py` | Folder organization and categorisation persisted in `folders.json`. | `get_folders`, `save_folders` |
+| `services/sharing_service.py` | Packaging and extraction of `.sbobina` archives and zip files with zip-slip and symlink defense. | `export_sbobina_package`, `import_sbobina_package` |
+| `services/config_service.py` | Config file persistence, desktop path resolution, safe filename sanitization. | `load_config`, `save_config`, `safe_output_basename` |
+| `services/network_service.py` | Connectivity monitoring and online/offline status checks. | `check_connectivity` |
+| `services/usage_service.py` | Token usage, cost estimation, and request metric tracking. | `record_usage`, `get_usage_summary` |
+| `services/validation_service.py` | Pre-flight runtime validation (FFmpeg presence, write permissions, key validity). | `validate_environment` |
+
+### `core/` — Domain Foundations & State Management
+
+| Module | Responsibility | Key symbols |
+|---|---|---|
+| `core/shared.py` | Fingerprint-based session IDs, atomic file write utilities (`_atomic_write_json`, `_atomic_write_text`), default paths. | `_session_id_for_file`, `_atomic_write_json`, `_atomic_write_text` |
+| `core/session_store.py` | On-disk session layout: `SessionPaths`, `new_session`, `load_session`, `save_session`. | `SessionPaths`, `load_session`, `save_session` |
+| `core/session_storage.py` | Storage metrics computation with cached sizing calculations. | `get_session_storage_info`, `invalidate_session_storage_cache` |
+| `core/session_cleanup.py` | Automatic purge of orphan chunks, incomplete sessions, and legacy data roots. | `cleanup_orphan_temp_chunks`, `cleanup_orphan_sessions` |
+| `core/model_registry.py` | Supported Gemini models, per-model chunk defaults, fallback chains. | `MODEL_OPTIONS`, `ModelState`, `build_model_state` |
+| `core/credentials.py` | Secure API key storage using Windows DPAPI or macOS Keychain / Secret Service. | `store_credential`, `retrieve_credential` |
+| `core/prompts.py` | Prompt templates for transcription, macro-revision, and boundary stitching. | `PROMPT_SISTEMA`, `PROMPT_REVISIONE`, `PROMPT_REVISIONE_CONFINE` |
+| `core/media_server.py` | Local streaming HTTP server with Range request support for audio playback in the editor. | `LocalMediaServer` |
+| `core/updater.py` | In-app release download, SHA-256 verification, and installer launch. | `download_and_install_update` |
+
+### `utils/` — System & File Helpers
+
+| Module | Responsibility | Key symbols |
+|---|---|---|
+| `utils/ffmpeg_utils.py` | FFmpeg subprocess execution with cancellation support, audio probing, mono-16 kHz conversion, and chunk slicing. | `get_ffmpeg_exe`, `probe_duration_seconds`, `preconvert_to_mono16k_mp3`, `cut_chunk_to_mp3` |
+| `utils/html_export.py` | Markdown-to-HTML compilation with `nh3` sanitization, list normalization, and CSP-protected document shell. | `build_html_document`, `sanitize_html_basic` |
+| `utils/file_ops.py` | Concurrency-guarded HTML body saving (`save_html_body_content`) and OS default application launcher. | `open_path_with_default_app`, `save_html_body_content` |
+| `utils/logging_utils.py` | Structured logger with automatic API key / secret redaction and per-session log files. | `get_logger`, `configure_logging`, `redact_secrets` |
+| `utils/dedup_utils.py` | Conservative duplicate text suppression prior to LLM revision. | `local_macro_cleanup` |
 
 ## Frontend module map (`webui/src/`)
 
@@ -130,7 +171,7 @@ el_sbobinator.app_webview.main()
                    rev_NNN.md → build_html_document → <Title>_Sbobina.html
 ```
 
-All pipeline → UI updates go through `PipelineRuntime` (`el_sbobinator/pipeline_hooks.py`), which forwards to `PipelineAdapter` methods on the adapter. The adapter buffers them through `_BridgeDispatcher`, which calls `window.evaluate_js("window.elSbobinatorBridge.<event>(<json>)")` roughly every 80 ms. React's `processingReducer` then consumes the events. See [`bridge_protocol.md`](./bridge_protocol.md) for the full event/API tables.
+All pipeline → UI updates go through `PipelineRuntime` (`el_sbobinator/pipeline/pipeline_hooks.py`), which forwards to `PipelineAdapter` methods on the adapter. The adapter buffers them through `_BridgeDispatcher`, which calls `window.evaluate_js("window.elSbobinatorBridge.<event>(<json>)")` roughly every 80 ms. React's `processingReducer` then consumes the events. See [`bridge_protocol.md`](./bridge_protocol.md) for the full event/API tables.
 
 ## Threading model
 
@@ -139,7 +180,7 @@ All pipeline → UI updates go through `PipelineRuntime` (`el_sbobinator/pipelin
 - **FFmpeg prefetch thread** — inside phase 1, each iteration may spawn a daemon thread that cuts the *next* chunk while the current one is being sent to Gemini (controlled by `PipelineSettings.prefetch_next_chunk`).
 - **`_BridgeDispatcher` timer** — single shared `threading.Timer` that flushes queued UI events.
 - **`LocalMediaServer` threads** — one `ThreadingTCPServer` per actively streamed audio file (LRU-capped at 5).
-- **Session-storage info thread** — one long-lived `ThreadPoolExecutor` worker in `shared.py` that recomputes total session size / count on demand (with a 30 s cache).
+- **Session-storage info thread** — one long-lived `ThreadPoolExecutor` worker in `core/session_storage.py` that recomputes total session size / count on demand (with a 30 s cache).
 
 ## Further reading
 
