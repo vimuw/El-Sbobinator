@@ -9,7 +9,10 @@ import urllib.error
 import urllib.request
 from unittest.mock import MagicMock
 
-from el_sbobinator.core.media_server import LocalMediaServer
+from el_sbobinator.core.media_server import (
+    LocalMediaServer,
+    detect_media_content_type,
+)
 
 
 def _fake_server():
@@ -187,6 +190,50 @@ class RangeRequestTests(unittest.TestCase):
             self.assertEqual(response.status, 206)
             self.assertEqual(response.headers.get("Content-Range"), "bytes 6-9/10")
             self.assertEqual(response.read(), b"6789")
+
+
+class DetectContentTypeTests(unittest.TestCase):
+    def test_detects_by_extension_when_present(self):
+        with tempfile.TemporaryDirectory() as td:
+            p_mp3 = os.path.join(td, "track.mp3")
+            with open(p_mp3, "wb") as f:
+                f.write(b"any data")
+            self.assertEqual(detect_media_content_type(p_mp3), "audio/mpeg")
+
+    def test_detects_m4a_magic_bytes_without_extension(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = os.path.join(td, "lecture_recording")
+            with open(p, "wb") as f:
+                f.write(b"\x00\x00\x00\x1cftypM4A \x00\x00\x00\x00M4A isommp42")
+            self.assertEqual(detect_media_content_type(p), "audio/mp4")
+
+    def test_detects_mp4_magic_bytes_without_extension(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = os.path.join(td, "video_recording")
+            with open(p, "wb") as f:
+                f.write(b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom")
+            self.assertEqual(detect_media_content_type(p), "video/mp4")
+
+    def test_detects_audio_magic_headers(self):
+        cases = [
+            (b"ID3\x04\x00\x00\x00\x00\x00\x00", "audio/mpeg"),
+            (b"\xff\xfb\x90\x44\x00\x00\x00\x00", "audio/mpeg"),
+            (b"RIFF\x24\x00\x00\x00WAVEfmt ", "audio/wav"),
+            (b"OggS\x00\x02\x00\x00\x00\x00\x00", "audio/ogg"),
+            (b"fLaC\x00\x00\x00\x22\x00\x00\x00", "audio/flac"),
+            (b"\x1a\x45\xdf\xa3\x93\x42\x82\x88", "video/webm"),
+            (b"plain text without magic bytes", "audio/mpeg"),
+        ]
+        with tempfile.TemporaryDirectory() as td:
+            for idx, (header, expected_mime) in enumerate(cases):
+                p = os.path.join(td, f"file_{idx}")
+                with open(p, "wb") as f:
+                    f.write(header)
+                self.assertEqual(
+                    detect_media_content_type(p),
+                    expected_mime,
+                    f"Failed for header: {header!r}",
+                )
 
 
 if __name__ == "__main__":

@@ -310,7 +310,7 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     expect(onRequestQuitConfirmation).toHaveBeenCalled();
   });
 
-  it('filesDropped calls enqueueUniqueFiles when appState is idle', () => {
+  it('filesDropped calls enqueueUniqueFiles when appState is idle or processing', () => {
     const enqueueUniqueFiles = vi.fn();
     const opts = makeMinimalHook({ enqueueUniqueFiles });
     renderHook(() => { useBridgeCallbacks(opts); });
@@ -320,6 +320,26 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     expect(enqueueUniqueFiles).toHaveBeenCalledWith(
       expect.arrayContaining([expect.objectContaining({ name: 'f.mp3' })]),
     );
+
+    enqueueUniqueFiles.mockClear();
+    opts.appStateRef.current = 'processing';
+    act(() => {
+      window.elSbobinatorBridge?.filesDropped([{ id: 'y', name: 'Fisiologia II Lezione 1 pt 1', path: '/audio', size: 200, duration: 60 }]);
+    });
+    expect(enqueueUniqueFiles).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ name: 'Fisiologia II Lezione 1 pt 1' })]),
+    );
+  });
+
+  it('filesDropped does not call enqueueUniqueFiles when appState is canceling', () => {
+    const enqueueUniqueFiles = vi.fn();
+    const opts = makeMinimalHook({ enqueueUniqueFiles });
+    opts.appStateRef.current = 'canceling';
+    renderHook(() => { useBridgeCallbacks(opts); });
+    act(() => {
+      window.elSbobinatorBridge?.filesDropped([{ id: 'x', name: 'f.mp3', path: '/f.mp3', size: 100, duration: 30 }]);
+    });
+    expect(enqueueUniqueFiles).not.toHaveBeenCalled();
   });
 
   it('fileDone callback: covers notification path for completed file', () => {

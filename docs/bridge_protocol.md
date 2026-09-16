@@ -103,7 +103,7 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
 | `ask_files()` | — | `BridgeFileItem[]` | Native multi-select dialog. |
 | `ask_media_file()` | — | `BridgeFileItem \| null` | Native single-select dialog (used to re-link audio). |
 | `check_path_exists(path)` | absolute path | `{ok, exists}` | Used when re-hydrating the queue from `localStorage`. |
-| `collect_dropped_files(names)` | list of basenames | `{ok}` | Retrieves OS paths for drag-and-dropped files via the WebView2 native-bridge; then emits `filesDropped`. Only allowed audio/video extensions are surfaced. |
+| `collect_dropped_files(names)` | list of basenames | `{ok}` | Retrieves OS paths for drag-and-dropped files via the WebView2 native-bridge; then emits `filesDropped`. Allowed audio/video formats and extensionless media files validated via FFmpeg are surfaced. |
 
 ### Processing lifecycle
 

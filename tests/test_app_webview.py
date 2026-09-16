@@ -3223,6 +3223,30 @@ class TestStreamMediaFile(unittest.TestCase):
 
         self.assertFalse(result["ok"])
 
+    def test_stream_media_file_extensionless_valid_audio(self):
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as td:
+            ext_audio = os.path.join(td, "Fisiologia II Lezione 10 pt 1")
+            with open(ext_audio, "wb") as f:
+                f.write(b"m4a container data")
+
+            with (
+                patch(
+                    "el_sbobinator.core.media_server.LocalMediaServer.stream_url_for_file",
+                    return_value="http://127.0.0.1:9000/stream-xyz/media",
+                ) as mock_server,
+                patch(
+                    "el_sbobinator.services.audio_service.probe_media_duration",
+                    return_value=(5772.0, None),
+                ),
+            ):
+                result = api.stream_media_file(ext_audio)
+                mock_server.assert_called_once_with(ext_audio)
+                self.assertTrue(result["ok"])
+                self.assertEqual(
+                    result["url"], "http://127.0.0.1:9000/stream-xyz/media"
+                )
+
     def test_extension_check_is_case_insensitive(self):
         api = ElSbobinatorApi()
         with patch(

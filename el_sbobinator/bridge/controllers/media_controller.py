@@ -38,9 +38,12 @@ class MediaControllerMixin:
         ".mp4",
         ".mkv",
         ".webm",
+        ".opus",
+        ".mov",
+        ".3gp",
     }
     _SUPPORTED_MEDIA_LABEL: ClassVar[str] = (
-        "MP3, M4A, WAV, OGG, FLAC, AAC, MP4, MKV o WEBM"
+        "MP3, M4A, WAV, OGG, FLAC, AAC, MP4, MKV, OPUS, MOV o 3GP"
     )
     _UNSUPPORTED_MEDIA_ERROR: ClassVar[str] = (
         "Formato non supportato. Seleziona un file audio/video: "
@@ -50,6 +53,39 @@ class MediaControllerMixin:
         "Impossibile leggere la durata del file. Seleziona un file audio/video "
         f"valido: {_SUPPORTED_MEDIA_LABEL}."
     )
+    _KNOWN_NON_MEDIA_EXTS: ClassVar[set[str]] = {
+        ".pdf",
+        ".docx",
+        ".doc",
+        ".txt",
+        ".rtf",
+        ".odt",
+        ".zip",
+        ".tar",
+        ".gz",
+        ".7z",
+        ".rar",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".bmp",
+        ".webp",
+        ".svg",
+        ".html",
+        ".htm",
+        ".css",
+        ".js",
+        ".json",
+        ".xml",
+        ".csv",
+        ".py",
+        ".exe",
+        ".dll",
+        ".so",
+        ".dmg",
+        ".iso",
+    }
     _ALLOWED_DROP_EXTS: ClassVar[set[str]] = _ALLOWED_MEDIA_EXTS
     _ALLOWED_STREAM_EXTS: ClassVar[set[str]] = _ALLOWED_MEDIA_EXTS
 
@@ -83,23 +119,31 @@ class MediaControllerMixin:
         )
         if candidate is None:
             return None
-        if os.path.splitext(candidate)[1].lower() not in self._ALLOWED_STREAM_EXTS:
-            return None
+        ext = os.path.splitext(candidate)[1].lower()
+        if ext not in self._ALLOWED_STREAM_EXTS:
+            if ext in self._KNOWN_NON_MEDIA_EXTS:
+                return None
+            ok, _err, _dur = self._validate_media_path(candidate, require_duration=True)
+            if not ok:
+                return None
         return candidate
 
     @staticmethod
-    def _build_file_descriptor(path: str) -> BridgeFileItem:
+    def _build_file_descriptor(
+        path: str, duration: float | None = None
+    ) -> BridgeFileItem:
         try:
             size = os.path.getsize(path)
         except Exception:
             size = 0
-        try:
-            from el_sbobinator.services.audio_service import probe_media_duration
+        if duration is None:
+            try:
+                from el_sbobinator.services.audio_service import probe_media_duration
 
-            dur_val, _reason = probe_media_duration(path)
-            duration = dur_val if dur_val else 0
-        except Exception:
-            duration = 0
+                dur_val, _reason = probe_media_duration(path)
+                duration = dur_val if dur_val else 0
+            except Exception:
+                duration = 0
         return {
             "id": path,
             "path": path,
@@ -120,10 +164,26 @@ class MediaControllerMixin:
                 None,
             )
         ext = os.path.splitext(normalized_path)[1].lower()
-        if ext not in cls._ALLOWED_MEDIA_EXTS:
+        if ext in cls._ALLOWED_MEDIA_EXTS:
+            if not require_duration:
+                return True, "", None
+            try:
+                from el_sbobinator.services.audio_service import probe_media_duration
+
+                duration, _reason = probe_media_duration(normalized_path)
+                duration_value = float(duration or 0)
+            except Exception:
+                duration_value = 0.0
+            if duration_value <= 0:
+                return False, cls._UNREADABLE_MEDIA_ERROR, None
+            return True, "", duration_value
+
+        if ext in cls._KNOWN_NON_MEDIA_EXTS:
+            # Il file ha un'estensione non multimediale nota (es. .pdf, .docx, .txt)
             return False, cls._UNSUPPORTED_MEDIA_ERROR, None
-        if not require_duration:
-            return True, "", None
+
+        # Per file senza estensione o con pseudo-estensioni (es. date o numeri nel nome),
+        # verifica tramite FFmpeg se contengono uno stream multimediale decodificabile.
         try:
             from el_sbobinator.services.audio_service import probe_media_duration
 
@@ -132,15 +192,15 @@ class MediaControllerMixin:
         except Exception:
             duration_value = 0.0
         if duration_value <= 0:
-            return False, cls._UNREADABLE_MEDIA_ERROR, None
+            return False, cls._UNSUPPORTED_MEDIA_ERROR, None
         return True, "", duration_value
 
     def _build_valid_media_descriptor(self, path: str) -> BridgeFileItem | None:
-        ok, error, _duration = self._validate_media_path(path)
+        ok, error, probed_duration = self._validate_media_path(path)
         if not ok:
             self._push_console(f"⚠ {error}")
             return None
-        return self._build_file_descriptor(path)
+        return self._build_file_descriptor(path, duration=probed_duration)
 
     def _validate_processing_files(self, files: list[BridgeFileItem]) -> str | None:
         for file_info in files:
@@ -162,8 +222,9 @@ class MediaControllerMixin:
                 webview.OPEN_DIALOG,
                 allow_multiple=True,
                 file_types=(
-                    "Audio (*.mp3;*.m4a;*.wav;*.ogg;*.flac;*.aac)",
-                    "Video (*.mp4;*.mkv;*.webm)",
+                    "Audio (*.mp3;*.m4a;*.wav;*.ogg;*.flac;*.aac;*.opus)",
+                    "Video (*.mp4;*.mkv;*.webm;*.mov;*.3gp)",
+                    "Tutti i file (*.*)",
                 ),
             )
         except Exception:
@@ -194,8 +255,9 @@ class MediaControllerMixin:
                 webview.OPEN_DIALOG,
                 allow_multiple=False,
                 file_types=(
-                    "Audio (*.mp3;*.m4a;*.wav;*.ogg;*.flac;*.aac)",
-                    "Video (*.mp4;*.mkv;*.webm)",
+                    "Audio (*.mp3;*.m4a;*.wav;*.ogg;*.flac;*.aac;*.opus)",
+                    "Video (*.mp4;*.mkv;*.webm;*.mov;*.3gp)",
+                    "Tutti i file (*.*)",
                 ),
             )
         except Exception:
@@ -222,9 +284,15 @@ class MediaControllerMixin:
         name_set = {str(n) for n in (names or [])}
         descriptors = []
         for _basename, fullpath in _drain_dnd_paths(name_set):
+            if not os.path.isfile(fullpath):
+                continue
             ext = os.path.splitext(fullpath)[1].lower()
-            if ext in self._ALLOWED_DROP_EXTS and os.path.isfile(fullpath):
+            if ext in self._ALLOWED_DROP_EXTS:
                 descriptors.append(self._build_file_descriptor(fullpath))
+            elif ext not in self._KNOWN_NON_MEDIA_EXTS:
+                descriptor = self._build_valid_media_descriptor(fullpath)
+                if descriptor is not None:
+                    descriptors.append(descriptor)
         if descriptors:
             self._adapter.emit("filesDropped", descriptors, batched=False)
         return bridge_ok()
@@ -268,7 +336,13 @@ class MediaControllerMixin:
             )
         ext = os.path.splitext(resolved_file_path)[1].lower()
         if ext not in self._ALLOWED_STREAM_EXTS:
-            return bridge_error("Tipo di file non supportato per lo streaming.")
+            if ext in self._KNOWN_NON_MEDIA_EXTS:
+                return bridge_error("Tipo di file non supportato per lo streaming.")
+            ok, _err, _dur = self._validate_media_path(
+                resolved_file_path, require_duration=True
+            )
+            if not ok:
+                return bridge_error("Tipo di file non supportato per lo streaming.")
         try:
             return bridge_ok(
                 url=LocalMediaServer.stream_url_for_file(resolved_file_path)

@@ -3,12 +3,70 @@ import { type FileDescriptor, type FileItem, type ProcessDonePayload, type Proce
 import { type ConfirmActionState } from './useConfirmModal';
 import { STORAGE_KEYS } from '../storageKeys';
 
-const SUPPORTED_MEDIA_EXTENSIONS = new Set(['.mp3', '.m4a', '.wav', '.ogg', '.flac', '.aac', '.mp4', '.mkv', '.webm']);
-const UNSUPPORTED_MEDIA_ERROR = 'Formato non supportato. Seleziona un file audio/video: MP3, M4A, WAV, OGG, FLAC, AAC, MP4, MKV o WEBM.';
+const SUPPORTED_MEDIA_EXTENSIONS = new Set([
+  '.mp3',
+  '.m4a',
+  '.wav',
+  '.ogg',
+  '.flac',
+  '.aac',
+  '.mp4',
+  '.mkv',
+  '.webm',
+  '.opus',
+  '.mov',
+  '.3gp',
+]);
+
+const KNOWN_NON_MEDIA_EXTENSIONS = new Set([
+  '.pdf',
+  '.docx',
+  '.doc',
+  '.txt',
+  '.rtf',
+  '.odt',
+  '.zip',
+  '.tar',
+  '.gz',
+  '.7z',
+  '.rar',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.bmp',
+  '.webp',
+  '.svg',
+  '.html',
+  '.htm',
+  '.css',
+  '.js',
+  '.json',
+  '.xml',
+  '.csv',
+  '.py',
+  '.exe',
+  '.dll',
+  '.so',
+  '.dmg',
+  '.iso',
+]);
+
+const UNSUPPORTED_MEDIA_ERROR = 'Formato non supportato. Seleziona un file audio/video valido.';
 
 export function isSupportedMediaPath(path: string): boolean {
-  const match = String(path || '').trim().toLowerCase().match(/\.[^.\\/]+$/);
-  return Boolean(match && SUPPORTED_MEDIA_EXTENSIONS.has(match[0]));
+  const clean = String(path || '').trim();
+  if (!clean) return false;
+  const match = clean.toLowerCase().match(/\.[^.\\/]+$/);
+  if (match) {
+    if (KNOWN_NON_MEDIA_EXTENSIONS.has(match[0])) {
+      return false;
+    }
+    if (SUPPORTED_MEDIA_EXTENSIONS.has(match[0])) {
+      return true;
+    }
+  }
+  return true;
 }
 
 function getErrorMessage(error: unknown): string {

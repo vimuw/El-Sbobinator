@@ -15,6 +15,37 @@ import uuid
 from typing import ClassVar
 
 
+def detect_media_content_type(path: str) -> str:
+    """Detect media MIME content-type using mimetypes or container magic bytes."""
+    ctype, _ = mimetypes.guess_type(path)
+    if ctype:
+        return ctype
+    try:
+        with open(path, "rb") as handle:
+            header = handle.read(64)
+        if len(header) >= 8:
+            if header[4:8] == b"ftyp":
+                brand = header[8:12].strip()
+                if brand in (b"M4A", b"M4B", b"M4P"):
+                    return "audio/mp4"
+                return "video/mp4"
+            if header[:3] == b"ID3" or (
+                header[0] == 0xFF and (header[1] & 0xE0) == 0xE0
+            ):
+                return "audio/mpeg"
+            if header[:4] == b"RIFF" and len(header) >= 12 and header[8:12] == b"WAVE":
+                return "audio/wav"
+            if header[:4] == b"OggS":
+                return "audio/ogg"
+            if header[:4] == b"fLaC":
+                return "audio/flac"
+            if header[:4] == b"\x1a\x45\xdf\xa3":
+                return "video/webm"
+    except Exception:
+        pass
+    return "audio/mpeg"
+
+
 class LocalMediaServer:
     _servers: ClassVar[dict[str, tuple[socketserver.ThreadingTCPServer, int, str]]] = {}
     _lock: ClassVar[threading.Lock] = threading.Lock()
@@ -106,8 +137,8 @@ class LocalMediaServer:
 
                         length = end - start + 1
                         self.send_response(status_code)
-                        ctype, _ = mimetypes.guess_type(path)
-                        self.send_header("Content-Type", ctype or "audio/mpeg")
+                        ctype = detect_media_content_type(path)
+                        self.send_header("Content-Type", ctype)
                         self.send_header("Accept-Ranges", "bytes")
                         self.send_header("Content-Length", str(length))
                         if status_code == 206:

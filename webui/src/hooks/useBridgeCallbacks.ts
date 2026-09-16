@@ -101,7 +101,7 @@ export function useBridgeCallbacks(options: {
         }
       },
       onFilesDropped: (droppedFiles: FileDescriptor[]) => {
-        if (appStateRef.current !== 'idle') return;
+        if (appStateRef.current === 'canceling') return;
         const filesToAdd = droppedFiles.map(f => ({
           id: crypto.randomUUID(),
           name: f.name,

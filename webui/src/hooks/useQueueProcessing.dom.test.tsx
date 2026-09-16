@@ -15,8 +15,14 @@ describe('useQueueProcessing', () => {
     expect(isSupportedMediaPath('audio.mp3')).toBe(true);
     expect(isSupportedMediaPath('video.mp4')).toBe(true);
     expect(isSupportedMediaPath('recording.m4a')).toBe(true);
+    expect(isSupportedMediaPath('voice_memo.opus')).toBe(true);
+    expect(isSupportedMediaPath('video.mov')).toBe(true);
+    expect(isSupportedMediaPath('audio.3gp')).toBe(true);
+    expect(isSupportedMediaPath('Fisiologia II Lezione 10 pt 1')).toBe(true);
+    expect(isSupportedMediaPath('Fisiologia II Lezione 10.10.2024')).toBe(true);
     expect(isSupportedMediaPath('document.pdf')).toBe(false);
     expect(isSupportedMediaPath('image.png')).toBe(false);
+    expect(isSupportedMediaPath('library.so')).toBe(false);
     expect(isSupportedMediaPath('')).toBe(false);
   });
 

@@ -3,6 +3,7 @@ import tempfile
 import threading
 import unittest
 from collections import OrderedDict
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 from el_sbobinator.bridge.controllers.export_controller import ExportControllerMixin
@@ -483,6 +484,83 @@ class TestMediaController(unittest.TestCase):
                 self.assertTrue(ok)
                 self.assertEqual(dur, 42.0)
 
+            # Extensionless media with valid audio probe
+            ext_audio = os.path.join(td, "Fisiologia II Lezione 1 pt 1")
+            with open(ext_audio, "wb") as f:
+                f.write(b"m4a container data")
+
+            with patch(
+                "el_sbobinator.services.audio_service.probe_media_duration",
+                return_value=(3320.0, None),
+            ):
+                ok, _err, dur = MediaControllerMixin._validate_media_path(
+                    ext_audio, require_duration=False
+                )
+                self.assertTrue(ok)
+                self.assertEqual(dur, 3320.0)
+
+                ok2, _err2, dur2 = MediaControllerMixin._validate_media_path(
+                    ext_audio, require_duration=True
+                )
+                self.assertTrue(ok2)
+                self.assertEqual(dur2, 3320.0)
+
+            # Extensionless media with dots in filename (e.g. date)
+            dotted_audio = os.path.join(td, "Fisiologia II Lezione 10.10.2024")
+            with open(dotted_audio, "wb") as f:
+                f.write(b"m4a container data")
+
+            with patch(
+                "el_sbobinator.services.audio_service.probe_media_duration",
+                return_value=(2800.0, None),
+            ) as mock_probe:
+                ok, _err, dur = MediaControllerMixin._validate_media_path(
+                    dotted_audio, require_duration=False
+                )
+                self.assertTrue(ok)
+                self.assertEqual(dur, 2800.0)
+
+                # Verify _build_valid_media_descriptor does not re-probe duration
+                mock_probe.reset_mock()
+                host = DummyMediaHost()
+                desc = host._build_valid_media_descriptor(dotted_audio)
+                self.assertIsNotNone(desc)
+                assert desc is not None
+                self.assertEqual(desc.get("duration"), 2800.0)
+                mock_probe.assert_called_once()
+
+            # Extensionless non-media file (probe returns no duration)
+            ext_text = os.path.join(td, "README")
+            with open(ext_text, "w") as f:
+                f.write("text without extension")
+
+            with patch(
+                "el_sbobinator.services.audio_service.probe_media_duration",
+                return_value=(None, "duration_NA"),
+            ):
+                ok, _err, dur = MediaControllerMixin._validate_media_path(
+                    ext_text, require_duration=False
+                )
+                self.assertFalse(ok)
+                self.assertIsNone(dur)
+
+    def test_supported_media_label_includes_all_formats(self):
+        label = MediaControllerMixin._SUPPORTED_MEDIA_LABEL
+        for ext in [
+            "OPUS",
+            "MOV",
+            "3GP",
+            "MP3",
+            "M4A",
+            "WAV",
+            "OGG",
+            "FLAC",
+            "AAC",
+            "MP4",
+            "MKV",
+        ]:
+            self.assertIn(ext, label)
+
     def test_ask_files_no_window(self):
         host = DummyMediaHost(window=None)
         self.assertEqual(host.ask_files(), [])
@@ -514,6 +592,34 @@ class TestMediaController(unittest.TestCase):
     def test_check_path_exists(self):
         host = DummyMediaHost()
         self.assertFalse(host.check_path_exists("/nonexistent/file")["exists"])
+
+    def test_collect_dropped_files_extensionless(self):
+        with tempfile.TemporaryDirectory() as td:
+            ext_audio = os.path.join(td, "Fisiologia II Lezione 1 pt 1")
+            with open(ext_audio, "wb") as f:
+                f.write(b"fake audio data")
+
+            host = DummyMediaHost()
+            with (
+                patch(
+                    "el_sbobinator.bridge.controllers.media_controller._drain_dnd_paths",
+                    return_value=[("Fisiologia II Lezione 1 pt 1", ext_audio)],
+                ),
+                patch(
+                    "el_sbobinator.services.audio_service.probe_media_duration",
+                    return_value=(3320.0, None),
+                ),
+            ):
+                res = host.collect_dropped_files(["Fisiologia II Lezione 1 pt 1"])
+                self.assertTrue(res.get("ok"))
+                mock_emit = cast(MagicMock, host._adapter.emit)
+                mock_emit.assert_called_once()
+                call_args = mock_emit.call_args
+                self.assertEqual(call_args[0][0], "filesDropped")
+                descriptors = call_args[0][1]
+                self.assertEqual(len(descriptors), 1)
+                self.assertEqual(descriptors[0]["path"], ext_audio)
+                self.assertEqual(descriptors[0]["duration"], 3320.0)
 
 
 class TestHtmlController(unittest.TestCase):
