@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { ArchivePage } from './ArchivePage';
@@ -332,25 +332,28 @@ describe('ArchivePage', () => {
 
     // Switch to full-text search mode
     const modeBtn = screen.getByTitle('Testo completo (Ricerca nel contenuto)');
-    fireEvent.click(modeBtn);
-
-    const input = screen.getByPlaceholderText('Cerca nel contenuto...');
-    fireEvent.change(input, { target: { value: 'epitelio' } });
-
-    // Wait for debounced search
-    await vi.waitFor(() => {
-      expect(mockSearchSessions).toHaveBeenCalledWith('epitelio', 100);
+    act(() => {
+      fireEvent.click(modeBtn);
     });
 
-    await vi.waitFor(() => {
+    const input = screen.getByPlaceholderText('Cerca nel contenuto...');
+    act(() => {
+      fireEvent.change(input, { target: { value: 'epitelio' } });
+    });
+
+    // Wait for debounced search and results
+    await waitFor(() => {
+      expect(mockSearchSessions).toHaveBeenCalledWith('epitelio', 100);
       expect(screen.getByText('1+ sbobine trovate')).toBeTruthy();
     });
 
     // SortMenu remains visible and includes full-text relevance option
     const sortBtn = screen.getByRole('button', { name: 'Cambia ordinamento' });
     expect(sortBtn).toBeTruthy();
-    fireEvent.click(sortBtn);
-    expect(screen.getByText('Più occorrenze')).toBeTruthy();
+    act(() => {
+      fireEvent.click(sortBtn);
+    });
+    expect(await screen.findByText('Più occorrenze')).toBeTruthy();
   });
 
   it('calls onNotification when importing sbobina package fails with error', async () => {
