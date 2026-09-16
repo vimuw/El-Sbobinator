@@ -28,6 +28,7 @@ interface UseQueueIngestOptions {
   appStateRef: React.MutableRefObject<string>;
   apiReady: boolean;
   appendConsole: (msg: string) => void;
+  onFilesAddedToBatch?: (count: number) => void;
 }
 
 export function useQueueIngest({
@@ -41,6 +42,7 @@ export function useQueueIngest({
   appStateRef,
   apiReady,
   appendConsole,
+  onFilesAddedToBatch,
 }: UseQueueIngestOptions) {
   const [duplicatePrompt, setDuplicatePrompt] = useState<DuplicatePrompt>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -114,14 +116,19 @@ export function useQueueIngest({
         }
       }
 
-      if (uniqueFiles.length > 0) dispatch({ type: 'queue/add', files: uniqueFiles });
+      if (uniqueFiles.length > 0) {
+        dispatch({ type: 'queue/add', files: uniqueFiles });
+        if (appStateRef.current === 'processing') {
+          onFilesAddedToBatch?.(uniqueFiles.length);
+        }
+      }
       if (alreadyProcessedMatches.length > 0) {
         setDuplicatePrompt({ kind: 'already-processed', matches: alreadyProcessedMatches, alsoInQueue: inQueueNames.length > 0 ? inQueueNames : undefined });
       } else if (inQueueNames.length > 0) {
         setDuplicatePrompt({ kind: 'in-queue', filenames: inQueueNames });
       }
     },
-    [dispatch, filesRef, archiveSessionsRef, getFileFingerprint],
+    [dispatch, filesRef, archiveSessionsRef, getFileFingerprint, appStateRef, onFilesAddedToBatch],
   );
 
   const handleDuplicateAddAgain = useCallback(
@@ -155,16 +162,19 @@ export function useQueueIngest({
           dispatch({ type: 'queue/add', files: [{ ...match.incoming, id: replacementId, resumeSession: false, allowCompletedDestroy: true }] });
         }
       }
+      if (appStateRef.current === 'processing' && matches.length > 0) {
+        onFilesAddedToBatch?.(matches.length);
+      }
       if (sessionDirsToHide.size > 0) {
         setArchiveSessions(prev => prev.filter(s => !sessionDirsToHide.has(s.session_dir)));
         setArchiveTotal(prev => Math.max(0, prev - sessionDirsToHide.size));
       }
     },
-    [archiveSessionsRef, dispatch, pendingArchiveReplacementsRef, setArchiveSessions, setArchiveTotal],
+    [archiveSessionsRef, dispatch, pendingArchiveReplacementsRef, setArchiveSessions, setArchiveTotal, appStateRef, onFilesAddedToBatch],
   );
 
   const handleBrowseClick = async () => {
-    if (appState !== 'idle') return;
+    if (appState === 'canceling') return;
     if (!apiReady || !window.pywebview || !window.pywebview.api) {
       appendConsole('⚠ In attesa della connessione con Python... riprova tra un momento.');
       return;
@@ -192,7 +202,7 @@ export function useQueueIngest({
   const handleDragOver = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
-      if (appState === 'idle') setIsDragging(true);
+      if (appState !== 'canceling') setIsDragging(true);
     },
     [appState],
   );
@@ -204,7 +214,7 @@ export function useQueueIngest({
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(false);
-      if (appStateRef.current !== 'idle') return;
+      if (appStateRef.current === 'canceling') return;
       try {
         const w = window as WebViewHostWindow;
         if (w.chrome?.webview?.postMessageWithAdditionalObjects) {

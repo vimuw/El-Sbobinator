@@ -135,4 +135,82 @@ describe('useQueueIngest', () => {
       filenames: ['lesson1.mp3'],
     });
   });
+
+  it('notifies onFilesAddedToBatch when new files are enqueued during processing', () => {
+    const filesRef = { current: [] as FileItem[] };
+    const archiveSessionsRef = { current: [] };
+    const pendingArchiveReplacementsRef = { current: new Map() };
+    const appStateRef = { current: 'processing' };
+    const onFilesAddedToBatch = vi.fn();
+
+    const { result } = renderHook(() =>
+      useQueueIngest({
+        filesRef,
+        archiveSessionsRef,
+        pendingArchiveReplacementsRef,
+        setArchiveSessions,
+        setArchiveTotal,
+        dispatch,
+        appState: 'processing',
+        appStateRef,
+        apiReady: true,
+        appendConsole,
+        onFilesAddedToBatch,
+      }),
+    );
+
+    const newFile: FileItem = {
+      id: 'f2',
+      name: 'lesson2.mp3',
+      path: '/path/lesson2.mp3',
+      size: 5000,
+      duration: 100,
+      status: 'queued',
+      progress: 0,
+      phase: 0,
+    };
+
+    act(() => {
+      result.current.enqueueUniqueFiles([newFile]);
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'queue/add',
+      files: [newFile],
+    });
+    expect(onFilesAddedToBatch).toHaveBeenCalledWith(1);
+  });
+
+  it('sets isDragging to true on handleDragOver when processing', () => {
+    const filesRef = { current: [] as FileItem[] };
+    const archiveSessionsRef = { current: [] };
+    const pendingArchiveReplacementsRef = { current: new Map() };
+    const appStateRef = { current: 'processing' };
+
+    const { result } = renderHook(() =>
+      useQueueIngest({
+        filesRef,
+        archiveSessionsRef,
+        pendingArchiveReplacementsRef,
+        setArchiveSessions,
+        setArchiveTotal,
+        dispatch,
+        appState: 'processing',
+        appStateRef,
+        apiReady: true,
+        appendConsole,
+      }),
+    );
+
+    const mockEvent = {
+      preventDefault: vi.fn(),
+    } as unknown as React.DragEvent;
+
+    act(() => {
+      result.current.handleDragOver(mockEvent);
+    });
+
+    expect(mockEvent.preventDefault).toHaveBeenCalled();
+    expect(result.current.isDragging).toBe(true);
+  });
 });

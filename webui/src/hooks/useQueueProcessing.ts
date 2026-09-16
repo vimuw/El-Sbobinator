@@ -156,6 +156,19 @@ export function useQueueProcessing({
     void refreshArchiveSessions();
   }, [onBatchReset, refreshArchiveSessions]);
 
+  const onFilesAddedToBatch = useCallback((count: number) => {
+    if (count <= 0) return;
+    if (appStateRef.current === 'processing') {
+      setBatchTotal(prev => (prev > 0 ? prev + count : batchCompleted + 1 + count));
+    }
+  }, [appStateRef, batchCompleted]);
+
+  const onFileRemovedFromBatch = useCallback(() => {
+    if (appStateRef.current === 'processing') {
+      setBatchTotal(prev => (prev > 0 ? Math.max(batchCompleted + 1, prev - 1) : 0));
+    }
+  }, [appStateRef, batchCompleted]);
+
   return {
     batchTotal,
     setBatchTotal,
@@ -168,5 +181,7 @@ export function useQueueProcessing({
     onBatchReset,
     onBatchFullyDone,
     resolveQueuedFilesForProcessing,
+    onFilesAddedToBatch,
+    onFileRemovedFromBatch,
   };
 }

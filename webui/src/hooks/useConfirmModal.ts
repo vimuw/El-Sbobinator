@@ -37,6 +37,7 @@ interface UseConfirmModalOptions {
   normalizeSessionDir: (value?: string) => string;
   appendConsole: (msg: string) => void;
   isQuittingRef?: React.RefObject<boolean>;
+  onFileRemovedFromBatch?: () => void;
 }
 
 export function useConfirmModal({
@@ -52,6 +53,7 @@ export function useConfirmModal({
   normalizeSessionDir,
   appendConsole,
   isQuittingRef,
+  onFileRemovedFromBatch,
 }: UseConfirmModalOptions) {
   const [confirmAction, setConfirmAction] = useState<ConfirmActionState | null>(null);
 
@@ -171,6 +173,7 @@ export function useConfirmModal({
       const removedFile = filesRef.current.find(f => f.id === confirmAction.fileId);
       dispatch({ type: 'queue/remove', id: confirmAction.fileId });
       setConfirmAction(null);
+      if (removedFile?.status === 'queued') onFileRemovedFromBatch?.();
       if (removedFile?.status === 'done') void refreshArchiveSessions();
       return;
     }
@@ -248,6 +251,7 @@ export function useConfirmModal({
     setArchiveTotal,
     foldersRef,
     setFolders,
+    onFileRemovedFromBatch,
   ]);
 
   const requestQuitConfirmation = useCallback(() => {

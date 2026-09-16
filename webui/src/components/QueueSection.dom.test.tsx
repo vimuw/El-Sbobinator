@@ -37,6 +37,7 @@ interface TestOverrides {
   onStart?: () => void;
   onStop?: () => void;
   onOpenSettings?: () => void;
+  onAddFiles?: () => void;
 }
 
 function makeProps(overrides: TestOverrides = {}): QueueSectionProps {
@@ -73,6 +74,7 @@ function makeProps(overrides: TestOverrides = {}): QueueSectionProps {
       onStart: overrides.onStart ?? vi.fn(),
       onStop: overrides.onStop ?? vi.fn(),
       onOpenSettings: overrides.onOpenSettings,
+      onAddFiles: overrides.onAddFiles,
     },
   };
 }
@@ -244,5 +246,54 @@ describe('QueueSection', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Opzioni coda' }));
     expect(screen.queryByRole('menuitem', { name: 'Svuota coda' })).toBeNull();
+  });
+
+  it('hides Aggiungi audio button when idle because dropzone is already visible', () => {
+    const onAddFiles = vi.fn();
+    render(<QueueSection {...makeProps({ onAddFiles, appState: 'idle' })} />);
+    expect(screen.queryByRole('button', { name: 'Aggiungi audio' })).toBeNull();
+  });
+
+  it('hides Aggiungi audio button when canceling', () => {
+    const onAddFiles = vi.fn();
+    render(<QueueSection {...makeProps({ onAddFiles, appState: 'canceling' })} />);
+    expect(screen.queryByRole('button', { name: 'Aggiungi audio' })).toBeNull();
+  });
+
+  it('renders Aggiungi audio button when processing and handles click', () => {
+    const onAddFiles = vi.fn();
+    render(
+      <QueueSection
+        {...makeProps({
+          onAddFiles,
+          appState: 'processing',
+          pendingFiles: [makeFile({ status: 'processing' })],
+        })}
+      />,
+    );
+    const addBtn = screen.getByRole('button', { name: 'Aggiungi audio' });
+    expect(addBtn).toBeTruthy();
+    fireEvent.click(addBtn);
+    expect(onAddFiles).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows drag handles during processing when at least 2 queued files exist', () => {
+    const files = [
+      makeFile({ id: 'f0', name: 'current.mp3', status: 'processing' }),
+      makeFile({ id: 'f1', name: 'queued1.mp3', status: 'queued' }),
+      makeFile({ id: 'f2', name: 'queued2.mp3', status: 'queued' }),
+    ];
+    render(
+      <QueueSection
+        {...makeProps({
+          pendingFiles: files,
+          queuedCount: 2,
+          appState: 'processing',
+        })}
+      />,
+    );
+    const handles = screen.getAllByLabelText('Trascina per riordinare');
+    // The two queued files have drag handles, processing does not
+    expect(handles.length).toBe(2);
   });
 });

@@ -112,4 +112,46 @@ describe('useQueueProcessing', () => {
     expect(started).toBe(false);
     expect(setConfirmAction).toHaveBeenCalledWith({ type: 'low-disk-warning', warning: lowDiskWarning });
   });
+
+  it('increments and decrements batchTotal dynamically when processing', () => {
+    const files: FileItem[] = [
+      { id: '1', path: '/test/audio1.mp3', name: 'audio1.mp3', size: 1000, duration: 10, status: 'processing', progress: 0, phase: 1 },
+      { id: '2', path: '/test/audio2.mp3', name: 'audio2.mp3', size: 1000, duration: 10, status: 'queued', progress: 0, phase: 0 },
+    ];
+    const filesRef = { current: files };
+    const appStateRef = { current: 'processing' as const };
+    const dispatch = vi.fn();
+    const appendConsole = vi.fn();
+    const setConfirmAction = vi.fn();
+    const refreshArchiveSessions = vi.fn().mockResolvedValue(undefined);
+
+    const { result } = renderHook(() =>
+      useQueueProcessing({
+        filesRef,
+        appStateRef,
+        apiKey: 'AIzaSyTestKey_123456789012345678901',
+        preferredModel: 'gemini-2.5-flash',
+        fallbackModels: [],
+        dispatch,
+        appendConsole,
+        setConfirmAction,
+        refreshArchiveSessions,
+      }),
+    );
+
+    act(() => {
+      result.current.setBatchTotal(2);
+    });
+    expect(result.current.batchTotal).toBe(2);
+
+    act(() => {
+      result.current.onFilesAddedToBatch(2);
+    });
+    expect(result.current.batchTotal).toBe(4);
+
+    act(() => {
+      result.current.onFileRemovedFromBatch();
+    });
+    expect(result.current.batchTotal).toBe(3);
+  });
 });

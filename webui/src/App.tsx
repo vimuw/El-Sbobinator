@@ -180,6 +180,9 @@ export default function App() {
     handleRetryFailedRevisionBlocks: useCallback((sessionDir: string, fileId?: string) => handleRetryFailedRevisionBlocksRef.current(sessionDir, fileId), []),
   });
 
+  const onFilesAddedToBatchRef = useRef<(count: number) => void>(() => {});
+  const onFileRemovedFromBatchRef = useRef<() => void>(() => {});
+
   const {
     duplicatePrompt,
     setDuplicatePrompt,
@@ -201,6 +204,7 @@ export default function App() {
     appStateRef,
     apiReady,
     appendConsole,
+    onFilesAddedToBatch: useCallback((count: number) => onFilesAddedToBatchRef.current(count), []),
   });
 
   const {
@@ -222,6 +226,7 @@ export default function App() {
     normalizeSessionDir,
     appendConsole,
     isQuittingRef,
+    onFileRemovedFromBatch: useCallback(() => onFileRemovedFromBatchRef.current(), []),
   });
 
   const {
@@ -247,6 +252,8 @@ export default function App() {
     onFileContinued,
     onBatchReset,
     onBatchFullyDone,
+    onFilesAddedToBatch,
+    onFileRemovedFromBatch,
   } = useQueueProcessing({
     filesRef,
     appStateRef,
@@ -298,10 +305,12 @@ export default function App() {
     installUpdateRef.current = installUpdate;
     handleRetryFailedRevisionBlocksRef.current = handleRetryFailedRevisionBlocks;
     startProcessingRef.current = startProcessing;
+    onFilesAddedToBatchRef.current = onFilesAddedToBatch;
+    onFileRemovedFromBatchRef.current = onFileRemovedFromBatch;
     filesRef.current = files;
     appStateRef.current = appState;
     autoContinueRef.current = autoContinue;
-  }, [installUpdate, handleRetryFailedRevisionBlocks, startProcessing, files, appState, autoContinue]);
+  }, [installUpdate, handleRetryFailedRevisionBlocks, startProcessing, onFilesAddedToBatch, onFileRemovedFromBatch, files, appState, autoContinue]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEYS.AUTO_CONTINUE, String(autoContinue)); } catch (_) {}
@@ -324,7 +333,7 @@ export default function App() {
   const requestRemoveFile = useCallback((id: string) => {
     const targetFile = filesRef.current.find(file => file.id === id);
     if (!targetFile) return;
-    if (appStateRef.current !== 'idle' && targetFile.status !== 'done') return;
+    if (appStateRef.current !== 'idle' && targetFile.status !== 'done' && targetFile.status !== 'queued' && targetFile.status !== 'error') return;
     setConfirmAction({ type: 'remove-file', fileId: id, fileName: targetFile.name, isDone: targetFile.status === 'done' });
   }, [setConfirmAction]);
 
@@ -332,12 +341,26 @@ export default function App() {
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
-    if (!over || active.id === over.id || appState !== 'idle') return;
+    if (!over || active.id === over.id) return;
+    if (appState !== 'idle' && appState !== 'processing' && appState !== 'canceling') return;
+
+    const activeFile = files.find(f => f.id === active.id);
+    if (!activeFile || activeFile.status !== 'queued') return;
+
     const fromIndex = files.findIndex(f => f.id === active.id);
-    const toIndex = files.findIndex(f => f.id === over.id);
+    let toIndex = files.findIndex(f => f.id === over.id);
     if (fromIndex < 0 || toIndex < 0) return;
+
+    if (appState === 'processing' || appState === 'canceling') {
+      const processingIndex = files.findIndex(f => f.status === 'processing');
+      if (processingIndex >= 0 && toIndex <= processingIndex) {
+        toIndex = processingIndex + 1;
+      }
+    }
+
+    if (fromIndex === toIndex) return;
     dispatch({ type: 'queue/reorder', fromIndex, toIndex });
-  }, [appState, files]);
+  }, [appState, files, dispatch]);
 
   const handleClearAll = useCallback(() => {
     setConfirmAction({ type: 'clear-all' });

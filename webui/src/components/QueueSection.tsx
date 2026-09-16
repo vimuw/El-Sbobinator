@@ -3,7 +3,7 @@ import { DndContext, closestCenter, useSensors, type DragEndEvent, type SensorDe
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { motion, AnimatePresence } from 'motion/react';
-import { FileAudio, MoreVertical, Play, Square, Trash2, Check, Zap } from 'lucide-react';
+import { FileAudio, MoreVertical, Play, Square, Trash2, Check, Zap, Plus } from 'lucide-react';
 import type { AppStatus, FileItem } from '../appState';
 import { shortModelName } from '../utils';
 import { QueueFileCard } from './QueueFileCard';
@@ -42,6 +42,7 @@ export interface QueueSectionActionProps {
   onStart: () => void;
   onStop: () => void;
   onOpenSettings?: () => void;
+  onAddFiles?: () => void;
 }
 
 export interface QueueSectionProps {
@@ -82,6 +83,7 @@ export const QueueSection = memo(function QueueSection({
     onStart,
     onStop,
     onOpenSettings,
+    onAddFiles,
   } = actions;
   const sortableIds = useMemo(() => pendingFiles.map(f => f.id), [pendingFiles]);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -135,42 +137,56 @@ export const QueueSection = memo(function QueueSection({
                 </>
               )}
             </div>
-            <div className="relative shrink-0" ref={menuRef}>
-              <button
-                type="button"
-                className="icon-button compact-icon-button"
-                aria-label="Opzioni coda"
-                title="Opzioni coda"
-                onClick={() => setMenuOpen(v => !v)}
-              >
-                <MoreVertical className="w-4 h-4" />
-              </button>
-              {menuOpen && (
-                <div role="menu" className="kebab-dropdown">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => setAutoContinue(v => !v)}
-                    title="Avvia automaticamente il file successivo al termine di ogni sbobinatura"
-                    className={`kebab-item ${autoContinue ? 'is-active' : ''}`}
-                  >
-                    <Zap className="w-4 h-4 shrink-0" style={{ color: autoContinue ? 'var(--accent-text)' : 'var(--text-muted)' }} />
-                    <span className="grow whitespace-nowrap">Coda automatica</span>
-                    {autoContinue && <Check className="w-4 h-4 shrink-0" style={{ color: 'var(--accent-text)' }} />}
-                  </button>
-                  {appState === 'idle' && pendingFiles.length > 0 && (
+            <div className="flex items-center gap-2 shrink-0">
+              {onAddFiles && appState === 'processing' && (
+                <button
+                  type="button"
+                  onClick={onAddFiles}
+                  className="premium-button-secondary compact-button flex items-center gap-1.5"
+                  title="Aggiungi file audio alla coda"
+                  aria-label="Aggiungi audio"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline text-xs font-semibold">Aggiungi audio</span>
+                </button>
+              )}
+              <div className="relative shrink-0" ref={menuRef}>
+                <button
+                  type="button"
+                  className="icon-button compact-icon-button"
+                  aria-label="Opzioni coda"
+                  title="Opzioni coda"
+                  onClick={() => setMenuOpen(v => !v)}
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </button>
+                {menuOpen && (
+                  <div role="menu" className="kebab-dropdown">
                     <button
                       type="button"
                       role="menuitem"
-                      onClick={() => { onClearAll(); setMenuOpen(false); }}
-                      className="kebab-item is-danger"
+                      onClick={() => setAutoContinue(v => !v)}
+                      title="Avvia automaticamente il file successivo al termine di ogni sbobinatura"
+                      className={`kebab-item ${autoContinue ? 'is-active' : ''}`}
                     >
-                      <Trash2 className="w-4 h-4 shrink-0" />
-                      <span>Svuota coda</span>
+                      <Zap className="w-4 h-4 shrink-0" style={{ color: autoContinue ? 'var(--accent-text)' : 'var(--text-muted)' }} />
+                      <span className="grow whitespace-nowrap">Coda automatica</span>
+                      {autoContinue && <Check className="w-4 h-4 shrink-0" style={{ color: 'var(--accent-text)' }} />}
                     </button>
-                  )}
-                </div>
-              )}
+                    {appState === 'idle' && pendingFiles.length > 0 && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { onClearAll(); setMenuOpen(false); }}
+                        className="kebab-item is-danger"
+                      >
+                        <Trash2 className="w-4 h-4 shrink-0" />
+                        <span>Svuota coda</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -192,6 +208,9 @@ export const QueueSection = memo(function QueueSection({
               <AnimatePresence>
                 {pendingFiles.map((file) => {
                   const isActive = file.status === 'processing';
+                  const canReorder = (appState === 'processing' || appState === 'canceling')
+                    ? queuedCount >= 2
+                    : pendingFiles.length >= 2;
                   return (
                     <QueueFileCard
                       key={file.id}
@@ -203,7 +222,7 @@ export const QueueSection = memo(function QueueSection({
                       onPreview={onPreview}
                       onOpenFile={onOpenFile}
                       onOpenSettings={onOpenSettings}
-                      showDragHandle={pendingFiles.length >= 2}
+                      showDragHandle={canReorder}
                     />
                   );
                 })}

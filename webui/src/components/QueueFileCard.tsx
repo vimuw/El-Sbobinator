@@ -33,7 +33,7 @@ function QueueFileCardInner({
   showDragHandle = true,
 }: QueueFileCardProps) {
   const isCanceling = appState === 'canceling' && file.status === 'processing';
-  const isDraggable = file.status === 'queued' && appState === 'idle' && showDragHandle;
+  const isDraggable = file.status === 'queued' && showDragHandle;
   const isPhase1ChunkFailure = Boolean(file.errorText?.startsWith('phase1_chunk_failed_'));
   const isPaused = file.status === 'error' && isPausedError(file.errorText, file.errorDetail);
   const { attributes, listeners, setNodeRef, transform, transition: dndTransition, isDragging } = useSortable({
@@ -165,7 +165,7 @@ function QueueFileCardInner({
                 </button>
               )
             )}
-            {appState === 'idle' && (
+            {(appState === 'idle' || file.status === 'queued' || file.status === 'error') && file.status !== 'processing' && (
               <button
                 onClick={() => onRemove(file.id)}
                 className="icon-button compact-icon-button group/remove"

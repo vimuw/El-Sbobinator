@@ -183,6 +183,27 @@ describe('QueueFileCard', () => {
     expect(onRemove).toHaveBeenCalledWith('f1');
   });
 
+  it('shows drag handle and remove button for queued file during processing', () => {
+    const onRemove = vi.fn();
+    render(
+      <QueueWrapper>
+        <QueueFileCard file={makeFile({ status: 'queued' })} appState="processing" onRemove={onRemove} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} showDragHandle={true} />
+      </QueueWrapper>,
+    );
+    expect(screen.getByLabelText('Trascina per riordinare')).toBeTruthy();
+    expect(screen.getByLabelText('Rimuovi')).toBeTruthy();
+  });
+
+  it('does not show drag handle or remove button for actively processing file', () => {
+    render(
+      <QueueWrapper>
+        <QueueFileCard file={makeFile({ status: 'processing' })} appState="processing" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} showDragHandle={true} />
+      </QueueWrapper>,
+    );
+    expect(screen.queryByLabelText('Trascina per riordinare')).toBeNull();
+    expect(screen.queryByLabelText('Rimuovi')).toBeNull();
+  });
+
   it('formats size and duration', () => {
     render(
       <QueueWrapper>

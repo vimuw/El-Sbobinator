@@ -448,6 +448,7 @@ export function QueuePage({
                 onStart: handleQueueStart,
                 onStop: handleQueueStop,
                 onOpenSettings: handleOpenSettings,
+                onAddFiles: handleBrowseClick,
               }}
             />
 

@@ -138,6 +138,13 @@ export interface UpdateDownloadProgressPayload {
   error?: string;
 }
 
+export interface StepTimePayload {
+  kind: string;
+  seconds: number;
+  done?: number;
+  total?: number;
+}
+
 export interface BridgeCallbacks {
   appendConsole: (msg: string) => void;
   updateProgress: (value: number) => void;
@@ -146,7 +153,7 @@ export interface BridgeCallbacks {
   processDone: (data: ProcessDonePayload) => void;
   setWorkTotals: (data: WorkTotalsPayload) => void;
   updateWorkDone: (data: WorkDonePayload) => void;
-  registerStepTime: (...args: unknown[]) => void;
+  registerStepTime: (data: StepTimePayload) => void;
   setCurrentFile: (data: SetCurrentFilePayload) => void;
   fileDone: (data: FileDonePayload) => void;
   fileFailed: (data: FileFailedPayload) => void;
