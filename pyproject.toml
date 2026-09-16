@@ -51,6 +51,7 @@ addopts = "-q"
 
 [tool.coverage.run]
 source = ["el_sbobinator"]
+parallel = true
 omit = [
     "*/__init__.py",
     "el_sbobinator/app.py",
