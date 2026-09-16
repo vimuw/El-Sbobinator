@@ -1,6 +1,6 @@
 # El Sbobinator
 
-Applicazione desktop open source per trasformare lezioni audio e video in dispense di studio strutturate tramite modelli Google Gemini.
+Client desktop open source per trasformare lezioni audio e video in dispense di studio strutturate tramite modelli Google Gemini (BYOK), con player sincronizzato, formule scientifiche in LaTeX ed esportazione rapida.
 
 <p align="center">
   <a href="https://github.com/vimuw/El-Sbobinator/releases/latest"><img src="https://img.shields.io/github/v/release/vimuw/El-Sbobinator?style=flat-square&color=blue&label=Versione" alt="Ultima Versione" /></a>
@@ -17,10 +17,9 @@ Applicazione desktop open source per trasformare lezioni audio e video in dispen
 ## Funzioni Principali
 
 - **Trascrizione e Sintesi**: Converte registrazioni audio e video in dispense di studio strutturate, ripulendo il parlato da intercalari e ripetizioni e organizzando i contenuti in capitoli, paragrafi ed elenchi puntati.
-- **Obiettivo**: Abbattere i tempi di sbobinatura manuale delle lezioni universitarie, fornendo una prima bozza ordinata e pronta per la revisione anziché dover trascrivere da zero ore di registrazione.
-- **Modello BYOK (Bring Your Own Key)**: L'applicazione è gratuita e non richiede abbonamenti. Ciascun studente utilizza la propria chiave API personale e gratuita di Google Gemini: la comunicazione avviene in forma diretta tra il computer locale e Google, senza server intermediari.
-- **Editor Integrato**: Permette di riascoltare la lezione con il player audio sincronizzato (velocità da 1.0x a 3.0x) mentre si corregge la bozza, con supporto per formule scientifiche (LaTeX) e copia rapida per Google Docs e Word.
-- **Archivio Locale**: Conserva lo storico delle lezioni elaborate direttamente sul computer, consentendo di riaprirle in qualsiasi momento e di cercare istantaneamente termini o concetti tra tutte le sbobine salvate.
+- **Modello BYOK (Bring Your Own Key)**: L'applicazione è un client desktop autonomo e gratuito, senza abbonamenti né server intermediari gestiti dallo sviluppatore. La comunicazione avviene in forma diretta e cifrata tra il computer locale e le API ufficiali di Google Gemini.
+- **Editor Sincronizzato**: Permette di riascoltare la lezione con il player audio sincronizzato (velocità da 1.0x a 3.0x) mentre si corregge la bozza, con supporto per formule scientifiche (LaTeX) e copia rapida formattata per Google Docs e Microsoft Word.
+- **Archivio Locale & Ricerca Istantanea**: Conserva lo storico delle lezioni elaborate sul computer in cartelle organizzabili, con ricerca testuale full-text ad alta velocità tra tutte le sbobine salvate.
 
 ---
 
@@ -30,7 +29,7 @@ Scarica la versione per il tuo sistema operativo:
 
 | Sistema Operativo | Pacchetto | Installazione rapida |
 | :--- | :--- | :--- |
-| **Windows** | [**Scarica per Windows (.exe)**](https://github.com/vimuw/El-Sbobinator/releases/latest) | Avvia il file `.exe` e segui la procedura guidata. |
+| **Windows** | [**Scarica per Windows (.exe)**](https://github.com/vimuw/El-Sbobinator/releases/latest) | Avvia l'installer `.exe` e segui la procedura guidata. |
 | **macOS** | [**Scarica per macOS (.dmg)**](https://github.com/vimuw/El-Sbobinator/releases/latest) | Apri il file `.dmg` e trascina *El Sbobinator* in **Applicazioni**. |
 
 > [!NOTE]
@@ -42,19 +41,17 @@ Scarica la versione per il tuo sistema operativo:
 
 Inizia a sbobinare in 4 passaggi:
 
-### 1. Ottieni la chiave Google Gemini gratuita
-L'applicazione non prevede costi né richiede carte di credito. Ogni studente utilizza la propria chiave API personale gratuita di Google:
+### 1. Ottieni la tua chiave Google Gemini
+L'applicazione opera in modalità BYOK (*Bring Your Own Key*) e non include chiavi incorporate né server proxy:
 1. Accedi a [**aistudio.google.com/apikey**](https://aistudio.google.com/apikey) con il tuo account Google.
-2. Clicca su **"Create API key"** (oppure *"Get API key"*), seleziona o crea un progetto e conferma.
-3. Copia il codice generato (`AIzaSy...`).
+2. Clicca su **"Create API key"** (oppure *"Get API key"*), seleziona o crea un progetto Google Cloud e conferma.
+3. Copia la chiave generata (`AIzaSy...`).
 
 ### 2. Inserisci la chiave nell'applicazione
-All'avvio di **El Sbobinator**, incolla la chiave nel campo iniziale e clicca su **Salva e inizia**. La chiave viene memorizzata in modo protetto nel portachiavi del sistema operativo (Windows DPAPI o macOS Keychain).
+All'avvio di **El Sbobinator**, incolla la chiave nel campo iniziale e clicca su **Salva e inizia**. La chiave viene memorizzata in modo protetto nel portachiavi sicuro del sistema operativo (Windows DPAPI o macOS Keychain).
 
 > [!NOTE]
-> **Consumo per lezione e quota del piano gratuito**: Nel piano gratuito di Google AI Studio, ciascun account dispone di una quota giornaliera di richieste. La trascrizione e revisione completa di una lezione tipica impiega mediamente tra le 15 e le 17 richieste: con una singola chiave è quindi possibile elaborare circa 1 lezione al giorno. Al raggiungimento del limite, la quota si ripristina automaticamente alle 9:00 di mattina (oppure è possibile passare a un piano con fatturazione abilitata su Google AI Studio per quote illimitate).
->
-> **Chiavi di riserva**: Nella sezione **Impostazioni** dell'applicazione è possibile configurare chiavi API secondarie di backup.
+> **Costi, quote e termini Google**: El Sbobinator non include un accesso Gemini centralizzato: ogni utente configura e utilizza la propria API key e il proprio progetto Google. Quote, limiti di traffico, disponibilità dei modelli, condizioni contrattuali ed eventuali costi dipendono dal piano e dal progetto Google dell'utente ([Termini Gemini API](https://ai.google.dev/gemini-api/terms)). Al raggiungimento del limite di quota del piano attivo, l'elaborazione si arresta fino al ripristino della quota o all'eventuale conferma di una chiave secondaria.
 
 ### 3. Trascina la registrazione e avvia
 Trascina il file audio o video direttamente nella finestra dell'applicazione (è possibile inserire più registrazioni in coda) e clicca su **Avvia Sbobinatura**.
@@ -62,15 +59,15 @@ Trascina il file audio o video direttamente nella finestra dell'applicazione (è
 - **Formati video supportati**: `.mp4`, `.mkv`, `.webm`, `.mov`, `.avi`.
 
 ### 4. Rivedi ed esporta
-Al termine dell'elaborazione, la lezione viene aperta nell'editor integrato dell'applicazione, dove è possibile riascoltare l'audio e correggere il testo. L'esportazione della sbobina avviene unicamente tramite copia e incolla: clicca su **Copia per Google Docs** per incollare la lezione direttamente su Google Docs o Word, mantenendo intatti titoli, elenchi, grassetti e formule.
+Al termine dell'elaborazione, la lezione viene aperta nell'editor integrato dell'applicazione, dove è possibile riascoltare l'audio e correggere il testo. L'esportazione della sbobina avviene tramite copia e incolla: clicca su **Copia per Google Docs** per copiare la sbobina con la formattazione preservata e incollarla in Google Docs o Microsoft Word.
 
 ---
 
 ## Privacy e Architettura dei Dati
 
-- **Elaborazione Locale e Diretta (BYOK)**: L'applicazione viene eseguita interamente sul computer dell'utente. I file audio e i testi vengono elaborati in locale e scambiati direttamente con i server di Google Gemini tramite la chiave API personale dello studente (*Bring Your Own Key*), senza alcun transito su server intermediari.
-- **Nessun Server Intermediario**: Lo sviluppatore non possiede né gestisce server o database per raccogliere, visualizzare o conservare registrazioni, trascrizioni o chiavi API. Registrazioni, bozze e trascrizioni rimangono archiviate esclusivamente sul disco locale del proprio computer.
-- **Termini del Piano Gratuito Google**: Poiché le richieste transitano direttamente verso Google tramite la chiave API personale dello studente, il trattamento dei dati inviati è regolato dai termini d'uso di Google AI Studio (che per il piano gratuito possono prevedere l'impiego dei dati per il perfezionamento dei modelli). Per i dettagli completi, consultare [**DISCLAIMER.md**](DISCLAIMER.md).
+- **Client Desktop Locale**: L'applicazione viene eseguita sul computer dell'utente e non utilizza un backend gestito dallo sviluppatore. I file e le bozze vengono conservati localmente; i contenuti necessari all'elaborazione AI vengono trasmessi direttamente agli endpoint ufficiali di Google Gemini (`generativelanguage.googleapis.com`) tramite la credenziale dell'utente.
+- **Nessun Backend Proprietario**: L'applicazione non dispone di un backend proprietario e non invia file audio, trascrizioni o API key a infrastrutture gestite dallo sviluppatore.
+- **Condizioni e Policy Esterne**: Il trattamento dei contenuti trasmessi a Gemini dipende dal servizio, dal piano e dalle condizioni applicabili al progetto dell'utente. Per le condizioni sul trattamento dei dati da parte di Google, consultare i [Termini Aggiuntivi Gemini API](https://ai.google.dev/gemini-api/terms) e il documento [**DISCLAIMER.md**](DISCLAIMER.md).
 
 ---
 
@@ -100,15 +97,15 @@ Poiché l'applicazione è open source e distribuita senza certificato a pagament
   Nella cartella **Applicazioni**, fare clic destro (o `Control` + clic) su *El Sbobinator* e selezionare **Apri**, quindi confermare nella finestra di dialogo.
 
 ### Quota giornaliera API esaurita (Errore 429)
-Se durante l'elaborazione viene raggiunto il limite giornaliero del piano gratuito (20 richieste), l'elaborazione si arresta temporaneamente. È possibile attendere il ripristino della quota (alle 9:00 di mattina) oppure configurare chiavi API di riserva nella sezione **Impostazioni**.
+Se durante l'elaborazione viene raggiunto il limite di quota del piano attivo, l'elaborazione si arresta. È possibile attendere il ripristino della quota o confermare una chiave di riserva tramite apposita finestra di dialogo.
 
 ---
 
 ## Note Legali e Responsabilità d'Uso
 
-L'uso del software è riservato a scopi di studio personale ed è vincolato al rispetto del diritto d'autore (L. 633/1941), dei regolamenti accademici sul consenso alle registrazioni, della normativa sulla tutela dei dati personali e sanitari (GDPR) e dei termini d'uso delle API di Google.
+El Sbobinator è pensato per l'utilizzo personale a fini di studio. L'utente è responsabile del rispetto della normativa applicabile, dei regolamenti del proprio ateneo, della tutela dei dati personali e dei termini d'uso delle API di Google.
 
-Per i termini completi, le condizioni d'uso vincolanti e l'esclusione di responsabilità, consultare il documento [**DISCLAIMER.md**](DISCLAIMER.md).
+Per i termini completi, le condizioni vincolanti e l'esclusione di responsabilità, consultare il documento [**DISCLAIMER.md**](DISCLAIMER.md).
 
 ---
 

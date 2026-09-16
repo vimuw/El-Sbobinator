@@ -1,36 +1,40 @@
-# Disclaimer e Termini di Utilizzo
+# Disclaimer e Condizioni di Utilizzo
 
-*El Sbobinator* è un'applicazione open source distribuita gratuitamente sotto licenza MIT. L'utilizzo del software comporta la presa visione e l'accettazione delle seguenti limitazioni ed esclusioni di responsabilità.
-
----
-
-### 1. Diritto d'Autore e Proprietà Intellettuale (L. 633/1941)
-- **Lezioni come Opere dell'Ingegno (artt. 2, 12 e 13)**: Le lezioni universitarie e i materiali didattici appartengono ai rispettivi docenti, che ne detengono i diritti esclusivi di riproduzione e diffusione. Ciò comporta che lo studente non ha alcun diritto di pubblicazione o distribuzione sui contenuti spiegati a lezione.
-- **Limiti dell'Uso Personale (art. 70)**: La legge consente la riproduzione parziale, il riassunto o la redazione di appunti esclusivamente per finalità di studio personale e didattico, purché non vi sia scopo di lucro.
+*El Sbobinator* è un'applicazione desktop open source distribuita gratuitamente sotto licenza MIT. Questo documento fornisce informazioni sui limiti di responsabilità, sul funzionamento dell'applicazione e sull'uso dei servizi terzi integrati.
 
 ---
 
-### 2. Regolamenti Universitari e Consenso alle Registrazioni
-L'acquisizione di registrazioni audio o video deve avvenire nel rispetto dei regolamenti didattici, del Codice Etico e del Regolamento di Disciplina del proprio Ateneo. Lo sviluppatore declina ogni responsabilità per registrazioni effettuate o gestite in contrasto con le indicazioni dei docenti o dei regolamenti accademici.
+### 1. Architettura Locale e Servizi di Terze Parti (BYOK)
+- **Nessun Backend Proprietario**: L'applicazione viene eseguita sul computer dell'utente e non utilizza server proxy, backend o database gestiti dallo sviluppatore. I file e le bozze vengono conservati localmente; i contenuti necessari all'elaborazione AI vengono trasmessi direttamente a Google Gemini.
+- **Comunicazione Diretta con Google Gemini**: L'applicazione adotta il modello *Bring Your Own Key* (BYOK). L'utente configura la propria API key e il proprio progetto Google. Le richieste per l'elaborazione AI vengono trasmesse direttamente e cifrate (TLS) tra la macchina dell'utente e gli endpoint ufficiali di Google (`generativelanguage.googleapis.com`).
+- **Termini e Policy di Terze Parti**: L'utilizzo delle API Gemini (incluse quote, disponibilità dei modelli, requisiti regionali, fatturazione e trattamento dei dati) è soggetto ai [Termini di Servizio di Google](https://policies.google.com/terms), ai [Termini delle Google APIs](https://developers.google.com/terms) e ai [Termini Aggiuntivi di Gemini API / AI Studio](https://ai.google.dev/gemini-api/terms) applicabili all'account e al progetto dell'utente.
+- **Requisiti di Età**: L'accesso e l'impiego delle API Gemini tramite l'applicazione sono soggetti ai requisiti di età previsti dai termini Google applicabili.
 
 ---
 
-### 3. Dati Sanitari e Tutela dei Pazienti (GDPR e Art. 622 C.P.)
-Nelle lezioni universitarie in ambito medico-sanitario possono essere discussi casi clinici o dati di pazienti reali:
-- **Divieto di Dati Identificativi**: È fatto divieto assoluto di sottoporre a elaborazione audio o testi contenenti dati che permettano di identificare pazienti reali (Art. 9 del Regolamento UE 2016/679 - GDPR).
-- **Anonimizzazione Preventiva**: È responsabilità esclusiva dello studente verificare ed eliminare qualsiasi dato identificativo prima dell'elaborazione, nel pieno rispetto del segreto professionale (art. 622 del Codice Penale). Lo sviluppatore declina ogni responsabilità per l'eventuale immissione di dati sanitari o personali non anonimizzati.
+### 2. Diritto d'Autore e Registrazioni
+L'utente è l'unico responsabile di verificare preventivamente di avere il diritto di registrare, elaborare, conservare e utilizzare le lezioni e i relativi materiali didattici, nel rispetto delle normative vigenti e dei regolamenti del proprio ateneo o istituto. L'utente non deve diffondere, pubblicare o condividere materiale protetto senza le necessarie autorizzazioni.
 
 ---
 
-### 4. Servizi di Terze Parti (Google AI Studio / Gemini API) e Trattamento Dati
-L'applicazione opera tramite architettura *Bring Your Own Key* (BYOK), fungendo unicamente da interfaccia locale tra il computer dell'utente e i server di Google Gemini:
-- **Rapporto Diretto con Google**: L'utente genera e inserisce la propria chiave API personale in piena autonomia. L'attivazione e l'impiego delle API di Google comportano l'accettazione diretta e vincolante dei [Termini di Servizio di Google](https://policies.google.com/terms) e dei [Termini di Google AI Studio / Gemini API](https://ai.google.dev/gemini-api/terms).
-- **Trattamento Dati nel Piano Gratuito (Free Tier)**: Si informa espressamente l'utente che, in conformità ai termini ufficiali di Google per il piano gratuito di Google AI Studio, i dati inviati (inclusi spezzoni audio, trascrizioni e prompt) possono essere trattati e impiegati da Google per l'addestramento e il miglioramento dei propri modelli, nonché sottoposti a eventuale revisione umana da parte del personale di Google. L'utente si assume la piena ed esclusiva responsabilità per la tipologia e la confidenzialità dei contenuti trasmessi ai server di Google.
-- **Assenza di Intermediazione dello Sviluppatore**: Lo sviluppatore non possiede né gestisce server intermediari, non ha accesso ai dati trasmessi né alle chiavi API memorizzate localmente. Lo sviluppatore declina pertanto ogni responsabilità per il trattamento dei dati operato da Google.
+### 3. Dati Personali e Sanitari
+Le registrazioni audio e video possono contenere dati personali o, nel caso di lezioni in ambito medico-sanitario, dati relativi alla salute, rientranti tra le categorie particolari di dati personali previste dall'art. 9 GDPR. L'utente è tenuto a verificare di essere legittimato a trattare tali dati per la specifica finalità e deve astenersi dall'inviare a servizi cloud esterni contenuti che non sia autorizzato a trasmettere, adottando le opportune cautele di anonimizzazione preventiva.
 
 ---
 
-### 5. Esclusione di Garanzie e Limitazione di Responsabilità (Licenza MIT)
-Il software viene fornito a titolo gratuito "così com'è" (*AS IS*), senza garanzie di alcun tipo, esplicite o implicite.
+### 4. Natura Assistiva dell'Output AI
+La trascrizione e la sintesi sono generate automaticamente da modelli di intelligenza artificiale che possono commettere inesattezze, omissioni o allucinazioni. Il testo prodotto costituisce una bozza di supporto allo studio personale e non sostituisce l'ascolto critico, i libri di testo o l'insegnamento dei docenti. L'utente è tenuto a verificare e revisionare sempre il contenuto finale.
 
-In nessun caso lo sviluppatore potrà essere ritenuto responsabile per danni diretti o indiretti di qualsiasi natura o controversie derivanti dall'uso del software. L'utente finale si assume la piena ed esclusiva responsabilità per l'utilizzo dell'applicazione e per i contenuti trattati.
+---
+
+### 5. Esclusione di Garanzie e Limitazione di Responsabilità
+Il software viene fornito a titolo gratuito "così com'è" (*AS IS*), senza garanzie di alcun tipo, esplicite o implicite. Lo sviluppatore non potrà essere ritenuto responsabile per qualsiasi danno diretto o indiretto, perdita di dati, sanzioni o controversie derivanti dall'utilizzo dell'applicazione, dalla violazione di diritti di terzi o dall'interazione con servizi cloud esterni.
+
+---
+
+### 6. Fonti e Documentazione di Riferimento
+- [Gemini API – Termini Aggiuntivi di Servizio](https://ai.google.dev/gemini-api/terms)
+- [Google APIs Terms of Service](https://developers.google.com/terms)
+- [Google Terms of Service](https://policies.google.com/terms)
+- [Regolamento (UE) 2016/679 – GDPR (EUR-Lex)](https://eur-lex.europa.eu/eli/reg/2016/679/oj)
+- [Legge 22 aprile 1941, n. 633 sul diritto d'autore (Normattiva)](https://www.normattiva.it/uri-res/N2Ls?urn:nir:stato:legge:1941-04-22;633)
