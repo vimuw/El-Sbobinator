@@ -434,8 +434,18 @@ class RetryWithQuotaTests(unittest.TestCase):
 
     def test_structured_503_exhausted_key_rotates_to_fallback_without_sleep_retry(self):
         runtime = _FakeRuntime()
-        rotated_client = object()
         call_clients = []
+
+        class _FakeModels:
+            def get(self, model=None, **_):
+                return True
+
+        class _FakeClient:
+            def __init__(self, api_key=None, **_):
+                self.api_key = api_key
+                self.models = _FakeModels()
+
+        rotated_client = _FakeClient(api_key="fallback-key")
 
         def fn(current_client):
             call_clients.append(current_client)
@@ -445,13 +455,13 @@ class RetryWithQuotaTests(unittest.TestCase):
 
         with (
             patch(
-                "el_sbobinator.services.generation_service.try_rotate_key",
-                return_value=(rotated_client, True, "fallback-key"),
-            ) as mock_rotate,
+                "el_sbobinator.services.generation_service.genai.Client",
+                return_value=rotated_client,
+            ),
             patch(
                 "el_sbobinator.services.generation_service.sleep_with_cancel",
                 side_effect=AssertionError(
-                    "503 exhausted-key path must rotate immediately, not sleep-retry"
+                    "503 exhausted-key path must prompt immediately, not sleep-retry"
                 ),
             ),
         ):
@@ -462,7 +472,7 @@ class RetryWithQuotaTests(unittest.TestCase):
                 model_name="test-model",
                 cancelled=lambda: False,
                 runtime=runtime,
-                request_fallback_key=lambda: None,
+                request_fallback_key=lambda: "fallback-key",
                 max_attempts=2,
                 retry_sleep_seconds=0.0,
                 rate_limit_sleep_seconds=0.0,
@@ -472,7 +482,6 @@ class RetryWithQuotaTests(unittest.TestCase):
         self.assertEqual(result, "ok")
         self.assertEqual(runtime.rotated_keys, ["fallback-key"])
         self.assertEqual(len(call_clients), 2)
-        mock_rotate.assert_called_once()
 
     def test_structured_503_exhausted_key_without_fallback_raises_quota_error(self):
         with self.assertRaises(QuotaDailyLimitError):
@@ -573,7 +582,7 @@ class RetryWithQuotaTests(unittest.TestCase):
                 model_name="test-model",
                 cancelled=cancel_event.is_set,
                 runtime=runtime,
-                request_fallback_key=lambda: None,
+                request_fallback_key=lambda: "fallback-key-1",
                 max_attempts=2,
                 retry_sleep_seconds=0.0,
                 rate_limit_sleep_seconds=0.0,
@@ -1758,9 +1767,11 @@ class RetryWithQuotaEdgeTests(unittest.TestCase):
                 raise RuntimeError("quota exceeded daily limit per day")
             return "ok"
 
+        rotated_client = _FakeClient(api_key="rotated-key")
+
         with patch(
-            "el_sbobinator.services.generation_service.try_rotate_key",
-            return_value=(_FakeClient(), True, "rotated-key"),
+            "el_sbobinator.services.generation_service.genai.Client",
+            return_value=rotated_client,
         ):
             _, result = retry_with_quota(
                 fn,
@@ -1769,7 +1780,7 @@ class RetryWithQuotaEdgeTests(unittest.TestCase):
                 model_name="test",
                 cancelled=lambda: False,
                 runtime=_FakeRuntime(),
-                request_fallback_key=lambda: None,
+                request_fallback_key=lambda: "rotated-key",
                 max_attempts=2,
                 retry_sleep_seconds=0.0,
                 rate_limit_sleep_seconds=0.0,

@@ -130,6 +130,12 @@ def try_rotate_key(
     logger=None,
     cancelled: Callable[[], bool] | None = None,
 ):
+    """Validate and rotate to a fallback key from a provided list.
+
+    Note: In standard processing flows, silent automatic background rotation
+    is deprecated in favor of explicit user-driven confirmation via
+    request_fallback_key() to maintain transparency with rate-limit policies.
+    """
     log = logger or get_logger("el_sbobinator.generation")
     pass_limit = len([str(item).strip() for item in fallback_keys if str(item).strip()])
     checked = 0
@@ -412,33 +418,21 @@ def _retry_on_quota(
         print("   [*] Operazione annullata dall'utente.")
         return False, client
 
-    new_c, rotated, rotated_key = try_rotate_key(
-        client,
-        fallback_keys,
-        current_model,
-        logger=log,
-        cancelled=cancelled,
-    )
-    if rotated:
-        client = new_c
-        runtime.set_effective_api_key(rotated_key)
-        if on_key_rotated is not None:
-            on_key_rotated(client)
-        return True, client
-
-    if cancelled():
-        print("   [*] Operazione annullata dall'utente.")
-        return False, client
-    new_api_key = request_fallback_key()
+    # Explicit user-driven key replacement on quota exhaustion.
+    # Automatic silent rotation is omitted to ensure transparency and prevent circumventing rate-limit policies.
+    new_api_key = request_fallback_key() if request_fallback_key else None
     if new_api_key and new_api_key.strip():
         try:
             test_c = genai.Client(api_key=new_api_key.strip())
             test_c.models.get(model=current_model)
+            if cancelled():
+                print("   [*] Operazione annullata dall'utente.")
+                return False, client
             client = test_c
             runtime.set_effective_api_key(new_api_key.strip())
             if on_key_rotated is not None:
                 on_key_rotated(client)
-            print("   [OK] Nuova API Key valida! Ripresa automatica...")
+            print("   [OK] Nuova API Key valida! Ripresa confermata dall'utente...")
             return True, client
         except Exception as err:
             print(f"   [!] Chiave non valida fornita: {redact_secrets(err)}")
