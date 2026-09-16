@@ -552,7 +552,11 @@ export default function App() {
         onAnswer={handleRegenerateAnswer}
         onDismiss={() => void handleRegenerateAnswer(null)}
       />
-      <NewKeyModal isOpen={askNewKeyPrompt} onClose={() => setAskNewKeyPrompt(false)} />
+      <NewKeyModal
+        isOpen={askNewKeyPrompt}
+        onClose={() => setAskNewKeyPrompt(false)}
+        fallbackKeys={fallbackKeys}
+      />
       <DuplicateFileModal
         prompt={duplicatePrompt}
         onDismiss={() => setDuplicatePrompt(null)}

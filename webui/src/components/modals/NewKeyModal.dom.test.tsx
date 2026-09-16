@@ -52,14 +52,38 @@ describe('NewKeyModal', () => {
     expect(btn.disabled).toBe(true);
   });
 
-  it('calls onClose and answer_new_key(null) when Annulla is clicked', () => {
+  it('calls onClose and answer_new_key(null) when Sospendi elaborazione is clicked', () => {
     const onClose = vi.fn();
     const answerNewKey = vi.fn();
     setPywebview({ answer_new_key: answerNewKey });
     render(<NewKeyModal isOpen onClose={onClose} />);
-    fireEvent.click(screen.getByText('Annulla'));
+    fireEvent.click(screen.getByText('Sospendi elaborazione'));
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(answerNewKey).toHaveBeenCalledWith(null);
+  });
+
+  it('shows 1-click button when fallbackKeys are available and handles confirmation', () => {
+    const onClose = vi.fn();
+    const answerNewKey = vi.fn();
+    setPywebview({ answer_new_key: answerNewKey });
+    const fallbackKeys = ['AIzaSyDummyFallbackKey12345678901234'];
+    render(<NewKeyModal isOpen onClose={onClose} fallbackKeys={fallbackKeys} />);
+
+    expect(screen.getByText('Chiave di riserva disponibile')).toBeTruthy();
+    expect(screen.getByText('Continua con la chiave di riserva')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Continua con la chiave di riserva'));
+    expect(answerNewKey).toHaveBeenCalledWith('AIzaSyDummyFallbackKey12345678901234');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows revealing manual input when fallbackKeys are available', () => {
+    const fallbackKeys = ['AIzaSyDummyFallbackKey12345678901234'];
+    render(<NewKeyModal isOpen onClose={vi.fn()} fallbackKeys={fallbackKeys} />);
+
+    expect(screen.queryByPlaceholderText('Incolla qui la nuova API Key...')).toBeNull();
+    fireEvent.click(screen.getByText('Oppure inserisci una chiave diversa manualmente'));
+    expect(screen.getByPlaceholderText('Incolla qui la nuova API Key...')).toBeTruthy();
   });
 
   it('calls answer_new_key with key and onClose when valid key is submitted', () => {
