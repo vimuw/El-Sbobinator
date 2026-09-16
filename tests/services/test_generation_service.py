@@ -1044,11 +1044,11 @@ class RetryWithQuotaTests(unittest.TestCase):
 
 
 class QuotaModelFallbackTests(unittest.TestCase):
-    """When all API keys are exhausted, retry_with_quota should cascade to the
-    next model in the chain instead of immediately raising QuotaDailyLimitError."""
+    """When quota is exhausted and no replacement key is provided, retry_with_quota
+    must raise QuotaDailyLimitError without automatic model switching."""
 
-    def test_all_keys_exhausted_switches_to_fallback_model(self):
-        """After all keys drained, cascade to fallback model and succeed."""
+    def test_quota_exhaustion_without_replacement_key_raises_quota_error(self):
+        """Quota exhaustion with no replacement key must raise QuotaDailyLimitError and not switch model."""
         model_state = build_model_state(
             "gemini-2.5-flash", ["gemini-3.1-flash-lite-preview"]
         )
@@ -1059,16 +1059,14 @@ class QuotaModelFallbackTests(unittest.TestCase):
                 raise RuntimeError("429 quota exceeded daily limit per day")
             return "ok"
 
-        _, result = self._run(
-            fn,
-            model_state=model_state,
-            on_model_switched=lambda old, new: switched.append((old, new)),
-        )
-        self.assertEqual(result, "ok")
-        self.assertEqual(model_state.current, "gemini-3.1-flash-lite-preview")
-        self.assertEqual(
-            switched, [("gemini-2.5-flash", "gemini-3.1-flash-lite-preview")]
-        )
+        with self.assertRaises(QuotaDailyLimitError):
+            self._run(
+                fn,
+                model_state=model_state,
+                on_model_switched=lambda old, new: switched.append((old, new)),
+            )
+        self.assertEqual(model_state.current, "gemini-2.5-flash")
+        self.assertEqual(switched, [])
 
     def test_all_keys_exhausted_no_fallback_raises_quota_error(self):
         """No fallback model in chain → QuotaDailyLimitError (regression guard)."""

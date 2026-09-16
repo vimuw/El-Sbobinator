@@ -572,75 +572,51 @@ describe('SettingsModal — session folder and cleanup', () => {
   });
 });
 
-describe('SettingsModal — fallback models list', () => {
-  it('renders fallback model card when fallbackModels is populated', async () => {
+describe('SettingsModal — model section', () => {
+  it('renders primary model select and summary', async () => {
     const models = [
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast and capable', default_chunk_minutes: 12 },
-      { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite (Preview)', summary: 'Lightweight', default_chunk_minutes: 10 },
+      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: 'Successore consigliato', default_chunk_minutes: 15 },
     ];
     render(
       <SettingsModal
         {...makeProps({
           availableModels: models,
           preferredModel: 'gemini-2.5-flash',
-          fallbackModels: ['gemini-3.1-flash-lite-preview'],
         })}
       />,
     );
     await act(async () => {
       fireEvent.click(screen.getAllByText('Generale')[0].closest('button')!);
     });
-    expect(screen.getAllByText('Gemini 3.1 Flash Lite (Preview)').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Lightweight').length).toBeGreaterThan(0);
+    expect(screen.getByText('Modello di Trascrizione (Primario)')).toBeTruthy();
+    expect(screen.getByText('Fast and capable')).toBeTruthy();
   });
 
-  it('calls setFallbackModels when remove fallback button is clicked', async () => {
+  it('calls setPreferredModel when another model is selected', async () => {
     const models = [
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast', default_chunk_minutes: 12 },
-      { id: 'gemini-3.1-flash-lite-preview', label: 'Lite', summary: 'Light', default_chunk_minutes: 10 },
+      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: 'Successore consigliato', default_chunk_minutes: 15 },
     ];
-    const setFallbackModels = vi.fn();
+    const setPreferredModel = vi.fn();
     render(
       <SettingsModal
         {...makeProps({
           availableModels: models,
           preferredModel: 'gemini-2.5-flash',
-          fallbackModels: ['gemini-3.1-flash-lite-preview'],
-          setFallbackModels,
+          setPreferredModel,
         })}
       />,
     );
     await act(async () => {
       fireEvent.click(screen.getAllByText('Generale')[0].closest('button')!);
     });
-    fireEvent.click(screen.getByTitle('Rimuovi fallback'));
-    expect(setFallbackModels).toHaveBeenCalled();
+    const trigger = screen.getByRole('button', { name: /Gemini 2.5 Flash/i });
+    fireEvent.click(trigger);
+    const option = screen.getByRole('option', { name: /Gemini 3.6 Flash/i });
+    fireEvent.click(option);
+    expect(setPreferredModel).toHaveBeenCalledWith('gemini-3.6-flash');
   });
-
-  it('calls setFallbackModels when move-down button clicked (with 2 fallbacks)', async () => {
-    const models = [
-      { id: 'gemini-2.5-flash', label: 'Flash', summary: 'F', default_chunk_minutes: 12 },
-      { id: 'gemini-3.1-flash-lite-preview', label: 'Lite', summary: 'L', default_chunk_minutes: 10 },
-      { id: 'gemini-2.5-pro', label: 'Pro', summary: 'P', default_chunk_minutes: 20 },
-    ];
-    const setFallbackModels = vi.fn();
-    render(
-      <SettingsModal
-        {...makeProps({
-          availableModels: models,
-          preferredModel: 'gemini-2.5-flash',
-          fallbackModels: ['gemini-3.1-flash-lite-preview', 'gemini-2.5-pro'],
-          setFallbackModels,
-        })}
-      />,
-    );
-    await act(async () => {
-      fireEvent.click(screen.getAllByText('Generale')[0].closest('button')!);
-    });
-    fireEvent.click(screen.getAllByTitle('Sposta giù')[0]);
-    expect(setFallbackModels).toHaveBeenCalled();
-  });
-
 });
 
 describe('SettingsModal — version status display', () => {

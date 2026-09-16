@@ -437,16 +437,6 @@ def _retry_on_quota(
         except Exception as err:
             print(f"   [!] Chiave non valida fornita: {redact_secrets(err)}")
 
-    if model_state is not None:
-        _switch_to_next_model(
-            model_state,
-            on_model_switched=on_model_switched,
-            error_message="Quota giornaliera esaurita su tutte le chiavi disponibili.",
-            cause=exc,
-            exc_type=QuotaDailyLimitError,
-        )
-        return True, client
-
     raise QuotaDailyLimitError(str(exc)) from exc
 
 

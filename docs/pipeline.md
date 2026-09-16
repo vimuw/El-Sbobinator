@@ -104,7 +104,7 @@ All Gemini calls in every phase go through `retry_with_quota(callable_fn, ...)`,
 |---|---|
 | HTTP 503 / "model unavailable" | Progressive back-off `(3 s, 6 s, 15 s)`; if the same model fails all three attempts, switch to the next model (`_switch_to_next_model`). If the chain is exhausted, raise `AllModelsUnavailableError`. |
 | HTTP 429 minute-scoped rate limit | Sleep 65 s then retry. After `_MAX_RETRY_ATTEMPTS` (4) attempts, re-raise. |
-| HTTP 429 daily/exhausted key | Prompt the UI via `request_new_api_key` for up to 10 minutes to explicitly confirm a fallback key. If the prompt times out or is cancelled, save a quota error and stop the batch; otherwise, if no key is supplied and there is still a next model, switch model. |
+| HTTP 429 daily/exhausted key | Prompt the UI via `request_new_api_key` for up to 10 minutes to explicitly confirm a fallback key. If the prompt times out or is cancelled, save a quota error and stop the batch. |
 | HTTP 404 model-not-found | Switch model; if no fallback left, re-raise. |
 | `DegenerateOutputError` | Switch model; if no fallback left, re-raise. |
 | `PermanentError` | Re-raise immediately (no retry). |

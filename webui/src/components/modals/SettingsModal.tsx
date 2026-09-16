@@ -75,7 +75,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   storage,
 }) => {
   const { apiKey, setApiKey, hasProtectedKey, fallbackKeys, setFallbackKeys } = auth;
-  const { preferredModel, setPreferredModel, fallbackModels, setFallbackModels, availableModels } = models;
+  const { preferredModel, setPreferredModel, fallbackModels, availableModels } = models;
   const { latestVersion, checkForUpdates, isCheckingUpdate, hasChecked, checkFailed, updateInstallState, onInstallUpdate } = updater;
   const onSessionRootMoved = storage?.onSessionRootMoved;
   const [activeTab, setActiveTab] = useState<TabType>('general');
@@ -516,8 +516,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <ModelSection
                         preferredModel={preferredModel}
                         setPreferredModel={setPreferredModel}
-                        fallbackModels={fallbackModels}
-                        setFallbackModels={setFallbackModels}
                         availableModels={availableModels}
                       />
 
