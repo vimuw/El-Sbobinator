@@ -52,18 +52,19 @@ Source: `_BridgeDispatcher` + `PipelineAdapter` in `el_sbobinator/app_webview.py
 | `registerStepTime` (Deprecated/Unused) | yes | `{kind, seconds, done?, total?}` | `PipelineAdapter.register_step_time` | [DEPRECATED/UNUSED] Formerly used to track elapsed time for a single step to drive the EMA-based ETA. |
 | `setCurrentFile` | no | `{index: int, id: string, total: int}` | Inside `ElSbobinatorApi.start_processing._run` | New file in the batch has started. |
 | `fileDone` | no | `{index, id, output_html, output_dir, primary_model?, effective_model?}` | `ElSbobinatorApi.start_processing._run` | File completed successfully. |
-| `fileFailed` | no | `{index, id, error, error_detail?}` | `ElSbobinatorApi.start_processing._run` | File failed; `error` may be a `last_error` key mapped via `utils.errorLabel`; `error_detail` carries optional session detail such as `api_key_prompt_timeout`. |
-| `processDone` | no | `{cancelled: bool, completed: int, failed: int, total: int, quota_exhausted?}` | `ElSbobinatorApi.start_processing._run` (finally) | Batch has finished (or was cancelled). `quota_exhausted` marks a terminal quota stop so auto-continue does not restart queued files. |
+| `fileFailed` | no | `{index, id, error, error_detail?, retryable?, retry_reason?, recommended_retry_at?}` | `ElSbobinatorApi.start_processing._run` | File failed or paused. Circuit-breaker pauses use `retryable=true` and `retry_reason="circuit_breaker_paused"`. |
+| `retryStateChanged` | no | `{state, reason?, model?, attempt?, max_attempts?, next_retry_at?, seconds_remaining?}` | `generation_service` / `pipeline.py` | Circuit states are `idle`, `cooling_down`, `probing`, `exhausted`, and `paused`; `next_retry_at` is ISO UTC. |
+| `processDone` | no | `{cancelled: bool, completed: int, failed: int, paused?: int, total: int, quota_exhausted?}` | `ElSbobinatorApi.start_processing._run` (finally) | Batch has finished, paused, or was cancelled. A paused file stops the batch and leaves later files queued. |
 | `askRegenerate` | no | `{filename: string, mode?: "completed" \| "resume"}` | `PipelineAdapter.ask_regenerate` | Pipeline needs the user to decide "regenerate vs. use saved". |
 | `askNewKey` | no | `{}` | `PipelineAdapter.ask_new_api_key` | Quota exhausted; ask the user for a new API key. |
 | `dismissNewKey` | no | `{}` | `PipelineAdapter.dismiss_new_api_key_prompt` | Close the new-key prompt after backend timeout without treating it as a user cancellation. |
 | `filesDropped` | no | `FileDescriptor[]` | `ElSbobinatorApi.collect_dropped_files` | New files dropped on the window; front-end adds them to the queue. |
 | `updateDownloadProgress` | no | `{status: string, bytes_done: number, bytes_total: number, error?: string}` | `updater.py` via auto-update process | Native download/installation progress during auto-updates. |
-| `apiUsageUpdated` | no | `ApiUsageResult` | `PipelineControllerMixin._emit_api_usage` | Pushed after file or batch completion with latest daily quota tracking stats. |
+| `apiUsageUpdated` | no | `ApiUsageResult` | `PipelineControllerMixin._emit_api_usage` | Pushed after file or batch completion with latest daily project limits, telemetry stats, and credential diagnostics. |
 | `requestQuitConfirmation` | no | `{}` | `build_close_handler` in `webview_entry.py` | Emitted when user attempts to close the window while pipeline, retry, or move is active. Triggers the WebUI quit confirmation modal. |
 | `appendConsole` | no | `string` | `_ConsoleTee` (wraps `sys.stdout`/`stderr`) | Forwarded stdout/stderr for the in-app terminal. |
 
-The TypeScript-side payload shapes are the same ones declared in `webui/src/appState.ts` (`WorkTotalsPayload`, `WorkDonePayload`, `StepTimePayload`, `SetCurrentFilePayload`, `FileDonePayload`, `FileFailedPayload`, `ProcessDonePayload`) and `webui/src/bridge.ts` (`BridgeCallbacks`). The Python-side counterparts are `TypedDict`s in `el_sbobinator/bridge_types.py`.
+The TypeScript-side payload shapes are the same ones declared in `webui/src/appState.ts` (`WorkTotalsPayload`, `WorkDonePayload`, `StepTimePayload`, `SetCurrentFilePayload`, `FileDonePayload`, `FileFailedPayload`, `ProcessDonePayload`) and `webui/src/bridge.ts` (`BridgeCallbacks`, `ApiUsageResult`, `ProjectModelLimit`, `TelemetryStats`, `WorkStats`, `CredentialProfile`). The Python-side counterparts are `TypedDict`s in `el_sbobinator/bridge_types.py`.
 
 ## JS → Python API
 
@@ -77,7 +78,8 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
 | `save_settings(api_key, fallback_keys, preferred_model, fallback_models)` | API key (nullable), list of strings, model id, list of ids | `{ok, error?}` | Writes via `config_service.save_config`. |
 | `save_theme_preference(theme)` | theme string (`"light"` \| `"dark"`) | `None` | Persists theme preference to disk. |
 | `validate_environment(api_key?, check_api_key?, preferred_model?, fallback_models?)` | `{ok, result?: ValidationResult, error?}` | Cached environment check. | |
-| `get_api_usage(api_key?, fallback_keys?, preferred_model?, fallback_models?)` | API keys and models | `{ok, result?: ApiUsageResult, error?}` | Aggregated Gemini daily request count and quota headroom per key/model. |
+| `get_api_usage(api_key?, fallback_keys?, preferred_model?, fallback_models?)` | API keys and models | `{ok, result?: ApiUsageResult, error?}` | Aggregated Gemini state-first operational status, project limits, single-authority telemetry, work stats, and credential profiles. |
+
 | `get_diagnostic_report(api_key?, fallback_keys?, preferred_model?, fallback_models?)` | API keys and models | `{ok, report?: string, error?}` | Sanitized technical support diagnostic report formatted in Markdown. |
 | `open_logs_folder()` | — | `{ok, error?}` | Opens the local configuration and logs directory in the OS file explorer. |
 | `get_session_storage_info()` | — | `{ok, total_bytes, total_sessions, session_root, error?}` | Wraps `shared.get_session_storage_info` (30 s cache). |
@@ -109,7 +111,7 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
 
 | Method | Arguments | Returns | Notes |
 |---|---|---|---|
-| `start_processing(files, api_key, resume_session, preferred_model?, fallback_models?)` | `BridgeFileItem[]`, key, bool, optional strings | `{ok, error?}` | Persists config, then launches the pipeline worker thread. |
+| `start_processing(files, api_key, resume_session, preferred_model?, fallback_models?, override_low_disk?, force_retry?)` | `BridgeFileItem[]`, key, bool, optional strings/flags | `{ok, error?}` | Persists config, then launches the pipeline worker thread. `force_retry` is reserved for an explicit manual resume after a circuit pause. |
 | `stop_processing()` | — | `{ok}` | Sets the cancel event; pipeline exits at the next check. Also cancels any pending `ask_*` prompts. |
 | `answer_regenerate(regenerate)` | `true \| false \| null` | `{ok}` | `null` treats the prompt as cancelled. |
 | `answer_new_key(key)` | new API key string | `{ok}` | Empty string = refuse and abort. |
@@ -141,6 +143,7 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
       "size": int,
       "duration": float,
       "resume_session": bool,
+      "force_retry": bool,
   }
   ```
 - `FileDescriptor` — TS equivalent in `webui/src/appState.ts`. Same shape minus `id` being optional on intake.
@@ -164,6 +167,7 @@ File: `el_sbobinator/pipeline_hooks.py`. The pipeline never touches `PipelineAda
 | `process_done()` | `processo_terminato()` | `pipeline.py` (finally block) |
 | `set_run_result(status, error=None)` | `set_run_result(...)` or `last_run_{status,error}` attributes | `pipeline.py` (finally block) |
 | `set_effective_api_key(api_key)` | `set_effective_api_key(...)` or `effective_api_key` attribute | `generation_service.retry_with_quota` |
+| `retry_state(payload)` | `emit_retry_state(payload)` | `generation_service`, `pipeline.py` |
 | `ask_regenerate(filename, callback, mode)` | `ask_regenerate(filename, callback, mode)` | `pipeline.py` (resume flow) |
 | `ask_new_api_key(callback)` | `ask_new_api_key(callback)` | `generation_service.request_new_api_key` |
 | `ask_confirmation(title, message)` | `window.create_confirmation_dialog(...)` | `pipeline.py` fallback for `ask_regenerate` |

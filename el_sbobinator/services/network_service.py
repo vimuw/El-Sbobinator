@@ -69,6 +69,17 @@ def check_connectivity(
                 pass
 
 
+def is_network_online(
+    host: str = GEMINI_API_HOST,
+    port: int = GEMINI_API_PORT,
+    timeout: float = DEFAULT_CONNECTIVITY_TIMEOUT,
+) -> bool:
+    """Return True if connection to Gemini endpoint succeeds."""
+    return check_connectivity(
+        host=host, port=port, timeout=timeout, bypass_in_test=False
+    )
+
+
 def is_network_offline_error(exc: Exception | None) -> bool:
     """Return True if an exception represents network offline, DNS, or socket connection failure."""
     if exc is None:

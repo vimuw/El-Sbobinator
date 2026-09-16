@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
+from typing import Literal
 
 
 class QuotaDailyLimitError(Exception):
@@ -30,6 +31,25 @@ class DegenerateOutputError(RuntimeError):
 
 class AllModelsUnavailableError(RuntimeError):
     """Raised when all models in the fallback chain are 503-unavailable."""
+
+
+class CircuitBreakerExhaustedError(RuntimeError):
+    """Raised when the adaptive circuit breaker retry budget is exhausted and the batch is suspended."""
+
+    def __init__(
+        self,
+        message: str = "Circuit breaker budget exhausted.",
+        *,
+        cause_error: str = "",
+        model: str = "",
+        attempts: int = 4,
+        recommended_retry_after_seconds: float = 1800.0,
+    ) -> None:
+        super().__init__(message)
+        self.cause_error = cause_error
+        self.model = model
+        self.attempts = attempts
+        self.recommended_retry_after_seconds = recommended_retry_after_seconds
 
 
 def _error_text(exc: Exception) -> str:
@@ -74,6 +94,40 @@ def _error_code(exc: Exception) -> int | None:
 def _is_daily_or_key_exhausted(error_text: str, error_code: int | None) -> bool:
     norm_text = _normalize_guardrail_text(error_text)
 
+    # Minute only markers to avoid false positives on daily exhaustion
+    minute_only_markers = (
+        "per minute",
+        "per-minute",
+        "per_minute",
+        "requests_per_minute",
+        "requests per minute",
+        "requestsperminute",
+        "tokens_per_minute",
+        "tokens per minute",
+        "tokensperminute",
+        "tpm",
+        "rpm",
+        "generatecontenttokenspermodelperminute",
+        "generatecontentrequestspermodelperminute",
+    )
+    daily_explicit_markers = (
+        "per day",
+        "per-day",
+        "per_day",
+        "perday",
+        "daily",
+        "generaterequestsperday",
+        "generate_content_free_tier_requests",
+        "requests_per_day",
+        "requests per day",
+        "exceeded your current quota",
+    )
+
+    if any(m in norm_text for m in minute_only_markers) and not any(
+        d in norm_text for d in daily_explicit_markers
+    ):
+        return False
+
     # 1. Google Gemini specific daily / account quota exhaustion markers
     hard_limit_markers = (
         "per day",
@@ -99,38 +153,6 @@ def _is_daily_or_key_exhausted(error_text: str, error_code: int | None) -> bool:
         "balance",
     )
     if any(marker in norm_text for marker in hard_limit_markers):
-        # Exclude only if it specifically says per minute / rpm without mentioning daily
-        minute_only_markers = (
-            "per minute",
-            "per-minute",
-            "per_minute",
-            "requests_per_minute",
-            "requests per minute",
-            "requestsperminute",
-            "tokens_per_minute",
-            "tokens per minute",
-            "tokensperminute",
-            "tpm",
-            "rpm",
-            "generatecontenttokenspermodelperminute",
-            "generatecontentrequestspermodelperminute",
-        )
-        if any(m in norm_text for m in minute_only_markers) and not any(
-            d in norm_text
-            for d in (
-                "per day",
-                "per-day",
-                "per_day",
-                "perday",
-                "daily",
-                "generaterequestsperday",
-                "generate_content_free_tier_requests",
-                "requests_per_day",
-                "requests per day",
-                "exceeded your current quota",
-            )
-        ):
-            return False
         return True
 
     # 2. General token exhaustion markers
@@ -166,8 +188,8 @@ def _is_minute_scoped_rate_limit(
         "per minute",
         "per-minute",
         "per_minute",
-        "rate limit",
-        "too many requests",
+        "rate limit exceeded",
+        "rate_limit_exceeded",
         "requests_per_minute",
         "requests per minute",
         "requestsperminute",
@@ -272,6 +294,178 @@ def _is_transient_key_probe_failure(
     if any(marker in error_text for marker in markers):
         return not _is_daily_or_key_exhausted(error_text, error_code)
     return False
+
+
+def classify_429_error(
+    exc: Exception,
+) -> Literal["rate_limit_exceeded", "quota_exceeded", "unknown_429"]:
+    """Classifies a 429 / RESOURCE_EXHAUSTED error into RPM rate limit, RPD daily quota, or unknown."""
+    err_text = _error_text(exc)
+    err_code = _error_code(exc)
+
+    if _is_daily_or_key_exhausted(err_text, err_code):
+        return "quota_exceeded"
+    if _is_minute_scoped_rate_limit(err_text, err_code):
+        return "rate_limit_exceeded"
+    return "unknown_429"
+
+
+def classify_credential_status(
+    exc: Exception,
+) -> Literal[
+    "invalid", "permission_denied", "request_error", "temporarily_failing", "unknown"
+]:
+    """Maps API exceptions to operational credential status."""
+    err_code = _error_code(exc)
+    err_text = _error_text(exc)
+
+    if err_code == 401 or any(
+        m in err_text
+        for m in (
+            "api key not valid",
+            "api_key_invalid",
+            "invalid api key",
+            "invalid_api_key",
+            "malformed api key",
+            "unauthenticated",
+            "not authorized",
+            "unauthorized",
+        )
+    ):
+        return "invalid"
+    if err_code == 403 or any(
+        m in err_text
+        for m in (
+            "permission_denied",
+            "permission denied",
+            "forbidden",
+            "access denied",
+            "does not have permission",
+        )
+    ):
+        return "permission_denied"
+    if err_code == 400 or any(
+        m in err_text
+        for m in (
+            "invalid_argument",
+            "bad request",
+            "request_error",
+        )
+    ):
+        return "request_error"
+    if (
+        err_code in (408, 429, 500, 502, 503, 504)
+        or isinstance(exc, (TimeoutError, ConnectionError))
+        or any(
+            m in err_text
+            for m in (
+                "timeout",
+                "timed out",
+                "service unavailable",
+                "backend error",
+                "overloaded",
+                "temporarily unavailable",
+            )
+        )
+    ):
+        return "temporarily_failing"
+    return "unknown"
+
+
+def extract_retry_after_seconds(exc: Exception) -> float | None:
+    """Attempts to extract retry-after duration in seconds from response headers or message text."""
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None) or getattr(exc, "headers", None)
+    if headers is not None:
+        raw_val = None
+        if hasattr(headers, "get"):
+            raw_val = headers.get("retry-after") or headers.get("Retry-After")
+        elif isinstance(headers, (list, tuple)):
+            for k, v in headers:
+                if str(k).lower() == "retry-after":
+                    raw_val = v
+                    break
+        if raw_val is not None:
+            try:
+                return max(0.0, float(raw_val))
+            except (ValueError, TypeError):
+                try:
+                    from datetime import UTC, datetime
+                    from email.utils import parsedate_to_datetime
+
+                    dt = parsedate_to_datetime(str(raw_val))
+                    if dt:
+                        now = datetime.now(UTC)
+                        if dt.tzinfo is None:
+                            diff = (
+                                dt - datetime.now(UTC).replace(tzinfo=None)
+                            ).total_seconds()
+                        else:
+                            diff = (dt - now).total_seconds()
+                        return max(0.0, float(diff))
+                except Exception:
+                    pass
+
+    text = _error_text(exc)
+    patterns = [
+        r"retry[\s_-]?after[:\s]+([0-9]+(?:\.[0-9]+)?)s?",
+        r"retry in ([0-9]+(?:\.[0-9]+)?)s?",
+        r"wait ([0-9]+(?:\.[0-9]+)?)s?",
+        r"reset in ([0-9]+(?:\.[0-9]+)?)s?",
+        r"([0-9]+(?:\.[0-9]+)?)\s*(?:seconds?|s)\s*(?:before retry|to reset)",
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, text)
+        if m:
+            try:
+                return max(0.0, float(m.group(1)))
+            except (ValueError, TypeError):
+                pass
+    return None
+
+
+def _is_transient_capacity_or_server_error(
+    error_text: str, error_code: int | None, exc: Exception | None = None
+) -> bool:
+    """Returns True if error is 503, 408, 500, 502, 504, or network timeout/overload."""
+    if exc is not None and isinstance(exc, (TimeoutError, ConnectionError)):
+        return True
+    if error_code in (408, 500, 502, 503, 504):
+        return True
+    markers = (
+        "service unavailable",
+        "backend error",
+        "model is overloaded",
+        "overloaded",
+        "temporarily unavailable",
+        "internal server error",
+        "bad gateway",
+        "gateway timeout",
+        "request timeout",
+        "timed out",
+        "timeout",
+        "deadline exceeded",
+    )
+    return any(marker in error_text for marker in markers)
+
+
+def _is_deterministic_client_error(error_text: str, error_code: int | None) -> bool:
+    """Returns True if error is 400, 401, 403, invalid argument, permission denied, etc."""
+    if error_code in (400, 401, 403):
+        return True
+    markers = (
+        "invalid_argument",
+        "bad request",
+        "unauthenticated",
+        "permission_denied",
+        "permission denied",
+        "api key not valid",
+        "api_key_invalid",
+        "invalid api key",
+        "forbidden",
+        "access denied",
+    )
+    return any(marker in error_text for marker in markers)
 
 
 def _normalize_guardrail_text(text: str) -> str:

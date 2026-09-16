@@ -7,8 +7,9 @@
 ### 1. Architettura Locale e Servizi di Terze Parti (BYOK)
 - **Nessun Backend Proprietario**: L'applicazione viene eseguita sul computer dell'utente e non utilizza server proxy, backend o database gestiti dallo sviluppatore. I file e le bozze vengono conservati localmente; i contenuti necessari all'elaborazione AI vengono trasmessi direttamente a Google Gemini.
 - **Comunicazione Diretta con Google Gemini**: L'applicazione adotta il modello *Bring Your Own Key* (BYOK). L'utente configura la propria API key e il proprio progetto Google. Le richieste per l'elaborazione AI vengono trasmesse direttamente e cifrate (TLS) tra la macchina dell'utente e gli endpoint ufficiali di Google (`generativelanguage.googleapis.com`).
-- **Termini e Policy di Terze Parti**: L'utilizzo delle API Gemini (incluse quote, disponibilità dei modelli, requisiti regionali, fatturazione e trattamento dei dati) è soggetto ai [Termini di Servizio di Google](https://policies.google.com/terms), ai [Termini delle Google APIs](https://developers.google.com/terms) e ai [Termini Aggiuntivi di Gemini API / AI Studio](https://ai.google.dev/gemini-api/terms) applicabili all'account e al progetto dell'utente.
+- **Termini e Policy di Terze Parti**: L'utilizzo delle API Gemini (incluse quote per progetto/modello, disponibilità dei modelli, requisiti regionali, fatturazione e trattamento dei dati) è soggetto ai [Termini di Servizio di Google](https://policies.google.com/terms), ai [Termini delle Google APIs](https://developers.google.com/terms) e ai [Termini Aggiuntivi di Gemini API / AI Studio](https://ai.google.dev/gemini-api/terms) applicabili all'account e al progetto dell'utente. I limiti RPD/RPM sono stabiliti a livello di progetto Google Cloud e non si moltiplicano con l'uso di più chiavi appartenenti al medesimo progetto.
 - **Requisiti di Età**: L'accesso e l'impiego delle API Gemini tramite l'applicazione sono soggetti ai requisiti di età previsti dai termini Google applicabili.
+
 
 ---
 

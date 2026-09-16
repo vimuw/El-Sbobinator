@@ -133,10 +133,11 @@ export function useQueueProcessing({
       duration: nextDuration,
       ...(file.resumeSession !== undefined ? { resume_session: file.resumeSession } : {}),
       allow_completed_destroy: file.allowCompletedDestroy,
+      ...(file.forceRetry ? { force_retry: true } : {}),
     }] as FileDescriptor[];
   }, [appendConsole, dispatch, filesRef]);
 
-  const startProcessing = useCallback(async (isContinuation: boolean = false, overrideLowDisk: boolean = false) => {
+  const startProcessing = useCallback(async (isContinuation: boolean = false, overrideLowDisk: boolean = false, forceRetry: boolean = false) => {
     const currentQueued = filesRef.current.filter(f => f.status === 'queued');
     if (currentQueued.length === 0 || !apiKey.trim()) return false;
     if (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' && !navigator.onLine) {
@@ -152,7 +153,7 @@ export function useQueueProcessing({
     try {
       const fileDescriptors = await resolveQueuedFilesForProcessing();
       if (!fileDescriptors || fileDescriptors.length === 0) return false;
-      const result = await window.pywebview.api.start_processing?.(fileDescriptors, apiKey.trim(), true, preferredModel, fallbackModels, overrideLowDisk);
+      const result = await window.pywebview.api.start_processing?.(fileDescriptors, apiKey.trim(), true, preferredModel, fallbackModels, overrideLowDisk, forceRetry);
       if (!result?.ok) {
         if (result?.low_disk_warning) {
           setConfirmAction({ type: 'low-disk-warning', warning: result.low_disk_warning });

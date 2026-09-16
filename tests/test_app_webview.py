@@ -135,14 +135,14 @@ class AppWebviewTests(unittest.TestCase):
     def test_update_model_subsequent_call_does_not_change_primary_model(self):
         adapter = PipelineAdapter(None, cancel_event=__import__("threading").Event())
         adapter.update_model("gemini-2.5-flash")
-        adapter.update_model("gemini-3.1-flash-lite-preview")
+        adapter.update_model("gemini-3.6-flash")
         self.assertEqual(adapter.last_primary_model, "gemini-2.5-flash")
-        self.assertEqual(adapter.last_effective_model, "gemini-3.1-flash-lite-preview")
+        self.assertEqual(adapter.last_effective_model, "gemini-3.6-flash")
 
     def test_reset_run_state_clears_primary_model(self):
         adapter = PipelineAdapter(None, cancel_event=__import__("threading").Event())
         adapter.update_model("gemini-2.5-flash")
-        adapter.update_model("gemini-3.1-flash-lite-preview")
+        adapter.update_model("gemini-3.6-flash")
         adapter.reset_run_state()
         self.assertIsNone(adapter.last_primary_model)
         self.assertIsNone(adapter.last_effective_model)
@@ -150,11 +150,11 @@ class AppWebviewTests(unittest.TestCase):
     def test_primary_model_reset_allows_new_run_to_capture_new_primary(self):
         adapter = PipelineAdapter(None, cancel_event=__import__("threading").Event())
         adapter.update_model("gemini-2.5-flash")
-        adapter.update_model("gemini-3.1-flash-lite-preview")
+        adapter.update_model("gemini-3.6-flash")
         adapter.reset_run_state()
-        adapter.update_model("gemini-3-flash-preview")
-        self.assertEqual(adapter.last_primary_model, "gemini-3-flash-preview")
-        self.assertEqual(adapter.last_effective_model, "gemini-3-flash-preview")
+        adapter.update_model("gemini-3.6-flash")
+        self.assertEqual(adapter.last_primary_model, "gemini-3.6-flash")
+        self.assertEqual(adapter.last_effective_model, "gemini-3.6-flash")
 
     def test_load_settings_exposes_insecure_api_key_flag(self):
         api = ElSbobinatorApi()
@@ -620,6 +620,60 @@ class AppWebviewTests(unittest.TestCase):
         self.assertEqual(process_done_events[0]["completed"], 0)
         self.assertEqual(process_done_events[0]["failed"], 0)
         self.assertEqual(process_done_events[0]["total"], 1)
+
+    @patch("threading.Thread", _SyncThread)
+    @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
+    def test_paused_file_stops_batch_before_next_file(self, mock_pipeline_run):
+        api = ElSbobinatorApi()
+        emitted = []
+        processed_paths: list[str] = []
+
+        def fake_emit(fn_name, data, batched=None):
+            emitted.append((fn_name, data, batched))
+
+        def fake_pipeline_run(path, _api_key, adapter, **_kwargs):
+            processed_paths.append(path)
+            adapter.last_retry_state = {
+                "recommended_retry_at": "2026-09-17T00:00:00+00:00"
+            }
+            adapter.set_run_result("paused", "circuit breaker exhausted")
+            adapter.set_run_error_detail("503 Service Unavailable")
+
+        mock_pipeline_run.side_effect = fake_pipeline_run
+        api._adapter.emit = fake_emit
+        paths: list[str] = []
+        try:
+            for _ in range(2):
+                with tempfile.NamedTemporaryFile(
+                    "wb", suffix=".mp3", delete=False
+                ) as tmp:
+                    tmp.write(b"fake")
+                    paths.append(tmp.name)
+
+            result = api.start_processing(
+                [
+                    {"id": "file-1", "path": paths[0], "name": "one.mp3"},
+                    {"id": "file-2", "path": paths[1], "name": "two.mp3"},
+                ],
+                api_key="fake-key",
+            )
+        finally:
+            for path in paths:
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(processed_paths, [paths[0]])
+        failed = [data for name, data, _ in emitted if name == "fileFailed"]
+        self.assertEqual(len(failed), 1)
+        self.assertTrue(failed[0]["retryable"])
+        self.assertEqual(failed[0]["recommended_retry_at"], "2026-09-17T00:00:00+00:00")
+        done = [data for name, data, _ in emitted if name == "processDone"]
+        self.assertEqual(done[0]["paused"], 1)
+        self.assertEqual(done[0]["failed"], 0)
+        self.assertEqual(done[0]["total"], 2)
 
     @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
     def test_failed_run_emits_file_failed_even_if_cancel_event_is_set(

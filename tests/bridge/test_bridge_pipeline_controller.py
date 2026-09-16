@@ -1,7 +1,12 @@
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
-from el_sbobinator.bridge.controllers.pipeline_controller import PipelineControllerMixin
+from el_sbobinator.bridge.controllers.pipeline_controller import (
+    PipelineControllerMixin,
+    _clear_retry_state_if_forced,
+    _reset_governor_if_needed,
+)
 
 
 class DummyPipelineController(PipelineControllerMixin):
@@ -49,3 +54,58 @@ class TestPipelineControllerConfigPersistence(unittest.TestCase):
             self.assertEqual(len(ctrl.console_messages), 1)
             self.assertIn("Errore imprevisto", ctrl.console_messages[0])
             self.assertIn("Disk corrupted", ctrl.console_messages[0])
+
+
+class TestForcedCircuitRetry(unittest.TestCase):
+    def test_file_force_retry_resets_global_governor(self):
+        with patch(
+            "el_sbobinator.services.generation_service.reset_global_governor"
+        ) as reset:
+            _reset_governor_if_needed(
+                [
+                    {
+                        "id": "f1",
+                        "path": "audio.mp3",
+                        "name": "audio",
+                        "force_retry": True,
+                    }
+                ],
+                False,
+            )
+
+        reset.assert_called_once_with()
+
+    def test_forced_retry_clears_only_circuit_pause_metadata(self):
+        session = {
+            "retry_state": {"state": "paused"},
+            "last_error": "circuit_breaker_paused",
+            "last_error_detail": "503 Service Unavailable",
+            "phase1": {"chunks_done": 4},
+        }
+        with (
+            patch(
+                "el_sbobinator.bridge.controllers.pipeline_controller.resolve_session_paths",
+                return_value=SimpleNamespace(session_path="session.json"),
+            ),
+            patch(
+                "el_sbobinator.bridge.controllers.pipeline_controller.os.path.exists",
+                return_value=True,
+            ),
+            patch(
+                "el_sbobinator.bridge.controllers.pipeline_controller.load_session",
+                return_value=session,
+            ),
+            patch(
+                "el_sbobinator.bridge.controllers.pipeline_controller.save_session"
+            ) as save,
+        ):
+            _clear_retry_state_if_forced(
+                {"id": "f1", "path": "audio.mp3", "name": "audio", "force_retry": True},
+                False,
+            )
+
+        self.assertIsNone(session["retry_state"])
+        self.assertIsNone(session["last_error"])
+        self.assertIsNone(session["last_error_detail"])
+        self.assertEqual(session["phase1"]["chunks_done"], 4)
+        save.assert_called_once_with("session.json", session)

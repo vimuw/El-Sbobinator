@@ -45,14 +45,16 @@ from el_sbobinator.pipeline.pipeline_session import (
     reset_for_regeneration,
     restore_phase1_progress,
 )
-from el_sbobinator.services import generation_service
+from el_sbobinator.services import generation_service, usage_service
 from el_sbobinator.services.audio_service import (
     probe_media_duration,
     resolve_ffmpeg,
 )
 from el_sbobinator.services.config_service import safe_output_basename
 from el_sbobinator.services.export_service import export_final_html_document
+from el_sbobinator.services.gemini_errors import CircuitBreakerExhaustedError
 from el_sbobinator.services.generation_service import (
+    create_gemini_client,
     extract_client_api_key,
     load_fallback_keys,
 )
@@ -466,6 +468,7 @@ def _export_html_and_finish(
             {
                 "title": _title,
                 "outputs": {**session.get("outputs", {}), "html": html_path},
+                "retry_state": None,
             },
         )
         mark_html_exported(session)
@@ -477,6 +480,8 @@ def _export_html_and_finish(
         runtime.output_html(html_path)
     except Exception:
         pass
+
+    usage_service.record_work_completed("sbobine", 1)
 
     elapsed = time.monotonic() - start_time
     minutes = int(elapsed // 60)
@@ -542,6 +547,11 @@ def _pipeline_finally_cleanup(
             "cancelled",
             last_run_error or "cancelled",
         )
+    elif last_run_status == "paused":
+        runtime.phase("Fase: in pausa")
+        runtime.set_run_error_detail(
+            session.get("last_error_detail") if isinstance(session, dict) else None
+        )
     else:
         runtime.progress(1.0)
         if last_run_status in {
@@ -561,6 +571,56 @@ def _pipeline_finally_cleanup(
             )
     detach_file_handler(log_handler)
     runtime.process_done()
+
+
+def _handle_circuit_breaker_paused(
+    e: CircuitBreakerExhaustedError,
+    runtime: PipelineRuntime,
+    session: dict | None,
+    session_ctx,
+    settings,
+    save_session,
+    logger,
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    runtime.set_run_result("paused", str(e))
+    cause_err = getattr(e, "cause_error", None) or "circuit_breaker_exhausted"
+    runtime.set_run_error_detail(cause_err)
+    rec_sec = float(getattr(e, "recommended_retry_after_seconds", 1800.0) or 1800.0)
+    rec_iso = (datetime.now(UTC) + timedelta(seconds=rec_sec)).isoformat()
+    attempts = int(getattr(e, "attempts", 4) or 4)
+    if isinstance(session, dict) and session_ctx is not None:
+        session["retry_state"] = {
+            "cause": cause_err,
+            "model": getattr(e, "model", "") or (settings.model if settings else ""),
+            "attempt": attempts,
+            "max_attempts": attempts,
+            "deadline_iso": rec_iso,
+            "last_error": str(e),
+            "recommended_retry_at": rec_iso,
+        }
+        session["last_error"] = "circuit_breaker_paused"
+        session["last_error_detail"] = cause_err
+        save_session()
+    runtime.retry_state(
+        {
+            "state": "paused",
+            "reason": "circuit_breaker_paused",
+            "model": getattr(e, "model", "") or (settings.model if settings else ""),
+            "attempt": attempts,
+            "max_attempts": attempts,
+            "next_retry_at": rec_iso,
+            "seconds_remaining": rec_sec,
+            "recommended_retry_at": rec_iso,
+        }
+    )
+    logger.warning(
+        "Pipeline sospesa per circuit breaker: %s",
+        e,
+        extra={"stage": "paused"},
+    )
+    print(f"\n[⏸] PIPELINE SOSPESA (CIRCUIT BREAKER):\n{e}")
 
 
 def _esegui_sbobinatura_impl(
@@ -591,7 +651,7 @@ def _esegui_sbobinatura_impl(
             logger.error("API key mancante o non valida.", extra={"stage": "startup"})
             return
 
-        client = genai.Client(api_key=api_key_value.strip())
+        client = create_gemini_client(api_key_value.strip())
         runtime.set_run_result("failed")
         runtime.set_effective_api_key(api_key_value.strip())
 
@@ -762,6 +822,16 @@ def _esegui_sbobinatura_impl(
         ):
             return
 
+    except CircuitBreakerExhaustedError as e:
+        _handle_circuit_breaker_paused(
+            e,
+            runtime,
+            session,
+            session_ctx,
+            settings,
+            save_session,
+            logger,
+        )
     except AutosaveFailedError:
         runtime.set_run_result("failed", "autosave_failed")
         logger.warning(

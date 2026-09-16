@@ -119,6 +119,41 @@ describe('useQueueProcessing', () => {
     expect(setConfirmAction).toHaveBeenCalledWith({ type: 'low-disk-warning', warning: lowDiskWarning });
   });
 
+  it('passes force_retry only for an explicitly resumed paused file', async () => {
+    const startProcessingMock = vi.fn().mockResolvedValue({ ok: true });
+    window.pywebview = {
+      api: {
+        check_path_exists: vi.fn().mockResolvedValue({ exists: true }),
+        start_processing: startProcessingMock,
+      } as unknown as PywebviewApi,
+    };
+    const files: FileItem[] = [
+      { id: 'paused', path: '/test/audio.mp3', name: 'audio.mp3', size: 1000, duration: 10, status: 'queued', progress: 0, phase: 0, forceRetry: true },
+    ];
+    const { result } = renderHook(() =>
+      useQueueProcessing({
+        filesRef: { current: files },
+        appStateRef: { current: 'idle' as const },
+        apiKey: 'AIzaSyTestKey_123456789012345678901',
+        preferredModel: 'gemini-2.5-flash',
+        fallbackModels: [],
+        dispatch: vi.fn(),
+        appendConsole: vi.fn(),
+        setConfirmAction: vi.fn(),
+        refreshArchiveSessions: vi.fn().mockResolvedValue(undefined),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.startProcessing();
+    });
+
+    const descriptors = startProcessingMock.mock.calls[0][0];
+    expect(descriptors).toEqual([
+      expect.objectContaining({ id: 'paused', force_retry: true }),
+    ]);
+  });
+
   it('increments and decrements batchTotal dynamically when processing', () => {
     const files: FileItem[] = [
       { id: '1', path: '/test/audio1.mp3', name: 'audio1.mp3', size: 1000, duration: 10, status: 'processing', progress: 0, phase: 1 },

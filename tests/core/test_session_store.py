@@ -17,7 +17,7 @@ class SessionStoreTests(unittest.TestCase):
             "el_sbobinator.core.session_store.build_default_pipeline_settings",
             return_value={
                 "model": "gemini-2.5-flash",
-                "fallback_models": ["gemini-3.1-flash-lite-preview"],
+                "fallback_models": ["gemini-3.6-flash"],
                 "effective_model": "gemini-2.5-flash",
                 "chunk_minutes": 15,
                 "overlap_seconds": 30,
@@ -34,9 +34,7 @@ class SessionStoreTests(unittest.TestCase):
         self.assertIn("outputs", session)
         self.assertEqual(session["settings"]["model"], "gemini-2.5-flash")
         self.assertEqual(session["settings"]["effective_model"], "gemini-2.5-flash")
-        self.assertEqual(
-            session["settings"]["fallback_models"], ["gemini-3.1-flash-lite-preview"]
-        )
+        self.assertEqual(session["settings"]["fallback_models"], ["gemini-3.6-flash"])
         self.assertEqual(session["settings"]["audio"]["bitrate"], "48k")
 
     def test_clone_session_settings_is_deep_copy(self):
@@ -210,33 +208,35 @@ class ResolveSessionPathsHintTests(unittest.TestCase):
 
 
 class TestMigrateSession(unittest.TestCase):
-    def test_pre_versioned_session_migrated_to_v1(self):
+    def test_pre_versioned_session_migrated_to_current_version(self):
         from el_sbobinator.core.session_store import migrate_session
 
         session = {"stage": "phase2", "settings": {"model": "x"}}
         result, changed = migrate_session(session)
         self.assertTrue(changed)
-        self.assertEqual(result["schema_version"], 1)
+        self.assertEqual(result["schema_version"], 2)
         self.assertIn("phase1", result)
         self.assertIn("phase2", result)
         self.assertIn("outputs", result)
         self.assertIn("last_error", result)
+        self.assertIsNone(result["retry_state"])
         self.assertEqual(result["stage"], "phase2")
 
     def test_current_version_is_no_op(self):
         from el_sbobinator.core.session_store import migrate_session
 
         session = {
-            "schema_version": 1,
+            "schema_version": 2,
             "stage": "boundary",
             "phase1": {"chunks_done": 3},
             "phase2": {"macro_total": 5},
             "outputs": {"html": "out.html"},
             "last_error": None,
+            "retry_state": None,
         }
         result, changed = migrate_session(session)
         self.assertFalse(changed)
-        self.assertEqual(result["schema_version"], 1)
+        self.assertEqual(result["schema_version"], 2)
         self.assertEqual(result["phase1"]["chunks_done"], 3)
         self.assertEqual(result["outputs"]["html"], "out.html")
 
@@ -246,7 +246,7 @@ class TestMigrateSession(unittest.TestCase):
         session = {"stage": "done", "outputs": {"html": "path.html"}}
         result, changed = migrate_session(session)
         self.assertTrue(changed)
-        self.assertEqual(result["schema_version"], 1)
+        self.assertEqual(result["schema_version"], 2)
         self.assertEqual(result["outputs"]["html"], "path.html")
 
     def test_migration_is_idempotent(self):
@@ -256,7 +256,27 @@ class TestMigrateSession(unittest.TestCase):
         result, _ = migrate_session(session)
         result2, changed2 = migrate_session(result)
         self.assertFalse(changed2)
-        self.assertEqual(result2["schema_version"], 1)
+        self.assertEqual(result2["schema_version"], 2)
+
+    def test_v1_adds_retry_state_without_losing_progress(self):
+        from el_sbobinator.core.session_store import migrate_session
+
+        session = {
+            "schema_version": 1,
+            "stage": "phase2",
+            "phase1": {"chunks_done": 7},
+            "phase2": {"revised_done": 2},
+            "outputs": {"html": "partial.html"},
+        }
+
+        result, changed = migrate_session(session)
+
+        self.assertTrue(changed)
+        self.assertEqual(result["schema_version"], 2)
+        self.assertIsNone(result["retry_state"])
+        self.assertEqual(result["phase1"]["chunks_done"], 7)
+        self.assertEqual(result["phase2"]["revised_done"], 2)
+        self.assertEqual(result["outputs"]["html"], "partial.html")
 
 
 class SessionStoreDomainDutiesTests(unittest.TestCase):

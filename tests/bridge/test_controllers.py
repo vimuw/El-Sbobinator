@@ -827,7 +827,7 @@ class TestSystemControllerDiagnostics(unittest.TestCase):
             api_key="AIzaSyTestKey1234567890",
             fallback_keys=[],
             preferred_model="gemini-2.5-flash",
-            fallback_models=["gemini-2.5-flash-lite"],
+            fallback_models=["gemini-3.6-flash"],
         )
         self.assertTrue(res["ok"])
         self.assertIn("result", res)

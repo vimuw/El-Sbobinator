@@ -5,12 +5,16 @@ export type FileItem = {
   name: string;
   size: number;
   duration: number;
-  status: 'queued' | 'processing' | 'done' | 'error';
+  status: 'queued' | 'processing' | 'done' | 'error' | 'paused';
   progress: number;
   phase: number;
   phaseText?: string;
   errorText?: string;
   errorDetail?: string;
+  retryable?: boolean;
+  retryReason?: string;
+  recommendedRetryAt?: string;
+  forceRetry?: boolean;
   path?: string;
   outputHtml?: string;
   outputDir?: string;
@@ -45,6 +49,7 @@ export type FileDescriptor = {
   duration?: number;
   resume_session?: boolean;
   allow_completed_destroy?: boolean;
+  force_retry?: boolean;
 };
 
 export type AppStatus = 'idle' | 'processing' | 'canceling';
@@ -54,6 +59,7 @@ export type ProcessDonePayload = {
   completed?: number;
   completed_with_warnings?: number;
   failed?: number;
+  paused?: number;
   total?: number;
   quota_exhausted?: boolean;
 };
@@ -85,6 +91,9 @@ export type FileFailedPayload = {
   id: string;
   error: string;
   error_detail?: string;
+  retryable?: boolean;
+  retry_reason?: string;
+  recommended_retry_at?: string | null;
 };
 
 export type WorkTotalsPayload = {
@@ -238,8 +247,8 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         ...state,
         structuralVersion: state.structuralVersion + 1,
         files: state.files.map(file =>
-          file.status === 'error'
-            ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorText: undefined, errorDetail: undefined }
+          file.status === 'error' || file.status === 'paused'
+            ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorText: undefined, errorDetail: undefined, forceRetry: file.status === 'paused', retryable: undefined, retryReason: undefined, recommendedRetryAt: undefined }
             : file,
         ),
       };
@@ -248,8 +257,8 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         ...state,
         structuralVersion: state.structuralVersion + 1,
         files: state.files.map(file =>
-          file.id === action.id && file.status === 'error'
-            ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorDetail: undefined, errorText: undefined }
+          file.id === action.id && (file.status === 'error' || file.status === 'paused')
+            ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorDetail: undefined, errorText: undefined, forceRetry: file.status === 'paused', retryable: undefined, retryReason: undefined, recommendedRetryAt: undefined }
             : file,
         ),
       };
@@ -357,7 +366,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         currentBatchTotal: action.data.total,
         files: state.files.map(file =>
           file.id === action.data.id
-            ? { ...file, status: 'processing', progress: 0, phase: 1, phaseText: undefined, errorText: undefined, errorDetail: undefined, startedAt: Date.now() }
+            ? { ...file, status: 'processing', progress: 0, phase: 1, phaseText: undefined, errorText: undefined, errorDetail: undefined, forceRetry: undefined, startedAt: Date.now() }
             : file,
         ),
       };
@@ -395,12 +404,15 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
           file.id === action.data.id
             ? {
                 ...file,
-                status: 'error',
+                status: (action.data.retry_reason === 'circuit_breaker_paused' || action.data.retryable) ? ('paused' as const) : ('error' as const),
                 progress: 0,
                 phase: 0,
-                phaseText: 'Errore',
+                phaseText: (action.data.retry_reason === 'circuit_breaker_paused' || action.data.retryable) ? 'In pausa' : 'Errore',
                 errorText: action.data.error || 'Elaborazione non completata.',
                 errorDetail: action.data.error_detail || undefined,
+                retryable: action.data.retryable,
+                retryReason: action.data.retry_reason,
+                recommendedRetryAt: action.data.recommended_retry_at ?? undefined,
               }
             : file,
         ),

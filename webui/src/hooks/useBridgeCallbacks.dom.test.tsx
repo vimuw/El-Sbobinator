@@ -507,4 +507,52 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
 
     vi.restoreAllMocks();
   });
+
+  it('does not auto-continue queued files after a circuit-breaker pause', async () => {
+    const startProcessing = vi.fn().mockResolvedValue(true);
+    const onBatchFullyDone = vi.fn();
+    const opts = makeMinimalHook();
+    opts.filesRef = { current: [{
+      id: 'queued-1', name: 'lesson.mp3', size: 1, duration: 1,
+      path: 'C:\\audio\\lesson.mp3', status: 'queued', progress: 0, phase: 0,
+    }] } as unknown as ReturnType<typeof useRef<FileItem[]>>;
+    opts.autoContinueRef = { current: true } as ReturnType<typeof useRef<boolean>>;
+    opts.startProcessingRef = { current: startProcessing } as unknown as ReturnType<typeof useRef<(isContinuation?: boolean) => Promise<boolean>>>;
+    opts.onBatchFullyDone = onBatchFullyDone;
+    renderHook(() => { useBridgeCallbacks(opts); });
+
+    const payload = { completed: 0, failed: 0, paused: 1, total: 2 };
+    act(() => {
+      window.elSbobinatorBridge?.processDone(payload);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+
+    expect(startProcessing).not.toHaveBeenCalled();
+    expect(onBatchFullyDone).toHaveBeenCalledWith(payload);
+  });
+
+  it('uses the backend retry-state names for cooldown, probe, and pause', () => {
+    const appendConsole = vi.fn();
+    const opts = makeMinimalHook();
+    opts.appendConsole = appendConsole;
+    renderHook(() => { useBridgeCallbacks(opts); });
+
+    act(() => {
+      window.elSbobinatorBridge?.retryStateChanged?.({
+        state: 'cooling_down', attempt: 2, max_attempts: 4, seconds_remaining: 15,
+      });
+      window.elSbobinatorBridge?.retryStateChanged?.({
+        state: 'probing', attempt: 2, max_attempts: 4, model: 'gemini-2.5-flash',
+      });
+      window.elSbobinatorBridge?.retryStateChanged?.({
+        state: 'paused', attempt: 4, max_attempts: 4,
+      });
+    });
+
+    expect(appendConsole).toHaveBeenCalledWith(expect.stringContaining('Attesa cooldown'));
+    expect(appendConsole).toHaveBeenCalledWith(expect.stringContaining('Esecuzione sonda'));
+    expect(appendConsole).toHaveBeenCalledWith(expect.stringContaining('Batch sospeso'));
+  });
 });

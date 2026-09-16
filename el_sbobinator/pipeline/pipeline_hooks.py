@@ -68,6 +68,12 @@ class PipelineRuntime:
     def process_done(self) -> None:
         self._safe_call("processo_terminato")
 
+    def retry_state(self, payload: dict[str, Any]) -> None:
+        if hasattr(self.target, "emit_retry_state"):
+            self._safe_call("emit_retry_state", payload)
+        else:
+            self._safe_call("emit", "retryStateChanged", payload, batched=False)
+
     def set_work_totals(self, chunks_total=None, macro_total=None) -> None:
         self._safe_call(
             "set_work_totals",

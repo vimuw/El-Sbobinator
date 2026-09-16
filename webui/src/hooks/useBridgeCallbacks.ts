@@ -13,7 +13,7 @@ export function useBridgeCallbacks(options: {
   setRegeneratePrompt: (data: { filename: string; mode?: 'completed' | 'resume'; sessionDir?: string } | null) => void;
   setAskNewKeyPrompt: (open: boolean) => void;
   autoContinueRef: React.RefObject<boolean>;
-  startProcessingRef: React.RefObject<(isContinuation?: boolean, overrideLowDisk?: boolean) => Promise<boolean>>;
+  startProcessingRef: React.RefObject<(isContinuation?: boolean, overrideLowDisk?: boolean, forceRetry?: boolean) => Promise<boolean>>;
   onFileContinued: () => void;
   onBatchReset: () => void;
   onBatchFullyDone: (data: ProcessDonePayload) => void;
@@ -141,7 +141,7 @@ export function useBridgeCallbacks(options: {
       },
       onBatchDone: data => {
         setRegeneratePromptRef.current(null);
-        if (!data.cancelled && !data.quota_exhausted && autoContinueRef.current) {
+        if (!data.cancelled && !data.quota_exhausted && !data.paused && autoContinueRef.current) {
           const hasQueued = filesRef.current?.some(f => f.status === 'queued');
           if (hasQueued) {
             setTimeout(() => {
@@ -200,11 +200,23 @@ export function useBridgeCallbacks(options: {
           }
         }
       },
+      onRetryStateChanged: data => {
+        if (data.state === 'cooling_down') {
+          const sec = Math.round(data.seconds_remaining ?? 0);
+          appendConsoleRef.current(`⏳ Attesa cooldown (${data.attempt ?? 1}/${data.max_attempts ?? 4}): riprovo tra ${sec}s...`);
+        } else if (data.state === 'probing') {
+          appendConsoleRef.current(`🔍 Esecuzione sonda (${data.attempt ?? 1}/${data.max_attempts ?? 4}) con ${data.model ?? 'modello'}...`);
+        } else if (data.state === 'paused') {
+          appendConsoleRef.current(`⏸️ Batch sospeso: capacità Gemini non disponibile dopo ${data.max_attempts ?? 4} tentativi. Progressi salvati.`);
+        }
+      },
       onFileFailed: data => {
         const currentFile = filesRef.current?.find(file => file.id === data.id);
-        const isGoogleServerOverload = data.error?.includes('indisponibile') || data.error?.includes('unavailable') || data.error === 'phase1_all_models_unavailable';
-        const isPaused = isPausedError(data.error, data.error_detail);
-        const friendlyError = errorLabel(data.error, data.error_detail);
+        const isPaused = data.retry_reason === 'circuit_breaker_paused' || Boolean(data.retryable) || isPausedError(data.error, data.error_detail);
+        const isGoogleServerOverload = !isPaused && (data.error?.includes('indisponibile') || data.error?.includes('unavailable') || data.error === 'phase1_all_models_unavailable');
+        const friendlyError = data.retry_reason === 'circuit_breaker_paused'
+          ? "Capacità Google Gemini temporaneamente esaurita. L'elaborazione è stata messa in pausa per proteggere il batch. Puoi cliccare 'Riprendi' per forzare un nuovo tentativo."
+          : errorLabel(data.error, data.error_detail);
 
         if (addNotificationRef.current && currentFile) {
           if (isGoogleServerOverload) {

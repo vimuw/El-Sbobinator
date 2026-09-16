@@ -21,7 +21,7 @@ from el_sbobinator.core.model_registry import ModelState
 from el_sbobinator.core.session_store import _update_session
 from el_sbobinator.core.shared import _atomic_write_text
 from el_sbobinator.pipeline.pipeline_session import record_step_metric
-from el_sbobinator.services import generation_service
+from el_sbobinator.services import generation_service, usage_service
 from el_sbobinator.services.audio_service import cut_audio_chunk_to_mp3
 from el_sbobinator.services.config_service import debug_log
 from el_sbobinator.services.generation_service import (
@@ -453,6 +453,7 @@ def _record_chunk_success(
         },
     )
     save_session()
+    usage_service.record_work_completed("chunks", 1)
     runtime.progress(0.7 * chunk_idx / total_chunks)
     _step_secs = max(0.0, time.monotonic() - float(chunk_step_t0))
     record_step_metric(

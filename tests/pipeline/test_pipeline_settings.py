@@ -177,7 +177,7 @@ class LoadAndSanitizeSettingsTests(unittest.TestCase):
         session = self._base_session(
             model="gemini-2.5-flash",
             fallback_models=[],
-            effective_model="gemini-3.1-flash-lite-preview",
+            effective_model="gemini-3.6-flash",
         )
         settings, _ = load_and_sanitize_settings(session)
         self.assertEqual(settings.effective_model, "gemini-2.5-flash")
@@ -185,20 +185,24 @@ class LoadAndSanitizeSettingsTests(unittest.TestCase):
     def test_effective_model_kept_when_in_fallbacks(self):
         session = self._base_session(
             model="gemini-2.5-flash",
-            fallback_models=["gemini-3.1-flash-lite-preview"],
-            effective_model="gemini-3.1-flash-lite-preview",
+            fallback_models=["gemini-3.6-flash"],
+            effective_model="gemini-3.6-flash",
         )
         settings, _ = load_and_sanitize_settings(session)
-        self.assertEqual(settings.effective_model, "gemini-3.1-flash-lite-preview")
+        self.assertEqual(settings.effective_model, "gemini-3.6-flash")
 
     def test_macro_22000_clamped_down_for_flash_lite_preview(self):
         session = self._base_session(
-            model="gemini-3.1-flash-lite-preview",
-            effective_model="gemini-3.1-flash-lite-preview",
+            model="gemini-3.6-flash",
+            effective_model="gemini-3.6-flash",
             macro_char_limit=22000,
         )
-        settings, _ = load_and_sanitize_settings(session)
-        self.assertLess(settings.macro_char_limit, 22000)
+        with patch(
+            "el_sbobinator.pipeline.pipeline_settings.default_macro_char_limit_for_model",
+            return_value=7500,
+        ):
+            settings, _ = load_and_sanitize_settings(session)
+            self.assertLess(settings.macro_char_limit, 22000)
 
     def test_audio_dict_missing_creates_with_default_bitrate(self):
         session = {"settings": {"model": "gemini-2.5-flash"}}

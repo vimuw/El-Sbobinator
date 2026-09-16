@@ -84,7 +84,7 @@ const makeProps = (overrides: MakePropsOverrides = {}): SettingsModalProps => ({
     setFallbackKeys: overrides.setFallbackKeys ?? overrides.auth?.setFallbackKeys ?? vi.fn(),
   },
   models: {
-    preferredModel: overrides.preferredModel ?? overrides.models?.preferredModel ?? 'gemini-3-flash-preview',
+    preferredModel: overrides.preferredModel ?? overrides.models?.preferredModel ?? 'gemini-3.6-flash',
     setPreferredModel: overrides.setPreferredModel ?? overrides.models?.setPreferredModel ?? vi.fn(),
     fallbackModels: overrides.fallbackModels ?? overrides.models?.fallbackModels ?? [],
     setFallbackModels: overrides.setFallbackModels ?? overrides.models?.setFallbackModels ?? vi.fn(),
@@ -115,11 +115,11 @@ afterEach(() => {
 describe('SettingsModal — model parameters chunk display', () => {
   it('does not display technical chunk duration or temperature parameters in UI', async () => {
     const models = [
-      { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash (Preview)', summary: '', default_chunk_minutes: 15 },
-      { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite (Preview)', summary: '', default_chunk_minutes: 10 },
+      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15 },
+      { id: 'gemini-3.7-flash', label: 'Gemini 3.7 Flash', summary: '', default_chunk_minutes: 15 },
     ];
     render(
-      <SettingsModal {...makeProps({ availableModels: models, preferredModel: 'gemini-3-flash-preview' })} />,
+      <SettingsModal {...makeProps({ availableModels: models, preferredModel: 'gemini-3.6-flash' })} />,
     );
     await act(async () => {
       fireEvent.click(screen.getAllByText('Generale')[0].closest('button')!);

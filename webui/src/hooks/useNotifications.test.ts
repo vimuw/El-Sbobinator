@@ -246,25 +246,6 @@ describe('useNotifications', () => {
       expect(localStorage.getItem('el-sbobinator.config-recovery-dismissed.v1:C:/test/path/config.json')).toBe('1');
     });
 
-    it('sets peak-hour warning dismissal localStorage and calls setIsPeakDismissed on delete', () => {
-      const setIsPeakDismissed = vi.fn();
-      const { result } = renderHook(() => useNotifications({ setIsPeakDismissed }));
-
-      act(() => {
-        result.current.addNotification('Picco', 'Orario di punta', 'warning', 'system', {
-          dedupeKey: 'peak-hour-warning',
-        });
-      });
-
-      const notifId = result.current.rawNotifications[0].id;
-      act(() => {
-        result.current.deleteNotification(notifId);
-      });
-
-      expect(setIsPeakDismissed).toHaveBeenCalledWith(true);
-      expect(localStorage.getItem('peakBannerDismissedUntil')).toBeTruthy();
-    });
-
     it('calls onDismissUpdate when deleting update-available notification', () => {
       const onDismissUpdate = vi.fn();
       const { result } = renderHook(() => useNotifications({ onDismissUpdate }));
@@ -287,17 +268,13 @@ describe('useNotifications', () => {
 
   describe('clearAllNotifications', () => {
     it('clears all notifications and runs dismissal side effects for all items', () => {
-      const setIsPeakDismissed = vi.fn();
       const onDismissUpdate = vi.fn();
-      const { result } = renderHook(() => useNotifications({ setIsPeakDismissed, onDismissUpdate }));
+      const { result } = renderHook(() => useNotifications({ onDismissUpdate }));
 
       act(() => {
         result.current.addNotification('Normal', 'Msg');
         result.current.addNotification('Config', 'Msg', 'warning', 'system', {
           dedupeKey: 'config-recovery:C:/path/config.json',
-        });
-        result.current.addNotification('Peak', 'Msg', 'warning', 'system', {
-          dedupeKey: 'peak-hour-warning',
         });
         result.current.addNotification('Update', 'Msg', 'info', 'update', {
           dedupeKey: 'update-available',
@@ -305,7 +282,7 @@ describe('useNotifications', () => {
         });
       });
 
-      expect(result.current.rawNotifications).toHaveLength(4);
+      expect(result.current.rawNotifications).toHaveLength(3);
 
       act(() => {
         result.current.clearAllNotifications();
@@ -314,7 +291,6 @@ describe('useNotifications', () => {
       expect(result.current.rawNotifications).toHaveLength(0);
       expect(result.current.unreadNotificationsCount).toBe(0);
       expect(localStorage.getItem('el-sbobinator.config-recovery-dismissed.v1:C:/path/config.json')).toBe('1');
-      expect(setIsPeakDismissed).toHaveBeenCalledWith(true);
       expect(onDismissUpdate).toHaveBeenCalledWith('v3.0.0');
     });
   });

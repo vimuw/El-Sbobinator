@@ -1,6 +1,18 @@
 import React from 'react';
-import { Activity, Clock, RefreshCw, AlertTriangle, Loader2 } from 'lucide-react';
-import type { ApiUsageResult } from '../../../bridge';
+import {
+  Activity,
+  Clock,
+  RefreshCw,
+  AlertTriangle,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  XCircle,
+  Layers,
+  Cpu,
+  Key,
+} from 'lucide-react';
+import type { ApiUsageResult, CredentialProfile } from '../../../bridge';
 
 interface QuotasSectionProps {
   apiUsage?: ApiUsageResult | null;
@@ -8,211 +20,414 @@ interface QuotasSectionProps {
   onRefreshUsage?: () => void;
 }
 
-export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(({
-  apiUsage,
-  isLoadingUsage,
-  onRefreshUsage,
-}) => {
-  const totalRemainingRequests =
-    apiUsage?.total_requests_remaining ??
-    apiUsage?.keys?.reduce((acc, k) => {
-      return (
-        acc +
-        Object.values(k.models || {}).reduce((mAcc, m) => mAcc + (m.remaining || 0), 0)
-      );
-    }, 0) ??
-    0;
+export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
+  ({ apiUsage, isLoadingUsage, onRefreshUsage }) => {
+    const primaryStatus = apiUsage?.primary_status ?? 'operational';
 
-  return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Header and Refresh Control */}
-      <div className="flex items-center justify-between gap-3 pb-1">
-        <div className="space-y-1 min-w-0">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
-            <Activity className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-            <span>Quote & Utilizzo Google AI Studio</span>
-            {apiUsage && (apiUsage.keys?.length ?? 0) > 0 && (
-              <span className="text-[11px] font-semibold text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-default)] px-1.5 py-0.5 rounded-full leading-none normal-case tracking-normal">
-                {apiUsage.keys.length}{' '}
-                {apiUsage.keys.length === 1 ? 'chiave' : 'chiavi'}
-              </span>
-            )}
-          </h3>
-          <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-[var(--text-secondary)] shrink-0" />
-            {apiUsage?.next_reset_info || 'Reset quote: ore 09:00 (fuso Google PT)'}
-          </p>
-        </div>
+    const getStatusHero = () => {
+      switch (primaryStatus) {
+        case 'rate_limited':
+          return {
+            containerClass:
+              'border-[var(--warning-border,var(--border-default))] bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)]',
+            icon: <Clock className="w-5 h-5 shrink-0 text-[var(--warning-text)] animate-pulse" />,
+            title: 'In attesa — Rate limit temporaneo',
+            subtitle:
+              apiUsage?.status_message ||
+              (apiUsage?.retry_after_seconds
+                ? `Ripresa automatica tra ${Math.round(apiUsage.retry_after_seconds)}s.`
+                : 'In attesa del raffreddamento dei limiti al minuto (RPM/TPM).'),
+          };
+        case 'quota_exhausted':
+          return {
+            containerClass:
+              'border-[var(--error-border,var(--border-default))] bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)]',
+            icon: <AlertCircle className="w-5 h-5 shrink-0 text-[var(--error-text)]" />,
+            title: 'Quota giornaliera esaurita (RPD)',
+            subtitle:
+              apiUsage?.status_message ||
+              'La quota giornaliera gratuita del progetto è terminata. Reset automatico alle ore 09:00 (fuso PT).',
+          };
+        case 'degraded':
+          return {
+            containerClass:
+              'border-[var(--warning-border,var(--border-default))] bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)]',
+            icon: <AlertTriangle className="w-5 h-5 shrink-0 text-[var(--warning-text)]" />,
+            title: 'Modalità Degradata Attiva',
+            subtitle:
+              apiUsage?.degraded_reason ||
+              apiUsage?.status_message ||
+              'Modello primario Flash esaurito per oggi. Switch automatico sul modello di riserva.',
+          };
+        case 'credential_error':
+          return {
+            containerClass:
+              'border-[var(--error-border,var(--border-default))] bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)]',
+            icon: <XCircle className="w-5 h-5 shrink-0 text-[var(--error-text)]" />,
+            title: 'Errore Autenticazione API',
+            subtitle:
+              apiUsage?.status_message ||
+              'Chiave API non valida o permessi non sufficienti sul progetto Google.',
+          };
+        case 'operational':
+        default:
+          return {
+            containerClass:
+              'border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--text-primary)]',
+            icon: <CheckCircle2 className="w-5 h-5 shrink-0 text-[var(--accent-text)]" />,
+            title: 'API Google Gemini Operativa',
+            subtitle:
+              apiUsage?.status_message ||
+              'Tutti i sistemi sono pronti e sincronizzati per nuove sbobinature.',
+          };
+      }
+    };
 
-        <button
-          type="button"
-          onClick={onRefreshUsage}
-          disabled={isLoadingUsage}
-          className="p-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 group/refresh shrink-0 cursor-pointer"
-          title="Aggiorna conteggio quote"
-          aria-label="Aggiorna conteggio quote"
-        >
-          <RefreshCw
-            className={`w-4 h-4 transition-transform duration-500 ease-out ${
-              isLoadingUsage
-                ? 'animate-spin text-[var(--accent-text)]'
-                : 'group-hover/refresh:rotate-180 group-hover/refresh:scale-105'
-            }`}
-          />
-        </button>
-      </div>
+    const hero = getStatusHero();
+    const projectLimits = apiUsage?.project_limits || {};
+    const modelKeys = Object.keys(projectLimits);
+    const telemetry = apiUsage?.telemetry;
+    const workStats = apiUsage?.work_stats;
+    const credentials: CredentialProfile[] =
+      apiUsage?.credentials && apiUsage.credentials.length > 0
+        ? apiUsage.credentials
+        : (apiUsage?.keys || []).map((k, idx) => ({
+            id: k.id,
+            masked_key: k.masked_key,
+            label: k.label,
+            is_primary: k.is_primary,
+            operational_status: (k.operational_status ||
+              (Object.values(k.models || {}).some(m => m.is_exhausted)
+                ? 'temporarily_failing'
+                : 'active')) as CredentialProfile['operational_status'],
+            key_type: (idx === 0 ? 'standard_legacy' : 'unknown') as CredentialProfile['key_type'],
+            project_id: null,
+            last_error_message: null,
+          }));
 
-      {/* Metric Stat Cards */}
-      {apiUsage && (
-        <div className="grid grid-cols-2 gap-3">
-          <div
-            className="p-3.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] space-y-1 cursor-help"
-            title={`${totalRemainingRequests} chiamate totali rimaste tra tutte le chiavi.`}
-          >
-            <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider block">
-              Chiamate Residue
+
+    const renderCredentialStatusBadge = (status?: string) => {
+      switch (status) {
+        case 'active':
+          return (
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)] shrink-0">
+              Attiva
             </span>
-            <span
-              className={`text-2xl font-bold block ${
-                totalRemainingRequests === 0
-                  ? 'text-[var(--error-text)]'
-                  : totalRemainingRequests < 20
-                  ? 'text-[var(--warning-text)]'
-                  : 'text-[var(--text-primary)]'
+          );
+        case 'unused':
+          return (
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)] shrink-0">
+              Non utilizzata
+            </span>
+          );
+        case 'temporarily_failing':
+          return (
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-border,var(--border-default))] shrink-0">
+              Errore temporaneo
+            </span>
+          );
+        case 'invalid':
+          return (
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-border,var(--border-default))] shrink-0">
+              Non valida (401)
+            </span>
+          );
+        case 'permission_denied':
+          return (
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-border,var(--border-default))] shrink-0">
+              Permesso negato (403)
+            </span>
+          );
+        case 'request_error':
+          return (
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-border,var(--border-default))] shrink-0">
+              Errore richiesta (400)
+            </span>
+          );
+        default:
+          return (
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)] shrink-0">
+              Stato sconosciuto
+            </span>
+          );
+      }
+    };
+
+    return (
+      <div className="space-y-6 animate-fade-in">
+        {/* Header and Refresh Control */}
+        <div className="flex items-center justify-between gap-3 pb-1">
+          <div className="space-y-1 min-w-0">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
+              <Activity className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
+              <span>Quote & Telemetria API</span>
+              {apiUsage && credentials.length > 0 && (
+                <span className="text-[11px] font-semibold text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-default)] px-1.5 py-0.5 rounded-full leading-none normal-case tracking-normal">
+                  {credentials.length} {credentials.length === 1 ? 'chiave' : 'chiavi'}
+                </span>
+              )}
+            </h3>
+            <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-[var(--text-secondary)] shrink-0" />
+              {apiUsage?.next_reset_info || 'Reset quote: ore 09:00 (fuso Google PT)'}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onRefreshUsage}
+            disabled={isLoadingUsage}
+            className="p-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 group/refresh shrink-0 cursor-pointer"
+            title="Aggiorna telemetria e stato quote"
+            aria-label="Aggiorna conteggio quote"
+          >
+            <RefreshCw
+              className={`w-4 h-4 transition-transform duration-500 ease-out ${
+                isLoadingUsage
+                  ? 'animate-spin text-[var(--accent-text)]'
+                  : 'group-hover/refresh:rotate-180 group-hover/refresh:scale-105'
               }`}
+            />
+          </button>
+        </div>
+
+        {/* Loading Spinner */}
+        {isLoadingUsage ? (
+          <div className="py-12 flex items-center justify-center gap-2 text-xs font-medium text-[var(--text-secondary)]">
+            <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-text)]" />
+            Caricamento telemetria e stato quote in corso...
+          </div>
+        ) : apiUsage ? (
+          <>
+            {/* Primary Operational Status Banner (State-First Hero) */}
+            <div
+              className={`p-4 rounded-xl border flex items-start gap-3 transition-colors ${hero.containerClass}`}
             >
-              {totalRemainingRequests}
-            </span>
-          </div>
+              {hero.icon}
+              <div className="space-y-0.5 min-w-0 flex-1">
+                <p className="text-sm font-bold tracking-tight">{hero.title}</p>
+                <p className="text-xs opacity-90 leading-relaxed">{hero.subtitle}</p>
+              </div>
+            </div>
 
-          <div
-            className="p-3.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] space-y-1 cursor-help"
-            title={`Equivalgono a circa ${apiUsage.estimated_sbobine_remaining} lezioni complete da 2h30–3h (~19 chiamate a lezione: 12 chunk audio da 15 min + 7 macro-sezioni di testo).`}
-          >
-            <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider block">
-              Autonomia Stimata
-            </span>
-            <span className="text-2xl font-bold text-[var(--text-primary)] block">
-              ~{apiUsage.estimated_sbobine_remaining} lezioni <span className="text-xs font-normal text-[var(--text-secondary)]">(3h)</span>
-            </span>
-          </div>
-        </div>
-      )}
-
-      {apiUsage?.is_degraded_mode && (
-        <div className="alert-card is-warning text-xs flex-row items-start gap-2 animate-fade-in">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-          <div className="space-y-0.5">
-            <p className="font-bold">Modalità Degradata Attiva</p>
-            <p className="text-[var(--text-secondary)]">{apiUsage.degraded_reason}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Keys and per-model consumption list */}
-      {isLoadingUsage ? (
-        <div className="py-12 flex items-center justify-center gap-2 text-xs font-medium text-[var(--text-secondary)]">
-          <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-text)]" />
-          Caricamento quote in corso...
-        </div>
-      ) : apiUsage && (apiUsage.keys?.length ?? 0) > 0 ? (
-        <div className="divide-y divide-[var(--border-default)] border-t border-[var(--border-default)] pt-1">
-          {apiUsage.keys.map(k => {
-            const hasUsage = Object.values(k.models || {}).some(m => m.used_today > 0);
-            const isAnyExhausted = Object.values(k.models || {}).some(m => m.is_exhausted);
-            const isPrimaryLabelDuplicate = Boolean(k.label?.toLowerCase().includes('principale'));
-
-            return (
-              <div
-                key={k.id}
-                className={`py-4 space-y-3 transition-colors ${
-                  !hasUsage ? 'opacity-90 hover:opacity-100' : ''
-                }`}
-              >
-                {/* Key Row Header */}
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span
-                      className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                        isAnyExhausted
-                          ? 'bg-[var(--error-bg)]'
-                          : hasUsage
-                          ? 'bg-[var(--accent-bg)]'
-                          : 'bg-[var(--text-secondary)] opacity-40'
-                      }`}
-                    />
-                    <span className="text-sm font-bold text-[var(--text-primary)] truncate">
-                      {k.label}
+            {/* Metric Stat Cards (Work Done + Telemetry Activity) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Card 1: Work Done */}
+              <div className="p-3.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] space-y-2">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
+                  <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                    Lavoro Svolto Oggi
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 pt-1 border-t border-[var(--border-default)]">
+                  <div>
+                    <span className="text-lg font-bold text-[var(--text-primary)] block">
+                      {workStats?.chunks_completed ?? 0}
                     </span>
-                    <span className="px-2.5 py-0.5 rounded-full bg-[var(--bg-surface)] border border-[var(--border-default)] font-mono text-xs font-bold text-[var(--text-primary)] shrink-0">
-                      {k.masked_key.length > 8 ? `...${k.masked_key.slice(-4)}` : k.masked_key}
+                    <span className="text-[10px] text-[var(--text-secondary)] font-medium">
+                      Chunk
                     </span>
-                    {k.is_primary && !isPrimaryLabelDuplicate && (
-                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)] shrink-0">
-                        Principale
-                      </span>
-                    )}
+                  </div>
+                  <div>
+                    <span className="text-lg font-bold text-[var(--text-primary)] block">
+                      {workStats?.revisions_completed ?? 0}
+                    </span>
+                    <span className="text-[10px] text-[var(--text-secondary)] font-medium">
+                      Revisioni
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-lg font-bold text-[var(--text-primary)] block">
+                      {workStats?.sbobine_completed ?? 0}
+                    </span>
+                    <span className="text-[10px] text-[var(--text-secondary)] font-medium">
+                      Sbobine
+                    </span>
                   </div>
                 </div>
+              </div>
 
-                {/* Per-Model Progress Rows */}
-                <div className="space-y-2">
-                  {Object.values(k.models || {}).map(m => {
-                    const percentUsed = Math.min(100, Math.round((m.used_today / Math.max(1, m.limit)) * 100));
-                    const isExhausted = m.is_exhausted || m.used_today >= m.limit;
+              {/* Card 2: Telemetry API */}
+              <div className="p-3.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] space-y-2">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
+                  <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                    Telemetria Chiamate
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-1.5 pt-1 border-t border-[var(--border-default)] text-center">
+                  <div>
+                    <span className="text-lg font-bold text-[var(--text-primary)] block">
+                      {telemetry?.requests_sent ?? 0}
+                    </span>
+                    <span className="text-[10px] text-[var(--text-secondary)] font-medium truncate block">
+                      Inviate
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-lg font-bold text-[var(--text-primary)] block">
+                      {telemetry?.responses_succeeded ?? 0}
+                    </span>
+                    <span className="text-[10px] text-[var(--text-secondary)] font-medium truncate block">
+                      Successi
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-lg font-bold text-[var(--warning-text)] block">
+                      {telemetry?.retries_total ?? 0}
+                    </span>
+                    <span className="text-[10px] text-[var(--text-secondary)] font-medium truncate block">
+                      Retry
+                    </span>
+                  </div>
+                  <div>
+                    <span
+                      className={`text-lg font-bold block ${
+                        (telemetry?.final_failures ?? 0) > 0
+                          ? 'text-[var(--error-text)]'
+                          : 'text-[var(--text-secondary)]'
+                      }`}
+                    >
+                      {telemetry?.final_failures ?? 0}
+                    </span>
+                    <span className="text-[10px] text-[var(--text-secondary)] font-medium truncate block">
+                      Errori
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section: Project / Model Limits */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-[var(--text-secondary)] shrink-0" />
+                <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+                  Limiti di Progetto & Modelli
+                </h4>
+              </div>
+
+              {/* Disclaimer Notice */}
+              <div className="p-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] text-xs text-[var(--text-secondary)] leading-relaxed flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-[var(--accent-text)] shrink-0 mt-0.5" />
+                <p>
+                  I tetti di richieste giornaliere (RPD) e al minuto (RPM) sono vincolati all&apos;intero
+                  <strong> Progetto Google Cloud</strong>. L&apos;aggiunta di ulteriori chiavi dello stesso progetto
+                  non moltiplica la quota complessiva.
+                </p>
+              </div>
+
+              {/* Model Limit Rows */}
+              {modelKeys.length > 0 && (
+                <div className="border border-[var(--border-default)] rounded-xl divide-y divide-[var(--border-default)] overflow-hidden bg-[var(--bg-surface)]">
+                  {modelKeys.map(mName => {
+                    const lim = projectLimits[mName];
+                    const isExhausted = lim?.quota_state === 'rpd_exhausted';
+                    const isRateLimited = lim?.quota_state === 'rate_limited';
+
                     return (
-                      <div key={m.model_id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 text-xs">
-                        <span className="font-mono text-xs text-[var(--text-primary)] font-semibold sm:w-44 shrink-0 truncate">
-                          {m.model_id}
-                        </span>
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'var(--progress-bg)' }}>
-                            <div
-                              className={`h-full transition-all duration-300 rounded-full ${
-                                isExhausted
-                                  ? 'bg-[var(--error-bg)]'
-                                  : percentUsed > 80
-                                  ? 'bg-[var(--warning-bg)]'
-                                  : 'bg-[var(--accent-bg)]'
-                              }`}
-                              style={{ width: `${percentUsed}%` }}
-                            />
-                          </div>
-                          <div className="font-mono text-xs shrink-0 text-right min-w-24">
-                            <span
-                              className={`font-bold ${
-                                isExhausted
-                                  ? 'text-[var(--error-text)]'
-                                  : m.used_today > 0
-                                  ? 'text-[var(--text-primary)]'
-                                  : 'text-[var(--text-secondary)]'
-                              }`}
-                            >
-                              {m.used_today}/{m.limit}
+                      <div
+                        key={mName}
+                        className="p-3 flex flex-wrap items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="space-y-0.5 min-w-0">
+                          <span className="font-mono font-bold text-[var(--text-primary)] block">
+                            {mName}
+                          </span>
+                          <span className="text-[11px] text-[var(--text-secondary)]">
+                            {lim?.rpd_limit ? `${lim.rpd_limit} RPD` : 'RPD standard'} •{' '}
+                            {lim?.rpm_limit ? `${lim.rpm_limit} RPM` : 'RPM standard'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {isExhausted ? (
+                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-border,var(--border-default))]">
+                              Esaurito oggi (RPD)
                             </span>
-                            <span className="text-[11px] text-[var(--text-secondary)] ml-1 font-medium">
-                              ({m.remaining} rimaste)
+                          ) : isRateLimited ? (
+                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-border,var(--border-default))]">
+                              Rate limited (RPM)
                             </span>
-                          </div>
+                          ) : (
+                            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--bg-hover)] text-[var(--text-secondary)] border border-[var(--border-default)]">
+                              Normale
+                            </span>
+                          )}
                         </div>
                       </div>
                     );
                   })}
                 </div>
+              )}
+            </div>
+
+            {/* Section: Configured Credentials Diagnostics */}
+            {credentials.length > 0 && (
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center gap-2">
+                  <Key className="w-4 h-4 text-[var(--text-secondary)] shrink-0" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+                    Stato Chiavi Configurate
+                  </h4>
+                </div>
+
+                <div className="border border-[var(--border-default)] rounded-xl divide-y divide-[var(--border-default)] overflow-hidden bg-[var(--bg-surface)]">
+                  {credentials.map((cred, idx) => {
+                    const maskedDisplay =
+                      cred.masked_key && cred.masked_key.length > 8
+                        ? `...${cred.masked_key.slice(-4)}`
+                        : cred.masked_key;
+
+                    return (
+                      <div key={cred.id || idx} className="p-3 space-y-1.5 text-xs">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-bold text-[var(--text-primary)]">
+                              {cred.label || (cred.is_primary ? 'Chiave Principale' : `Chiave Riserva ${idx}`)}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full bg-[var(--bg-hover)] border border-[var(--border-default)] font-mono text-[11px] text-[var(--text-primary)] font-semibold">
+                              {maskedDisplay}
+                            </span>
+                            {cred.is_primary && (
+                              <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)]">
+                                Principale
+                              </span>
+                            )}
+                            {cred.project_id && (
+                              <span className="text-[10px] font-medium px-2 py-0.2 rounded-full bg-[var(--bg-hover)] text-[var(--text-secondary)] border border-[var(--border-default)]">
+                                Progetto: {cred.project_id}
+                              </span>
+                            )}
+                          </div>
+
+                          <div>{renderCredentialStatusBadge(cred.operational_status)}</div>
+                        </div>
+
+                        {cred.last_error_message && (
+                          <div className="text-[11px] text-[var(--error-text)] bg-[var(--error-subtle,var(--bg-surface))] p-2 rounded-lg border border-[var(--error-border,var(--border-default))] leading-relaxed">
+                            Ultimo errore: {cred.last_error_message}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="py-8 text-center space-y-2">
-          <Activity className="w-8 h-8 text-[var(--text-secondary)] mx-auto opacity-50" />
-          <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto leading-relaxed">
-            Inserisci una chiave API per monitorare le quote giornaliere per ciascun modello.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-});
+            )}
+          </>
+        ) : (
+          <div className="py-8 text-center space-y-2">
+            <Activity className="w-8 h-8 text-[var(--text-secondary)] mx-auto opacity-50" />
+            <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto leading-relaxed">
+              Inserisci una chiave API per visualizzare lo stato operativo, i limiti di progetto e la telemetria.
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
+);
 
 QuotasSection.displayName = 'QuotasSection';

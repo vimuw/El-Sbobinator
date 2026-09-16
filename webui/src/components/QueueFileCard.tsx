@@ -144,8 +144,8 @@ function QueueFileCardInner({
                 Chiavi di riserva
               </button>
             )}
-            {appState === 'idle' && file.status === 'error' && (
-              isResumableError(file.errorText) || isPhase1ChunkFailure ? (
+            {appState === 'idle' && (file.status === 'error' || file.status === 'paused') && (
+              file.status === 'paused' || isResumableError(file.errorText) || isPhase1ChunkFailure ? (
                 <button
                   onClick={() => onRetry(file.id)}
                   className="icon-button compact-icon-button group/retry"

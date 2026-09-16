@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 import threading
 import time
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, ClassVar
 
 from el_sbobinator.bridge.bridge_types import (
@@ -29,6 +30,11 @@ from el_sbobinator.bridge.bridge_utils import (
     bridge_ok,
 )
 from el_sbobinator.core.session_store import (
+    _compute_session_storage_info,
+    _folder_size,
+    _session_dir_for_file,
+    cleanup_orphan_temp_chunks,
+    load_session,
     mark_html_exported,
     resolve_session_paths,
     save_session,
@@ -37,7 +43,6 @@ from el_sbobinator.core.shared import (
     DEFAULT_MODEL,
     _atomic_write_json,
     _load_json,
-    cleanup_orphan_temp_chunks,
     get_session_root,
     invalidate_session_storage_cache,
 )
@@ -55,6 +60,127 @@ if TYPE_CHECKING:
     from collections import OrderedDict
 
     import webview
+
+
+def _build_failure_payload(
+    idx: int,
+    file_info: BridgeFileItem,
+    adapter: PipelineAdapter,
+    last_run_status: str,
+) -> tuple[FileFailedPayload, bool]:
+    error_detail = getattr(adapter, "last_run_error_detail", None) or ""
+    error_message = (
+        redact_secrets(adapter.last_run_error) or "Elaborazione non completata."
+    )
+    error_detail = redact_secrets(error_detail)
+    ff_payload: FileFailedPayload = {
+        "index": idx,
+        "id": file_info.get("id", ""),
+        "error": error_message,
+    }
+    if error_detail:
+        ff_payload["error_detail"] = error_detail
+
+    is_paused = last_run_status == "paused" or "circuit_breaker" in str(error_message)
+    if is_paused:
+        ff_payload["retryable"] = True
+        ff_payload["retry_reason"] = "circuit_breaker_paused"
+        retry_state = getattr(adapter, "last_retry_state", None) or {}
+        rec_iso = str(retry_state.get("recommended_retry_at") or "").strip()
+        if not rec_iso:
+            rec_iso = (datetime.now(UTC) + timedelta(minutes=30)).isoformat()
+        ff_payload["recommended_retry_at"] = rec_iso
+    return ff_payload, is_paused
+
+
+def _handle_file_completed(
+    idx: int,
+    file_info: BridgeFileItem,
+    adapter: PipelineAdapter,
+    last_run_status: str,
+) -> tuple[str, bool]:
+    if adapter.last_output_html and os.path.exists(adapter.last_output_html):
+        revision_failed_blocks = list(adapter.last_revision_failed_blocks or [])
+        completion_status = (
+            "completed_with_warnings"
+            if last_run_status == "completed_with_warnings" or revision_failed_blocks
+            else "completed"
+        )
+        fd_payload: FileDonePayload = {
+            "index": idx,
+            "id": file_info.get("id", ""),
+            "output_html": adapter.last_output_html,
+            "output_dir": adapter.last_output_dir or "",
+            "completion_status": completion_status,
+            "revision_failed_blocks": revision_failed_blocks,
+            "primary_model": adapter.last_primary_model or "",
+            "effective_model": adapter.last_effective_model or "",
+        }
+        adapter.emit("fileDone", fd_payload, batched=False)
+        return completion_status, True
+
+    ff_payload2: FileFailedPayload = {
+        "index": idx,
+        "id": file_info.get("id", ""),
+        "error": "Output HTML non generato.",
+    }
+    adapter.emit("fileFailed", ff_payload2, batched=False)
+    return "failed", False
+
+
+def _handle_file_failure(
+    idx: int,
+    file_info: BridgeFileItem,
+    adapter: PipelineAdapter,
+    last_run_status: str,
+) -> tuple[int, int, bool, bool]:
+    payload, is_paused = _build_failure_payload(
+        idx, file_info, adapter, last_run_status
+    )
+    adapter.emit("fileFailed", payload, batched=False)
+    quota_exhausted = payload["error"] in {
+        "quota_daily_limit_phase1",
+        "quota_daily_limit_phase2",
+    }
+    paused_delta = int(is_paused)
+    failed_delta = 1 - paused_delta
+    return paused_delta, failed_delta, quota_exhausted, is_paused or quota_exhausted
+
+
+def _reset_governor_if_needed(files: list[BridgeFileItem], force_retry: bool) -> None:
+    if force_retry or any(
+        bool(f.get("force_retry")) for f in files if isinstance(f, dict)
+    ):
+        try:
+            from el_sbobinator.services.generation_service import (
+                reset_global_governor,
+            )
+
+            reset_global_governor()
+        except Exception:
+            pass
+
+
+def _clear_retry_state_if_forced(file_info: BridgeFileItem, force_retry: bool) -> None:
+    if not (force_retry or bool(file_info.get("force_retry"))):
+        return
+    file_path = str(file_info.get("path", "") or "")
+    if not file_path:
+        return
+    try:
+        paths = resolve_session_paths(file_path)
+        if not os.path.exists(paths.session_path):
+            return
+        session = load_session(paths.session_path)
+        if not isinstance(session, dict):
+            return
+        session["retry_state"] = None
+        if session.get("last_error") == "circuit_breaker_paused":
+            session["last_error"] = None
+            session["last_error_detail"] = None
+        save_session(paths.session_path, session)
+    except Exception:
+        pass
 
 
 class PipelineControllerMixin:
@@ -374,6 +500,7 @@ class PipelineControllerMixin:
         preferred_model: str | None = None,
         fallback_models: list[str] | None = None,
         override_low_disk: bool = False,
+        force_retry: bool = False,
     ) -> dict:
         """Start the pipeline in a background thread."""
         if not files or not api_key:
@@ -387,6 +514,8 @@ class PipelineControllerMixin:
         )
         if start_error is not None:
             return start_error
+
+        _reset_governor_if_needed(files, force_retry)
 
         try:
             removed = cleanup_orphan_temp_chunks()
@@ -408,6 +537,7 @@ class PipelineControllerMixin:
             completed_count = 0
             completed_with_warnings_count = 0
             failed_count = 0
+            paused_count = 0
             current_index: int | None = None
             current_file_id = ""
             quota_exhausted = False
@@ -438,6 +568,7 @@ class PipelineControllerMixin:
                             f"  File {idx + 1}/{len(files)}: {os.path.basename(file_path)}"
                         )
                         self._push_console(f"{'=' * 50}")
+                        _clear_retry_state_if_forced(file_info, force_retry)
                         current_payload: SetCurrentFilePayload = {
                             "index": idx,
                             "id": file_info.get("id", ""),
@@ -474,73 +605,30 @@ class PipelineControllerMixin:
                             break
 
                         if last_run_status in ("completed", "completed_with_warnings"):
-                            if self._adapter.last_output_html and os.path.exists(
-                                self._adapter.last_output_html
-                            ):
-                                revision_failed_blocks = list(
-                                    self._adapter.last_revision_failed_blocks or []
-                                )
-                                completion_status = (
-                                    "completed_with_warnings"
-                                    if last_run_status == "completed_with_warnings"
-                                    or revision_failed_blocks
-                                    else "completed"
-                                )
-                                fd_payload: FileDonePayload = {
-                                    "index": idx,
-                                    "id": file_info.get("id", ""),
-                                    "output_html": self._adapter.last_output_html,
-                                    "output_dir": self._adapter.last_output_dir or "",
-                                    "completion_status": completion_status,
-                                    "revision_failed_blocks": revision_failed_blocks,
-                                    "primary_model": self._adapter.last_primary_model
-                                    or "",
-                                    "effective_model": self._adapter.last_effective_model
-                                    or "",
-                                }
-                                self._adapter.emit(
-                                    "fileDone", fd_payload, batched=False
-                                )
+                            comp_status, ok = _handle_file_completed(
+                                idx, file_info, self._adapter, last_run_status
+                            )
+                            if ok:
                                 self._emit_api_usage()
-                                if completion_status == "completed_with_warnings":
+                                if comp_status == "completed_with_warnings":
                                     completed_with_warnings_count += 1
                                 else:
                                     completed_count += 1
-
                             else:
-                                ff_payload2: FileFailedPayload = {
-                                    "index": idx,
-                                    "id": file_info.get("id", ""),
-                                    "error": "Output HTML non generato.",
-                                }
-                                self._adapter.emit(
-                                    "fileFailed", ff_payload2, batched=False
-                                )
                                 failed_count += 1
                         else:
-                            error_detail = (
-                                getattr(self._adapter, "last_run_error_detail", None)
-                                or ""
+                            (
+                                paused_delta,
+                                failed_delta,
+                                quota_exhausted_now,
+                                should_stop_batch,
+                            ) = _handle_file_failure(
+                                idx, file_info, self._adapter, last_run_status
                             )
-                            error_message = (
-                                redact_secrets(self._adapter.last_run_error)
-                                or "Elaborazione non completata."
-                            )
-                            error_detail = redact_secrets(error_detail)
-                            ff_payload3: FileFailedPayload = {
-                                "index": idx,
-                                "id": file_info.get("id", ""),
-                                "error": error_message,
-                            }
-                            if error_detail:
-                                ff_payload3["error_detail"] = error_detail
-                            self._adapter.emit("fileFailed", ff_payload3, batched=False)
-                            failed_count += 1
-                            if ff_payload3["error"] in {
-                                "quota_daily_limit_phase1",
-                                "quota_daily_limit_phase2",
-                            }:
-                                quota_exhausted = True
+                            paused_count += paused_delta
+                            failed_count += failed_delta
+                            quota_exhausted = quota_exhausted or quota_exhausted_now
+                            if should_stop_batch:
                                 break
                         current_index = None
                         current_file_id = ""
@@ -571,6 +659,7 @@ class PipelineControllerMixin:
                     "completed": completed_count,
                     "completed_with_warnings": completed_with_warnings_count,
                     "failed": failed_count,
+                    "paused": paused_count,
                     "total": len(files),
                 }
                 if quota_exhausted:

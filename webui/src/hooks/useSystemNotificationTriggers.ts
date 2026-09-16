@@ -1,5 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { STORAGE_KEYS } from '../storageKeys';
+import { useEffect, useRef } from 'react';
 import { type AddNotificationOptions, type NotificationCategory, type NotificationType } from './useNotifications';
 
 export interface UseSystemNotificationTriggersOptions {
@@ -13,39 +12,13 @@ export interface UseSystemNotificationTriggersOptions {
     options?: AddNotificationOptions,
   ) => void;
   removeNotificationByDedupeKey: (dedupeKey: string) => void;
-  isPeakDismissed: boolean;
-  setIsPeakDismissed: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export function useSystemNotificationTriggers({
   configRecoveredFrom,
   updateAvailable,
   addNotification,
-  removeNotificationByDedupeKey,
-  isPeakDismissed,
-  setIsPeakDismissed,
 }: UseSystemNotificationTriggersOptions) {
-  const [isPeakHour, setIsPeakHour] = useState(() => {
-    const h = new Date().getHours();
-    return h >= 15 && h < 20;
-  });
-
-  useEffect(() => {
-    const check = () => {
-      const h = new Date().getHours();
-      setIsPeakHour(h >= 15 && h < 20);
-    };
-    const id = setInterval(check, 60_000);
-    return () => clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    if (isPeakHour) {
-      const ts = localStorage.getItem(STORAGE_KEYS.PEAK_BANNER_DISMISSED_UNTIL);
-      setIsPeakDismissed(ts ? Date.now() < Number(ts) : false);
-    }
-  }, [isPeakHour, setIsPeakDismissed]);
-
   const configRecoveryToastPathRef = useRef<string | null>(null);
   useEffect(() => {
     const recoveredPath = configRecoveredFrom.trim();
@@ -68,24 +41,6 @@ export function useSystemNotificationTriggers({
     );
   }, [configRecoveredFrom, addNotification]);
 
-  useEffect(() => {
-    if (!isPeakHour) {
-      removeNotificationByDedupeKey('peak-hour-warning');
-      return;
-    }
-    if (isPeakDismissed) return;
-    addNotification(
-      'Fascia oraria di punta',
-      'Fascia oraria di punta (15:00–20:00): i modelli Gemini Flash possono subire rallentamenti o errori 503.',
-      'warning',
-      'system',
-      {
-        persistent: true,
-        dedupeKey: 'peak-hour-warning',
-      },
-    );
-  }, [isPeakHour, isPeakDismissed, addNotification, removeNotificationByDedupeKey]);
-
   const updateToastShownVersionRef = useRef<string | null>(null);
   useEffect(() => {
     if (!updateAvailable) return;
@@ -104,8 +59,4 @@ export function useSystemNotificationTriggers({
       },
     );
   }, [updateAvailable, addNotification]);
-
-  return {
-    isPeakHour,
-  };
 }

@@ -5,7 +5,6 @@ export const STORAGE_KEYS = {
   SHOW_CONSOLE: 'show_console',
   AUTO_CONTINUE: 'auto_continue',
   NOTIFICATIONS_ENABLED: 'notifications_enabled',
-  PEAK_BANNER_DISMISSED_UNTIL: 'peakBannerDismissedUntil',
   EDITOR_ZOOM: 'editor_zoom',
   COLLAB_USERNAME: 'collab_username',
   COLLAB_USERCOLOR: 'collab_usercolor',

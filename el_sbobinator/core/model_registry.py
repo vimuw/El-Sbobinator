@@ -26,9 +26,6 @@ SUPPORTED_MODELS: tuple[str, ...] = (
     "gemini-3.8-flash",
     "gemini-3.7-flash",
     "gemini-3.5-flash",
-    "gemini-3.5-flash-lite",
-    "gemini-3-flash-preview",
-    "gemini-3.1-flash-lite-preview",
 )
 
 DEFAULT_MODEL = "gemini-2.5-flash"
@@ -73,30 +70,6 @@ MODEL_OPTIONS: tuple[ModelOption, ...] = (
         "summary": "Generazione Flash precedente, orientato a workload ad alto throughput.",
         "default_chunk_minutes": 15,
         "default_macro_char_limit": 22000,
-        "phase1_temperature": 0.35,
-    },
-    {
-        "id": "gemini-3.5-flash-lite",
-        "label": "Gemini 3.5 Flash Lite",
-        "summary": "",
-        "default_chunk_minutes": 15,
-        "default_macro_char_limit": 22000,
-        "phase1_temperature": 0.35,
-    },
-    {
-        "id": "gemini-3-flash-preview",
-        "label": "Gemini 3 Flash (Preview)",
-        "summary": "",
-        "default_chunk_minutes": 15,
-        "default_macro_char_limit": 22000,
-        "phase1_temperature": 0.35,
-    },
-    {
-        "id": "gemini-3.1-flash-lite-preview",
-        "label": "Gemini 3.1 Flash Lite (Preview)",
-        "summary": "",
-        "default_chunk_minutes": 5,
-        "default_macro_char_limit": 7500,
         "phase1_temperature": 0.35,
     },
 )

@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import threading
 import time
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 import webview
 
@@ -75,6 +75,7 @@ class PipelineAdapter:
         self.last_run_status: str = "idle"
         self.last_run_error: str | None = None
         self.last_run_error_detail: str | None = None
+        self.last_retry_state: dict[str, Any] | None = None
         self.effective_api_key: str | None = None
 
         # Pending UI-answer callbacks (written by pipeline thread, read by UI thread)
@@ -149,6 +150,7 @@ class PipelineAdapter:
         self.last_run_status = "failed"
         self.last_run_error = None
         self.last_run_error_detail = None
+        self.last_retry_state = None
         self.effective_api_key = str(api_key or "").strip() or None
 
     def set_run_result(self, status: str, error: str | None = None):
@@ -175,6 +177,10 @@ class PipelineAdapter:
             "total": total,
         }
         self._emit_js("updateWorkDone", payload, batched=True)
+
+    def emit_retry_state(self, payload: dict[str, Any]):
+        self.last_retry_state = dict(payload)
+        self._emit_js("retryStateChanged", payload, batched=False)
 
     def register_step_time(
         self,

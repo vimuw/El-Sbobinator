@@ -9,11 +9,14 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import re
 import threading
 import time
 from collections import Counter
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from google import genai
@@ -24,29 +27,35 @@ from el_sbobinator.core.model_registry import (
     ModelState,
     next_model_in_chain,
 )
-from el_sbobinator.services import network_service
+from el_sbobinator.services import network_service, usage_service
 from el_sbobinator.services.config_service import load_config
 from el_sbobinator.services.gemini_errors import (
     AllModelsUnavailableError,
+    CircuitBreakerExhaustedError,
     DegenerateOutputError,
     PermanentError,
     QuotaDailyLimitError,
     _error_code,
     _error_text,
     _is_daily_or_key_exhausted,
+    _is_deterministic_client_error,
     _is_invalid_key_probe_failure,
     _is_minute_scoped_rate_limit,
     _is_model_not_found,
     _is_model_unavailable,
     _is_quota_related,
+    _is_transient_capacity_or_server_error,
     _is_transient_key_probe_failure,
     _normalize_guardrail_text,
+    classify_429_error,
+    classify_credential_status,
     detect_degenerate_output,
+    extract_retry_after_seconds,
 )
 from el_sbobinator.utils.logging_utils import get_logger, redact_secrets
 
 # ---------------------------------------------------------------------------
-# Module-level constants
+# Module-level constants & Adaptive Governor
 # ---------------------------------------------------------------------------
 
 _FILE_UPLOAD_TIMEOUT_SECONDS: int = (
@@ -57,20 +66,177 @@ _FILE_UPLOAD_POLL_SECONDS: int = (
 )
 
 _MAX_RETRY_ATTEMPTS: int = (
-    4  # Maximum Gemini API call attempts before propagating the error
+    4  # Maximum Gemini API call attempts before suspending/propagating the error
 )
 _RETRY_SLEEP_SECONDS: float = 30.0  # Back-off pause between generic transient errors
 _MODEL_UNAVAILABLE_RETRY_DELAYS: tuple[float, ...] = (
-    5.0,
     15.0,
     30.0,
     60.0,
-    120.0,
-)  # Progressive back-off before switching model on 503/UNAVAILABLE (6 total attempts)
+)  # Initial call, then three bounded probes with exponential backoff.
 # Gemini enforces a per-minute request quota that resets after ~60 s; sleeping
 # 65 s adds a small buffer to ensure the window has fully elapsed before retry.
 _RATE_LIMIT_SLEEP_SECONDS: float = 65.0
 _NEW_API_KEY_TIMEOUT_SECONDS: float = 600.0
+
+
+def create_gemini_client(api_key: str) -> genai.Client:
+    """Instantiate a Google GenAI Client with SDK-level retries explicitly disabled.
+
+    generation_service is the sole retry authority to guarantee deterministic timings
+    and exact telemetry counting.
+    """
+    cleaned_key = str(api_key or "").strip()
+    http_opts = types.HttpOptions(retry_options=types.HttpRetryOptions(attempts=1))
+    return genai.Client(api_key=cleaned_key, http_options=http_opts)
+
+
+@dataclass
+class AdaptiveGovernor:
+    """Reactive timing governor and circuit breaker for rate limiting, backoff, and shared cooldown across chunks."""
+
+    next_allowed_at: float = 0.0
+    consecutive_503: int = 0
+    consecutive_429: int = 0
+    attempt: int = 1
+    max_attempts: int = 4
+    state: str = "idle"
+    reason: str = ""
+    model: str = ""
+    last_error: str = ""
+    recommended_retry_at_iso: str | None = None
+
+    def wait_if_needed(
+        self, cancelled: Callable[[], bool], runtime: Any = None
+    ) -> bool:
+        """Wait if cooldown or backoff is active. Returns False if cancelled."""
+        remaining = self.next_allowed_at - time.monotonic()
+        if remaining <= 0:
+            if self.state in ("cooling_down", "probing"):
+                self.state = "idle"
+                self.reason = ""
+            return True
+        if runtime is not None and hasattr(runtime, "retry_state"):
+            try:
+                runtime.retry_state(self.get_state_payload())
+            except Exception:
+                pass
+        return sleep_with_cancel(cancelled, remaining)
+
+    def on_success(self) -> None:
+        """Reset consecutive error counters without shortening active residual cooldowns."""
+        self.consecutive_503 = 0
+        self.consecutive_429 = 0
+        self.attempt = 1
+        self.state = "idle"
+        self.reason = ""
+        self.last_error = ""
+        self.recommended_retry_at_iso = None
+
+    def on_503(
+        self,
+        base_delay: float = 15.0,
+        max_delay: float = 60.0,
+        jitter_range: tuple[float, float] | None = None,
+        model: str = "",
+        attempt: int | None = None,
+    ) -> float:
+        """Record a 503/transient capacity error and compute backoff with positive jitter up to 10%."""
+        self.consecutive_503 += 1
+        self.model = model or self.model
+        if attempt is not None:
+            self.attempt = attempt
+        else:
+            self.attempt = min(self.max_attempts, self.consecutive_503 + 1)
+        self.state = "cooling_down"
+        self.reason = "503_service_unavailable"
+
+        if base_delay <= 0.0:
+            self.next_allowed_at = 0.0
+            return 0.0
+
+        if jitter_range is not None:
+            jitter = random.uniform(*jitter_range)
+        else:
+            jitter = random.uniform(0.0, 0.10 * base_delay)
+
+        delay = min(base_delay, max_delay) + jitter
+        self.next_allowed_at = max(self.next_allowed_at, time.monotonic() + delay)
+        return delay
+
+    def on_429(
+        self,
+        retry_after: float | None = None,
+        default_delay: float = 65.0,
+        jitter_range: tuple[float, float] | None = None,
+        model: str = "",
+    ) -> float:
+        """Record a 429 Rate Limit error and set cooldown for a single probe."""
+        self.consecutive_429 += 1
+        self.model = model or self.model
+        self.attempt = 2
+        self.state = "cooling_down"
+        self.reason = "429_rate_limit_exceeded"
+
+        base = (
+            retry_after
+            if retry_after is not None and retry_after > 0
+            else default_delay
+        )
+        if base <= 0.0:
+            self.next_allowed_at = 0.0
+            return 0.0
+
+        if jitter_range is not None:
+            jitter = random.uniform(*jitter_range)
+        else:
+            jitter = random.uniform(0.0, 0.10 * base)
+
+        delay = base + jitter
+        self.next_allowed_at = max(self.next_allowed_at, time.monotonic() + delay)
+        return delay
+
+    def reset(self) -> None:
+        """Hard reset of all state, including pending cooldowns and error counters."""
+        self.next_allowed_at = 0.0
+        self.consecutive_503 = 0
+        self.consecutive_429 = 0
+        self.attempt = 1
+        self.state = "idle"
+        self.reason = ""
+        self.model = ""
+        self.last_error = ""
+        self.recommended_retry_at_iso = None
+
+    def get_state_payload(self) -> dict[str, Any]:
+        remaining = max(0.0, self.next_allowed_at - time.monotonic())
+        next_retry_at = (
+            (datetime.now(UTC) + timedelta(seconds=remaining)).isoformat()
+            if remaining > 0
+            else None
+        )
+        return {
+            "state": self.state,
+            "reason": self.reason,
+            "model": self.model,
+            "attempt": self.attempt,
+            "max_attempts": self.max_attempts,
+            "next_retry_at": next_retry_at,
+            "seconds_remaining": remaining if remaining > 0 else 0.0,
+        }
+
+
+_GLOBAL_GOVERNOR: AdaptiveGovernor = AdaptiveGovernor()
+
+
+def get_governor() -> AdaptiveGovernor:
+    """Return the global AdaptiveGovernor instance."""
+    return _GLOBAL_GOVERNOR
+
+
+def reset_global_governor() -> None:
+    """Reset the global AdaptiveGovernor instance state."""
+    _GLOBAL_GOVERNOR.reset()
 
 
 def current_model_name(model_state: ModelState | None, default_model: str) -> str:
@@ -148,7 +314,7 @@ def try_rotate_key(
             continue
         checked += 1
         try:
-            new_client = genai.Client(api_key=key)
+            new_client = create_gemini_client(key)
             new_client.models.get(model=model_name)
             if cancelled is not None and cancelled():
                 return current_client, False, None
@@ -315,31 +481,54 @@ def _phase1_temperature(model_name: str) -> float:
 def _retry_on_model_unavailable(
     callable_fn,
     client,
-    model_state: ModelState,
+    model_state: ModelState | None,
     current_model: str,
     cancelled,
     runtime,
     restore_phase,
     model_unavailable_retry_delays: tuple[float, ...],
     on_model_switched,
+    governor: AdaptiveGovernor | None = None,
 ) -> tuple[bool, Any, Any, Exception | None]:
-    """Execute retry loop for 503 unavailable model.
+    """Execute circuit breaker retry loop for transient 503 / capacity errors without switching model.
 
-    Returns (switched, client, result, last_exc).
+    Returns (switched=False, client, result, last_exc).
     """
-    total = len(model_unavailable_retry_delays)
-    for retry_idx, wait in enumerate(model_unavailable_retry_delays, start=1):
-        print(
-            f"      [Modello {current_model} temporaneamente indisponibile."
-            f" Riprovo tra {int(wait)}s... (retry {retry_idx}/{total})]"
+    gov = governor or _GLOBAL_GOVERNOR
+    total_retries = len(model_unavailable_retry_delays)
+    gov.max_attempts = total_retries + 1
+    for retry_idx, base_wait in enumerate(model_unavailable_retry_delays, start=1):
+        wait = gov.on_503(
+            base_delay=base_wait,
+            max_delay=60.0,
+            model=current_model,
+            attempt=retry_idx + 1,
         )
-        runtime.phase(f"Server Gemini occupato — ritento tra {int(wait)}s")
+        usage_service.record_retry_event("503")
+        print(
+            f"      [Modello {current_model} temporaneamente occupato (503)."
+            f" Riprovo tra {int(wait)}s... (tentativo {retry_idx + 1}/{total_retries + 1})]"
+        )
+        if runtime is not None:
+            runtime.phase(
+                f"Server Gemini occupato — riprovo tra {int(wait)}s (tentativo {retry_idx + 1}/{total_retries + 1})"
+            )
+            if hasattr(runtime, "retry_state"):
+                runtime.retry_state(gov.get_state_payload())
         if not sleep_with_cancel(cancelled, wait):
             print("   [*] Operazione annullata dall'utente.")
             return False, client, None, None
         restore_phase()
+        gov.state = "probing"
+        if runtime is not None and hasattr(runtime, "retry_state"):
+            runtime.retry_state(gov.get_state_payload())
         try:
+            _record_attempt_usage(client, current_model, model_state)
             result = callable_fn(client)
+            gov.on_success()
+            _record_success_usage(client, current_model, model_state)
+            if runtime is not None and hasattr(runtime, "retry_state"):
+                runtime.retry_state(gov.get_state_payload())
             return False, client, result, None
         except Exception as retry_exc:
             if cancelled():
@@ -347,16 +536,14 @@ def _retry_on_model_unavailable(
                 return False, client, None, None
             retry_error = _error_text(retry_exc)
             retry_code = _error_code(retry_exc)
-            if _is_model_unavailable(retry_error, retry_code):
-                if retry_idx == total:
-                    _switch_to_next_model(
-                        model_state,
-                        on_model_switched=on_model_switched,
-                        error_message="Modello Gemini indisponibile.",
-                        cause=retry_exc,
-                        exc_type=AllModelsUnavailableError,
-                    )
-                    return True, client, None, None
+            if _is_model_unavailable(
+                retry_error, retry_code
+            ) or _is_transient_capacity_or_server_error(
+                retry_error, retry_code, retry_exc
+            ):
+                if retry_idx == total_retries:
+                    gov.state = "exhausted"
+                    return False, client, None, retry_exc
             else:
                 return False, client, None, retry_exc
     return False, client, None, None
@@ -381,49 +568,88 @@ def _retry_on_quota(
     error_code: int | None,
     log,
     restore_phase,
+    governor: AdaptiveGovernor | None = None,
 ) -> tuple[bool, Any]:
-    """Handle minute rate limits, key rotation, dynamic key prompting, and model degradation.
+    """Handle minute rate limits (single probe), daily quota exhaustion, and key rotation."""
+    gov = governor or _GLOBAL_GOVERNOR
+    kind_429 = classify_429_error(exc)
+    retry_after = extract_retry_after_seconds(exc)
+    is_exhausted_key = (kind_429 == "quota_exceeded") or _is_daily_or_key_exhausted(
+        error, error_code
+    )
+    is_minute_rate_limit = (kind_429 == "rate_limit_exceeded") or (
+        _is_minute_scoped_rate_limit(error, error_code) and not is_exhausted_key
+    )
 
-    Returns (should_retry, new_client).
-    """
-    is_minute_rate_limit = _is_minute_scoped_rate_limit(error, error_code)
-    is_exhausted_key = _is_daily_or_key_exhausted(error, error_code)
-    if is_minute_rate_limit and not is_exhausted_key and attempts < max_attempts - 1:
+    if (
+        (is_minute_rate_limit or kind_429 in ("rate_limit_exceeded", "unknown_429"))
+        and not is_exhausted_key
+        and gov.consecutive_429 == 0
+        and attempts < max_attempts - 1
+    ):
+        sleep_dur = gov.on_429(
+            retry_after=retry_after,
+            default_delay=rate_limit_sleep_seconds,
+            model=current_model,
+        )
+        display_dur = int(sleep_dur)
+        phase_msg = f"⏳ Rate limit: attesa {display_dur}s prima della sonda..."
+
+        usage_service.mark_rate_limited(
+            current_model, sleep_dur if sleep_dur > 0 else 65.0
+        )
+        usage_service.record_retry_event("429")
         print(
-            "      [Rilevato limite temporaneo. Attesa di 65s per il reset quota al minuto...]"
+            f"      [Rilevato rate limit ({kind_429}). Attesa di {display_dur}s per il reset quota...]"
         )
         if runtime is not None:
-            runtime.phase("⏳ Rate limit: attesa 65s...")
-        if not sleep_with_cancel(cancelled, rate_limit_sleep_seconds):
+            runtime.phase(phase_msg)
+            if hasattr(runtime, "retry_state"):
+                runtime.retry_state(gov.get_state_payload())
+        if not sleep_with_cancel(cancelled, sleep_dur):
             print("   [*] Operazione annullata dall'utente.")
             return False, client
         restore_phase()
+        gov.state = "probing"
+        if runtime is not None and hasattr(runtime, "retry_state"):
+            runtime.retry_state(gov.get_state_payload())
 
         return True, client
-    if is_minute_rate_limit and not is_exhausted_key:
-        raise exc
+    if (
+        is_minute_rate_limit or kind_429 in ("rate_limit_exceeded", "unknown_429")
+    ) and not is_exhausted_key:
+        old_key = extract_client_api_key(client) or ""
+        usage_service.record_request_failure(
+            old_key, current_model, reason="rate_limit_exceeded", is_final=True
+        )
+        gov.state = "exhausted"
+        if runtime is not None and hasattr(runtime, "retry_state"):
+            runtime.retry_state(gov.get_state_payload())
+        raise CircuitBreakerExhaustedError(
+            f"Rate limit persistente per il modello {current_model}.",
+            cause_error=error,
+            model=current_model,
+            attempts=attempts + 1,
+            recommended_retry_after_seconds=1800.0,
+        ) from exc
 
     print("\n[!!] CHIAVE API ESAURITA O QUOTA GIORNALIERA RAGGIUNTA!")
 
-    if is_exhausted_key:
-        old_key = extract_client_api_key(client)
-        if old_key:
-            try:
-                from el_sbobinator.services import usage_service
-
-                usage_service.mark_model_exhausted(old_key, current_model)
-            except Exception:
-                pass
+    old_key = extract_client_api_key(client) or ""
+    if is_exhausted_key or kind_429 == "quota_exceeded":
+        usage_service.mark_quota_exhausted(current_model)
+        usage_service.record_request_failure(
+            old_key, current_model, reason="quota_exceeded", is_final=True
+        )
     if cancelled():
         print("   [*] Operazione annullata dall'utente.")
         return False, client
 
     # Explicit user-driven key replacement on quota exhaustion.
-    # Automatic silent rotation is omitted to ensure transparency and prevent circumventing rate-limit policies.
     new_api_key = request_fallback_key() if request_fallback_key else None
     if new_api_key and new_api_key.strip():
         try:
-            test_c = genai.Client(api_key=new_api_key.strip())
+            test_c = create_gemini_client(new_api_key.strip())
             test_c.models.get(model=current_model)
             if cancelled():
                 print("   [*] Operazione annullata dall'utente.")
@@ -440,20 +666,253 @@ def _retry_on_quota(
     raise QuotaDailyLimitError(str(exc)) from exc
 
 
-def _record_success_usage(
+def _record_attempt_usage(
     client, model_name: str, model_state: ModelState | None
 ) -> None:
-    cur_key = extract_client_api_key(client)
-    if not cur_key:
-        return
+    cur_key = extract_client_api_key(client) or ""
     try:
-        from el_sbobinator.services import usage_service
-
-        usage_service.record_request(
-            cur_key, current_model_name(model_state, model_name), 1
+        usage_service.record_request_attempt(
+            cur_key, current_model_name(model_state, model_name)
         )
     except Exception:
         pass
+
+
+def _record_success_usage(
+    client, model_name: str, model_state: ModelState | None
+) -> None:
+    cur_key = extract_client_api_key(client) or ""
+    try:
+        usage_service.record_request_success(
+            cur_key, current_model_name(model_state, model_name)
+        )
+    except Exception:
+        pass
+
+
+def _handle_credential_error_recording(
+    exc: Exception, cur_key: str, current_model: str, error_code: int | None
+) -> str:
+    cred_status = classify_credential_status(exc)
+    if cred_status in ("invalid", "permission_denied", "request_error"):
+        usage_service.mark_credential_status(
+            cur_key,
+            cred_status,
+            error_msg=str(exc),
+            code=error_code,
+        )
+        usage_service.record_request_failure(
+            cur_key, current_model, reason=cred_status, is_final=True
+        )
+    return cred_status
+
+
+def _handle_model_error(
+    exc: Exception,
+    error: str,
+    error_code: int | None,
+    current_model: str,
+    model_state: ModelState | None,
+    on_model_switched: Any,
+) -> bool:
+    if model_state is None:
+        return False
+    if isinstance(exc, DegenerateOutputError):
+        _rejected_len = len(getattr(exc, "rejected_text", ""))
+        print(
+            f'      [Output degenerato] model={current_model} reason="{exc}" ({_rejected_len} chars) - provo fallback...'
+        )
+        _switch_to_next_model(
+            model_state,
+            on_model_switched=on_model_switched,
+            error_message="Tutti i modelli della chain hanno prodotto output degenerato o non valido.",
+            cause=exc,
+            exc_type=DegenerateOutputError,
+        )
+        return True
+    if _is_model_not_found(error, error_code):
+        print(
+            f"      [Modello {current_model} non supportato o non trovato. Provo il fallback successivo...]"
+        )
+        _switch_to_next_model(
+            model_state,
+            on_model_switched=on_model_switched,
+            error_message="Modello Gemini non supportato o non trovato.",
+            cause=exc,
+        )
+        return True
+    return False
+
+
+def _handle_offline_network(
+    cancelled,
+    runtime,
+    restore_phase,
+) -> bool:
+    """Returns True to continue main retry loop, False if cancelled."""
+    usage_service.record_retry_event("network")
+    print(
+        "      [Connessione assente: impossibile raggiungere i server Google. In attesa di rete (controllo ogni 10s)...]"
+    )
+    if runtime is not None:
+        runtime.phase(
+            "Connessione assente — verifica rete in corso (riprovo ogni 10s)..."
+        )
+    while not network_service.is_network_online():
+        if not sleep_with_cancel(cancelled, 10.0):
+            print("   [*] Operazione annullata dall'utente.")
+            return False
+    restore_phase()
+    return True
+
+
+def _check_deterministic_client_error(
+    exc: Exception,
+    error: str,
+    error_code: int | None,
+    cred_status: str,
+    cur_key: str,
+    current_model: str,
+    is_quota_related: bool,
+) -> None:
+    if (
+        isinstance(exc, PermanentError)
+        or cred_status in ("invalid", "permission_denied", "request_error")
+        or (_is_deterministic_client_error(error, error_code) and not is_quota_related)
+    ):
+        usage_service.record_request_failure(
+            cur_key,
+            current_model,
+            reason=cred_status or "client_error",
+            is_final=True,
+        )
+        raise exc
+
+
+def _handle_transient_capacity(
+    callable_fn,
+    client,
+    model_state,
+    current_model: str,
+    cancelled,
+    runtime,
+    restore_phase,
+    delays: tuple[float, ...],
+    on_model_switched,
+    gov: AdaptiveGovernor,
+    cur_key: str,
+    exc: Exception,
+    error: str,
+) -> tuple[bool, Any, Any, Exception | None]:
+    """Execute model unavailable retry loop.
+
+    Returns (done, client, result, other_exc).
+    """
+    _switched, client, result, other_exc = _retry_on_model_unavailable(
+        callable_fn,
+        client,
+        model_state,
+        current_model,
+        cancelled,
+        runtime,
+        restore_phase,
+        delays,
+        on_model_switched,
+        governor=gov,
+    )
+    if result is not None or other_exc is None:
+        return True, client, result, None
+
+    if other_exc is not None:
+        other_err = _error_text(other_exc)
+        other_c = _error_code(other_exc)
+        if not (
+            _is_model_unavailable(other_err, other_c)
+            or _is_transient_capacity_or_server_error(other_err, other_c, other_exc)
+        ):
+            return False, client, None, other_exc
+
+    actual_max_attempts = len(delays) + 1
+    gov.state = "exhausted"
+    if runtime is not None and hasattr(runtime, "retry_state"):
+        runtime.retry_state(gov.get_state_payload())
+    usage_service.record_request_failure(
+        cur_key, current_model, reason="circuit_breaker_exhausted", is_final=True
+    )
+    raise CircuitBreakerExhaustedError(
+        f"Server Gemini temporaneamente indisponibile dopo {actual_max_attempts} tentativi ({current_model}).",
+        cause_error=error,
+        model=current_model,
+        attempts=actual_max_attempts,
+        recommended_retry_after_seconds=1800.0,
+    ) from (other_exc or exc)
+
+
+def _process_transient_capacity_fallback(
+    other_exc: Exception,
+    cur_key: str,
+    current_model: str,
+    model_state: ModelState | None,
+    on_model_switched,
+) -> tuple[bool, Exception, str, int | None, bool]:
+    """Returns (model_switched, exc, error, error_code, is_quota_related)."""
+    error = _error_text(other_exc)
+    error_code = _error_code(other_exc)
+    is_quota_related = _is_quota_related(error, error_code)
+    cred_status = _handle_credential_error_recording(
+        other_exc, cur_key, current_model, error_code
+    )
+    if _handle_model_error(
+        other_exc,
+        error,
+        error_code,
+        current_model,
+        model_state,
+        on_model_switched,
+    ):
+        return True, other_exc, error, error_code, is_quota_related
+    _check_deterministic_client_error(
+        other_exc,
+        error,
+        error_code,
+        cred_status,
+        cur_key,
+        current_model,
+        is_quota_related,
+    )
+    return False, other_exc, error, error_code, is_quota_related
+
+
+def _handle_generic_transient_retry(
+    exc: Exception,
+    cur_key: str,
+    current_model: str,
+    attempts: int,
+    max_attempts: int,
+    retry_sleep_seconds: float,
+    cancelled,
+) -> bool:
+    """Returns True if sleep succeeded and should continue retry loop, False if cancelled.
+
+    Raises original exception if max_attempts exceeded.
+    """
+    if attempts >= max_attempts:
+        usage_service.record_request_failure(
+            cur_key,
+            current_model,
+            reason="max_attempts_exceeded",
+            is_final=True,
+        )
+        raise exc
+
+    usage_service.record_retry_event("other")
+    print(
+        f"      [Errore: {redact_secrets(exc)}. Riprovo in {int(retry_sleep_seconds)}s...]"
+    )
+    if not sleep_with_cancel(cancelled, retry_sleep_seconds):
+        print("   [*] Operazione annullata dall'utente.")
+        return False
+    return True
 
 
 def retry_with_quota(
@@ -474,16 +933,17 @@ def retry_with_quota(
     on_model_switched=None,
     logger=None,
     resume_phase_text: str | None = None,
+    governor: AdaptiveGovernor | None = None,
 ):
-    """Execute callable_fn(client) with automatic quota/rate-limit retry and key rotation.
+    """Execute callable_fn(client) with adaptive circuit breaker backoff and shared cooldown.
 
     Returns (new_client, result) where result is the return value of callable_fn(client).
-    Raises QuotaDailyLimitError if daily quota is exhausted with no fallback.
-    Raises the original exception after max_attempts for non-quota errors.
-    callable_fn receives the current client as its sole argument.
-    on_key_rotated(new_client) is called after each successful key rotation.
+    Raises QuotaDailyLimitError if daily quota is exhausted.
+    Raises CircuitBreakerExhaustedError when automatic retry budget (4 attempts) is exhausted.
+    Raises original exception for non-retryable client errors.
     """
     log = logger or get_logger("el_sbobinator.generation")
+    gov = governor or _GLOBAL_GOVERNOR
 
     def _restore_phase() -> None:
         if runtime is not None and resume_phase_text:
@@ -493,9 +953,20 @@ def retry_with_quota(
     while attempts < max_attempts:
         if cancelled():
             return client, None
+        if not gov.wait_if_needed(cancelled, runtime=runtime):
+            print("   [*] Operazione annullata dall'utente.")
+            return client, None
+
+        current_model = current_model_name(model_state, model_name)
+        cur_key = extract_client_api_key(client) or ""
+
         try:
+            _record_attempt_usage(client, current_model, model_state)
             result = callable_fn(client)
-            _record_success_usage(client, model_name, model_state)
+            gov.on_success()
+            _record_success_usage(client, current_model, model_state)
+            if runtime is not None and hasattr(runtime, "retry_state"):
+                runtime.retry_state(gov.get_state_payload())
             return client, result
         except Exception as exc:
             if cancelled():
@@ -504,42 +975,46 @@ def retry_with_quota(
             error = _error_text(exc)
             error_code = _error_code(exc)
             is_quota_related = _is_quota_related(error, error_code)
-            current_model = current_model_name(model_state, model_name)
 
-            if model_state is not None and isinstance(exc, DegenerateOutputError):
-                _rejected_len = len(getattr(exc, "rejected_text", ""))
-                print(
-                    f'      [Output degenerato] model={current_model} reason="{exc}" ({_rejected_len} chars) - provo fallback...'
-                )
-                _switch_to_next_model(
-                    model_state,
-                    on_model_switched=on_model_switched,
-                    error_message="Tutti i modelli della chain hanno prodotto output degenerato o non valido.",
-                    cause=exc,
-                    exc_type=DegenerateOutputError,
-                )
-                attempts = 0
-                continue
+            cred_status = _handle_credential_error_recording(
+                exc, cur_key, current_model, error_code
+            )
 
-            if model_state is not None and _is_model_not_found(error, error_code):
-                print(
-                    f"      [Modello {current_model} non supportato o non trovato. Provo il fallback successivo...]"
-                )
-                _switch_to_next_model(
-                    model_state,
-                    on_model_switched=on_model_switched,
-                    error_message="Modello Gemini non supportato o non trovato.",
-                    cause=exc,
-                )
-                attempts = 0
-                continue
-
-            if (
-                not is_quota_related
-                and _is_model_unavailable(error, error_code)
-                and model_state is not None
+            # 1. Deterministic model issues (404 Not Found, Degenerate runaway text)
+            if _handle_model_error(
+                exc,
+                error,
+                error_code,
+                current_model,
+                model_state,
+                on_model_switched,
             ):
-                switched, client, result, other_exc = _retry_on_model_unavailable(
+                attempts = 0
+                continue
+
+            # 2. Deterministic client errors (400, 401, 403, PermanentError) -> Fail immediately
+            _check_deterministic_client_error(
+                exc,
+                error,
+                error_code,
+                cred_status,
+                cur_key,
+                current_model,
+                is_quota_related,
+            )
+
+            # 3. Offline network -> Poll connectivity without consuming API attempt budget
+            if network_service.is_network_offline_error(exc):
+                if not _handle_offline_network(cancelled, runtime, _restore_phase):
+                    return client, None
+                continue
+
+            # 4. Transient capacity & server errors (503, 500, 502, 504, 408, Timeout)
+            if not is_quota_related and (
+                _is_model_unavailable(error, error_code)
+                or _is_transient_capacity_or_server_error(error, error_code, exc)
+            ):
+                done, client, result, other_exc = _handle_transient_capacity(
                     callable_fn,
                     client,
                     model_state,
@@ -549,19 +1024,28 @@ def retry_with_quota(
                     _restore_phase,
                     model_unavailable_retry_delays,
                     on_model_switched,
+                    gov,
+                    cur_key,
+                    exc,
+                    error,
                 )
-                if result is not None or (cancelled() and other_exc is None):
+                if done:
                     return client, result
-                if switched:
-                    attempts = 0
-                    continue
                 if other_exc is not None:
-                    exc = other_exc
-                    error = _error_text(exc)
-                    error_code = _error_code(exc)
-                    is_quota_related = _is_quota_related(error, error_code)
-                    current_model = current_model_name(model_state, model_name)
+                    switched, exc, error, error_code, is_quota_related = (
+                        _process_transient_capacity_fallback(
+                            other_exc,
+                            cur_key,
+                            current_model,
+                            model_state,
+                            on_model_switched,
+                        )
+                    )
+                    if switched:
+                        attempts = 0
+                        continue
 
+            # 5. 429 Quota & Rate Limit handling
             if is_quota_related:
                 should_retry, client = _retry_on_quota(
                     exc,
@@ -581,6 +1065,7 @@ def retry_with_quota(
                     error_code=error_code,
                     log=log,
                     restore_phase=_restore_phase,
+                    governor=gov,
                 )
                 if should_retry:
                     if _is_daily_or_key_exhausted(error, error_code):
@@ -590,23 +1075,17 @@ def retry_with_quota(
                     continue
                 return client, None
 
-            if isinstance(exc, PermanentError):
-                raise
-
+            # 6. Generic transient error retry
             attempts += 1
-            if attempts >= max_attempts:
-                raise
-
-            if network_service.is_network_offline_error(exc):
-                print(
-                    f"      [Connessione assente: impossibile raggiungere i server Google. Tentativo {attempts}/{max_attempts} tra {int(retry_sleep_seconds)}s...]"
-                )
-            else:
-                print(
-                    f"      [Errore: {redact_secrets(exc)}. Riprovo in {int(retry_sleep_seconds)}s...]"
-                )
-            if not sleep_with_cancel(cancelled, retry_sleep_seconds):
-                print("   [*] Operazione annullata dall'utente.")
+            if not _handle_generic_transient_retry(
+                exc,
+                cur_key,
+                current_model,
+                attempts,
+                max_attempts,
+                retry_sleep_seconds,
+                cancelled,
+            ):
                 return client, None
     return client, None
 

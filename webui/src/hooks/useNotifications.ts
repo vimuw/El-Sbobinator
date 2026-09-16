@@ -35,7 +35,6 @@ export interface UseNotificationsOptions {
   onInstallUpdate?: (version: string) => Promise<void>;
   onDismissUpdate?: (version: string) => void;
   onOpenUrl?: (url: string) => Promise<void>;
-  setIsPeakDismissed?: (dismissed: boolean) => void;
   updateAvailable?: string | null;
   onOpenSettings?: () => void;
 }
@@ -91,13 +90,6 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
         const storageKey = `el-sbobinator.config-recovery-dismissed.v1:${recoveredPath}`;
         try { localStorage.setItem(storageKey, '1'); } catch (_) {}
       }
-      if (notif?.dedupeKey === 'peak-hour-warning') {
-        const next = new Date();
-        next.setDate(next.getDate() + 1);
-        next.setHours(15, 0, 0, 0);
-        try { localStorage.setItem('peakBannerDismissedUntil', String(next.getTime())); } catch (_) {}
-        optionsRef.current.setIsPeakDismissed?.(true);
-      }
       if (notif?.dedupeKey === 'update-available') {
         const actionData = notif.actionData as Record<string, unknown> | undefined;
         const version = (typeof actionData?.version === 'string' ? actionData.version : undefined) || optionsRef.current.updateAvailable;
@@ -124,13 +116,6 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
           const recoveredPath = notif.dedupeKey.split('config-recovery:')[1];
           const storageKey = `el-sbobinator.config-recovery-dismissed.v1:${recoveredPath}`;
           try { localStorage.setItem(storageKey, '1'); } catch (_) {}
-        }
-        if (notif.dedupeKey === 'peak-hour-warning') {
-          const next = new Date();
-          next.setDate(next.getDate() + 1);
-          next.setHours(15, 0, 0, 0);
-          try { localStorage.setItem('peakBannerDismissedUntil', String(next.getTime())); } catch (_) {}
-          optionsRef.current.setIsPeakDismissed?.(true);
         }
         if (notif.dedupeKey === 'update-available') {
           const actionData = notif.actionData as Record<string, unknown> | undefined;

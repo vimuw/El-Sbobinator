@@ -17,8 +17,10 @@ from el_sbobinator.core.model_registry import ModelState
 from el_sbobinator.core.session_store import _update_session
 from el_sbobinator.core.shared import _atomic_write_text
 from el_sbobinator.pipeline.pipeline_session import record_step_metric
+from el_sbobinator.services import usage_service
 from el_sbobinator.services.generation_service import (
     QuotaDailyLimitError,
+    create_gemini_client,
     current_model_name,
     extract_response_text,
     retry_with_quota,
@@ -242,6 +244,7 @@ def _run_macro_retry_pass(
                 },
             )
             save_session()
+            usage_service.record_work_completed("revisions", 1)
             _macro_secs = max(0.0, time.monotonic() - float(step_t0))
             record_step_metric(
                 session, "macro", _macro_secs, done=revised_done, total=macro_total
@@ -410,6 +413,7 @@ def _process_macro_block_item(
             },
         )
         save_session()
+        usage_service.record_work_completed("revisions", 1)
 
         success = True
         runtime.progress(0.7 + 0.2 * (new_revised_done / max(1, macro_total)))
@@ -789,7 +793,7 @@ def execute_failed_blocks_retry_workflow(
     ).strip()
     fallback_models = settings.get("fallback_models") or cfg.get("fallback_models", [])
     model_state = build_model_state(primary_model, fallback_models)
-    client = genai.Client(api_key=api_key)
+    client = generation_service.create_gemini_client(api_key)
     fallback_keys = generation_service.load_fallback_keys()
 
     def _save_session() -> bool:

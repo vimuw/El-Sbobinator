@@ -4,12 +4,17 @@ from typing import Any, ClassVar, cast
 from unittest.mock import patch
 
 from el_sbobinator.core.model_registry import build_model_state
+from el_sbobinator.services.gemini_errors import CircuitBreakerExhaustedError
 from el_sbobinator.services.generation_service import (
+    AdaptiveGovernor,
     AllModelsUnavailableError,
     DegenerateOutputError,
     QuotaDailyLimitError,
     _is_model_unavailable,
+    create_gemini_client,
     detect_degenerate_output,
+    get_governor,
+    reset_global_governor,
     retry_with_quota,
     try_rotate_key,
 )
@@ -19,12 +24,16 @@ class _FakeRuntime:
     def __init__(self):
         self.rotated_keys = []
         self.phase_calls: list[str] = []
+        self.retry_states: list[dict[str, Any]] = []
 
     def phase(self, text):
         self.phase_calls.append(text)
 
     def set_effective_api_key(self, key):
         self.rotated_keys.append(key)
+
+    def retry_state(self, payload):
+        self.retry_states.append(dict(payload))
 
 
 class _Structured503QuotaError(RuntimeError):
@@ -40,6 +49,34 @@ class _Structured503QuotaError(RuntimeError):
                 "message": "Token balance exhausted for this API key",
             }
         }
+
+
+class GeminiClientFactoryTests(unittest.TestCase):
+    def test_factory_disables_sdk_retries_without_fallback_constructor(self):
+        sentinel = object()
+        with patch(
+            "el_sbobinator.services.generation_service.genai.Client",
+            return_value=sentinel,
+        ) as constructor:
+            client = create_gemini_client(" test-key ")
+
+        self.assertIs(client, sentinel)
+        constructor.assert_called_once()
+        kwargs = constructor.call_args.kwargs
+        self.assertEqual(kwargs["api_key"], "test-key")
+        self.assertEqual(kwargs["http_options"].retry_options.attempts, 1)
+
+    def test_factory_propagates_configuration_errors(self):
+        with (
+            patch(
+                "el_sbobinator.services.generation_service.genai.Client",
+                side_effect=TypeError("unsupported retry options"),
+            ) as constructor,
+            self.assertRaisesRegex(TypeError, "unsupported retry options"),
+        ):
+            create_gemini_client("test-key")
+
+        constructor.assert_called_once()
 
 
 class TryRotateKeyTests(unittest.TestCase):
@@ -150,6 +187,12 @@ class TryRotateKeyTests(unittest.TestCase):
 
 
 class RetryWithQuotaTests(unittest.TestCase):
+    def setUp(self):
+        reset_global_governor()
+
+    def tearDown(self):
+        reset_global_governor()
+
     def _run(self, fn, *, max_attempts=2):
         return retry_with_quota(
             fn,
@@ -161,23 +204,24 @@ class RetryWithQuotaTests(unittest.TestCase):
             request_fallback_key=lambda: None,
             max_attempts=max_attempts,
             retry_sleep_seconds=0.0,
+            model_unavailable_retry_delays=(0.0, 0.0, 0.0),
             rate_limit_sleep_seconds=0.0,
         )
 
-    def test_plain_503_switches_to_next_model_after_quick_retry(self):
+    def test_plain_503_retries_without_model_switch(self):
         primary_client = object()
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-3.1-flash-lite-preview"],
+            ["gemini-3.6-flash"],
             "gemini-2.5-flash",
         )
         switched = []
+        call_count = 0
 
         def fn(current_client):
-            if (
-                current_client is primary_client
-                and model_state.current == "gemini-3.1-flash-lite-preview"
-            ):
+            nonlocal call_count
+            call_count += 1
+            if current_client is primary_client and call_count >= 2:
                 return "ok"
             err = RuntimeError("503 Service Unavailable")
             err.code = 503  # type: ignore[attr-defined]
@@ -201,15 +245,13 @@ class RetryWithQuotaTests(unittest.TestCase):
 
         self.assertIs(client, primary_client)
         self.assertEqual(result, "ok")
-        self.assertEqual(model_state.current, "gemini-3.1-flash-lite-preview")
-        self.assertEqual(
-            switched, [("gemini-2.5-flash", "gemini-3.1-flash-lite-preview")]
-        )
+        self.assertEqual(model_state.current, "gemini-2.5-flash")
+        self.assertEqual(switched, [])
 
     def test_model_404_switches_immediately_without_sleep(self):
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-3.1-flash-lite-preview"],
+            ["gemini-3.6-flash"],
             "gemini-2.5-flash",
         )
         switched = []
@@ -217,7 +259,7 @@ class RetryWithQuotaTests(unittest.TestCase):
 
         def fn(_client):
             call_models.append(model_state.current)
-            if model_state.current == "gemini-3.1-flash-lite-preview":
+            if model_state.current == "gemini-3.6-flash":
                 return "ok"
             err = RuntimeError("404 NOT_FOUND model unsupported for generateContent")
             err.code = 404  # type: ignore[attr-defined]
@@ -244,17 +286,13 @@ class RetryWithQuotaTests(unittest.TestCase):
             )
 
         self.assertEqual(result, "ok")
-        self.assertEqual(
-            call_models, ["gemini-2.5-flash", "gemini-3.1-flash-lite-preview"]
-        )
-        self.assertEqual(
-            switched, [("gemini-2.5-flash", "gemini-3.1-flash-lite-preview")]
-        )
+        self.assertEqual(call_models, ["gemini-2.5-flash", "gemini-3.6-flash"])
+        self.assertEqual(switched, [("gemini-2.5-flash", "gemini-3.6-flash")])
 
     def test_degenerate_output_switches_model_without_consuming_attempts(self):
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-3.1-flash-lite-preview"],
+            ["gemini-3.6-flash"],
             "gemini-2.5-flash",
         )
         switched = []
@@ -262,7 +300,7 @@ class RetryWithQuotaTests(unittest.TestCase):
 
         def fn(_client):
             call_models.append(model_state.current)
-            if model_state.current == "gemini-3.1-flash-lite-preview":
+            if model_state.current == "gemini-3.6-flash":
                 return "ok"
             raise DegenerateOutputError("frase ripetuta 8 volte")
 
@@ -283,17 +321,13 @@ class RetryWithQuotaTests(unittest.TestCase):
         )
 
         self.assertEqual(result, "ok")
-        self.assertEqual(
-            call_models, ["gemini-2.5-flash", "gemini-3.1-flash-lite-preview"]
-        )
-        self.assertEqual(
-            switched, [("gemini-2.5-flash", "gemini-3.1-flash-lite-preview")]
-        )
+        self.assertEqual(call_models, ["gemini-2.5-flash", "gemini-3.6-flash"])
+        self.assertEqual(switched, [("gemini-2.5-flash", "gemini-3.6-flash")])
 
     def test_degenerate_output_exhausted_chain_re_raises_degenerate_error(self):
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-3.1-flash-lite-preview"],
+            ["gemini-3.6-flash"],
             "gemini-2.5-flash",
         )
 
@@ -321,7 +355,7 @@ class RetryWithQuotaTests(unittest.TestCase):
     def test_plain_503_exhausted_chain_raises_clear_error(self):
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-3.1-flash-lite-preview"],
+            ["gemini-3.6-flash"],
             "gemini-2.5-flash",
         )
 
@@ -330,7 +364,7 @@ class RetryWithQuotaTests(unittest.TestCase):
             err.code = 503  # type: ignore[attr-defined]
             raise err
 
-        with self.assertRaises(RuntimeError) as ctx:
+        with self.assertRaises(CircuitBreakerExhaustedError):
             retry_with_quota(
                 fn,
                 client=object(),
@@ -345,12 +379,11 @@ class RetryWithQuotaTests(unittest.TestCase):
                 model_unavailable_retry_delays=(0.0, 0.0),
                 rate_limit_sleep_seconds=0.0,
             )
-        self.assertIn("fallback configurati", str(ctx.exception))
 
     def test_plain_503_retry_that_becomes_429_does_not_switch_model(self):
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-3.1-flash-lite-preview"],
+            ["gemini-3.6-flash"],
             "gemini-2.5-flash",
         )
         call_count = 0
@@ -364,7 +397,7 @@ class RetryWithQuotaTests(unittest.TestCase):
                 raise err
             raise RuntimeError("429 resource_exhausted per minute")
 
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(CircuitBreakerExhaustedError):
             retry_with_quota(
                 fn,
                 client=object(),
@@ -390,7 +423,7 @@ class RetryWithQuotaTests(unittest.TestCase):
         def fn(_client):
             raise RuntimeError("429 resource_exhausted per minute threshold")
 
-        with self.assertRaises(RuntimeError) as ctx:
+        with self.assertRaises(CircuitBreakerExhaustedError) as ctx:
             retry_with_quota(
                 fn,
                 client=object(),
@@ -420,7 +453,7 @@ class RetryWithQuotaTests(unittest.TestCase):
             self._run(fn)
 
     def test_rate_limit_retries_before_giving_up(self):
-        """Rate-limit path must exhaust all attempts before raising."""
+        """Rate-limit path must probe once then raise CircuitBreakerExhaustedError."""
         call_count = 0
 
         def fn(_client):
@@ -428,9 +461,9 @@ class RetryWithQuotaTests(unittest.TestCase):
             call_count += 1
             raise RuntimeError("429 resource_exhausted per minute")
 
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(CircuitBreakerExhaustedError):
             self._run(fn, max_attempts=3)
-        self.assertEqual(call_count, 3)
+        self.assertEqual(call_count, 2)
 
     def test_structured_503_exhausted_key_rotates_to_fallback_without_sleep_retry(self):
         runtime = _FakeRuntime()
@@ -511,10 +544,10 @@ class RetryWithQuotaTests(unittest.TestCase):
         with patch(
             "el_sbobinator.services.generation_service.try_rotate_key"
         ) as mock_rotate:
-            with self.assertRaises(RuntimeError):
+            with self.assertRaises(CircuitBreakerExhaustedError):
                 self._run(fn, max_attempts=2)
 
-        self.assertEqual(call_count, 2)
+        self.assertEqual(call_count, 4)
         mock_rotate.assert_not_called()
 
     def test_cancelled_quota_error_does_not_rotate_or_request_new_key(self):
@@ -604,9 +637,9 @@ class RetryWithQuotaTests(unittest.TestCase):
         self.assertIn("frase ripetuta", detect_degenerate_output(text) or "")
 
     def test_503_phase_restored_after_switch_to_fallback(self):
-        """503 retry 1/2 then retry 2/2 → switch model: each wait is followed by phase restore."""
+        """503 retry 1/2 then retry 2/2: each wait is followed by phase restore."""
         model_state = build_model_state(
-            "gemini-2.5-flash", ["gemini-3.1-flash-lite-preview"], "gemini-2.5-flash"
+            "gemini-2.5-flash", ["gemini-3.6-flash"], "gemini-2.5-flash"
         )
         rt = _FakeRuntime()
 
@@ -615,7 +648,7 @@ class RetryWithQuotaTests(unittest.TestCase):
             err.code = 503  # type: ignore[attr-defined]
             raise err
 
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(CircuitBreakerExhaustedError):
             retry_with_quota(
                 fn,
                 client=object(),
@@ -632,22 +665,15 @@ class RetryWithQuotaTests(unittest.TestCase):
             )
 
         resume_text = "Fase 1/3: trascrizione (chunk 1/5)"
-        wait_msg = "Server Gemini occupato — ritento tra 0s"
-        self.assertIn(wait_msg, rt.phase_calls)
+        wait_msg = "Server Gemini occupato — riprovo tra 0s"
+        self.assertTrue(any(wait_msg in c for c in rt.phase_calls))
         self.assertIn(resume_text, rt.phase_calls)
-        first_wait = rt.phase_calls.index(wait_msg)
+        first_wait = next(i for i, c in enumerate(rt.phase_calls) if wait_msg in c)
         first_resume = rt.phase_calls.index(resume_text)
         self.assertGreater(
             first_resume,
             first_wait,
             "resume phase must appear after first wait message",
-        )
-        second_wait = rt.phase_calls.index(wait_msg, first_resume)
-        second_resume = rt.phase_calls.index(resume_text, second_wait)
-        self.assertGreater(
-            second_resume,
-            second_wait,
-            "resume phase must appear after second wait message",
         )
 
     def test_rate_limit_phase_restored_after_wait(self):
@@ -679,16 +705,18 @@ class RetryWithQuotaTests(unittest.TestCase):
         )
 
         self.assertEqual(result, "ok")
-        self.assertIn("⏳ Rate limit: attesa 65s...", rt.phase_calls)
+        self.assertTrue(any("Rate limit: attesa" in c for c in rt.phase_calls))
         self.assertIn("Fase 2/3: revisione (1/4)", rt.phase_calls)
-        wait_idx = rt.phase_calls.index("⏳ Rate limit: attesa 65s...")
+        wait_idx = next(
+            i for i, c in enumerate(rt.phase_calls) if "Rate limit: attesa" in c
+        )
         resume_idx = rt.phase_calls.index("Fase 2/3: revisione (1/4)")
         self.assertGreater(resume_idx, wait_idx)
 
     def test_503_third_attempt_succeeds_without_model_switch(self):
         """503x2 (original + retry 1) -> success on retry 2: no model switch, 3 total calls."""
         model_state = build_model_state(
-            "gemini-2.5-flash", ["gemini-3.1-flash-lite-preview"], "gemini-2.5-flash"
+            "gemini-2.5-flash", ["gemini-3.6-flash"], "gemini-2.5-flash"
         )
         switched = []
         call_count = [0]
@@ -726,50 +754,46 @@ class RetryWithQuotaTests(unittest.TestCase):
             "no model switch must occur when success before retry budget exhausted",
         )
 
-    def test_503_all_retries_exhausted_then_switches_model(self):
-        """503x3 (original + retry 1 + retry 2) -> switch to fallback, which succeeds."""
+    def test_503_all_retries_exhausted_raises_circuit_breaker_exhausted(self):
+        """503x3 (original + retry 1 + retry 2) -> raises CircuitBreakerExhaustedError without model switch."""
         model_state = build_model_state(
-            "gemini-2.5-flash", ["gemini-3.1-flash-lite-preview"], "gemini-2.5-flash"
+            "gemini-2.5-flash", ["gemini-3.6-flash"], "gemini-2.5-flash"
         )
         switched = []
         call_count = [0]
 
         def fn(_client):
             call_count[0] += 1
-            if model_state.current == "gemini-2.5-flash":
-                err = RuntimeError("503 Service Unavailable")
-                err.code = 503  # type: ignore[attr-defined]
-                raise err
-            return "ok"
+            err = RuntimeError("503 Service Unavailable")
+            err.code = 503  # type: ignore[attr-defined]
+            raise err
 
-        _client, result = retry_with_quota(
-            fn,
-            client=object(),
-            fallback_keys=[],
-            model_name="gemini-2.5-flash",
-            model_state=model_state,
-            cancelled=lambda: False,
-            runtime=_FakeRuntime(),
-            request_fallback_key=lambda: None,
-            max_attempts=2,
-            retry_sleep_seconds=0.0,
-            model_unavailable_retry_delays=(0.0, 0.0),
-            rate_limit_sleep_seconds=0.0,
-            on_model_switched=lambda old, new: switched.append((old, new)),
-        )
+        with self.assertRaises(CircuitBreakerExhaustedError):
+            retry_with_quota(
+                fn,
+                client=object(),
+                fallback_keys=[],
+                model_name="gemini-2.5-flash",
+                model_state=model_state,
+                cancelled=lambda: False,
+                runtime=_FakeRuntime(),
+                request_fallback_key=lambda: None,
+                max_attempts=2,
+                retry_sleep_seconds=0.0,
+                model_unavailable_retry_delays=(0.0, 0.0),
+                rate_limit_sleep_seconds=0.0,
+                on_model_switched=lambda old, new: switched.append((old, new)),
+            )
 
-        self.assertEqual(result, "ok")
-        self.assertEqual(call_count[0], 4, "3 calls with flash + 1 with flash-lite")
-        self.assertEqual(model_state.current, "gemini-3.1-flash-lite-preview")
-        self.assertEqual(
-            switched, [("gemini-2.5-flash", "gemini-3.1-flash-lite-preview")]
-        )
+        self.assertEqual(call_count[0], 3, "1 initial + 2 retries = 3 calls total")
+        self.assertEqual(model_state.current, "gemini-2.5-flash")
+        self.assertEqual(switched, [])
 
     def test_503_two_waits_phase_restore_interleaved(self):
         """With two retry delays the phase sequence must be:
-        wait1 → restore → wait2 → restore (→ switch or success)."""
+        wait1 → restore → wait2 → restore → success."""
         model_state = build_model_state(
-            "gemini-2.5-flash", ["gemini-3.1-flash-lite-preview"], "gemini-2.5-flash"
+            "gemini-2.5-flash", ["gemini-3.6-flash"], "gemini-2.5-flash"
         )
         rt = _FakeRuntime()
         call_count = [0]
@@ -798,22 +822,26 @@ class RetryWithQuotaTests(unittest.TestCase):
             resume_phase_text="Fase 1/3: trascrizione (chunk 3/10)",
         )
 
-        wait_msg = "Server Gemini occupato — ritento tra 0s"
-        restore = "Fase 1/3: trascrizione (chunk 3/10)"
-        self.assertIn(wait_msg, rt.phase_calls)
-        self.assertIn(restore, rt.phase_calls)
-        idx_w1 = rt.phase_calls.index(wait_msg)
-        idx_r1 = rt.phase_calls.index(restore)
-        idx_w2 = rt.phase_calls.index(wait_msg, idx_r1)
-        idx_r2 = rt.phase_calls.index(restore, idx_w2)
-        self.assertLess(idx_w1, idx_r1)
-        self.assertLess(idx_r1, idx_w2)
-        self.assertLess(idx_w2, idx_r2)
+        wait_indices = [
+            i
+            for i, c in enumerate(rt.phase_calls)
+            if "Server Gemini occupato — riprovo tra" in c
+        ]
+        restore_indices = [
+            i
+            for i, c in enumerate(rt.phase_calls)
+            if c == "Fase 1/3: trascrizione (chunk 3/10)"
+        ]
+        self.assertEqual(len(wait_indices), 2)
+        self.assertEqual(len(restore_indices), 2)
+        self.assertLess(wait_indices[0], restore_indices[0])
+        self.assertLess(restore_indices[0], wait_indices[1])
+        self.assertLess(wait_indices[1], restore_indices[1])
 
     def test_503_cancel_during_second_retry_sleep_returns_none_no_switch(self):
         """If cancel fires during the second 503 sleep, returns (client, None) without switching model."""
         model_state = build_model_state(
-            "gemini-2.5-flash", ["gemini-3.1-flash-lite-preview"], "gemini-2.5-flash"
+            "gemini-2.5-flash", ["gemini-3.6-flash"], "gemini-2.5-flash"
         )
         switched = []
         sleep_call = [0]
@@ -859,22 +887,18 @@ class RetryWithQuotaTests(unittest.TestCase):
 
     def test_503_inner_retry_raises_429_reraises_429_not_503(self):
         """Regression: when the inner 503-model-unavailable retry loop encounters a
-        minute-scoped 429 and breaks, the terminal `raise exc` must surface the 429,
-        not the original outer 503 that `sys.exc_info()` still holds."""
+        minute-scoped 429 and breaks, the terminal exception must surface the 429,
+        not the original outer 503."""
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-3.1-flash-lite-preview"],
+            ["gemini-3.6-flash"],
             "gemini-2.5-flash",
         )
         call_count = [0]
 
         def fn(_client):
             call_count[0] += 1
-            if call_count[0] <= 3:
-                err = RuntimeError("429 Too Many Requests per minute")
-                err.code = 429  # type: ignore[attr-defined]
-                raise err
-            if call_count[0] == 4:
+            if call_count[0] == 1:
                 err = RuntimeError("503 Service Unavailable")
                 err.code = 503  # type: ignore[attr-defined]
                 raise err
@@ -882,7 +906,7 @@ class RetryWithQuotaTests(unittest.TestCase):
             err.code = 429  # type: ignore[attr-defined]
             raise err
 
-        with self.assertRaises(RuntimeError) as ctx:
+        with self.assertRaises(CircuitBreakerExhaustedError) as ctx:
             retry_with_quota(
                 fn,
                 client=object(),
@@ -892,15 +916,16 @@ class RetryWithQuotaTests(unittest.TestCase):
                 cancelled=lambda: False,
                 runtime=_FakeRuntime(),
                 request_fallback_key=lambda: None,
-                max_attempts=4,
+                max_attempts=2,
                 retry_sleep_seconds=0.0,
                 model_unavailable_retry_delays=(0.0,),
                 rate_limit_sleep_seconds=0.0,
             )
 
         self.assertNotIsInstance(ctx.exception, QuotaDailyLimitError)
-        self.assertIn("429", str(ctx.exception))
-        self.assertEqual(getattr(ctx.exception, "code", None), 429)
+        self.assertIn(
+            "429", str(ctx.exception) + " " + getattr(ctx.exception, "cause_error", "")
+        )
         self.assertNotIn("503", str(ctx.exception))
         self.assertEqual(model_state.current, "gemini-2.5-flash")
 
@@ -911,7 +936,7 @@ class RetryWithQuotaTests(unittest.TestCase):
         with the fix, fallback gets a fresh budget and can retry once before succeeding."""
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-3.1-flash-lite-preview"],
+            ["gemini-3.6-flash"],
             "gemini-2.5-flash",
         )
         primary_calls = [0]
@@ -956,7 +981,7 @@ class RetryWithQuotaTests(unittest.TestCase):
         Fallback must get a fresh budget and be able to retry before succeeding."""
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-3.1-flash-lite-preview"],
+            ["gemini-3.6-flash"],
             "gemini-2.5-flash",
         )
         primary_calls = [0]
@@ -997,13 +1022,11 @@ class RetryWithQuotaTests(unittest.TestCase):
             fallback_calls[0], 2, "fallback must get full retry budget after 404 switch"
         )
 
-    def test_503_model_switch_resets_attempts_for_fallback(self):
-        """Bug B3: attempts not reset after 503-exhausted-retries model-switch.
-        Primary drains one attempt via a generic error, then 503s through all retries
-        → model switch.  Fallback must get a fresh budget and be able to retry."""
+    def test_503_does_not_switch_model_even_with_fallback_chain(self):
+        """503 / capacity errors must NEVER switch model to fallback."""
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-3.1-flash-lite-preview"],
+            ["gemini-3.6-flash"],
             "gemini-2.5-flash",
         )
         primary_calls = [0]
@@ -1012,34 +1035,31 @@ class RetryWithQuotaTests(unittest.TestCase):
         def fn(_client):
             if model_state.current == "gemini-2.5-flash":
                 primary_calls[0] += 1
-                if primary_calls[0] == 1:
-                    raise RuntimeError("generic transient error")
                 err = RuntimeError("503 Service Unavailable")
                 err.code = 503  # type: ignore[attr-defined]
                 raise err
             fallback_calls[0] += 1
-            if fallback_calls[0] == 1:
-                raise RuntimeError("transient error on fallback")
             return "ok"
 
-        _, result = retry_with_quota(
-            fn,
-            client=object(),
-            fallback_keys=[],
-            model_name="gemini-2.5-flash",
-            model_state=model_state,
-            cancelled=lambda: False,
-            runtime=_FakeRuntime(),
-            request_fallback_key=lambda: None,
-            max_attempts=2,
-            retry_sleep_seconds=0.0,
-            model_unavailable_retry_delays=(0.0,),
-            rate_limit_sleep_seconds=0.0,
-        )
+        with self.assertRaises(CircuitBreakerExhaustedError):
+            retry_with_quota(
+                fn,
+                client=object(),
+                fallback_keys=[],
+                model_name="gemini-2.5-flash",
+                model_state=model_state,
+                cancelled=lambda: False,
+                runtime=_FakeRuntime(),
+                request_fallback_key=lambda: None,
+                max_attempts=2,
+                retry_sleep_seconds=0.0,
+                model_unavailable_retry_delays=(0.0, 0.0),
+                rate_limit_sleep_seconds=0.0,
+            )
 
-        self.assertEqual(result, "ok")
+        self.assertEqual(model_state.current, "gemini-2.5-flash")
         self.assertEqual(
-            fallback_calls[0], 2, "fallback must get full retry budget after 503 switch"
+            fallback_calls[0], 0, "fallback model must not be called on 503"
         )
 
 
@@ -1049,9 +1069,7 @@ class QuotaModelFallbackTests(unittest.TestCase):
 
     def test_quota_exhaustion_without_replacement_key_raises_quota_error(self):
         """Quota exhaustion with no replacement key must raise QuotaDailyLimitError and not switch model."""
-        model_state = build_model_state(
-            "gemini-2.5-flash", ["gemini-3.1-flash-lite-preview"]
-        )
+        model_state = build_model_state("gemini-2.5-flash", ["gemini-3.6-flash"])
         switched = []
 
         def fn(_client):
@@ -1106,32 +1124,32 @@ class QuotaModelFallbackTests(unittest.TestCase):
             request_fallback_key=lambda: None,
             max_attempts=max_attempts,
             retry_sleep_seconds=0.0,
+            model_unavailable_retry_delays=(0.0, 0.0),
             rate_limit_sleep_seconds=0.0,
             on_model_switched=on_model_switched,
         )
 
 
-class AllModelsUnavailableErrorTests(unittest.TestCase):
-    """503 chain-exhaustion path raises AllModelsUnavailableError."""
+class CircuitBreakerExhaustedErrorTests(unittest.TestCase):
+    """503 circuit-breaker exhaustion path raises CircuitBreakerExhaustedError."""
 
     def _make_503(self):
         err = RuntimeError("503 Service Unavailable")
         err.code = 503  # type: ignore[attr-defined]
         return err
 
-    def test_all_models_503_raises_all_models_unavailable_error(self):
-        """When every model in the chain exhausts its 503 retries, retry_with_quota
-        must raise AllModelsUnavailableError (not plain RuntimeError)."""
+    def test_all_models_503_raises_circuit_breaker_exhausted_error(self):
+        """When 503 retries are exhausted, retry_with_quota raises CircuitBreakerExhaustedError."""
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-3.1-flash-lite-preview"],
+            ["gemini-3.6-flash"],
             "gemini-2.5-flash",
         )
 
         def fn(_client):
             raise self._make_503()
 
-        with self.assertRaises(AllModelsUnavailableError):
+        with self.assertRaises(CircuitBreakerExhaustedError):
             retry_with_quota(
                 fn,
                 client=object(),
@@ -1146,38 +1164,6 @@ class AllModelsUnavailableErrorTests(unittest.TestCase):
                 model_unavailable_retry_delays=(0.0,),
                 rate_limit_sleep_seconds=0.0,
             )
-
-    def test_first_model_503_switches_to_fallback_success(self):
-        """Primary exhausts 503 retries → switches to fallback → fallback succeeds.
-        Must NOT raise AllModelsUnavailableError."""
-        model_state = build_model_state(
-            "gemini-2.5-flash",
-            ["gemini-3.1-flash-lite-preview"],
-            "gemini-2.5-flash",
-        )
-
-        def fn(_client):
-            if model_state.current == "gemini-2.5-flash":
-                raise self._make_503()
-            return "ok"
-
-        _, result = retry_with_quota(
-            fn,
-            client=object(),
-            fallback_keys=[],
-            model_name="gemini-2.5-flash",
-            model_state=model_state,
-            cancelled=lambda: False,
-            runtime=_FakeRuntime(),
-            request_fallback_key=lambda: None,
-            max_attempts=2,
-            retry_sleep_seconds=0.0,
-            model_unavailable_retry_delays=(0.0,),
-            rate_limit_sleep_seconds=0.0,
-        )
-
-        self.assertEqual(result, "ok")
-        self.assertEqual(model_state.current, "gemini-3.1-flash-lite-preview")
 
 
 class IsModelUnavailableTests(unittest.TestCase):
@@ -1227,12 +1213,10 @@ class Phase1TemperatureTests(unittest.TestCase):
 
         self._t = _phase1_temperature
 
-    def test_lite_models_temperature(self):
-        self.assertEqual(self._t("gemini-3.1-flash-lite-preview"), 0.35)
-
-    def test_non_lite_models_return_035(self):
+    def test_temperature_for_supported_models(self):
+        self.assertEqual(self._t("gemini-3.5-flash"), 0.35)
         self.assertEqual(self._t("gemini-2.5-flash"), 0.35)
-        self.assertEqual(self._t("gemini-3-flash-preview"), 0.35)
+        self.assertEqual(self._t("gemini-3.6-flash"), 0.35)
 
     def test_unknown_model_falls_back_to_035(self):
         self.assertEqual(self._t("gemini-unknown-model"), 0.35)
@@ -1663,6 +1647,12 @@ class DetectDegenerateMoreTests(unittest.TestCase):
 
 
 class RetryWithQuotaEdgeTests(unittest.TestCase):
+    def setUp(self):
+        reset_global_governor()
+
+    def tearDown(self):
+        reset_global_governor()
+
     def test_cancelled_at_start_skips_fn(self):
         called = []
 
@@ -1911,7 +1901,7 @@ class RetryWithQuotaEdgeTests(unittest.TestCase):
     def test_cancel_during_503_inner_retry_attempt(self):
         """Cancel fires inside the inner-retry callable (line 561 path), not just the outer catch."""
         model_state = build_model_state(
-            "gemini-2.5-flash", ["gemini-3.1-flash-lite-preview"], "gemini-2.5-flash"
+            "gemini-2.5-flash", ["gemini-3.6-flash"], "gemini-2.5-flash"
         )
         cancel = threading.Event()
         call_count = [0]
@@ -1948,3 +1938,274 @@ class RetryWithQuotaEdgeTests(unittest.TestCase):
         self.assertIsNone(result)
         self.assertIs(returned_client, original_client)
         self.assertEqual(call_count[0], 2)
+
+
+class AdaptiveGovernorTests(unittest.TestCase):
+    def setUp(self):
+        reset_global_governor()
+
+    def tearDown(self):
+        reset_global_governor()
+
+    def test_governor_normal_flow_zero_latency(self):
+        gov = AdaptiveGovernor()
+        sleep_called = []
+        with patch(
+            "el_sbobinator.services.generation_service.sleep_with_cancel",
+            lambda cb, dur: sleep_called.append(dur) or True,
+        ):
+            self.assertTrue(gov.wait_if_needed(lambda: False))
+        self.assertEqual(sleep_called, [])
+
+    def test_governor_on_503_exponential_backoff_and_jitter(self):
+        gov = AdaptiveGovernor()
+        fixed_time = [100.0]
+        with patch("time.monotonic", lambda: fixed_time[0]):
+            delay1 = gov.on_503(
+                base_delay=15.0, max_delay=60.0, jitter_range=(0.5, 0.5)
+            )
+            self.assertEqual(gov.consecutive_503, 1)
+            self.assertAlmostEqual(delay1, 15.5)
+            self.assertAlmostEqual(gov.next_allowed_at, 115.5)
+
+            delay2 = gov.on_503(
+                base_delay=30.0, max_delay=60.0, jitter_range=(1.0, 1.0)
+            )
+            self.assertEqual(gov.consecutive_503, 2)
+            self.assertAlmostEqual(delay2, 31.0)
+            self.assertAlmostEqual(gov.next_allowed_at, 131.0)
+
+            delay3 = gov.on_503(
+                base_delay=60.0, max_delay=60.0, jitter_range=(2.0, 2.0)
+            )
+            self.assertEqual(gov.consecutive_503, 3)
+            self.assertAlmostEqual(delay3, 62.0)
+            self.assertAlmostEqual(gov.next_allowed_at, 162.0)
+
+    def test_governor_on_429_uses_retry_after_or_default(self):
+        gov = AdaptiveGovernor()
+        fixed_time = [100.0]
+        with patch("time.monotonic", lambda: fixed_time[0]):
+            delay1 = gov.on_429(
+                retry_after=42.0, default_delay=65.0, jitter_range=(0.5, 0.5)
+            )
+            self.assertEqual(gov.consecutive_429, 1)
+            self.assertAlmostEqual(delay1, 42.5)
+            self.assertAlmostEqual(gov.next_allowed_at, 142.5)
+
+            delay2 = gov.on_429(
+                retry_after=None, default_delay=65.0, jitter_range=(0.5, 0.5)
+            )
+            self.assertEqual(gov.consecutive_429, 2)
+            self.assertAlmostEqual(delay2, 65.5)
+            self.assertAlmostEqual(gov.next_allowed_at, 165.5)
+
+    def test_governor_on_success_resets_counters_preserves_active_cooldown(self):
+        gov = AdaptiveGovernor(
+            next_allowed_at=150.0, consecutive_503=3, consecutive_429=2
+        )
+        gov.on_success()
+        self.assertEqual(gov.consecutive_503, 0)
+        self.assertEqual(gov.consecutive_429, 0)
+        self.assertEqual(gov.next_allowed_at, 150.0)
+
+    def test_governor_reset_clears_all(self):
+        gov = AdaptiveGovernor(
+            next_allowed_at=150.0, consecutive_503=3, consecutive_429=2
+        )
+        gov.reset()
+        self.assertEqual(gov.consecutive_503, 0)
+        self.assertEqual(gov.consecutive_429, 0)
+        self.assertEqual(gov.next_allowed_at, 0.0)
+
+    def test_governor_cancellation(self):
+        gov = AdaptiveGovernor(next_allowed_at=200.0)
+        with patch("time.monotonic", return_value=100.0):
+            # When cancelled() returns True, sleep_with_cancel returns False
+            res = gov.wait_if_needed(lambda: True)
+            self.assertFalse(res)
+
+    def test_golden_flow_chunk3_error_and_chunk4_residual_cooldown(self):
+        """Golden Test:
+
+        T0: Chunk 3 gets 503 -> sets next_allowed_at = T0 + 15s.
+        T0 + 5s: Chunk 3 retry succeeds -> governor preserves next_allowed_at = T0 + 15s.
+        T0 + 6s: Chunk 4 starts -> wait_if_needed() enforces 9s remaining wait.
+        T0 + 15s: Chunk 4 executes -> succeeds -> resets consecutive counters.
+        """
+        gov = AdaptiveGovernor()
+        cur_time = [100.0]  # T0
+        sleeps_recorded: list[float] = []
+
+        def fake_sleep(_cb, duration):
+            sleeps_recorded.append(duration)
+            cur_time[0] += duration
+            return True
+
+        with (
+            patch("time.monotonic", lambda: cur_time[0]),
+            patch(
+                "el_sbobinator.services.generation_service.sleep_with_cancel",
+                fake_sleep,
+            ),
+        ):
+            # T0: Chunk 3 first attempt fails with 503
+            delay = gov.on_503(base_delay=14.5, jitter_range=(0.5, 0.5))
+            self.assertAlmostEqual(delay, 15.0)
+            self.assertAlmostEqual(gov.next_allowed_at, 115.0)  # T0 + 15s
+
+            # Chunk 3 retry happens at T0 + 5s
+            cur_time[0] = 105.0  # T0 + 5s
+            # Chunk 3 retry succeeds
+            gov.on_success()
+            self.assertEqual(gov.consecutive_503, 0)
+            self.assertAlmostEqual(gov.next_allowed_at, 115.0)  # Preserved
+
+            # T0 + 6s: Chunk 4 starts
+            cur_time[0] = 106.0  # T0 + 6s
+            allowed = gov.wait_if_needed(lambda: False)
+            self.assertTrue(allowed)
+            # Must have slept for 9.0s (115.0 - 106.0)
+            self.assertEqual(len(sleeps_recorded), 1)
+            self.assertAlmostEqual(sleeps_recorded[0], 9.0)
+            self.assertAlmostEqual(cur_time[0], 115.0)
+
+            # Chunk 4 succeeds
+            gov.on_success()
+            self.assertEqual(gov.consecutive_503, 0)
+            self.assertEqual(gov.consecutive_429, 0)
+
+            # Subsequent call at 115.0s proceeds without sleep
+            allowed_subsequent = gov.wait_if_needed(lambda: False)
+            self.assertTrue(allowed_subsequent)
+            self.assertEqual(len(sleeps_recorded), 1)  # No extra sleep
+
+    def test_governor_get_state_payload(self):
+        gov = AdaptiveGovernor()
+        gov.model = "gemini-2.5-flash"
+        with patch("time.monotonic", return_value=100.0):
+            gov.on_503(
+                base_delay=15.0,
+                jitter_range=(0.0, 0.0),
+                model="gemini-2.5-flash",
+                attempt=2,
+            )
+            payload = gov.get_state_payload()
+            self.assertEqual(payload["state"], "cooling_down")
+            self.assertEqual(payload["reason"], "503_service_unavailable")
+            self.assertEqual(payload["model"], "gemini-2.5-flash")
+            self.assertEqual(payload["attempt"], 2)
+            self.assertEqual(payload["max_attempts"], 4)
+            self.assertIsInstance(payload["next_retry_at"], str)
+            self.assertTrue(str(payload["next_retry_at"]).endswith("+00:00"))
+            self.assertEqual(payload["seconds_remaining"], 15.0)
+
+    def test_persistent_503_uses_four_total_calls_and_15_30_60_backoff(self):
+        calls = 0
+        sleeps: list[float] = []
+        runtime = _FakeRuntime()
+
+        def fn(_client):
+            nonlocal calls
+            calls += 1
+            err = RuntimeError("503 Service Unavailable")
+            err.code = 503  # type: ignore[attr-defined]
+            raise err
+
+        with (
+            patch(
+                "el_sbobinator.services.generation_service.random.uniform",
+                return_value=0.0,
+            ),
+            patch(
+                "el_sbobinator.services.generation_service.sleep_with_cancel",
+                side_effect=lambda _cancelled, delay: sleeps.append(delay) or True,
+            ),
+            self.assertRaises(CircuitBreakerExhaustedError) as raised,
+        ):
+            retry_with_quota(
+                fn,
+                client=object(),
+                fallback_keys=[],
+                model_name="gemini-2.5-flash",
+                cancelled=lambda: False,
+                runtime=runtime,
+                request_fallback_key=lambda: None,
+            )
+
+        self.assertEqual(calls, 4)
+        self.assertEqual(sleeps, [15.0, 30.0, 60.0])
+        self.assertEqual(raised.exception.attempts, 4)
+        self.assertEqual(
+            [state["state"] for state in runtime.retry_states],
+            [
+                "cooling_down",
+                "probing",
+                "cooling_down",
+                "probing",
+                "cooling_down",
+                "probing",
+                "exhausted",
+            ],
+        )
+
+    def test_governor_thread_safety(self):
+        gov = AdaptiveGovernor()
+        errors = []
+
+        def worker():
+            try:
+                for _ in range(50):
+                    gov.on_503(base_delay=0.01, jitter_range=(0.0, 0.0))
+                    gov.get_state_payload()
+                    gov.on_success()
+                    gov.reset()
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=worker) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        self.assertEqual(errors, [])
+
+    def test_offline_network_polling_does_not_consume_attempts(self):
+        call_count = [0]
+
+        def is_offline(exc):
+            return "offline" in str(exc).lower()
+
+        def fn(_c):
+            call_count[0] += 1
+            if call_count[0] <= 3:
+                raise RuntimeError("Network offline: unreachable host")
+            return "recovered"
+
+        with (
+            patch(
+                "el_sbobinator.services.network_service.is_network_offline_error",
+                side_effect=is_offline,
+            ),
+            patch(
+                "el_sbobinator.services.generation_service.sleep_with_cancel",
+                return_value=True,
+            ),
+        ):
+            _, result = retry_with_quota(
+                fn,
+                client=object(),
+                fallback_keys=[],
+                model_name="gemini-2.5-flash",
+                cancelled=lambda: False,
+                runtime=_FakeRuntime(),
+                request_fallback_key=lambda: None,
+                max_attempts=2,
+                retry_sleep_seconds=0.0,
+                model_unavailable_retry_delays=(0.0, 0.0),
+                rate_limit_sleep_seconds=0.0,
+            )
+
+        self.assertEqual(result, "recovered")
+        self.assertEqual(call_count[0], 4)

@@ -275,6 +275,28 @@ describe('processingReducer', () => {
     expect(state.files[1].status).toBe('error');
   });
 
+  it('queue/retry_one preserves an explicit force retry for paused files', () => {
+    const file = makeFile({
+      id: 'paused',
+      status: 'paused',
+      retryable: true,
+      retryReason: 'circuit_breaker_paused',
+    });
+    const queued = processingReducer(
+      { ...initialProcessingState, files: [file] },
+      { type: 'queue/retry_one', id: 'paused' },
+    );
+
+    expect(queued.files[0].status).toBe('queued');
+    expect(queued.files[0].forceRetry).toBe(true);
+
+    const processing = processingReducer(queued, {
+      type: 'bridge/set_current_file',
+      data: { id: 'paused', index: 0, total: 1 },
+    });
+    expect(processing.files[0].forceRetry).toBeUndefined();
+  });
+
   it('queue/clear_all removes non-done files', () => {
     const state = processingReducer(
       { ...initialProcessingState, files: [makeFile()] },

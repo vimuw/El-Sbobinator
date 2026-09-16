@@ -11,7 +11,6 @@ describe('useSystemNotificationTriggers', () => {
   it('triggers notification when config was recovered from backup', () => {
     const addNotification = vi.fn();
     const removeNotificationByDedupeKey = vi.fn();
-    const setIsPeakDismissed = vi.fn();
 
     renderHook(() =>
       useSystemNotificationTriggers({
@@ -19,8 +18,6 @@ describe('useSystemNotificationTriggers', () => {
         updateAvailable: null,
         addNotification,
         removeNotificationByDedupeKey,
-        isPeakDismissed: false,
-        setIsPeakDismissed,
       }),
     );
 
@@ -38,7 +35,6 @@ describe('useSystemNotificationTriggers', () => {
   it('triggers notification when update is available', () => {
     const addNotification = vi.fn();
     const removeNotificationByDedupeKey = vi.fn();
-    const setIsPeakDismissed = vi.fn();
 
     renderHook(() =>
       useSystemNotificationTriggers({
@@ -46,8 +42,6 @@ describe('useSystemNotificationTriggers', () => {
         updateAvailable: 'v2.1.0',
         addNotification,
         removeNotificationByDedupeKey,
-        isPeakDismissed: false,
-        setIsPeakDismissed,
       }),
     );
 

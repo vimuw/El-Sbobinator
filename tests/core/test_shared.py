@@ -188,14 +188,18 @@ class SharedCleanupTests(unittest.TestCase):
 
 
 class SharedPipelineDefaultsTests(unittest.TestCase):
-    def test_build_default_pipeline_settings_uses_5_minutes_for_flash_lite_preview(
+    def test_build_default_pipeline_settings_uses_model_default_chunk_minutes(
         self,
     ):
-        settings = build_default_pipeline_settings(
-            {"preferred_model": "gemini-3.1-flash-lite-preview", "fallback_models": []}
-        )
-        self.assertEqual(settings["model"], "gemini-3.1-flash-lite-preview")
-        self.assertEqual(settings["chunk_minutes"], 5)
+        with patch(
+            "el_sbobinator.pipeline.pipeline_settings.default_chunk_minutes_for_model",
+            return_value=5,
+        ):
+            settings = build_default_pipeline_settings(
+                {"preferred_model": "gemini-3.5-flash", "fallback_models": []}
+            )
+            self.assertEqual(settings["model"], "gemini-3.5-flash")
+            self.assertEqual(settings["chunk_minutes"], 5)
 
     def test_build_default_pipeline_settings_keeps_15_minutes_for_other_models(self):
         settings = build_default_pipeline_settings(
@@ -204,32 +208,36 @@ class SharedPipelineDefaultsTests(unittest.TestCase):
         self.assertEqual(settings["model"], "gemini-2.5-flash")
         self.assertEqual(settings["chunk_minutes"], 15)
 
-    def test_load_and_sanitize_settings_defaults_flash_lite_preview_to_5_when_missing(
+    def test_load_and_sanitize_settings_defaults_chunk_minutes_when_missing(
         self,
     ):
         session = {
             "settings": {
-                "model": "gemini-3.1-flash-lite-preview",
+                "model": "gemini-3.5-flash",
                 "fallback_models": [],
-                "effective_model": "gemini-3.1-flash-lite-preview",
+                "effective_model": "gemini-3.5-flash",
                 "audio": {"bitrate": "48k"},
             }
         }
 
-        settings, changed = load_and_sanitize_settings(session)
+        with patch(
+            "el_sbobinator.pipeline.pipeline_settings.default_chunk_minutes_for_model",
+            return_value=5,
+        ):
+            settings, changed = load_and_sanitize_settings(session)
 
-        self.assertTrue(changed)
-        self.assertEqual(settings.chunk_minutes, 5)
-        self.assertEqual(session["settings"]["chunk_minutes"], 5)
+            self.assertTrue(changed)
+            self.assertEqual(settings.chunk_minutes, 5)
+            self.assertEqual(session["settings"]["chunk_minutes"], 5)
 
-    def test_load_and_sanitize_settings_preserves_explicit_flash_lite_chunk_minutes(
+    def test_load_and_sanitize_settings_preserves_explicit_chunk_minutes(
         self,
     ):
         session = {
             "settings": {
-                "model": "gemini-3.1-flash-lite-preview",
+                "model": "gemini-3.5-flash",
                 "fallback_models": [],
-                "effective_model": "gemini-3.1-flash-lite-preview",
+                "effective_model": "gemini-3.5-flash",
                 "chunk_minutes": 15,
                 "overlap_seconds": 30,
                 "macro_char_limit": 15000,

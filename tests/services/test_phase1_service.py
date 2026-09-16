@@ -614,8 +614,8 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
         switched = []
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-3.1-flash-lite-preview"],
-            "gemini-3.1-flash-lite-preview",
+            ["gemini-3.6-flash"],
+            "gemini-3.6-flash",
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -638,9 +638,7 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
             self.assertEqual(len(os.listdir(chunks_dir)), 1)
             self.assertEqual(calls, 2)
             self.assertEqual(model_state.current, "gemini-2.5-flash")
-            self.assertIn(
-                ("gemini-3.1-flash-lite-preview", "gemini-2.5-flash"), switched
-            )
+            self.assertIn(("gemini-3.6-flash", "gemini-2.5-flash"), switched)
 
     def test_recovery_extra_pass_also_exhausted_stops_job(self):
         """retry_with_quota exhausts the chain twice: once in the initial call and once
@@ -698,8 +696,8 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
         # Start with fallback already active (prior 503 moved the model during this session)
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-3.1-flash-lite-preview"],
-            "gemini-3.1-flash-lite-preview",
+            ["gemini-3.6-flash"],
+            "gemini-3.6-flash",
         )
 
         call_count = [0]
@@ -716,10 +714,10 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
             ms = kwargs.get("model_state")
             if ms is not None:
                 old = ms.current
-                ms.current = "gemini-3.1-flash-lite-preview"
+                ms.current = "gemini-3.6-flash"
                 on_sw = kwargs.get("on_model_switched")
-                if on_sw is not None and old != "gemini-3.1-flash-lite-preview":
-                    on_sw(old, "gemini-3.1-flash-lite-preview")
+                if on_sw is not None and old != "gemini-3.6-flash":
+                    on_sw(old, "gemini-3.6-flash")
             return kwargs["client"], "testo valido trascritto via fallback"
 
         saved_chunks = []
@@ -764,10 +762,10 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
         self.assertIsNone(session.get("last_error_detail"))
         self.assertEqual(len(saved_chunks), 1)
         self.assertEqual(call_count[0], 2)
-        self.assertEqual(model_state.current, "gemini-3.1-flash-lite-preview")
+        self.assertEqual(model_state.current, "gemini-3.6-flash")
         # recovery: lite→flash; then 503 fallback: flash→lite
-        self.assertIn(("gemini-3.1-flash-lite-preview", "gemini-2.5-flash"), switched)
-        self.assertIn(("gemini-2.5-flash", "gemini-3.1-flash-lite-preview"), switched)
+        self.assertIn(("gemini-3.6-flash", "gemini-2.5-flash"), switched)
+        self.assertIn(("gemini-2.5-flash", "gemini-3.6-flash"), switched)
 
     def test_recovery_rebuilds_chunk_audio_for_each_pass(self):
         """cut_audio_chunk_to_mp3 and make_inline_audio_part must each be called once
@@ -835,8 +833,8 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
         switched = []
         model_state = build_model_state(
             "gemini-2.5-flash",
-            ["gemini-3.1-flash-lite-preview"],
-            "gemini-3.1-flash-lite-preview",
+            ["gemini-3.6-flash"],
+            "gemini-3.6-flash",
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -859,9 +857,7 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
             self.assertEqual(len(os.listdir(chunks_dir)), 1)
             self.assertEqual(calls, 2)
             self.assertEqual(model_state.current, "gemini-2.5-flash")
-            self.assertIn(
-                ("gemini-3.1-flash-lite-preview", "gemini-2.5-flash"), switched
-            )
+            self.assertIn(("gemini-3.6-flash", "gemini-2.5-flash"), switched)
 
     def test_all_models_unavailable_twice_sets_specific_error(self):
         """AllModelsUnavailableError on both the initial attempt and the recovery pass:

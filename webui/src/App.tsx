@@ -75,10 +75,6 @@ export default function App() {
 
   const [activePage, setActivePage] = useState<ActivePage>('queue');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [isPeakDismissed, setIsPeakDismissed] = useState(() => {
-    const ts = localStorage.getItem(STORAGE_KEYS.PEAK_BANNER_DISMISSED_UNTIL);
-    return ts ? Date.now() < Number(ts) : false;
-  });
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
@@ -93,7 +89,7 @@ export default function App() {
 
   const handleRetryFailedRevisionBlocksRef = useRef<(sessionDir: string, fileId?: string) => Promise<void>>(() => Promise.resolve());
   const installUpdateRef = useRef<(version: string) => Promise<void>>(() => Promise.resolve());
-  const startProcessingRef = useRef<(isContinuation?: boolean, overrideLowDisk?: boolean) => Promise<boolean>>(() => Promise.resolve(false));
+  const startProcessingRef = useRef<(isContinuation?: boolean, overrideLowDisk?: boolean, forceRetry?: boolean) => Promise<boolean>>(() => Promise.resolve(false));
 
   const {
     notifications,
@@ -111,7 +107,6 @@ export default function App() {
     onInstallUpdate: useCallback((version: string) => installUpdateRef.current(version), []),
     onDismissUpdate: dismissUpdate,
     updateAvailable,
-    setIsPeakDismissed,
     onOpenSettings: useCallback(() => setIsSettingsOpen(true), [setIsSettingsOpen]),
   });
 
@@ -287,8 +282,6 @@ export default function App() {
     updateAvailable,
     addNotification,
     removeNotificationByDedupeKey,
-    isPeakDismissed,
-    setIsPeakDismissed,
   });
 
   const [isJoinRoomOpen, setIsJoinRoomOpen] = useState(false);

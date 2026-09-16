@@ -102,13 +102,15 @@ All Gemini calls in every phase go through `retry_with_quota(callable_fn, ...)`,
 
 | Condition | Behaviour |
 |---|---|
-| HTTP 503 / "model unavailable" | Progressive back-off `(3 s, 6 s, 15 s)`; if the same model fails all three attempts, switch to the next model (`_switch_to_next_model`). If the chain is exhausted, raise `AllModelsUnavailableError`. |
-| HTTP 429 minute-scoped rate limit | Sleep 65 s then retry. After `_MAX_RETRY_ATTEMPTS` (4) attempts, re-raise. |
-| HTTP 429 daily/exhausted key | Prompt the UI via `request_new_api_key` for up to 10 minutes to explicitly confirm a fallback key. If the prompt times out or is cancelled, save a quota error and stop the batch. |
+| HTTP 503 / "model unavailable" | Progressive back-off `(3 s, 6 s, 15 s)`; if the same model fails all three attempts, switch to the next model (`_switch_to_next_model`). If the chain is exhausted, raise `AllModelsUnavailableError`. Every attempt and retry is recorded in single-authority telemetry. |
+| HTTP 429 rate limit (`rate_limit_exceeded`) | Minute/token-scoped quota: extracts `retry-after` header or text back-off (default 65 s), sets ephemeral runtime status, and retries. After `_MAX_RETRY_ATTEMPTS` (4), re-raises. |
+| HTTP 429 daily quota (`quota_exceeded`) | Day-scoped (RPD) exhaustion on Google project: marks model quota state as `rpd_exhausted`, prompts UI via `request_new_api_key` for explicit fallback key confirmation. If prompt times out or cancelled, aborts with quota error. |
+| HTTP 429 unknown | Defaults to minute-scoped rate limit backoff (65 s) before escalating to daily quota exhaustion if repeated. |
 | HTTP 404 model-not-found | Switch model; if no fallback left, re-raise. |
 | `DegenerateOutputError` | Switch model; if no fallback left, re-raise. |
 | `PermanentError` | Re-raise immediately (no retry). |
 | Any other exception | Sleep `retry_sleep_seconds`, retry up to `_MAX_RETRY_ATTEMPTS`. |
+
 
 Side effects are routed through callbacks so phases can react:
 
@@ -126,12 +128,10 @@ Source: `el_sbobinator/model_registry.py`.
 
 | Model id | Default chunk min | Default macro char limit | Phase-1 temperature |
 |---|---|---|---|
+| `gemini-3.8-flash` | 15 | 22 000 | 0.35 |
 | `gemini-3.7-flash` | 15 | 22 000 | 0.35 |
 | `gemini-3.6-flash` | 15 | 22 000 | 0.35 |
 | `gemini-3.5-flash` | 15 | 22 000 | 0.35 |
-| `gemini-3.5-flash-lite` | 15 | 22 000 | 0.35 |
-| `gemini-3-flash-preview` | 15 | 22 000 | 0.35 |
-| `gemini-3.1-flash-lite-preview` | 5 | 7 500 | 0.35 |
 | `gemini-2.5-flash` (default primary) | 15 | 22 000 | 0.35 |
 
 The `ModelState` dataclass tracks the ordered chain and the currently active model. `build_model_state(primary, fallbacks)` always resets `current` to the primary on resume — the previous run's `effective_model` is persisted for observability only.

@@ -26,6 +26,7 @@ from el_sbobinator.core.model_registry import (
 from el_sbobinator.core.shared import DEFAULT_MODEL, get_session_root
 from el_sbobinator.services.audio_service import resolve_ffmpeg
 from el_sbobinator.services.config_service import CONFIG_FILE, get_config_dir
+from el_sbobinator.services.generation_service import create_gemini_client
 from el_sbobinator.services.usage_service import (
     get_daily_usage,
 )
@@ -150,7 +151,7 @@ def validate_environment(
             )
         else:
             try:
-                client = genai.Client(api_key=cleaned)
+                client = create_gemini_client(cleaned)
             except Exception as exc:
                 checks.append(
                     {
@@ -374,20 +375,71 @@ def generate_diagnostic_report(
         "## 📊 Quote & Utilizzo Google AI Studio (Oggi)",
         f"- **Data Quota (PT)**: {usage_info.get('quota_date', 'N/A')}",
         f"- **Reset Giornaliero**: {usage_info.get('next_reset_info', 'Ore 09:00')}",
-        f"- **Sbobine Complete Stimate**: ~{usage_info.get('estimated_sbobine_remaining', 0)}",
+        f"- **Stato Operativo**: {usage_info.get('primary_status', 'operational')} ({usage_info.get('primary_status_detail', 'N/A')})",
     ]
 
     if usage_info.get("is_degraded_mode"):
         lines.append(f"- ⚠️ **Modalità Degradata**: {usage_info.get('degraded_reason')}")
 
-    lines.append("")
-    lines.append("### Dettaglio Chiavi & Modelli")
-    for key_entry in usage_info.get("keys", []):
-        lines.append(f"- **{key_entry['label']}** (`{key_entry['masked_key']}`):")
-        for m_id, m_quota in key_entry.get("models", {}).items():
-            status_txt = "⚠️ Esaurito" if m_quota["is_exhausted"] else "✅ Attivo"
+    work_stats = usage_info.get("work_stats", {})
+    if work_stats:
+        lines.append("")
+        lines.append("### Lavoro Svolto Oggi")
+        lines.append(
+            f"- **Chunk completati**: {work_stats.get('chunks_completed', 0)} | "
+            f"**Revisioni completate**: {work_stats.get('revisions_completed', 0)} | "
+            f"**Sbobine completate**: {work_stats.get('sbobine_completed', 0)}"
+        )
+
+    telemetry = usage_info.get("telemetry", {})
+    if telemetry:
+        lines.append("")
+        lines.append("### Telemetria Chiamate API")
+        lines.append(
+            f"- **Totale Inviate**: {telemetry.get('requests_sent', 0)} | "
+            f"**Successi**: {telemetry.get('responses_succeeded', 0)} | "
+            f"**Retry Eseguiti**: {telemetry.get('retries_total', 0)} | "
+            f"**Errori Finali**: {telemetry.get('final_failures', 0)}"
+        )
+        retries_by_type = telemetry.get("retries_by_type", {})
+        if retries_by_type:
+            breakdowns = [f"{k}: {v}" for k, v in retries_by_type.items() if v > 0]
+            if breakdowns:
+                lines.append(f"- **Dettaglio Retry**: {', '.join(breakdowns)}")
+
+    proj_limits = usage_info.get("project_limits", {})
+    if proj_limits:
+        lines.append("")
+        lines.append("### Limiti di Progetto / Modello")
+        for m_id, m_lim in proj_limits.items():
             lines.append(
-                f"  - `{m_id}`: {m_quota['used_today']} / {m_quota['limit']} usate ({m_quota['remaining']} rimaste) • {status_txt}"
+                f"- `{m_id}` ({m_lim.get('quota_state', 'normal')}): {m_lim.get('rpd_limit', 'N/A')} RPD • "
+                f"{m_lim.get('rpm_limit', 'N/A')} RPM • {m_lim.get('tpm_limit', 'N/A')} TPM"
+            )
+
+    credentials = usage_info.get("credentials", [])
+    if credentials:
+        lines.append("")
+        lines.append("### Credenziali Configurate")
+        for cred in credentials:
+            proj_str = (
+                f" [Project: {cred['project_id']}]" if cred.get("project_id") else ""
+            )
+            status_val = cred.get("operational_status") or cred.get("status", "unknown")
+            lines.append(
+                f"- **{cred.get('label', 'Chiave')}** (`{cred.get('masked_key', '***')}`): **{status_val}**{proj_str}"
+            )
+            if cred.get("last_error_message"):
+                err_iso = cred.get("last_error_iso") or cred.get("last_error_at", "N/A")
+                lines.append(
+                    f"  > Ultimo errore ({err_iso}): `{cred['last_error_message']}`"
+                )
+    elif usage_info.get("keys"):
+        lines.append("")
+        lines.append("### Dettaglio Chiavi")
+        for key_entry in usage_info.get("keys", []):
+            lines.append(
+                f"- **{key_entry.get('label', 'Chiave')}** (`{key_entry.get('masked_key', '***')}`)"
             )
 
     lines.append("")

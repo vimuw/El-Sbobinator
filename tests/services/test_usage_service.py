@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import unittest
@@ -7,7 +8,7 @@ from unittest.mock import patch
 from el_sbobinator.services import usage_service
 
 
-class UsageServiceTests(unittest.TestCase):
+class UsageServiceV2Tests(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.TemporaryDirectory()
         self.config_dir_patch = patch(
@@ -21,78 +22,128 @@ class UsageServiceTests(unittest.TestCase):
         self.config_dir_patch.stop()
         self.tmp_dir.cleanup()
 
-    def test_record_request_increments_for_specific_model(self):
+    def test_schema_v2_defaults_and_attempt_recording(self):
         key = "AIzaSyTest1234567890abcdef"
-        usage_service.record_request(key, "gemini-2.5-flash", 1)
-        usage_service.record_request(key, "gemini-2.5-flash", 2)
+        usage_service.record_request_attempt(key, "gemini-2.5-flash")
+        usage_service.record_request_success(key, "gemini-2.5-flash")
 
         data = usage_service.get_daily_usage(
             primary_key=key,
             primary_model="gemini-2.5-flash",
-            fallback_models=["gemini-3.1-flash-lite-preview"],
         )
 
-        key_entry = data["keys"][0]
-        self.assertEqual(key_entry["models"]["gemini-2.5-flash"]["used_today"], 3)
-        self.assertEqual(key_entry["models"]["gemini-2.5-flash"]["remaining"], 17)
-        self.assertFalse(key_entry["models"]["gemini-2.5-flash"]["is_exhausted"])
+        self.assertEqual(data["schema_version"], 2)
+        self.assertEqual(data["primary_status"], "operational")
+        self.assertEqual(data["telemetry"]["requests_sent"], 1)
+        self.assertEqual(data["telemetry"]["responses_succeeded"], 1)
+        self.assertEqual(data["telemetry"]["final_failures"], 0)
+        self.assertEqual(data["telemetry"]["retries_total"], 0)
 
-        # Model isolation: Flash Lite quota should be completely untouched
-        self.assertEqual(
-            key_entry["models"]["gemini-3.1-flash-lite-preview"]["used_today"], 0
-        )
-        self.assertEqual(
-            key_entry["models"]["gemini-3.1-flash-lite-preview"]["remaining"], 500
-        )
+        # Check credential status
+        cred = next(c for c in data["credentials"] if c["is_primary"])
+        self.assertEqual(cred["operational_status"], "active")
+        self.assertEqual(cred["masked_key"][:6], "AIzaSy")
 
-    def test_mark_model_exhausted_only_affects_targeted_model(self):
+    def test_project_quota_exhaustion_marks_status(self):
         key = "AIzaSyTest1234567890abcdef"
-        usage_service.record_request(key, "gemini-2.5-flash", 5)
-        usage_service.mark_model_exhausted(key, "gemini-2.5-flash")
+        usage_service.mark_quota_exhausted("gemini-2.5-flash")
 
         data = usage_service.get_daily_usage(
             primary_key=key,
             primary_model="gemini-2.5-flash",
-            fallback_models=["gemini-3.1-flash-lite-preview"],
+            fallback_models=["gemini-3.6-flash"],
         )
 
-        key_entry = data["keys"][0]
-        self.assertTrue(key_entry["models"]["gemini-2.5-flash"]["is_exhausted"])
-        self.assertEqual(key_entry["models"]["gemini-2.5-flash"]["remaining"], 0)
+        # Primary model is exhausted, but fallback model is available -> degraded mode
+        self.assertEqual(data["primary_status"], "degraded")
+        self.assertTrue(data["is_degraded_mode"])
+        self.assertIn("riserva", str(data["degraded_reason"]).lower())
 
-        # Fallback model remains fully available
-        self.assertFalse(
-            key_entry["models"]["gemini-3.1-flash-lite-preview"]["is_exhausted"]
+        # If fallback is also exhausted -> quota_exhausted
+        usage_service.mark_quota_exhausted("gemini-3.6-flash")
+        data2 = usage_service.get_daily_usage(
+            primary_key=key,
+            primary_model="gemini-2.5-flash",
+            fallback_models=["gemini-3.6-flash"],
         )
-        self.assertEqual(
-            key_entry["models"]["gemini-3.1-flash-lite-preview"]["remaining"], 500
-        )
+        self.assertEqual(data2["primary_status"], "quota_exhausted")
 
-    def test_multi_key_isolation(self):
-        key1 = "AIzaSyKey111111111111111111"
-        key2 = "AIzaSyKey222222222222222222"
-
-        usage_service.record_request(key1, "gemini-2.5-flash", 10)
-        usage_service.record_request(key2, "gemini-2.5-flash", 2)
+    def test_rate_limiting_and_retry_after(self):
+        key = "AIzaSyKey111111111111111111"
+        usage_service.mark_rate_limited("gemini-2.5-flash", retry_after_seconds=25.0)
 
         data = usage_service.get_daily_usage(
-            primary_key=key1,
-            fallback_keys=[key2],
+            primary_key=key,
             primary_model="gemini-2.5-flash",
         )
 
-        self.assertEqual(len(data["keys"]), 2)
-        k1 = next(k for k in data["keys"] if k["is_primary"])
-        k2 = next(k for k in data["keys"] if not k["is_primary"])
+        self.assertEqual(data["primary_status"], "rate_limited")
+        self.assertIsNotNone(data["retry_after_seconds"])
+        self.assertGreater(data["retry_after_seconds"], 0)
+        self.assertIn("rate limit", data["status_message"].lower())
 
-        self.assertEqual(k1["models"]["gemini-2.5-flash"]["used_today"], 10)
-        self.assertEqual(k1["models"]["gemini-2.5-flash"]["remaining"], 10)
-        self.assertEqual(k2["models"]["gemini-2.5-flash"]["used_today"], 2)
-        self.assertEqual(k2["models"]["gemini-2.5-flash"]["remaining"], 18)
+    def test_credential_error_mapping(self):
+        key = "AIzaSyInvalidKey1234567890"
+        usage_service.mark_credential_status(
+            key, "invalid", error_msg="API key not valid", code=401
+        )
+
+        data = usage_service.get_daily_usage(primary_key=key)
+        self.assertEqual(data["primary_status"], "credential_error")
+        self.assertIn("401", data["status_message"])
+
+    def test_work_stats_tracking(self):
+        usage_service.record_work_completed("chunks", count=5)
+        usage_service.record_work_completed("macro", count=2)
+        usage_service.record_work_completed("sbobine", count=1)
+
+        data = usage_service.get_daily_usage(primary_key="AIzaSyKey111111111111111111")
+        self.assertEqual(data["work_stats"]["chunks_completed"], 5)
+        self.assertEqual(data["work_stats"]["revisions_completed"], 2)
+        self.assertEqual(data["work_stats"]["sbobine_completed"], 1)
+
+    def test_v1_to_v2_migration_preserves_keys(self):
+        # Create a mock legacy v1 api_usage.json
+        legacy_data = {
+            "quota_date": "2026-09-01",
+            "keys": {
+                "hash123": {
+                    "id": "hash123",
+                    "masked_key": "AIzaSy...1111",
+                    "is_primary": True,
+                    "models": {
+                        "gemini-2.5-flash": {
+                            "limit": 20,
+                            "used_today": 12,
+                            "is_exhausted": False,
+                            "last_reset_iso": "2026-09-01T10:00:00Z",
+                        }
+                    },
+                }
+            },
+        }
+        usage_file = os.path.join(self.tmp_dir.name, "api_usage.json")
+        with open(usage_file, "w", encoding="utf-8") as f:
+            json.dump(legacy_data, f)
+
+        # Loading should trigger migration
+        data = usage_service.get_daily_usage(
+            primary_key="AIzaSyFakeKey111111111111111",
+            primary_model="gemini-2.5-flash",
+        )
+        self.assertEqual(data["schema_version"], 2)
+        self.assertTrue(len(data["credentials"]) >= 1)
+
+        # Verify raw file is now valid v2 JSON
+        with open(usage_file, encoding="utf-8") as f:
+            saved_json = json.load(f)
+        self.assertEqual(saved_json["schema_version"], 2)
+        self.assertIn("project_limits", saved_json)
+        self.assertIn("telemetry", saved_json)
 
     def test_pacific_date_reset(self):
         key = "AIzaSyKey111111111111111111"
-        usage_service.record_request(key, "gemini-2.5-flash", 10)
+        usage_service.mark_quota_exhausted("gemini-2.5-flash")
 
         # Simulate next day in Pacific time
         fake_next_day = "2099-01-01"
@@ -104,46 +155,11 @@ class UsageServiceTests(unittest.TestCase):
                 primary_key=key,
                 primary_model="gemini-2.5-flash",
             )
-            k1 = data["keys"][0]
-            self.assertEqual(k1["models"]["gemini-2.5-flash"]["used_today"], 0)
-            self.assertEqual(k1["models"]["gemini-2.5-flash"]["remaining"], 20)
+            self.assertEqual(
+                data["project_limits"]["gemini-2.5-flash"]["quota_state"], "normal"
+            )
+            self.assertEqual(data["primary_status"], "operational")
             self.assertEqual(data["quota_date"], fake_next_day)
-
-    def test_degraded_mode_sbobine_calculation(self):
-        key = "AIzaSyKey111111111111111111"
-        # Exhaust 20 Flash Standard requests
-        usage_service.mark_model_exhausted(key, "gemini-2.5-flash")
-        # Record 50 requests on Flash Lite (out of 500) -> 450 remaining
-        usage_service.record_request(key, "gemini-3.1-flash-lite-preview", 50)
-
-        data = usage_service.get_daily_usage(
-            primary_key=key,
-            primary_model="gemini-2.5-flash",
-            fallback_models=["gemini-3.1-flash-lite-preview"],
-        )
-
-        self.assertTrue(data["is_degraded_mode"])
-        # 450 / 19 = 23 complete 3-hour sbobine
-        self.assertEqual(data["estimated_sbobine_remaining"], 23)
-        self.assertEqual(data["total_requests_remaining"], 450)
-
-    def test_fallback_timezone_date_calculation(self):
-        fallback_tz = timezone(timedelta(hours=-7))
-        with patch("el_sbobinator.services.usage_service.PACIFIC_TZ", fallback_tz):
-            dt_utc = datetime(2026, 9, 2, 12, 0, 0, tzinfo=UTC)
-            date_str = usage_service.get_pacific_date_string(dt_utc)
-            self.assertEqual(date_str, "2026-09-02")
-
-    def test_fallback_keys_deduplication(self):
-        key1 = "AIzaSyKey111111111111111111"
-        key2 = "AIzaSyKey222222222222222222"
-
-        data = usage_service.get_daily_usage(
-            primary_key=key1,
-            fallback_keys=[key1, key2, key2, key1],
-            primary_model="gemini-2.5-flash",
-        )
-        self.assertEqual(len(data["keys"]), 2)
 
 
 if __name__ == "__main__":

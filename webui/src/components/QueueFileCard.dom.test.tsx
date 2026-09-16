@@ -120,6 +120,22 @@ describe('QueueFileCard', () => {
     expect(onRetry).toHaveBeenCalledWith('f1');
   });
 
+  it('shows Riprendi CTA for a circuit-breaker paused file', () => {
+    const onRetry = vi.fn();
+    render(
+      <QueueWrapper>
+        <QueueFileCard
+          file={makeFile({ status: 'paused', retryable: true, retryReason: 'circuit_breaker_paused' })}
+          appState="idle"
+          onRemove={vi.fn()} onRetry={onRetry} onPreview={vi.fn()} onOpenFile={vi.fn()}
+        />
+      </QueueWrapper>,
+    );
+
+    fireEvent.click(screen.getByLabelText('Riprendi'));
+    expect(onRetry).toHaveBeenCalledWith('f1');
+  });
+
   it('shows Riprendi CTA and warning badge styling for regenerate prompt timeout when idle', () => {
     const onRetry = vi.fn();
     const { container } = render(

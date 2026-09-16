@@ -25,7 +25,7 @@ class _AlwaysOkClient:
 
 class _FallbackFailModels:
     def get(self, model=None, **kwargs):
-        if model == "gemini-3.1-flash-lite-preview":
+        if model == "gemini-3.6-flash":
             raise RuntimeError("model disabled for this key")
         return {"model": model}
 
@@ -54,7 +54,7 @@ class _ClientCtorFail:
 
 class _MiddleFailModels:
     def get(self, model=None, **kwargs):
-        if model == "gemini-3.1-flash-lite-preview":
+        if model == "gemini-3.6-flash":
             raise RuntimeError(
                 "middle model disabled key=AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345"
             )
@@ -100,7 +100,7 @@ class ValidationServiceTests(unittest.TestCase):
             api_key="fake",
             validate_api_key=True,
             preferred_model="gemini-2.5-flash",
-            fallback_models=["gemini-3.1-flash-lite-preview"],
+            fallback_models=["gemini-3.6-flash"],
         )
         self.assertTrue(result["ok"])
         self.assertGreaterEqual(len(result["checks"]), 5)
@@ -113,7 +113,7 @@ class ValidationServiceTests(unittest.TestCase):
             for check in result["checks"]
             if str(check.get("id", "")).startswith("api")
         ]
-        self.assertIn("gemini-3.1-flash-lite-preview", details)
+        self.assertIn("gemini-3.6-flash", details)
 
     @patch(
         "el_sbobinator.services.validation_service.resolve_ffmpeg",
@@ -128,7 +128,7 @@ class ValidationServiceTests(unittest.TestCase):
             api_key="fake",
             validate_api_key=True,
             preferred_model="gemini-2.5-flash",
-            fallback_models=["gemini-3.1-flash-lite-preview"],
+            fallback_models=["gemini-3.6-flash"],
         )
 
         self.assertFalse(result["ok"])
@@ -140,7 +140,7 @@ class ValidationServiceTests(unittest.TestCase):
         )
         self.assertEqual(api_check["status"], "ok")
         self.assertEqual(fallback_check["status"], "error")
-        self.assertIn("gemini-3.1-flash-lite-preview", fallback_check["details"])  # type: ignore[typeddict-item]
+        self.assertIn("gemini-3.6-flash", fallback_check["details"])  # type: ignore[typeddict-item]
         self.assertEqual(
             fallback_check["message"],
             "Modello fallback 1 non accessibile con questa chiave.",
@@ -161,7 +161,7 @@ class ValidationServiceTests(unittest.TestCase):
             api_key="fake",
             validate_api_key=True,
             preferred_model="gemini-2.5-flash",
-            fallback_models=["gemini-3.1-flash-lite-preview"],
+            fallback_models=["gemini-3.6-flash"],
         )
 
         self.assertFalse(result["ok"])
@@ -192,7 +192,7 @@ class ValidationServiceTests(unittest.TestCase):
             api_key="fake",
             validate_api_key=True,
             preferred_model="gemini-2.5-flash",
-            fallback_models=["gemini-3.1-flash-lite-preview"],
+            fallback_models=["gemini-3.6-flash"],
         )
 
         self.assertFalse(result["ok"])
@@ -244,7 +244,7 @@ class ValidationServiceTests(unittest.TestCase):
             api_key="fake",
             validate_api_key=True,
             preferred_model="gemini-2.5-flash",
-            fallback_models=["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview"],
+            fallback_models=["gemini-3.6-flash", "gemini-3.7-flash"],
         )
 
         self.assertFalse(result["ok"])
@@ -261,11 +261,11 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertEqual(middle_check["status"], "error")
         middle_details = middle_check.get("details", "")
         last_details = last_check.get("details")
-        self.assertIn("gemini-3.1-flash-lite-preview", middle_details)
+        self.assertIn("gemini-3.6-flash", middle_details)
         self.assertNotIn("AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345", middle_details)
         self.assertIn("[API_KEY_REDACTED]", middle_details)
         self.assertEqual(last_check["status"], "ok")
-        self.assertEqual(last_details, "gemini-3-flash-preview")
+        self.assertEqual(last_details, "gemini-3.7-flash")
 
     @patch(
         "el_sbobinator.services.validation_service.resolve_ffmpeg",

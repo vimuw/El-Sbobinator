@@ -59,7 +59,7 @@ from el_sbobinator.utils.file_ops import (
 )
 
 PRECONVERTED_AUDIO_FINAL = "el_sbobinator_preconverted_mono16k.mp3"
-SESSION_SCHEMA_VERSION = 1
+SESSION_SCHEMA_VERSION = 2
 
 _LEGACY_SESSION_ROOT = os.path.join(USER_HOME, ".el_sbobinator_sessions")
 _DEFAULT_LEGACY_SESSION_ROOT = _LEGACY_SESSION_ROOT
@@ -391,6 +391,7 @@ def new_session(input_path: str, settings: dict | None = None) -> dict:
         "outputs": {},
         "last_error": None,
         "last_error_detail": None,
+        "retry_state": None,
     }
 
 
@@ -420,10 +421,15 @@ def migrate_session(session: dict) -> tuple[dict, bool]:
         session["schema_version"] = 1
         changed = True
 
+    if version < 2:
+        session.setdefault("retry_state", None)
+        session["schema_version"] = 2
+        changed = True
+
     # Future migrations go here:
-    # if version < 2:
+    # if version < 3:
     #     session.setdefault("new_field", default_value)
-    #     session["schema_version"] = 2
+    #     session["schema_version"] = 3
     #     changed = True
 
     return session, changed

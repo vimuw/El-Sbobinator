@@ -38,18 +38,80 @@ export interface KeyProfile {
   label: string;
   masked_key: string;
   is_primary: boolean;
-  models: Record<string, ModelQuota>;
+  operational_status?: string;
+  models?: Record<string, ModelQuota>;
+}
+
+export interface ProjectModelLimit {
+  model_name?: string;
+  rpd_limit?: number | null;
+  rpm_limit?: number | null;
+  tpm_limit?: number | null;
+  source?: 'configured' | 'user_observed' | 'ai_studio_snapshot' | 'unknown';
+  quota_state?: 'normal' | 'rpd_exhausted' | 'rate_limited' | 'unknown';
+  updated_at?: string | null;
+}
+
+export interface TelemetryStats {
+  requests_sent?: number;
+  responses_succeeded?: number;
+  final_failures?: number;
+  retries_total?: number;
+  retries_by_type?: Record<string, number>;
+  last_request_iso?: string | null;
+}
+
+export interface WorkStats {
+  chunks_completed?: number;
+  revisions_completed?: number;
+  sbobine_completed?: number;
+}
+
+export interface CredentialProfile {
+  id?: string;
+  masked_key: string;
+  label?: string;
+  is_primary?: boolean;
+  operational_status?:
+    | 'unused'
+    | 'active'
+    | 'temporarily_failing'
+    | 'invalid'
+    | 'permission_denied'
+    | 'request_error'
+    | 'unknown';
+  key_type?: 'authorization_key' | 'standard_legacy' | 'unknown';
+  project_id?: string | null;
+  last_error_code?: number | null;
+  last_error_message?: string | null;
+  last_error_iso?: string | null;
+  last_used_iso?: string | null;
 }
 
 export interface ApiUsageResult {
+  schema_version?: number;
   quota_date: string;
   next_reset_info: string;
-  keys: KeyProfile[];
-  total_requests_remaining?: number;
-  estimated_sbobine_remaining: number;
+  primary_status?:
+    | 'operational'
+    | 'rate_limited'
+    | 'quota_exhausted'
+    | 'credential_error'
+    | 'degraded'
+    | 'unknown';
+  status_message?: string;
+  retry_after_seconds?: number | null;
+  project_limits?: Record<string, ProjectModelLimit>;
+  telemetry?: TelemetryStats;
+  work_stats?: WorkStats;
+  credentials?: CredentialProfile[];
   is_degraded_mode: boolean;
   degraded_reason?: string | null;
+  keys?: KeyProfile[];
+  total_requests_remaining?: number;
+  estimated_sbobine_remaining?: number;
 }
+
 
 
 
@@ -145,6 +207,17 @@ export interface StepTimePayload {
   total?: number;
 }
 
+export interface RetryStatePayload {
+  state: 'idle' | 'cooling_down' | 'probing' | 'exhausted' | 'paused';
+  reason?: string;
+  model?: string;
+  attempt?: number;
+  max_attempts?: number;
+  next_retry_at?: string | null;
+  seconds_remaining?: number | null;
+  recommended_retry_at?: string | null;
+}
+
 export interface BridgeCallbacks {
   appendConsole: (msg: string) => void;
   updateProgress: (value: number) => void;
@@ -163,6 +236,7 @@ export interface BridgeCallbacks {
   filesDropped: (files: FileDescriptor[]) => void;
   updateDownloadProgress: (data: UpdateDownloadProgressPayload) => void;
   apiUsageUpdated?: (data: ApiUsageResult) => void;
+  retryStateChanged?: (data: RetryStatePayload) => void;
   requestQuitConfirmation?: () => void;
 }
 
@@ -178,7 +252,15 @@ export interface PywebviewApi {
   ask_media_file?: () => Promise<FileDescriptor | null>;
   check_path_exists?: (path: string) => Promise<{ ok: boolean; exists: boolean }>;
   collect_dropped_files?: (names: string[]) => Promise<{ ok: boolean }>;
-  start_processing?: (files: FileDescriptor[], apiKey: string, resumeSession: boolean, preferredModel: string, fallbackModels: string[], overrideLowDisk?: boolean) => Promise<StartProcessingResult>;
+  start_processing?: (
+    files: FileDescriptor[],
+    apiKey: string,
+    resumeSession: boolean,
+    preferredModel: string,
+    fallbackModels: string[],
+    overrideLowDisk?: boolean,
+    forceRetry?: boolean,
+  ) => Promise<StartProcessingResult>;
   stop_processing?: () => Promise<{ ok: boolean }>;
   close_window?: () => Promise<{ ok: boolean }>;
   is_processing_active?: () => Promise<{ ok: boolean; active?: boolean }>;
@@ -306,6 +388,7 @@ export function createBridge(options: {
   onBatchStart: () => void;
   onDownloadProgress?: (data: UpdateDownloadProgressPayload) => void;
   onApiUsageUpdated?: (data: ApiUsageResult) => void;
+  onRetryStateChanged?: (data: RetryStatePayload) => void;
   onRequestQuitConfirmation?: () => void;
 }): BridgeCallbacks {
   const {
@@ -321,6 +404,7 @@ export function createBridge(options: {
     onBatchStart,
     onDownloadProgress,
     onApiUsageUpdated,
+    onRetryStateChanged,
     onRequestQuitConfirmation,
   } = options;
 
@@ -351,6 +435,7 @@ export function createBridge(options: {
     filesDropped: onFilesDropped,
     updateDownloadProgress: data => { onDownloadProgress?.(data); },
     apiUsageUpdated: data => { onApiUsageUpdated?.(data); },
+    retryStateChanged: data => { onRetryStateChanged?.(data); },
     requestQuitConfirmation: () => { onRequestQuitConfirmation?.(); },
   };
 }
