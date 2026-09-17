@@ -334,21 +334,6 @@ export interface PywebviewApi {
     html_path?: string;
     has_audio?: boolean;
   }>;
-  share_sbobina_via_email?: (
-    sessionDir: string,
-    exportType?: 'full' | 'text_only' | 'audio_only',
-    recipient?: string,
-    mailProvider?: 'system' | 'gmail',
-  ) => Promise<{
-    ok: boolean;
-    error?: string;
-    package_path?: string;
-    mailto_url?: string;
-    folder_opened?: string;
-    audio_included?: boolean;
-    subject?: string;
-    body?: string;
-  }>;
   send_collaboration_signal?: (room: string, payload: string) => Promise<{ ok: boolean; error?: string }>;
   get_api_usage?: (
     apiKey?: string,

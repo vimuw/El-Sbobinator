@@ -1,8 +1,8 @@
 """
 Sharing and Export/Import service for El Sbobinator.
 
-Handles packaging sessions into compressed `.sbobina` archives (or zip files),
-safe extraction and import into local storage, and preparing mail sharing.
+Handles packaging sessions into compressed `.sbobina` archives (or zip files)
+and safe extraction and import into local storage.
 """
 
 from __future__ import annotations
@@ -10,8 +10,6 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import tempfile
-import urllib.parse
 import uuid
 import zipfile
 from typing import Literal
@@ -327,101 +325,3 @@ def unpack_and_import_package(package_path: str, session_root: str) -> dict:
             "ok": False,
             "error": f"Errore durante l'importazione del pacchetto: {e!s}",
         }
-
-
-def prepare_email_share(
-    session_dir: str,
-    include_mode: Literal["full", "text_only", "audio_only"] = "full",
-    recipient: str = "",
-    mail_provider: Literal["system", "gmail"] = "system",
-    target_dir: str | None = None,
-) -> dict:
-    """Generate package, prefill mailto or Gmail Web URL, and reveal output file for easy attachment."""
-    if not os.path.isdir(session_dir):
-        return {"ok": False, "error": "Cartella sessione non valida."}
-
-    session_path = os.path.join(session_dir, "session.json")
-    session_data = _load_json(session_path) if os.path.isfile(session_path) else {}
-
-    titolo = session_data.get("input", {}).get("name") or os.path.basename(session_dir)
-    nome_puro = os.path.splitext(titolo)[0]
-
-    out_folder = target_dir or os.path.join(
-        tempfile.gettempdir(), "el_sbobinator_exports"
-    )
-    _safe_mkdir(out_folder)
-    if os.name == "posix":
-        try:
-            os.chmod(out_folder, 0o700)
-        except OSError:
-            pass
-
-    target_zip = os.path.join(out_folder, f"{nome_puro}_Sbobina.sbobina")
-
-    pkg_res = create_sbobina_package(session_dir, target_zip, include_mode=include_mode)
-    if not pkg_res.get("ok"):
-        return pkg_res
-
-    subject = f"Sbobina: {nome_puro}"
-    body = (
-        f"Ciao!\n\n"
-        f"Ti invio la sbobina '{nome_puro}' prodotta con El Sbobinator.\n\n"
-        f"In allegato trovi il pacchetto .sbobina da importare nell'app."
-    )
-
-    quoted_rec = urllib.parse.quote(recipient)
-    quoted_sub = urllib.parse.quote(subject)
-    quoted_body = urllib.parse.quote(body)
-
-    if mail_provider == "gmail":
-        mail_url = f"https://mail.google.com/mail/?view=cm&fs=1&to={quoted_rec}&su={quoted_sub}&body={quoted_body}"
-    else:
-        mail_url = f"mailto:{quoted_rec}?subject={quoted_sub}&body={quoted_body}"
-
-    # Launch Explorer highlighting target file and launch mail app asynchronously
-    def _async_launch_email() -> None:
-        import platform
-        import subprocess
-
-        # 1. Reveal file in Explorer / Finder
-        try:
-            if platform.system() == "Windows":
-                subprocess.Popen(
-                    ["explorer.exe", "/select,", os.path.normpath(target_zip)]
-                )
-            elif platform.system() == "Darwin":
-                subprocess.Popen(["open", "-R", target_zip])
-            else:
-                from el_sbobinator.utils.file_ops import open_path_with_default_app
-
-                open_path_with_default_app(out_folder)
-        except Exception:
-            pass
-
-        # 2. Open mail app or Gmail Web Compose
-        try:
-            from el_sbobinator.utils.file_ops import open_path_with_default_app
-
-            open_path_with_default_app(mail_url)
-        except Exception:
-            try:
-                import webbrowser
-
-                webbrowser.open(mail_url)
-            except Exception:
-                pass
-
-    import threading
-
-    threading.Thread(target=_async_launch_email, daemon=True).start()
-
-    return {
-        "ok": True,
-        "package_path": target_zip,
-        "mailto_url": mail_url,
-        "folder_opened": out_folder,
-        "audio_included": pkg_res.get("audio_included", False),
-        "mail_provider": mail_provider,
-        "subject": subject,
-        "body": body,
-    }

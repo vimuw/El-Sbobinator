@@ -182,26 +182,6 @@ class TestExportController(unittest.TestCase):
         self.assertFalse(res.get("ok"))
         self.assertIn("Nessun pacchetto", res.get("error", ""))
 
-    def test_share_sbobina_via_email(self):
-        host = DummyExportHost()
-        with patch(
-            "el_sbobinator.bridge.controllers.export_controller.prepare_email_share"
-        ) as mock_email:
-            mock_email.return_value = {
-                "ok": True,
-                "mailto_url": "mailto:test@example.com",
-            }
-            res = host.share_sbobina_via_email(
-                "/fake/session", recipient="test@example.com", mail_provider="gmail"
-            )
-            self.assertTrue(res.get("ok"))
-            mock_email.assert_called_once_with(
-                session_dir="/fake/session",
-                include_mode="full",
-                recipient="test@example.com",
-                mail_provider="gmail",
-            )
-
 
 class TestSystemController(unittest.TestCase):
     def test_validate_environment(self):

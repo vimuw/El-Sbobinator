@@ -1,6 +1,5 @@
 import json
 import os
-import tempfile
 import zipfile
 from unittest.mock import patch
 
@@ -10,7 +9,6 @@ from el_sbobinator.services.sharing_service import (
     _safe_zip_extract,
     create_sbobina_package,
     find_audio_for_session,
-    prepare_email_share,
     unpack_and_import_package,
 )
 
@@ -110,37 +108,6 @@ def test_safe_zip_extract_prevents_zip_slip(tmp_path):
     with zipfile.ZipFile(str(malicious_zip_path), "r") as zf:
         with pytest.raises(ValueError, match="Attacco Zip Slip rilevato"):
             _safe_zip_extract(zf, str(target_extract))
-
-
-def test_prepare_email_share_mailto_and_gmail(tmp_path):
-    session_dir = tmp_path / "mock_email_session"
-    session_dir.mkdir()
-    (session_dir / "session.json").write_text(
-        '{"input": {"name": "anatomia.mp3"}}', encoding="utf-8"
-    )
-    (session_dir / "Sbobina.html").write_text("<p>Anatomia</p>", encoding="utf-8")
-
-    target_out = tmp_path / "email_out"
-    res_system = prepare_email_share(
-        str(session_dir),
-        include_mode="text_only",
-        recipient="student@test.com",
-        mail_provider="system",
-        target_dir=str(target_out),
-    )
-    assert res_system["ok"] is True
-    assert "mailto:student%40test.com" in res_system["mailto_url"]
-    assert os.path.exists(res_system["package_path"])
-
-    res_gmail = prepare_email_share(
-        str(session_dir),
-        include_mode="text_only",
-        recipient="student@test.com",
-        mail_provider="gmail",
-        target_dir=str(target_out),
-    )
-    assert res_gmail["ok"] is True
-    assert "https://mail.google.com/mail/" in res_gmail["mailto_url"]
 
 
 def test_unpack_invalid_package(tmp_path):

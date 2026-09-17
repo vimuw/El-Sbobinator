@@ -13,7 +13,6 @@ from el_sbobinator.bridge.bridge_utils import bridge_error, bridge_ok
 from el_sbobinator.core.shared import _load_json
 from el_sbobinator.services.sharing_service import (
     create_sbobina_package,
-    prepare_email_share,
     unpack_and_import_package,
 )
 from el_sbobinator.utils.logging_utils import redact_secrets
@@ -25,7 +24,7 @@ if TYPE_CHECKING:
 
 
 class ExportControllerMixin:
-    """Mixin providing package export, import, and email sharing IPC methods."""
+    """Mixin providing package export and import IPC methods."""
 
     if TYPE_CHECKING:
         _window: webview.Window | None
@@ -118,25 +117,6 @@ class ExportControllerMixin:
             res = unpack_and_import_package(package_path, self._get_session_root())
             if res.get("ok"):
                 self._invalidate_sessions_cache()
-            return res
-        except Exception as e:
-            return bridge_error(e)
-
-    def share_sbobina_via_email(
-        self,
-        session_dir: str,
-        export_type: str = "full",
-        recipient: str = "",
-        mail_provider: str = "system",
-    ) -> dict:
-        """Prepare email sharing with pre-filled content and output package location."""
-        try:
-            res = prepare_email_share(
-                session_dir=session_dir,
-                include_mode=export_type,  # type: ignore[arg-type]
-                recipient=recipient,
-                mail_provider=mail_provider,  # type: ignore[arg-type]
-            )
             return res
         except Exception as e:
             return bridge_error(e)
