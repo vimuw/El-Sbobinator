@@ -40,17 +40,14 @@ describe('UpdaterSection component', () => {
       />,
     );
 
-    // Verify badge
-    const badge = screen.getByText('Nuovo');
+    // Verify title and version badge
+    expect(screen.getByText('Nuova versione disponibile')).toBeTruthy();
+    const badge = screen.getByText('v2.5.1');
     expect(badge).toBeTruthy();
     expect(badge.className).toContain('rounded-full');
 
-    // Verify version text
-    expect(screen.getByText('v2.5.1')).toBeTruthy();
-    expect(screen.getByText(/Disponibile:/)).toBeTruthy();
-
     // Verify card styling
-    const card = container.querySelector('.bg-\\[var\\(--bg-surface\\)\\]');
+    const card = container.querySelector('.bg-\\[var\\(--accent-subtle\\)\\]');
     expect(card).toBeTruthy();
     expect(card?.className).toContain('rounded-lg');
 

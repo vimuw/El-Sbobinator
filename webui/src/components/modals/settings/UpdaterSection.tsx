@@ -102,24 +102,25 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
 
       {/* Update Available Banner Card */}
       {isUpdateAvailable && !isDone && (
-        <div className="p-3.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] space-y-3">
+        <div className="p-4 rounded-lg bg-[var(--accent-subtle)] border border-[var(--accent-ring)] space-y-3 relative overflow-hidden transition-all">
           {/* Top/Inline Content */}
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)] tracking-wide uppercase shrink-0">
-                  Nuovo
-                </span>
-                <span className="text-xs text-[var(--text-secondary)]">
-                  Disponibile: <span className="font-mono font-bold text-[var(--text-primary)]">{cleanLatestVersion}</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-sm font-bold text-[var(--text-primary)] leading-tight">
+                  Nuova versione disponibile
+                </h4>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono bg-[var(--bg-surface)] text-[var(--accent-text)] border border-[var(--accent-ring)] tracking-wide shrink-0">
+                  {cleanLatestVersion}
                 </span>
               </div>
+
               <div>
                 <a
                   href={GITHUB_RELEASES_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--accent-text)] hover:underline inline-flex items-center gap-1 transition-colors"
+                  className="text-xs font-semibold text-[var(--accent-text)] hover:underline inline-flex items-center gap-1 transition-colors"
                 >
                   Note di rilascio su GitHub
                   <ExternalLink className="w-3.5 h-3.5" />
@@ -136,7 +137,7 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
                 className="premium-button compact-button cursor-pointer shrink-0 font-bold text-xs flex items-center gap-1.5"
               >
                 <ArrowDownToLine className="w-3.5 h-3.5" />
-                Aggiorna
+                Aggiorna ora
               </button>
             )}
           </div>
