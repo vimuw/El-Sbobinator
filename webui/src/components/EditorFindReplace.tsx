@@ -52,7 +52,13 @@ export const FindReplacePanel = ({
         }
       });
     }
-    return () => { editor.commands.setSearchTerm('', -1, false); };
+    return () => {
+      if (editor && !editor.isDestroyed) {
+        try {
+          editor.commands.setSearchTerm('', -1, false);
+        } catch (_) {}
+      }
+    };
   }, [editor, updateSearch, initialFindText]);
 
   useEffect(() => {

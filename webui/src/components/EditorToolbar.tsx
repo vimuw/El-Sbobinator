@@ -32,8 +32,8 @@ const menuBarStateKey = (editor: TiptapEditor): string => [
   editor.isActive({ textAlign: 'center' }),
   editor.isActive({ textAlign: 'right' }),
   editor.isActive({ textAlign: 'justify' }),
-  editor.can().undo(),
-  editor.can().redo(),
+  Boolean(editor.can?.()?.undo?.()),
+  Boolean(editor.can?.()?.redo?.()),
   editor.getAttributes('highlight').color ?? '',
   editor.getAttributes('textStyle').color ?? '',
   editor.getAttributes('textStyle').fontFamily ?? '',
@@ -80,10 +80,30 @@ export const MenuBar = ({
 
   return (
     <div className="editor-toolbar">
-      <button type="button" onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} className="editor-button" title="Annulla (Ctrl+Z)">
+      <button
+        type="button"
+        onClick={() => {
+          if (editor.can?.()?.undo?.()) {
+            editor.chain().focus().undo().run();
+          }
+        }}
+        disabled={!editor.can?.()?.undo?.()}
+        className="editor-button"
+        title="Annulla (Ctrl+Z)"
+      >
         <Undo className="h-4 w-4" />
       </button>
-      <button type="button" onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} className="editor-button" title="Ripeti (Ctrl+Y)">
+      <button
+        type="button"
+        onClick={() => {
+          if (editor.can?.()?.redo?.()) {
+            editor.chain().focus().redo().run();
+          }
+        }}
+        disabled={!editor.can?.()?.redo?.()}
+        className="editor-button"
+        title="Ripeti (Ctrl+Y)"
+      >
         <Redo className="h-4 w-4" />
       </button>
 

@@ -115,6 +115,8 @@ export function RichTextEditor({
   const isPlaceholderContent = typeof initialContent === 'string' && initialContent.includes('Connessione in corso alla stanza');
   const effectiveInitialContent = collaborationRoom ? undefined : initialContent;
 
+  const isCollaborationActive = Boolean(collaborationRoom && ydoc && provider);
+
   const extensions = useMemo(() => [
     StarterKit.configure({
       heading: false,
@@ -122,7 +124,7 @@ export function RichTextEditor({
       link: false,
       underline: false,
       horizontalRule: false,
-      ...(collaborationRoom ? { undoRedo: false } : {}),
+      ...(isCollaborationActive ? { undoRedo: false } : {}),
     }),
     CustomHeading,
     CustomParagraph,
@@ -154,14 +156,14 @@ export function RichTextEditor({
     TableRow,
     TableHeader,
     TableCell,
-    ...(collaborationRoom && ydoc && provider ? [
+    ...(isCollaborationActive && ydoc && provider ? [
       Collaboration.configure({ document: ydoc }),
       CollaborationCursor.configure({
         provider,
         user: userRef.current || { name: 'Studente', color: '#3b82f6' },
       }),
     ] : []),
-  ], [collaborationRoom, ydoc, provider]);
+  ], [isCollaborationActive, ydoc, provider]);
 
   const editor = useEditor({
     extensions,
@@ -181,7 +183,7 @@ export function RichTextEditor({
           }
         };
       }
-      onEditorReady?.(() => editorRef.current!.getHTML());
+      onEditorReady?.(() => (editorRef.current && !editorRef.current.isDestroyed) ? editorRef.current.getHTML() : '');
     },
     onUpdate: ({ editor }) => {
       onChange?.(editor.getHTML());
@@ -238,25 +240,36 @@ export function RichTextEditor({
   }, [extensions]);
 
   useEffect(() => {
-    if (!editor) return;
-    const timer = setTimeout(() => publishHeadings(editor), 0);
+    if (!editor || editor.isDestroyed) return;
+    const timer = setTimeout(() => {
+      if (!editor.isDestroyed) {
+        publishHeadings(editor);
+      }
+    }, 0);
     return () => clearTimeout(timer);
   }, [editor]);
 
   useEffect(() => {
-    if (editor && collaborationUser) {
+    if (!editor || editor.isDestroyed || !collaborationUser) return;
+    try {
       const commands = editor.commands as unknown as { updateUser?: (user: { name: string; color: string }) => boolean };
-      commands.updateUser?.(collaborationUser);
+      commands?.updateUser?.(collaborationUser);
+    } catch (_) {
+      // The editor instance may have been destroyed during collaboration connection
     }
   }, [editor, collaborationUser]);
 
   useEffect(() => {
-    if (!collaborationRoom || !editor || !initialContent || isPlaceholderContent) return;
+    if (!collaborationRoom || !editor || editor.isDestroyed || !initialContent || isPlaceholderContent) return;
     const xml = ydoc?.getXmlFragment('default');
     if (xml && xml.length === 0) {
       const timer = setTimeout(() => {
-        if (xml && xml.length === 0) {
-          editor.commands.setContent(initialContent);
+        if (!editor.isDestroyed && xml && xml.length === 0) {
+          try {
+            editor.commands.setContent(initialContent);
+          } catch (_) {
+            // Guard against destroyed editor instance
+          }
         }
       }, 100);
       return () => clearTimeout(timer);

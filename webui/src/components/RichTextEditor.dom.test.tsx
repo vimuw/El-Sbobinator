@@ -144,4 +144,40 @@ describe('RichTextEditor Component', () => {
     expect(outputHtml).toContain('Maschio');
     expect(outputHtml).not.toContain('IDSoggettoSessoEtà');
   });
+
+  it('renders successfully without throwing undo/redo TypeError when collaborationRoom is provided', async () => {
+    let renderError: unknown = null;
+    try {
+      render(
+        <RichTextEditor
+          collaborationRoom="stanza-studio"
+          initialContent="<p>Testo collaborativo</p>"
+        />
+      );
+    } catch (err) {
+      renderError = err;
+    }
+
+    expect(renderError).toBeNull();
+    expect(document.querySelector('.editor-shell')).toBeTruthy();
+    expect(screen.getByTitle('Annulla (Ctrl+Z)')).toBeTruthy();
+  });
+
+  it('renders successfully without throwing when joining an active room with collaborationUser', async () => {
+    let renderError: unknown = null;
+    try {
+      render(
+        <RichTextEditor
+          collaborationRoom="stanza-avviata"
+          collaborationUser={{ name: 'Luigi', color: '#10b981' }}
+          initialContent="<p>Sessione condivisa attiva</p>"
+        />
+      );
+    } catch (err) {
+      renderError = err;
+    }
+
+    expect(renderError).toBeNull();
+    expect(document.querySelector('.editor-shell')).toBeTruthy();
+  });
 });

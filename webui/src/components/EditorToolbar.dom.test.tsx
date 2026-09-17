@@ -94,4 +94,41 @@ describe('EditorToolbar MenuBar', () => {
 
     expect(onZoomChange).toHaveBeenCalledWith(150);
   });
+
+  it('renders safely and disables buttons when editor.can() lacks undo and redo functions', () => {
+    const editorWithoutUndo = {
+      isActive: vi.fn().mockReturnValue(false),
+      can: vi.fn(() => ({})), // no undo or redo defined
+      getAttributes: vi.fn().mockReturnValue({}),
+      chain: vi.fn(() => ({
+        focus: vi.fn().mockReturnThis(),
+        run: vi.fn().mockReturnValue(true),
+      })),
+      on: vi.fn(),
+      off: vi.fn(),
+    };
+
+    expect(() => {
+      render(
+        <MenuBar
+          editor={editorWithoutUndo as unknown as TiptapEditor}
+          onOpenImagePicker={vi.fn()}
+          showFindReplace={false}
+          onToggleFindReplace={vi.fn()}
+        />
+      );
+    }).not.toThrow();
+
+    const undoBtn = screen.getByTitle('Annulla (Ctrl+Z)') as HTMLButtonElement;
+    const redoBtn = screen.getByTitle('Ripeti (Ctrl+Y)') as HTMLButtonElement;
+
+    expect(undoBtn.disabled).toBe(true);
+    expect(redoBtn.disabled).toBe(true);
+
+    // Clicking does not crash
+    expect(() => {
+      fireEvent.click(undoBtn);
+      fireEvent.click(redoBtn);
+    }).not.toThrow();
+  });
 });
