@@ -736,6 +736,7 @@ def _esegui_sbobinatura_impl(
             if status in ("timeout", "early_done"):
                 return
             if status == "regenerated":
+                session = session_ctx.session
                 settings = session_ctx.settings
                 model_state = build_model_state(
                     settings.model, settings.fallback_models
