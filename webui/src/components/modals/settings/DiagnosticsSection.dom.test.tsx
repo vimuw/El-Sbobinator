@@ -2,6 +2,7 @@ import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { DiagnosticsSection, type DisplayCheck } from './DiagnosticsSection';
+import type { ApiUsageResult } from '../../../bridge';
 
 describe('DiagnosticsSection', () => {
   const dummyChecks: DisplayCheck[] = [
@@ -149,5 +150,50 @@ describe('DiagnosticsSection', () => {
     fireEvent.click(openLogsBtn);
 
     expect(onOpenLogs).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders telemetry and work stats when apiUsage telemetry is present', () => {
+    const apiUsageWithTelemetry: ApiUsageResult = {
+      schema_version: 2,
+      quota_date: '2026-09-17',
+      primary_status: 'operational',
+      status_message: 'API Google Gemini operative.',
+      next_reset_info: 'Reset quote: ore 09:00',
+      is_degraded_mode: false,
+      degraded_reason: null,
+      project_limits: {},
+      work_stats: {
+        chunks_completed: 34,
+        revisions_completed: 16,
+        sbobine_completed: 4,
+      },
+      telemetry: {
+        requests_sent: 99,
+        responses_succeeded: 50,
+        retries_total: 20,
+        final_failures: 28,
+      },
+    };
+
+    render(
+      <DiagnosticsSection
+        isValidatingEnvironment={false}
+        onRunValidation={vi.fn()}
+        validationResult={null}
+        displayChecks={dummyChecks}
+        apiUsage={apiUsageWithTelemetry}
+      />
+    );
+
+    expect(screen.getByText('Telemetria Chiamate API & Lavoro Svolto')).toBeTruthy();
+    expect(screen.getByText('Lavoro Svolto Oggi')).toBeTruthy();
+    expect(screen.getByText('34')).toBeTruthy();
+    expect(screen.getByText('16')).toBeTruthy();
+    expect(screen.getByText('4')).toBeTruthy();
+    expect(screen.getByText('Telemetria Rete API')).toBeTruthy();
+    expect(screen.getByText('99')).toBeTruthy();
+    expect(screen.getByText('50')).toBeTruthy();
+    expect(screen.getByText('20')).toBeTruthy();
+    expect(screen.getByText('28')).toBeTruthy();
   });
 });
