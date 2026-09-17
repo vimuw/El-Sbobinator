@@ -142,12 +142,11 @@ export const QueueSection = memo(function QueueSection({
                 <button
                   type="button"
                   onClick={onAddFiles}
-                  className="premium-button-secondary compact-button flex items-center gap-1.5"
+                  className="icon-button compact-icon-button"
                   title="Aggiungi file audio alla coda"
                   aria-label="Aggiungi audio"
                 >
                   <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline text-xs font-semibold">Aggiungi audio</span>
                 </button>
               )}
               <div className="relative shrink-0" ref={menuRef}>
