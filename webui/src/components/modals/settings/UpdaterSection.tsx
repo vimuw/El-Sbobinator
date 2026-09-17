@@ -60,10 +60,12 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
       {/* Header row: Version Info & Check Button */}
       <div className="flex items-center justify-between gap-4 py-0.5">
         <div className="space-y-0.5 min-w-0">
-          <span className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <Tag className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-            <span>Versione applicazione</span>
-          </span>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+              Versione applicazione
+            </h3>
+          </div>
           <p className="text-xs text-[var(--text-secondary)]">
             Installata:{' '}
             <span className="font-mono font-bold text-[var(--text-primary)]">{cleanAppVersion}</span>
@@ -86,9 +88,15 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
           disabled={isCheckingUpdate || isInProgress}
           aria-label="Cerca aggiornamenti"
           title={isCheckingUpdate ? 'Controllo in corso…' : 'Cerca aggiornamenti'}
-          className="p-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 shrink-0 cursor-pointer"
+          className="p-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 group/refresh shrink-0 cursor-pointer"
         >
-          <RefreshCw className={`w-4 h-4 transition-transform duration-500 ease-out ${isCheckingUpdate ? 'animate-spin text-[var(--accent-text)]' : ''}`} />
+          <RefreshCw
+            className={`w-4 h-4 transition-transform duration-500 ease-out ${
+              isCheckingUpdate
+                ? 'animate-spin text-[var(--accent-text)]'
+                : 'group-hover/refresh:rotate-180 group-hover/refresh:scale-105'
+            }`}
+          />
         </button>
       </div>
 

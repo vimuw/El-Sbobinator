@@ -115,4 +115,16 @@ describe('CompletedSection', () => {
     );
     expect(screen.getByTitle('Raccolta: Corso A')).toBeTruthy();
   });
+
+  it('renders a bounded scrollable container for completed items with natural scroll chaining', () => {
+    const { container } = render(
+      <CompletedSection
+        {...baseProps}
+        doneFiles={[makeFile()]}
+      />,
+    );
+    const scrollContainer = container.querySelector('.overflow-y-auto.app-scroll.is-chainable');
+    expect(scrollContainer).toBeTruthy();
+    expect(scrollContainer?.className).toContain('max-h-[390px]');
+  });
 });

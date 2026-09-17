@@ -219,6 +219,7 @@
     --glass-top-shimmer: rgba(255, 255, 255, 0.04);
 
     --header-bg: #191919;
+    --editor-chrome-bg: #191919;
 }
 
 /* ── Theme Mode Toggle Button Animation ─────────── */
@@ -237,6 +238,7 @@
 /* ── Theme Mode Transition for UI Shell & Surfaces ─── */
 .editor-fullpage,
 .editor-fullpage-header,
+.editor-fullpage-footer,
 .editor-fullpage-back,
 .editor-fullpage-title,
 .editor-autosave-badge,
@@ -1359,6 +1361,11 @@ button {
   overscroll-behavior: contain;
   overscroll-behavior-y: contain;
   scrollbar-gutter: stable;
+}
+
+.app-scroll.is-chainable {
+  overscroll-behavior: auto;
+  overscroll-behavior-y: auto;
 }
 
 .console-scroll::-webkit-scrollbar {
@@ -3437,6 +3444,11 @@ input[type="password"]::-ms-reveal {
   background: var(--editor-chrome-bg);
 }
 
+.editor-fullpage-footer {
+  background: var(--editor-chrome-bg);
+  border-top-color: var(--border-subtle);
+}
+
 .editor-fullpage-back {
   display: inline-flex;
   align-items: center;
@@ -3796,10 +3808,9 @@ input[type="password"]::-ms-reveal {
 }
 
 .custom-select-trigger {
-  background: var(--bg-surface) !important;
-  border: 1px solid var(--border-default) !important;
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
   text-align: left;
-  padding: 0.35rem 0.75rem !important;
 }
 
 /* Floating Elevated Components */

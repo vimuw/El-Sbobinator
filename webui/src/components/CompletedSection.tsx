@@ -85,10 +85,7 @@ export const CompletedSection = memo(function CompletedSection({ doneFiles, appS
           </div>
 
           <div
-            className="overflow-x-hidden"
-            style={{
-              padding: '4px 6px',
-            }}
+            className="overflow-x-hidden overflow-y-auto app-scroll is-chainable max-h-[390px] px-1.5 py-1"
           >
             <div className="space-y-3">
               <AnimatePresence>

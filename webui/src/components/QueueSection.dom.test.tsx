@@ -296,4 +296,11 @@ describe('QueueSection', () => {
     // The two queued files have drag handles, processing does not
     expect(handles.length).toBe(2);
   });
+
+  it('renders a bounded scrollable container for queue items with natural scroll chaining', () => {
+    const { container } = render(<QueueSection {...makeProps({ pendingFiles: [makeFile()] })} />);
+    const scrollContainer = container.querySelector('.overflow-y-auto.app-scroll.is-chainable');
+    expect(scrollContainer).toBeTruthy();
+    expect(scrollContainer?.className).toContain('max-h-[390px]');
+  });
 });

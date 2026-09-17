@@ -91,7 +91,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         onClick={() => setIsOpen(prev => !prev)}
-        className="w-full flex items-center justify-between gap-3 px-3.5 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--border-strong)] hover:border-[var(--accent-bg)] text-left text-sm font-semibold transition-all duration-180 focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)] disabled:opacity-50 disabled:cursor-not-allowed min-h-[40px]"
+        className="custom-select-trigger w-full flex items-center justify-between gap-3 px-3.5 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--border-strong)] hover:border-[var(--accent-bg)] text-left text-sm font-semibold transition-all duration-180 focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)] disabled:opacity-50 disabled:cursor-not-allowed min-h-[40px]"
       >
         <span className="truncate text-sm text-[var(--text-primary)] font-semibold">
           {selectedOption ? (

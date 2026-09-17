@@ -16,10 +16,12 @@ export const NotificationSection: React.FC = React.memo(() => {
   return (
     <div className="flex items-center justify-between gap-4 py-0.5">
       <div className="space-y-0.5 min-w-0">
-        <span className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <Bell className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-          <span>Notifiche di sistema</span>
-        </span>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+            Notifiche di sistema
+          </h3>
+        </div>
         <p className="text-xs text-[var(--text-secondary)]">
           Avvisami al completamento dell&apos;elaborazione di ciascuna sbobina.
         </p>
