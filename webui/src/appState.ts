@@ -150,18 +150,28 @@ export type ProcessingAction =
   | { type: 'bridge/file_done'; data: FileDonePayload }
   | { type: 'bridge/file_failed'; data: FileFailedPayload };
 
-export const initialProcessingState: ProcessingState = {
-  files: [],
-  structuralVersion: 0,
-  appState: 'idle',
-  currentPhase: '',
-  currentModel: '',
-  activeProgress: 0,
-  currentFileIndex: 0,
-  currentBatchTotal: 0,
-  workTotals: { chunks: 0, macro: 0 },
-  workDone: { chunks: 0, macro: 0 },
-};
+export function createInitialProcessingState(initialFiles: FileItem[] = []): ProcessingState {
+  return {
+    files: initialFiles,
+    structuralVersion: 0,
+    appState: 'idle',
+    currentPhase: '',
+    currentModel: '',
+    activeProgress: 0,
+    currentFileIndex: 0,
+    currentBatchTotal: 0,
+    workTotals: {
+      chunks: 0,
+      macro: 0,
+    },
+    workDone: {
+      chunks: 0,
+      macro: 0,
+    },
+  };
+}
+
+export const initialProcessingState: ProcessingState = createInitialProcessingState();
 
 export function processingReducer(state: ProcessingState, action: ProcessingAction): ProcessingState {
   switch (action.type) {
@@ -248,7 +258,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         structuralVersion: state.structuralVersion + 1,
         files: state.files.map(file =>
           file.status === 'error' || file.status === 'paused'
-            ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorText: undefined, errorDetail: undefined, forceRetry: file.status === 'paused', retryable: undefined, retryReason: undefined, recommendedRetryAt: undefined }
+            ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorText: undefined, errorDetail: undefined, forceRetry: file.status === 'paused', retryable: undefined, retryReason: undefined, recommendedRetryAt: undefined, resumeSession: undefined }
             : file,
         ),
       };
@@ -258,7 +268,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         structuralVersion: state.structuralVersion + 1,
         files: state.files.map(file =>
           file.id === action.id && (file.status === 'error' || file.status === 'paused')
-            ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorDetail: undefined, errorText: undefined, forceRetry: file.status === 'paused', retryable: undefined, retryReason: undefined, recommendedRetryAt: undefined }
+            ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorDetail: undefined, errorText: undefined, forceRetry: file.status === 'paused', retryable: undefined, retryReason: undefined, recommendedRetryAt: undefined, resumeSession: undefined }
             : file,
         ),
       };
@@ -328,7 +338,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         files: action.data?.cancelled
           ? state.files.map(file =>
               file.status === 'processing'
-                ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorText: undefined, errorDetail: undefined }
+                ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorText: undefined, errorDetail: undefined, resumeSession: undefined }
                 : file,
             )
           : state.files,
@@ -366,7 +376,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         currentBatchTotal: action.data.total,
         files: state.files.map(file =>
           file.id === action.data.id
-            ? { ...file, status: 'processing', progress: 0, phase: 1, phaseText: undefined, errorText: undefined, errorDetail: undefined, forceRetry: undefined, startedAt: Date.now() }
+            ? { ...file, status: 'processing', progress: 0, phase: 1, phaseText: undefined, errorText: undefined, errorDetail: undefined, forceRetry: undefined, resumeSession: undefined, startedAt: Date.now() }
             : file,
         ),
       };

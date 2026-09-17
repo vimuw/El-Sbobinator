@@ -52,6 +52,19 @@ export function deserializeQueueFile(file: Partial<FileItem>, index: number): Fi
   };
 }
 
+export function loadPersistedQueue(): FileItem[] {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return [];
+    const raw = window.localStorage.getItem(QUEUE_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) return [];
+    return parsed.map(deserializeQueueFile);
+  } catch {
+    return [];
+  }
+}
+
 export function useQueuePersistence(
   files: FileItem[],
   structuralVersion: number,
@@ -67,20 +80,20 @@ export function useQueuePersistence(
   useEffect(() => {
     if (hasRestoredQueueRef.current) return;
     hasRestoredQueueRef.current = true;
+    if (filesRef.current.length > 0) {
+      appendConsole(`Coda ripristinata: ${filesRef.current.length} file.`);
+      return;
+    }
     try {
-      const raw = window.localStorage.getItem(QUEUE_STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed) || parsed.length === 0) return;
-
-      const restoredFiles: FileItem[] = parsed.map(deserializeQueueFile);
+      const restoredFiles = loadPersistedQueue();
+      if (restoredFiles.length === 0) return;
 
       dispatch({ type: 'queue/add', files: restoredFiles });
       appendConsole(`Coda ripristinata: ${restoredFiles.length} file.`);
     } catch (error) {
       appendConsole(`[ERRORE] Ripristino coda fallito: ${error}`);
     }
-  }, [appendConsole]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [appendConsole, dispatch]);
 
   useEffect(() => {
     if (structuralVersion === 0) return; // skip initial mount – restore hasn’t run yet

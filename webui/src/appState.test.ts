@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type FileItem } from './appState';
+import { createInitialProcessingState, getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type FileItem } from './appState';
 
 
 function makeFile(overrides: Partial<FileItem> = {}): FileItem {
@@ -504,5 +504,22 @@ describe('processingReducer', () => {
     expect(state.files[0].outputHtml).toBe('E:/new_sessions/sess1/out.html');
     expect(state.files[1].outputDir).toBe('D:\\other\\sess2');
     expect(state.files[1].outputHtml).toBe('D:\\other\\sess2\\out.html');
+  });
+
+  describe('createInitialProcessingState', () => {
+    it('initializes with default empty files when no arguments provided', () => {
+      const state = createInitialProcessingState();
+      expect(state.files).toEqual([]);
+      expect(state.structuralVersion).toBe(0);
+      expect(state.appState).toBe('idle');
+    });
+
+    it('initializes with passed files and default state', () => {
+      const customFiles = [makeFile({ id: 'f-init', name: 'init.mp3' })];
+      const state = createInitialProcessingState(customFiles);
+      expect(state.files).toEqual(customFiles);
+      expect(state.structuralVersion).toBe(0);
+      expect(state.appState).toBe('idle');
+    });
   });
 });

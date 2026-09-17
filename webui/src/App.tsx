@@ -4,13 +4,13 @@ import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-ki
 import { GithubIcon } from './components/icons/GithubIcon';
 import { GITHUB_URL, KOFI_URL } from './branding';
 import { type ElSbobinatorBridge, type PywebviewApi } from './bridge';
-import { initialProcessingState, processingReducer } from './appState';
+import { createInitialProcessingState, processingReducer } from './appState';
 import { GEMINI_KEY_PATTERN } from './utils';
 import { STORAGE_KEYS } from './storageKeys';
 import { useConsole } from './hooks/useConsole';
 import { useTheme } from './hooks/useTheme';
 import { useUpdateChecker } from './hooks/useUpdateChecker';
-import { useQueuePersistence } from './hooks/useQueuePersistence';
+import { loadPersistedQueue, useQueuePersistence } from './hooks/useQueuePersistence';
 import { useApiReady } from './hooks/useApiReady';
 import { useBridgeCallbacks } from './hooks/useBridgeCallbacks';
 import { useBodyScrollLock } from './hooks/useBodyScrollLock';
@@ -47,7 +47,11 @@ declare global {
 }
 
 export default function App() {
-  const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone }, dispatch] = useReducer(processingReducer, initialProcessingState);
+  const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone }, dispatch] = useReducer(
+    processingReducer,
+    undefined,
+    () => createInitialProcessingState(loadPersistedQueue()),
+  );
 
   const { consoleLogs, appendConsole } = useConsole();
   const { themeMode, setThemeMode } = useTheme();

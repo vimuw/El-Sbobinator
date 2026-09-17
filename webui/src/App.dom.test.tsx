@@ -6,6 +6,7 @@ import { useApiReady } from './hooks/useApiReady';
 import { useBridgeCallbacks } from './hooks/useBridgeCallbacks';
 import { useQueuePersistence } from './hooks/useQueuePersistence';
 import { useUpdateChecker } from './hooks/useUpdateChecker';
+import { STORAGE_KEYS } from './storageKeys';
 import type { FileDonePayload, ProcessingAction } from './appState';
 
 const motionCache = new Map<string, React.ForwardRefExoticComponent<React.PropsWithoutRef<Record<string, unknown>> & React.RefAttributes<unknown>>>();
@@ -60,9 +61,13 @@ const mockApiReadyWithKey = {
 
 vi.mock('./hooks/useUpdateChecker');
 
-vi.mock('./hooks/useQueuePersistence', () => ({
-  useQueuePersistence: vi.fn(),
-}));
+vi.mock('./hooks/useQueuePersistence', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./hooks/useQueuePersistence')>();
+  return {
+    ...actual,
+    useQueuePersistence: vi.fn(),
+  };
+});
 
 vi.mock('./hooks/useBridgeCallbacks', () => ({
   useBridgeCallbacks: vi.fn().mockReturnValue(undefined),
@@ -520,6 +525,25 @@ describe('App — ready-empty mode (valid API key, no files)', () => {
     const consoleBtnAfter = screen.getByLabelText('Mostra console') as HTMLButtonElement;
     expect(consoleBtnAfter.disabled).toBe(true);
     expect(screen.queryByRole('heading', { name: 'Console' })).toBeNull();
+  });
+
+  it('preserves showConsole state across app restarts when persisted queue has files', async () => {
+    localStorage.setItem(STORAGE_KEYS.SHOW_CONSOLE, 'true');
+    localStorage.setItem(STORAGE_KEYS.QUEUE_V1, JSON.stringify([{
+      id: 'done-1',
+      name: 'lesson-done.mp3',
+      size: 1024,
+      duration: 120,
+      status: 'done',
+      completedAt: Date.now(),
+    }]));
+
+    await act(async () => { render(<App />); });
+
+    const consoleBtn = screen.getByLabelText('Mostra console') as HTMLButtonElement;
+    expect(consoleBtn.disabled).toBe(false);
+    expect(screen.getByRole('heading', { name: 'Console' })).toBeTruthy();
+    expect(localStorage.getItem(STORAGE_KEYS.SHOW_CONSOLE)).toBe('true');
   });
 });
 

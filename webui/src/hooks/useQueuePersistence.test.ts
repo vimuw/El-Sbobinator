@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { FileItem } from '../appState';
-import { deserializeQueueFile, serializeQueueFile } from './useQueuePersistence';
+import { deserializeQueueFile, loadPersistedQueue, serializeQueueFile } from './useQueuePersistence';
 
 function roundTrip(file: FileItem): FileItem {
   return deserializeQueueFile(JSON.parse(JSON.stringify(serializeQueueFile(file))), 0);
@@ -118,5 +118,11 @@ describe('useQueuePersistence — serialization contract', () => {
     const restored2 = roundTrip(file2);
     expect(restored2.resumeSession).toBeUndefined();
     expect(restored2.allowCompletedDestroy).toBeUndefined();
+  });
+
+  describe('loadPersistedQueue', () => {
+    it('returns empty array if localStorage is empty or corrupt', () => {
+      expect(loadPersistedQueue()).toEqual([]);
+    });
   });
 });
