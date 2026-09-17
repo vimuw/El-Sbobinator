@@ -19,6 +19,8 @@ interface KebabMenuProps {
   items: KebabMenuItem[];
   align?: 'left' | 'right';
   buttonClassName?: string;
+  ariaLabel?: string;
+  title?: string;
 }
 
 interface DropdownPos {
@@ -38,7 +40,7 @@ interface SubmenuPos {
   opensLeft: boolean;
 }
 
-export function KebabMenu({ items, align = 'right', buttonClassName }: KebabMenuProps) {
+export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, title }: KebabMenuProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<DropdownPos | null>(null);
   const [activeSubmenuIndex, setActiveSubmenuIndex] = useState<number | null>(null);
@@ -272,8 +274,8 @@ export function KebabMenu({ items, align = 'right', buttonClassName }: KebabMenu
           borderRadius: 8,
           cursor: 'pointer',
         }}
-        aria-label="Altre opzioni"
-        title="Altre opzioni"
+        aria-label={ariaLabel || 'Altre opzioni'}
+        title={title || ariaLabel || 'Altre opzioni'}
       >
         <MoreVertical className="w-4 h-4" />
       </button>
@@ -334,6 +336,7 @@ export function KebabMenu({ items, align = 'right', buttonClassName }: KebabMenu
                         item.onClick?.();
                         setOpen(false);
                         setActiveSubmenuIndex(null);
+                        buttonRef.current?.focus();
                       }
                     }}
                     className={`kebab-item ${item.danger ? 'is-danger' : ''} ${isSubmenuActive ? 'is-active' : ''}`.trim()}
@@ -396,6 +399,7 @@ export function KebabMenu({ items, align = 'right', buttonClassName }: KebabMenu
                       child.onClick?.();
                       setOpen(false);
                       setActiveSubmenuIndex(null);
+                      buttonRef.current?.focus();
                     }}
                     className={`kebab-item ${child.danger ? 'is-danger' : ''}`.trim()}
                     style={child.disabled ? { opacity: 0.4, cursor: 'default' } : undefined}

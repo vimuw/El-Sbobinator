@@ -25,8 +25,11 @@ describe('KebabMenu component', () => {
     expect(screen.getByText('Option 2')).toBeTruthy();
 
     // Click item
-    fireEvent.click(screen.getByText('Option 1'));
+    const firstOption = screen.getByText('Option 1');
+    firstOption.focus();
+    fireEvent.click(firstOption);
     expect(handleAction).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(button);
   });
 
   it('flips upwards when near the bottom of viewport', () => {
