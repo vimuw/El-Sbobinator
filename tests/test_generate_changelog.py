@@ -131,7 +131,7 @@ class TestGenerateChangelog(unittest.TestCase):
         )
         self.assertNotIn("--", log_call_args)
 
-    def test_main_tag_msg_generic_and_duplicate_filtering(self) -> None:
+    def test_main_tag_message_ignored(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_file = os.path.join(tmpdir, "changelog.md")
             test_args = [
@@ -142,12 +142,12 @@ class TestGenerateChangelog(unittest.TestCase):
                 output_file,
             ]
 
-            # Case 1: tag_msg is generic "Release v1.0.0" -> should not be prepended
-            def mock_git_generic(args):
+            # Tag message exists but should be ignored; output starts with ## Changes
+            def mock_git(args):
                 if args[0] == "cat-file":
                     return "tag"
                 if args[0] == "tag" and args[1] == "-l":
-                    return "Release v1.0.0"
+                    return "Custom announcement or highlights in tag"
                 if args[0] == "rev-parse":
                     return "v1.0.0"
                 if args[0] == "describe":
@@ -158,9 +158,7 @@ class TestGenerateChangelog(unittest.TestCase):
 
             with (
                 patch.object(sys, "argv", test_args),
-                patch(
-                    "scripts.generate_changelog.run_git", side_effect=mock_git_generic
-                ),
+                patch("scripts.generate_changelog.run_git", side_effect=mock_git),
                 patch.dict(
                     os.environ, {"GITHUB_REPOSITORY": "owner/repo"}, clear=False
                 ),
@@ -169,70 +167,8 @@ class TestGenerateChangelog(unittest.TestCase):
 
             with open(output_file, encoding="utf-8") as f:
                 content = f.read()
-            self.assertFalse(content.startswith("Release v1.0.0\n\n"))
+            self.assertNotIn("Custom announcement or highlights in tag", content)
             self.assertTrue(content.startswith("## Changes\n\n"))
-
-            # Case 2: tag_msg is custom announcement -> should be prepended
-            def mock_git_custom(args):
-                if args[0] == "cat-file":
-                    return "tag"
-                if args[0] == "tag" and args[1] == "-l":
-                    return "Exciting new update with UI refresh!"
-                if args[0] == "rev-parse":
-                    return "v1.0.0"
-                if args[0] == "describe":
-                    return "v0.9.0"
-                if args[0] == "log":
-                    return "abc1234|feat: add foo"
-                return ""
-
-            with (
-                patch.object(sys, "argv", test_args),
-                patch(
-                    "scripts.generate_changelog.run_git", side_effect=mock_git_custom
-                ),
-                patch.dict(
-                    os.environ, {"GITHUB_REPOSITORY": "owner/repo"}, clear=False
-                ),
-            ):
-                main()
-
-            with open(output_file, encoding="utf-8") as f:
-                content = f.read()
-            self.assertTrue(
-                content.startswith("Exciting new update with UI refresh!\n\n## Changes")
-            )
-
-            # Case 3: tag_msg already contains full changelog -> should not be prepended twice
-            def mock_git_full_changelog(args):
-                if args[0] == "cat-file":
-                    return "tag"
-                if args[0] == "tag" and args[1] == "-l":
-                    return "## Changes\n\n### Features\n- foo\n\n**Full Changelog**: https://..."
-                if args[0] == "rev-parse":
-                    return "v1.0.0"
-                if args[0] == "describe":
-                    return "v0.9.0"
-                if args[0] == "log":
-                    return "abc1234|feat: add foo"
-                return ""
-
-            with (
-                patch.object(sys, "argv", test_args),
-                patch(
-                    "scripts.generate_changelog.run_git",
-                    side_effect=mock_git_full_changelog,
-                ),
-                patch.dict(
-                    os.environ, {"GITHUB_REPOSITORY": "owner/repo"}, clear=False
-                ),
-            ):
-                main()
-
-            with open(output_file, encoding="utf-8") as f:
-                content = f.read()
-            # Should have exactly one "## Changes"
-            self.assertEqual(content.count("## Changes"), 1)
 
     def test_categorize_commits_deps_prefix(self) -> None:
         commits = [

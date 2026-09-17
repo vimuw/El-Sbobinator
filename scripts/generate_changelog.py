@@ -514,18 +514,6 @@ def main() -> None:
     except Exception:
         pass
 
-    # Get tag annotation message if tag is an annotated tag
-    tag_msg = ""
-    try:
-        tag_type = run_git(["cat-file", "-t", tag])
-        if tag_type == "tag":
-            clean_tag = (
-                tag[len("refs/tags/") :] if tag.startswith("refs/tags/") else tag
-            )
-            tag_msg = run_git(["tag", "-l", "--format=%(contents)", clean_tag])
-    except Exception:
-        pass
-
     commits = get_commits(tag, max_commits=args.max_commits)
     repo = get_repo(args.repo)
     categories = categorize_commits(commits, repo)
@@ -538,7 +526,7 @@ def main() -> None:
         resolved_tag = "HEAD"
     prev_ref = get_previous_tag(resolved_tag, current_tag=clean_tag)
 
-    # Determine custom body to prepend
+    # Determine custom body to prepend if explicitly provided
     env_body = os.environ.get("CUSTOM_RELEASE_BODY")
     raw_custom_body = (
         args.highlights
@@ -546,31 +534,12 @@ def main() -> None:
         or args.custom_body
     ).strip()
 
-    body_to_prepend = ""
-    if raw_custom_body:
-        body_to_prepend = raw_custom_body
-    elif tag_msg.strip():
-        cleaned_msg = tag_msg.strip()
-        clean_tag_lower = clean_tag.lower()
-        generic_headers = {
-            clean_tag_lower,
-            f"release {clean_tag_lower}",
-            f"release v{clean_tag_lower.lstrip('v')}",
-            f"v{clean_tag_lower.lstrip('v')}",
-        }
-        if (
-            cleaned_msg.lower() not in generic_headers
-            and "## Changes" not in cleaned_msg
-            and "**Full Changelog**:" not in cleaned_msg
-        ):
-            body_to_prepend = cleaned_msg
-
     output_text = format_changelog(
         categories=categories,
         repo=repo,
         prev_ref=prev_ref,
         clean_tag=clean_tag,
-        custom_body=body_to_prepend,
+        custom_body=raw_custom_body,
         collapse_maintenance=not args.no_collapse,
     )
 
