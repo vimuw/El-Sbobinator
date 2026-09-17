@@ -803,6 +803,8 @@ def _process_phase1_transcription_impl(
 
     runtime.set_work_totals(chunks_total=total_chunks)
     runtime.update_work_done("chunks", chunk_idx, total=total_chunks)
+    if chunk_idx > 0 and total_chunks > 0:
+        runtime.progress(0.7 * chunk_idx / total_chunks)
 
     next_cut = None
 

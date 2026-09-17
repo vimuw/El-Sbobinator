@@ -309,7 +309,6 @@ def phase1_has_progress(
         or int(phase1_state.get("chunks_done", 0) or 0) > 0
         or int(phase1_state.get("next_start_sec", 0) or 0) > 0
         or bool(str(outputs_state.get("html") or "").strip())
-        or bool(session.get("last_error"))
     )
 
 

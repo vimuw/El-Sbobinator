@@ -921,5 +921,51 @@ class TestRetryFailedRevisionBlocks(unittest.TestCase):
             self.assertEqual(result["failed_blocks"], [])
 
 
+class Phase2ResumeProgressTests(unittest.TestCase):
+    def test_resume_emits_initial_progress(self):
+        progress_calls: list[float] = []
+
+        class _ProgressRuntime(_FakeRuntime):
+            def progress(self, v):
+                progress_calls.append(v)
+
+        session = {"stage": "phase2", "phase2": {"revised_done": 2}, "last_error": None}
+        runtime = _ProgressRuntime()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create existing files for blocks 1 and 2
+            with open(os.path.join(tmpdir, "rev_001.md"), "w", encoding="utf-8") as fh:
+                fh.write("block 1")
+            with open(os.path.join(tmpdir, "rev_002.md"), "w", encoding="utf-8") as fh:
+                fh.write("block 2")
+
+            with (
+                patch(
+                    "el_sbobinator.services.revision_service.retry_with_quota",
+                    return_value=(object(), "block rev"),
+                ),
+                patch(
+                    "el_sbobinator.services.revision_service.sleep_with_cancel",
+                    return_value=True,
+                ),
+            ):
+                process_macro_revision_phase(
+                    client=object(),
+                    model_name="test",
+                    macro_blocks=["b1", "b2", "b3", "b4"],
+                    phase2_revised_dir=tmpdir,
+                    session=session,
+                    save_session=lambda: True,
+                    runtime=runtime,
+                    cancelled=lambda: False,
+                    fallback_keys=[],
+                    request_fallback_key=lambda: None,
+                    prompt_revisione="prompt",
+                )
+
+        self.assertTrue(len(progress_calls) >= 1)
+        self.assertAlmostEqual(progress_calls[0], 0.8)
+
+
 if __name__ == "__main__":
     unittest.main()

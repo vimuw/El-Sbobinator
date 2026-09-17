@@ -497,11 +497,14 @@ def process_macro_revision_phase(
 
     runtime.set_work_totals(macro_total=macro_total)
     try:
+        initial_macro_done = int(session.get("phase2", {}).get("revised_done", 0) or 0)
         runtime.update_work_done(
             "macro",
-            int(session.get("phase2", {}).get("revised_done", 0) or 0),
+            initial_macro_done,
             total=macro_total,
         )
+        if initial_macro_done > 0 and macro_total > 0:
+            runtime.progress(0.7 + 0.2 * (initial_macro_done / max(1, macro_total)))
     except Exception:
         pass
 

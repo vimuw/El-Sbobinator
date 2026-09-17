@@ -1742,3 +1742,63 @@ class TestChunkFileSaveFailure(unittest.TestCase):
                 0,
                 "snapshot must show next_start_sec == 0 (not advanced past the unwritten chunk)",
             )
+
+
+class Phase1ResumeProgressTests(unittest.TestCase):
+    def test_resume_emits_initial_progress(self):
+        progress_calls: list[float] = []
+
+        class _ProgressRuntime(_FakeRuntime):
+            def progress(self, v):
+                progress_calls.append(v)
+
+        session = {
+            "stage": "phase1",
+            "phase1": {"chunks_done": 2, "next_start_sec": 120},
+        }
+        runtime = _ProgressRuntime()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            chunks_dir = os.path.join(tmpdir, "chunks")
+            os.makedirs(chunks_dir)
+
+            with (
+                patch(
+                    "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                    return_value=(True, None),
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.retry_with_quota",
+                    return_value=(object(), "Testo."),
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.sleep_with_cancel",
+                    return_value=True,
+                ),
+            ):
+                process_phase1_transcription(
+                    client=object(),
+                    model_name="test",
+                    input_path="fake.mp3",
+                    preconv_used_path=None,
+                    ffmpeg_exe="ffmpeg",
+                    cancel_event=threading.Event(),
+                    cancelled=lambda: False,
+                    start_sec=120,
+                    total_duration_sec=240,
+                    step_seconds=60,
+                    chunk_seconds=60,
+                    bitrate="48k",
+                    inline_max_bytes=None,
+                    prefetch_enabled=False,
+                    phase1_chunks_dir=chunks_dir,
+                    session=session,
+                    save_session=lambda: True,
+                    fallback_keys=[],
+                    request_fallback_key=lambda: None,
+                    system_prompt="test",
+                    runtime=runtime,
+                )
+
+        self.assertTrue(len(progress_calls) >= 1)
+        self.assertAlmostEqual(progress_calls[0], 0.35)

@@ -1232,10 +1232,17 @@ class TestPipelineSessionEdgeCases(unittest.TestCase):
         session = {"outputs": {"html": "result.html"}}
         self.assertTrue(phase1_has_progress(session, "phase1", []))
 
-    def test_phase1_has_progress_true_when_last_error_set(self):
-        """last_error non-empty → True (failed run still has progress marker)."""
+    def test_phase1_has_progress_false_when_only_last_error_set(self):
+        """last_error alone without saved chunks or progress is False (0 chunks completed)."""
         session = {"last_error": "quota_daily_limit"}
-        self.assertTrue(phase1_has_progress(session, "phase1", []))
+        self.assertFalse(phase1_has_progress(session, "phase1", []))
+
+    def test_phase1_has_progress_true_when_chunks_done_or_next_start_sec_set(self):
+        """chunks_done > 0 or next_start_sec > 0 in phase1 state is True."""
+        session1 = {"phase1": {"chunks_done": 1}}
+        self.assertTrue(phase1_has_progress(session1, "phase1", []))
+        session2 = {"phase1": {"next_start_sec": 600}}
+        self.assertTrue(phase1_has_progress(session2, "phase1", []))
 
     # ── record_step_metric ─────────────────────────────────────────────────────
 
