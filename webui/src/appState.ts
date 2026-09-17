@@ -78,8 +78,10 @@ export type SetCurrentFilePayload = {
 export type FileDonePayload = {
   index: number;
   id: string;
-  output_html: string;
-  output_dir: string;
+  output_html?: string;
+  output_dir?: string;
+  html_path?: string;
+  session_dir?: string;
   primary_model?: string;
   effective_model?: string;
   completion_status?: 'completed' | 'completed_with_warnings';
@@ -392,8 +394,8 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
                 status: 'done',
                 progress: 100,
                 phase: 3,
-                outputHtml: action.data.output_html,
-                outputDir: action.data.output_dir,
+                outputHtml: action.data.output_html || action.data.html_path,
+                outputDir: action.data.output_dir || action.data.session_dir,
                 phaseText: undefined,
                 errorText: undefined,
                 errorDetail: undefined,

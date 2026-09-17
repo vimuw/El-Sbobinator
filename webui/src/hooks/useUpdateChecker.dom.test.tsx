@@ -18,6 +18,17 @@ afterEach(() => {
 });
 
 describe('useUpdateChecker', () => {
+  it('does not contact the release service when update support is disabled', async () => {
+    const { result } = renderHook(() => useUpdateChecker(false));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(result.current.hasChecked).toBe(false);
+  });
+
   it('starts with no update available', async () => {
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ tag_name: null })));
     const { result } = renderHook(() => useUpdateChecker());

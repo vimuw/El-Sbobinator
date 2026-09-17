@@ -10,11 +10,13 @@ export function useApiReady(appendConsole: (msg: string) => void) {
   const [apiKeyInsecureReason, setApiKeyInsecureReason] = useState('');
   const [configRecoveredFrom, setConfigRecoveredFrom] = useState('');
   const [fallbackKeys, setFallbackKeys] = useState<string[]>([]);
+  const [configuredFallbackKeyCount, setConfiguredFallbackKeyCount] = useState(0);
   const [preferredModel, setPreferredModel] = useState('gemini-2.5-flash');
   const [fallbackModels, setFallbackModels] = useState<string[]>([]);
   const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
   const initDoneRef = useRef(false);
   const inFlightRef = useRef(false);
+  const bootstrapAttemptRef = useRef(0);
   const retriesRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const appendConsoleRef = useRef(appendConsole);
@@ -35,6 +37,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
     setApiKeyInsecureReason(String(cfg?.api_key_insecure_reason ?? ''));
     setConfigRecoveredFrom(String(cfg?.config_recovered_from ?? ''));
     setFallbackKeys(Array.isArray(cfg?.fallback_keys) ? cfg.fallback_keys : []);
+    setConfiguredFallbackKeyCount(Number(cfg?.configuredFallbackKeyCount ?? 0));
     setPreferredModel(cfg?.preferred_model || 'gemini-2.5-flash');
     setFallbackModels(Array.isArray(cfg?.fallback_models) ? cfg.fallback_models : []);
     setAvailableModels(Array.isArray(cfg?.available_models) ? cfg.available_models : []);
@@ -56,9 +59,10 @@ export function useApiReady(appendConsole: (msg: string) => void) {
       if (!window.pywebview?.api?.load_settings) return;
 
       inFlightRef.current = true;
+      const attempt = ++bootstrapAttemptRef.current;
       try {
         const cfg = await window.pywebview.api.load_settings();
-        if (!alive) return;
+        if (!alive || attempt !== bootstrapAttemptRef.current) return;
         initDoneRef.current = true;
         setBridgeDelayed(false);
         setApiReady(true);
@@ -66,7 +70,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
         applySettings(cfg);
       } catch (e) {
         console.error('Load settings failed:', e);
-        if (!alive) return;
+        if (!alive || attempt !== bootstrapAttemptRef.current) return;
         if (!initDoneRef.current && retriesRef.current < 3) {
           retriesRef.current += 1;
           if (retryTimerRef.current !== null) clearTimeout(retryTimerRef.current);
@@ -75,7 +79,9 @@ export function useApiReady(appendConsole: (msg: string) => void) {
           setBridgeDelayed(true);
         }
       } finally {
-        inFlightRef.current = false;
+        if (attempt === bootstrapAttemptRef.current) {
+          inFlightRef.current = false;
+        }
       }
     };
 
@@ -100,6 +106,8 @@ export function useApiReady(appendConsole: (msg: string) => void) {
 
     return () => {
       alive = false;
+      bootstrapAttemptRef.current += 1;
+      inFlightRef.current = false;
       window.removeEventListener('pywebviewready', onBridgeReady);
       clearTimeout(delayedWarning);
       if (retryTimerRef.current !== null) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
@@ -119,6 +127,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
     configRecoveredFrom,
     fallbackKeys,
     setFallbackKeys,
+    configuredFallbackKeyCount,
     preferredModel,
     setPreferredModel,
     fallbackModels,

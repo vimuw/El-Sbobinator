@@ -10,6 +10,7 @@ import { ConfirmActionModal } from './modals/ConfirmActionModal';
 import { useTheme } from '../hooks/useTheme';
 import { useEditorAutosave, type EditorSaveController } from '../hooks/useEditorAutosave';
 import { STORAGE_KEYS } from '../storageKeys';
+import { getHostCapabilities } from '../browserHost';
 
 const LazyAudioPlayer = React.lazy(() =>
   import('./AudioPlayer').then(m => ({ default: m.AudioPlayer }))
@@ -373,7 +374,7 @@ export function EditorFullPage({
               >
                 {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
               </button>
-              {htmlPath && (
+              {htmlPath && getHostCapabilities().openLocalPath && (
                 <button
                   onClick={() => window.pywebview?.api?.open_file?.(htmlPath)}
                   className="icon-button"
@@ -465,7 +466,7 @@ export function EditorFullPage({
               />
             </Suspense>
 
-            <div className="shrink-0 border-t px-4 sm:px-5" style={{ background: 'var(--editor-chrome-bg)', borderColor: 'var(--border-subtle)' }}>
+            <div className="editor-fullpage-footer shrink-0 border-t px-4 sm:px-5" style={{ background: 'var(--editor-chrome-bg)', borderColor: 'var(--border-subtle)' }}>
               {audioSrc ? (
                 <Suspense fallback={<div className="p-4 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento player...</div>}>
                   <LazyAudioPlayer

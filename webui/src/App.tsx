@@ -13,6 +13,7 @@ import { useUpdateChecker } from './hooks/useUpdateChecker';
 import { loadPersistedQueue, useQueuePersistence } from './hooks/useQueuePersistence';
 import { useApiReady } from './hooks/useApiReady';
 import { useBridgeCallbacks } from './hooks/useBridgeCallbacks';
+import { getHostCapabilities } from './browserHost';
 import { useBodyScrollLock } from './hooks/useBodyScrollLock';
 import { usePreview } from './hooks/usePreview';
 import { useNotifications } from './hooks/useNotifications';
@@ -55,7 +56,9 @@ export default function App() {
 
   const { consoleLogs, appendConsole } = useConsole();
   const { themeMode, setThemeMode } = useTheme();
-  const { updateAvailable, latestVersion, isCheckingUpdate, hasChecked, checkFailed, checkForUpdates, dismissUpdate } = useUpdateChecker();
+  const { updateAvailable, latestVersion, isCheckingUpdate, hasChecked, checkFailed, checkForUpdates, dismissUpdate } = useUpdateChecker(
+    getHostCapabilities().updateInstallation,
+  );
   const {
     apiReady,
     bridgeDelayed,
@@ -69,6 +72,7 @@ export default function App() {
     configRecoveredFrom,
     fallbackKeys,
     setFallbackKeys,
+    configuredFallbackKeyCount,
     preferredModel,
     setPreferredModel,
     fallbackModels,
@@ -179,6 +183,13 @@ export default function App() {
     handleRetryFailedRevisionBlocks: useCallback((sessionDir: string, fileId?: string) => handleRetryFailedRevisionBlocksRef.current(sessionDir, fileId), []),
   });
 
+  const completedFileCount = files.filter(file => file.status === 'done').length;
+  useEffect(() => {
+    if (apiReady && completedFileCount > 0) {
+      void refreshArchiveSessions();
+    }
+  }, [apiReady, completedFileCount, refreshArchiveSessions]);
+
   const onFilesAddedToBatchRef = useRef<(count: number) => void>(() => {});
   const onFileRemovedFromBatchRef = useRef<() => void>(() => {});
 
@@ -257,6 +268,7 @@ export default function App() {
     filesRef,
     appStateRef,
     apiKey,
+    hasProtectedKey,
     preferredModel,
     fallbackModels,
     dispatch,
@@ -313,8 +325,8 @@ export default function App() {
     try { localStorage.setItem(STORAGE_KEYS.AUTO_CONTINUE, String(autoContinue)); } catch (_) {}
   }, [autoContinue]);
 
-  const hasApiKey = Boolean(apiKey.trim());
-  const isApiKeyValid = GEMINI_KEY_PATTERN.test(apiKey.trim());
+  const hasApiKey = Boolean(apiKey.trim() || hasProtectedKey);
+  const isApiKeyValid = hasProtectedKey || GEMINI_KEY_PATTERN.test(apiKey.trim());
   const isConsoleDisabled = !hasApiKey || !isApiKeyValid || !(files.length > 0 || appState === 'processing' || appState === 'canceling' || completionFlash);
 
   useEffect(() => {
@@ -552,7 +564,6 @@ export default function App() {
       <NewKeyModal
         isOpen={askNewKeyPrompt}
         onClose={() => setAskNewKeyPrompt(false)}
-        fallbackKeys={fallbackKeys}
       />
       <DuplicateFileModal
         prompt={duplicatePrompt}
@@ -592,6 +603,7 @@ export default function App() {
               hasProtectedKey,
               fallbackKeys,
               setFallbackKeys,
+              configuredFallbackKeyCount,
             }}
             models={{
               preferredModel,

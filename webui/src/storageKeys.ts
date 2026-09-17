@@ -12,6 +12,7 @@ export const STORAGE_KEYS = {
   EDITOR_SESSIONS_V1: 'el-sbobinator.editor-sessions.v1',
   QUEUE_V1: 'el-sbobinator.queue.v1',
   NOTIFICATIONS_V1: 'el-sbobinator.notifications.v1',
+  BROWSER_INSTANCE_V1: 'el-sbobinator.browser-instance.v1',
   THEME_V1: 'el-sbobinator.theme.v1',
   CONFIG_RECOVERY_PREFIX: 'el-sbobinator.config-recovery-dismissed.v1:',
 } as const;

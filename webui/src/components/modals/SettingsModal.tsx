@@ -13,6 +13,7 @@ import { UpdaterSection, type SettingsUpdateInstallState } from './settings/Upda
 
 import { useSettingsStorage, SESSION_CLEANUP_DAYS } from '../../hooks/useSettingsStorage';
 import { formatSize } from '../../utils';
+import { getHostCapabilities } from '../../browserHost';
 
 export type { SettingsUpdateInstallState };
 
@@ -27,6 +28,7 @@ export interface SettingsAuthProps {
   hasProtectedKey: boolean;
   fallbackKeys: string[];
   setFallbackKeys: React.Dispatch<React.SetStateAction<string[]>>;
+  configuredFallbackKeyCount?: number;
 }
 
 export interface SettingsModelsProps {
@@ -81,7 +83,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   updater,
   storage,
 }) => {
-  const { apiKey, setApiKey, hasProtectedKey, fallbackKeys, setFallbackKeys } = auth;
+  const {
+    apiKey,
+    setApiKey,
+    hasProtectedKey,
+    fallbackKeys,
+    setFallbackKeys,
+    configuredFallbackKeyCount,
+  } = auth;
   const {
     preferredModel,
     setPreferredModel,
@@ -91,6 +100,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   } = models;
   const { latestVersion, checkForUpdates, isCheckingUpdate, hasChecked, checkFailed, updateInstallState, onInstallUpdate } = updater;
   const onSessionRootMoved = storage?.onSessionRootMoved;
+  const hostCapabilities = getHostCapabilities();
   const [activeTab, setActiveTab] = useState<TabType>('general');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -175,7 +185,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   }, [apiKey, fallbackKeys, fallbackModels, isOpen, preferredModel]);
 
 
-  const fetchApiUsage = useCallback(async () => {
+  const fetchApiUsage = useCallback(async (forceRefresh = false) => {
     if (!window.pywebview?.api?.get_api_usage) return;
     setIsLoadingUsage(true);
     try {
@@ -188,6 +198,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         fallbackKeys,
         preferredModel,
         fallbackModels,
+        forceRefresh,
       );
       if (isMountedRef.current && res?.ok && res.result) {
         setApiUsage(res.result);
@@ -198,6 +209,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       if (isMountedRef.current) setIsLoadingUsage(false);
     }
   }, [apiKey, clearProtectedPrimary, fallbackKeys, fallbackModels, hasProtectedKey, preferredModel]);
+
+  const handleRefreshUsage = useCallback(() => {
+    void fetchApiUsage(true);
+  }, [fetchApiUsage]);
 
   useEffect(() => {
     if (isOpen) {
@@ -380,7 +395,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           : hasProtectedKey && !apiKey.trim()
             ? null
             : apiKey.trim();
-        result = await window.pywebview.api.save_settings(apiKeyPayload, keys, preferredModel, fallbackModels);
+        const fallbackKeysPayload =
+          fallbackKeys.length === 0 && (configuredFallbackKeyCount ?? 0) > 0
+            ? null
+            : keys;
+        result = await window.pywebview.api.save_settings(
+          apiKeyPayload,
+          fallbackKeysPayload,
+          preferredModel,
+          fallbackModels,
+        );
       } catch (e: unknown) {
         const err = `Errore salvataggio impostazioni: ${getErrorMessage(e)}`;
         if (isMountedRef.current) setSaveError(err);
@@ -406,8 +430,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  const handleClose = () => {
-    if (isSaving) return;
+  const handleClose = useCallback(() => {
+    if (isSavingRef.current) return;
     const snapshot = settingsSnapshotRef.current;
     if (snapshot) {
       setApiKey(snapshot.apiKey);
@@ -417,7 +441,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setClearProtectedPrimary(false);
     }
     onClose();
-  };
+  }, [onClose, setApiKey, setFallbackKeys, setFallbackModels, setPreferredModel]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isSavingRef.current) {
+        e.preventDefault();
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, handleClose]);
 
   return (
     <>
@@ -430,7 +466,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
               className="modal-overlay absolute inset-0"
-              onClick={handleClose}
             />
 
             <motion.div
@@ -617,6 +652,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         cleanupResult={cleanupResult}
                         completedCleanupResult={completedCleanupResult}
                         onDismissCleanupResult={handleDismissCleanupResult}
+                        canManageSessionFolder={hostCapabilities.nativeFolderPicker && hostCapabilities.openLocalPath}
                       />
                     </div>
                   )}
@@ -633,7 +669,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <QuotasSection
                         apiUsage={apiUsage}
                         isLoadingUsage={isLoadingUsage}
-                        onRefreshUsage={fetchApiUsage}
+                        onRefreshUsage={handleRefreshUsage}
+                        preferredModel={preferredModel}
+                        availableModels={availableModels}
                       />
                     </div>
                   )}
@@ -654,6 +692,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         displayChecks={getDisplayChecks()}
                         onCopyReport={handleCopyReport}
                         onOpenLogs={handleOpenLogs}
+                        apiUsage={apiUsage}
+                        showOpenLogs={hostCapabilities.openLocalPath}
                       />
                     </div>
                   )}

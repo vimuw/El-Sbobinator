@@ -188,7 +188,11 @@ def run_python_checks(with_coverage: bool = False) -> None:
     run_pyright()
 
 
-def run_webui_checks(skip_npm_install: bool, with_coverage: bool = False) -> None:
+def run_webui_checks(
+    skip_npm_install: bool,
+    with_coverage: bool = False,
+    with_browser_e2e: bool = False,
+) -> None:
     install_node_dependencies(skip_npm_install=skip_npm_install)
     run(["npm", "run", "lint"], cwd=WEBUI_DIR)
     run(["npm", "run", "typecheck"], cwd=WEBUI_DIR)
@@ -196,6 +200,8 @@ def run_webui_checks(skip_npm_install: bool, with_coverage: bool = False) -> Non
         run(["npm", "run", "test:coverage"], cwd=WEBUI_DIR)
     else:
         run(["npm", "test"], cwd=WEBUI_DIR)
+    if with_browser_e2e:
+        run(["npm", "run", "test:e2e"], cwd=WEBUI_DIR)
 
 
 def build_webui(skip_npm_install: bool) -> None:
@@ -369,7 +375,9 @@ def command_check(args: argparse.Namespace) -> None:
         run_python_checks(with_coverage=with_coverage)
     if not args.skip_webui:
         run_webui_checks(
-            skip_npm_install=bool(args.skip_npm_install), with_coverage=with_coverage
+            skip_npm_install=bool(args.skip_npm_install),
+            with_coverage=with_coverage,
+            with_browser_e2e=bool(getattr(args, "with_browser_e2e", False)),
         )
 
 
@@ -439,6 +447,7 @@ def build_parser() -> argparse.ArgumentParser:
     check_parser.add_argument("--skip-webui", action="store_true")
     check_parser.add_argument("--skip-npm-install", action="store_true")
     check_parser.add_argument("--with-coverage", action="store_true")
+    check_parser.add_argument("--with-browser-e2e", action="store_true")
     check_parser.set_defaults(func=command_check)
 
     build_parser = subparsers.add_parser("build", help="Build the distributable app")

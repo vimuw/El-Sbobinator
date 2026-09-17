@@ -183,8 +183,8 @@ export function QueuePage({
     return { queuedCount: count };
   }, [files]);
 
-  const hasApiKey = Boolean(apiKey.trim());
-  const isApiKeyValid = GEMINI_KEY_PATTERN.test(apiKey.trim());
+  const hasApiKey = Boolean(apiKey.trim() || hasProtectedKey);
+  const isApiKeyValid = hasProtectedKey || GEMINI_KEY_PATTERN.test(apiKey.trim());
   const handleNetworkChange = useCallback((online: boolean) => {
     if (online) {
       appendConsole('Connessione a Internet ripristinata.');

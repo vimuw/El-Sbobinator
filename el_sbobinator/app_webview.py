@@ -20,6 +20,7 @@ from typing import ClassVar
 
 import webview
 
+from el_sbobinator.bridge.bridge_dispatcher import EventDispatcher
 from el_sbobinator.bridge.controllers import (
     ExportControllerMixin,
     HtmlControllerMixin,
@@ -57,10 +58,20 @@ class ElSbobinatorApi(
 ):
     """Methods callable from React via window.pywebview.api.*"""
 
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        session_root_override: str | None = None,
+        load_persisted_session_root: bool = True,
+        event_dispatcher: EventDispatcher | None = None,
+    ):
+        if session_root_override:
+            set_session_root(os.path.abspath(session_root_override))
         self._window: webview.Window | None = None
         self._cancel_event = threading.Event()
-        self._adapter = PipelineAdapter(None, self._cancel_event)
+        self._adapter = PipelineAdapter(
+            None, self._cancel_event, dispatcher=event_dispatcher
+        )
         self._processing_thread: threading.Thread | None = None
         self._html_shell_cache: dict[str, tuple[str, str]] = {}
         self._resolved_path_cache: dict[str, str] = {}
@@ -87,23 +98,25 @@ class ElSbobinatorApi(
         configure_logging()
         self._logger = get_logger("el_sbobinator.webview")
 
-        # Initialise session root: apply persisted override or auto-migrate legacy path.
-        try:
-            _cfg = load_config()
-            _custom_root = str(_cfg.get("session_root") or "").strip()
-            if _custom_root and os.path.isabs(_custom_root):
-                set_session_root(_custom_root)
-                real_root = get_session_root()
-                if real_root != _custom_root:
-                    from el_sbobinator.services.config_service import (
-                        save_session_root_to_config,
-                    )
+        # Desktop loads the persisted location. Browser development passes an
+        # explicit isolated root and must never inspect the user's config.
+        if load_persisted_session_root:
+            try:
+                _cfg = load_config()
+                _custom_root = str(_cfg.get("session_root") or "").strip()
+                if _custom_root and os.path.isabs(_custom_root):
+                    set_session_root(_custom_root)
+                    real_root = get_session_root()
+                    if real_root != _custom_root:
+                        from el_sbobinator.services.config_service import (
+                            save_session_root_to_config,
+                        )
 
-                    save_session_root_to_config(real_root)
-            else:
-                migrate_legacy_session_root()
-        except Exception:
-            pass
+                        save_session_root_to_config(real_root)
+                else:
+                    migrate_legacy_session_root()
+            except Exception:
+                pass
 
         self._startup_cleanup_thread = threading.Thread(
             target=self._cleanup_orphan_temp_chunks_on_startup,

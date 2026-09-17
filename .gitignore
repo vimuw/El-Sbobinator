@@ -96,3 +96,7 @@ tools/resize_icon.py
 
 # Temporary changelog generated during build/release
 /release_changelog.md
+
+# Browser E2E artifacts
+/test-results/
+/playwright-report/

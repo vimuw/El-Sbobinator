@@ -297,8 +297,10 @@ class MediaControllerMixin:
             self._adapter.emit("filesDropped", descriptors, batched=False)
         return bridge_ok()
 
-    def stream_media_file(self, file_path: str, session_dir: str | None = None) -> dict:
-        """Avvia o riavvia un micro-server HTTP per inviare l'audio nativo a React via streaming byte-range."""
+    def _resolve_stream_media_path(
+        self, file_path: str, session_dir: str | None = None
+    ) -> tuple[str | None, bool, str | None]:
+        """Resolve and validate media using the same rules for desktop and browser."""
         resolved_file_path = str(file_path or "").strip()
         has_audio = bool(resolved_file_path)
         if session_dir and (
@@ -325,27 +327,41 @@ class MediaControllerMixin:
             except Exception:
                 pass
             if not resolved_file_path or not os.path.isfile(resolved_file_path):
-                return bridge_error(
+                return (
+                    None,
+                    has_audio,
                     "Nessun file audio trovato per questa sessione.",
-                    has_audio=has_audio,
                 )
         if not resolved_file_path:
-            return bridge_error(
+            return (
+                None,
+                has_audio,
                 "Nessun file audio trovato per questa sessione.",
-                has_audio=has_audio,
             )
         ext = os.path.splitext(resolved_file_path)[1].lower()
         if ext not in self._ALLOWED_STREAM_EXTS:
             if ext in self._KNOWN_NON_MEDIA_EXTS:
-                return bridge_error("Tipo di file non supportato per lo streaming.")
+                return None, has_audio, "Tipo di file non supportato per lo streaming."
             ok, _err, _dur = self._validate_media_path(
                 resolved_file_path, require_duration=True
             )
             if not ok:
-                return bridge_error("Tipo di file non supportato per lo streaming.")
+                return None, has_audio, "Tipo di file non supportato per lo streaming."
+        return resolved_file_path, True, None
+
+    def stream_media_file(self, file_path: str, session_dir: str | None = None) -> dict:
+        """Avvia o riavvia un micro-server HTTP per inviare l'audio nativo a React via streaming byte-range."""
+        resolved_file_path, has_audio, error = self._resolve_stream_media_path(
+            file_path, session_dir
+        )
+        if not resolved_file_path:
+            return bridge_error(
+                error or "Nessun file audio trovato.", has_audio=has_audio
+            )
         try:
             return bridge_ok(
-                url=LocalMediaServer.stream_url_for_file(resolved_file_path)
+                url=LocalMediaServer.stream_url_for_file(resolved_file_path),
+                has_audio=True,
             )
         except Exception as e:
             return bridge_error(e)

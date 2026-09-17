@@ -77,6 +77,7 @@ export interface UseQueueProcessingOptions {
   filesRef: React.MutableRefObject<FileItem[]>;
   appStateRef: React.MutableRefObject<ProcessingState['appState']>;
   apiKey: string;
+  hasProtectedKey?: boolean;
   preferredModel: string;
   fallbackModels: string[];
   dispatch: React.Dispatch<ProcessingAction>;
@@ -89,6 +90,7 @@ export function useQueueProcessing({
   filesRef,
   appStateRef,
   apiKey,
+  hasProtectedKey = false,
   preferredModel,
   fallbackModels,
   dispatch,
@@ -139,7 +141,8 @@ export function useQueueProcessing({
 
   const startProcessing = useCallback(async (isContinuation: boolean = false, overrideLowDisk: boolean = false, forceRetry: boolean = false) => {
     const currentQueued = filesRef.current.filter(f => f.status === 'queued');
-    if (currentQueued.length === 0 || !apiKey.trim()) return false;
+    const hasKey = Boolean(apiKey.trim() || hasProtectedKey);
+    if (currentQueued.length === 0 || !hasKey) return false;
     if (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' && !navigator.onLine) {
       appendConsole('❌ Nessuna connessione a Internet rilevata. Connettiti alla rete per iniziare la sbobinatura.');
       return false;
@@ -171,7 +174,7 @@ export function useQueueProcessing({
       appendConsole(`❌ Errore avvio: ${getErrorMessage(e)}`);
       return false;
     }
-  }, [apiKey, appendConsole, appStateRef, dispatch, fallbackModels, filesRef, preferredModel, resolveQueuedFilesForProcessing, setConfirmAction]);
+  }, [apiKey, appendConsole, appStateRef, dispatch, fallbackModels, filesRef, hasProtectedKey, preferredModel, resolveQueuedFilesForProcessing, setConfirmAction]);
 
   const onFileContinued = useCallback(() => { setBatchCompleted(prev => prev + 1); }, []);
   const onBatchReset = useCallback(() => { setBatchTotal(0); setBatchCompleted(0); }, []);

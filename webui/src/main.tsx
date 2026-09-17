@@ -1,6 +1,7 @@
 import React, { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
+import { initBrowserHost } from './browserHost';
 import './index.css';
 
 
@@ -78,10 +79,15 @@ class RootErrorBoundary extends React.Component<React.PropsWithChildren, { hasEr
   }
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <RootErrorBoundary>
-      <App />
-    </RootErrorBoundary>
-  </StrictMode>,
-);
+async function mountApp() {
+  await initBrowserHost();
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <RootErrorBoundary>
+        <App />
+      </RootErrorBoundary>
+    </StrictMode>,
+  );
+}
+
+void mountApp();

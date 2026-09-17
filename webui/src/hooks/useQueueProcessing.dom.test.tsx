@@ -69,6 +69,49 @@ describe('useQueueProcessing', () => {
     expect(dispatch).toHaveBeenCalledWith({ type: 'app/set_status', status: 'processing' });
   });
 
+  it('handles startProcessing when apiKey is empty but hasProtectedKey is true', async () => {
+    const startProcessingMock = vi.fn().mockResolvedValue({ ok: true });
+    window.pywebview = {
+      api: {
+        check_path_exists: vi.fn().mockResolvedValue({ exists: true }),
+        start_processing: startProcessingMock,
+      } as unknown as PywebviewApi,
+    };
+
+    const files: FileItem[] = [
+      { id: '1', path: '/test/audio.mp3', name: 'audio.mp3', size: 1000, duration: 10, status: 'queued', progress: 0, phase: 0 },
+    ];
+    const filesRef = { current: files };
+    const appStateRef = { current: 'idle' as const };
+    const dispatch = vi.fn();
+    const appendConsole = vi.fn();
+    const setConfirmAction = vi.fn();
+    const refreshArchiveSessions = vi.fn().mockResolvedValue(undefined);
+
+    const { result } = renderHook(() =>
+      useQueueProcessing({
+        filesRef,
+        appStateRef,
+        apiKey: '',
+        hasProtectedKey: true,
+        preferredModel: 'gemini-2.5-flash',
+        fallbackModels: [],
+        dispatch,
+        appendConsole,
+        setConfirmAction,
+        refreshArchiveSessions,
+      }),
+    );
+
+    let started = false;
+    await act(async () => {
+      started = await result.current.startProcessing();
+    });
+
+    expect(started).toBe(true);
+    expect(startProcessingMock).toHaveBeenCalledTimes(1);
+  });
+
   it('handles low disk warning during start_processing', async () => {
     const lowDiskWarning = {
       needed_bytes: 3000000000,

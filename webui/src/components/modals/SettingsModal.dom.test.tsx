@@ -55,6 +55,7 @@ interface MakePropsOverrides {
   setApiKey?: (key: string) => void;
   hasProtectedKey?: boolean;
   fallbackKeys?: string[];
+  configuredFallbackKeyCount?: number;
   setFallbackKeys?: React.Dispatch<React.SetStateAction<string[]>>;
   preferredModel?: string;
   setPreferredModel?: (model: string) => void;
@@ -82,6 +83,7 @@ const makeProps = (overrides: MakePropsOverrides = {}): SettingsModalProps => ({
     hasProtectedKey: overrides.hasProtectedKey ?? overrides.auth?.hasProtectedKey ?? false,
     fallbackKeys: overrides.fallbackKeys ?? overrides.auth?.fallbackKeys ?? [],
     setFallbackKeys: overrides.setFallbackKeys ?? overrides.auth?.setFallbackKeys ?? vi.fn(),
+    configuredFallbackKeyCount: overrides.configuredFallbackKeyCount ?? overrides.auth?.configuredFallbackKeyCount ?? 0,
   },
   models: {
     preferredModel: overrides.preferredModel ?? overrides.models?.preferredModel ?? 'gemini-3.6-flash',
@@ -305,6 +307,43 @@ describe('SettingsModal — save behavior', () => {
     });
 
     expect(mockSave).toHaveBeenCalledWith('', [], 'gemini-3.6-flash', []);
+  });
+
+  it('preserves configured fallback keys when masked values were not edited', async () => {
+    const mockSave = vi.fn().mockResolvedValue({ ok: true });
+    setPywebview({ save_settings: mockSave });
+
+    render(
+      <SettingsModal
+        {...makeProps({ fallbackKeys: [], configuredFallbackKeyCount: 2 })}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Salva e Chiudi'));
+    });
+
+    expect(mockSave).toHaveBeenCalledWith(
+      'AIzaSyTest123456',
+      null,
+      'gemini-3.6-flash',
+      [],
+    );
+  });
+
+  it('backdrop click when idle: onClose NOT called', () => {
+    const onClose = vi.fn();
+    const { container } = render(<SettingsModal {...makeProps()} onClose={onClose} />);
+    const backdrop = container.querySelector('.modal-overlay') as HTMLElement;
+    fireEvent.click(backdrop);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes on Escape key when idle', () => {
+    const onClose = vi.fn();
+    render(<SettingsModal {...makeProps()} onClose={onClose} />);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('double-click: save_settings called only once, onClose called only once', async () => {

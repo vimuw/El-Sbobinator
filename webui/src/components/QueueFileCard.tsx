@@ -5,6 +5,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
 import type { ArchiveFolder } from '../bridge';
+import { getHostCapabilities } from '../browserHost';
 import { errorLabel, formatDuration, formatRelativeTime, formatSize, isPausedError, isQuotaError, isResumableError, shortModelName } from '../utils';
 import { KebabMenu, type KebabMenuItem } from './KebabMenu';
 import { FolderIndicatorChip } from './FolderChip';
@@ -196,6 +197,7 @@ interface CompletedFileCardProps {
 }
 
 function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetryFailedRevisionBlocks, currentFolder }: CompletedFileCardProps) {
+  const canOpenLocalPath = getHostCapabilities().openLocalPath;
   const isClickable = Boolean(file.outputHtml);
   const [isRetryingBlocks, setIsRetryingBlocks] = React.useState(false);
   const isRetrying = file.isRetryingBlocks || isRetryingBlocks;
@@ -308,7 +310,7 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
                   icon: <PenLine className="w-3.5 h-3.5" />,
                   onClick: () => onPreview(file.outputHtml!, file.name, file.path, file.id, file.outputDir),
                 } as KebabMenuItem,
-                {
+                ...(canOpenLocalPath ? [{
                   label: 'Apri cartella',
                   icon: <FolderOpen className="w-3.5 h-3.5" />,
                   onClick: () => onOpenFile(file.outputDir ?? file.outputHtml!),
@@ -317,7 +319,7 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
                   label: 'Apri nel browser',
                   icon: <ExternalLink className="w-3.5 h-3.5" />,
                   onClick: () => onOpenFile(file.outputHtml!),
-                } as KebabMenuItem,
+                } as KebabMenuItem] : []),
               ] : []),
               {
                 label: 'Rimuovi',

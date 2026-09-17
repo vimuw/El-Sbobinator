@@ -86,6 +86,7 @@ export interface CredentialProfile {
   last_error_message?: string | null;
   last_error_iso?: string | null;
   last_used_iso?: string | null;
+  exhausted_models?: string[];
 }
 
 export interface ApiUsageResult {
@@ -133,6 +134,8 @@ export interface SettingsPayload {
   api_key_insecure?: boolean;
   api_key_insecure_reason?: string;
   config_recovered_from?: string;
+  configuredFallbackKeyCount?: number;
+  configured_fallback_key_count?: number;
 }
 
 export interface ArchiveSession {
@@ -244,7 +247,7 @@ export interface PywebviewApi {
   load_settings?: () => Promise<SettingsPayload>;
   save_settings?: (
     apiKey: string | null,
-    fallbackKeys: string[],
+    fallbackKeys: string[] | null,
     preferredModel: string,
     fallbackModels: string[],
   ) => Promise<{ ok: boolean; error?: string }>;
@@ -340,6 +343,7 @@ export interface PywebviewApi {
     fallbackKeys?: string[],
     preferredModel?: string,
     fallbackModels?: string[],
+    forceRefresh?: boolean,
   ) => Promise<{ ok: boolean; result?: ApiUsageResult; error?: string }>;
   get_diagnostic_report?: (
     apiKey?: string,
@@ -348,6 +352,8 @@ export interface PywebviewApi {
     fallbackModels?: string[],
   ) => Promise<{ ok: boolean; report?: string; error?: string }>;
   open_logs_folder?: () => Promise<{ ok: boolean; error?: string }>;
+  upload_browser_files?: (files: File[]) => Promise<FileDescriptor[]>;
+  set_browser_scenario?: (scenario: string) => Promise<{ ok: boolean; scenario?: string; error?: string }>;
 }
 
 
@@ -392,11 +398,19 @@ export function createBridge(options: {
     onRetryStateChanged,
     onRequestQuitConfirmation,
   } = options;
+  let lastPhaseMessage = '';
 
   return {
     appendConsole,
     updateProgress: value => dispatch({ type: 'bridge/update_progress', value }),
-    updatePhase: text => { onBatchStart(); dispatch({ type: 'bridge/update_phase', text }); },
+    updatePhase: text => {
+      const normalized = String(text ?? '').trim();
+      if (!normalized || normalized === lastPhaseMessage) return;
+      lastPhaseMessage = normalized;
+      onBatchStart();
+      dispatch({ type: 'bridge/update_phase', text: normalized });
+      appendConsole(normalized);
+    },
     updateModel: model => dispatch({ type: 'bridge/update_model', model }),
     processDone: data => {
       dispatch({ type: 'bridge/process_done', data });

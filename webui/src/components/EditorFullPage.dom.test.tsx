@@ -324,4 +324,17 @@ describe('EditorFullPage autosave', () => {
     });
     expect(onRelink).toHaveBeenCalledTimes(1);
   });
+
+  it('renders the editor-fullpage-footer with semantic class and chrome background', async () => {
+    const { container } = render(
+      <EditorFullPage
+        {...baseProps}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const footer = container.querySelector('.editor-fullpage-footer');
+    expect(footer).not.toBeNull();
+    expect((footer as HTMLElement).style.background).toBe('var(--editor-chrome-bg)');
+  });
 });

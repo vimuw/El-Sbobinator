@@ -5,6 +5,7 @@ import path from 'path';
 import { defineConfig } from 'vite';
 
 const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')) as { version: string };
+const backendPort = Number.parseInt(process.env.EL_SBOBINATOR_BACKEND_PORT ?? '8000', 10);
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -29,5 +30,12 @@ export default defineConfig({
   server: {
     port: 3000,
     hmr: true,
+    proxy: {
+      '/api': {
+        target: `http://127.0.0.1:${backendPort}`,
+        changeOrigin: true,
+        ws: true,
+      },
+    },
   },
 });

@@ -43,7 +43,7 @@ const writeCachedLatest = (version: string) => {
   } catch (_) {}
 };
 
-export function useUpdateChecker() {
+export function useUpdateChecker(enabled: boolean = true) {
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
   const [isDismissed, setIsDismissed] = useState(false);
@@ -82,6 +82,7 @@ export function useUpdateChecker() {
   }, []);
 
   const checkForUpdates = useCallback((force: boolean = false) => {
+    if (!enabled) return;
     if (isCheckingRef.current) return;
     if (!force) {
       try {
@@ -123,11 +124,11 @@ export function useUpdateChecker() {
         if (force) setIsCheckingUpdate(false);
         setHasChecked(true);
       });
-  }, [applyLatestVersion]);
+  }, [applyLatestVersion, enabled]);
 
   useEffect(() => {
-    checkForUpdates(false);
-  }, [checkForUpdates]);
+    if (enabled) checkForUpdates(false);
+  }, [checkForUpdates, enabled]);
 
   const dismissUpdate = useCallback((version: string) => {
     try { window.localStorage.setItem(UPDATE_DISMISSED_KEY, version); } catch (_) {}

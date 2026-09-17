@@ -183,6 +183,14 @@ def _clear_retry_state_if_forced(file_info: BridgeFileItem, force_retry: bool) -
         pass
 
 
+def _resolve_start_api_key(api_key: str) -> str | None:
+    key = str(api_key or "").strip()
+    if key:
+        return key
+    cfg = load_config()
+    return str(cfg.get("api_key") or "").strip() or None
+
+
 class PipelineControllerMixin:
     """Mixin providing pipeline execution, cancellation, retry, and low disk IPC methods."""
 
@@ -503,8 +511,10 @@ class PipelineControllerMixin:
         force_retry: bool = False,
     ) -> dict:
         """Start the pipeline in a background thread."""
-        if not files or not api_key:
+        resolved_key = _resolve_start_api_key(api_key)
+        if not files or not resolved_key:
             return bridge_error("File o API key mancanti")
+        api_key = resolved_key
         start_error = self._prepare_start_processing(
             files,
             api_key,

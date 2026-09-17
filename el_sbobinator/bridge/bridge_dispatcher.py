@@ -9,7 +9,16 @@ from __future__ import annotations
 import json
 import threading
 from collections import deque
-from typing import Literal, get_args
+from typing import Any, Literal, Protocol, get_args, runtime_checkable
+
+
+@runtime_checkable
+class EventDispatcher(Protocol):
+    """Protocol defining the interface for bridge event dispatchers."""
+
+    def emit(self, fn_name: str, data: Any, batched: bool | None = None) -> None: ...
+
+    def flush(self) -> None: ...
 
 
 class _BridgeDispatcher:

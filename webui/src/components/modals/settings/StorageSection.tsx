@@ -28,6 +28,7 @@ interface StorageSectionProps {
   onAskCleanup: () => void;
   onAskCompletedCleanup: () => void;
   onDismissCleanupResult?: () => void;
+  canManageSessionFolder?: boolean;
 }
 
 export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
@@ -47,6 +48,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
   onAskCleanup,
   onAskCompletedCleanup,
   onDismissCleanupResult,
+  canManageSessionFolder = true,
 }) => {
   return (
     <div className="space-y-6">
@@ -94,35 +96,37 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
                 Posizione su disco delle trascrizioni e dei file di lavoro.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={onAskMoveFolder}
-              disabled={isMoveInProgress}
-              aria-label="Cambia Cartella"
-              title="Cambia Cartella"
-              className="p-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 shrink-0 cursor-pointer"
-            >
-              {isMoveInProgress ? (
-                <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-text)]" />
-              ) : (
-                <FolderInput className="w-4 h-4" />
-              )}
-              <span className="sr-only">Cambia Cartella</span>
-            </button>
+            {canManageSessionFolder && (
+              <button
+                type="button"
+                onClick={onAskMoveFolder}
+                disabled={isMoveInProgress}
+                aria-label="Cambia Cartella"
+                title="Cambia Cartella"
+                className="p-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 shrink-0 cursor-pointer"
+              >
+                {isMoveInProgress ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-text)]" />
+                ) : (
+                  <FolderInput className="w-4 h-4" />
+                )}
+                <span className="sr-only">Cambia Cartella</span>
+              </button>
+            )}
           </div>
 
           <div
-            onClick={onOpenSessionFolder}
-            title="Apri cartella sessioni"
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
+            onClick={canManageSessionFolder ? onOpenSessionFolder : undefined}
+            title={canManageSessionFolder ? 'Apri cartella sessioni' : undefined}
+            role={canManageSessionFolder ? 'button' : undefined}
+            tabIndex={canManageSessionFolder ? 0 : undefined}
+            onKeyDown={canManageSessionFolder ? (e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 onOpenSessionFolder();
               }
-            }}
-            className="p-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-default)] font-mono text-xs break-all text-[var(--text-primary)] cursor-pointer hover:border-[var(--border-strong)] group transition-colors"
+            } : undefined}
+            className={`p-2.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] font-mono text-xs break-all text-[var(--text-primary)] group transition-colors ${canManageSessionFolder ? 'cursor-pointer hover:border-[var(--border-strong)]' : ''}`}
           >
             <span className="font-mono text-xs break-all group-hover:underline font-medium">
               {sessionInfo?.session_root || (isLoadingSessionInfo ? '…' : '—')}
@@ -175,7 +179,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
 
         <div className="space-y-1 pt-1">
           {/* Row: Incomplete Sessions */}
-          <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl hover:bg-[var(--bg-hover)] transition-colors -mx-2">
+          <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg hover:bg-[var(--bg-hover)] transition-colors -mx-2">
             <div className="space-y-0.5 min-w-0">
               <span className="text-sm font-bold text-[var(--text-primary)] block">
                 Sessioni incomplete
@@ -190,7 +194,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
               disabled={isCleaningSession}
               aria-label="Pulisci sessioni incomplete"
               title="Conta ed elimina tutte le elaborazioni incomplete"
-              className="p-2 rounded-xl text-[var(--error-text)] hover:bg-[var(--error-subtle)] transition-colors disabled:opacity-40 shrink-0"
+              className="p-2 rounded-lg text-[var(--error-text)] hover:bg-[var(--error-subtle)] transition-colors disabled:opacity-40 shrink-0 cursor-pointer"
             >
               {isCleaningSession ? (
                 <Loader2 className="w-4 h-4 animate-spin text-[var(--error-text)]" />
@@ -201,7 +205,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
           </div>
 
           {/* Row: Old Completed Sessions */}
-          <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl hover:bg-[var(--bg-hover)] transition-colors -mx-2">
+          <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg hover:bg-[var(--bg-hover)] transition-colors -mx-2">
             <div className="space-y-0.5 min-w-0">
               <span className="text-sm font-bold text-[var(--text-primary)] block">
                 Sbobine completate vecchie
@@ -216,7 +220,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
               disabled={isCleaningCompletedSessions}
               aria-label={`Elimina sbobine completate vecchie di oltre ${SESSION_CLEANUP_DAYS} giorni`}
               title={`Conta ed elimina sbobine completate vecchie di oltre ${SESSION_CLEANUP_DAYS} giorni`}
-              className="p-2 rounded-xl text-[var(--error-text)] hover:bg-[var(--error-subtle)] transition-colors disabled:opacity-40 shrink-0"
+              className="p-2 rounded-lg text-[var(--error-text)] hover:bg-[var(--error-subtle)] transition-colors disabled:opacity-40 shrink-0 cursor-pointer"
             >
               {isCleaningCompletedSessions ? (
                 <Loader2 className="w-4 h-4 animate-spin text-[var(--error-text)]" />

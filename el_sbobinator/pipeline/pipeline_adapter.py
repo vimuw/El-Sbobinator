@@ -14,7 +14,7 @@ from typing import Any, Literal, cast
 
 import webview
 
-from el_sbobinator.bridge.bridge_dispatcher import _BridgeDispatcher
+from el_sbobinator.bridge.bridge_dispatcher import EventDispatcher, _BridgeDispatcher
 from el_sbobinator.bridge.bridge_types import (
     WorkDonePayload,
     WorkTotalsPayload,
@@ -57,7 +57,12 @@ def _drain_dnd_paths(names: set[str]) -> list[tuple[str, str]]:
 class PipelineAdapter:
     """Thin adapter mimicking the attributes/methods that pipeline.py reads."""
 
-    def __init__(self, window: webview.Window | None, cancel_event: threading.Event):
+    def __init__(
+        self,
+        window: webview.Window | None,
+        cancel_event: threading.Event,
+        dispatcher: EventDispatcher | None = None,
+    ):
         self.window = window
         self.cancel_event = cancel_event
         self._lock = threading.Lock()
@@ -81,8 +86,13 @@ class PipelineAdapter:
         # Pending UI-answer callbacks (written by pipeline thread, read by UI thread)
         self._regenerate_callback = None
         self._new_key_callback = None
+        self._has_explicit_dispatcher = dispatcher is not None
 
-        self._dispatcher = _BridgeDispatcher(lambda: self.window, flush_interval=0.08)
+        self._dispatcher: EventDispatcher = (
+            dispatcher
+            if dispatcher is not None
+            else _BridgeDispatcher(lambda: self.window, flush_interval=0.08)
+        )
 
     @property
     def is_running(self) -> bool:
@@ -98,7 +108,7 @@ class PipelineAdapter:
 
     def winfo_exists(self) -> bool:
         try:
-            return self.window is not None
+            return self.window is not None or self._has_explicit_dispatcher
         except Exception:
             return False
 

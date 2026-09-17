@@ -21,8 +21,8 @@ interface UseQueueIngestOptions {
   filesRef: React.MutableRefObject<FileItem[]>;
   archiveSessionsRef: React.MutableRefObject<ArchiveSession[]>;
   pendingArchiveReplacementsRef: React.MutableRefObject<Map<string, PendingArchiveReplacement>>;
-  setArchiveSessions: React.Dispatch<React.SetStateAction<ArchiveSession[]>>;
-  setArchiveTotal: React.Dispatch<React.SetStateAction<number>>;
+  setArchiveSessions?: React.Dispatch<React.SetStateAction<ArchiveSession[]>>;
+  setArchiveTotal?: React.Dispatch<React.SetStateAction<number>>;
   dispatch: React.Dispatch<ProcessingAction>;
   appState: string;
   appStateRef: React.MutableRefObject<string>;
@@ -35,8 +35,6 @@ export function useQueueIngest({
   filesRef,
   archiveSessionsRef,
   pendingArchiveReplacementsRef,
-  setArchiveSessions,
-  setArchiveTotal,
   dispatch,
   appState,
   appStateRef,
@@ -134,7 +132,6 @@ export function useQueueIngest({
   const handleDuplicateAddAgain = useCallback(
     async (matches: AlreadyProcessedMatch[]) => {
       setDuplicatePrompt(null);
-      const sessionDirsToHide = new Set<string>();
       for (const match of matches) {
         const replacementId = crypto.randomUUID();
         if (match.source === 'done') {
@@ -148,7 +145,6 @@ export function useQueueIngest({
               inputPath: match.incoming.path,
               sessions: archiveMatches,
             });
-            for (const s of archiveMatches) sessionDirsToHide.add(s.session_dir);
           }
           dispatch({ type: 'queue/remove', id: match.existingFile.id });
           dispatch({ type: 'queue/add', files: [{ ...match.incoming, id: replacementId, resumeSession: false, allowCompletedDestroy: true }] });
@@ -158,20 +154,30 @@ export function useQueueIngest({
             inputPath: match.incoming.path,
             sessions: match.sessions,
           });
-          for (const s of match.sessions) sessionDirsToHide.add(s.session_dir);
           dispatch({ type: 'queue/add', files: [{ ...match.incoming, id: replacementId, resumeSession: false, allowCompletedDestroy: true }] });
         }
       }
       if (appStateRef.current === 'processing' && matches.length > 0) {
         onFilesAddedToBatch?.(matches.length);
       }
-      if (sessionDirsToHide.size > 0) {
-        setArchiveSessions(prev => prev.filter(s => !sessionDirsToHide.has(s.session_dir)));
-        setArchiveTotal(prev => Math.max(0, prev - sessionDirsToHide.size));
-      }
     },
-    [archiveSessionsRef, dispatch, pendingArchiveReplacementsRef, setArchiveSessions, setArchiveTotal, appStateRef, onFilesAddedToBatch],
+    [archiveSessionsRef, dispatch, pendingArchiveReplacementsRef, appStateRef, onFilesAddedToBatch],
   );
+
+  const ingestDescriptors = useCallback((selectedFiles: FileDescriptor[]) => {
+    if (selectedFiles.length === 0) return;
+    const filesToAdd: FileItem[] = selectedFiles.map((f: FileDescriptor) => ({
+      id: crypto.randomUUID(),
+      name: f.name,
+      size: f.size,
+      duration: f.duration || 0,
+      path: f.path,
+      status: 'queued' as const,
+      progress: 0,
+      phase: 0,
+    }));
+    enqueueUniqueFiles(filesToAdd);
+  }, [enqueueUniqueFiles]);
 
   const handleBrowseClick = async () => {
     if (appState === 'canceling') return;
@@ -182,17 +188,7 @@ export function useQueueIngest({
     try {
       const selectedFiles = await window.pywebview.api.ask_files?.();
       if (selectedFiles?.length > 0) {
-        const filesToAdd: FileItem[] = selectedFiles.map((f: FileDescriptor) => ({
-          id: crypto.randomUUID(),
-          name: f.name,
-          size: f.size,
-          duration: f.duration || 0,
-          path: f.path,
-          status: 'queued' as const,
-          progress: 0,
-          phase: 0,
-        }));
-        enqueueUniqueFiles(filesToAdd);
+        ingestDescriptors(selectedFiles);
       }
     } catch (e) {
       appendConsole(`❌ Errore selezione file: ${e}`);
@@ -210,7 +206,7 @@ export function useQueueIngest({
   const handleDragLeave = useCallback(() => setIsDragging(false), []);
 
   const handleDrop = useCallback(
-    (e: React.DragEvent) => {
+    async (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(false);
@@ -221,10 +217,18 @@ export function useQueueIngest({
           const names = Array.from(e.dataTransfer.files).map((f: File) => f.name);
           w.chrome.webview.postMessageWithAdditionalObjects('FilesDropped', e.dataTransfer.files);
           window.pywebview?.api?.collect_dropped_files?.(names);
+          return;
         }
-      } catch (_) {}
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length > 0 && window.pywebview?.api?.upload_browser_files) {
+          const uploaded = await window.pywebview.api.upload_browser_files(files);
+          ingestDescriptors(uploaded);
+        }
+      } catch (error) {
+        appendConsole(`❌ Errore caricamento file: ${String(error)}`);
+      }
     },
-    [appStateRef],
+    [appStateRef, appendConsole, ingestDescriptors],
   );
 
   return {

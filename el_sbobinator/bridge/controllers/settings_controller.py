@@ -81,7 +81,7 @@ class SettingsControllerMixin:
     def save_settings(
         self,
         api_key: str | None,
-        fallback_keys: list[str],
+        fallback_keys: list[str] | None,
         preferred_model: str,
         fallback_models: list[str],
     ) -> dict:

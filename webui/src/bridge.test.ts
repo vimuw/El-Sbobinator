@@ -104,6 +104,34 @@ describe('createBridge', () => {
     expect(onBatchStart).toHaveBeenCalledTimes(2);
   });
 
+  it('logs normalized phases once and ignores blank or consecutive duplicates', () => {
+    const dispatch = vi.fn();
+    const appendConsole = vi.fn();
+    const bridge = createBridge({
+      dispatch,
+      appendConsole,
+      onRegenerate: vi.fn(),
+      onAskNewKey: vi.fn(),
+      onDismissNewKey: vi.fn(),
+      onBatchDone: vi.fn(),
+      onFileDone: vi.fn(),
+      onFilesDropped: vi.fn(),
+      onBatchStart: vi.fn(),
+    });
+
+    bridge.updatePhase('  Trascrizione chunk 1/2...  ');
+    bridge.updatePhase('Trascrizione chunk 1/2...');
+    bridge.updatePhase('   ');
+
+    expect(appendConsole).toHaveBeenCalledOnce();
+    expect(appendConsole).toHaveBeenCalledWith('Trascrizione chunk 1/2...');
+    expect(dispatch).toHaveBeenCalledOnce();
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'bridge/update_phase',
+      text: 'Trascrizione chunk 1/2...',
+    });
+  });
+
   it('resets an in-flight file when processDone reports cancellation', () => {
     let state = initialProcessingState;
     const dispatch = (action: ProcessingAction) => {
