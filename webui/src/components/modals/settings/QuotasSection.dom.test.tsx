@@ -65,29 +65,25 @@ describe('QuotasSection', () => {
     ],
   };
 
-  it('renders operational hero, work stats, telemetry, project limits, and credentials', () => {
+  it('renders operational hero, active model with autonomy, and supported models', () => {
     const onRefreshUsage = vi.fn();
     render(
       <QuotasSection
         apiUsage={dummyUsage}
         isLoadingUsage={false}
         onRefreshUsage={onRefreshUsage}
+        preferredModel="gemini-2.5-flash"
       />
     );
 
-    expect(screen.getByText('Quote & Telemetria API')).toBeTruthy();
+    expect(screen.getByText('Quote API & Risorse')).toBeTruthy();
     expect(screen.getByText('API Google Gemini Operativa')).toBeTruthy();
-    expect(screen.getByText('Lavoro Svolto Oggi')).toBeTruthy();
-    expect(screen.getByText('12')).toBeTruthy(); // Chunks
-    expect(screen.getByText('Telemetria Chiamate')).toBeTruthy();
-    expect(screen.getByText('19')).toBeTruthy(); // Inviate
-    expect(screen.getByText('Limiti di Progetto & Modelli')).toBeTruthy();
+    expect(screen.getByText('In uso')).toBeTruthy();
     expect(screen.getByText('Gemini 2.5 Flash')).toBeTruthy();
-    expect(screen.getByText('Stato Chiavi Configurate')).toBeTruthy();
-    expect(screen.getByText('Chiave Principale')).toBeTruthy();
-    expect(screen.getByText('Progetto: 1234567890')).toBeTruthy();
-    expect(screen.getByText('Attiva')).toBeTruthy();
-    expect(screen.getByText('In standby')).toBeTruthy();
+    expect(screen.getByText('2 su 2 chiavi pronte')).toBeTruthy();
+    expect(screen.getByText('Autonomia Stimata')).toBeTruthy();
+    expect(screen.getByText('Altri Modelli Disponibili (Quote Separate)')).toBeTruthy();
+    expect(screen.getByText('Gemini 3.6 Flash')).toBeTruthy();
 
     const refreshBtn = screen.getByLabelText('Aggiorna conteggio quote');
     fireEvent.click(refreshBtn);
@@ -107,8 +103,9 @@ describe('QuotasSection', () => {
           masked_key: 'AIza...dbtI',
           is_primary: true,
           operational_status: 'temporarily_failing',
-          last_error_message: 'Quota giornaliera (RPD) esaurita per gemini-3.5-flash',
+          last_error_message: 'Quota giornaliera (RPD) esaurita per gemini-2.5-flash',
           last_error_code: 429,
+          exhausted_models: ['gemini-2.5-flash'],
         },
         {
           id: 'key-2',
@@ -116,6 +113,7 @@ describe('QuotasSection', () => {
           masked_key: 'AIza...Tih4',
           is_primary: false,
           operational_status: 'active',
+          exhausted_models: [],
         },
       ],
     };
@@ -124,12 +122,14 @@ describe('QuotasSection', () => {
       <QuotasSection
         apiUsage={degradedUsage}
         isLoadingUsage={false}
+        preferredModel="gemini-2.5-flash"
       />
     );
 
     expect(screen.getByText('Modalità Riserva Attiva')).toBeTruthy();
-    expect(screen.getByText(/Il lavoro prosegue automaticamente sulla chiave di riserva/)).toBeTruthy();
-    expect(screen.getByText('Quota esaurita (oggi)')).toBeTruthy();
+    expect(screen.getAllByText(/chiave di riserva/i).length).toBeGreaterThan(0);
+    expect(screen.getByText('1 su 2 chiavi pronte')).toBeTruthy();
+    expect(screen.getByText('Chiave principale esaurita — riserva subentrata')).toBeTruthy();
   });
 
   it('renders rate limited status hero banner when rate limited', () => {
@@ -196,10 +196,10 @@ describe('QuotasSection', () => {
     );
 
     expect(screen.getByText('Errore Autenticazione API')).toBeTruthy();
-    expect(screen.getByText(/Non valida \(401\)/)).toBeTruthy();
     expect(
-      screen.getByText(/API_KEY_INVALID: API key not valid/)
+      screen.getByText('Chiave API non valida (HTTP 401). Verifica le impostazioni.')
     ).toBeTruthy();
+    expect(screen.getByText('0 su 1 chiavi pronte')).toBeTruthy();
   });
 
   it('renders fallback text when no apiUsage is provided', () => {
@@ -211,7 +211,7 @@ describe('QuotasSection', () => {
     );
 
     expect(
-      screen.getByText(/Inserisci una chiave API per visualizzare lo stato operativo/i)
+      screen.getByText(/Inserisci una chiave API in Generale/i)
     ).toBeTruthy();
   });
 });

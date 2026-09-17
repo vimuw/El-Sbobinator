@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { ConfirmActionModal } from '../ConfirmActionModal';
 import { KebabMenu, type KebabMenuItem } from '../../KebabMenu';
-import { GEMINI_KEY_PATTERN } from '../../../utils';
+import { GEMINI_KEY_PATTERN, getModelDisplayName } from '../../../utils';
 import type { ApiUsageResult, CredentialProfile } from '../../../bridge';
 
 export interface ApiKeySectionProps {
@@ -34,6 +34,7 @@ export interface ApiKeySectionProps {
   apiUsage?: ApiUsageResult | null;
   isLoadingUsage?: boolean;
   onRefreshUsage?: () => void;
+  preferredModel?: string;
 }
 
 interface DeleteTarget {
@@ -55,6 +56,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
   apiUsage,
   isLoadingUsage = false,
   onRefreshUsage,
+  preferredModel,
 }) => {
   const [newKeyInput, setNewKeyInput] = useState('');
   const [notice, setNotice] = useState<{ type: 'error' | 'warning'; message: string } | null>(null);
@@ -338,7 +340,30 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     setNotice(null);
   };
 
-  const renderCredentialStatusBadge = (cred?: CredentialProfile) => {
+  const primaryCred = getCredentialFor(apiKey, true);
+  const isPrimaryWorking =
+    hasPrimaryConfigured &&
+    primaryCred?.operational_status !== 'temporarily_failing' &&
+    primaryCred?.operational_status !== 'invalid' &&
+    primaryCred?.operational_status !== 'permission_denied';
+
+  const activeFallbackKey = !isPrimaryWorking
+    ? cleanedFallbackKeys.find((k, idx) => {
+        const c = getCredentialFor(k, false, idx);
+        return (
+          !c ||
+          (c.operational_status !== 'temporarily_failing' &&
+            c.operational_status !== 'invalid' &&
+            c.operational_status !== 'permission_denied')
+        );
+      })
+    : null;
+
+  const renderCredentialStatusBadge = (
+    cred?: CredentialProfile,
+    isPrimary?: boolean,
+    keyVal?: string,
+  ) => {
     if (isLoadingUsage) {
       return (
         <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)] inline-flex items-center gap-1 leading-normal shrink-0">
@@ -348,72 +373,149 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
       );
     }
 
+    const baseBadge =
+      'text-[11px] font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center justify-center leading-normal shrink-0';
+
     if (!cred) {
+      if (isPrimary) {
+        return (
+          <span className={`${baseBadge} bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)]`}>
+            Operativa
+          </span>
+        );
+      }
       return (
-        <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)] inline-flex items-center justify-center leading-normal shrink-0">
-          In standby
+        <span className={`${baseBadge} bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)]`}>
+          In riserva
         </span>
       );
     }
 
     const status = cred.operational_status;
+    const exhaustedModels = cred.exhausted_models || [];
+    const isCurrentModelExhausted = Boolean(
+      preferredModel && exhaustedModels.includes(preferredModel)
+    );
     const isQuotaExhausted =
       status === 'temporarily_failing' &&
       (!cred.last_error_message ||
         cred.last_error_message.toLowerCase().includes('quota') ||
         cred.last_error_message.toLowerCase().includes('rpd') ||
-        cred.last_error_code === 429);
+        cred.last_error_code === 429 ||
+        exhaustedModels.length > 0);
 
-    const baseBadge =
-      'text-[11px] font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center justify-center leading-normal shrink-0';
-
-    switch (status) {
-      case 'active':
+    if (status === 'temporarily_failing' || (isQuotaExhausted && isCurrentModelExhausted)) {
+      if (isQuotaExhausted) {
+        if (exhaustedModels.length === 1) {
+          return (
+            <span
+              className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}
+              title={`Quota esaurita per ${getModelDisplayName(exhaustedModels[0])}. Disponibile per gli altri modelli.`}
+            >
+              Quota esaurita per {getModelDisplayName(exhaustedModels[0])}
+            </span>
+          );
+        }
+        if (exhaustedModels.length > 1) {
+          const names = exhaustedModels.map(getModelDisplayName).join(', ');
+          const otherCount = exhaustedModels.length - 1;
+          const label = isCurrentModelExhausted
+            ? `Quota esaurita per ${getModelDisplayName(preferredModel || 'gemini-2.5-flash')} (+${otherCount})`
+            : `Quota esaurita (${exhaustedModels.length} modelli)`;
+          return (
+            <span
+              className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}
+              title={`Quota esaurita per: ${names}. Disponibile per gli altri modelli.`}
+            >
+              {label}
+            </span>
+          );
+        }
         return (
-          <span className={`${baseBadge} bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)]`}>
-            Attiva
+          <span className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}>
+            Quota esaurita (oggi)
           </span>
         );
-      case 'unused':
-        return (
-          <span className={`${baseBadge} bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)]`}>
-            In standby
-          </span>
-        );
-      case 'temporarily_failing':
-        return (
-          <span className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-border,var(--border-default))]`}>
-            {isQuotaExhausted ? 'Quota esaurita (oggi)' : 'Non disponibile (temporaneo)'}
-          </span>
-        );
-      case 'invalid':
-        return (
-          <span className={`${baseBadge} bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-border,var(--border-default))]`}>
-            Non valida (401)
-          </span>
-        );
-      case 'permission_denied':
-        return (
-          <span className={`${baseBadge} bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-border,var(--border-default))]`}>
-            Permesso negato (403)
-          </span>
-        );
-      case 'request_error':
-        return (
-          <span className={`${baseBadge} bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-border,var(--border-default))]`}>
-            Errore richiesta (400)
-          </span>
-        );
-      default:
-        return (
-          <span className={`${baseBadge} bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)]`}>
-            In standby
-          </span>
-        );
+      }
+      return (
+        <span className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}>
+          Non disponibile (temporaneo)
+        </span>
+      );
     }
-  };
+    if (status === 'invalid') {
+      return (
+        <span className={`${baseBadge} bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-ring)]`}>
+          Non valida (401)
+        </span>
+      );
+    }
+    if (status === 'permission_denied') {
+      return (
+        <span className={`${baseBadge} bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-ring)]`}>
+          Permesso negato (403)
+        </span>
+      );
+    }
+    if (status === 'request_error') {
+      return (
+        <span className={`${baseBadge} bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-ring)]`}>
+          Errore richiesta (400)
+        </span>
+      );
+    }
 
-  const primaryCred = getCredentialFor(apiKey, true);
+    const renderExhaustedTag = () => {
+      if (exhaustedModels.length === 0) return null;
+      const label =
+        exhaustedModels.length === 1
+          ? `Esaurita per ${getModelDisplayName(exhaustedModels[0])}`
+          : exhaustedModels.length === 2
+          ? `Esaurita per ${exhaustedModels.map(m => getModelDisplayName(m).replace('Gemini ', '')).join(' & ')}`
+          : `Esaurita per ${exhaustedModels.length} modelli`;
+      const title = `Disponibile per il modello attuale. Quota esaurita oggi per: ${exhaustedModels.map(getModelDisplayName).join(', ')}`;
+      return (
+        <span
+          className="text-[10px] font-medium text-[var(--warning-text)] bg-[var(--warning-subtle,var(--bg-surface))] px-2 py-0.5 rounded-full border border-[var(--warning-ring)] leading-normal shrink-0"
+          title={title}
+        >
+          {label}
+        </span>
+      );
+    };
+
+    // Operational or reserve status
+    if (isPrimary || cred.is_primary) {
+      return (
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+          <span className={`${baseBadge} bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)]`}>
+            Operativa
+          </span>
+          {renderExhaustedTag()}
+        </div>
+      );
+    }
+
+    if (keyVal && keyVal === activeFallbackKey) {
+      return (
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+          <span className={`${baseBadge} bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)]`}>
+            In uso (riserva)
+          </span>
+          {renderExhaustedTag()}
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+        <span className={`${baseBadge} bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)]`}>
+          In riserva
+        </span>
+        {renderExhaustedTag()}
+      </div>
+    );
+  };
   const primaryMaskedDisplay = apiKey
     ? (apiKey.length > 8 ? `...${apiKey.slice(-4)}` : apiKey)
     : (primaryCred?.masked_key
@@ -467,16 +569,16 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
           )}
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           {totalKeysCount > 0 && (
             <button
               type="button"
               onClick={toggleAllReveal}
-              className="p-1.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+              className="p-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
               title={hasAnyRevealedKey ? 'Nascondi tutte le chiavi' : 'Mostra tutte le chiavi in chiaro'}
               aria-label={hasAnyRevealedKey ? 'Nascondi tutte le chiavi' : 'Mostra chiavi'}
             >
-              {hasAnyRevealedKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              {hasAnyRevealedKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           )}
 
@@ -485,15 +587,15 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
               type="button"
               onClick={onRefreshUsage}
               disabled={isLoadingUsage}
-              className="p-1.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 cursor-pointer group/refresh"
+              className="p-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 cursor-pointer group/refresh"
               title="Aggiorna stato quote API"
               aria-label="Aggiorna stato quote API"
             >
               <RefreshCw
-                className={`w-3.5 h-3.5 transition-transform duration-500 ease-out ${
+                className={`w-4 h-4 transition-transform duration-500 ease-out ${
                   isLoadingUsage
                     ? 'animate-spin text-[var(--accent-text)]'
-                    : 'group-hover/refresh:rotate-180'
+                    : 'group-hover/refresh:rotate-180 group-hover/refresh:scale-105'
                 }`}
               />
             </button>
@@ -590,10 +692,6 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
                 {isPrimaryRevealed && apiKey ? apiKey : primaryMaskedDisplay}
               </span>
 
-              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)] inline-flex items-center leading-normal">
-                Principale
-              </span>
-
               {hasProtectedKey && !apiKey && (
                 <span
                   className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[var(--bg-hover)] text-[var(--success-text)] border border-[var(--border-default)] inline-flex items-center gap-1 leading-normal"
@@ -606,7 +704,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              {renderCredentialStatusBadge(primaryCred)}
+              {renderCredentialStatusBadge(primaryCred, true, apiKey)}
 
               <div onClick={e => e.stopPropagation()}>
                 <KebabMenu
@@ -688,7 +786,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
-                {renderCredentialStatusBadge(cred)}
+                {renderCredentialStatusBadge(cred, false, key)}
 
                 <div onClick={e => e.stopPropagation()}>
                   <KebabMenu

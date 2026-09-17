@@ -503,6 +503,10 @@ def _check_and_reset_unlocked(data: dict[str, Any]) -> bool:
     if saved_date != current_pacific_date:
         data["quota_date"] = current_pacific_date
 
+        # Reset daily work stats and telemetry for the new day
+        data["work_stats"] = _empty_work_stats_dict()
+        data["telemetry"] = _empty_telemetry_dict()
+
         # Reset model quota states from rpd_exhausted back to normal
         for _m_name, model_limit in data.get("project_limits", {}).items():
             if model_limit.get("quota_state") in ("rpd_exhausted", "rate_limited"):
@@ -517,7 +521,18 @@ def _check_and_reset_unlocked(data: dict[str, Any]) -> bool:
                 cred["operational_status"] = (
                     "active" if cred.get("last_used_iso") else "unused"
                 )
+                cred["last_error_code"] = None
+                cred["last_error_message"] = None
                 changed = True
+
+        # Clean legacy keys dictionary if present
+        if "keys" in data and isinstance(data["keys"], dict):
+            for _k_id, k_entry in data["keys"].items():
+                if isinstance(k_entry, dict) and "models" in k_entry:
+                    for _m, m_entry in k_entry.get("models", {}).items():
+                        if isinstance(m_entry, dict):
+                            m_entry["used_today"] = 0
+                            m_entry["is_exhausted"] = False
 
         changed = True
 
@@ -791,31 +806,36 @@ def _build_ordered_project_limits(
     data: dict[str, Any], credentials_list: list[dict[str, Any]]
 ) -> dict[str, ProjectModelLimit]:
     ordered_project_limits: dict[str, ProjectModelLimit] = {}
-    primary_cred = (
-        credentials_list[0]
-        if (credentials_list and credentials_list[0].get("is_primary"))
-        else None
-    )
+    primary_cred = next((c for c in credentials_list if c.get("is_primary")), None)
     primary_exhausted = (
         set(primary_cred.get("exhausted_models", [])) if primary_cred else set()
     )
-    other_exhausted = {
-        m
+    fb_creds = [
+        c
         for c in credentials_list
         if not c.get("is_primary")
-        for m in c.get("exhausted_models", [])
-    }
+        and c.get("operational_status") not in ("invalid", "permission_denied")
+    ]
 
     for m_name in SUPPORTED_MODELS:
         raw_lim = data.get("project_limits", {}).get(
             m_name, _create_model_limit_entry(m_name)
         )
         model_lim = dict(raw_lim)
-        if primary_cred is not None:
-            if m_name in primary_exhausted:
-                model_lim["quota_state"] = "rpd_exhausted"
-            elif m_name in other_exhausted and m_name not in primary_exhausted:
+
+        has_available_fb = any(
+            m_name not in c.get("exhausted_models", []) for c in fb_creds
+        )
+
+        if m_name in primary_exhausted:
+            if has_available_fb:
                 model_lim["quota_state"] = "normal"
+            else:
+                model_lim["quota_state"] = "rpd_exhausted"
+        elif any(m_name in c.get("exhausted_models", []) for c in fb_creds):
+            if model_lim.get("quota_state") != "rate_limited":
+                model_lim["quota_state"] = "normal"
+
         ordered_project_limits[m_name] = model_lim  # type: ignore
 
     return ordered_project_limits
@@ -870,13 +890,20 @@ def _determine_primary_status(
             False,
             None,
         )
-    if quota_state == "rpd_exhausted":
-        fb_creds = [c for c in credentials_list if not c.get("is_primary")]
-        has_fb_key_for_primary_model = any(
-            c.get("operational_status") not in ("invalid", "permission_denied")
-            and clean_primary_model not in c.get("exhausted_models", [])
-            for c in fb_creds
-        )
+
+    primary_cred = next((c for c in credentials_list if c.get("is_primary")), None)
+    is_primary_exhausted = (
+        primary_cred is not None
+        and clean_primary_model in primary_cred.get("exhausted_models", [])
+    )
+    fb_creds = [c for c in credentials_list if not c.get("is_primary")]
+    has_fb_key_for_primary_model = any(
+        c.get("operational_status") not in ("invalid", "permission_denied")
+        and clean_primary_model not in c.get("exhausted_models", [])
+        for c in fb_creds
+    )
+
+    if is_primary_exhausted or quota_state == "rpd_exhausted":
         if has_fb_key_for_primary_model:
             return (
                 "degraded",
@@ -886,7 +913,7 @@ def _determine_primary_status(
             )
         return (
             "quota_exhausted",
-            "Quota giornaliera (RPD) esaurita. Reset alle ore 09:00 (fuso PT).",
+            "Quota giornaliera (RPD) esaurita. Reset alle ore 09:00 (ora italiana / 00:00 PT).",
             False,
             None,
         )
@@ -900,11 +927,86 @@ def _determine_primary_status(
     return "operational", "API Google Gemini operative.", False, None
 
 
+def _probe_primary_credential(
+    clean_primary: str, clean_primary_model: str
+) -> tuple[str | None, int | None, str | None]:
+    """Probe key validity via Google Gemini API outside the interprocess lock."""
+    if not clean_primary:
+        return None, None, None
+    try:
+        from google import genai
+
+        probe_client = genai.Client(api_key=clean_primary)
+        probe_client.models.get(model=clean_primary_model)
+        return "active", None, None
+    except Exception as exc:
+        from el_sbobinator.services.gemini_errors import (
+            _error_code,
+            _error_text,
+            classify_credential_status,
+        )
+
+        status = classify_credential_status(exc)
+        if status in ("invalid", "permission_denied"):
+            return status, _error_code(exc), _error_text(exc)[:200]
+        return None, None, None
+
+
+def _handle_force_refresh_unlocked(
+    data: dict[str, Any],
+    clean_primary: str,
+    probe_result: tuple[str | None, int | None, str | None] | None = None,
+) -> bool:
+    """Resets transient rate limits and applies probe results without wiping daily quota exhaustion."""
+    changed = False
+    for _m_name, model_limit in data.get("project_limits", {}).items():
+        if model_limit.get("quota_state") == "rate_limited":
+            model_limit["quota_state"] = "normal"
+            model_limit["updated_at"] = get_current_authoritative_utc().isoformat()
+            changed = True
+
+    for _k_id, cred in data.get("credentials", {}).items():
+        # Only clear temporarily_failing if it wasn't an exhausted model failure
+        if cred.get("operational_status") == "temporarily_failing" and not cred.get(
+            "exhausted_models"
+        ):
+            cred["operational_status"] = (
+                "active" if cred.get("last_used_iso") else "unused"
+            )
+            cred["last_error_code"] = None
+            cred["last_error_message"] = None
+            changed = True
+
+    if clean_primary and probe_result is not None:
+        status, code, message = probe_result
+        if status:
+            primary_id = hash_key(clean_primary)
+            if primary_id in data.get("credentials", {}):
+                p_cred = data["credentials"][primary_id]
+                if status == "active" and p_cred.get("operational_status") in (
+                    "invalid",
+                    "permission_denied",
+                ):
+                    p_cred["operational_status"] = (
+                        "active" if p_cred.get("last_used_iso") else "unused"
+                    )
+                    p_cred["last_error_code"] = None
+                    p_cred["last_error_message"] = None
+                    changed = True
+                elif status in ("invalid", "permission_denied"):
+                    p_cred["operational_status"] = status
+                    p_cred["last_error_code"] = code
+                    p_cred["last_error_message"] = message
+                    changed = True
+    return changed
+
+
 def get_daily_usage(
     primary_key: str | None = None,
     fallback_keys: list[str] | None = None,
     primary_model: str = "gemini-2.5-flash",
     fallback_models: list[str] | None = None,
+    force_refresh: bool = False,
 ) -> dict[str, Any]:
     """Retrieves aggregated state, primary status, project limits, telemetry, and credentials."""
     all_keys: list[tuple[str, bool, str]] = []
@@ -928,9 +1030,20 @@ def get_daily_usage(
         if cfm and cfm not in relevant_models:
             relevant_models.append(cfm)
 
+    probe_result = (
+        _probe_primary_credential(clean_primary, clean_primary_model)
+        if force_refresh
+        else None
+    )
+
     with _interprocess_lock():
         data = _load_raw_usage_unlocked()
         changed = _check_and_reset_unlocked(data)
+
+        if force_refresh:
+            if _handle_force_refresh_unlocked(data, clean_primary, probe_result):
+                changed = True
+
         if changed:
             _save_raw_usage_unlocked(data)
 
@@ -995,7 +1108,7 @@ def get_daily_usage(
             "primary_status": primary_status,
             "status_message": status_message,
             "retry_after_seconds": remaining_retry_after,
-            "next_reset_info": "Reset quote: ore 09:00 (fuso Google PT)",
+            "next_reset_info": "Reset quote: ore 09:00 (ora italiana / 00:00 PT)",
             "project_limits": ordered_project_limits,
             "work_stats": work_stats_dict,
             "telemetry": telemetry_dict,

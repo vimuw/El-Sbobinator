@@ -208,6 +208,8 @@ class UsageServiceV2Tests(unittest.TestCase):
 
     def test_pacific_date_reset(self):
         key = "AIzaSyKey111111111111111111"
+        usage_service.record_request_attempt(key, "gemini-2.5-flash")
+        usage_service.record_work_completed("sbobine", 5)
         usage_service.mark_quota_exhausted("gemini-2.5-flash")
 
         # Simulate next day in Pacific time
@@ -225,6 +227,50 @@ class UsageServiceV2Tests(unittest.TestCase):
             )
             self.assertEqual(data["primary_status"], "operational")
             self.assertEqual(data["quota_date"], fake_next_day)
+            self.assertEqual(data["work_stats"]["sbobine_completed"], 0)
+            self.assertEqual(data["telemetry"]["requests_sent"], 0)
+
+    def test_force_refresh_preserves_daily_quota_exhaustion(self):
+        key = "AIzaSyKey111111111111111111"
+        usage_service.mark_quota_exhausted("gemini-2.5-flash", api_key=key)
+
+        with patch("google.genai.Client") as mock_client:
+            mock_client.return_value.models.get.return_value = True
+            data = usage_service.get_daily_usage(
+                primary_key=key,
+                primary_model="gemini-2.5-flash",
+                force_refresh=True,
+            )
+            # Preserves exhaustion for the day until midnight PT
+            self.assertEqual(data["primary_status"], "quota_exhausted")
+            self.assertEqual(
+                data["project_limits"]["gemini-2.5-flash"]["quota_state"],
+                "rpd_exhausted",
+            )
+
+    def test_force_refresh_with_fallback_preserves_exhausted_models(self):
+        primary_key = "AIzaSyKey111111111111111111"
+        fb_key = "AIzaSyKey222222222222222222"
+        usage_service.mark_quota_exhausted("gemini-2.5-flash", api_key=primary_key)
+
+        with patch("google.genai.Client") as mock_client:
+            mock_client.return_value.models.get.return_value = True
+            data = usage_service.get_daily_usage(
+                primary_key=primary_key,
+                fallback_keys=[fb_key],
+                primary_model="gemini-2.5-flash",
+                force_refresh=True,
+            )
+            # Degraded because primary is exhausted but fallback is available
+            self.assertEqual(data["primary_status"], "degraded")
+            # Model itself is normal because fallback is ready
+            self.assertEqual(
+                data["project_limits"]["gemini-2.5-flash"]["quota_state"], "normal"
+            )
+            primary_cred = next(c for c in data["credentials"] if c["is_primary"])
+            self.assertIn("gemini-2.5-flash", primary_cred["exhausted_models"])
+            fb_cred = next(c for c in data["credentials"] if not c["is_primary"])
+            self.assertEqual(fb_cred["exhausted_models"], [])
 
 
 if __name__ == "__main__":

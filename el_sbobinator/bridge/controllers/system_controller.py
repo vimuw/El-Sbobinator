@@ -64,6 +64,7 @@ class SystemControllerMixin:
         fallback_keys: list[str] | None = None,
         preferred_model: str | None = None,
         fallback_models: list[str] | None = None,
+        force_refresh: bool = False,
     ) -> dict:
         """Get daily Gemini API request usage and quota stats per key and per model."""
         try:
@@ -91,6 +92,7 @@ class SystemControllerMixin:
                 fallback_keys=fb_keys,
                 primary_model=pref_model,
                 fallback_models=fb_models,
+                force_refresh=force_refresh,
             )
             return bridge_ok(result=usage)
         except Exception as e:

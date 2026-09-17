@@ -19,7 +19,6 @@ describe('ApiKeySection component', () => {
     render(<ApiKeySection {...defaultProps} />);
 
     expect(screen.getByText('Chiave Principale')).toBeTruthy();
-    expect(screen.getByText('Principale')).toBeTruthy();
     expect(screen.getByText('...2345')).toBeTruthy();
     expect(screen.getByText('1 chiave')).toBeTruthy();
   });
@@ -435,7 +434,7 @@ describe('ApiKeySection component', () => {
     );
 
     expect(screen.getByText('Quota esaurita (oggi)')).toBeTruthy();
-    expect(screen.getByText('Attiva')).toBeTruthy();
+    expect(screen.getByText('In uso (riserva)')).toBeTruthy();
   });
 
   it('matches stale telemetry by key identity after primary promotion', () => {
@@ -473,7 +472,7 @@ describe('ApiKeySection component', () => {
     const fallbackRow = screen.getByText('Chiave Riserva 1').closest('.p-3');
     expect(primaryRow).not.toBeNull();
     expect(fallbackRow).not.toBeNull();
-    expect(within(primaryRow as HTMLElement).getByText('Attiva')).toBeTruthy();
+    expect(within(primaryRow as HTMLElement).getByText('Operativa')).toBeTruthy();
     expect(within(fallbackRow as HTMLElement).getByText('Quota esaurita (oggi)')).toBeTruthy();
   });
 

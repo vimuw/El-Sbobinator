@@ -9,8 +9,10 @@ import {
   X,
   Copy,
   FolderOpen,
+  Activity,
+  Layers,
 } from 'lucide-react';
-import type { ValidationResult } from '../../../bridge';
+import type { ValidationResult, ApiUsageResult } from '../../../bridge';
 
 export interface DisplayCheck {
   id: string;
@@ -29,6 +31,8 @@ interface DiagnosticsSectionProps {
   displayChecks: DisplayCheck[];
   onOpenLogs?: () => void;
   onCopyReport?: () => Promise<void>;
+  apiUsage?: ApiUsageResult | null;
+  showOpenLogs?: boolean;
 }
 
 export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(({
@@ -38,6 +42,8 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
   displayChecks,
   onOpenLogs,
   onCopyReport,
+  apiUsage,
+  showOpenLogs = true,
 }) => {
   const [copiedToast, setCopiedToast] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
@@ -92,7 +98,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
             type="button"
             onClick={handleCopyReport}
             disabled={isCopying}
-            className="p-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 shrink-0 cursor-pointer"
+            className="p-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 shrink-0 cursor-pointer"
             title={copiedToast ? 'Report copiato!' : 'Copia report per assistenza'}
             aria-label="Copia report diagnostico"
           >
@@ -105,21 +111,23 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
             )}
           </button>
 
-          <button
-            type="button"
-            onClick={handleOpenLogsFolder}
-            className="p-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors shrink-0 cursor-pointer"
-            title="Apri cartella log"
-            aria-label="Apri cartella log"
-          >
-            <FolderOpen className="w-4 h-4" />
-          </button>
+          {showOpenLogs && (
+            <button
+              type="button"
+              onClick={handleOpenLogsFolder}
+              className="p-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors shrink-0 cursor-pointer"
+              title="Apri cartella log"
+              aria-label="Apri cartella log"
+            >
+              <FolderOpen className="w-4 h-4" />
+            </button>
+          )}
 
           <button
             type="button"
             onClick={onRunValidation}
             disabled={isValidatingEnvironment}
-            className="p-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 shrink-0 cursor-pointer"
+            className="p-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 shrink-0 cursor-pointer"
             title="Verifica ambiente"
             aria-label="Verifica ambiente"
           >
@@ -215,6 +223,106 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
           </li>
         ))}
       </ul>
+
+      {/* Telemetry & System Work Stats (for technical troubleshooting) */}
+      {(apiUsage?.telemetry || apiUsage?.work_stats) && (
+        <div className="space-y-3 pt-2 border-t border-[var(--border-default)]">
+          <div className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
+            <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+              Telemetria Chiamate API & Lavoro Svolto
+            </h4>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Card 1: Work Done */}
+            <div className="p-3.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] space-y-2">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
+                <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                  Lavoro Svolto Oggi
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 pt-1 border-t border-[var(--border-default)] text-center">
+                <div>
+                  <span className="text-lg font-bold text-[var(--text-primary)] block">
+                    {apiUsage.work_stats?.chunks_completed ?? 0}
+                  </span>
+                  <span className="text-[10px] text-[var(--text-secondary)] font-medium">
+                    Chunk
+                  </span>
+                </div>
+                <div>
+                  <span className="text-lg font-bold text-[var(--text-primary)] block">
+                    {apiUsage.work_stats?.revisions_completed ?? 0}
+                  </span>
+                  <span className="text-[10px] text-[var(--text-secondary)] font-medium">
+                    Revisioni
+                  </span>
+                </div>
+                <div>
+                  <span className="text-lg font-bold text-[var(--text-primary)] block">
+                    {apiUsage.work_stats?.sbobine_completed ?? 0}
+                  </span>
+                  <span className="text-[10px] text-[var(--text-secondary)] font-medium">
+                    Sbobine
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 2: Telemetry API */}
+            <div className="p-3.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] space-y-2">
+              <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
+                <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                  Telemetria Rete API
+                </span>
+              </div>
+              <div className="grid grid-cols-4 gap-1.5 pt-1 border-t border-[var(--border-default)] text-center">
+                <div>
+                  <span className="text-lg font-bold text-[var(--text-primary)] block">
+                    {apiUsage.telemetry?.requests_sent ?? 0}
+                  </span>
+                  <span className="text-[10px] text-[var(--text-secondary)] font-medium truncate block">
+                    Inviate
+                  </span>
+                </div>
+                <div>
+                  <span className="text-lg font-bold text-[var(--text-primary)] block">
+                    {apiUsage.telemetry?.responses_succeeded ?? 0}
+                  </span>
+                  <span className="text-[10px] text-[var(--text-secondary)] font-medium truncate block">
+                    Successi
+                  </span>
+                </div>
+                <div>
+                  <span className="text-lg font-bold text-[var(--warning-text)] block">
+                    {apiUsage.telemetry?.retries_total ?? 0}
+                  </span>
+                  <span className="text-[10px] text-[var(--text-secondary)] font-medium truncate block">
+                    Retry
+                  </span>
+                </div>
+                <div>
+                  <span
+                    className={`text-lg font-bold block ${
+                      (apiUsage.telemetry?.final_failures ?? 0) > 0
+                        ? 'text-[var(--error-text)]'
+                        : 'text-[var(--text-secondary)]'
+                    }`}
+                  >
+                    {apiUsage.telemetry?.final_failures ?? 0}
+                  </span>
+                  <span className="text-[10px] text-[var(--text-secondary)] font-medium truncate block">
+                    Errori
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 });

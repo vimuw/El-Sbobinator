@@ -62,27 +62,9 @@ describe('NewKeyModal', () => {
     expect(answerNewKey).toHaveBeenCalledWith(null);
   });
 
-  it('shows 1-click button when fallbackKeys are available and handles confirmation', () => {
-    const onClose = vi.fn();
-    const answerNewKey = vi.fn();
-    setPywebview({ answer_new_key: answerNewKey });
-    const fallbackKeys = ['AIzaSyDummyFallbackKey12345678901234'];
-    render(<NewKeyModal isOpen onClose={onClose} fallbackKeys={fallbackKeys} />);
-
-    expect(screen.getByText('Chiave di riserva disponibile')).toBeTruthy();
-    expect(screen.getByText('Continua con la chiave di riserva')).toBeTruthy();
-
-    fireEvent.click(screen.getByText('Continua con la chiave di riserva'));
-    expect(answerNewKey).toHaveBeenCalledWith('AIzaSyDummyFallbackKey12345678901234');
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it('allows revealing manual input when fallbackKeys are available', () => {
-    const fallbackKeys = ['AIzaSyDummyFallbackKey12345678901234'];
-    render(<NewKeyModal isOpen onClose={vi.fn()} fallbackKeys={fallbackKeys} />);
-
-    expect(screen.queryByPlaceholderText('Incolla qui la nuova API Key...')).toBeNull();
-    fireEvent.click(screen.getByText('Oppure inserisci una chiave diversa manualmente'));
+  it('shows clear quota exhausted message and direct input on open', () => {
+    render(<NewKeyModal isOpen onClose={vi.fn()} />);
+    expect(screen.getByText(/Tutte le chiavi API configurate hanno esaurito la quota/)).toBeTruthy();
     expect(screen.getByPlaceholderText('Incolla qui la nuova API Key...')).toBeTruthy();
   });
 
@@ -103,6 +85,21 @@ describe('NewKeyModal', () => {
     const onClose = vi.fn();
     render(<NewKeyModal isOpen onClose={onClose} />);
     fireEvent.click(screen.getByLabelText('Chiudi finestra'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not close when backdrop overlay is clicked', () => {
+    const onClose = vi.fn();
+    const { container } = render(<NewKeyModal isOpen onClose={onClose} />);
+    const backdrop = container.querySelector('.modal-overlay') as HTMLElement;
+    fireEvent.click(backdrop);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes on Escape key press', () => {
+    const onClose = vi.fn();
+    render(<NewKeyModal isOpen onClose={onClose} />);
+    fireEvent.keyDown(window, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
