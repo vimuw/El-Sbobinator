@@ -256,7 +256,11 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
                     {activeModelReadyCreds.length} su {credentials.length} chiavi pronte
                   </span>
                   <span className="text-[11px] text-[var(--text-secondary)] block">
-                    {isPrimaryExhaustedOnActive
+                    {activeModelReadyCreds.length === 0
+                      ? credentials.length === 1
+                        ? 'Quota esaurita (nessuna riserva configurata)'
+                        : 'Tutte le chiavi hanno esaurito la quota'
+                      : isPrimaryExhaustedOnActive && activeFallbackCred
                       ? 'Chiave principale esaurita — riserva subentrata'
                       : activeModelReadyCreds.length === credentials.length
                       ? 'Tutte le chiavi operative per questo modello'

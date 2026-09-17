@@ -132,6 +132,36 @@ describe('QuotasSection', () => {
     expect(screen.getByText('Chiave principale esaurita — riserva subentrata')).toBeTruthy();
   });
 
+  it('renders correct subtitle for single key when quota is exhausted', () => {
+    const singleKeyExhaustedUsage: ApiUsageResult = {
+      ...dummyUsage,
+      primary_status: 'quota_exhausted',
+      status_message: 'Quota giornaliera (RPD) esaurita. Reset alle ore 09:00 (ora italiana / 00:00 PT).',
+      credentials: [
+        {
+          id: 'key-1',
+          label: 'Chiave Principale',
+          masked_key: 'AIza...dbtI',
+          is_primary: true,
+          operational_status: 'temporarily_failing',
+          exhausted_models: ['gemini-3.5-flash'],
+        },
+      ],
+    };
+
+    render(
+      <QuotasSection
+        apiUsage={singleKeyExhaustedUsage}
+        isLoadingUsage={false}
+        preferredModel="gemini-3.5-flash"
+      />
+    );
+
+    expect(screen.getByText('0 su 1 chiavi pronte')).toBeTruthy();
+    expect(screen.getByText('Quota esaurita (nessuna riserva configurata)')).toBeTruthy();
+    expect(screen.queryByText(/riserva subentrata/i)).toBeNull();
+  });
+
   it('renders rate limited status hero banner when rate limited', () => {
     const rateLimitedUsage: ApiUsageResult = {
       ...dummyUsage,
