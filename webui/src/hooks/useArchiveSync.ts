@@ -79,7 +79,7 @@ export function useArchiveSync({
       if (result?.ok && result.sessions) {
         setArchiveSessions(result.sessions);
         setArchiveTotal(result.total ?? result.sessions.length);
-        prevSessionDirsRef.current = new Map(result.sessions.map((s: ArchiveSession) => [s.session_dir, s.name]));
+        prevSessionDirsRef.current = new Map(result.sessions.map((s: ArchiveSession) => [normalizeSessionDir(s.session_dir), s.name]));
         try {
           localStorage.setItem('el-sbobinator.has_sessions.v1', String(result.sessions.length > 0));
         } catch (_) {}
@@ -87,7 +87,7 @@ export function useArchiveSync({
     } catch (_) {} finally {
       setIsArchiveLoaded(true);
     }
-  }, []);
+  }, [normalizeSessionDir]);
 
   useEffect(() => {
     if (isArchiveLoaded) {
@@ -112,9 +112,9 @@ export function useArchiveSync({
     if (sessionDir) {
       setArchiveSessions(prev => prev.filter(s => s.session_dir !== sessionDir));
       setArchiveTotal(prev => Math.max(0, prev - 1));
-      prevSessionDirsRef.current.delete(sessionDir);
+      prevSessionDirsRef.current.delete(normalizeSessionDir(sessionDir));
     }
-  }, [addNotification]);
+  }, [addNotification, normalizeSessionDir]);
 
   const handleFoldersChange = useCallback(async (next: ArchiveFolder[]) => {
     setFolders(next);
@@ -170,6 +170,9 @@ export function useArchiveSync({
       }
       if (deletedSessionDirs.length > 0) {
         const deletedNorm = new Set(deletedSessionDirs.map(d => normalizeSessionDir(d)));
+        for (const dir of deletedSessionDirs) {
+          prevSessionDirsRef.current.delete(normalizeSessionDir(dir));
+        }
         setArchiveSessions(prev => prev.filter(s => !deletedNorm.has(normalizeSessionDir(s.session_dir))));
         setArchiveTotal(prev => Math.max(0, prev - deletedSessionDirs.length));
         const updated = foldersRef.current.map(folder => ({
@@ -215,14 +218,14 @@ export function useArchiveSync({
   // Polling interval when activePage === 'archive'
   useEffect(() => {
     if (activePage !== 'archive') return;
-    prevSessionDirsRef.current = new Map(archiveSessionsRef.current.map(s => [s.session_dir, s.name]));
+    prevSessionDirsRef.current = new Map(archiveSessionsRef.current.map(s => [normalizeSessionDir(s.session_dir), s.name]));
     const intervalId = setInterval(async () => {
       try {
         const lim = archiveLimitRef.current;
         const result = await window.pywebview?.api?.get_completed_sessions?.(lim <= 0 ? 0 : lim);
         if (!result?.ok || !result.sessions) return;
         const newSessions: ArchiveSession[] = result.sessions;
-        const newDirs = new Set<string>(newSessions.map(s => s.session_dir));
+        const newDirs = new Set<string>(newSessions.map(s => normalizeSessionDir(s.session_dir)));
         if (newSessions.length > 0 || prevSessionDirsRef.current.size <= 2) {
           for (const [dir, name] of prevSessionDirsRef.current.entries()) {
             if (!newDirs.has(dir)) {
@@ -238,14 +241,14 @@ export function useArchiveSync({
         }
         setArchiveSessions(newSessions);
         setArchiveTotal(result.total ?? newSessions.length);
-        prevSessionDirsRef.current = new Map(newSessions.map(s => [s.session_dir, s.name]));
+        prevSessionDirsRef.current = new Map(newSessions.map(s => [normalizeSessionDir(s.session_dir), s.name]));
       } catch (_) {}
     }, 30_000);
     return () => {
       clearInterval(intervalId);
       archiveLimitRef.current = 0;
     };
-  }, [activePage, addNotification]);
+  }, [activePage, addNotification, normalizeSessionDir]);
 
   const executeRetryFromArchive = useCallback(async (session: ArchiveSession) => {
     if (appStateRef.current !== 'idle') {
@@ -294,9 +297,30 @@ export function useArchiveSync({
   }, [handleRetryFailedRevisionBlocks, normalizeSessionDir, addNotification, setActivePage, dispatch]);
 
   const archiveFiltered = useMemo(() => {
-    const activeHtmlPaths = new Set(files.map(f => f.outputHtml).filter(Boolean));
-    return archiveSessions.filter(s => !activeHtmlPaths.has(s.html_path));
-  }, [archiveSessions, files]);
+    const activeHtmlPaths = new Set(files.map(f => normalizeSessionDir(f.outputHtml)).filter(Boolean));
+    const currentFileIds = new Set(files.map(f => f.id));
+    const pendingSessionDirs = new Set<string>();
+    const pendingHtmlPaths = new Set<string>();
+
+    for (const [fileId, replacement] of pendingArchiveReplacementsRef.current.entries()) {
+      if (currentFileIds.has(fileId)) {
+        for (const s of replacement.sessions) {
+          if (s.session_dir) {
+            pendingSessionDirs.add(normalizeSessionDir(s.session_dir));
+          }
+          if (s.html_path) {
+            pendingHtmlPaths.add(normalizeSessionDir(s.html_path));
+          }
+        }
+      }
+    }
+
+    return archiveSessions.filter(
+      s => !activeHtmlPaths.has(normalizeSessionDir(s.html_path))
+        && !pendingHtmlPaths.has(normalizeSessionDir(s.html_path))
+        && !pendingSessionDirs.has(normalizeSessionDir(s.session_dir)),
+    );
+  }, [archiveSessions, files, normalizeSessionDir]);
 
   const completedSessionFolderMap = useMemo(() => {
     const map = new Map<string, ArchiveFolder>();

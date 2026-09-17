@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { useArchiveSync } from './useArchiveSync';
 import type { PywebviewApi, ArchiveSession } from '../bridge';
+import type { FileItem } from '../appState';
 
 describe('useArchiveSync', () => {
   const dispatch = vi.fn();
@@ -143,5 +144,69 @@ describe('useArchiveSync', () => {
       newRoot: '/new',
     });
     expect(result.current.folders).toHaveLength(1);
+  });
+
+  it('filters out pending archive replacement sessions across refreshes and restores them if file is canceled', async () => {
+    const mockApi: Partial<PywebviewApi> = {
+      get_completed_sessions: vi.fn().mockResolvedValue({
+        ok: true,
+        sessions: [mockSession],
+        total: 1,
+      }),
+    };
+    window.pywebview = { api: mockApi as PywebviewApi };
+
+    let currentFiles: FileItem[] = [
+      {
+        id: 'replacement-1',
+        name: 'Lecture 1',
+        size: 1024,
+        duration: 120,
+        status: 'queued',
+        progress: 0,
+        phase: 0,
+      },
+    ];
+
+    const { result, rerender } = renderHook(
+      ({ files }: { files: FileItem[] }) =>
+        useArchiveSync({
+          files,
+          dispatch,
+          activePage: 'archive',
+          setActivePage,
+          appState: 'idle',
+          apiReady: true,
+          appendConsole,
+          addNotification,
+          handleRetryFailedRevisionBlocks,
+        }),
+      { initialProps: { files: currentFiles } },
+    );
+
+    // Register pending replacement
+    result.current.pendingArchiveReplacementsRef.current.set('replacement-1', {
+      fileName: 'Lecture 1',
+      inputPath: mockSession.input_path,
+      sessions: [mockSession],
+    });
+
+    // Refresh archive (simulating user clicking refresh button)
+    await act(async () => {
+      await result.current.refreshArchiveSessions();
+    });
+
+    // Backend returned the session on disk
+    expect(result.current.archiveSessions).toHaveLength(1);
+    // But archiveFiltered excludes it because replacement-1 is still queued
+    expect(result.current.archiveFiltered).toHaveLength(0);
+
+    // Now simulate user canceling/removing replacement-1 from the queue
+    currentFiles = [];
+    rerender({ files: currentFiles });
+
+    // The session should immediately reappear in archiveFiltered
+    expect(result.current.archiveFiltered).toHaveLength(1);
+    expect(result.current.archiveFiltered[0].session_dir).toBe(mockSession.session_dir);
   });
 });
