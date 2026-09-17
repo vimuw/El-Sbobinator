@@ -1,8 +1,28 @@
-import React, { useState } from 'react';
-import { Eye, EyeOff, Key, ShieldCheck, AlertCircle, AlertTriangle, ChevronRight, Plus, X, Lightbulb, ExternalLink } from 'lucide-react';
+import React, { useState, useMemo, useCallback } from 'react';
+import {
+  Key,
+  ShieldCheck,
+  AlertCircle,
+  AlertTriangle,
+  Plus,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  Copy,
+  Check,
+  ArrowUp,
+  ArrowDown,
+  Star,
+  RefreshCw,
+  Loader2,
+  Trash2,
+} from 'lucide-react';
+import { ConfirmActionModal } from '../ConfirmActionModal';
+import { KebabMenu, type KebabMenuItem } from '../../KebabMenu';
 import { GEMINI_KEY_PATTERN } from '../../../utils';
+import type { ApiUsageResult, CredentialProfile } from '../../../bridge';
 
-interface ApiKeySectionProps {
+export interface ApiKeySectionProps {
   apiKey: string;
   setApiKey: (key: string) => void;
   hasProtectedKey: boolean;
@@ -10,6 +30,17 @@ interface ApiKeySectionProps {
   apiKeyInsecureReason: string;
   fallbackKeys: string[];
   setFallbackKeys: (keys: string[]) => void;
+  onClearProtectedPrimary?: () => void;
+  apiUsage?: ApiUsageResult | null;
+  isLoadingUsage?: boolean;
+  onRefreshUsage?: () => void;
+}
+
+interface DeleteTarget {
+  type: 'primary' | 'fallback';
+  index?: number;
+  label: string;
+  maskedKey: string;
 }
 
 export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
@@ -20,59 +51,129 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
   apiKeyInsecureReason,
   fallbackKeys,
   setFallbackKeys,
+  onClearProtectedPrimary,
+  apiUsage,
+  isLoadingUsage = false,
+  onRefreshUsage,
 }) => {
-  const [showPrimaryKey, setShowPrimaryKey] = useState(false);
-  const [showFallbackKeys, setShowFallbackKeys] = useState(false);
   const [newKeyInput, setNewKeyInput] = useState('');
-  const [fallbackNotice, setFallbackNotice] = useState<{ type: 'error' | 'warning'; message: string } | null>(null);
+  const [notice, setNotice] = useState<{ type: 'error' | 'warning'; message: string } | null>(null);
+  const [revealedKeys, setRevealedKeys] = useState<Record<string, boolean>>({});
+  const [showAllKeys, setShowAllKeys] = useState(false);
+  const [showNewKeyInput, setShowNewKeyInput] = useState(false);
+  const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
-  const isInvalidFormat = apiKey.trim() !== '' && !GEMINI_KEY_PATTERN.test(apiKey.trim());
+  const cleanedFallbackKeys = useMemo(
+    () => fallbackKeys.map(k => k.trim()).filter(Boolean),
+    [fallbackKeys]
+  );
 
-  const cleanedFallbackKeys = fallbackKeys.map(k => k.trim()).filter(Boolean);
+  const hasPrimaryConfigured = Boolean(apiKey.trim() || hasProtectedKey);
+  const totalKeysCount = (hasPrimaryConfigured ? 1 : 0) + cleanedFallbackKeys.length;
+
+  const credentials: CredentialProfile[] = useMemo(() => {
+    if (apiUsage?.credentials && apiUsage.credentials.length > 0) {
+      return apiUsage.credentials;
+    }
+    if (apiUsage?.keys && apiUsage.keys.length > 0) {
+      return apiUsage.keys.map((k, idx) => ({
+        id: k.id,
+        masked_key: k.masked_key,
+        label: k.label,
+        is_primary: k.is_primary,
+        operational_status: (k.operational_status ||
+          (Object.values(k.models || {}).some(m => m.is_exhausted)
+            ? 'temporarily_failing'
+            : 'active')) as CredentialProfile['operational_status'],
+        key_type: (idx === 0 ? 'standard_legacy' : 'unknown') as CredentialProfile['key_type'],
+        project_id: null,
+        last_error_message: null,
+      }));
+    }
+    return [];
+  }, [apiUsage]);
+
+  const getCredentialFor = useCallback(
+    (rawKey: string, isPrimary: boolean, fallbackIdx?: number): CredentialProfile | undefined => {
+      if (credentials.length === 0) return undefined;
+      if (rawKey) {
+        const suffix = rawKey.slice(-4);
+        const found = credentials.find(c => c.masked_key?.endsWith(suffix));
+        if (found) return found;
+      }
+      if (isPrimary) {
+        return credentials.find(c => c.is_primary);
+      }
+      if (fallbackIdx !== undefined) {
+        const nonPrimary = credentials.filter(c => !c.is_primary);
+        return nonPrimary[fallbackIdx];
+      }
+      return undefined;
+    },
+    [credentials]
+  );
 
   const processKeys = (candidates: string[]) => {
     if (candidates.length === 0) return;
 
-    const primaryKeyTrimmed = (apiKey || '').trim();
+    const primaryKeyTrimmed = apiKey.trim();
+    const isPrimaryEmpty = !primaryKeyTrimmed && !hasProtectedKey;
 
     if (candidates.length === 1) {
       const cand = candidates[0];
       if (!GEMINI_KEY_PATTERN.test(cand)) {
-        setFallbackNotice({
+        setNotice({
           type: 'error',
           message: 'Formato API key non valido (deve iniziare con "AIzaSy" o "AQ.")',
         });
         return;
       }
+
+      if (isPrimaryEmpty) {
+        setApiKey(cand);
+        setNewKeyInput('');
+        setShowNewKeyInput(false);
+        setNotice(null);
+        return;
+      }
+
       if (primaryKeyTrimmed && cand === primaryKeyTrimmed) {
-        setFallbackNotice({
+        setNotice({
           type: 'error',
           message: 'Questa chiave è già impostata come chiave principale.',
         });
         return;
       }
       if (cleanedFallbackKeys.includes(cand)) {
-        setFallbackNotice({
+        setNotice({
           type: 'error',
           message: 'Questa chiave è già presente tra le riserve.',
         });
         return;
       }
+
       setFallbackKeys([...cleanedFallbackKeys, cand]);
       setNewKeyInput('');
-      setFallbackNotice(null);
+      setShowNewKeyInput(false);
+      setNotice(null);
       return;
     }
 
     const newValidKeys: string[] = [];
     let skippedCount = 0;
+    let nextPrimary = isPrimaryEmpty ? '' : primaryKeyTrimmed;
 
     for (const cand of candidates) {
       if (!GEMINI_KEY_PATTERN.test(cand)) {
         skippedCount++;
         continue;
       }
-      if (primaryKeyTrimmed && cand === primaryKeyTrimmed) {
+      if (isPrimaryEmpty && !nextPrimary) {
+        nextPrimary = cand;
+        continue;
+      }
+      if (nextPrimary && cand === nextPrimary) {
         skippedCount++;
         continue;
       }
@@ -83,26 +184,34 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
       newValidKeys.push(cand);
     }
 
-    if (newValidKeys.length > 0) {
-      setFallbackKeys([...cleanedFallbackKeys, ...newValidKeys]);
+    if (isPrimaryEmpty && nextPrimary) {
+      setApiKey(nextPrimary);
+    }
+
+    if (newValidKeys.length > 0 || (isPrimaryEmpty && nextPrimary)) {
+      if (newValidKeys.length > 0) {
+        setFallbackKeys([...cleanedFallbackKeys, ...newValidKeys]);
+      }
       setNewKeyInput('');
+      setShowNewKeyInput(false);
+      const totalAdded = (isPrimaryEmpty && nextPrimary ? 1 : 0) + newValidKeys.length;
       if (skippedCount > 0) {
-        setFallbackNotice({
+        setNotice({
           type: 'warning',
-          message: `${newValidKeys.length} ${newValidKeys.length === 1 ? 'chiave aggiunta' : 'chiavi aggiunte'}. ${skippedCount} ${skippedCount === 1 ? 'ignorata' : 'ignorate'} (non valida o già presente).`,
+          message: `${totalAdded} ${totalAdded === 1 ? 'chiave aggiunta' : 'chiavi aggiunte'}. ${skippedCount} ${skippedCount === 1 ? 'ignorata' : 'ignorate'} (non valida o già presente).`,
         });
       } else {
-        setFallbackNotice(null);
+        setNotice(null);
       }
     } else {
-      setFallbackNotice({
+      setNotice({
         type: 'error',
         message: 'Nessuna chiave valida aggiunta: le chiavi inserite sono già presenti o non valide.',
       });
     }
   };
 
-  const handleAddFallbackKey = () => {
+  const handleAddKey = () => {
     const raw = newKeyInput.trim();
     if (!raw) return;
 
@@ -132,211 +241,510 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      handleAddFallbackKey();
+      handleAddKey();
     }
   };
 
-  const handleRemoveFallbackKey = (indexToRemove: number) => {
-    const updated = cleanedFallbackKeys.filter((_, idx) => idx !== indexToRemove);
-    setFallbackKeys(updated);
-    setFallbackNotice(null);
+  const handlePromoteToPrimary = (index: number) => {
+    const targetKey = cleanedFallbackKeys[index];
+    if (!targetKey) return;
+
+    const currentPrimary = apiKey.trim();
+    const updatedFallbacks = [...cleanedFallbackKeys];
+
+    if (currentPrimary) {
+      updatedFallbacks[index] = currentPrimary;
+    } else {
+      updatedFallbacks.splice(index, 1);
+    }
+
+    setApiKey(targetKey);
+    setFallbackKeys(updatedFallbacks);
+    setNotice(null);
   };
+
+  const handleMoveUp = (index: number) => {
+    if (index <= 0) return;
+    const updated = [...cleanedFallbackKeys];
+    const temp = updated[index];
+    updated[index] = updated[index - 1];
+    updated[index - 1] = temp;
+    setFallbackKeys(updated);
+  };
+
+  const handleMoveDown = (index: number) => {
+    if (index >= cleanedFallbackKeys.length - 1) return;
+    const updated = [...cleanedFallbackKeys];
+    const temp = updated[index];
+    updated[index] = updated[index + 1];
+    updated[index + 1] = temp;
+    setFallbackKeys(updated);
+  };
+
+  const handleCopyKey = async (rawKey: string, id: string) => {
+    if (!rawKey) return;
+    try {
+      await navigator.clipboard.writeText(rawKey);
+      setCopiedKeyId(id);
+      setTimeout(() => {
+        setCopiedKeyId(prev => (prev === id ? null : prev));
+      }, 2000);
+    } catch (e) {
+      console.error('Failed to copy key to clipboard:', e);
+    }
+  };
+
+  const toggleRowReveal = (id: string) => {
+    setRevealedKeys(prev => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
+
+  const hasAnyRevealedKey =
+    showAllKeys ||
+    Boolean(revealedKeys.primary) ||
+    cleanedFallbackKeys.some(key => revealedKeys[`fallback-${key}`]);
+
+  const toggleAllReveal = () => {
+    if (hasAnyRevealedKey) {
+      setShowAllKeys(false);
+      setRevealedKeys({});
+      return;
+    }
+    setShowAllKeys(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deleteTarget) return;
+
+    if (deleteTarget.type === 'primary') {
+      if (cleanedFallbackKeys.length > 0) {
+        const [firstReserve, ...rest] = cleanedFallbackKeys;
+        setApiKey(firstReserve);
+        setFallbackKeys(rest);
+      } else {
+        setApiKey('');
+        if (hasProtectedKey) {
+          onClearProtectedPrimary?.();
+        }
+      }
+    } else if (deleteTarget.type === 'fallback' && typeof deleteTarget.index === 'number') {
+      const updated = cleanedFallbackKeys.filter((_, idx) => idx !== deleteTarget.index);
+      setFallbackKeys(updated);
+    }
+
+    setDeleteTarget(null);
+    setNotice(null);
+  };
+
+  const renderCredentialStatusBadge = (cred?: CredentialProfile) => {
+    if (isLoadingUsage) {
+      return (
+        <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)] inline-flex items-center gap-1 leading-normal shrink-0">
+          <Loader2 className="w-3 h-3 animate-spin text-[var(--accent-text)]" />
+          <span>Verifica...</span>
+        </span>
+      );
+    }
+
+    if (!cred) {
+      return (
+        <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)] inline-flex items-center justify-center leading-normal shrink-0">
+          In standby
+        </span>
+      );
+    }
+
+    const status = cred.operational_status;
+    const isQuotaExhausted =
+      status === 'temporarily_failing' &&
+      (!cred.last_error_message ||
+        cred.last_error_message.toLowerCase().includes('quota') ||
+        cred.last_error_message.toLowerCase().includes('rpd') ||
+        cred.last_error_code === 429);
+
+    const baseBadge =
+      'text-[11px] font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center justify-center leading-normal shrink-0';
+
+    switch (status) {
+      case 'active':
+        return (
+          <span className={`${baseBadge} bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)]`}>
+            Attiva
+          </span>
+        );
+      case 'unused':
+        return (
+          <span className={`${baseBadge} bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)]`}>
+            In standby
+          </span>
+        );
+      case 'temporarily_failing':
+        return (
+          <span className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-border,var(--border-default))]`}>
+            {isQuotaExhausted ? 'Quota esaurita (oggi)' : 'Non disponibile (temporaneo)'}
+          </span>
+        );
+      case 'invalid':
+        return (
+          <span className={`${baseBadge} bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-border,var(--border-default))]`}>
+            Non valida (401)
+          </span>
+        );
+      case 'permission_denied':
+        return (
+          <span className={`${baseBadge} bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-border,var(--border-default))]`}>
+            Permesso negato (403)
+          </span>
+        );
+      case 'request_error':
+        return (
+          <span className={`${baseBadge} bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-border,var(--border-default))]`}>
+            Errore richiesta (400)
+          </span>
+        );
+      default:
+        return (
+          <span className={`${baseBadge} bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)]`}>
+            In standby
+          </span>
+        );
+    }
+  };
+
+  const primaryCred = getCredentialFor(apiKey, true);
+  const primaryMaskedDisplay = apiKey
+    ? (apiKey.length > 8 ? `...${apiKey.slice(-4)}` : apiKey)
+    : (primaryCred?.masked_key
+        ? (primaryCred.masked_key.length > 8 ? `...${primaryCred.masked_key.slice(-4)}` : primaryCred.masked_key)
+        : (hasProtectedKey ? '••••••••••••' : ''));
+
+  const isPrimaryRevealed = showAllKeys || Boolean(revealedKeys['primary']);
+
+  const primaryKebabItems: KebabMenuItem[] = [
+    ...(apiKey
+      ? [
+          {
+            label: copiedKeyId === 'primary' ? 'Chiave copiata!' : 'Copia chiave',
+            icon: copiedKeyId === 'primary' ? <Check className="w-3.5 h-3.5 text-[var(--success-text)]" /> : <Copy className="w-3.5 h-3.5" />,
+            onClick: () => handleCopyKey(apiKey, 'primary'),
+          },
+          {
+            label: isPrimaryRevealed ? 'Nascondi chiave' : 'Mostra in chiaro',
+            icon: isPrimaryRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />,
+            onClick: () => toggleRowReveal('primary'),
+          },
+          { separator: true as const },
+        ]
+      : []),
+    {
+      label: 'Rimuovi chiave',
+      icon: <Trash2 className="w-3.5 h-3.5" />,
+      danger: true,
+      onClick: () =>
+        setDeleteTarget({
+          type: 'primary',
+          label: 'Chiave Principale',
+          maskedKey: primaryMaskedDisplay,
+        }),
+    },
+  ];
 
   return (
     <div className="space-y-3">
-      {/* Primary API Key Field */}
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <label className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
-            <Key className="w-4 h-4 text-[var(--accent-text)]" />
-            <span>Google Gemini API Key (Principale)</span>
-          </label>
-          <button
-            type="button"
-            onClick={() => setShowPrimaryKey(prev => !prev)}
-            className="p-1 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
-            title={showPrimaryKey ? 'Nascondi chiave' : 'Mostra chiave'}
-          >
-            {showPrimaryKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-          </button>
-        </div>
-        <div className="relative">
-          <input
-            type={showPrimaryKey ? 'text' : 'password'}
-            value={apiKey}
-            onChange={e => setApiKey(e.target.value)}
-            placeholder="AIzaSy... oppure AQ..."
-            className={`w-full app-input !py-2 !px-3.5 text-sm font-mono border border-[var(--border-strong)] rounded-lg min-h-[40px] ${
-              isInvalidFormat ? 'border-[var(--error-ring)]' : ''
-            }`}
-          />
-        </div>
-
-        {hasProtectedKey && (
-          <p className="text-xs flex items-center gap-1.5 text-[var(--success-text)] font-medium">
-            <ShieldCheck className="w-4 h-4 shrink-0" />
-            <span>Salvata in sicurezza (Windows DPAPI / Keychain)</span>
-          </p>
-        )}
-
-        {isInvalidFormat && (
-          <div className="alert-card is-error text-xs flex-row items-center gap-2 py-2 px-3 animate-fade-in">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span className="font-medium leading-snug">
-              Formato API key non valido (deve iniziare con &quot;AIzaSy&quot; o &quot;AQ.&quot;)
+      {/* 1. Header with count & global actions */}
+      <div className="flex items-center justify-between gap-3 pb-0.5">
+        <div className="flex items-center gap-2 min-w-0">
+          <Key className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
+          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] truncate">
+            Stato Chiavi Configurate
+          </h3>
+          {totalKeysCount > 0 && (
+            <span className="text-[11px] font-semibold text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-default)] px-2 py-0.5 rounded-full leading-normal shrink-0">
+              {totalKeysCount} {totalKeysCount === 1 ? 'chiave' : 'chiavi'}
             </span>
-          </div>
-        )}
+          )}
+        </div>
 
-        {apiKeyInsecure && (
-          <div className="alert-card is-warning text-xs space-y-1">
-            <div className="font-bold flex items-center gap-1.5">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              Memorizzazione in chiaro
-            </div>
-            <p className="text-[var(--text-secondary)]">
-              {apiKeyInsecureReason || 'Impossibile cifrare l\'API key sul sistema corrente. Verrà salvata in modo sicuro ma non cifrato.'}
-            </p>
-          </div>
-        )}
-
-        {/* Onboarding info card */}
-        <div className="mt-1 p-2.5 px-3 rounded-xl bg-[var(--accent-subtle)] border border-[var(--accent-ring)] flex items-start gap-2.5 text-xs text-[var(--accent-text)]">
-          <Lightbulb className="w-4 h-4 shrink-0 mt-0.5 text-[var(--accent-text)]" />
-          <p className="flex-1 min-w-0 text-xs text-[var(--accent-text)] leading-relaxed">
-            <span className="font-semibold">Non hai una chiave?</span>{' '}
-            <span>È gratuita al 100%:{' '}</span>
-            <a
-              href="https://aistudio.google.com/apikey"
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={e => {
-                e.preventDefault();
-                window.pywebview?.api?.open_url?.('https://aistudio.google.com/apikey');
-              }}
-              className="font-bold underline hover:opacity-80 inline-flex items-center gap-1 ml-0.5 cursor-pointer"
+        <div className="flex items-center gap-1 shrink-0">
+          {totalKeysCount > 0 && (
+            <button
+              type="button"
+              onClick={toggleAllReveal}
+              className="p-1.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+              title={hasAnyRevealedKey ? 'Nascondi tutte le chiavi' : 'Mostra tutte le chiavi in chiaro'}
+              aria-label={hasAnyRevealedKey ? 'Nascondi tutte le chiavi' : 'Mostra chiavi'}
             >
-              <span>Ottieni gratis su aistudio.google.com</span>
-              <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-            </a>
-          </p>
+              {hasAnyRevealedKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            </button>
+          )}
+
+          {onRefreshUsage && (
+            <button
+              type="button"
+              onClick={onRefreshUsage}
+              disabled={isLoadingUsage}
+              className="p-1.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 cursor-pointer group/refresh"
+              title="Aggiorna stato quote API"
+              aria-label="Aggiorna stato quote API"
+            >
+              <RefreshCw
+                className={`w-3.5 h-3.5 transition-transform duration-500 ease-out ${
+                  isLoadingUsage
+                    ? 'animate-spin text-[var(--accent-text)]'
+                    : 'group-hover/refresh:rotate-180'
+                }`}
+              />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Fallback API Keys - Collapsible disclosure toggle, collapsed by default */}
-      <details className="group/fallback pt-0.5 text-sm">
-        <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-center justify-between text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors min-h-[28px] py-1 select-none">
-          <span className="font-semibold flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-            <ChevronRight className="w-4 h-4 transition-transform duration-200 group-open/fallback:rotate-90 text-[var(--text-secondary)]" />
-            <span>Opzioni avanzate: Chiavi di riserva (Fallback)</span>
-            {cleanedFallbackKeys.length > 0 && (
-              <span className="ml-1.5 px-1.5 h-5 inline-flex items-center justify-center rounded-full bg-[var(--bg-surface)] border border-[var(--border-default)] text-[11px] font-mono font-bold text-[var(--text-secondary)] leading-none">
-                {cleanedFallbackKeys.length}
-              </span>
-            )}
-          </span>
+      {/* 2. Compact Add Key Bar */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 min-w-0">
+          <input
+            type={showNewKeyInput ? 'text' : 'password'}
+            value={newKeyInput}
+            onChange={e => {
+              setNewKeyInput(e.target.value);
+              if (notice) setNotice(null);
+            }}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            placeholder={
+              hasPrimaryConfigured
+                ? 'Aggiungi chiave di riserva (AIzaSy... o AQ...)'
+                : 'Inserisci chiave principale (AIzaSy... o AQ...)'
+            }
+            aria-label="Nuova chiave di riserva"
+            className={`w-full app-input !py-1.5 !pl-3 !pr-9 text-xs font-mono border border-[var(--border-strong)] rounded-lg min-h-[38px] ${
+              notice?.type === 'error' ? 'border-[var(--error-ring)]' : ''
+            }`}
+          />
           <button
             type="button"
-            onClick={e => {
-              e.preventDefault();
-              setShowFallbackKeys(prev => !prev);
-            }}
-            className="p-1 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
-            title={showFallbackKeys ? 'Nascondi chiavi' : 'Mostra chiavi'}
-            aria-label={showFallbackKeys ? 'Nascondi chiavi' : 'Mostra chiavi'}
+            onClick={() => setShowNewKeyInput(prev => !prev)}
+            className="absolute inset-y-0 right-2 flex items-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+            aria-label={showNewKeyInput ? 'Nascondi nuova chiave' : 'Mostra nuova chiave'}
+            title={showNewKeyInput ? 'Nascondi nuova chiave' : 'Mostra nuova chiave'}
           >
-            {showFallbackKeys ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            {showNewKeyInput ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
           </button>
-        </summary>
-        <div className="mt-2 pl-5 space-y-3">
-          {/* Add Key Box */}
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1 min-w-0">
-              <input
-                type={showFallbackKeys ? 'text' : 'password'}
-                value={newKeyInput}
-                onChange={e => {
-                  setNewKeyInput(e.target.value);
-                  if (fallbackNotice) setFallbackNotice(null);
-                }}
-                onKeyDown={handleKeyDown}
-                onPaste={handlePaste}
-                placeholder="Aggiungi chiave di riserva (AIzaSy...)"
-                aria-label="Nuova chiave di riserva"
-                className={`w-full app-input !py-1.5 !px-3 text-xs font-mono border border-[var(--border-strong)] rounded-lg min-h-[36px] ${
-                  fallbackNotice?.type === 'error' ? 'border-[var(--error-ring)]' : ''
-                }`}
-              />
-            </div>
-            <button
-              type="button"
-              onClick={handleAddFallbackKey}
-              disabled={!newKeyInput.trim()}
-              className="px-3 py-1.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-xs font-medium text-[var(--text-primary)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 shrink-0 cursor-pointer min-h-[36px]"
-              aria-label="Aggiungi chiave di riserva"
-            >
-              <Plus className="w-3.5 h-3.5 text-[var(--accent-text)]" />
-              <span>Aggiungi</span>
-            </button>
-          </div>
+        </div>
+        <button
+          type="button"
+          onClick={handleAddKey}
+          disabled={!newKeyInput.trim()}
+          className="px-3.5 py-1.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-xs font-semibold text-[var(--text-primary)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 shrink-0 cursor-pointer min-h-[38px]"
+          aria-label="Aggiungi chiave di riserva"
+        >
+          <Plus className="w-3.5 h-3.5 text-[var(--accent-text)]" />
+          <span>Aggiungi</span>
+        </button>
+      </div>
 
-          {/* Validation Notice / Error */}
-          {fallbackNotice && (
-            <div
-              className={`alert-card ${
-                fallbackNotice.type === 'warning' ? 'is-warning' : 'is-error'
-              } text-xs flex-row items-center gap-2 py-2 px-3 animate-fade-in`}
-            >
-              {fallbackNotice.type === 'warning' ? (
-                <AlertTriangle className="w-4 h-4 shrink-0" />
-              ) : (
-                <AlertCircle className="w-4 h-4 shrink-0" />
-              )}
-              <span className="font-medium leading-snug">{fallbackNotice.message}</span>
-            </div>
-          )}
-
-          {/* Masked Key Chips (Option A) */}
-          {cleanedFallbackKeys.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2 pt-0.5">
-              {cleanedFallbackKeys.map((key, idx) => {
-                const masked = key.length > 8 ? `...${key.slice(-4)}` : key;
-                return (
-                  <div
-                    key={`${key}-${idx}`}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] text-xs font-mono text-[var(--text-primary)] transition-colors group/chip"
-                  >
-                    <Key className="w-3 h-3 text-[var(--accent-text)] shrink-0" />
-                    <span
-                      className="select-all"
-                      title={showFallbackKeys ? key : `Termina con ${key.slice(-4)}`}
-                    >
-                      {showFallbackKeys ? key : masked}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveFallbackKey(idx)}
-                      className="p-0.5 rounded-full hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--error-text)] transition-colors cursor-pointer"
-                      title="Rimuovi chiave di riserva"
-                      aria-label={`Rimuovi chiave che termina con ${key.slice(-4)}`}
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+      {/* Validation / Format Notice */}
+      {notice && (
+        <div
+          className={`alert-card ${
+            notice.type === 'warning' ? 'is-warning' : 'is-error'
+          } text-xs flex-row items-center gap-2 py-2 px-3 animate-fade-in`}
+        >
+          {notice.type === 'warning' ? (
+            <AlertTriangle className="w-4 h-4 shrink-0" />
           ) : (
-            <p className="text-xs text-[var(--text-secondary)] italic">
-              Nessuna chiave di riserva aggiunta.
-            </p>
+            <AlertCircle className="w-4 h-4 shrink-0" />
           )}
+          <span className="font-medium leading-snug">{notice.message}</span>
+        </div>
+      )}
 
-          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            Usate automaticamente se la chiave principale esaurisce la quota giornaliera.
+      {/* Storage / Security notice */}
+      {apiKeyInsecure && (
+        <div className="alert-card is-warning text-xs space-y-1">
+          <div className="font-bold flex items-center gap-1.5">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            Memorizzazione in chiaro
+          </div>
+          <p className="text-[var(--text-secondary)]">
+            {apiKeyInsecureReason ||
+              "Impossibile cifrare l'API key sul sistema corrente. Verrà salvata in modo sicuro ma non cifrato."}
           </p>
         </div>
-      </details>
+      )}
+
+      {/* 3. Structured Card Table (Quotas Layout) */}
+      <div className="border border-[var(--border-default)] rounded-xl divide-y divide-[var(--border-default)] overflow-hidden bg-[var(--bg-surface)]">
+        {/* Row 1: Chiave Principale (if configured) */}
+        {hasPrimaryConfigured ? (
+          <div className="p-3 flex items-center justify-between gap-2.5 text-xs">
+            <div className="flex items-center gap-2 min-w-0 flex-wrap">
+              <span className="font-bold text-[var(--text-primary)]">Chiave Principale</span>
+
+              <span
+                className="px-2.5 py-0.5 rounded-full bg-[var(--bg-hover)] border border-[var(--border-default)] font-mono text-[11px] text-[var(--text-primary)] font-semibold inline-flex items-center leading-normal select-all"
+                title={isPrimaryRevealed ? apiKey : `Termina con ${primaryMaskedDisplay}`}
+              >
+                {isPrimaryRevealed && apiKey ? apiKey : primaryMaskedDisplay}
+              </span>
+
+              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)] inline-flex items-center leading-normal">
+                Principale
+              </span>
+
+              {hasProtectedKey && !apiKey && (
+                <span
+                  className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[var(--bg-hover)] text-[var(--success-text)] border border-[var(--border-default)] inline-flex items-center gap-1 leading-normal"
+                  title="Salvata in sicurezza (Windows DPAPI / Keychain)"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                  <span>DPAPI</span>
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {renderCredentialStatusBadge(primaryCred)}
+
+              <div onClick={e => e.stopPropagation()}>
+                <KebabMenu
+                  items={primaryKebabItems}
+                  ariaLabel="Opzioni chiave principale"
+                  title="Opzioni chiave principale"
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Rows 2..N: Fallback Keys */}
+        {cleanedFallbackKeys.map((key, idx) => {
+          const rowId = `fallback-${key}`;
+          const isRevealed = showAllKeys || Boolean(revealedKeys[rowId]);
+          const masked = key.length > 8 ? `...${key.slice(-4)}` : key;
+          const cred = getCredentialFor(key, false, idx);
+          const label = `Chiave Riserva ${idx + 1}`;
+
+          const fallbackKebabItems: KebabMenuItem[] = [
+            {
+              label: 'Imposta come principale',
+              icon: <Star className="w-3.5 h-3.5" />,
+              onClick: () => handlePromoteToPrimary(idx),
+            },
+            {
+              label: 'Sposta su di priorità',
+              icon: <ArrowUp className="w-3.5 h-3.5" />,
+              disabled: idx === 0,
+              onClick: () => handleMoveUp(idx),
+            },
+            {
+              label: 'Sposta giù di priorità',
+              icon: <ArrowDown className="w-3.5 h-3.5" />,
+              disabled: idx === cleanedFallbackKeys.length - 1,
+              onClick: () => handleMoveDown(idx),
+            },
+            { separator: true as const },
+            {
+              label: copiedKeyId === rowId ? 'Chiave copiata!' : 'Copia chiave',
+              icon: copiedKeyId === rowId ? <Check className="w-3.5 h-3.5 text-[var(--success-text)]" /> : <Copy className="w-3.5 h-3.5" />,
+              onClick: () => handleCopyKey(key, rowId),
+            },
+            {
+              label: isRevealed ? 'Nascondi chiave' : 'Mostra in chiaro',
+              icon: isRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />,
+              onClick: () => toggleRowReveal(rowId),
+            },
+            { separator: true as const },
+            {
+              label: 'Rimuovi chiave',
+              icon: <Trash2 className="w-3.5 h-3.5" />,
+              danger: true,
+              onClick: () =>
+                setDeleteTarget({
+                  type: 'fallback',
+                  index: idx,
+                  label,
+                  maskedKey: masked,
+                }),
+            },
+          ];
+
+          return (
+            <div
+              key={`${key}-${idx}`}
+              className="p-3 flex items-center justify-between gap-2.5 text-xs"
+            >
+              <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                <span className="font-bold text-[var(--text-primary)]">{label}</span>
+
+                <span
+                  className="px-2.5 py-0.5 rounded-full bg-[var(--bg-hover)] border border-[var(--border-default)] font-mono text-[11px] text-[var(--text-primary)] font-semibold inline-flex items-center leading-normal select-all"
+                  title={isRevealed ? key : `Termina con ${key.slice(-4)}`}
+                >
+                  {isRevealed ? key : masked}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {renderCredentialStatusBadge(cred)}
+
+                <div onClick={e => e.stopPropagation()}>
+                  <KebabMenu
+                    items={fallbackKebabItems}
+                    ariaLabel={`Opzioni ${label}`}
+                    title={`Opzioni ${label}`}
+                  />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Empty state inside the card table */}
+        {totalKeysCount === 0 && (
+          <div className="p-6 text-center text-xs text-[var(--text-secondary)] space-y-1">
+            <p className="font-semibold text-[var(--text-primary)]">Nessuna chiave API configurata</p>
+            <p>Inserisci la tua prima chiave API nel campo qui sopra per abilitare le trascrizioni.</p>
+          </div>
+        )}
+      </div>
+
+      {/* 4. Quiet Footer Caption with AI Studio link */}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-secondary)] pt-0.5 leading-relaxed">
+        <span>Le chiavi di riserva subentrano in ordine quando la principale esaurisce la quota (RPD).</span>
+        <a
+          href="https://aistudio.google.com/apikey"
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={e => {
+            e.preventDefault();
+            window.pywebview?.api?.open_url?.('https://aistudio.google.com/apikey');
+          }}
+          className="font-medium underline hover:text-[var(--text-primary)] inline-flex items-center gap-1 cursor-pointer text-[var(--accent-text)] shrink-0"
+        >
+          <span>Ottieni gratis su aistudio.google.com</span>
+          <ExternalLink className="w-3 h-3 shrink-0" />
+        </a>
+      </div>
+
+      {/* 5. Delete Confirmation Dialog */}
+      <ConfirmActionModal
+        isOpen={Boolean(deleteTarget)}
+        title="Rimuovi chiave API"
+        description={
+          deleteTarget?.type === 'primary'
+            ? cleanedFallbackKeys.length > 0
+              ? `Sei sicuro di voler rimuovere la Chiave Principale (${deleteTarget.maskedKey})? La Chiave Riserva 1 verrà promossa automaticamente a nuova chiave principale.`
+              : `Sei sicuro di voler rimuovere la Chiave Principale (${deleteTarget?.maskedKey})? Non sarà più possibile eseguire trascrizioni fino all'inserimento di una nuova chiave.`
+            : `Sei sicuro di voler rimuovere ${deleteTarget?.label || 'questa chiave di riserva'} (${deleteTarget?.maskedKey})?`
+        }
+        confirmLabel="Rimuovi"
+        cancelLabel="Annulla"
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 });

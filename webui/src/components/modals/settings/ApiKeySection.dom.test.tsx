@@ -1,7 +1,8 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiKeySection } from './ApiKeySection';
+import type { ApiUsageResult } from '../../../bridge';
 
 describe('ApiKeySection component', () => {
   const defaultProps = {
@@ -14,16 +15,16 @@ describe('ApiKeySection component', () => {
     setFallbackKeys: vi.fn(),
   };
 
-  it('renders primary API key and shows empty fallback state', () => {
+  it('renders primary API key in the card table and shows count', () => {
     render(<ApiKeySection {...defaultProps} />);
 
-    const primaryInput = screen.getByPlaceholderText(/AIzaSy\.\.\. oppure AQ\.\.\./i) as HTMLInputElement;
-    expect(primaryInput.value).toBe(defaultProps.apiKey);
-
-    expect(screen.getByText(/Nessuna chiave di riserva aggiunta\./i)).toBeTruthy();
+    expect(screen.getByText('Chiave Principale')).toBeTruthy();
+    expect(screen.getByText('Principale')).toBeTruthy();
+    expect(screen.getByText('...2345')).toBeTruthy();
+    expect(screen.getByText('1 chiave')).toBeTruthy();
   });
 
-  it('renders existing fallback keys as masked chips (...XXXX)', () => {
+  it('renders existing fallback keys as masked rows (...XXXX)', () => {
     const fallbackKeys = [
       'AIzaSyBackupKey11111111111111ABCD',
       'AIzaSyBackupKey22222222222222WXYZ',
@@ -31,11 +32,11 @@ describe('ApiKeySection component', () => {
 
     render(<ApiKeySection {...defaultProps} fallbackKeys={fallbackKeys} />);
 
-    // Should show masked keys
     expect(screen.getByText('...ABCD')).toBeTruthy();
     expect(screen.getByText('...WXYZ')).toBeTruthy();
-    // Count badge should show 2
-    expect(screen.getByText('2')).toBeTruthy();
+    expect(screen.getByText('Chiave Riserva 1')).toBeTruthy();
+    expect(screen.getByText('Chiave Riserva 2')).toBeTruthy();
+    expect(screen.getByText('3 chiavi')).toBeTruthy();
   });
 
   it('adds a valid fallback key when clicking Aggiungi button', () => {
@@ -45,7 +46,6 @@ describe('ApiKeySection component', () => {
     const input = screen.getByLabelText('Nuova chiave di riserva');
     const addButton = screen.getByRole('button', { name: 'Aggiungi chiave di riserva' }) as HTMLButtonElement;
 
-    // Button should be disabled initially
     expect(addButton.disabled).toBe(true);
 
     fireEvent.change(input, { target: { value: 'AIzaSyValidKey9999999999999999' } });
@@ -54,6 +54,34 @@ describe('ApiKeySection component', () => {
     fireEvent.click(addButton);
 
     expect(setFallbackKeys).toHaveBeenCalledWith(['AIzaSyValidKey9999999999999999']);
+  });
+
+  it('sets primary key when adding the first key to an empty configuration', () => {
+    const setApiKey = vi.fn();
+    render(
+      <ApiKeySection
+        {...defaultProps}
+        apiKey=""
+        setApiKey={setApiKey}
+      />
+    );
+
+    const input = screen.getByLabelText('Nuova chiave di riserva');
+    fireEvent.change(input, { target: { value: 'AIzaSyValidPrimary999999999' } });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+    expect(setApiKey).toHaveBeenCalledWith('AIzaSyValidPrimary999999999');
+  });
+
+  it('masks a new API key by default and reveals it only on request', () => {
+    render(<ApiKeySection {...defaultProps} />);
+
+    const input = screen.getByLabelText('Nuova chiave di riserva') as HTMLInputElement;
+    expect(input.type).toBe('password');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mostra nuova chiave' }));
+    expect(input.type).toBe('text');
+    expect(screen.getByRole('button', { name: 'Nascondi nuova chiave' })).toBeTruthy();
   });
 
   it('adds a valid fallback key when pressing Enter', () => {
@@ -144,7 +172,7 @@ describe('ApiKeySection component', () => {
     ]);
   });
 
-  it('removes a fallback key when clicking the X button', () => {
+  it('removes a fallback key after confirmation prompt', () => {
     const setFallbackKeys = vi.fn();
     const fallbackKeys = [
       'AIzaSyBackupKey11111111111111ABCD',
@@ -153,15 +181,157 @@ describe('ApiKeySection component', () => {
 
     render(<ApiKeySection {...defaultProps} fallbackKeys={fallbackKeys} setFallbackKeys={setFallbackKeys} />);
 
-    const removeButtons = screen.getAllByTitle('Rimuovi chiave di riserva');
-    expect(removeButtons).toHaveLength(2);
+    const kebab = screen.getByRole('button', { name: 'Opzioni Chiave Riserva 1' });
+    fireEvent.click(kebab);
 
-    fireEvent.click(removeButtons[0]);
+    const removeBtn = screen.getByRole('button', { name: 'Rimuovi chiave' });
+    fireEvent.click(removeBtn);
+
+    // Confirmation modal should open
+    expect(screen.getByText('Rimuovi chiave API')).toBeTruthy();
+    expect(screen.getByText(/Sei sicuro di voler rimuovere Chiave Riserva 1/i)).toBeTruthy();
+
+    // Confirm removal
+    const confirmBtn = screen.getByRole('button', { name: 'Rimuovi' });
+    fireEvent.click(confirmBtn);
 
     expect(setFallbackKeys).toHaveBeenCalledWith(['AIzaSyBackupKey22222222222222WXYZ']);
   });
 
-  it('toggles visibility of full fallback keys when eye button is clicked', () => {
+  it('removes primary key and auto-promotes first reserve key after confirmation', () => {
+    const setApiKey = vi.fn();
+    const setFallbackKeys = vi.fn();
+    const fallbackKeys = [
+      'AIzaSyBackupKey11111111111111ABCD',
+      'AIzaSyBackupKey22222222222222WXYZ',
+    ];
+
+    render(
+      <ApiKeySection
+        {...defaultProps}
+        fallbackKeys={fallbackKeys}
+        setApiKey={setApiKey}
+        setFallbackKeys={setFallbackKeys}
+      />
+    );
+
+    const kebab = screen.getByRole('button', { name: 'Opzioni chiave principale' });
+    fireEvent.click(kebab);
+
+    const removePrimaryBtn = screen.getByRole('button', { name: 'Rimuovi chiave' });
+    fireEvent.click(removePrimaryBtn);
+
+    expect(screen.getByText('Rimuovi chiave API')).toBeTruthy();
+    expect(screen.getByText(/La Chiave Riserva 1 verrà promossa automaticamente/i)).toBeTruthy();
+
+    const confirmBtn = screen.getByRole('button', { name: 'Rimuovi' });
+    fireEvent.click(confirmBtn);
+
+    expect(setApiKey).toHaveBeenCalledWith('AIzaSyBackupKey11111111111111ABCD');
+    expect(setFallbackKeys).toHaveBeenCalledWith(['AIzaSyBackupKey22222222222222WXYZ']);
+  });
+
+  it('requests explicit deletion when the primary key is protected and inaccessible', () => {
+    const setApiKey = vi.fn();
+    const onClearProtectedPrimary = vi.fn();
+
+    render(
+      <ApiKeySection
+        {...defaultProps}
+        apiKey=""
+        setApiKey={setApiKey}
+        hasProtectedKey
+        onClearProtectedPrimary={onClearProtectedPrimary}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Opzioni chiave principale' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Rimuovi chiave' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Rimuovi' }));
+
+    expect(setApiKey).toHaveBeenCalledWith('');
+    expect(onClearProtectedPrimary).toHaveBeenCalledTimes(1);
+  });
+
+  it('promotes a reserve key to primary and swaps current primary into reserves', () => {
+    const setApiKey = vi.fn();
+    const setFallbackKeys = vi.fn();
+    const fallbackKeys = [
+      'AIzaSyBackupKey11111111111111ABCD',
+      'AIzaSyBackupKey22222222222222WXYZ',
+    ];
+
+    render(
+      <ApiKeySection
+        {...defaultProps}
+        fallbackKeys={fallbackKeys}
+        setApiKey={setApiKey}
+        setFallbackKeys={setFallbackKeys}
+      />
+    );
+
+    const kebab = screen.getByRole('button', { name: 'Opzioni Chiave Riserva 2' });
+    fireEvent.click(kebab);
+
+    const promoteBtn = screen.getByRole('button', { name: 'Imposta come principale' });
+    fireEvent.click(promoteBtn);
+
+    expect(setApiKey).toHaveBeenCalledWith('AIzaSyBackupKey22222222222222WXYZ');
+    expect(setFallbackKeys).toHaveBeenCalledWith([
+      'AIzaSyBackupKey11111111111111ABCD',
+      defaultProps.apiKey,
+    ]);
+  });
+
+  it('reorders reserve keys with move up and move down buttons', () => {
+    const setFallbackKeys = vi.fn();
+    const fallbackKeys = [
+      'AIzaSyBackupKey11111111111111ABCD',
+      'AIzaSyBackupKey22222222222222WXYZ',
+      'AIzaSyBackupKey33333333333333KLMN',
+    ];
+
+    render(
+      <ApiKeySection
+        {...defaultProps}
+        fallbackKeys={fallbackKeys}
+        setFallbackKeys={setFallbackKeys}
+      />
+    );
+
+    // Move Down on first reserve via Kebab Menu
+    const kebab = screen.getByRole('button', { name: 'Opzioni Chiave Riserva 1' });
+    fireEvent.click(kebab);
+
+    const moveDownFirst = screen.getByRole('button', { name: 'Sposta giù di priorità' });
+    fireEvent.click(moveDownFirst);
+
+    expect(setFallbackKeys).toHaveBeenCalledWith([
+      'AIzaSyBackupKey22222222222222WXYZ',
+      'AIzaSyBackupKey11111111111111ABCD',
+      'AIzaSyBackupKey33333333333333KLMN',
+    ]);
+  });
+
+  it('keeps reveal state attached to the same key after reordering', () => {
+    const firstKey = 'AIzaSyBackupKey11111111111111ABCD';
+    const secondKey = 'AIzaSyBackupKey22222222222222WXYZ';
+    const { rerender } = render(
+      <ApiKeySection {...defaultProps} fallbackKeys={[firstKey, secondKey]} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Opzioni Chiave Riserva 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mostra in chiaro' }));
+    expect(screen.getByText(firstKey)).toBeTruthy();
+
+    rerender(<ApiKeySection {...defaultProps} fallbackKeys={[secondKey, firstKey]} />);
+
+    expect(screen.getByText(firstKey)).toBeTruthy();
+    expect(screen.getByText('...WXYZ')).toBeTruthy();
+    expect(screen.queryByText(secondKey)).toBeNull();
+  });
+
+  it('toggles visibility of full fallback keys when header eye button is clicked', () => {
     const fallbackKeys = ['AIzaSyBackupKey11111111111111ABCD'];
     render(<ApiKeySection {...defaultProps} fallbackKeys={fallbackKeys} />);
 
@@ -176,7 +346,138 @@ describe('ApiKeySection component', () => {
     expect(screen.getByText('AIzaSyBackupKey11111111111111ABCD')).toBeTruthy();
   });
 
-  it('renders onboarding info card with uniform styling and handles external link click', () => {
+  it('toggles visibility of a single fallback key via kebab menu', () => {
+    const fallbackKeys = ['AIzaSyBackupKey11111111111111ABCD'];
+    render(<ApiKeySection {...defaultProps} fallbackKeys={fallbackKeys} />);
+
+    expect(screen.getByText('...ABCD')).toBeTruthy();
+    expect(screen.queryByText('AIzaSyBackupKey11111111111111ABCD')).toBeNull();
+
+    const kebab = screen.getByRole('button', { name: 'Opzioni Chiave Riserva 1' });
+    fireEvent.click(kebab);
+
+    const revealBtn = screen.getByRole('button', { name: 'Mostra in chiaro' });
+    fireEvent.click(revealBtn);
+
+    expect(screen.getByText('AIzaSyBackupKey11111111111111ABCD')).toBeTruthy();
+  });
+
+  it('hides individually revealed keys with the global hide action', () => {
+    const fallbackKey = 'AIzaSyBackupKey11111111111111ABCD';
+    render(<ApiKeySection {...defaultProps} fallbackKeys={[fallbackKey]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Opzioni Chiave Riserva 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mostra in chiaro' }));
+    expect(screen.getByText(fallbackKey)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Nascondi tutte le chiavi' }));
+
+    expect(screen.queryByText(fallbackKey)).toBeNull();
+    expect(screen.getByText('...ABCD')).toBeTruthy();
+  });
+
+  it('copies key to clipboard via kebab menu', async () => {
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: writeTextMock,
+      },
+    });
+
+    const fallbackKeys = ['AIzaSyBackupKey11111111111111ABCD'];
+    render(<ApiKeySection {...defaultProps} fallbackKeys={fallbackKeys} />);
+
+    const kebab = screen.getByRole('button', { name: 'Opzioni Chiave Riserva 1' });
+    fireEvent.click(kebab);
+
+    const copyBtn = screen.getByRole('button', { name: 'Copia chiave' });
+    await act(async () => {
+      fireEvent.click(copyBtn);
+    });
+
+    expect(writeTextMock).toHaveBeenCalledWith('AIzaSyBackupKey11111111111111ABCD');
+  });
+
+  it('renders live status badges from apiUsage telemetry', () => {
+    const mockUsage: ApiUsageResult = {
+      credentials: [
+        {
+          id: 'cred-1',
+          masked_key: '...2345',
+          label: 'Chiave Principale',
+          is_primary: true,
+          operational_status: 'temporarily_failing',
+          last_error_message: 'Quota esaurita (RPD limit reached)',
+          last_error_code: 429,
+          key_type: 'standard_legacy',
+          project_id: 'test-project',
+        },
+        {
+          id: 'cred-2',
+          masked_key: '...ABCD',
+          label: 'Chiave Riserva 1',
+          is_primary: false,
+          operational_status: 'active',
+          last_error_message: null,
+          last_error_code: null,
+          key_type: 'standard_legacy',
+          project_id: 'test-project',
+        },
+      ],
+    } as unknown as ApiUsageResult;
+
+    render(
+      <ApiKeySection
+        {...defaultProps}
+        fallbackKeys={['AIzaSyBackupKey11111111111111ABCD']}
+        apiUsage={mockUsage}
+      />
+    );
+
+    expect(screen.getByText('Quota esaurita (oggi)')).toBeTruthy();
+    expect(screen.getByText('Attiva')).toBeTruthy();
+  });
+
+  it('matches stale telemetry by key identity after primary promotion', () => {
+    const oldPrimary = 'AIzaSyPrimary0123456789012345';
+    const promotedKey = 'AIzaSyBackupKey11111111111111ABCD';
+    const staleUsage = {
+      credentials: [
+        {
+          masked_key: 'AIzaSy...2345',
+          is_primary: true,
+          operational_status: 'temporarily_failing',
+          last_error_message: 'Quota RPD esaurita',
+          last_error_code: 429,
+        },
+        {
+          masked_key: 'AIzaSy...ABCD',
+          is_primary: false,
+          operational_status: 'active',
+          last_error_message: null,
+          last_error_code: null,
+        },
+      ],
+    } as unknown as ApiUsageResult;
+
+    render(
+      <ApiKeySection
+        {...defaultProps}
+        apiKey={promotedKey}
+        fallbackKeys={[oldPrimary]}
+        apiUsage={staleUsage}
+      />
+    );
+
+    const primaryRow = screen.getByText('Chiave Principale').closest('.p-3');
+    const fallbackRow = screen.getByText('Chiave Riserva 1').closest('.p-3');
+    expect(primaryRow).not.toBeNull();
+    expect(fallbackRow).not.toBeNull();
+    expect(within(primaryRow as HTMLElement).getByText('Attiva')).toBeTruthy();
+    expect(within(fallbackRow as HTMLElement).getByText('Quota esaurita (oggi)')).toBeTruthy();
+  });
+
+  it('renders footer caption and handles external link click', () => {
     const openUrlMock = vi.fn();
     (window as unknown as { pywebview: { api: { open_url: typeof openUrlMock } } }).pywebview = {
       api: { open_url: openUrlMock },
@@ -184,8 +485,7 @@ describe('ApiKeySection component', () => {
 
     render(<ApiKeySection {...defaultProps} />);
 
-    expect(screen.getByText('Non hai una chiave?')).toBeTruthy();
-    expect(screen.getByText(/È gratuita al 100%:/)).toBeTruthy();
+    expect(screen.getByText(/Le chiavi di riserva subentrano in ordine/i)).toBeTruthy();
 
     const link = screen.getByRole('link', { name: /Ottieni gratis su aistudio\.google\.com/i });
     expect(link).toBeTruthy();
@@ -205,7 +505,6 @@ describe('ApiKeySection component', () => {
     );
 
     const input = screen.getByLabelText('Nuova chiave di riserva');
-    // Mixed: 1 valid new, 1 duplicate of existing, 1 invalid format, 1 matching primary key
     const mixedBatch = `AIzaSyValidNewKey22222222222222\nAIzaSyBackupKey11111111111111ABCD\ninvalid_format\n${defaultProps.apiKey}`;
     fireEvent.paste(input, {
       clipboardData: {
