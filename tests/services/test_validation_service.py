@@ -510,6 +510,10 @@ class TestValidationKeyringCheck(unittest.TestCase):
         self.assertIn("AIzaSy...2345", report)
 
     @patch(
+        "el_sbobinator.services.validation_service.platform.system",
+        return_value="Windows",
+    )
+    @patch(
         "el_sbobinator.services.validation_service.get_session_root",
         return_value=".",
     )
@@ -537,6 +541,10 @@ class TestValidationKeyringCheck(unittest.TestCase):
         )
 
     @patch(
+        "el_sbobinator.services.validation_service.platform.system",
+        return_value="Windows",
+    )
+    @patch(
         "el_sbobinator.services.validation_service.get_session_root",
         return_value=".",
     )
@@ -555,6 +563,35 @@ class TestValidationKeyringCheck(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertFalse(result.get("has_warnings"))
         self.assertEqual(result["summary"], "Ambiente pronto.")
+
+    @patch(
+        "el_sbobinator.services.validation_service.platform.system",
+        return_value="Linux",
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.get_session_root",
+        return_value=".",
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.resolve_ffmpeg",
+        return_value="ffmpeg",
+    )
+    @patch("google.genai.Client", _AlwaysOkClient)
+    def test_validate_environment_all_ok_non_windows_with_keyring_has_no_warnings(
+        self, *_mocks
+    ):
+        mock_kr = MagicMock()
+        mock_kr.get_password.return_value = None
+        with patch.dict(sys.modules, {"keyring": mock_kr}):
+            result = validate_environment(
+                api_key="fake",
+                validate_api_key=True,
+                preferred_model="gemini-2.5-flash",
+                fallback_models=[],
+            )
+            self.assertTrue(result["ok"])
+            self.assertFalse(result.get("has_warnings"))
+            self.assertEqual(result["summary"], "Ambiente pronto.")
 
 
 if __name__ == "__main__":
