@@ -296,12 +296,7 @@ def try_rotate_key(
     logger=None,
     cancelled: Callable[[], bool] | None = None,
 ):
-    """Validate and rotate to a fallback key from a provided list.
-
-    Note: In standard processing flows, silent automatic background rotation
-    is deprecated in favor of explicit user-driven confirmation via
-    request_fallback_key() to maintain transparency with rate-limit policies.
-    """
+    """Validate and rotate to a fallback key from a provided list."""
     log = logger or get_logger("el_sbobinator.generation")
     pass_limit = len([str(item).strip() for item in fallback_keys if str(item).strip()])
     checked = 0
@@ -637,7 +632,7 @@ def _retry_on_quota(
 
     old_key = extract_client_api_key(client) or ""
     if is_exhausted_key or kind_429 == "quota_exceeded":
-        usage_service.mark_quota_exhausted(current_model)
+        usage_service.mark_quota_exhausted(current_model, api_key=old_key)
         usage_service.record_request_failure(
             old_key, current_model, reason="quota_exceeded", is_final=True
         )
@@ -645,7 +640,26 @@ def _retry_on_quota(
         print("   [*] Operazione annullata dall'utente.")
         return False, client
 
-    # Explicit user-driven key replacement on quota exhaustion.
+    new_c, rotated, rotated_key = try_rotate_key(
+        client,
+        fallback_keys,
+        current_model,
+        logger=log,
+        cancelled=cancelled,
+    )
+    if rotated:
+        client = new_c
+        if runtime is not None and hasattr(runtime, "set_effective_api_key"):
+            runtime.set_effective_api_key(rotated_key)
+        if on_key_rotated is not None:
+            on_key_rotated(client)
+        return True, client
+
+    if cancelled():
+        print("   [*] Operazione annullata dall'utente.")
+        return False, client
+
+    # Explicit user-driven key replacement on quota exhaustion if fallback keys are exhausted.
     new_api_key = request_fallback_key() if request_fallback_key else None
     if new_api_key and new_api_key.strip():
         try:
@@ -655,7 +669,8 @@ def _retry_on_quota(
                 print("   [*] Operazione annullata dall'utente.")
                 return False, client
             client = test_c
-            runtime.set_effective_api_key(new_api_key.strip())
+            if runtime is not None and hasattr(runtime, "set_effective_api_key"):
+                runtime.set_effective_api_key(new_api_key.strip())
             if on_key_rotated is not None:
                 on_key_rotated(client)
             print("   [OK] Nuova API Key valida! Ripresa confermata dall'utente...")

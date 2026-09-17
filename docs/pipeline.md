@@ -102,9 +102,9 @@ All Gemini calls in every phase go through `retry_with_quota(callable_fn, ...)`,
 
 | Condition | Behaviour |
 |---|---|
-| HTTP 503 / "model unavailable" | Progressive back-off `(3 s, 6 s, 15 s)`; if the same model fails all three attempts, switch to the next model (`_switch_to_next_model`). If the chain is exhausted, raise `AllModelsUnavailableError`. Every attempt and retry is recorded in single-authority telemetry. |
-| HTTP 429 rate limit (`rate_limit_exceeded`) | Minute/token-scoped quota: extracts `retry-after` header or text back-off (default 65 s), sets ephemeral runtime status, and retries. After `_MAX_RETRY_ATTEMPTS` (4), re-raises. |
-| HTTP 429 daily quota (`quota_exceeded`) | Day-scoped (RPD) exhaustion on Google project: marks model quota state as `rpd_exhausted`, prompts UI via `request_new_api_key` for explicit fallback key confirmation. If prompt times out or cancelled, aborts with quota error. |
+| HTTP 408/500/502/503/504, timeout, or "model unavailable" | At most four calls: initial request, then retries after 15 s, 30 s, and 60 s, each with positive jitter up to 10%. The model never changes for capacity errors; after the last failure the circuit breaker pauses the current file and stops the batch. Every attempt and retry is recorded in single-authority telemetry. |
+| HTTP 429 rate limit (`rate_limit_exceeded`) | Minute/token-scoped quota: extracts `Retry-After` or uses 65 s, then makes one probe. A failed probe exhausts the circuit breaker and pauses the batch. |
+| HTTP 429 daily quota (`quota_exceeded`) | Day-scoped (RPD) exhaustion on Google project: marks model quota state as `rpd_exhausted`, automatically rotates to the next available fallback key via `try_rotate_key(fallback_keys)`, and prompts the UI via `request_new_api_key` only if all fallback keys are exhausted. If prompt times out or cancelled, aborts with quota error. |
 | HTTP 429 unknown | Defaults to minute-scoped rate limit backoff (65 s) before escalating to daily quota exhaustion if repeated. |
 | HTTP 404 model-not-found | Switch model; if no fallback left, re-raise. |
 | `DegenerateOutputError` | Switch model; if no fallback left, re-raise. |

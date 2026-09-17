@@ -82,16 +82,54 @@ describe('QuotasSection', () => {
     expect(screen.getByText('Telemetria Chiamate')).toBeTruthy();
     expect(screen.getByText('19')).toBeTruthy(); // Inviate
     expect(screen.getByText('Limiti di Progetto & Modelli')).toBeTruthy();
-    expect(screen.getByText('gemini-2.5-flash')).toBeTruthy();
+    expect(screen.getByText('Gemini 2.5 Flash')).toBeTruthy();
     expect(screen.getByText('Stato Chiavi Configurate')).toBeTruthy();
     expect(screen.getByText('Chiave Principale')).toBeTruthy();
     expect(screen.getByText('Progetto: 1234567890')).toBeTruthy();
     expect(screen.getByText('Attiva')).toBeTruthy();
-    expect(screen.getByText('Non utilizzata')).toBeTruthy();
+    expect(screen.getByText('In standby')).toBeTruthy();
 
     const refreshBtn = screen.getByLabelText('Aggiorna conteggio quote');
     fireEvent.click(refreshBtn);
     expect(onRefreshUsage).toHaveBeenCalled();
+  });
+
+  it('renders reserve mode status hero banner when degraded', () => {
+    const degradedUsage: ApiUsageResult = {
+      ...dummyUsage,
+      primary_status: 'degraded',
+      is_degraded_mode: true,
+      degraded_reason: 'Chiave principale esaurita per oggi. Il lavoro prosegue automaticamente sulla chiave di riserva.',
+      credentials: [
+        {
+          id: 'key-1',
+          label: 'Chiave Principale',
+          masked_key: 'AIza...dbtI',
+          is_primary: true,
+          operational_status: 'temporarily_failing',
+          last_error_message: 'Quota giornaliera (RPD) esaurita per gemini-3.5-flash',
+          last_error_code: 429,
+        },
+        {
+          id: 'key-2',
+          label: 'Chiave Riserva 1',
+          masked_key: 'AIza...Tih4',
+          is_primary: false,
+          operational_status: 'active',
+        },
+      ],
+    };
+
+    render(
+      <QuotasSection
+        apiUsage={degradedUsage}
+        isLoadingUsage={false}
+      />
+    );
+
+    expect(screen.getByText('Modalità Riserva Attiva')).toBeTruthy();
+    expect(screen.getByText(/Il lavoro prosegue automaticamente sulla chiave di riserva/)).toBeTruthy();
+    expect(screen.getByText('Quota esaurita (oggi)')).toBeTruthy();
   });
 
   it('renders rate limited status hero banner when rate limited', () => {

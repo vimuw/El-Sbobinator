@@ -53,11 +53,11 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
             containerClass:
               'border-[var(--warning-border,var(--border-default))] bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)]',
             icon: <AlertTriangle className="w-5 h-5 shrink-0 text-[var(--warning-text)]" />,
-            title: 'Modalità Degradata Attiva',
+            title: 'Modalità Riserva Attiva',
             subtitle:
               apiUsage?.degraded_reason ||
               apiUsage?.status_message ||
-              'Modello primario Flash esaurito per oggi. Switch automatico sul modello di riserva.',
+              'Chiave o modello primario esaurito per oggi. Il lavoro prosegue automaticamente con le risorse di riserva.',
           };
         case 'credential_error':
           return {
@@ -106,47 +106,58 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
           }));
 
 
-    const renderCredentialStatusBadge = (status?: string) => {
+    const renderCredentialStatusBadge = (cred: CredentialProfile) => {
+      const status = cred.operational_status;
+      const isQuotaExhausted =
+        status === 'temporarily_failing' &&
+        (!cred.last_error_message ||
+          cred.last_error_message.toLowerCase().includes('quota') ||
+          cred.last_error_message.toLowerCase().includes('rpd') ||
+          cred.last_error_code === 429);
+
+      const baseBadge =
+        'text-[11px] font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center justify-center leading-normal shrink-0';
+
       switch (status) {
         case 'active':
           return (
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)] shrink-0">
+            <span className={`${baseBadge} bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)]`}>
               Attiva
             </span>
           );
         case 'unused':
           return (
-            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)] shrink-0">
-              Non utilizzata
+            <span className={`${baseBadge} bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)]`}>
+              In standby
             </span>
           );
         case 'temporarily_failing':
           return (
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-border,var(--border-default))] shrink-0">
-              Errore temporaneo
+            <span className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-border,var(--border-default))]`}>
+              {isQuotaExhausted ? 'Quota esaurita (oggi)' : 'Non disponibile (temporaneo)'}
             </span>
           );
         case 'invalid':
           return (
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-border,var(--border-default))] shrink-0">
+            <span className={`${baseBadge} bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-border,var(--border-default))]`}>
               Non valida (401)
             </span>
           );
         case 'permission_denied':
           return (
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-border,var(--border-default))] shrink-0">
+            <span className={`${baseBadge} bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-border,var(--border-default))]`}>
               Permesso negato (403)
             </span>
           );
         case 'request_error':
           return (
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-border,var(--border-default))] shrink-0">
+            <span className={`${baseBadge} bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-border,var(--border-default))]`}>
               Errore richiesta (400)
             </span>
           );
         default:
           return (
-            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)] shrink-0">
+            <span className={`${baseBadge} bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)]`}>
               Stato sconosciuto
             </span>
           );
@@ -162,7 +173,7 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
               <Activity className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
               <span>Quote & Telemetria API</span>
               {apiUsage && credentials.length > 0 && (
-                <span className="text-[11px] font-semibold text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-default)] px-1.5 py-0.5 rounded-full leading-none normal-case tracking-normal">
+                <span className="text-[11px] font-semibold text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-default)] px-2.5 py-0.5 rounded-full leading-normal normal-case tracking-normal inline-flex items-center justify-center">
                   {credentials.length} {credentials.length === 1 ? 'chiave' : 'chiavi'}
                 </span>
               )}
@@ -220,7 +231,7 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
                     Lavoro Svolto Oggi
                   </span>
                 </div>
-                <div className="grid grid-cols-3 gap-2 pt-1 border-t border-[var(--border-default)]">
+                <div className="grid grid-cols-3 gap-2 pt-1 border-t border-[var(--border-default)] text-center">
                   <div>
                     <span className="text-lg font-bold text-[var(--text-primary)] block">
                       {workStats?.chunks_completed ?? 0}
@@ -325,6 +336,14 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
                     const lim = projectLimits[mName];
                     const isExhausted = lim?.quota_state === 'rpd_exhausted';
                     const isRateLimited = lim?.quota_state === 'rate_limited';
+                    const modelLabels: Record<string, string> = {
+                      'gemini-2.5-flash': 'Gemini 2.5 Flash',
+                      'gemini-3.6-flash': 'Gemini 3.6 Flash',
+                      'gemini-3.8-flash': 'Gemini 3.8 Flash',
+                      'gemini-3.7-flash': 'Gemini 3.7 Flash',
+                      'gemini-3.5-flash': 'Gemini 3.5 Flash',
+                    };
+                    const displayLabel = modelLabels[mName] || mName;
 
                     return (
                       <div
@@ -332,10 +351,12 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
                         className="p-3 flex flex-wrap items-center justify-between gap-3 text-xs"
                       >
                         <div className="space-y-0.5 min-w-0">
-                          <span className="font-mono font-bold text-[var(--text-primary)] block">
-                            {mName}
-                          </span>
-                          <span className="text-[11px] text-[var(--text-secondary)]">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-[var(--text-primary)]">
+                              {displayLabel}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-[var(--text-secondary)] block">
                             {lim?.rpd_limit ? `${lim.rpd_limit} RPD` : 'RPD standard'} •{' '}
                             {lim?.rpm_limit ? `${lim.rpm_limit} RPM` : 'RPM standard'}
                           </span>
@@ -343,15 +364,15 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
 
                         <div className="flex items-center gap-2">
                           {isExhausted ? (
-                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-border,var(--border-default))]">
+                            <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-border,var(--border-default))] inline-flex items-center justify-center leading-normal shrink-0">
                               Esaurito oggi (RPD)
                             </span>
                           ) : isRateLimited ? (
-                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-border,var(--border-default))]">
+                            <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-border,var(--border-default))] inline-flex items-center justify-center leading-normal shrink-0">
                               Rate limited (RPM)
                             </span>
                           ) : (
-                            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--bg-hover)] text-[var(--text-secondary)] border border-[var(--border-default)]">
+                            <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[var(--bg-hover)] text-[var(--text-secondary)] border border-[var(--border-default)] inline-flex items-center justify-center leading-normal shrink-0">
                               Normale
                             </span>
                           )}
@@ -380,34 +401,40 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
                         ? `...${cred.masked_key.slice(-4)}`
                         : cred.masked_key;
 
+                    const isQuotaError =
+                      Boolean(cred.last_error_message &&
+                      (cred.last_error_message.toLowerCase().includes('quota') ||
+                        cred.last_error_message.toLowerCase().includes('rpd') ||
+                        cred.last_error_code === 429));
+
                     return (
                       <div key={cred.id || idx} className="p-3 space-y-1.5 text-xs">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0">
+                          <div className="flex items-center gap-2 min-w-0 flex-wrap">
                             <span className="font-bold text-[var(--text-primary)]">
                               {cred.label || (cred.is_primary ? 'Chiave Principale' : `Chiave Riserva ${idx}`)}
                             </span>
-                            <span className="px-2 py-0.5 rounded-full bg-[var(--bg-hover)] border border-[var(--border-default)] font-mono text-[11px] text-[var(--text-primary)] font-semibold">
+                            <span className="px-2.5 py-0.5 rounded-full bg-[var(--bg-hover)] border border-[var(--border-default)] font-mono text-[11px] text-[var(--text-primary)] font-semibold inline-flex items-center leading-normal">
                               {maskedDisplay}
                             </span>
                             {cred.is_primary && (
-                              <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)]">
+                              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)] inline-flex items-center leading-normal">
                                 Principale
                               </span>
                             )}
                             {cred.project_id && (
-                              <span className="text-[10px] font-medium px-2 py-0.2 rounded-full bg-[var(--bg-hover)] text-[var(--text-secondary)] border border-[var(--border-default)]">
+                              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[var(--bg-hover)] text-[var(--text-secondary)] border border-[var(--border-default)] inline-flex items-center leading-normal">
                                 Progetto: {cred.project_id}
                               </span>
                             )}
                           </div>
 
-                          <div>{renderCredentialStatusBadge(cred.operational_status)}</div>
+                          <div>{renderCredentialStatusBadge(cred)}</div>
                         </div>
 
-                        {cred.last_error_message && (
+                        {cred.last_error_message && !isQuotaError && (
                           <div className="text-[11px] text-[var(--error-text)] bg-[var(--error-subtle,var(--bg-surface))] p-2 rounded-lg border border-[var(--error-border,var(--border-default))] leading-relaxed">
-                            Ultimo errore: {cred.last_error_message}
+                            Errore: {cred.last_error_message}
                           </div>
                         )}
                       </div>

@@ -53,7 +53,7 @@ The Python backend is organized into five modular subpackages under `el_sbobinat
 
 | Module | Responsibility | Key symbols |
 |---|---|---|
-| `services/generation_service.py` | Gemini transport: `retry_with_quota`, fallback model rotation, explicit key confirmation on exhaustion, and degenerate output guardrail. | `retry_with_quota`, `try_rotate_key`, `detect_degenerate_output` |
+| `services/generation_service.py` | Gemini transport: `retry_with_quota`, fallback model rotation, automatic fallback key rotation on exhaustion, and degenerate output guardrail. | `retry_with_quota`, `try_rotate_key`, `detect_degenerate_output` |
 | `services/gemini_errors.py` | Domain error hierarchy distinguishing transient rate limits, daily quota exhaustion, model unavailability, and unrecoverable errors. | `DegenerateOutputError`, `QuotaDailyLimitError`, `AllModelsUnavailableError`, `PermanentError` |
 | `services/phase1_service.py` | Chunked transcription loop with background FFmpeg prefetching and model chain fallback. | `process_phase1_transcription` |
 | `services/revision_service.py` | Phase 2 macro-revision with two-pass retry via `.raw.md`, and phase 3 boundary stitching. | `build_macro_blocks`, `process_macro_revision_phase`, `process_boundary_revision_phase` |

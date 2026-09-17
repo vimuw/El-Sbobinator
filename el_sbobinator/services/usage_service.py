@@ -26,6 +26,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from typing import Any, Literal, TypedDict
 from zoneinfo import ZoneInfo
 
+from el_sbobinator.core.model_registry import SUPPORTED_MODELS
 from el_sbobinator.services.config_service import get_config_dir
 
 # ---------------------------------------------------------------------------
@@ -50,17 +51,17 @@ DEFAULT_FLASH_LITE_TPM: int = 1000000
 
 MODEL_RPD_LIMITS: dict[str, int] = {
     "gemini-2.5-flash": 20,
-    "gemini-3.7-flash": 20,
     "gemini-3.6-flash": 20,
     "gemini-3.8-flash": 20,
+    "gemini-3.7-flash": 20,
     "gemini-3.5-flash": 20,
 }
 
 MODEL_RPM_LIMITS: dict[str, int] = {
     "gemini-2.5-flash": 5,
-    "gemini-3.7-flash": 5,
     "gemini-3.6-flash": 5,
     "gemini-3.8-flash": 5,
+    "gemini-3.7-flash": 5,
     "gemini-3.5-flash": 5,
 }
 
@@ -131,6 +132,7 @@ class CredentialProfile(TypedDict):
     last_error_message: str | None
     last_error_iso: str | None
     last_used_iso: str | None
+    exhausted_models: list[str]
 
 
 class ApiUsageResultPayload(TypedDict):
@@ -374,16 +376,16 @@ def _create_credential_entry(
         "last_error_message": None,
         "last_error_iso": None,
         "last_used_iso": None,
+        "exhausted_models": [],
     }
 
 
 def _create_empty_v2_storage() -> dict[str, Any]:
+    limits = {m: _create_model_limit_entry(m) for m in SUPPORTED_MODELS}
     return {
         "schema_version": SCHEMA_VERSION,
         "quota_date": get_pacific_date_string(),
-        "project_limits": {
-            "gemini-2.5-flash": _create_model_limit_entry("gemini-2.5-flash"),
-        },
+        "project_limits": limits,
         "telemetry": _empty_telemetry_dict(),
         "work_stats": _empty_work_stats_dict(),
         "credentials": {},
@@ -420,6 +422,7 @@ def _migrate_v1_to_v2(data: dict[str, Any]) -> dict[str, Any]:
                     "last_error_message": None,
                     "last_error_iso": None,
                     "last_used_iso": None,
+                    "exhausted_models": [],
                 }
                 migrated["credentials"][k_id] = cred
 
@@ -444,9 +447,20 @@ def _load_raw_usage_unlocked() -> dict[str, Any]:
             _save_raw_usage_unlocked(migrated)
             return migrated
 
-        # Validate required v2 sections
-        if "project_limits" not in data or not isinstance(data["project_limits"], dict):
-            data["project_limits"] = _create_empty_v2_storage()["project_limits"]
+        # Validate required v2 sections & sanitize project limits against SUPPORTED_MODELS
+        raw_limits = data.get("project_limits")
+        existing_limits: dict[str, Any] = (
+            raw_limits if isinstance(raw_limits, dict) else {}
+        )
+        cleaned_limits: dict[str, Any] = {}
+        for m in SUPPORTED_MODELS:
+            entry = existing_limits.get(m)
+            if isinstance(entry, dict):
+                cleaned_limits[m] = entry
+            else:
+                cleaned_limits[m] = _create_model_limit_entry(m)
+        data["project_limits"] = cleaned_limits
+
         if "telemetry" not in data or not isinstance(data["telemetry"], dict):
             data["telemetry"] = _empty_telemetry_dict()
         if "work_stats" not in data or not isinstance(data["work_stats"], dict):
@@ -496,10 +510,13 @@ def _check_and_reset_unlocked(data: dict[str, Any]) -> bool:
                 model_limit["updated_at"] = get_current_authoritative_utc().isoformat()
                 changed = True
 
-        # Reset transiently failing credentials back to active/unused
+        # Reset transiently failing credentials back to active/unused and clear exhausted_models
         for _k_id, cred in data.get("credentials", {}).items():
+            cred["exhausted_models"] = []
             if cred.get("operational_status") == "temporarily_failing":
-                cred["operational_status"] = "active"
+                cred["operational_status"] = (
+                    "active" if cred.get("last_used_iso") else "unused"
+                )
                 changed = True
 
         changed = True
@@ -527,6 +544,10 @@ def _get_or_create_credential_unlocked(
     profile["masked_key"] = mask_key(api_key)
     if label:
         profile["label"] = label
+    if "exhausted_models" not in profile or not isinstance(
+        profile["exhausted_models"], list
+    ):
+        profile["exhausted_models"] = []
     return profile
 
 
@@ -592,9 +613,12 @@ def record_request_success(api_key: str, model_name: str) -> None:
             cred = _get_or_create_credential_unlocked(data, cleaned_key)
             cred["operational_status"] = "active"
             cred["last_used_iso"] = now_iso
+            exhausted = cred.setdefault("exhausted_models", [])
+            if cleaned_model in exhausted:
+                exhausted.remove(cleaned_model)
 
         model_limit = _get_or_create_project_limit_unlocked(data, cleaned_model)
-        if model_limit.get("quota_state") == "rate_limited":
+        if model_limit.get("quota_state") in ("rate_limited", "rpd_exhausted"):
             model_limit["quota_state"] = "normal"
             model_limit["updated_at"] = now_iso
 
@@ -658,14 +682,33 @@ def record_work_completed(
         _save_raw_usage_unlocked(data)
 
 
-def mark_quota_exhausted(model_name: str) -> None:
-    """Marks project daily quota (RPD) as exhausted for a specific model."""
+def mark_quota_exhausted(model_name: str, api_key: str | None = None) -> None:
+    """Marks daily quota (RPD) as exhausted for a specific model and optionally key."""
     cleaned_model = str(model_name or "gemini-2.5-flash").strip()
+    cleaned_key = str(api_key or "").strip()
     now_iso = get_current_authoritative_utc().isoformat()
 
     with _interprocess_lock():
         data = _load_raw_usage_unlocked()
         _check_and_reset_unlocked(data)
+
+        if cleaned_key:
+            cred = _get_or_create_credential_unlocked(data, cleaned_key)
+            exhausted = cred.setdefault("exhausted_models", [])
+            if cleaned_model not in exhausted:
+                exhausted.append(cleaned_model)
+            cred["operational_status"] = "temporarily_failing"
+            cred["last_error_code"] = 429
+            cred["last_error_message"] = (
+                f"Quota giornaliera (RPD) esaurita per {cleaned_model}"
+            )
+            cred["last_error_iso"] = now_iso
+        else:
+            # Mark all existing credentials as having exhausted this model
+            for _k, cred in data.get("credentials", {}).items():
+                exhausted = cred.setdefault("exhausted_models", [])
+                if cleaned_model not in exhausted:
+                    exhausted.append(cleaned_model)
 
         limit = _get_or_create_project_limit_unlocked(data, cleaned_model)
         limit["quota_state"] = "rpd_exhausted"
@@ -744,6 +787,119 @@ def mark_credential_status(
 # ---------------------------------------------------------------------------
 
 
+def _build_ordered_project_limits(
+    data: dict[str, Any], credentials_list: list[dict[str, Any]]
+) -> dict[str, ProjectModelLimit]:
+    ordered_project_limits: dict[str, ProjectModelLimit] = {}
+    primary_cred = (
+        credentials_list[0]
+        if (credentials_list and credentials_list[0].get("is_primary"))
+        else None
+    )
+    primary_exhausted = (
+        set(primary_cred.get("exhausted_models", [])) if primary_cred else set()
+    )
+    other_exhausted = {
+        m
+        for c in credentials_list
+        if not c.get("is_primary")
+        for m in c.get("exhausted_models", [])
+    }
+
+    for m_name in SUPPORTED_MODELS:
+        raw_lim = data.get("project_limits", {}).get(
+            m_name, _create_model_limit_entry(m_name)
+        )
+        model_lim = dict(raw_lim)
+        if primary_cred is not None:
+            if m_name in primary_exhausted:
+                model_lim["quota_state"] = "rpd_exhausted"
+            elif m_name in other_exhausted and m_name not in primary_exhausted:
+                model_lim["quota_state"] = "normal"
+        ordered_project_limits[m_name] = model_lim  # type: ignore
+
+    return ordered_project_limits
+
+
+def _determine_primary_status(
+    credentials_list: list[dict[str, Any]],
+    ordered_project_limits: dict[str, ProjectModelLimit],
+    clean_primary_model: str,
+    remaining_retry_after: float | None,
+) -> tuple[
+    Literal[
+        "operational",
+        "rate_limited",
+        "quota_exhausted",
+        "credential_error",
+        "degraded",
+        "unknown",
+    ],
+    str,
+    bool,
+    str | None,
+]:
+    primary_model_limit = ordered_project_limits.get(
+        clean_primary_model, _create_model_limit_entry(clean_primary_model)
+    )
+    quota_state = primary_model_limit.get("quota_state", "normal")
+
+    has_perm_denied = any(
+        c.get("operational_status") == "permission_denied" for c in credentials_list
+    )
+    has_invalid = any(
+        c.get("operational_status") == "invalid" for c in credentials_list
+    )
+    has_active = any(
+        c.get("operational_status") in ("active", "unused") for c in credentials_list
+    )
+
+    if not credentials_list:
+        return "unknown", "Nessuna chiave API configurata.", False, None
+    if has_invalid and not has_active:
+        return (
+            "credential_error",
+            "Chiave API non valida (HTTP 401). Verifica le impostazioni.",
+            False,
+            None,
+        )
+    if has_perm_denied and not has_active:
+        return (
+            "credential_error",
+            "Permessi insufficienti sul progetto Google (HTTP 403).",
+            False,
+            None,
+        )
+    if quota_state == "rpd_exhausted":
+        fb_creds = [c for c in credentials_list if not c.get("is_primary")]
+        has_fb_key_for_primary_model = any(
+            c.get("operational_status") not in ("invalid", "permission_denied")
+            and clean_primary_model not in c.get("exhausted_models", [])
+            for c in fb_creds
+        )
+        if has_fb_key_for_primary_model:
+            return (
+                "degraded",
+                "Modalità riserva: elaborazione su chiave di riserva.",
+                True,
+                "Chiave principale esaurita per oggi. Il lavoro prosegue automaticamente sulla chiave di riserva.",
+            )
+        return (
+            "quota_exhausted",
+            "Quota giornaliera (RPD) esaurita. Reset alle ore 09:00 (fuso PT).",
+            False,
+            None,
+        )
+    if quota_state == "rate_limited" or remaining_retry_after is not None:
+        if remaining_retry_after and remaining_retry_after > 0:
+            msg = f"In attesa per rate limit temporaneo. Ripresa tra {remaining_retry_after:.0f}s."
+        else:
+            msg = "In attesa per rate limit temporaneo (RPM/TPM)."
+        return "rate_limited", msg, False, None
+
+    return "operational", "API Google Gemini operative.", False, None
+
+
 def get_daily_usage(
     primary_key: str | None = None,
     fallback_keys: list[str] | None = None,
@@ -778,8 +934,8 @@ def get_daily_usage(
         if changed:
             _save_raw_usage_unlocked(data)
 
-        # Ensure project limits exist for requested models
-        for m_name in relevant_models:
+        # Ensure project limits exist for all supported models
+        for m_name in SUPPORTED_MODELS:
             _get_or_create_project_limit_unlocked(data, m_name)
 
         # Ensure credentials exist in storage
@@ -802,71 +958,19 @@ def get_daily_usage(
                 _RUNTIME_RETRY_AFTER_EXPIRY_UTC = None
                 _RUNTIME_RETRY_AFTER_SECONDS = None
 
-        # Determine primary status
-        primary_model_limit = data.get("project_limits", {}).get(
-            clean_primary_model, _create_model_limit_entry(clean_primary_model)
-        )
-        quota_state = primary_model_limit.get("quota_state", "normal")
+        ordered_project_limits = _build_ordered_project_limits(data, credentials_list)
 
-        # Check credential issues
-        has_perm_denied = any(
-            c.get("operational_status") == "permission_denied" for c in credentials_list
+        (
+            primary_status,
+            status_message,
+            is_degraded,
+            degraded_reason,
+        ) = _determine_primary_status(
+            credentials_list,
+            ordered_project_limits,
+            clean_primary_model,
+            remaining_retry_after,
         )
-        has_invalid = any(
-            c.get("operational_status") == "invalid" for c in credentials_list
-        )
-        has_active = any(
-            c.get("operational_status") in ("active", "unused")
-            for c in credentials_list
-        )
-
-        is_degraded = False
-        degraded_reason = None
-
-        if not credentials_list:
-            primary_status = "unknown"
-            status_message = "Nessuna chiave API configurata."
-        elif has_invalid and not has_active:
-            primary_status = "credential_error"
-            status_message = (
-                "Chiave API non valida (HTTP 401). Verifica le impostazioni."
-            )
-        elif has_perm_denied and not has_active:
-            primary_status = "credential_error"
-            status_message = "Permessi insufficienti sul progetto Google (HTTP 403)."
-        elif quota_state == "rpd_exhausted":
-            # Check fallback models
-            fallback_candidates = [
-                m for m in relevant_models if m != clean_primary_model
-            ]
-            has_fallback_available = any(
-                data.get("project_limits", {}).get(fm, {}).get("quota_state", "normal")
-                != "rpd_exhausted"
-                for fm in fallback_candidates
-            )
-            if has_fallback_available:
-                primary_status = "degraded"
-                is_degraded = True
-                degraded_reason = (
-                    "Modello primario esaurito per oggi. Switch su modello di riserva."
-                )
-                status_message = (
-                    "Modalità degradata: elaborazione su modello di riserva."
-                )
-            else:
-                primary_status = "quota_exhausted"
-                status_message = (
-                    "Quota giornaliera (RPD) esaurita. Reset alle ore 09:00 (fuso PT)."
-                )
-        elif quota_state == "rate_limited" or remaining_retry_after is not None:
-            primary_status = "rate_limited"
-            if remaining_retry_after and remaining_retry_after > 0:
-                status_message = f"In attesa per rate limit temporaneo. Ripresa tra {remaining_retry_after:.0f}s."
-            else:
-                status_message = "In attesa per rate limit temporaneo (RPM/TPM)."
-        else:
-            primary_status = "operational"
-            status_message = "API Google Gemini operative."
 
         telemetry_dict = data.get("telemetry", _empty_telemetry_dict())
         work_stats_dict = data.get("work_stats", _empty_work_stats_dict())
@@ -892,7 +996,7 @@ def get_daily_usage(
             "status_message": status_message,
             "retry_after_seconds": remaining_retry_after,
             "next_reset_info": "Reset quote: ore 09:00 (fuso Google PT)",
-            "project_limits": data.get("project_limits", {}),
+            "project_limits": ordered_project_limits,
             "work_stats": work_stats_dict,
             "telemetry": telemetry_dict,
             "credentials": credentials_list,

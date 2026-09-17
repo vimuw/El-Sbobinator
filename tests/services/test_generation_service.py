@@ -1,7 +1,7 @@
 import threading
 import unittest
 from typing import Any, ClassVar, cast
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from el_sbobinator.core.model_registry import build_model_state
 from el_sbobinator.services.gemini_errors import CircuitBreakerExhaustedError
@@ -486,6 +486,12 @@ class RetryWithQuotaTests(unittest.TestCase):
                 return "ok"
             raise _Structured503QuotaError()
 
+        request_mock = MagicMock(
+            side_effect=AssertionError(
+                "request_fallback_key must not be called when fallback key is available"
+            )
+        )
+
         with (
             patch(
                 "el_sbobinator.services.generation_service.genai.Client",
@@ -494,7 +500,7 @@ class RetryWithQuotaTests(unittest.TestCase):
             patch(
                 "el_sbobinator.services.generation_service.sleep_with_cancel",
                 side_effect=AssertionError(
-                    "503 exhausted-key path must prompt immediately, not sleep-retry"
+                    "503 exhausted-key path must rotate immediately, not sleep-retry"
                 ),
             ),
         ):
@@ -505,7 +511,7 @@ class RetryWithQuotaTests(unittest.TestCase):
                 model_name="test-model",
                 cancelled=lambda: False,
                 runtime=runtime,
-                request_fallback_key=lambda: "fallback-key",
+                request_fallback_key=request_mock,
                 max_attempts=2,
                 retry_sleep_seconds=0.0,
                 rate_limit_sleep_seconds=0.0,
@@ -515,6 +521,7 @@ class RetryWithQuotaTests(unittest.TestCase):
         self.assertEqual(result, "ok")
         self.assertEqual(runtime.rotated_keys, ["fallback-key"])
         self.assertEqual(len(call_clients), 2)
+        request_mock.assert_not_called()
 
     def test_structured_503_exhausted_key_without_fallback_raises_quota_error(self):
         with self.assertRaises(QuotaDailyLimitError):
@@ -1756,6 +1763,11 @@ class RetryWithQuotaEdgeTests(unittest.TestCase):
             return "ok"
 
         rotated_client = _FakeClient(api_key="rotated-key")
+        request_mock = MagicMock(
+            side_effect=AssertionError(
+                "request_fallback_key must not be called when fallback key rotates automatically"
+            )
+        )
 
         with patch(
             "el_sbobinator.services.generation_service.genai.Client",
@@ -1768,7 +1780,7 @@ class RetryWithQuotaEdgeTests(unittest.TestCase):
                 model_name="test",
                 cancelled=lambda: False,
                 runtime=_FakeRuntime(),
-                request_fallback_key=lambda: "rotated-key",
+                request_fallback_key=request_mock,
                 max_attempts=2,
                 retry_sleep_seconds=0.0,
                 rate_limit_sleep_seconds=0.0,
@@ -1777,6 +1789,7 @@ class RetryWithQuotaEdgeTests(unittest.TestCase):
 
         self.assertEqual(result, "ok")
         self.assertEqual(len(rotated), 1)
+        request_mock.assert_not_called()
 
     def test_new_api_key_valid_continues(self):
         from unittest.mock import MagicMock

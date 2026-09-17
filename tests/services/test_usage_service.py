@@ -44,7 +44,7 @@ class UsageServiceV2Tests(unittest.TestCase):
         self.assertEqual(cred["operational_status"], "active")
         self.assertEqual(cred["masked_key"][:6], "AIzaSy")
 
-    def test_project_quota_exhaustion_marks_status(self):
+    def test_project_quota_exhaustion_does_not_switch_model(self):
         key = "AIzaSyTest1234567890abcdef"
         usage_service.mark_quota_exhausted("gemini-2.5-flash")
 
@@ -54,19 +54,11 @@ class UsageServiceV2Tests(unittest.TestCase):
             fallback_models=["gemini-3.6-flash"],
         )
 
-        # Primary model is exhausted, but fallback model is available -> degraded mode
-        self.assertEqual(data["primary_status"], "degraded")
-        self.assertTrue(data["is_degraded_mode"])
-        self.assertIn("riserva", str(data["degraded_reason"]).lower())
-
-        # If fallback is also exhausted -> quota_exhausted
-        usage_service.mark_quota_exhausted("gemini-3.6-flash")
-        data2 = usage_service.get_daily_usage(
-            primary_key=key,
-            primary_model="gemini-2.5-flash",
-            fallback_models=["gemini-3.6-flash"],
-        )
-        self.assertEqual(data2["primary_status"], "quota_exhausted")
+        # 429/RPD never changes model automatically: a configured model fallback
+        # does not make the queue runnable again.
+        self.assertEqual(data["primary_status"], "quota_exhausted")
+        self.assertFalse(data["is_degraded_mode"])
+        self.assertIsNone(data["degraded_reason"])
 
     def test_rate_limiting_and_retry_after(self):
         key = "AIzaSyKey111111111111111111"
@@ -140,6 +132,79 @@ class UsageServiceV2Tests(unittest.TestCase):
         self.assertEqual(saved_json["schema_version"], 2)
         self.assertIn("project_limits", saved_json)
         self.assertIn("telemetry", saved_json)
+
+    def test_supported_models_alignment_and_pruning(self):
+        # Create an api_usage.json containing obsolete models
+        stale_data = {
+            "schema_version": 2,
+            "quota_date": "2026-09-01",
+            "project_limits": {
+                "gemini-3.1-flash-lite-preview": {
+                    "model_name": "gemini-3.1-flash-lite-preview",
+                    "rpd_limit": 500,
+                    "rpm_limit": 15,
+                    "tpm_limit": 1000000,
+                    "source": "configured",
+                    "quota_state": "normal",
+                },
+                "gemini-2.5-flash": {
+                    "model_name": "gemini-2.5-flash",
+                    "rpd_limit": 20,
+                    "rpm_limit": 5,
+                    "tpm_limit": 250000,
+                    "source": "configured",
+                    "quota_state": "normal",
+                },
+            },
+            "telemetry": {},
+            "work_stats": {},
+            "credentials": {},
+        }
+        usage_file = os.path.join(self.tmp_dir.name, "api_usage.json")
+        with open(usage_file, "w", encoding="utf-8") as f:
+            json.dump(stale_data, f)
+
+        data = usage_service.get_daily_usage(
+            primary_key="AIzaSyKey111111111111111111",
+            primary_model="gemini-2.5-flash",
+        )
+
+        # Stale model should be pruned
+        self.assertNotIn("gemini-3.1-flash-lite-preview", data["project_limits"])
+        # All SUPPORTED_MODELS should be present
+        for m in [
+            "gemini-2.5-flash",
+            "gemini-3.6-flash",
+            "gemini-3.8-flash",
+            "gemini-3.7-flash",
+            "gemini-3.5-flash",
+        ]:
+            self.assertIn(m, data["project_limits"])
+
+    def test_multi_account_key_rotation(self):
+        key1 = "AIzaSyAccount1Key111111111"
+        key2 = "AIzaSyAccount2Key222222222"
+
+        # Key 1 hits quota exhaustion on gemini-2.5-flash
+        usage_service.mark_quota_exhausted("gemini-2.5-flash", api_key=key1)
+
+        # Querying with key1 as primary and key2 as fallback
+        data1 = usage_service.get_daily_usage(
+            primary_key=key1,
+            fallback_keys=[key2],
+            primary_model="gemini-2.5-flash",
+        )
+        self.assertEqual(data1["primary_status"], "degraded")
+        self.assertTrue(data1["is_degraded_mode"])
+        self.assertIn("riserva", str(data1["status_message"]).lower())
+
+        # When switching primary_key to key2 (from Account 2), quota is fresh!
+        data2 = usage_service.get_daily_usage(
+            primary_key=key2,
+            fallback_keys=[key1],
+            primary_model="gemini-2.5-flash",
+        )
+        self.assertEqual(data2["primary_status"], "operational")
 
     def test_pacific_date_reset(self):
         key = "AIzaSyKey111111111111111111"

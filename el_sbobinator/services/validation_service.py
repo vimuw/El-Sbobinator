@@ -379,7 +379,7 @@ def generate_diagnostic_report(
     ]
 
     if usage_info.get("is_degraded_mode"):
-        lines.append(f"- ⚠️ **Modalità Degradata**: {usage_info.get('degraded_reason')}")
+        lines.append(f"- ⚠️ **Modalità Riserva**: {usage_info.get('degraded_reason')}")
 
     work_stats = usage_info.get("work_stats", {})
     if work_stats:
