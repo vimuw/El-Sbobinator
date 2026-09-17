@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { DiagnosticsSection, type DisplayCheck } from './DiagnosticsSection';
 
 describe('DiagnosticsSection', () => {
@@ -125,7 +125,9 @@ describe('DiagnosticsSection', () => {
     );
 
     const copyBtn = screen.getByLabelText('Copia report diagnostico');
-    fireEvent.click(copyBtn);
+    await act(async () => {
+      fireEvent.click(copyBtn);
+    });
 
     expect(onCopyReport).toHaveBeenCalledTimes(1);
     expect(screen.queryByTitle('Report copiato!')).toBeNull();

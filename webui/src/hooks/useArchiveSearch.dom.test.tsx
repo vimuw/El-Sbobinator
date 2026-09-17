@@ -58,38 +58,45 @@ describe('useArchiveSearch', () => {
   });
 
   it('performs debounced full-text search when enabled with >= 3 characters', async () => {
-    const searchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      results: [
-        {
-          session_dir: '/dir1',
-          name: 'Anatomia',
-          html_path: '/dir1/index.html',
-          completed_at_iso: '2026-01-01T10:00:00Z',
-          snippets: [{ before: 'il ', match: 'fegato', after: ' produce bile' }],
-          match_count: 1,
-        },
-      ],
-      total: 1,
-    });
-    setPywebview({ search_sessions: searchMock });
+    vi.useFakeTimers();
+    try {
+      const searchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        results: [
+          {
+            session_dir: '/dir1',
+            name: 'Anatomia',
+            html_path: '/dir1/index.html',
+            completed_at_iso: '2026-01-01T10:00:00Z',
+            snippets: [{ before: 'il ', match: 'fegato', after: ' produce bile' }],
+            match_count: 1,
+          },
+        ],
+        total: 1,
+      });
+      setPywebview({ search_sessions: searchMock });
 
-    const { result } = renderHook(() =>
-      useArchiveSearch({
-        sessions: [],
-        editorSessionsMap: {},
-      })
-    );
+      const { result } = renderHook(() =>
+        useArchiveSearch({
+          sessions: [],
+          editorSessionsMap: {},
+        })
+      );
 
-    act(() => {
-      result.current.setFullTextMode(true);
-      result.current.setSearch('fegato');
-    });
+      act(() => {
+        result.current.setFullTextMode(true);
+        result.current.setSearch('fegato');
+      });
 
-    await vi.waitFor(() => {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(450);
+      });
+
       expect(searchMock).toHaveBeenCalledWith('fegato', 100);
       expect(result.current.ftResults?.length).toBe(1);
       expect(result.current.ftTotal).toBe(1);
-    });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

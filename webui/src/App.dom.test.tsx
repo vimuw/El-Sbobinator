@@ -926,7 +926,7 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       await act(async () => { render(<App />); });
       expect(capturedOptions).not.toBeNull();
 
-      act(() => {
+      await act(async () => {
         capturedOptions.onBatchFullyDone({
           total: 3,
           completed: 3,
@@ -946,7 +946,7 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
     it('shows warnings batch notification when some files have warnings', async () => {
       await act(async () => { render(<App />); });
 
-      act(() => {
+      await act(async () => {
         capturedOptions.onBatchFullyDone({
           total: 3,
           completed: 2,
@@ -965,7 +965,7 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
     it('shows errors batch notification when some files failed', async () => {
       await act(async () => { render(<App />); });
 
-      act(() => {
+      await act(async () => {
         capturedOptions.onBatchFullyDone({
           total: 3,
           completed: 1,
@@ -984,7 +984,7 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
     it('does not show notification when batch was cancelled', async () => {
       await act(async () => { render(<App />); });
 
-      act(() => {
+      await act(async () => {
         capturedOptions.onBatchFullyDone({
           total: 3,
           completed: 1,
@@ -1001,7 +1001,7 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       localStorage.setItem('notifications_enabled', 'false');
       await act(async () => { render(<App />); });
 
-      act(() => {
+      await act(async () => {
         capturedOptions.onBatchFullyDone({
           total: 3,
           completed: 3,
@@ -1018,7 +1018,7 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       vi.spyOn(document, 'hasFocus').mockReturnValue(true);
       await act(async () => { render(<App />); });
 
-      act(() => {
+      await act(async () => {
         capturedOptions.onBatchFullyDone({
           total: 3,
           completed: 3,
