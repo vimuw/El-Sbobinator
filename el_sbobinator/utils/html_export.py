@@ -36,9 +36,13 @@ _ALLOWED_TAGS: frozenset[str] = frozenset(
         "table",
         "thead",
         "tbody",
+        "tfoot",
         "tr",
         "th",
         "td",
+        "colgroup",
+        "col",
+        "caption",
         "a",
         "span",
         "div",
@@ -60,8 +64,11 @@ _ALLOWED_ATTRS: dict[str, set[str]] = {
     },
     "a": {"href", "title", "target"},
     "img": {"src", "alt", "width", "height", "align"},
-    "th": {"colspan", "rowspan"},
-    "td": {"colspan", "rowspan"},
+    "th": {"colspan", "rowspan", "colwidth", "width", "scope"},
+    "td": {"colspan", "rowspan", "colwidth", "width"},
+    "col": {"width", "span"},
+    "colgroup": {"span"},
+    "table": {"border", "cellpadding", "cellspacing"},
 }
 
 _ALLOWED_URL_SCHEMES: frozenset[str] = frozenset({"http", "https", "mailto", "data"})

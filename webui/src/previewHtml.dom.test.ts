@@ -93,7 +93,14 @@ describe('normalizePreviewHtmlContent', () => {
     expect(ALLOWED_STYLE_PROPS.has('color')).toBe(true);
     expect(ALLOWED_STYLE_PROPS.has('font-size')).toBe(true);
     expect(ALLOWED_STYLE_PROPS.has('margin')).toBe(true);
+    expect(ALLOWED_STYLE_PROPS.has('width')).toBe(true);
     expect(ALLOWED_STYLE_PROPS.has('padding')).toBe(false);
+  });
+
+  it('preserves width style property on elements such as table cells or columns', () => {
+    const html = '<table><colgroup><col style="width: 150px" /></colgroup></table>';
+    const result = normalizePreviewHtmlContent(html);
+    expect(result).toContain('style="width: 150px"');
   });
 
   it('exports EDITOR_IMAGE_ALLOWED_DATA_ATTRS with expected members', () => {

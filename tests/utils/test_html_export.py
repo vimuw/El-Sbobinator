@@ -180,6 +180,27 @@ class SanitizeHtmlBasicTests(unittest.TestCase):
         cleaned = sanitize_html_basic(raw)
         self.assertIn('data-math-block="\\int x dx"', cleaned)
 
+    def test_preserves_table_tags_and_colwidth_attributes(self):
+        raw = (
+            '<table border="1">'
+            "<caption>Dati</caption>"
+            '<colgroup><col width="120" span="1"><col width="200"></colgroup>'
+            '<thead><tr><th colwidth="120" scope="col">Col 1</th><th colwidth="200" scope="col">Col 2</th></tr></thead>'
+            '<tbody><tr><td colwidth="120" colspan="1" rowspan="1">Val 1</td><td colwidth="200">Val 2</td></tr></tbody>'
+            '<tfoot><tr><td colspan="2">Totale</td></tr></tfoot>'
+            "</table>"
+        )
+        cleaned = sanitize_html_basic(raw)
+        self.assertIn("<table", cleaned)
+        self.assertIn("<caption>Dati</caption>", cleaned)
+        self.assertIn("<colgroup>", cleaned)
+        self.assertIn('width="120"', cleaned)
+        self.assertIn('colwidth="120"', cleaned)
+        self.assertIn('colwidth="200"', cleaned)
+        self.assertIn('scope="col"', cleaned)
+        self.assertIn('colspan="2"', cleaned)
+        self.assertIn("<tfoot>", cleaned)
+
 
 if __name__ == "__main__":
     unittest.main()
