@@ -87,6 +87,15 @@ export function RichTextEditor({
   const onHeadingsChangeRef = useRef(onHeadingsChange);
   useEffect(() => { onHeadingsChangeRef.current = onHeadingsChange; }, [onHeadingsChange]);
   const headingsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const publishHeadings = (currentEditor: TiptapEditor) => {
+    if (currentEditor.isDestroyed) return;
+    try {
+      onHeadingsChangeRef.current?.(extractHeadings(currentEditor));
+    } catch (_) {
+      // TipTap can briefly retain an editor object with a disposed schema while
+      // React StrictMode reconnects effects. The next mounted pass republishes.
+    }
+  };
 
   const { activeHeadingId, tocNavRef, tocStickyRef } = useTocScrollSpy({
     tocHeadings,
@@ -173,13 +182,12 @@ export function RichTextEditor({
         };
       }
       onEditorReady?.(() => editorRef.current!.getHTML());
-      onHeadingsChangeRef.current?.(extractHeadings(editor));
     },
     onUpdate: ({ editor }) => {
       onChange?.(editor.getHTML());
       if (headingsDebounceRef.current) clearTimeout(headingsDebounceRef.current);
       headingsDebounceRef.current = setTimeout(() => {
-        onHeadingsChangeRef.current?.(extractHeadings(editor));
+        publishHeadings(editor);
       }, 400);
     },
     editorProps: {
@@ -228,6 +236,12 @@ export function RichTextEditor({
       transformPastedHTML,
     },
   }, [extensions]);
+
+  useEffect(() => {
+    if (!editor) return;
+    const timer = setTimeout(() => publishHeadings(editor), 0);
+    return () => clearTimeout(timer);
+  }, [editor]);
 
   useEffect(() => {
     if (editor && collaborationUser) {
@@ -302,8 +316,13 @@ export function RichTextEditor({
   };
 
   useEffect(() => {
-    if (editor && initialContent !== editor.getHTML() && !editor.isFocused && editor.isEmpty) {
-      editor.commands.setContent(initialContent);
+    if (!editor || editor.isDestroyed) return;
+    try {
+      if (initialContent !== editor.getHTML() && !editor.isFocused && editor.isEmpty) {
+        editor.commands.setContent(initialContent);
+      }
+    } catch (_) {
+      // The editor schema may already be disposed during a StrictMode reconnect.
     }
   }, [initialContent, editor]);
 
