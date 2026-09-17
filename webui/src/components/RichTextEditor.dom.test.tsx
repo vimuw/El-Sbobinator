@@ -119,4 +119,29 @@ describe('RichTextEditor Component', () => {
       expect(html).toContain('Titolo con dimensione inline');
     });
   });
+
+  it('preserves and correctly parses HTML tables without flattening cells', async () => {
+    let getHtmlFn: (() => string) | null = null;
+    const onEditorReady = vi.fn((getHtml: () => string) => {
+      getHtmlFn = getHtml;
+    });
+
+    const tableHtml = '<table><thead><tr><th>ID Soggetto</th><th>Sesso</th><th>Età</th></tr></thead><tbody><tr><td>001</td><td>Maschio</td><td>45</td></tr></tbody></table>';
+
+    render(
+      <RichTextEditor
+        initialContent={tableHtml}
+        onEditorReady={onEditorReady}
+      />
+    );
+
+    await waitFor(() => expect(onEditorReady).toHaveBeenCalled());
+    expect(getHtmlFn).toBeTruthy();
+
+    const outputHtml = getHtmlFn!();
+    expect(outputHtml).toContain('<table');
+    expect(outputHtml).toContain('ID Soggetto');
+    expect(outputHtml).toContain('Maschio');
+    expect(outputHtml).not.toContain('IDSoggettoSessoEtà');
+  });
 });

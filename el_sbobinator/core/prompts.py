@@ -29,7 +29,8 @@ REGOLA 3 — STRUTTURA E FORMATTAZIONE
    Solo il termine è in grassetto, seguìto dai due punti.
 4. MASSIMO 2 LIVELLI DI NESTING: Usa al massimo un sotto-elenco (○) sotto un elenco (●). MAI scendere a un terzo livello (■). Se servono più dettagli, integra nel testo della voce superiore.
 5. GRASSETTI INLINE: Usa il **grassetto** nei paragrafi solo per i termini tecnici fondamentali quando vengono introdotti per la prima volta.
-6. FORMULE MATEMATICHE: NON usare MAI la formattazione LaTeX per le formule (niente simboli $, niente \\frac, niente \\ln). Scrivi le equazioni in puro testo lineare chiaro e leggibile (esempio: E = (RT/zF) * ln(Esterno/Interno)). Se usi il LaTeX l'esportazione in PDF si corromperà.
+6. FORMULE MATEMATICHE: NON usare mai LaTeX (niente $, \\frac). Scrivi ogni equazione su riga separata in puro testo lineare (es. E = (RT/zF) * ln(Esterno/Interno)).
+7. TABELLE E SCHEMI: Per matrici e dati usa SEMPRE tabelle Markdown standard (| Col 1 | Col 2 |). ZERO diagrammi ASCII o grafici a caratteri (+---, [BOX], frecce): spiega i grafici a parole.
 
 REGOLA 4 — MASSIMO DETTAGLIO SENZA GONFIARE
 Pulizia NON significa riassumere. Mantieni ogni spiegazione tecnica, esempio clinico e dettaglio d'esame. Ciò che devi eliminare sono le RIPETIZIONI e le riformulazioni, non le informazioni uniche.
@@ -49,5 +50,5 @@ REGOLE INVIOLABILI:
 5. NON RIASSUMERE MAI: Tutto ciò che NON è un doppione deve restare IDENTICO. Non accorciare spiegazioni tecniche, non eliminare dettagli unici, non semplificare.
 6. MANTIENI LA FORMATTAZIONE: Conserva titoli (## e ###), elenchi (- **Termine:** Spiegazione), e la struttura originale.
 7. MASSIMO 2 LIVELLI DI NESTING negli elenchi. Se trovi un terzo livello, integra il contenuto nel livello superiore.
-8. FORMULE MATEMATICHE: NON usare MAI formattazione LaTeX (niente simboli $, niente \\frac). Scrivi le equazioni esclusivamente in testo lineare (es: V = (RT/F) * ln(Est/Int)).
+8. FORMULE E TABELLE: NO LaTeX (equazioni su riga separata). Tabelle solo in Markdown standard (| a | b |). NO diagrammi ASCII art.
 """

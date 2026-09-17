@@ -54,6 +54,8 @@ _ALLOWED_ATTRS: dict[str, set[str]] = {
         "data-layout",
         "data-align",
         "data-width",
+        "data-math",
+        "data-math-block",
         "align",
     },
     "a": {"href", "title", "target"},
@@ -92,7 +94,7 @@ def normalize_inline_star_lists(md: str) -> str:
 
     list_line_re = r"^\s*([*+-]|\d+\.)\s+"
     # Bullet unicode che il modello usa spesso (e che Markdown non interpreta come liste).
-    bullet_top = ("\u25cf", "\u2022", "\u25aa", "\u2023")  # ● • ▪ ‣
+    bullet_top = ("\u25cf", "\u2022", "\u25aa", "\u2023", "\u25a0")  # ● • ▪ ‣ ■
 
     # 1) Trasforma elenchi in-line tipo "Esempi: * Voce1 ... * Voce2 ..."
     out_lines = []
@@ -110,7 +112,8 @@ def normalize_inline_star_lists(md: str) -> str:
         # Caso A: riga che INIZIA con bullet unicode -> lista Markdown.
         if not re.match(list_line_re, line):
             m = re.match(
-                r"^(\s*)([\u25cf\u2022\u25aa\u2023\u25e6\u25cb\u2219])\s+(.*)$", line
+                r"^(\s*)([\u25cf\u2022\u25aa\u2023\u25e6\u25cb\u2219\u25a0\u25a1])\s+(.*)$",
+                line,
             )
             if m:
                 bullet = m.group(2)
@@ -122,10 +125,10 @@ def normalize_inline_star_lists(md: str) -> str:
 
         # Caso B: bullet unicode "in mezzo" a una riga -> spezza in lista.
         if not re.match(list_line_re, line) and re.search(
-            r"[\u25cf\u2022\u25aa\u2023]\s+(\*\*|[A-ZÀ-ÖØ-Ý])", line
+            r"[\u25cf\u2022\u25aa\u2023\u25a0\u25a1]\s+(\*\*|[A-ZÀ-ÖØ-Ý])", line
         ):
-            if re.search(r"\s[\u25cf\u2022\u25aa\u2023]\s+", line):
-                parts = re.split(r"\s*[\u25cf\u2022\u25aa\u2023]\s+", line)
+            if re.search(r"\s[\u25cf\u2022\u25aa\u2023\u25a0\u25a1]\s+", line):
+                parts = re.split(r"\s*[\u25cf\u2022\u25aa\u2023\u25a0\u25a1]\s+", line)
                 if len(parts) > 1:
                     first = (parts[0] or "").rstrip()
                     if first:
@@ -262,6 +265,9 @@ def build_html_document(title: str, markdown_text: str) -> str:
     hr {{ display: none; }}
     code {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 0.95em; }}
     blockquote {{ margin: 0.9rem 0; padding: 0.1rem 0 0.1rem 1rem; border-left: 3px solid var(--rule); color: var(--muted); }}
+    table {{ border-collapse: collapse; width: 100%; margin: 1.2rem 0; font-size: 0.95em; }}
+    th, td {{ border: 1px solid var(--rule); padding: 8px 12px; text-align: left; vertical-align: top; }}
+    th {{ background: #f8f9fa; font-weight: 700; }}
   </style>
 </head>
 <body>

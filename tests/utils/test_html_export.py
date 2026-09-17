@@ -4,6 +4,7 @@ from el_sbobinator.utils.html_export import (
     build_html_document,
     normalize_heading_levels,
     normalize_inline_star_lists,
+    sanitize_html_basic,
 )
 
 
@@ -23,6 +24,12 @@ class NormalizeInlineStarListsTests(unittest.TestCase):
         result = normalize_inline_star_lists(md)
         self.assertIn("- Voce uno", result)
         self.assertIn("- Voce due", result)
+
+    def test_unicode_square_bullet_converted_to_list(self):
+        md = "\u25a0 Voce quadrata uno\n\u25a0 Voce quadrata due"
+        result = normalize_inline_star_lists(md)
+        self.assertIn("- Voce quadrata uno", result)
+        self.assertIn("- Voce quadrata due", result)
 
     def test_unicode_sub_bullet_at_line_start(self):
         md = "\u25e6 Sub-voce"
@@ -159,6 +166,19 @@ class BuildHtmlDocumentTests(unittest.TestCase):
     def test_none_markdown_produces_empty_body(self):
         result = build_html_document("T", None)  # type: ignore[arg-type]
         self.assertIn("<body>", result)
+
+
+class SanitizeHtmlBasicTests(unittest.TestCase):
+    def test_preserves_data_math_attributes(self):
+        raw = '<p><span data-math="E=mc^2" class="math-node-inline">formula</span></p>'
+        cleaned = sanitize_html_basic(raw)
+        self.assertIn('data-math="E=mc^2"', cleaned)
+        self.assertIn('class="math-node-inline"', cleaned)
+
+    def test_preserves_data_math_block_attributes(self):
+        raw = '<div data-math-block="\\int x dx" class="math-node-block">integral</div>'
+        cleaned = sanitize_html_basic(raw)
+        self.assertIn('data-math-block="\\int x dx"', cleaned)
 
 
 if __name__ == "__main__":

@@ -19,6 +19,7 @@ import { type Heading, SearchHighlight, FontSize, CustomHeading, CustomParagraph
 import Youtube from '@tiptap/extension-youtube';
 import Typography from '@tiptap/extension-typography';
 import Collaboration from '@tiptap/extension-collaboration';
+import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import { MenuBar } from './EditorToolbar';
 import { getWordRangeAtPos } from '../editorUtils';
 import { EditorBubbleMenu } from './EditorBubbleMenu';
@@ -138,6 +139,12 @@ export function RichTextEditor({
     MathInline,
     MathBlock,
     SmartArrows,
+    Table.configure({
+      resizable: true,
+    }),
+    TableRow,
+    TableHeader,
+    TableCell,
     ...(collaborationRoom && ydoc && provider ? [
       Collaboration.configure({ document: ydoc }),
       CollaborationCursor.configure({
