@@ -22,10 +22,10 @@ class ModelOption(TypedDict):
 
 SUPPORTED_MODELS: tuple[str, ...] = (
     "gemini-2.5-flash",
-    "gemini-3.6-flash",
-    "gemini-3.8-flash",
-    "gemini-3.7-flash",
     "gemini-3.5-flash",
+    "gemini-3.6-flash",
+    "gemini-3.7-flash",
+    "gemini-3.8-flash",
 )
 
 DEFAULT_MODEL = "gemini-2.5-flash"
@@ -41,17 +41,17 @@ MODEL_OPTIONS: tuple[ModelOption, ...] = (
         "phase1_temperature": 0.35,
     },
     {
-        "id": "gemini-3.6-flash",
-        "label": "Gemini 3.6 Flash",
-        "summary": "Consigliato per la migrazione: successore ufficiale GA di 2.5 Flash, stabile e multimodale.",
+        "id": "gemini-3.5-flash",
+        "label": "Gemini 3.5 Flash",
+        "summary": "Generazione Flash orientata a workload ad alto throughput ed efficienza.",
         "default_chunk_minutes": 15,
         "default_macro_char_limit": 22000,
         "phase1_temperature": 0.35,
     },
     {
-        "id": "gemini-3.8-flash",
-        "label": "Gemini 3.8 Flash",
-        "summary": "Frontiera più recente: finestre di contesto estese, ad alte prestazioni.",
+        "id": "gemini-3.6-flash",
+        "label": "Gemini 3.6 Flash",
+        "summary": "Consigliato per la migrazione: successore ufficiale GA di 2.5 Flash, stabile e multimodale.",
         "default_chunk_minutes": 15,
         "default_macro_char_limit": 22000,
         "phase1_temperature": 0.35,
@@ -65,9 +65,9 @@ MODEL_OPTIONS: tuple[ModelOption, ...] = (
         "phase1_temperature": 0.35,
     },
     {
-        "id": "gemini-3.5-flash",
-        "label": "Gemini 3.5 Flash",
-        "summary": "Generazione Flash precedente, orientato a workload ad alto throughput.",
+        "id": "gemini-3.8-flash",
+        "label": "Gemini 3.8 Flash",
+        "summary": "Frontiera più recente: finestre di contesto estese, ad alte prestazioni.",
         "default_chunk_minutes": 15,
         "default_macro_char_limit": 22000,
         "phase1_temperature": 0.35,

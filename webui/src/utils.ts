@@ -10,7 +10,6 @@ export const GEMINI_KEY_PATTERN = /^(AIza[0-9A-Za-z_-]{20,}|AQ\.[0-9A-Za-z_-]{20
 export function normalizeSessionPath(path?: string): string {
   return String(path || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 }
-
 const _ERROR_MAP: Record<string, string> = {
   phase1_degenerate_output: 'Trascrizione interrotta: testo non valido anche dopo il retry automatico.',
   quota_daily_limit_phase1: 'Quota API giornaliera esaurita — riprova domani, oppure aggiungi una chiave di riserva nelle impostazioni.',
@@ -386,3 +385,42 @@ export const readAndOptimizeImageAsDataUrl = async (
   const rawDataUrl = await readFileAsDataUrl(file);
   return optimizeDataUrlImage(rawDataUrl, options);
 };
+
+export const MODEL_ORDER: string[] = [
+  'gemini-2.5-flash',
+  'gemini-3.5-flash',
+  'gemini-3.6-flash',
+  'gemini-3.7-flash',
+  'gemini-3.8-flash',
+];
+
+export const MODEL_DISPLAY_NAMES: Record<string, string> = {
+  'gemini-2.5-flash': 'Gemini 2.5 Flash',
+  'gemini-3.5-flash': 'Gemini 3.5 Flash',
+  'gemini-3.6-flash': 'Gemini 3.6 Flash',
+  'gemini-3.7-flash': 'Gemini 3.7 Flash',
+  'gemini-3.8-flash': 'Gemini 3.8 Flash',
+};
+
+export function getModelDisplayName(modelId: string): string {
+  const cleaned = (modelId || '').trim();
+  return MODEL_DISPLAY_NAMES[cleaned] || cleaned;
+}
+
+export function sortModelsByVersion<T extends { id?: string } | string>(models: T[]): T[] {
+  const getVersionKey = (item: T): string => {
+    const id = typeof item === 'string' ? item : item.id || '';
+    return id.toLowerCase().trim();
+  };
+
+  return [...models].sort((a, b) => {
+    const keyA = getVersionKey(a);
+    const keyB = getVersionKey(b);
+    const idxA = MODEL_ORDER.indexOf(keyA);
+    const idxB = MODEL_ORDER.indexOf(keyB);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    return keyA.localeCompare(keyB, undefined, { numeric: true });
+  });
+}

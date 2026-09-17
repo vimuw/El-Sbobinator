@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { errorLabel, formatDuration, formatRelativeTime, formatSize, generateRoomCode, isNetworkError, isPausedError, isQuotaError, isResumableError, readFileAsDataUrl, readAndOptimizeImageAsDataUrl, calculateOptimalDimensions, shortModelName } from './utils';
+import { errorLabel, formatDuration, formatRelativeTime, formatSize, generateRoomCode, isNetworkError, isPausedError, isQuotaError, isResumableError, readFileAsDataUrl, readAndOptimizeImageAsDataUrl, calculateOptimalDimensions, shortModelName, sortModelsByVersion, getModelDisplayName, MODEL_ORDER } from './utils';
 
 describe('isQuotaError', () => {
   it('returns false for undefined', () => {
@@ -376,5 +376,58 @@ describe('generateRoomCode', () => {
     } finally {
       globalThis.crypto = originalCrypto;
     }
+  });
+});
+
+describe('model sorting and display names', () => {
+  it('correctly maps model display names', () => {
+    expect(getModelDisplayName('gemini-2.5-flash')).toBe('Gemini 2.5 Flash');
+    expect(getModelDisplayName('gemini-3.5-flash')).toBe('Gemini 3.5 Flash');
+    expect(getModelDisplayName('gemini-3.6-flash')).toBe('Gemini 3.6 Flash');
+    expect(getModelDisplayName('gemini-3.7-flash')).toBe('Gemini 3.7 Flash');
+    expect(getModelDisplayName('gemini-3.8-flash')).toBe('Gemini 3.8 Flash');
+    expect(getModelDisplayName('unknown-model')).toBe('unknown-model');
+  });
+
+  it('sorts models in chronological version order', () => {
+    const unordered = [
+      'gemini-3.8-flash',
+      'gemini-2.5-flash',
+      'gemini-3.5-flash',
+      'gemini-3.7-flash',
+      'gemini-3.6-flash',
+    ];
+    const sorted = sortModelsByVersion(unordered);
+    expect(sorted).toEqual([
+      'gemini-2.5-flash',
+      'gemini-3.5-flash',
+      'gemini-3.6-flash',
+      'gemini-3.7-flash',
+      'gemini-3.8-flash',
+    ]);
+  });
+
+  it('sorts objects with id property', () => {
+    const objects = [
+      { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
+      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+      { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
+    ];
+    const sorted = sortModelsByVersion(objects);
+    expect(sorted.map(m => m.id)).toEqual([
+      'gemini-2.5-flash',
+      'gemini-3.5-flash',
+      'gemini-3.8-flash',
+    ]);
+  });
+
+  it('defines MODEL_ORDER in expected version order', () => {
+    expect(MODEL_ORDER).toEqual([
+      'gemini-2.5-flash',
+      'gemini-3.5-flash',
+      'gemini-3.6-flash',
+      'gemini-3.7-flash',
+      'gemini-3.8-flash',
+    ]);
   });
 });
