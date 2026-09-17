@@ -25,6 +25,17 @@ export function FolderModal({ state, onClose, onSave }: FolderModalProps) {
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
@@ -40,7 +51,6 @@ export function FolderModal({ state, onClose, onSave }: FolderModalProps) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        onClick={onClose}
         className="modal-overlay absolute inset-0"
       />
       <motion.div
@@ -143,6 +153,17 @@ export function DeleteFolderConfirmModal({
 }: DeleteFolderConfirmModalProps) {
   const sessionCount = folder.session_dirs.length;
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
     <motion.div
       exit={{ opacity: 0 }}
@@ -152,7 +173,6 @@ export function DeleteFolderConfirmModal({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        onClick={onClose}
         className="modal-overlay absolute inset-0"
       />
       <motion.div
@@ -234,6 +254,17 @@ export function DeleteMultipleSessionsConfirmModal({
   const previewList = sessions.slice(0, 5);
   const remainingCount = count - previewList.length;
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
     <motion.div
       exit={{ opacity: 0 }}
@@ -243,7 +274,6 @@ export function DeleteMultipleSessionsConfirmModal({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        onClick={onClose}
         className="modal-overlay absolute inset-0"
       />
       <motion.div

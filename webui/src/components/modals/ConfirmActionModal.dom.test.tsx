@@ -87,6 +87,14 @@ describe('ConfirmActionModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('does not call onClose when backdrop overlay is clicked', () => {
+    const onClose = vi.fn();
+    const { container } = render(<ConfirmActionModal {...baseProps} onClose={onClose} />);
+    const backdrop = container.querySelector('.modal-overlay') as HTMLElement;
+    fireEvent.click(backdrop);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('renders nothing when isOpen is false', () => {
     render(<ConfirmActionModal {...baseProps} isOpen={false} />);
     expect(screen.queryByText('Conferma azione')).toBeNull();

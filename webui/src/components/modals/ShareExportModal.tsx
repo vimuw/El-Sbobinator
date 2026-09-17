@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Download, Package, FileText, Music, CheckCircle2, AlertCircle, Loader2, FolderOpen } from 'lucide-react';
 import type { ArchiveSession } from '../../bridge';
@@ -14,6 +14,18 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
   const [exportedPath, setExportedPath] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!session) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isProcessing) {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [session, isProcessing, onClose]);
 
   if (!session) return null;
 
@@ -68,7 +80,6 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={onClose}
           className="modal-overlay absolute inset-0"
         />
         <motion.div

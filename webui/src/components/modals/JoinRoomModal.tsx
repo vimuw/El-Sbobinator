@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Users, X, Check, Radio } from 'lucide-react';
 import { STORAGE_KEYS } from '../../storageKeys';
@@ -30,12 +30,24 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
   const [name, setName] = useState(getStoredCollabName);
   const [color, setColor] = useState(getStoredCollabColor);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen) {
       setName(getStoredCollabName());
       setColor(getStoredCollabColor());
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,7 +75,6 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
             className="modal-overlay absolute inset-0"
           />
           <motion.div

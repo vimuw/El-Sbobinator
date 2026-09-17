@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AlertCircle, Info, X } from 'lucide-react';
 import type { ArchiveSession } from '../../bridge';
@@ -19,6 +20,18 @@ interface DuplicateFileModalProps {
 }
 
 export function DuplicateFileModal({ prompt, onDismiss, onAddAgain }: DuplicateFileModalProps) {
+  useEffect(() => {
+    if (!prompt) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onDismiss();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [prompt, onDismiss]);
+
   return (
     <AnimatePresence>
       {prompt && (
@@ -30,7 +43,6 @@ export function DuplicateFileModal({ prompt, onDismiss, onAddAgain }: DuplicateF
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onDismiss}
             className="modal-overlay absolute inset-0"
           />
           <motion.div

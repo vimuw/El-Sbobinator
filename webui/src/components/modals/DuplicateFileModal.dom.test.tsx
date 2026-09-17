@@ -145,4 +145,31 @@ describe('DuplicateFileModal', () => {
     fireEvent.click(screen.getByText('Rigenera da zero'));
     expect(onAddAgain).toHaveBeenCalledWith([match]);
   });
+
+  it('does not call onDismiss when backdrop overlay is clicked', () => {
+    const onDismiss = vi.fn();
+    const { container } = render(
+      <DuplicateFileModal
+        prompt={{ kind: 'in-queue', filenames: ['audio.mp3'] }}
+        onDismiss={onDismiss}
+        onAddAgain={vi.fn()}
+      />,
+    );
+    const backdrop = container.querySelector('.modal-overlay') as HTMLElement;
+    fireEvent.click(backdrop);
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it('calls onDismiss when Escape key is pressed', () => {
+    const onDismiss = vi.fn();
+    render(
+      <DuplicateFileModal
+        prompt={{ kind: 'in-queue', filenames: ['audio.mp3'] }}
+        onDismiss={onDismiss}
+        onAddAgain={vi.fn()}
+      />,
+    );
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
 });

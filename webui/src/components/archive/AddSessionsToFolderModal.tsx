@@ -62,6 +62,17 @@ export function AddSessionsToFolderModal({
     onClose();
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const allFilteredSelected =
     filteredSessions.length > 0 &&
     filteredSessions.every(s => selectedDirs.has(s.session_dir));
@@ -75,7 +86,6 @@ export function AddSessionsToFolderModal({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        onClick={onClose}
         className="modal-overlay absolute inset-0"
       />
       <motion.div

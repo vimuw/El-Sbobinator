@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AlertCircle, X } from 'lucide-react';
 
@@ -8,6 +9,18 @@ interface RegenerateModalProps {
 }
 
 export function RegenerateModal({ prompt, onAnswer, onDismiss }: RegenerateModalProps) {
+  useEffect(() => {
+    if (!prompt) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onDismiss();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [prompt, onDismiss]);
+
   return (
     <AnimatePresence>
       {prompt && (
@@ -19,7 +32,6 @@ export function RegenerateModal({ prompt, onAnswer, onDismiss }: RegenerateModal
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onDismiss}
             className="modal-overlay absolute inset-0"
           />
           <motion.div

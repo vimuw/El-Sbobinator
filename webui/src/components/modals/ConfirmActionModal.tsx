@@ -86,7 +86,6 @@ export function ConfirmActionModal({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
             className="modal-overlay absolute inset-0"
           />
           <motion.div
