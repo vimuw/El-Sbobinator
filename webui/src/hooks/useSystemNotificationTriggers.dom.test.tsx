@@ -53,6 +53,7 @@ describe('useSystemNotificationTriggers', () => {
       expect.objectContaining({
         persistent: true,
         dedupeKey: 'update-available',
+        actionType: 'install_update',
       }),
     );
   });

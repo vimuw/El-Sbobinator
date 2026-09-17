@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Info,
   Loader2,
+  Sparkles,
 } from 'lucide-react';
 import type { NotificationMessage } from '../NotificationDropdown';
 import { formatRelativeTime } from '../../utils';
@@ -49,7 +50,21 @@ export function NotificationItem({
   };
 
   const getIconBadge = () => {
-    if (notification.category === 'update' || notification.type === 'info') {
+    if (notification.category === 'update') {
+      return (
+        <div
+          className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+          style={{
+            background: 'var(--accent-subtle)',
+            color: 'var(--accent-text)',
+          }}
+        >
+          <Sparkles className="w-4 h-4" />
+        </div>
+      );
+    }
+
+    if (notification.type === 'info') {
       return (
         <div
           className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"

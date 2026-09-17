@@ -55,6 +55,7 @@ export function useSystemNotificationTriggers({
       {
         persistent: true,
         dedupeKey: 'update-available',
+        actionType: 'install_update',
         actionData: { version: updateAvailable },
       },
     );

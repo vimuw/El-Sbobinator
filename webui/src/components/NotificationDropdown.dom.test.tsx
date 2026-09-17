@@ -96,6 +96,24 @@ describe('NotificationDropdown component', () => {
     });
   });
 
+  it('renders update notifications with accent sparkles badge', () => {
+    render(
+      <NotificationDropdown
+        isOpen={true}
+        onClose={vi.fn()}
+        notifications={[mockNotifications[1]]}
+        onMarkAsRead={vi.fn()}
+        onMarkAllAsRead={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    const updateItem = screen.getByText('Aggiornamento disponibile').closest('[data-notification-id="notif-2"]');
+    expect(updateItem).toBeTruthy();
+    const badge = updateItem?.querySelector('.lucide-sparkles');
+    expect(badge).toBeTruthy();
+  });
+
   it('handles "Segna come già lette" action', () => {
     const handleMarkAllAsRead = vi.fn();
 
