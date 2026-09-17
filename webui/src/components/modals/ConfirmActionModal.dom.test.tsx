@@ -16,6 +16,43 @@ describe('ConfirmActionModal', () => {
     render(<ConfirmActionModal {...baseProps} />);
     expect(screen.getByText('Conferma azione')).toBeTruthy();
     expect(screen.getByText('Sei sicuro di voler procedere?')).toBeTruthy();
+    expect(screen.getByRole('alertdialog').getAttribute('aria-modal')).toBe('true');
+  });
+
+  it('focuses the safe action when opened and restores the previous focus when closed', () => {
+    const trigger = document.createElement('button');
+    document.body.appendChild(trigger);
+    trigger.focus();
+
+    const { rerender } = render(<ConfirmActionModal {...baseProps} />);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Annulla' }));
+
+    rerender(<ConfirmActionModal {...baseProps} isOpen={false} />);
+    expect(document.activeElement).toBe(trigger);
+    trigger.remove();
+  });
+
+  it('closes on Escape', () => {
+    const onClose = vi.fn();
+    render(<ConfirmActionModal {...baseProps} onClose={onClose} />);
+
+    fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps Tab focus inside the dialog', () => {
+    render(<ConfirmActionModal {...baseProps} />);
+    const closeButton = screen.getByRole('button', { name: 'Chiudi finestra' });
+    const confirmButton = screen.getByRole('button', { name: 'Elimina' });
+
+    confirmButton.focus();
+    fireEvent.keyDown(confirmButton, { key: 'Tab' });
+    expect(document.activeElement).toBe(closeButton);
+
+    closeButton.focus();
+    fireEvent.keyDown(closeButton, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(confirmButton);
   });
 
   it('renders confirm and cancel buttons', () => {
