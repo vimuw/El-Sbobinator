@@ -468,8 +468,8 @@ describe('ApiKeySection component', () => {
       />
     );
 
-    const primaryRow = screen.getByText('Chiave Principale').closest('.p-3');
-    const fallbackRow = screen.getByText('Chiave Riserva 1').closest('.p-3');
+    const primaryRow = screen.getByText('Chiave Principale').closest('.justify-between');
+    const fallbackRow = screen.getByText('Chiave Riserva 1').closest('.justify-between');
     expect(primaryRow).not.toBeNull();
     expect(fallbackRow).not.toBeNull();
     expect(within(primaryRow as HTMLElement).getByText('Operativa')).toBeTruthy();

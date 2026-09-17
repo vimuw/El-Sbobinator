@@ -488,6 +488,36 @@ describe('SettingsModal — main-section interactions', () => {
     fireEvent.click(screen.getByText(/Ottieni gratis su aistudio/));
     expect(openUrl).toHaveBeenCalledWith('https://aistudio.google.com/apikey');
   });
+
+  it('opens confirmation modal and removes API key when confirmed', async () => {
+    const setApiKey = vi.fn();
+    const setFallbackKeys = vi.fn();
+    render(
+      <SettingsModal
+        {...makeProps({
+          apiKey: 'AIzaSyPrimary1234567890',
+          fallbackKeys: ['AIzaSyReserve1111111111'],
+          setApiKey,
+          setFallbackKeys,
+        })}
+      />
+    );
+
+    const kebab = screen.getByRole('button', { name: 'Opzioni chiave principale' });
+    fireEvent.click(kebab);
+
+    const removeBtn = screen.getByRole('button', { name: 'Rimuovi chiave' });
+    fireEvent.click(removeBtn);
+
+    expect(screen.getByText('Rimuovi chiave API')).toBeTruthy();
+    expect(screen.getByText(/La Chiave Riserva 1 verrà promossa automaticamente a nuova chiave principale/i)).toBeTruthy();
+
+    const confirmBtn = screen.getByRole('button', { name: 'Rimuovi' });
+    fireEvent.click(confirmBtn);
+
+    expect(setApiKey).toHaveBeenCalledWith('AIzaSyReserve1111111111');
+    expect(setFallbackKeys).toHaveBeenCalledWith([]);
+  });
 });
 
 describe('SettingsModal — session folder and cleanup', () => {

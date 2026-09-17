@@ -35,9 +35,10 @@ export interface ApiKeySectionProps {
   isLoadingUsage?: boolean;
   onRefreshUsage?: () => void;
   preferredModel?: string;
+  onAskDeleteKey?: (target: DeleteKeyTarget) => void;
 }
 
-interface DeleteTarget {
+export interface DeleteKeyTarget {
   type: 'primary' | 'fallback';
   index?: number;
   label: string;
@@ -57,6 +58,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
   isLoadingUsage = false,
   onRefreshUsage,
   preferredModel,
+  onAskDeleteKey,
 }) => {
   const [newKeyInput, setNewKeyInput] = useState('');
   const [notice, setNotice] = useState<{ type: 'error' | 'warning'; message: string } | null>(null);
@@ -64,7 +66,15 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
   const [showAllKeys, setShowAllKeys] = useState(false);
   const [showNewKeyInput, setShowNewKeyInput] = useState(false);
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteKeyTarget | null>(null);
+
+  const requestDeleteKey = (target: DeleteKeyTarget) => {
+    if (onAskDeleteKey) {
+      onAskDeleteKey(target);
+    } else {
+      setDeleteTarget(target);
+    }
+  };
 
   const cleanedFallbackKeys = useMemo(
     () => fallbackKeys.map(k => k.trim()).filter(Boolean),
@@ -545,7 +555,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
       icon: <Trash2 className="w-3.5 h-3.5" />,
       danger: true,
       onClick: () =>
-        setDeleteTarget({
+        requestDeleteKey({
           type: 'primary',
           label: 'Chiave Principale',
           maskedKey: primaryMaskedDisplay,
@@ -639,10 +649,10 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
           type="button"
           onClick={handleAddKey}
           disabled={!newKeyInput.trim()}
-          className="px-3.5 py-1.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-xs font-semibold text-[var(--text-primary)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 shrink-0 cursor-pointer min-h-[38px]"
+          className="premium-button compact-button text-xs font-bold shrink-0 cursor-pointer flex items-center gap-1.5 min-h-[38px]"
           aria-label="Aggiungi chiave di riserva"
         >
-          <Plus className="w-3.5 h-3.5 text-[var(--accent-text)]" />
+          <Plus className="w-3.5 h-3.5" />
           <span>Aggiungi</span>
         </button>
       </div>
@@ -678,10 +688,10 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
       )}
 
       {/* 3. Structured Card Table (Quotas Layout) */}
-      <div className="border border-[var(--border-default)] rounded-xl divide-y divide-[var(--border-default)] overflow-hidden bg-[var(--bg-surface)]">
+      <div className="border border-[var(--border-default)] rounded-lg divide-y divide-[var(--border-default)] overflow-hidden bg-[var(--bg-surface)]">
         {/* Row 1: Chiave Principale (if configured) */}
         {hasPrimaryConfigured ? (
-          <div className="p-3 flex items-center justify-between gap-2.5 text-xs">
+          <div className="py-2 px-3.5 flex items-center justify-between gap-2.5 text-xs">
             <div className="flex items-center gap-2 min-w-0 flex-wrap">
               <span className="font-bold text-[var(--text-primary)]">Chiave Principale</span>
 
@@ -760,7 +770,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
               icon: <Trash2 className="w-3.5 h-3.5" />,
               danger: true,
               onClick: () =>
-                setDeleteTarget({
+                requestDeleteKey({
                   type: 'fallback',
                   index: idx,
                   label,
@@ -772,7 +782,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
           return (
             <div
               key={`${key}-${idx}`}
-              className="p-3 flex items-center justify-between gap-2.5 text-xs"
+              className="py-2 px-3.5 flex items-center justify-between gap-2.5 text-xs"
             >
               <div className="flex items-center gap-2 min-w-0 flex-wrap">
                 <span className="font-bold text-[var(--text-primary)]">{label}</span>
@@ -827,22 +837,24 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
         </a>
       </div>
 
-      {/* 5. Delete Confirmation Dialog */}
-      <ConfirmActionModal
-        isOpen={Boolean(deleteTarget)}
-        title="Rimuovi chiave API"
-        description={
-          deleteTarget?.type === 'primary'
-            ? cleanedFallbackKeys.length > 0
-              ? `Sei sicuro di voler rimuovere la Chiave Principale (${deleteTarget.maskedKey})? La Chiave Riserva 1 verrà promossa automaticamente a nuova chiave principale.`
-              : `Sei sicuro di voler rimuovere la Chiave Principale (${deleteTarget?.maskedKey})? Non sarà più possibile eseguire trascrizioni fino all'inserimento di una nuova chiave.`
-            : `Sei sicuro di voler rimuovere ${deleteTarget?.label || 'questa chiave di riserva'} (${deleteTarget?.maskedKey})?`
-        }
-        confirmLabel="Rimuovi"
-        cancelLabel="Annulla"
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={handleConfirmDelete}
-      />
+      {/* 5. Delete Confirmation Dialog (fallback for standalone rendering) */}
+      {!onAskDeleteKey && (
+        <ConfirmActionModal
+          isOpen={Boolean(deleteTarget)}
+          title="Rimuovi chiave API"
+          description={
+            deleteTarget?.type === 'primary'
+              ? cleanedFallbackKeys.length > 0
+                ? `Sei sicuro di voler rimuovere la Chiave Principale (${deleteTarget.maskedKey})? La Chiave Riserva 1 verrà promossa automaticamente a nuova chiave principale.`
+                : `Sei sicuro di voler rimuovere la Chiave Principale (${deleteTarget?.maskedKey})? Non sarà più possibile eseguire trascrizioni fino all'inserimento di una nuova chiave.`
+              : `Sei sicuro di voler rimuovere ${deleteTarget?.label || 'questa chiave di riserva'} (${deleteTarget?.maskedKey})?`
+          }
+          confirmLabel="Rimuovi"
+          cancelLabel="Annulla"
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleConfirmDelete}
+        />
+      )}
     </div>
   );
 });

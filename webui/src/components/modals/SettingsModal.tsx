@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Settings, HardDrive, Activity, SlidersHorizontal, Loader2, X, FlaskConical } from 'lucide-react';
 import type { ApiUsageResult, ModelOption, ValidationResult } from '../../bridge';
 import { ConfirmActionModal } from './ConfirmActionModal';
-import { ApiKeySection } from './settings/ApiKeySection';
+import { ApiKeySection, type DeleteKeyTarget } from './settings/ApiKeySection';
 import { ModelSection } from './settings/ModelSection';
 import { NotificationSection } from './settings/NotificationSection';
 import { StorageSection } from './settings/StorageSection';
@@ -112,6 +112,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [apiUsage, setApiUsage] = useState<ApiUsageResult | null>(null);
   const [isLoadingUsage, setIsLoadingUsage] = useState(false);
   const [clearProtectedPrimary, setClearProtectedPrimary] = useState(false);
+  const [keyDeleteTarget, setKeyDeleteTarget] = useState<DeleteKeyTarget | null>(null);
 
   const isSavingRef = useRef(false);
   const isMountedRef = useRef(true);
@@ -443,6 +444,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onClose();
   }, [onClose, setApiKey, setFallbackKeys, setFallbackModels, setPreferredModel]);
 
+  const handleConfirmDeleteKey = useCallback(() => {
+    if (!keyDeleteTarget) return;
+
+    if (keyDeleteTarget.type === 'primary') {
+      const cleaned = fallbackKeys.map(k => k.trim()).filter(Boolean);
+      if (cleaned.length > 0) {
+        const [firstReserve, ...rest] = cleaned;
+        setApiKey(firstReserve);
+        setFallbackKeys(rest);
+        setClearProtectedPrimary(false);
+      } else {
+        setApiKey('');
+        if (hasProtectedKey) {
+          setClearProtectedPrimary(true);
+        }
+      }
+    } else if (keyDeleteTarget.type === 'fallback' && typeof keyDeleteTarget.index === 'number') {
+      const cleaned = fallbackKeys.map(k => k.trim()).filter(Boolean);
+      const updated = cleaned.filter((_, idx) => idx !== keyDeleteTarget.index);
+      setFallbackKeys(updated);
+    }
+
+    setKeyDeleteTarget(null);
+  }, [fallbackKeys, hasProtectedKey, keyDeleteTarget, setApiKey, setFallbackKeys]);
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -598,6 +624,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         apiUsage={apiUsage}
                         isLoadingUsage={isLoadingUsage}
                         onRefreshUsage={fetchApiUsage}
+                        onAskDeleteKey={setKeyDeleteTarget}
                       />
 
                       <div className="border-t border-[var(--border-default)]" />
@@ -681,7 +708,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div>
                         <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Diagnostica</h2>
                         <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                          Verifica requisiti di sistema (FFmpeg, API, disco) e report di assistenza.
+                          Telemetria delle chiamate, verifica requisiti di sistema (FFmpeg, API, disco) e report di assistenza.
                         </p>
                       </div>
 
@@ -769,6 +796,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         onConfirm={() => {
           void handleConfirmMove();
         }}
+      />
+      <ConfirmActionModal
+        isOpen={Boolean(keyDeleteTarget)}
+        title="Rimuovi chiave API"
+        description={
+          keyDeleteTarget?.type === 'primary'
+            ? fallbackKeys.map(k => k.trim()).filter(Boolean).length > 0
+              ? `Sei sicuro di voler rimuovere la Chiave Principale (${keyDeleteTarget.maskedKey})? La Chiave Riserva 1 verrà promossa automaticamente a nuova chiave principale.`
+              : `Sei sicuro di voler rimuovere la Chiave Principale (${keyDeleteTarget?.maskedKey})? Non sarà più possibile eseguire trascrizioni fino all'inserimento di una nuova chiave.`
+            : `Sei sicuro di voler rimuovere ${keyDeleteTarget?.label || 'questa chiave di riserva'} (${keyDeleteTarget?.maskedKey})?`
+        }
+        confirmLabel="Rimuovi"
+        cancelLabel="Annulla"
+        onClose={() => setKeyDeleteTarget(null)}
+        onConfirm={handleConfirmDeleteKey}
       />
     </>
   );
