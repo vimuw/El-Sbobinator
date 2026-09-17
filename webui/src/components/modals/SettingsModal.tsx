@@ -64,6 +64,13 @@ export interface SettingsModalProps {
 
 type TabType = 'general' | 'storage' | 'quotas' | 'diagnostics';
 
+interface SettingsSnapshot {
+  apiKey: string;
+  fallbackKeys: string[];
+  preferredModel: string;
+  fallbackModels: string[];
+}
+
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
@@ -75,7 +82,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   storage,
 }) => {
   const { apiKey, setApiKey, hasProtectedKey, fallbackKeys, setFallbackKeys } = auth;
-  const { preferredModel, setPreferredModel, fallbackModels, availableModels } = models;
+  const {
+    preferredModel,
+    setPreferredModel,
+    fallbackModels,
+    setFallbackModels,
+    availableModels,
+  } = models;
   const { latestVersion, checkForUpdates, isCheckingUpdate, hasChecked, checkFailed, updateInstallState, onInstallUpdate } = updater;
   const onSessionRootMoved = storage?.onSessionRootMoved;
   const [activeTab, setActiveTab] = useState<TabType>('general');
@@ -88,9 +101,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isValidatingEnvironment, setIsValidatingEnvironment] = useState(false);
   const [apiUsage, setApiUsage] = useState<ApiUsageResult | null>(null);
   const [isLoadingUsage, setIsLoadingUsage] = useState(false);
+  const [clearProtectedPrimary, setClearProtectedPrimary] = useState(false);
 
   const isSavingRef = useRef(false);
   const isMountedRef = useRef(true);
+  const settingsSnapshotRef = useRef<SettingsSnapshot | null>(null);
+  const wasOpenRef = useRef(false);
 
   const {
     sessionInfo,
@@ -144,13 +160,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     };
   }, []);
 
+  useEffect(() => {
+    if (isOpen && !wasOpenRef.current) {
+      settingsSnapshotRef.current = {
+        apiKey,
+        fallbackKeys: [...fallbackKeys],
+        preferredModel,
+        fallbackModels: [...fallbackModels],
+      };
+    } else if (!isOpen) {
+      settingsSnapshotRef.current = null;
+    }
+    wasOpenRef.current = isOpen;
+  }, [apiKey, fallbackKeys, fallbackModels, isOpen, preferredModel]);
+
 
   const fetchApiUsage = useCallback(async () => {
     if (!window.pywebview?.api?.get_api_usage) return;
     setIsLoadingUsage(true);
     try {
       const res = await window.pywebview.api.get_api_usage(
-        apiKey.trim(),
+        clearProtectedPrimary
+          ? ''
+          : hasProtectedKey && !apiKey.trim()
+            ? undefined
+            : apiKey.trim(),
         fallbackKeys,
         preferredModel,
         fallbackModels,
@@ -163,11 +197,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     } finally {
       if (isMountedRef.current) setIsLoadingUsage(false);
     }
-  }, [apiKey, fallbackKeys, preferredModel, fallbackModels]);
+  }, [apiKey, clearProtectedPrimary, fallbackKeys, fallbackModels, hasProtectedKey, preferredModel]);
 
   useEffect(() => {
     if (isOpen) {
-      if (activeTab === 'quotas') {
+      if (activeTab === 'quotas' || activeTab === 'general') {
         void fetchApiUsage();
       }
       if (activeTab === 'storage') {
@@ -178,6 +212,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      setClearProtectedPrimary(false);
       setSaveError(null);
       setIsSaving(false);
       isSavingRef.current = false;
@@ -198,7 +233,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     setSaveError(null);
-    if (tab === 'quotas') {
+    if (tab === 'quotas' || tab === 'general') {
       void fetchApiUsage();
     }
   };
@@ -340,7 +375,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       const keys = fallbackKeys.map(k => k.trim()).filter(Boolean);
       let result;
       try {
-        const apiKeyPayload = hasProtectedKey && !apiKey.trim() ? null : apiKey.trim();
+        const apiKeyPayload = clearProtectedPrimary
+          ? ''
+          : hasProtectedKey && !apiKey.trim()
+            ? null
+            : apiKey.trim();
         result = await window.pywebview.api.save_settings(apiKeyPayload, keys, preferredModel, fallbackModels);
       } catch (e: unknown) {
         const err = `Errore salvataggio impostazioni: ${getErrorMessage(e)}`;
@@ -369,6 +408,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleClose = () => {
     if (isSaving) return;
+    const snapshot = settingsSnapshotRef.current;
+    if (snapshot) {
+      setApiKey(snapshot.apiKey);
+      setFallbackKeys([...snapshot.fallbackKeys]);
+      setPreferredModel(snapshot.preferredModel);
+      setFallbackModels([...snapshot.fallbackModels]);
+      setClearProtectedPrimary(false);
+    }
     onClose();
   };
 
@@ -481,7 +528,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </button>
               </div>
 
-              <div className="flex-1 flex flex-col min-w-0 bg-[var(--bg-surface)] h-full relative">
+              <div className="flex-1 min-h-0 flex flex-col min-w-0 bg-[var(--bg-surface)] relative">
                 <button
                   type="button"
                   onClick={handleClose}
@@ -503,12 +550,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                       <ApiKeySection
                         apiKey={apiKey}
-                        setApiKey={setApiKey}
-                        hasProtectedKey={hasProtectedKey}
+                        setApiKey={key => {
+                          if (key.trim()) setClearProtectedPrimary(false);
+                          setApiKey(key);
+                        }}
+                        hasProtectedKey={hasProtectedKey && !clearProtectedPrimary}
                         apiKeyInsecure={apiKeyInsecure}
                         apiKeyInsecureReason={apiKeyInsecureReason || ''}
                         fallbackKeys={fallbackKeys}
                         setFallbackKeys={setFallbackKeys}
+                        onClearProtectedPrimary={() => setClearProtectedPrimary(true)}
+                        apiUsage={apiUsage}
+                        isLoadingUsage={isLoadingUsage}
+                        onRefreshUsage={fetchApiUsage}
                       />
 
                       <div className="border-t border-[var(--border-default)]" />

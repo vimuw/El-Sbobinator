@@ -156,6 +156,71 @@ describe('SettingsModal — diagnostics environment pending checks', () => {
 });
 
 describe('SettingsModal — save behavior', () => {
+  it('restores unsaved keys and models when Annulla closes and reopens the modal', () => {
+    const primaryKey = 'AIzaABCDEFGHIJKLMNOPQRST';
+    const originalFallback = 'AIzaBBBBBBBBBBBBBBBBBBBB';
+    const addedFallback = 'AIzaCCCCCCCCCCCCCCCCCCCC';
+    const availableModels = [
+      { id: 'gemini-primary', label: 'Gemini Primary', summary: '', default_chunk_minutes: 15 },
+      { id: 'gemini-alternate', label: 'Gemini Alternate', summary: '', default_chunk_minutes: 15 },
+    ];
+
+    function StatefulSettingsHarness() {
+      const [isOpen, setIsOpen] = React.useState(true);
+      const [apiKey, setApiKey] = React.useState(primaryKey);
+      const [fallbackKeys, setFallbackKeys] = React.useState([originalFallback]);
+      const [preferredModel, setPreferredModel] = React.useState('gemini-primary');
+      const [fallbackModels, setFallbackModels] = React.useState(['gemini-alternate']);
+
+      return (
+        <>
+          <button type="button" onClick={() => setIsOpen(true)}>Riapri</button>
+          <SettingsModal
+            {...makeProps({
+              isOpen,
+              onClose: () => setIsOpen(false),
+              apiKey,
+              setApiKey,
+              fallbackKeys,
+              setFallbackKeys,
+              preferredModel,
+              setPreferredModel,
+              fallbackModels,
+              setFallbackModels,
+              availableModels,
+            })}
+          />
+        </>
+      );
+    }
+
+    render(<StatefulSettingsHarness />);
+
+    const input = screen.getByLabelText('Nuova chiave di riserva');
+    fireEvent.change(input, { target: { value: addedFallback } });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    expect(screen.getByText('3 chiavi')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Gemini Primary/i }));
+    fireEvent.click(screen.getByRole('option', { name: /Gemini Alternate/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Annulla' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Riapri' }));
+
+    expect(screen.getByText('2 chiavi')).toBeTruthy();
+    expect(screen.queryByText('...CCCC')).toBeNull();
+    expect(screen.getByRole('button', { name: /Gemini Primary/i })).toBeTruthy();
+  });
+
+  it('lets the mobile content column shrink so the footer remains inside the modal', () => {
+    render(<SettingsModal {...makeProps()} />);
+
+    const footer = screen.getByText('Salva e Chiudi').closest('.modal-footer');
+    const contentColumn = footer?.parentElement;
+
+    expect(contentColumn?.className).toContain('min-h-0');
+    expect(contentColumn?.className).not.toMatch(/(?:^|\s)h-full(?:\s|$)/);
+  });
+
   it('missing bridge: modal stays open, inline error displayed, console notified', async () => {
     const onClose = vi.fn();
     const appendConsole = vi.fn();
@@ -219,6 +284,27 @@ describe('SettingsModal — save behavior', () => {
     expect(onSettingsSaved).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onSettingsSaved.mock.invocationCallOrder[0]).toBeLessThan(onClose.mock.invocationCallOrder[0]);
+  });
+
+  it('sends an explicit empty key when removing an inaccessible protected primary', async () => {
+    const mockSave = vi.fn().mockResolvedValue({ ok: true });
+    setPywebview({ save_settings: mockSave });
+
+    render(
+      <SettingsModal
+        {...makeProps({ apiKey: '', hasProtectedKey: true, fallbackKeys: [] })}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Opzioni chiave principale' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Rimuovi chiave' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Rimuovi' }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Salva e Chiudi'));
+    });
+
+    expect(mockSave).toHaveBeenCalledWith('', [], 'gemini-3.6-flash', []);
   });
 
   it('double-click: save_settings called only once, onClose called only once', async () => {
@@ -318,17 +404,20 @@ describe('SettingsModal — session info race condition', () => {
 describe('SettingsModal — main-section interactions', () => {
   it('toggles showPrimaryKey on show/hide button click without affecting fallback keys', async () => {
     render(<SettingsModal {...makeProps()} />);
-    fireEvent.click(screen.getByTitle('Mostra chiave'));
-    expect(screen.getByTitle('Nascondi chiave')).toBeTruthy();
-    expect(screen.getByTitle('Mostra chiavi')).toBeTruthy();
+    const kebab = screen.getByRole('button', { name: 'Opzioni chiave principale' });
+    fireEvent.click(kebab);
+    fireEvent.click(screen.getByRole('button', { name: 'Mostra in chiaro' }));
+    fireEvent.click(kebab);
+    expect(screen.getByRole('button', { name: 'Nascondi chiave' })).toBeTruthy();
   });
 
-  it('calls setApiKey when API key input changes', async () => {
+  it('calls setApiKey when API key is added to empty settings', async () => {
     const setApiKey = vi.fn();
-    render(<SettingsModal {...makeProps({ setApiKey })} />);
-    const input = screen.getByPlaceholderText(/oppure AQ/);
-    fireEvent.change(input, { target: { value: 'AIzaSy123' } });
-    expect(setApiKey).toHaveBeenCalledWith('AIzaSy123');
+    render(<SettingsModal {...makeProps({ apiKey: '', setApiKey })} />);
+    const input = screen.getByPlaceholderText(/Inserisci chiave principale/);
+    fireEvent.change(input, { target: { value: 'AIzaSy1234567890123456789' } });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    expect(setApiKey).toHaveBeenCalledWith('AIzaSy1234567890123456789');
   });
 
   it('calls setFallbackKeys when a fallback key is added', async () => {
@@ -347,11 +436,10 @@ describe('SettingsModal — main-section interactions', () => {
     expect(localStorage.getItem('notifications_enabled')).toBeTruthy();
   });
 
-  it('toggles showFallbackKeys on Mostra chiavi click without affecting primary key', async () => {
+  it('toggles global key visibility on header eye click', async () => {
     render(<SettingsModal {...makeProps()} />);
-    fireEvent.click(screen.getByTitle('Mostra chiavi'));
-    expect(screen.getByTitle('Nascondi chiavi')).toBeTruthy();
-    expect(screen.getByTitle('Mostra chiave')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Mostra chiavi'));
+    expect(screen.getByLabelText('Nascondi tutte le chiavi')).toBeTruthy();
   });
 
   it('calls open_url when aistudio link is clicked', async () => {
