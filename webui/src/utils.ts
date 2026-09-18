@@ -424,3 +424,14 @@ export function sortModelsByVersion<T extends { id?: string } | string>(models: 
     return keyA.localeCompare(keyB, undefined, { numeric: true });
   });
 }
+
+/**
+ * Compare two semver-like version strings (e.g. 'v2.6.0' and '2.5.1').
+ * Returns > 0 if a > b, < 0 if a < b, 0 if equal.
+ */
+export function compareVersions(a: string, b: string): number {
+  const parse = (v: string) => String(v || '').replace(/^v/, '').split('.').map(p => parseInt(p, 10) || 0);
+  const [aMaj = 0, aMin = 0, aPatch = 0] = parse(a);
+  const [bMaj = 0, bMin = 0, bPatch = 0] = parse(b);
+  return aMaj !== bMaj ? aMaj - bMaj : aMin !== bMin ? aMin - bMin : aPatch - bPatch;
+}

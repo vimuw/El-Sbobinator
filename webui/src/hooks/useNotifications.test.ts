@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { GITHUB_RELEASES_URL } from '../branding';
+import { APP_VERSION, GITHUB_RELEASES_URL } from '../branding';
+import { STORAGE_KEYS } from '../storageKeys';
 import {
   NOTIFICATIONS_STORAGE_KEY,
+  sanitizePersistedNotifications,
   useNotifications,
   type PersistedNotification,
 } from './useNotifications';
@@ -76,6 +78,152 @@ describe('useNotifications', () => {
       expect(result.current.rawNotifications[0].title).toBe('Elaborazione in pausa');
       expect(result.current.rawNotifications[0].type).toBe('warning');
       expect(result.current.rawNotifications[0].message).toContain('Nessuna scelta ricevuta');
+    });
+
+    it('removes stale in-progress update-install notifications on bootstrap', () => {
+      const stale: PersistedNotification[] = [
+        {
+          id: 'install-1',
+          title: 'Installazione aggiornamento',
+          message: 'Installazione aggiornamento…',
+          type: 'info',
+          category: 'update',
+          timestamp: Date.now() - 10_000,
+          read: false,
+          persistent: true,
+          dedupeKey: 'update-install',
+        },
+      ];
+      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(stale));
+
+      const { result } = renderHook(() => useNotifications());
+      const hasInstallNotif = result.current.rawNotifications.some(n => n.dedupeKey === 'update-install');
+      expect(hasInstallNotif).toBe(false);
+    });
+
+    it('removes stale update-available notifications when target version <= current APP_VERSION', () => {
+      const stale: PersistedNotification[] = [
+        {
+          id: 'avail-1',
+          title: 'Aggiornamento disponibile',
+          message: `Nuova versione disponibile: ${APP_VERSION}`,
+          type: 'info',
+          category: 'update',
+          timestamp: Date.now() - 60_000,
+          read: false,
+          persistent: true,
+          dedupeKey: 'update-available',
+          actionType: 'install_update',
+          actionData: { version: APP_VERSION },
+        },
+      ];
+      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(stale));
+
+      const { result } = renderHook(() => useNotifications());
+      const hasAvailNotif = result.current.rawNotifications.some(n => n.dedupeKey === 'update-available');
+      expect(hasAvailNotif).toBe(false);
+    });
+
+    it('retains update-available notification when target version is strictly greater than current APP_VERSION', () => {
+      const futureVersion = 'v999.0.0';
+      const future: PersistedNotification[] = [
+        {
+          id: 'avail-future',
+          title: 'Aggiornamento disponibile',
+          message: `Nuova versione disponibile: ${futureVersion}`,
+          type: 'info',
+          category: 'update',
+          timestamp: Date.now() - 10_000,
+          read: false,
+          persistent: true,
+          dedupeKey: 'update-available',
+          actionType: 'install_update',
+          actionData: { version: futureVersion },
+        },
+      ];
+      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(future));
+      localStorage.setItem(STORAGE_KEYS.LAST_SEEN_APP_VERSION_V1, APP_VERSION);
+
+      const { result } = renderHook(() => useNotifications());
+      const hasAvailNotif = result.current.rawNotifications.some(n => n.dedupeKey === 'update-available');
+      expect(hasAvailNotif).toBe(true);
+    });
+
+    it('adds Aggiornamento completato notification when transitioning from a prior version', () => {
+      localStorage.setItem(STORAGE_KEYS.LAST_SEEN_APP_VERSION_V1, 'v2.5.1');
+      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify([]));
+
+      const { result } = renderHook(() => useNotifications({ currentAppVersion: 'v2.6.0' }));
+      const successNotif = result.current.rawNotifications.find(n => n.dedupeKey === 'update-success:v2.6.0');
+      expect(successNotif).toBeDefined();
+      expect(successNotif?.title).toBe('Aggiornamento completato');
+      expect(successNotif?.message).toContain('v2.6.0');
+      expect(successNotif?.type).toBe('success');
+      expect(localStorage.getItem(STORAGE_KEYS.LAST_SEEN_APP_VERSION_V1)).toBe('v2.6.0');
+    });
+
+    it('does not consume the prior version when render aborts before effects commit', () => {
+      localStorage.setItem(STORAGE_KEYS.LAST_SEEN_APP_VERSION_V1, 'v2.5.1');
+      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify([]));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      expect(() =>
+        renderHook(() => {
+          useNotifications({ currentAppVersion: 'v2.6.0' });
+          throw new Error('abort before commit');
+        })
+      ).toThrow('abort before commit');
+
+      expect(localStorage.getItem(STORAGE_KEYS.LAST_SEEN_APP_VERSION_V1)).toBe('v2.5.1');
+    });
+
+    it('adds Aggiornamento completato notification when prior storage had pending update for current APP_VERSION', () => {
+      const priorState: PersistedNotification[] = [
+        {
+          id: 'install-1',
+          title: 'Installazione aggiornamento',
+          message: 'Installazione aggiornamento…',
+          type: 'info',
+          category: 'update',
+          timestamp: Date.now() - 5000,
+          read: false,
+          persistent: true,
+          dedupeKey: 'update-install',
+        },
+        {
+          id: 'avail-1',
+          title: 'Aggiornamento disponibile',
+          message: `Nuova versione disponibile: ${APP_VERSION}`,
+          type: 'info',
+          category: 'update',
+          timestamp: Date.now() - 10000,
+          read: false,
+          persistent: true,
+          dedupeKey: 'update-available',
+          actionType: 'install_update',
+          actionData: { version: APP_VERSION },
+        },
+      ];
+      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(priorState));
+
+      const { result } = renderHook(() => useNotifications());
+      // Stale ones are gone
+      expect(result.current.rawNotifications.some(n => n.dedupeKey === 'update-install')).toBe(false);
+      expect(result.current.rawNotifications.some(n => n.dedupeKey === 'update-available')).toBe(false);
+      // Success is present
+      const successNotif = result.current.rawNotifications.find(n => n.dedupeKey === `update-success:${APP_VERSION}`);
+      expect(successNotif).toBeDefined();
+      expect(successNotif?.title).toBe('Aggiornamento completato');
+      expect(localStorage.getItem(STORAGE_KEYS.LAST_SEEN_APP_VERSION_V1)).toBe(APP_VERSION);
+    });
+
+    it('does not add duplicate Aggiornamento completato notification on subsequent loads', () => {
+      localStorage.setItem(STORAGE_KEYS.LAST_SEEN_APP_VERSION_V1, APP_VERSION);
+      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify([]));
+
+      const { result } = renderHook(() => useNotifications());
+      const successNotifs = result.current.rawNotifications.filter(n => n.dedupeKey === `update-success:${APP_VERSION}`);
+      expect(successNotifs).toHaveLength(0);
     });
 
     it('gracefully handles corrupt JSON in localStorage', () => {
@@ -462,5 +610,33 @@ describe('useNotifications', () => {
 
       expect(pywebviewOpenUrl).toHaveBeenCalledWith(GITHUB_RELEASES_URL);
     });
+  });
+});
+
+describe('sanitizePersistedNotifications', () => {
+  it('returns empty array when input is not an array', () => {
+    expect(sanitizePersistedNotifications(null)).toEqual([]);
+    expect(sanitizePersistedNotifications('string')).toEqual([]);
+    expect(sanitizePersistedNotifications({})).toEqual([]);
+  });
+
+  it('filters out stale update-install notifications', () => {
+    const list = [
+      { id: '1', dedupeKey: 'update-install', title: 'Install', message: 'test', type: 'info', category: 'update', timestamp: 1, read: false },
+      { id: '2', title: 'Regular', message: 'hello', type: 'info', category: 'system', timestamp: 2, read: false },
+    ];
+    const res = sanitizePersistedNotifications(list, 'v2.6.0');
+    expect(res).toHaveLength(1);
+    expect(res[0].id).toBe('2');
+  });
+
+  it('filters out update-available notifications when targetVersion <= currentAppVersion', () => {
+    const list = [
+      { id: '1', dedupeKey: 'update-available', title: 'Update', message: 'v2.6.0', type: 'info', category: 'update', timestamp: 1, read: false, actionData: { version: 'v2.6.0' } },
+      { id: '2', dedupeKey: 'update-available', title: 'Update', message: 'v2.7.0', type: 'info', category: 'update', timestamp: 2, read: false, actionData: { version: 'v2.7.0' } },
+    ];
+    const res = sanitizePersistedNotifications(list, 'v2.6.0');
+    expect(res).toHaveLength(1);
+    expect(res[0].id).toBe('2');
   });
 });

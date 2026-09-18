@@ -151,4 +151,27 @@ describe('useUpdateInstaller', () => {
 
     expect(mockApi.download_and_install_update).toHaveBeenCalledWith('1.2.0');
   });
+
+  it('removes update-available notification when installUpdate begins', async () => {
+    const mockApi: Partial<PywebviewApi> = {
+      download_and_install_update: vi.fn().mockImplementation(async () => ({ ok: true })),
+    };
+    window.pywebview = { api: mockApi as PywebviewApi };
+    const removeNotificationByDedupeKey = vi.fn();
+
+    const { result } = renderHook(() =>
+      useUpdateInstaller({
+        latestVersion: '1.2.0',
+        appendConsole,
+        upsertNotification,
+        removeNotificationByDedupeKey,
+      }),
+    );
+
+    act(() => {
+      void result.current.installUpdate('1.2.0');
+    });
+
+    expect(removeNotificationByDedupeKey).toHaveBeenCalledWith('update-available');
+  });
 });

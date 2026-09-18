@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { GITHUB_RELEASES_URL } from '../branding';
+import { APP_VERSION, GITHUB_RELEASES_URL } from '../branding';
 import type { NotificationMessage } from '../components/NotificationDropdown';
 import { STORAGE_KEYS } from '../storageKeys';
+import { compareVersions } from '../utils';
 
 export const NOTIFICATIONS_STORAGE_KEY = STORAGE_KEYS.NOTIFICATIONS_V1;
 
@@ -37,28 +38,92 @@ export interface UseNotificationsOptions {
   onOpenUrl?: (url: string) => Promise<void>;
   updateAvailable?: string | null;
   onOpenSettings?: () => void;
+  currentAppVersion?: string;
 }
 
-function sanitizePersistedNotifications(list: unknown): PersistedNotification[] {
+interface NotificationsBootstrap {
+  appVersion: string;
+  didUpgrade: boolean;
+  notifications: PersistedNotification[];
+}
+
+export function sanitizePersistedNotifications(list: unknown, currentAppVersion: string = APP_VERSION): PersistedNotification[] {
   if (!Array.isArray(list)) return [];
-  return list.map(item => {
+  const result: PersistedNotification[] = [];
+
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
     const n = item as PersistedNotification;
-    if (n && typeof n.message === 'string' && n.message.includes('regenerate_prompt_timeout')) {
+
+    // Remove stale in-progress update notifications from prior sessions
+    if (n.dedupeKey === 'update-install') {
+      continue;
+    }
+
+    // Remove stale update-available notifications if currentAppVersion >= targetVersion
+    if (n.dedupeKey === 'update-available') {
+      const actionData = n.actionData as Record<string, unknown> | undefined;
+      const targetVersion = (typeof actionData?.version === 'string' ? actionData.version : '') || '';
+      if (!targetVersion || compareVersions(currentAppVersion, targetVersion) >= 0) {
+        continue;
+      }
+    }
+
+    if (typeof n.message === 'string' && n.message.includes('regenerate_prompt_timeout')) {
       const cleanMessage = n.message
         .replace(
           'regenerate_prompt_timeout',
           'Nessuna scelta ricevuta sulla ripresa entro 120 secondi. Sessione salvata: clicca Riprendi per continuare.'
         )
         .replace(/^Errore per /, 'Per ');
-      return {
+      result.push({
         ...n,
         title: n.title === 'Errore elaborazione' ? 'Elaborazione in pausa' : n.title,
         type: n.type === 'error' ? 'warning' : n.type,
         message: cleanMessage,
-      };
+      });
+      continue;
     }
-    return n;
-  });
+
+    result.push(n);
+  }
+
+  return result;
+}
+
+function loadNotificationsBootstrap(currentAppVersion?: string): NotificationsBootstrap {
+  let storedList: unknown = [];
+  try {
+    const stored = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+    storedList = stored ? JSON.parse(stored) : [];
+  } catch (_) {
+    storedList = [];
+  }
+
+  const appVersion = currentAppVersion || APP_VERSION;
+  const notifications = sanitizePersistedNotifications(storedList, appVersion);
+  let didUpgrade = false;
+
+  try {
+    const lastSeenVersion = localStorage.getItem(STORAGE_KEYS.LAST_SEEN_APP_VERSION_V1);
+    if (lastSeenVersion) {
+      didUpgrade = compareVersions(appVersion, lastSeenVersion) > 0;
+    } else if (Array.isArray(storedList) && storedList.length > 0) {
+      didUpgrade = storedList.some(item => {
+        const n = item as PersistedNotification;
+        if (!n) return false;
+        if (n.dedupeKey === 'update-install') return true;
+        if (n.dedupeKey === 'update-available') {
+          const actionData = n.actionData as Record<string, unknown> | undefined;
+          const targetVersion = (typeof actionData?.version === 'string' ? actionData.version : '') || '';
+          return Boolean(targetVersion && compareVersions(appVersion, targetVersion) >= 0);
+        }
+        return false;
+      });
+    }
+  } catch (_) {}
+
+  return { appVersion, didUpgrade, notifications };
 }
 
 export function useNotifications(options: UseNotificationsOptions = {}) {
@@ -67,20 +132,51 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
     optionsRef.current = options;
   });
 
-  const [rawNotifications, setRawNotifications] = useState<PersistedNotification[]>(() => {
-    try {
-      const stored = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
-      return stored ? sanitizePersistedNotifications(JSON.parse(stored)) : [];
-    } catch (_) {
-      return [];
-    }
-  });
+  const [bootstrap] = useState(() => loadNotificationsBootstrap(options.currentAppVersion));
+  const [rawNotifications, setRawNotifications] = useState<PersistedNotification[]>(bootstrap.notifications);
 
   useEffect(() => {
     try {
       localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(rawNotifications));
     } catch (_) {}
   }, [rawNotifications]);
+
+  useEffect(() => {
+    let committedNotifications = bootstrap.notifications;
+
+    if (bootstrap.didUpgrade) {
+      const successDedupeKey = `update-success:${bootstrap.appVersion}`;
+      const alreadyHasSuccess = committedNotifications.some(n => n.dedupeKey === successDedupeKey);
+      if (!alreadyHasSuccess) {
+        const successNotif: PersistedNotification = {
+          id: crypto.randomUUID(),
+          title: 'Aggiornamento completato',
+          message: `El Sbobinator è stato aggiornato alla versione ${bootstrap.appVersion}.`,
+          type: 'success',
+          category: 'update',
+          timestamp: Date.now(),
+          read: false,
+          persistent: true,
+          dedupeKey: successDedupeKey,
+        };
+        committedNotifications = [successNotif, ...committedNotifications].slice(0, 50);
+        setRawNotifications(committedNotifications);
+      }
+    }
+
+    let notificationsPersisted = true;
+    try {
+      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(committedNotifications));
+    } catch (_) {
+      notificationsPersisted = false;
+    }
+
+    if (!bootstrap.didUpgrade || notificationsPersisted) {
+      try {
+        localStorage.setItem(STORAGE_KEYS.LAST_SEEN_APP_VERSION_V1, bootstrap.appVersion);
+      } catch (_) {}
+    }
+  }, [bootstrap]);
 
   const deleteNotification = useCallback((id: string) => {
     setRawNotifications(prev => {

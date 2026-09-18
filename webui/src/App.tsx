@@ -149,6 +149,7 @@ export default function App() {
     latestVersion,
     appendConsole,
     upsertNotification,
+    removeNotificationByDedupeKey,
   });
 
   const {

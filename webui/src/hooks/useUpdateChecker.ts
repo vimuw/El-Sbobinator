@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { APP_VERSION, GITHUB_API_RELEASES_URL } from '../branding';
+import { compareVersions } from '../utils';
 
 const UPDATE_DISMISSED_KEY = 'el-sbobinator.dismissed-update.v1';
 const UPDATE_LAST_CHECK_KEY = 'el-sbobinator.last-update-check.v1';
@@ -12,12 +13,6 @@ type LatestReleaseCache = {
   checkedAt: number;
 };
 
-const compareVersions = (a: string, b: string): number => {
-  const parse = (v: string) => v.replace(/^v/, '').split('.').map(p => parseInt(p, 10) || 0);
-  const [aMaj, aMin, aPatch] = parse(a);
-  const [bMaj, bMin, bPatch] = parse(b);
-  return aMaj !== bMaj ? aMaj - bMaj : aMin !== bMin ? aMin - bMin : aPatch - bPatch;
-};
 
 const readCachedLatest = (): LatestReleaseCache | null => {
   try {

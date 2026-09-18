@@ -15,6 +15,7 @@ export const STORAGE_KEYS = {
   BROWSER_INSTANCE_V1: 'el-sbobinator.browser-instance.v1',
   THEME_V1: 'el-sbobinator.theme.v1',
   CONFIG_RECOVERY_PREFIX: 'el-sbobinator.config-recovery-dismissed.v1:',
+  LAST_SEEN_APP_VERSION_V1: 'el-sbobinator.last-seen-app-version.v1',
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

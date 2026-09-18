@@ -18,6 +18,7 @@ export function useSystemNotificationTriggers({
   configRecoveredFrom,
   updateAvailable,
   addNotification,
+  removeNotificationByDedupeKey,
 }: UseSystemNotificationTriggersOptions) {
   const configRecoveryToastPathRef = useRef<string | null>(null);
   useEffect(() => {
@@ -43,7 +44,13 @@ export function useSystemNotificationTriggers({
 
   const updateToastShownVersionRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!updateAvailable) return;
+    if (!updateAvailable) {
+      if (updateToastShownVersionRef.current !== null) {
+        removeNotificationByDedupeKey('update-available');
+        updateToastShownVersionRef.current = null;
+      }
+      return;
+    }
     if (updateToastShownVersionRef.current === updateAvailable) return;
     updateToastShownVersionRef.current = updateAvailable;
     const cleanVer = updateAvailable.trim().replace(/^v+/, '');
@@ -59,5 +66,5 @@ export function useSystemNotificationTriggers({
         actionData: { version: updateAvailable },
       },
     );
-  }, [updateAvailable, addNotification]);
+  }, [updateAvailable, addNotification, removeNotificationByDedupeKey]);
 }

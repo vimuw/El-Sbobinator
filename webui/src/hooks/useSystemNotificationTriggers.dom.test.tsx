@@ -57,4 +57,30 @@ describe('useSystemNotificationTriggers', () => {
       }),
     );
   });
+
+  it('removes update-available notification when updateAvailable transitions to null', () => {
+    const addNotification = vi.fn();
+    const removeNotificationByDedupeKey = vi.fn();
+
+    const { rerender } = renderHook(
+      ({ updateAvailable }: { updateAvailable: string | null }) =>
+        useSystemNotificationTriggers({
+          configRecoveredFrom: '',
+          updateAvailable,
+          addNotification,
+          removeNotificationByDedupeKey,
+        }),
+      {
+        initialProps: { updateAvailable: 'v2.1.0' as string | null },
+      },
+    );
+
+    expect(addNotification).toHaveBeenCalledTimes(1);
+    expect(removeNotificationByDedupeKey).not.toHaveBeenCalled();
+
+    // Now simulate update dismissal or no longer available
+    rerender({ updateAvailable: null });
+
+    expect(removeNotificationByDedupeKey).toHaveBeenCalledWith('update-available');
+  });
 });

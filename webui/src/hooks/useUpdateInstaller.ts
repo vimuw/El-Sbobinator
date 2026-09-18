@@ -64,12 +64,14 @@ interface UseUpdateInstallerOptions {
       actionData?: unknown;
     },
   ) => void;
+  removeNotificationByDedupeKey?: (dedupeKey: string) => void;
 }
 
 export function useUpdateInstaller({
   latestVersion,
   appendConsole,
   upsertNotification,
+  removeNotificationByDedupeKey,
 }: UseUpdateInstallerOptions) {
   const [updateInstallState, setUpdateInstallState] = useState<UpdateInstallState>(UPDATE_INSTALL_IDLE);
   const updateInstallStateRef = useRef<UpdateInstallState>(UPDATE_INSTALL_IDLE);
@@ -113,6 +115,7 @@ export function useUpdateInstaller({
       }
 
       applyUpdateInstallState({ version, status: 'downloading', bytesDone: 0, bytesTotal: 0, error: null });
+      removeNotificationByDedupeKey?.('update-available');
       upsertUpdateInstallNotification('Download aggiornamento…', 'info');
 
       const completion = new Promise<void>((resolve, reject) => {
@@ -152,7 +155,7 @@ export function useUpdateInstaller({
       }
       return trackedCompletion;
     },
-    [appendConsole, applyUpdateInstallState, upsertUpdateInstallNotification],
+    [appendConsole, applyUpdateInstallState, removeNotificationByDedupeKey, upsertUpdateInstallNotification],
   );
 
   const handleDownloadProgress = useCallback(

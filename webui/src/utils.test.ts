@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { errorLabel, formatDuration, formatRelativeTime, formatSize, generateRoomCode, isNetworkError, isPausedError, isQuotaError, isResumableError, readFileAsDataUrl, readAndOptimizeImageAsDataUrl, calculateOptimalDimensions, shortModelName, sortModelsByVersion, getModelDisplayName, MODEL_ORDER } from './utils';
+import { compareVersions, errorLabel, formatDuration, formatRelativeTime, formatSize, generateRoomCode, isNetworkError, isPausedError, isQuotaError, isResumableError, readFileAsDataUrl, readAndOptimizeImageAsDataUrl, calculateOptimalDimensions, shortModelName, sortModelsByVersion, getModelDisplayName, MODEL_ORDER } from './utils';
 
 describe('isQuotaError', () => {
   it('returns false for undefined', () => {
@@ -429,5 +429,25 @@ describe('model sorting and display names', () => {
       'gemini-3.7-flash',
       'gemini-3.8-flash',
     ]);
+  });
+});
+
+describe('compareVersions', () => {
+  it('correctly compares semantic versions with or without v prefix', () => {
+    expect(compareVersions('v2.6.0', 'v2.5.1')).toBeGreaterThan(0);
+    expect(compareVersions('2.6.0', '2.6.0')).toBe(0);
+    expect(compareVersions('v2.5.0', 'v2.6.0')).toBeLessThan(0);
+    expect(compareVersions('v2.6.0', '2.6.0')).toBe(0);
+  });
+
+  it('handles major, minor, and patch differences', () => {
+    expect(compareVersions('3.0.0', '2.9.9')).toBeGreaterThan(0);
+    expect(compareVersions('2.6.1', '2.6.0')).toBeGreaterThan(0);
+    expect(compareVersions('2.6.0', '2.6.1')).toBeLessThan(0);
+  });
+
+  it('handles empty or malformed strings gracefully', () => {
+    expect(compareVersions('', '')).toBe(0);
+    expect(compareVersions('v1', 'v1.0.0')).toBe(0);
   });
 });
