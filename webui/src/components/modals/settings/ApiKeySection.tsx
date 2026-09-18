@@ -350,12 +350,15 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     setNotice(null);
   };
 
+  const effectivePreferredModel = preferredModel || 'gemini-2.5-flash';
+
   const primaryCred = getCredentialFor(apiKey, true);
   const isPrimaryWorking =
     hasPrimaryConfigured &&
     primaryCred?.operational_status !== 'temporarily_failing' &&
     primaryCred?.operational_status !== 'invalid' &&
-    primaryCred?.operational_status !== 'permission_denied';
+    primaryCred?.operational_status !== 'permission_denied' &&
+    !(primaryCred?.exhausted_models || []).includes(effectivePreferredModel);
 
   const activeFallbackKey = !isPrimaryWorking
     ? cleanedFallbackKeys.find((k, idx) => {
@@ -364,7 +367,8 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
           !c ||
           (c.operational_status !== 'temporarily_failing' &&
             c.operational_status !== 'invalid' &&
-            c.operational_status !== 'permission_denied')
+            c.operational_status !== 'permission_denied' &&
+            !(c.exhausted_models || []).includes(effectivePreferredModel))
         );
       })
     : null;
@@ -404,55 +408,9 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     const status = cred.operational_status;
     const exhaustedModels = cred.exhausted_models || [];
     const isCurrentModelExhausted = Boolean(
-      preferredModel && exhaustedModels.includes(preferredModel)
+      effectivePreferredModel && exhaustedModels.includes(effectivePreferredModel)
     );
-    const isQuotaExhausted =
-      status === 'temporarily_failing' &&
-      (!cred.last_error_message ||
-        cred.last_error_message.toLowerCase().includes('quota') ||
-        cred.last_error_message.toLowerCase().includes('rpd') ||
-        cred.last_error_code === 429 ||
-        exhaustedModels.length > 0);
 
-    if (status === 'temporarily_failing' || (isQuotaExhausted && isCurrentModelExhausted)) {
-      if (isQuotaExhausted) {
-        if (exhaustedModels.length === 1) {
-          return (
-            <span
-              className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}
-              title={`Quota esaurita per ${getModelDisplayName(exhaustedModels[0])}. Disponibile per gli altri modelli.`}
-            >
-              Quota esaurita per {getModelDisplayName(exhaustedModels[0])}
-            </span>
-          );
-        }
-        if (exhaustedModels.length > 1) {
-          const names = exhaustedModels.map(getModelDisplayName).join(', ');
-          const otherCount = exhaustedModels.length - 1;
-          const label = isCurrentModelExhausted
-            ? `Quota esaurita per ${getModelDisplayName(preferredModel || 'gemini-2.5-flash')} (+${otherCount})`
-            : `Quota esaurita (${exhaustedModels.length} modelli)`;
-          return (
-            <span
-              className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}
-              title={`Quota esaurita per: ${names}. Disponibile per gli altri modelli.`}
-            >
-              {label}
-            </span>
-          );
-        }
-        return (
-          <span className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}>
-            Quota esaurita (oggi)
-          </span>
-        );
-      }
-      return (
-        <span className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}>
-          Non disponibile (temporaneo)
-        </span>
-      );
-    }
     if (status === 'invalid') {
       return (
         <span className={`${baseBadge} bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-ring)]`}>
@@ -475,15 +433,67 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
       );
     }
 
+    const isQuotaExhausted =
+      isCurrentModelExhausted ||
+      (status === 'temporarily_failing' &&
+        (!cred.last_error_message ||
+          cred.last_error_message.toLowerCase().includes('quota') ||
+          cred.last_error_message.toLowerCase().includes('rpd') ||
+          cred.last_error_code === 429 ||
+          exhaustedModels.length > 0));
+
+    if (isCurrentModelExhausted || status === 'temporarily_failing') {
+      if (isQuotaExhausted) {
+        if (exhaustedModels.length === 1) {
+          return (
+            <span
+              className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}
+              title={`Quota esaurita per ${getModelDisplayName(exhaustedModels[0])}. Disponibile per gli altri modelli.`}
+            >
+              Quota esaurita per {getModelDisplayName(exhaustedModels[0])}
+            </span>
+          );
+        }
+        if (exhaustedModels.length > 1) {
+          const names = exhaustedModels.map(getModelDisplayName).join(', ');
+          const otherCount = exhaustedModels.length - 1;
+          const label = isCurrentModelExhausted
+            ? `Quota esaurita per ${getModelDisplayName(effectivePreferredModel)} (+${otherCount})`
+            : `Quota esaurita (${exhaustedModels.length} modelli)`;
+          return (
+            <span
+              className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}
+              title={`Quota esaurita per: ${names}. Disponibile per gli altri modelli.`}
+            >
+              {label}
+            </span>
+          );
+        }
+        return (
+          <span className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}>
+            Quota esaurita (oggi)
+          </span>
+        );
+      }
+      return (
+        <span className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}>
+          Non disponibile (temporaneo)
+        </span>
+      );
+    }
+
     const renderExhaustedTag = () => {
-      if (exhaustedModels.length === 0) return null;
+      const otherExhaustedModels = exhaustedModels.filter(
+        m => m !== effectivePreferredModel
+      );
+      if (otherExhaustedModels.length === 0) return null;
       const label =
-        exhaustedModels.length === 1
-          ? `Esaurita per ${getModelDisplayName(exhaustedModels[0])}`
-          : exhaustedModels.length === 2
-          ? `Esaurita per ${exhaustedModels.map(m => getModelDisplayName(m).replace('Gemini ', '')).join(' & ')}`
-          : `Esaurita per ${exhaustedModels.length} modelli`;
-      const title = `Disponibile per il modello attuale. Quota esaurita oggi per: ${exhaustedModels.map(getModelDisplayName).join(', ')}`;
+        otherExhaustedModels.length === 1
+          ? `Esaurita per ${getModelDisplayName(otherExhaustedModels[0])}`
+          : otherExhaustedModels.length === 2
+          ? `Esaurita per ${otherExhaustedModels.map(m => getModelDisplayName(m).replace('Gemini ', '')).join(' & ')}`
+          : `Esaurita per ${otherExhaustedModels.length} modelli`;
+      const title = `Disponibile per il modello attuale. Quota esaurita oggi per: ${otherExhaustedModels.map(getModelDisplayName).join(', ')}`;
       return (
         <span
           className="text-[10px] font-medium text-[var(--warning-text)] bg-[var(--warning-subtle,var(--bg-surface))] px-2 py-0.5 rounded-full border border-[var(--warning-ring)] leading-normal shrink-0"

@@ -624,6 +624,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         apiUsage={apiUsage}
                         isLoadingUsage={isLoadingUsage}
                         onRefreshUsage={fetchApiUsage}
+                        preferredModel={preferredModel}
                         onAskDeleteKey={setKeyDeleteTarget}
                       />
 
