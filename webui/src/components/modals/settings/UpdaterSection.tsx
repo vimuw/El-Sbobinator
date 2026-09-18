@@ -58,8 +58,8 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
   return (
     <div className="space-y-3">
       {/* Header row: Version Info & Check Button */}
-      <div className="flex items-center justify-between gap-4 py-0.5">
-        <div className="space-y-0.5 min-w-0">
+      <div className="flex items-center justify-between gap-4">
+        <div className="space-y-1 min-w-0">
           <div className="flex items-center gap-2">
             <Tag className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
             <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">

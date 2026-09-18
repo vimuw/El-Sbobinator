@@ -86,9 +86,9 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
         <div className="space-y-3 pb-6 border-b border-[var(--border-default)]">
           <div className="flex items-center gap-2">
             <Activity className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-            <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
               Telemetria Chiamate API & Lavoro Svolto
-            </h4>
+            </h3>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -182,7 +182,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
       )}
 
       {/* 2. Verifica Ambiente e Integrità */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-1">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-1 min-w-0">
           <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
             <FlaskConical className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
@@ -267,7 +267,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
       })()}
 
       {/* System Requirements Checks List */}
-      <ul className="divide-y divide-[var(--border-default)] border-t border-[var(--border-default)] pt-1">
+      <ul className="divide-y divide-[var(--border-default)] border-t border-[var(--border-default)]">
         {displayChecks.map(check => (
           <li
             key={check.id}

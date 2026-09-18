@@ -157,7 +157,7 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
     return (
       <div className="space-y-6 animate-fade-in">
         {/* 1. Header & Refresh Control */}
-        <div className="flex items-center justify-between gap-3 pb-1">
+        <div className="flex items-center justify-between gap-4">
           <div className="space-y-1 min-w-0">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
               <Activity className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
@@ -210,7 +210,7 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
             </div>
 
             {/* 3. Card Modello Attivo & Autonomia Stimata */}
-            <div className="p-4 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] space-y-3.5">
+            <div className="p-4 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border-default)] pb-3">
                 <div className="space-y-0.5 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -282,7 +282,7 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
 
             {/* 4. Panoramica Altri Modelli Supportati (Quote Separate) */}
             {otherModels.length > 0 && (
-              <div className="space-y-2.5 pt-1">
+              <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Cpu className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
                   <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
@@ -338,7 +338,7 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
                   })}
                 </div>
 
-                <p className="text-[11px] text-[var(--text-secondary)] flex items-center gap-1.5 pt-1">
+                <p className="text-[11px] text-[var(--text-secondary)] flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-[var(--accent-text)] shrink-0" />
                   <span>
                     Ciascun modello Google dispone di quote giornaliere separate (reset alle 09:00). Se una chiave esaurisce la quota su un modello, rimane utilizzabile sugli altri.

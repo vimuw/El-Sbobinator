@@ -53,7 +53,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
   return (
     <div className="space-y-6">
       {/* 1. Spazio Disco e Posizione Cartella */}
-      <div className="space-y-4">
+      <div className="space-y-3">
         {/* Header */}
         <div className="space-y-1">
           <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
@@ -86,7 +86,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
         </div>
 
         {/* Row: Sessions Folder */}
-        <div className="space-y-2 pt-1">
+        <div className="space-y-2">
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-0.5 min-w-0">
               <span className="text-sm font-bold text-[var(--text-primary)] block">
@@ -165,7 +165,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
       </div>
 
       {/* 2. Eliminazione e Pulizia Sbobine */}
-      <div className="border-t border-[var(--border-default)] pt-5 space-y-4">
+      <div className="border-t border-[var(--border-default)] pt-6 space-y-3">
         {/* Header */}
         <div className="space-y-1">
           <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
@@ -177,7 +177,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
           </p>
         </div>
 
-        <div className="space-y-1 pt-1">
+        <div className="space-y-1">
           {/* Row: Incomplete Sessions */}
           <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg hover:bg-[var(--bg-hover)] transition-colors -mx-2">
             <div className="space-y-0.5 min-w-0">

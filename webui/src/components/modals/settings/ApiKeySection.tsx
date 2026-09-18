@@ -576,7 +576,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
   return (
     <div className="space-y-3">
       {/* 1. Header with count & global actions */}
-      <div className="flex items-center justify-between gap-3 pb-0.5">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <Key className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
           <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] truncate">
@@ -830,7 +830,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
       </div>
 
       {/* 4. Quiet Footer Caption with AI Studio link */}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-secondary)] pt-0.5 leading-relaxed">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-secondary)] leading-relaxed">
         <span>Le chiavi di riserva subentrano in ordine quando la principale esaurisce la quota (RPD).</span>
         <a
           href="https://aistudio.google.com/apikey"

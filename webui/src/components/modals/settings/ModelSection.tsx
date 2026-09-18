@@ -40,24 +40,25 @@ export const ModelSection: React.FC<ModelSectionProps> = React.memo(({
 
   return (
     <div className="space-y-3">
-      {/* Primary Model Field */}
-      <div className="space-y-2">
+      <div className="space-y-1 min-w-0">
         <div className="flex items-center gap-2">
           <Cpu className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
           <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
             Modello di Trascrizione (Primario)
           </h3>
         </div>
-        <CustomSelect
-          value={preferredModel}
-          onChange={handlePrimaryModelChange}
-          options={primaryModelOptions}
-        />
-
         {primaryModelSummary && (
-          <p className="text-xs text-[var(--text-secondary)] italic">{primaryModelSummary}</p>
+          <p className="text-xs text-[var(--text-secondary)]">
+            {primaryModelSummary}
+          </p>
         )}
       </div>
+
+      <CustomSelect
+        value={preferredModel}
+        onChange={handlePrimaryModelChange}
+        options={primaryModelOptions}
+      />
     </div>
   );
 });
