@@ -436,7 +436,7 @@ describe('SettingsModal — session info race condition', () => {
     await act(async () => { resolveSecond({ ok: true, total_bytes: 1024, total_sessions: 3 }); });
 
     expect(screen.queryByText('Calcolo…')).toBeNull();
-    expect(screen.queryByText(/3 sessioni/)).not.toBeNull();
+    expect(screen.queryByText(/3 sbobine/)).not.toBeNull();
   });
 });
 
@@ -963,5 +963,25 @@ describe('SettingsModal — validate environment', () => {
     });
 
     expect(screen.getByRole('heading', { name: 'Quote API' })).toBeTruthy();
+  });
+
+  it('renders sidebar tabs in the correct order: Generale, Quote API, Archiviazione, Diagnostica', () => {
+    const { container } = render(
+      <SettingsModal
+        {...makeProps({
+          apiKey: 'test-api-key',
+        })}
+      />,
+    );
+
+    const sidebar = container.querySelector('.w-full.md\\:w-64');
+    expect(sidebar).toBeTruthy();
+    const buttons = sidebar ? Array.from(sidebar.querySelectorAll('button')) : [];
+    const buttonTexts = buttons.map(b => b.textContent?.trim() || '');
+    expect(buttonTexts).toHaveLength(4);
+    expect(buttonTexts[0]).toContain('Generale');
+    expect(buttonTexts[1]).toContain('Quote API');
+    expect(buttonTexts[2]).toContain('Archiviazione');
+    expect(buttonTexts[3]).toContain('Diagnostica');
   });
 });

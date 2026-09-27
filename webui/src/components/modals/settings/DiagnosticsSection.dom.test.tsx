@@ -152,7 +152,7 @@ describe('DiagnosticsSection', () => {
     expect(onOpenLogs).toHaveBeenCalledTimes(1);
   });
 
-  it('renders telemetry and work stats when apiUsage telemetry is present', () => {
+  it('does not render telemetry even if apiUsage is provided (moved to QuotasSection)', () => {
     const apiUsageWithTelemetry: ApiUsageResult = {
       schema_version: 2,
       quota_date: '2026-09-17',
@@ -185,15 +185,6 @@ describe('DiagnosticsSection', () => {
       />
     );
 
-    expect(screen.getByText('Telemetria Chiamate API & Lavoro Svolto')).toBeTruthy();
-    expect(screen.getByText('Lavoro Svolto Oggi')).toBeTruthy();
-    expect(screen.getByText('34')).toBeTruthy();
-    expect(screen.getByText('16')).toBeTruthy();
-    expect(screen.getByText('4')).toBeTruthy();
-    expect(screen.getByText('Telemetria Rete API')).toBeTruthy();
-    expect(screen.getByText('99')).toBeTruthy();
-    expect(screen.getByText('50')).toBeTruthy();
-    expect(screen.getByText('20')).toBeTruthy();
-    expect(screen.getByText('28')).toBeTruthy();
+    expect(screen.queryByText('Telemetria Chiamate API & Lavoro Svolto')).toBeNull();
   });
 });

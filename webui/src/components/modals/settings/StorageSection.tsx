@@ -55,14 +55,11 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
       {/* 1. Spazio Disco e Posizione Cartella */}
       <div className="space-y-3">
         {/* Header */}
-        <div className="space-y-1">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
-            <HardDrive className="w-4 h-4 text-[var(--accent-text)]" />
-            Spazio Disco e Sessioni
+        <div className="flex items-center gap-2">
+          <HardDrive className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
+          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+            Spazio Disco & Archivio
           </h3>
-          <p className="text-xs text-[var(--text-secondary)]">
-            Statistiche di utilizzo dell&apos;archivio locale e posizione della cartella di salvataggio.
-          </p>
         </div>
 
         {/* Metric Stat Cards */}
@@ -80,7 +77,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
               Totale Sbobine
             </span>
             <span className="text-2xl font-bold text-[var(--text-primary)] block">
-              {sessionInfo ? `${sessionInfo.total_sessions} ${sessionInfo.total_sessions === 1 ? 'sessione' : 'sessioni'}` : '—'}
+              {sessionInfo ? `${sessionInfo.total_sessions} ${sessionInfo.total_sessions === 1 ? 'sbobina' : 'sbobine'}` : '—'}
             </span>
           </div>
         </div>
@@ -167,14 +164,11 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
       {/* 2. Eliminazione e Pulizia Sbobine */}
       <div className="border-t border-[var(--border-default)] pt-6 space-y-3">
         {/* Header */}
-        <div className="space-y-1">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
-            <Trash2 className="w-4 h-4 text-[var(--accent-text)]" />
-            Eliminazione e Pulizia Sbobine
+        <div className="flex items-center gap-2">
+          <Trash2 className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
+          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+            Pulizia Archivio
           </h3>
-          <p className="text-xs text-[var(--text-secondary)]">
-            Rimuovi bozze interrotte o vecchie sbobine per liberare spazio su disco.
-          </p>
         </div>
 
         <div className="space-y-1">
@@ -182,7 +176,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
           <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg hover:bg-[var(--bg-hover)] transition-colors -mx-2">
             <div className="space-y-0.5 min-w-0">
               <span className="text-sm font-bold text-[var(--text-primary)] block">
-                Sessioni incomplete
+                Elaborazioni incomplete
               </span>
               <p className="text-xs text-[var(--text-secondary)]">
                 File temporanei e bozze interrotte
@@ -192,7 +186,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
               type="button"
               onClick={onAskCleanup}
               disabled={isCleaningSession}
-              aria-label="Pulisci sessioni incomplete"
+              aria-label="Pulisci elaborazioni incomplete"
               title="Conta ed elimina tutte le elaborazioni incomplete"
               className="p-2 rounded-lg text-[var(--error-text)] hover:bg-[var(--error-subtle)] transition-colors disabled:opacity-40 shrink-0 cursor-pointer"
             >
@@ -208,18 +202,18 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
           <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg hover:bg-[var(--bg-hover)] transition-colors -mx-2">
             <div className="space-y-0.5 min-w-0">
               <span className="text-sm font-bold text-[var(--text-primary)] block">
-                Sbobine completate vecchie
+                Sbobine archiviate
               </span>
               <p className="text-xs text-[var(--text-secondary)]">
-                Sbobine completate salvate da oltre {SESSION_CLEANUP_DAYS} giorni
+                Salvate da oltre {SESSION_CLEANUP_DAYS} giorni
               </p>
             </div>
             <button
               type="button"
               onClick={onAskCompletedCleanup}
               disabled={isCleaningCompletedSessions}
-              aria-label={`Elimina sbobine completate vecchie di oltre ${SESSION_CLEANUP_DAYS} giorni`}
-              title={`Conta ed elimina sbobine completate vecchie di oltre ${SESSION_CLEANUP_DAYS} giorni`}
+              aria-label={`Elimina sbobine completate archiviate da oltre ${SESSION_CLEANUP_DAYS} giorni`}
+              title={`Conta ed elimina sbobine completate archiviate da oltre ${SESSION_CLEANUP_DAYS} giorni`}
               className="p-2 rounded-lg text-[var(--error-text)] hover:bg-[var(--error-subtle)] transition-colors disabled:opacity-40 shrink-0 cursor-pointer"
             >
               {isCleaningCompletedSessions ? (

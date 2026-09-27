@@ -13,7 +13,6 @@ import {
   ArrowUp,
   ArrowDown,
   Star,
-  RefreshCw,
   Loader2,
   Trash2,
 } from 'lucide-react';
@@ -56,7 +55,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
   onClearProtectedPrimary,
   apiUsage,
   isLoadingUsage = false,
-  onRefreshUsage,
+  onRefreshUsage: _onRefreshUsage,
   preferredModel,
   onAskDeleteKey,
 }) => {
@@ -601,25 +600,6 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
               {hasAnyRevealedKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           )}
-
-          {onRefreshUsage && (
-            <button
-              type="button"
-              onClick={onRefreshUsage}
-              disabled={isLoadingUsage}
-              className="p-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 cursor-pointer group/refresh"
-              title="Aggiorna stato quote API"
-              aria-label="Aggiorna stato quote API"
-            >
-              <RefreshCw
-                className={`w-4 h-4 transition-transform duration-500 ease-out ${
-                  isLoadingUsage
-                    ? 'animate-spin text-[var(--accent-text)]'
-                    : 'group-hover/refresh:rotate-180 group-hover/refresh:scale-105'
-                }`}
-              />
-            </button>
-          )}
         </div>
       </div>
 
@@ -707,7 +687,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
 
               <span
                 className="px-2.5 py-0.5 rounded-full bg-[var(--bg-hover)] border border-[var(--border-default)] font-mono text-[11px] text-[var(--text-primary)] font-semibold inline-flex items-center leading-normal select-all"
-                title={isPrimaryRevealed ? apiKey : `Termina con ${primaryMaskedDisplay}`}
+                title={isPrimaryRevealed ? apiKey : 'Chiave protetta'}
               >
                 {isPrimaryRevealed && apiKey ? apiKey : primaryMaskedDisplay}
               </span>
@@ -799,7 +779,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
 
                 <span
                   className="px-2.5 py-0.5 rounded-full bg-[var(--bg-hover)] border border-[var(--border-default)] font-mono text-[11px] text-[var(--text-primary)] font-semibold inline-flex items-center leading-normal select-all"
-                  title={isRevealed ? key : `Termina con ${key.slice(-4)}`}
+                  title={isRevealed ? key : 'Chiave protetta'}
                 >
                   {isRevealed ? key : masked}
                 </span>

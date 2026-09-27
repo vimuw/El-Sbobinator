@@ -9,8 +9,7 @@ import {
   X,
   Copy,
   FolderOpen,
-  Activity,
-  Layers,
+  RefreshCw,
 } from 'lucide-react';
 import type { ValidationResult, ApiUsageResult } from '../../../bridge';
 
@@ -42,7 +41,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
   displayChecks,
   onOpenLogs,
   onCopyReport,
-  apiUsage,
+  apiUsage: _apiUsage,
   showOpenLogs = true,
 }) => {
   const [copiedToast, setCopiedToast] = useState(false);
@@ -81,116 +80,13 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* 1. Telemetry & System Work Stats (Session Overview) */}
-      {(apiUsage?.telemetry || apiUsage?.work_stats) && (
-        <div className="space-y-3 pb-6 border-b border-[var(--border-default)]">
-          <div className="flex items-center gap-2">
-            <Activity className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-              Telemetria Chiamate API & Lavoro Svolto
-            </h3>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Card 1: Work Done */}
-            <div className="p-3.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] space-y-2">
-              <div className="flex items-center gap-2">
-                <Layers className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-                <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">
-                  Lavoro Svolto Oggi
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 pt-1 border-t border-[var(--border-default)] text-center">
-                <div>
-                  <span className="text-lg font-bold text-[var(--text-primary)] block">
-                    {apiUsage.work_stats?.chunks_completed ?? 0}
-                  </span>
-                  <span className="text-[10px] text-[var(--text-secondary)] font-medium">
-                    Chunk
-                  </span>
-                </div>
-                <div>
-                  <span className="text-lg font-bold text-[var(--text-primary)] block">
-                    {apiUsage.work_stats?.revisions_completed ?? 0}
-                  </span>
-                  <span className="text-[10px] text-[var(--text-secondary)] font-medium">
-                    Revisioni
-                  </span>
-                </div>
-                <div>
-                  <span className="text-lg font-bold text-[var(--text-primary)] block">
-                    {apiUsage.work_stats?.sbobine_completed ?? 0}
-                  </span>
-                  <span className="text-[10px] text-[var(--text-secondary)] font-medium">
-                    Sbobine
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 2: Telemetry API */}
-            <div className="p-3.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] space-y-2">
-              <div className="flex items-center gap-2">
-                <Activity className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-                <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">
-                  Telemetria Rete API
-                </span>
-              </div>
-              <div className="grid grid-cols-4 gap-1.5 pt-1 border-t border-[var(--border-default)] text-center">
-                <div>
-                  <span className="text-lg font-bold text-[var(--text-primary)] block">
-                    {apiUsage.telemetry?.requests_sent ?? 0}
-                  </span>
-                  <span className="text-[10px] text-[var(--text-secondary)] font-medium truncate block">
-                    Inviate
-                  </span>
-                </div>
-                <div>
-                  <span className="text-lg font-bold text-[var(--text-primary)] block">
-                    {apiUsage.telemetry?.responses_succeeded ?? 0}
-                  </span>
-                  <span className="text-[10px] text-[var(--text-secondary)] font-medium truncate block">
-                    Successi
-                  </span>
-                </div>
-                <div>
-                  <span className="text-lg font-bold text-[var(--warning-text)] block">
-                    {apiUsage.telemetry?.retries_total ?? 0}
-                  </span>
-                  <span className="text-[10px] text-[var(--text-secondary)] font-medium truncate block">
-                    Retry
-                  </span>
-                </div>
-                <div>
-                  <span
-                    className={`text-lg font-bold block ${
-                      (apiUsage.telemetry?.final_failures ?? 0) > 0
-                        ? 'text-[var(--error-text)]'
-                        : 'text-[var(--text-secondary)]'
-                    }`}
-                  >
-                    {apiUsage.telemetry?.final_failures ?? 0}
-                  </span>
-                  <span className="text-[10px] text-[var(--text-secondary)] font-medium truncate block">
-                    Errori
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 2. Verifica Ambiente e Integrità */}
+      {/* Verifica Ambiente e Integrità */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="space-y-1 min-w-0">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
-            <FlaskConical className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-            <span>Verifica Ambiente e Integrità</span>
+        <div className="flex items-center gap-2">
+          <FlaskConical className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
+          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+            Verifica Ambiente e Integrità
           </h3>
-          <p className="text-xs text-[var(--text-secondary)]">
-            Controlla FFmpeg, spazio libero su disco e connettività con i server Google.
-          </p>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
@@ -234,7 +130,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
             {isValidatingEnvironment ? (
               <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-text)]" />
             ) : (
-              <FlaskConical className="w-4 h-4 text-[var(--accent-text)]" />
+              <RefreshCw className="w-4 h-4 text-[var(--accent-text)]" />
             )}
           </button>
         </div>

@@ -10,6 +10,7 @@ import {
   XCircle,
   Cpu,
   Sparkles,
+  Layers,
 } from 'lucide-react';
 import type { ApiUsageResult, CredentialProfile, ModelOption } from '../../../bridge';
 import { getModelDisplayName, sortModelsByVersion, MODEL_ORDER } from '../../../utils';
@@ -76,15 +77,7 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
           };
         case 'operational':
         default:
-          return {
-            containerClass:
-              'rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--text-primary)] flex items-start gap-3',
-            icon: <CheckCircle2 className="w-5 h-5 shrink-0 text-[var(--accent-text)]" />,
-            title: 'API Google Gemini Operativa',
-            subtitle:
-              apiUsage?.status_message ||
-              'Tutti i sistemi sono pronti e sincronizzati per nuove sbobinature.',
-          };
+          return null;
       }
     };
 
@@ -158,20 +151,22 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
       <div className="space-y-6 animate-fade-in">
         {/* 1. Header & Refresh Control */}
         <div className="flex items-center justify-between gap-4">
-          <div className="space-y-1 min-w-0">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
-              <Activity className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-              <span>Quote API & Risorse</span>
-              {credentials.length > 0 && (
-                <span className="text-[11px] font-semibold text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-default)] px-2.5 py-0.5 rounded-full leading-normal normal-case tracking-normal inline-flex items-center justify-center">
-                  {credentials.length} {credentials.length === 1 ? 'chiave' : 'chiavi'}
-                </span>
-              )}
-            </h3>
-            <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1.5">
+          <div className="flex items-center gap-2.5 flex-wrap min-w-0">
+            {primaryStatus === 'operational' && (
+              <span className="text-[11px] font-semibold text-[var(--accent-text)] bg-[var(--accent-subtle)] border border-[var(--accent-ring)] px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 leading-normal shrink-0">
+                <CheckCircle2 className="w-3.5 h-3.5 text-[var(--accent-text)]" />
+                <span>API Google Gemini Operativa</span>
+              </span>
+            )}
+            {credentials.length > 0 && (
+              <span className="text-[11px] font-semibold text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-default)] px-2.5 py-0.5 rounded-full leading-normal shrink-0">
+                {credentials.length} {credentials.length === 1 ? 'chiave' : 'chiavi'}
+              </span>
+            )}
+            <span className="text-xs text-[var(--text-secondary)] flex items-center gap-1.5 shrink-0">
               <Clock className="w-3.5 h-3.5 text-[var(--text-secondary)] shrink-0" />
               {apiUsage?.next_reset_info || 'Reset automatico alle 09:00 (ora italiana / 00:00 PT)'}
-            </p>
+            </span>
           </div>
 
           <button
@@ -200,14 +195,16 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
           </div>
         ) : apiUsage && credentials.length > 0 ? (
           <>
-            {/* 2. Primary Operational Status Banner */}
-            <div className={`p-3.5 transition-colors ${hero.containerClass}`}>
-              {hero.icon}
-              <div className="space-y-0.5 min-w-0 flex-1">
-                <p className="text-sm font-bold tracking-tight">{hero.title}</p>
-                <p className="text-xs opacity-90 leading-relaxed">{hero.subtitle}</p>
+            {/* 2. Primary Status Banner (Alerts only) */}
+            {hero && (
+              <div className={`p-3.5 transition-colors ${hero.containerClass}`}>
+                {hero.icon}
+                <div className="space-y-0.5 min-w-0 flex-1">
+                  <p className="text-sm font-bold tracking-tight">{hero.title}</p>
+                  <p className="text-xs opacity-90 leading-relaxed">{hero.subtitle}</p>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* 3. Card Modello Attivo & Autonomia Stimata */}
             <div className="p-4 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] space-y-3">
@@ -238,7 +235,7 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
                   </span>
                   <span className="text-sm font-bold text-[var(--text-primary)] block">
                     {activeModelReadyCreds.length > 0
-                      ? `~${activeModelReadyCreds.length}–${activeModelReadyCreds.length * 2} lezioni stimate oggi`
+                      ? `~${activeModelReadyCreds.length}–${activeModelReadyCreds.length * 2} lezioni oggi`
                       : 'Quota esaurita per oggi'}
                   </span>
                   <span className="text-[11px] text-[var(--text-secondary)] block">
@@ -250,7 +247,7 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
 
                 <div className="p-3 rounded-lg bg-[var(--bg-app)] border border-[var(--border-default)] space-y-1">
                   <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider block">
-                    Chiavi Pronte
+                    Chiavi Disponibili
                   </span>
                   <span className="text-sm font-bold text-[var(--text-primary)] block">
                     {activeModelReadyCreds.length} su {credentials.length} chiavi pronte
@@ -280,7 +277,107 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
               )}
             </div>
 
-            {/* 4. Panoramica Altri Modelli Supportati (Quote Separate) */}
+            {/* 4. Telemetria Chiamate API & Lavoro Svolto */}
+            {(apiUsage?.telemetry || apiUsage?.work_stats) && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+                    Attività & Telemetria di Oggi
+                  </h4>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Card 1: Work Done */}
+                  <div className="p-3.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
+                      <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                        Lavoro Svolto Oggi
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 pt-1 border-t border-[var(--border-default)] text-center">
+                      <div>
+                        <span className="text-lg font-bold text-[var(--text-primary)] block">
+                          {apiUsage.work_stats?.chunks_completed ?? 0}
+                        </span>
+                        <span className="text-[10px] text-[var(--text-secondary)] font-medium">
+                          Chunk
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-lg font-bold text-[var(--text-primary)] block">
+                          {apiUsage.work_stats?.revisions_completed ?? 0}
+                        </span>
+                        <span className="text-[10px] text-[var(--text-secondary)] font-medium">
+                          Revisioni
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-lg font-bold text-[var(--text-primary)] block">
+                          {apiUsage.work_stats?.sbobine_completed ?? 0}
+                        </span>
+                        <span className="text-[10px] text-[var(--text-secondary)] font-medium">
+                          Sbobine
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 2: Telemetry API */}
+                  <div className="p-3.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Activity className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
+                      <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                        Telemetria Rete API
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5 pt-1 border-t border-[var(--border-default)] text-center">
+                      <div>
+                        <span className="text-lg font-bold text-[var(--text-primary)] block">
+                          {apiUsage.telemetry?.requests_sent ?? 0}
+                        </span>
+                        <span className="text-[10px] text-[var(--text-secondary)] font-medium truncate block">
+                          Inviate
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-lg font-bold text-[var(--text-primary)] block">
+                          {apiUsage.telemetry?.responses_succeeded ?? 0}
+                        </span>
+                        <span className="text-[10px] text-[var(--text-secondary)] font-medium truncate block">
+                          Successi
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-lg font-bold text-[var(--warning-text)] block">
+                          {apiUsage.telemetry?.retries_total ?? 0}
+                        </span>
+                        <span className="text-[10px] text-[var(--text-secondary)] font-medium truncate block">
+                          Retry
+                        </span>
+                      </div>
+                      <div>
+                        <span
+                          className={`text-lg font-bold block ${
+                            (apiUsage.telemetry?.final_failures ?? 0) > 0
+                              ? 'text-[var(--error-text)]'
+                              : 'text-[var(--text-secondary)]'
+                          }`}
+                        >
+                          {apiUsage.telemetry?.final_failures ?? 0}
+                        </span>
+                        <span className="text-[10px] text-[var(--text-secondary)] font-medium truncate block">
+                          Errori
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 5. Panoramica Altri Modelli Supportati (Quote Separate) */}
             {otherModels.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
@@ -341,7 +438,7 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
                 <p className="text-[11px] text-[var(--text-secondary)] flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-[var(--accent-text)] shrink-0" />
                   <span>
-                    Ciascun modello Google dispone di quote giornaliere separate (reset alle 09:00). Se una chiave esaurisce la quota su un modello, rimane utilizzabile sugli altri.
+                    Ciascun modello Google dispone di quote giornaliere separate. Se una chiave esaurisce la quota su un modello, rimane utilizzabile sugli altri.
                   </span>
                 </p>
               </div>

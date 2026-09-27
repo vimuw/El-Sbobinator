@@ -64,7 +64,7 @@ export interface SettingsModalProps {
   storage?: SettingsStorageProps;
 }
 
-type TabType = 'general' | 'storage' | 'quotas' | 'diagnostics';
+type TabType = 'general' | 'quotas' | 'storage' | 'diagnostics';
 
 interface SettingsSnapshot {
   apiKey: string;
@@ -530,26 +530,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => handleTabChange('storage')}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-semibold tracking-wide text-left transition-all duration-150 whitespace-nowrap h-10 ${
-                    activeTab === 'storage'
-                      ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-bold ring-1 ring-[var(--border-default)]'
-                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <HardDrive className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'storage' ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)]'}`} />
-                    <span className="truncate">Archiviazione</span>
-                  </div>
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full bg-[var(--accent-text)] shrink-0 hidden md:block transition-opacity duration-150 ${
-                      activeTab === 'storage' ? 'opacity-100' : 'opacity-0'
-                    }`}
-                  />
-                </button>
-
-                <button
-                  type="button"
                   onClick={() => handleTabChange('quotas')}
                   className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-semibold tracking-wide text-left transition-all duration-150 whitespace-nowrap h-10 ${
                     activeTab === 'quotas'
@@ -564,6 +544,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <span
                     className={`w-1.5 h-1.5 rounded-full bg-[var(--accent-text)] shrink-0 hidden md:block transition-opacity duration-150 ${
                       activeTab === 'quotas' ? 'opacity-100' : 'opacity-0'
+                    }`}
+                  />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('storage')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-semibold tracking-wide text-left transition-all duration-150 whitespace-nowrap h-10 ${
+                    activeTab === 'storage'
+                      ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-bold ring-1 ring-[var(--border-default)]'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <HardDrive className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'storage' ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)]'}`} />
+                    <span className="truncate">Archiviazione</span>
+                  </div>
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full bg-[var(--accent-text)] shrink-0 hidden md:block transition-opacity duration-150 ${
+                      activeTab === 'storage' ? 'opacity-100' : 'opacity-0'
                     }`}
                   />
                 </button>
@@ -623,7 +623,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         onClearProtectedPrimary={() => setClearProtectedPrimary(true)}
                         apiUsage={apiUsage}
                         isLoadingUsage={isLoadingUsage}
-                        onRefreshUsage={fetchApiUsage}
                         preferredModel={preferredModel}
                         onAskDeleteKey={setKeyDeleteTarget}
                       />
@@ -690,7 +689,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div>
                         <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Quote API</h2>
                         <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                          Consumo giornaliero delle quote Google AI Studio e autonomia stimata.
+                          Consumo quote, telemetria chiamate di rete e autonomia stimata.
                         </p>
                       </div>
 
@@ -709,7 +708,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div>
                         <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Diagnostica</h2>
                         <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                          Telemetria delle chiamate, verifica requisiti di sistema (FFmpeg, API, disco) e report di assistenza.
+                          Verifica requisiti di sistema (FFmpeg, API, disco) e report di assistenza.
                         </p>
                       </div>
 
@@ -720,7 +719,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         displayChecks={getDisplayChecks()}
                         onCopyReport={handleCopyReport}
                         onOpenLogs={handleOpenLogs}
-                        apiUsage={apiUsage}
                         showOpenLogs={hostCapabilities.openLocalPath}
                       />
                     </div>

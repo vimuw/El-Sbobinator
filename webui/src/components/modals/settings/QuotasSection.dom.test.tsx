@@ -76,8 +76,8 @@ describe('QuotasSection', () => {
       />
     );
 
-    expect(screen.getByText('Quote API & Risorse')).toBeTruthy();
     expect(screen.getByText('API Google Gemini Operativa')).toBeTruthy();
+    expect(screen.getByText('2 chiavi')).toBeTruthy();
     expect(screen.getByText('In uso')).toBeTruthy();
     expect(screen.getByText('Gemini 2.5 Flash')).toBeTruthy();
     expect(screen.getByText('2 su 2 chiavi pronte')).toBeTruthy();
@@ -243,5 +243,23 @@ describe('QuotasSection', () => {
     expect(
       screen.getByText(/Inserisci una chiave API in Generale/i)
     ).toBeTruthy();
+  });
+
+  it('renders telemetry and work stats when apiUsage contains telemetry data', () => {
+    render(
+      <QuotasSection
+        apiUsage={dummyUsage}
+        isLoadingUsage={false}
+      />
+    );
+
+    expect(screen.getByText('Attività & Telemetria di Oggi')).toBeTruthy();
+    expect(screen.getByText('Lavoro Svolto Oggi')).toBeTruthy();
+    expect(screen.getByText('12')).toBeTruthy();
+    expect(screen.getByText('7')).toBeTruthy();
+    expect(screen.getAllByText('1')).toHaveLength(2);
+    expect(screen.getByText('Telemetria Rete API')).toBeTruthy();
+    expect(screen.getByText('19')).toBeTruthy();
+    expect(screen.getByText('18')).toBeTruthy();
   });
 });
