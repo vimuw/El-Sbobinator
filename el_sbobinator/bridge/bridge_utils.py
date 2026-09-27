@@ -70,17 +70,42 @@ class _RetryRuntime:
     def cancelled(self) -> bool:
         return self._cancel_event.is_set()
 
-    def phase(self, _text: str) -> None:
-        return None
+    def phase(self, text: str) -> None:
+        try:
+            self._adapter.aggiorna_fase(text)
+        except Exception:
+            pass
 
-    def progress(self, _value: float) -> None:
-        return None
+    def progress(self, value: float) -> None:
+        try:
+            self._adapter.aggiorna_progresso(value)
+        except Exception:
+            pass
 
-    def set_work_totals(self, *_args, **_kwargs) -> None:
-        return None
+    def set_work_totals(
+        self,
+        chunks_total: int | None = None,
+        macro_total: int | None = None,
+        **_kwargs,
+    ) -> None:
+        try:
+            self._adapter.set_work_totals(
+                chunks_total=chunks_total, macro_total=macro_total
+            )
+        except Exception:
+            pass
 
-    def update_work_done(self, *_args, **_kwargs) -> None:
-        return None
+    def update_work_done(
+        self,
+        kind: str = "macro",
+        done: int = 0,
+        total: int | None = None,
+        **_kwargs,
+    ) -> None:
+        try:
+            self._adapter.update_work_done(kind, done, total=total)
+        except Exception:
+            pass
 
     def register_step_time(self, *_args, **_kwargs) -> None:
         return None

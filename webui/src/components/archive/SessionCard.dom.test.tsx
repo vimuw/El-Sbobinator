@@ -100,7 +100,7 @@ describe('SessionCard components selection styling', () => {
       );
       const card1 = c1.querySelector('.archive-session-card') as HTMLElement;
       expect(card1.style.borderColor).toBe('var(--warning-ring)');
-      expect(card1.style.background).toBe('var(--warning-subtle)');
+      expect(card1.classList.contains('is-warning')).toBe(true);
       expect(card1.classList.contains('is-selected')).toBe(false);
 
       const { container: c2 } = render(
@@ -275,7 +275,7 @@ describe('SessionCard components selection styling', () => {
       );
       const card1 = c1.querySelector('.archive-session-card') as HTMLElement;
       expect(card1.style.borderColor).toBe('var(--warning-ring)');
-      expect(card1.style.background).toBe('var(--warning-subtle)');
+      expect(card1.classList.contains('is-warning')).toBe(true);
       expect(card1.classList.contains('is-selected')).toBe(false);
 
       const { container: c2 } = render(

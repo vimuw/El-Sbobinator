@@ -114,7 +114,7 @@ export function DraggableSessionCard({
       onClick={() => onPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir)}
       className={`archive-session-card flex items-center justify-between gap-3 px-4 py-3 cursor-pointer group/card ${selected ? 'is-selected' : ''} ${hasRevisionWarnings && !selected ? 'is-warning' : ''}`.trim()}
       style={{
-        ...(hasRevisionWarnings && !selected ? { borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)' } : {}),
+        ...(hasRevisionWarnings && !selected ? { borderColor: 'var(--warning-ring)' } : {}),
       }}
     >
       <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -140,14 +140,14 @@ export function DraggableSessionCard({
 
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{session.name}</p>
-          <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
-            {ts > 0 && <span>{formatRelativeTime(ts)}</span>}
+          <div className="flex items-center gap-2 mt-0.5 text-xs min-w-0 flex-nowrap overflow-hidden" style={{ color: 'var(--text-muted)' }}>
+            {ts > 0 && <span className="shrink-0">{formatRelativeTime(ts)}</span>}
             {session.effective_model && (
-              <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span>{shortModelName(session.effective_model)}</span></>
+              <><span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} /><span className="shrink-0">{shortModelName(session.effective_model)}</span></>
             )}
             {openedAtMs > 0 && (
               <>
-                <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
+                <span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} />
                 <span className="inline-flex items-center gap-1 shrink-0" title={`Ultima apertura: ${new Date(openedAtMs).toLocaleString('it-IT')}`}>
                   <Eye className="w-3 h-3 text-muted" style={{ opacity: 0.65 }} />
                   Aperto {formatRelativeTime(openedAtMs)}
@@ -156,39 +156,40 @@ export function DraggableSessionCard({
             )}
             {currentFolder && (
               <>
-                <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
+                <span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} />
                 <FolderIndicatorChip folder={currentFolder} />
               </>
             )}
             {hasRevisionWarnings && (
-              <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span style={{ color: 'var(--warning-text)', fontWeight: 600 }}>Completata con avvisi</span></>
+              <><span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} /><span className="shrink-0" style={{ color: 'var(--warning-text)', fontWeight: 600 }}>Completata con avvisi</span></>
             )}
             {failedBlockCount > 0 && (
               <>
-                <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
-                <span className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold uppercase tracking-wider px-1.5 py-[2px] h-4 box-border rounded-full" style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}>
+                <span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} />
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--warning-text)] shrink-0">
                   <AlertTriangle className="w-3 h-3" />{failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}
                 </span>
-                {canRetryBlocks && (
-                  <button
-                    type="button"
-                    onClick={handleRetryBlocks}
-                    disabled={isRetryingBlocks}
-                    className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold px-1.5 py-[2px] h-4 box-border rounded-full transition-opacity group/retry"
-                    style={{ color: 'var(--warning-text)', border: '1px solid var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
-                    title="Riprova solo i blocchi inclusi senza revisione"
-                  >
-                    <RotateCcw className={`w-2.5 h-2.5 transition-transform duration-500 ease-out ${isRetryingBlocks ? 'animate-spin' : 'group-hover/retry:-rotate-180 group-hover/retry:scale-110'}`} />
-                    {isRetryingBlocks ? 'Riprovo…' : 'Riprova revisione'}
-                  </button>
-                )}
               </>
             )}
           </div>
         </div>
       </div>
 
-      <div onClick={e => e.stopPropagation()}>
+      <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+        {canRetryBlocks && (
+          <button
+            type="button"
+            onClick={handleRetryBlocks}
+            disabled={isRetryingBlocks}
+            className="icon-button compact-icon-button text-[var(--warning-text)] hover:bg-[var(--warning-subtle)] group/retry"
+            style={{ opacity: isRetryingBlocks ? 0.65 : 1 }}
+            title="Riprova solo i blocchi inclusi senza revisione"
+            aria-label="Riprova revisione"
+          >
+            <RotateCcw className={`w-4 h-4 transition-transform duration-500 ease-out ${isRetryingBlocks ? 'animate-spin' : 'group-hover/retry:-rotate-180 group-hover/retry:scale-105'}`} />
+            <span className="sr-only">{isRetryingBlocks ? 'Riprovo…' : 'Riprova revisione'}</span>
+          </button>
+        )}
         <KebabMenu items={kebabItems} />
       </div>
     </div>
@@ -347,7 +348,7 @@ export function SortableSessionCard({
       {...attributes}
       {...(!disabled ? listeners : {})}
       onClick={() => onPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir)}
-      className={`archive-session-card flex items-center justify-between gap-3 px-4 py-3 group/card ${selected ? 'is-selected' : ''}`}
+      className={`archive-session-card flex items-center justify-between gap-3 px-4 py-3 group/card ${selected ? 'is-selected' : ''} ${hasRevisionWarnings && !selected ? 'is-warning' : ''}`.trim()}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
@@ -355,7 +356,6 @@ export function SortableSessionCard({
         touchAction: disabled ? undefined : 'none',
         cursor: isDragging ? 'grabbing' : disabled ? 'pointer' : 'grab',
         borderColor: hasRevisionWarnings && !selected ? 'var(--warning-ring)' : undefined,
-        background: hasRevisionWarnings && !selected ? 'var(--warning-subtle)' : undefined,
       }}
     >
       <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -390,14 +390,14 @@ export function SortableSessionCard({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{session.name}</p>
-          <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
-            {ts > 0 && <span>{formatRelativeTime(ts)}</span>}
+          <div className="flex items-center gap-2 mt-0.5 text-xs min-w-0 flex-nowrap overflow-hidden" style={{ color: 'var(--text-muted)' }}>
+            {ts > 0 && <span className="shrink-0">{formatRelativeTime(ts)}</span>}
             {session.effective_model && (
-              <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span>{shortModelName(session.effective_model)}</span></>
+              <><span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} /><span className="shrink-0">{shortModelName(session.effective_model)}</span></>
             )}
             {openedAtMs > 0 && (
               <>
-                <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
+                <span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} />
                 <span className="inline-flex items-center gap-1 shrink-0" title={`Ultima apertura: ${new Date(openedAtMs).toLocaleString('it-IT')}`}>
                   <Eye className="w-3 h-3 text-muted" style={{ opacity: 0.65 }} />
                   Aperto {formatRelativeTime(openedAtMs)}
@@ -405,33 +405,34 @@ export function SortableSessionCard({
               </>
             )}
             {hasRevisionWarnings && (
-              <><span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /><span style={{ color: 'var(--warning-text)', fontWeight: 600 }}>Completata con avvisi</span></>
+              <><span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} /><span className="shrink-0" style={{ color: 'var(--warning-text)', fontWeight: 600 }}>Completata con avvisi</span></>
             )}
             {failedBlockCount > 0 && (
               <>
-                <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
-                <span className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold uppercase tracking-wider px-1.5 py-[2px] h-4 box-border rounded-full" style={{ background: 'var(--warning-subtle)', color: 'var(--warning-text)', border: '1px solid var(--warning-ring)' }}>
+                <span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} />
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--warning-text)] shrink-0">
                   <AlertTriangle className="w-3 h-3" />{failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}
                 </span>
-                {canRetryBlocks && (
-                  <button
-                    type="button"
-                    onClick={handleRetryBlocks}
-                    disabled={isRetryingBlocks}
-                    className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold px-1.5 py-[2px] h-4 box-border rounded-full transition-opacity group/retry"
-                    style={{ color: 'var(--warning-text)', border: '1px solid var(--warning-ring)', background: 'var(--warning-subtle)', opacity: isRetryingBlocks ? 0.65 : 1 }}
-                    title="Riprova solo i blocchi inclusi senza revisione"
-                  >
-                    <RotateCcw className={`w-2.5 h-2.5 transition-transform duration-500 ease-out ${isRetryingBlocks ? 'animate-spin' : 'group-hover/retry:-rotate-180 group-hover/retry:scale-110'}`} />
-                    {isRetryingBlocks ? 'Riprovo…' : 'Riprova revisione'}
-                  </button>
-                )}
               </>
             )}
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+      <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+        {canRetryBlocks && (
+          <button
+            type="button"
+            onClick={handleRetryBlocks}
+            disabled={isRetryingBlocks}
+            className="icon-button compact-icon-button text-[var(--warning-text)] hover:bg-[var(--warning-subtle)] group/retry"
+            style={{ opacity: isRetryingBlocks ? 0.65 : 1 }}
+            title="Riprova solo i blocchi inclusi senza revisione"
+            aria-label="Riprova revisione"
+          >
+            <RotateCcw className={`w-4 h-4 transition-transform duration-500 ease-out ${isRetryingBlocks ? 'animate-spin' : 'group-hover/retry:-rotate-180 group-hover/retry:scale-105'}`} />
+            <span className="sr-only">{isRetryingBlocks ? 'Riprovo…' : 'Riprova revisione'}</span>
+          </button>
+        )}
         {(onMoveToPreviousPage || onMoveToNextPage) && (
           <div className="flex items-center gap-1">
             <button

@@ -128,7 +128,7 @@ export function useConfirmModal({
     if (confirmAction.type === 'retry-archive-session') {
       return {
         title: 'Ripristinare e riprovare la revisione?',
-        description: `La sbobina "${confirmAction.session.name}" verrà spostata nella schermata principale per elaborare i blocchi non revisionati. Vuoi procedere?`,
+        description: `La sbobina "${confirmAction.session.name}" verrà spostata nella coda di elaborazione per revisionare i blocchi mancanti. Vuoi procedere?`,
         confirmLabel: 'Riprova revisione',
         cancelLabel: 'Annulla',
       };

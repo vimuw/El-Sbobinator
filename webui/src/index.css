@@ -3213,7 +3213,7 @@ input[type="password"]::-ms-reveal {
 .archive-session-card.is-warning:not(.is-selected),
 :root:not([data-theme="dark"]) .archive-session-card.is-warning:not(.is-selected),
 :root[data-theme="dark"] .archive-session-card.is-warning:not(.is-selected) {
-  background: var(--warning-subtle);
+  background: var(--card-queued-bg);
   border-color: var(--warning-ring);
 }
 
@@ -4108,12 +4108,13 @@ input[type="password"]::-ms-reveal {
 }
 
 .queue-card.is-error {
-  background: var(--error-subtle) !important;
+  background: var(--card-queued-bg) !important;
+  border-color: var(--error-ring) !important;
   box-shadow: none !important;
 }
 
 .queue-card.is-warning {
-  background: var(--warning-subtle) !important;
+  background: var(--card-queued-bg) !important;
   border-color: var(--warning-ring) !important;
   box-shadow: none !important;
 }
@@ -4123,7 +4124,8 @@ input[type="password"]::-ms-reveal {
 }
 
 .queue-card.is-completed.is-warning {
-  background: var(--warning-subtle) !important;
+  background: var(--card-queued-bg) !important;
+  border-color: var(--warning-ring) !important;
 }
 
 /* App Footer Layout */

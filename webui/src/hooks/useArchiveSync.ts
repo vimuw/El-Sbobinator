@@ -251,15 +251,15 @@ export function useArchiveSync({
   }, [activePage, addNotification, normalizeSessionDir]);
 
   const executeRetryFromArchive = useCallback(async (session: ArchiveSession) => {
-    if (appStateRef.current !== 'idle') {
-      addNotification('Elaborazione in corso', 'Elaborazione in corso: riprova al termine.', 'warning', 'processing');
-      return;
-    }
     const normDir = normalizeSessionDir(session.session_dir);
     const existing = filesRef.current.find(f => normalizeSessionDir(f.outputDir) === normDir);
 
     if (existing?.isRetryingBlocks) {
       addNotification('Retry in corso', 'Retry già in corso per questa sessione.', 'warning', 'processing');
+      return;
+    }
+    if (appStateRef.current !== 'idle') {
+      addNotification('Elaborazione in corso', 'Elaborazione in corso: riprova al termine.', 'warning', 'processing');
       return;
     }
 
@@ -271,9 +271,9 @@ export function useArchiveSync({
         name: session.name,
         size: session.input_size ?? 0,
         duration: session.duration_sec ?? 0,
-        status: 'done',
-        progress: 100,
-        phase: 3,
+        status: 'processing',
+        progress: 0,
+        phase: 2,
         path: session.input_path,
         outputHtml: session.html_path,
         outputDir: session.session_dir,
@@ -283,7 +283,7 @@ export function useArchiveSync({
         revisionFailedBlocks: session.revision_failed_blocks,
         isRetryingBlocks: true,
       };
-      dispatch({ type: 'queue/add', files: [newFile] });
+      dispatch({ type: 'queue/prepend', files: [newFile] });
     } else {
       dispatch({ type: 'queue/set_retrying_blocks', id: fileId, value: true });
     }

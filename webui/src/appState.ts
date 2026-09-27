@@ -131,6 +131,7 @@ export type ProcessingState = {
 
 export type ProcessingAction =
   | { type: 'queue/add'; files: FileItem[] }
+  | { type: 'queue/prepend'; files: FileItem[] }
   | { type: 'queue/remove'; id: string }
   | { type: 'queue/reorder'; fromIndex: number; toIndex: number }
   | { type: 'queue/update_source'; id?: string; sessionDir?: string; path?: string; name?: string; size?: number; duration?: number }
@@ -179,6 +180,8 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
   switch (action.type) {
     case 'queue/add':
       return { ...state, structuralVersion: state.structuralVersion + 1, files: [...state.files, ...action.files] };
+    case 'queue/prepend':
+      return { ...state, structuralVersion: state.structuralVersion + 1, files: [...action.files, ...state.files] };
     case 'queue/remove':
       return { ...state, structuralVersion: state.structuralVersion + 1, files: state.files.filter(file => file.id !== action.id) };
     case 'queue/reorder': {
@@ -288,6 +291,8 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         changed = true;
         return {
           ...file,
+          status: 'done' as const,
+          isRetryingBlocks: false,
           revisionFailedBlocks: action.blocks,
           completionStatus: action.blocks.length > 0 ? ('completed_with_warnings' as const) : ('completed' as const),
           outputHtml: action.htmlPath ?? file.outputHtml,
@@ -298,16 +303,22 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
       return { ...state, structuralVersion: state.structuralVersion + 1, files };
     }
     case 'queue/set_retrying_blocks': {
-      let changed = false;
-      const files = state.files.map(file => {
-        if (file.id !== action.id) return file;
-        changed = true;
+      const target = state.files.find(file => file.id === action.id);
+      if (!target) return state;
+      const updatedTarget: FileItem = {
+        ...target,
+        isRetryingBlocks: action.value,
+        status: action.value ? ('processing' as const) : ('done' as const),
+      };
+      if (action.value) {
+        const remaining = state.files.filter(file => file.id !== action.id);
         return {
-          ...file,
-          isRetryingBlocks: action.value,
+          ...state,
+          structuralVersion: state.structuralVersion + 1,
+          files: [updatedTarget, ...remaining],
         };
-      });
-      if (!changed) return state;
+      }
+      const files = state.files.map(file => (file.id === action.id ? updatedTarget : file));
       return { ...state, structuralVersion: state.structuralVersion + 1, files };
     }
     case 'queue/clear_all':

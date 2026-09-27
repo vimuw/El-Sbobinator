@@ -106,11 +106,12 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
   }
 
   if (phase.startsWith('Fase 2/3')) {
+    const isRetry = phase.includes('retry');
     return {
       icon: <Sparkles className="w-8 h-8" />,
       iconAnimation: 'pulse',
-      title: 'Revisione e pulizia',
-      description: 'Il testo viene rivisto e ripulito da ripetizioni e imprecisioni.',
+      title: isRetry ? 'Revisione blocchi mancanti' : 'Revisione e pulizia',
+      description: isRetry ? phase : 'Il testo viene rivisto e ripulito da ripetizioni e imprecisioni.',
       kind: 'normal',
     };
   }

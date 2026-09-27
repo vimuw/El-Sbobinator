@@ -60,11 +60,15 @@ class TestBridgeUtils(unittest.TestCase):
         cancel_event.set()
         self.assertTrue(runtime.cancelled())
 
-        # No-op hook coverage
-        self.assertIsNone(runtime.phase("test"))
-        self.assertIsNone(runtime.progress(0.5))
-        self.assertIsNone(runtime.set_work_totals(10, 5))
-        self.assertIsNone(runtime.update_work_done(2))
+        # Telemetry hook forwarding coverage
+        runtime.phase("test")
+        adapter.aggiorna_fase.assert_called_once_with("test")
+        runtime.progress(0.5)
+        adapter.aggiorna_progresso.assert_called_once_with(0.5)
+        runtime.set_work_totals(chunks_total=10, macro_total=5)
+        adapter.set_work_totals.assert_called_once_with(chunks_total=10, macro_total=5)
+        runtime.update_work_done("macro", 2, total=5)
+        adapter.update_work_done.assert_called_once_with("macro", 2, total=5)
         self.assertIsNone(runtime.register_step_time("step1", 1.2))
 
         # Effective API key

@@ -49,14 +49,19 @@ export function useRevisionRetry({
       return;
     }
 
+    const blockCount = existing?.revisionFailedBlocks?.length ?? 1;
     dispatch({ type: 'queue/set_retrying_blocks', id: _fileId, value: true });
+    dispatch({ type: 'app/set_status', status: 'processing' });
+    dispatch({ type: 'bridge/update_phase', text: `Fase 2/3: retry blocchi mancanti (1/${blockCount})` });
+    dispatch({ type: 'bridge/update_progress', value: 0 });
     try {
       const res = await window.pywebview?.api?.retry_failed_revision_blocks?.(sessionDir);
       if (!res?.ok) {
         if (res?.conflict) {
           addNotification('Retry annullato', 'La sbobina è stata modificata: retry annullato per evitare sovrascritture.', 'warning', 'processing');
         } else if (res?.cancelled) {
-          addNotification('Retry annullato', 'Retry annullato.', 'info', 'processing');
+          void refreshArchiveSessions();
+          return;
         } else if (res?.quota_exhausted) {
           addNotification('Quota esaurita', 'Quota giornaliera esaurita: riprova domani.', 'warning', 'processing');
         } else {
@@ -87,7 +92,8 @@ export function useRevisionRetry({
       ));
       if (remaining.length > 0) {
         if (res.cancelled) {
-          addNotification('Retry annullato', `Retry annullato: ${remaining.length} ${remaining.length === 1 ? 'blocco resta non revisionato' : 'blocchi restano non revisionati'}.`, 'warning', 'processing');
+          // Manual cancellation: user intentionally stopped the retry.
+          // Card status and console already reflect the stopped state; no notification spam.
         } else if (res.quota_exhausted) {
           addNotification('Quota esaurita', `Quota giornaliera esaurita: ${remaining.length} ${remaining.length === 1 ? 'blocco resta non revisionato' : 'blocchi restano non revisionati'}. Riprova domani.`, 'warning', 'processing');
         } else {
@@ -99,6 +105,9 @@ export function useRevisionRetry({
       void refreshArchiveSessions();
     } finally {
       dispatch({ type: 'queue/set_retrying_blocks', id: _fileId, value: false });
+      dispatch({ type: 'app/set_status', status: 'idle' });
+      dispatch({ type: 'bridge/update_phase', text: '' });
+      dispatch({ type: 'bridge/update_progress', value: 0 });
     }
   }, [addNotification, archiveSessionsRef, dispatch, filesRef, normalizeSessionDir, refreshArchiveSessions, setArchiveSessions, setConfirmAction]);
 

@@ -677,6 +677,8 @@ def retry_failed_revision_blocks(
             runtime.phase(
                 f"Fase 2/3: retry blocchi mancanti ({position}/{len(failed_blocks)})"
             )
+            runtime.progress(float(position - 1) / max(1, len(failed_blocks)))
+            runtime.update_work_done("macro", position - 1, total=len(failed_blocks))
         except Exception:
             pass
         log.info(
@@ -714,6 +716,11 @@ def retry_failed_revision_blocks(
             except Exception:
                 pass
             retried_blocks.append(index)
+            try:
+                runtime.progress(float(position) / max(1, len(failed_blocks)))
+                runtime.update_work_done("macro", position, total=len(failed_blocks))
+            except Exception:
+                pass
             log.info(
                 "Blocco %d: revisione recuperata.",
                 index,
@@ -737,6 +744,15 @@ def retry_failed_revision_blocks(
                 extra={"stage": "phase2_retry_failed_blocks"},
             )
             remaining_blocks.append(index)
+
+    try:
+        if not remaining_blocks:
+            runtime.progress(1.0)
+            runtime.update_work_done(
+                "macro", len(failed_blocks), total=len(failed_blocks)
+            )
+    except Exception:
+        pass
 
     session_update = {
         "revision_failed_blocks": remaining_blocks,

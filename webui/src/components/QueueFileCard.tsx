@@ -67,7 +67,7 @@ function QueueFileCardInner({
         }`}
       >
         <div className="relative z-10 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 overflow-hidden flex-1">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             {isDraggable && (
               <div className="group/drag flex items-center shrink-0 gap-1">
                 <button
@@ -85,45 +85,58 @@ function QueueFileCardInner({
                 file.status === 'processing'
                   ? isCanceling ? 'text-[var(--error-text)]' : 'text-[var(--processing-text)]'
                   : file.status === 'error'
-                    ? isPaused ? 'text-[var(--warning-text)]' : 'text-[var(--error-text)]'
+                    ? isPaused
+                      ? 'bg-[var(--warning-subtle)] text-[var(--warning-text)] border border-[var(--warning-ring)]'
+                      : 'bg-[var(--error-subtle)] text-[var(--error-text)] border border-[var(--error-ring)]'
                     : 'text-[var(--text-muted)]'
               }`}
             >
               {file.status === 'processing'
                 ? isCanceling
                   ? <XCircle className="w-5 h-5" />
-                  : <Clock className="w-5 h-5 animate-pulse" />
+                  : file.isRetryingBlocks
+                    ? <RotateCcw className="w-5 h-5 animate-spin text-[var(--accent-text)]" />
+                    : <Clock className="w-5 h-5 animate-pulse" />
                 : file.status === 'error'
                   ? isPaused
-                    ? <AlertTriangle className="w-5 h-5" />
-                    : <AlertCircle className="w-5 h-5" />
+                    ? <AlertTriangle className="w-4 h-4" />
+                    : <AlertCircle className="w-4 h-4" />
                   : <FileAudio className="w-5 h-5" />}
             </div>
             <div className="min-w-0 flex-1">
               <h4 className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{file.name}</h4>
-              <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-[var(--text-muted)]">
-                <span>{formatSize(file.size)}</span>
+              <div className="flex items-center gap-2.5 mt-1.5 text-xs text-[var(--text-muted)] min-w-0 flex-nowrap overflow-hidden">
+                <span className="shrink-0">{formatSize(file.size)}</span>
                 {file.duration > 0 && (
                   <>
-                    <span className="w-1 h-1 rounded-full bg-[var(--border-default)]" />
-                    <span>{formatDuration(file.duration)}</span>
+                    <span className="w-1 h-1 rounded-full bg-[var(--border-default)] shrink-0" />
+                    <span className="shrink-0">{formatDuration(file.duration)}</span>
                   </>
                 )}
                 {file.status === 'processing' && (
                   <>
-                    <span className="w-1 h-1 rounded-full bg-[var(--border-default)]" />
-                    <span className={`inline-flex items-center gap-1.5 font-medium ${isCanceling ? 'text-[var(--error-text)]' : 'text-[var(--processing-text)]'}`}>
+                    <span className="w-1 h-1 rounded-full bg-[var(--border-default)] shrink-0" />
+                    <span className={`inline-flex items-center gap-1.5 font-medium shrink-0 ${isCanceling ? 'text-[var(--error-text)]' : 'text-[var(--processing-text)]'}`}>
                       <span className={`inline-flex h-1.5 w-1.5 rounded-full animate-pulse ${isCanceling ? 'bg-[var(--error-text)]' : 'bg-[var(--processing-dot)]'}`} />
-                      {isCanceling ? 'Annullamento in corso' : 'In elaborazione'}
+                      {isCanceling
+                        ? 'Annullamento in corso'
+                        : file.isRetryingBlocks
+                          ? (file.revisionFailedBlocks?.length ?? 0) > 0
+                            ? `Revisione blocchi in corso (${file.revisionFailedBlocks!.length} ${file.revisionFailedBlocks!.length === 1 ? 'blocco' : 'blocchi'})`
+                            : 'Revisione blocchi in corso'
+                          : 'In elaborazione'}
                     </span>
+                    {file.isRetryingBlocks && (
+                      <span className="sr-only">Riprovo…</span>
+                    )}
                   </>
                 )}
                 {file.status === 'error' && (
                   <>
-                    <span className="w-1 h-1 rounded-full bg-[var(--border-default)]" />
+                    <span className="w-1 h-1 rounded-full bg-[var(--border-default)] shrink-0" />
                     <span
                       title={file.errorDetail || file.errorText}
-                      className={isPaused ? 'text-[var(--warning-text)]' : 'text-[var(--error-text)]'}
+                      className={`truncate min-w-0 font-medium ${isPaused ? 'text-[var(--warning-text)]' : 'text-[var(--error-text)]'}`}
                     >
                       {errorLabel(file.errorText, file.errorDetail)}
                     </span>
@@ -149,7 +162,7 @@ function QueueFileCardInner({
               file.status === 'paused' || isResumableError(file.errorText) || isPhase1ChunkFailure ? (
                 <button
                   onClick={() => onRetry(file.id)}
-                  className="icon-button compact-icon-button group/retry"
+                  className="icon-button compact-icon-button text-[var(--warning-text)] hover:bg-[var(--warning-subtle)] group/retry"
                   title={isPhase1ChunkFailure ? 'I blocchi precedenti sono salvati: riprendi dal blocco fallito' : 'Il progresso è salvato: riprendi da dove è rimasto'}
                   aria-label="Riprendi"
                 >
@@ -158,7 +171,7 @@ function QueueFileCardInner({
               ) : (
                 <button
                   onClick={() => onRetry(file.id)}
-                  className="icon-button compact-icon-button is-danger group/retry"
+                  className="icon-button compact-icon-button is-danger text-[var(--error-text)] hover:bg-[var(--error-subtle)] group/retry"
                   title="Riprova"
                   aria-label="Riprova"
                 >
@@ -245,23 +258,23 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
                 <FolderIndicatorChip folder={currentFolder} />
               )}
             </div>
-            <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-[var(--text-muted)]">
-              <span>{formatSize(file.size)}</span>
+            <div className="flex items-center gap-2.5 mt-1.5 text-xs text-[var(--text-muted)] min-w-0 flex-nowrap overflow-hidden">
+              <span className="shrink-0">{formatSize(file.size)}</span>
               {file.duration > 0 && (
                 <>
-                  <span className="w-1 h-1 rounded-full bg-[var(--border-default)]" />
-                  <span>{formatDuration(file.duration)}</span>
+                  <span className="w-1 h-1 rounded-full bg-[var(--border-default)] shrink-0" />
+                  <span className="shrink-0">{formatDuration(file.duration)}</span>
                 </>
               )}
               {(file.primaryModel || file.effectiveModel) && (
                 <>
-                  <span className="w-1 h-1 rounded-full bg-[var(--border-default)]" />
-                  <span title={file.primaryModel || file.effectiveModel}>
+                  <span className="w-1 h-1 rounded-full bg-[var(--border-default)] shrink-0" />
+                  <span className="shrink-0" title={file.primaryModel || file.effectiveModel}>
                     {shortModelName(file.primaryModel || file.effectiveModel!)}
                   </span>
                   {file.primaryModel && file.effectiveModel && file.primaryModel !== file.effectiveModel && (
                     <span
-                      className="text-[10px] leading-none font-semibold uppercase tracking-wider px-1.5 py-[2px] h-4 box-border rounded-full badge-warning"
+                      className="text-[10px] leading-none font-semibold uppercase tracking-wider px-1.5 py-[2px] h-4 box-border rounded-full badge-warning shrink-0"
                       title={`Fallback usato: ${shortModelName(file.effectiveModel)}`}
                     >
                       fallback
@@ -269,39 +282,40 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
                   )}
                 </>
               )}
-              <span className="w-1 h-1 rounded-full bg-[var(--border-default)]" />
-              <span className={hasRevisionWarnings ? 'text-[var(--warning-text)]' : 'text-[var(--success-text)]'}>
+              <span className="w-1 h-1 rounded-full bg-[var(--border-default)] shrink-0" />
+              <span className={`shrink-0 ${hasRevisionWarnings ? 'text-[var(--warning-text)] font-medium' : 'text-[var(--success-text)]'}`}>
                 {hasRevisionWarnings ? 'Completata con avvisi' : file.completedAt ? formatRelativeTime(file.completedAt) : 'Completato'}
               </span>
               {failedBlockCount > 0 && (
                 <>
-                  <span className="w-1 h-1 rounded-full bg-[var(--border-default)]" />
+                  <span className="w-1 h-1 rounded-full bg-[var(--border-default)] shrink-0" />
                   <span
-                    className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold uppercase tracking-wider px-1.5 py-[2px] h-4 box-border rounded-full badge-warning"
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--warning-text)] shrink-0"
                   >
                     <AlertTriangle className="w-3 h-3" />
                     {failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}
                   </span>
-                  {canRetryBlocks && (
-                    <button
-                      type="button"
-                      onClick={handleRetryBlocks}
-                      disabled={isRetrying}
-                      className="inline-flex items-center gap-1 text-[10px] leading-none font-semibold px-1.5 py-[2px] h-4 box-border rounded-full transition-opacity premium-button-secondary compact-button is-warning group/retry"
-                      style={{ opacity: isRetrying ? 0.65 : 1 }}
-                      title="Riprova solo i blocchi inclusi senza revisione"
-                    >
-                      <RotateCcw className={`w-2.5 h-2.5 transition-transform duration-500 ease-out ${isRetrying ? 'animate-spin' : 'group-hover/retry:-rotate-180 group-hover/retry:scale-110'}`} />
-                      {isRetrying ? 'Riprovo…' : 'Riprova revisione'}
-                    </button>
-                  )}
                 </>
               )}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+          {canRetryBlocks && (
+            <button
+              type="button"
+              onClick={handleRetryBlocks}
+              disabled={isRetrying}
+              className="icon-button compact-icon-button text-[var(--warning-text)] hover:bg-[var(--warning-subtle)] group/retry"
+              style={{ opacity: isRetrying ? 0.65 : 1 }}
+              title="Riprova solo i blocchi inclusi senza revisione"
+              aria-label="Riprova revisione"
+            >
+              <RotateCcw className={`w-4 h-4 transition-transform duration-500 ease-out ${isRetrying ? 'animate-spin' : 'group-hover/retry:-rotate-180 group-hover/retry:scale-105'}`} />
+              <span className="sr-only">{isRetrying ? 'Riprovo…' : 'Riprova revisione'}</span>
+            </button>
+          )}
           <KebabMenu
             items={[
               ...( file.outputHtml ? [

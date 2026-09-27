@@ -280,6 +280,7 @@ class PipelineControllerMixin:
                 if self._adapter.is_running:
                     return bridge_error("Elaborazione in corso: riprova al termine.")
                 self._retry_active_count += 1
+                self._adapter.is_running = True
             _retry_count_incremented = True
 
             session = _load_json(session_path)
@@ -341,6 +342,7 @@ class PipelineControllerMixin:
                 self._active_retry_cancel_event = None
                 if _retry_count_incremented:
                     self._retry_active_count -= 1
+                    self._adapter.is_running = False
             if retry_lock is not None and retry_lock_acquired:
                 retry_lock.release()
             if retry_global_lock_acquired:
@@ -710,6 +712,9 @@ class PipelineControllerMixin:
     def stop_processing(self) -> dict:
         """Request cancellation."""
         self._cancel_event.set()
+        with self._pipeline_lifecycle_lock:
+            if self._active_retry_cancel_event is not None:
+                self._active_retry_cancel_event.set()
         self._adapter.cancel_pending_prompts()
         thread = self._processing_thread
         if not self._adapter.is_running and (thread is None or not thread.is_alive()):

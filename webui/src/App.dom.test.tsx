@@ -666,6 +666,7 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
 
     // Verify "Riprovo…" spinner/text is shown (meaning the file item was added and isRetryingBlocks is true)
     expect(await screen.findByText('Riprovo…')).toBeTruthy();
+    expect(await screen.findByText('Revisione blocchi mancanti')).toBeTruthy();
 
     // Now go back to Archive page to trigger second retry
     await act(async () => {

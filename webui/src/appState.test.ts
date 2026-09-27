@@ -194,6 +194,43 @@ describe('processingReducer', () => {
     expect(next).toBe(state);
   });
 
+  it('queue/prepend prepends files to the front of the queue', () => {
+    const existing = [makeFile({ id: 'file-1' }), makeFile({ id: 'file-2' })];
+    const newFile = makeFile({ id: 'file-prepended' });
+    const state = { ...initialProcessingState, files: existing, structuralVersion: 1 };
+    const next = processingReducer(state, { type: 'queue/prepend', files: [newFile] });
+    expect(next.structuralVersion).toBe(2);
+    expect(next.files.map(f => f.id)).toEqual(['file-prepended', 'file-1', 'file-2']);
+  });
+
+  it('queue/set_retrying_blocks moves retrying file to front with processing status and resets to done on false', () => {
+    const files = [
+      makeFile({ id: 'q1', status: 'queued' }),
+      makeFile({ id: 'done-1', status: 'done', isRetryingBlocks: false }),
+    ];
+    const state = { ...initialProcessingState, files, structuralVersion: 1 };
+    const retrying = processingReducer(state, {
+      type: 'queue/set_retrying_blocks',
+      id: 'done-1',
+      value: true,
+    });
+    expect(retrying.structuralVersion).toBe(2);
+    expect(retrying.files[0].id).toBe('done-1');
+    expect(retrying.files[0].status).toBe('processing');
+    expect(retrying.files[0].isRetryingBlocks).toBe(true);
+    expect(retrying.files[1].id).toBe('q1');
+
+    const finished = processingReducer(retrying, {
+      type: 'queue/set_retrying_blocks',
+      id: 'done-1',
+      value: false,
+    });
+    expect(finished.structuralVersion).toBe(3);
+    expect(finished.files[0].id).toBe('done-1');
+    expect(finished.files[0].status).toBe('done');
+    expect(finished.files[0].isRetryingBlocks).toBe(false);
+  });
+
   it('queue/clear_completed removes only done files, leaving queued and error intact', () => {
     const files = [
       makeFile({ id: 'q1', status: 'queued' }),
