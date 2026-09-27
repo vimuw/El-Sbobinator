@@ -181,9 +181,9 @@ describe('App', () => {
     expect(screen.getByText(/GitHub/)).toBeTruthy();
   });
 
-  it('renders Ko-fi link in footer', async () => {
+  it('does not render Ko-fi link in footer', async () => {
     await act(async () => { render(<App />); });
-    expect(screen.getByText(/caffè/)).toBeTruthy();
+    expect(screen.queryByText(/caffè/)).toBeNull();
   });
 
   it('shows API key input in setup mode', async () => {
@@ -480,7 +480,7 @@ describe('App — ready-empty mode (valid API key, no files)', () => {
   it('footer links are visible', async () => {
     await act(async () => { render(<App />); });
     expect(screen.getByText(/GitHub/)).toBeTruthy();
-    expect(screen.getByText(/caffè/)).toBeTruthy();
+    expect(screen.queryByText(/caffè/)).toBeNull();
   });
 
   it('console toggle button is disabled when queue is empty', async () => {

@@ -106,7 +106,7 @@ The Python backend is organized into five modular subpackages under `el_sbobinat
 | `previewHtml.ts` | Normalize preview HTML before loading into the editor |
 | `editorSessions.ts` | Per-file editor-session persistence (scroll, audio position) via `localStorage` |
 | `duplicateDetection.ts` | Archive-lookup helpers used by the "already processed" modal |
-| `branding.ts` | Constants for GitHub/Ko-fi/releases URLs |
+| `branding.ts` | Constants for GitHub/releases URLs |
 | `utils.ts` | `errorLabel` mapping (Python `last_error` → Italian UI string), formatters |
 | `index.css` | Tailwind v4 base + custom theme design tokens (including editor, sidebar, and modals) |
 | `components/NavSidebar.tsx` | Main lateral navigation bar switching between Queue, Archivio, and Setup pages |

@@ -123,7 +123,7 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
 | Method | Arguments | Returns | Notes |
 |---|---|---|---|
 | `open_file(path)` | absolute path to a whitelisted file type or a session dir | `{ok, error?}` | Extensions: `.html .htm .docx .doc .pdf .txt .md`. Rejects `http(s)://` — use `open_url`. |
-| `open_url(url)` | URL with an allowed prefix | `{ok, error?}` | Allowlist: `github.com`, `ko-fi.com`, Microsoft's WebView2 install link, `aistudio.google.com`. |
+| `open_url(url)` | URL with an allowed prefix | `{ok, error?}` | Allowlist: `github.com`, `aistudio.google.com`. |
 | `read_html_content(path)` | path under Desktop or `SESSION_ROOT` | `{ok, content?, error?}` | Path-traversal-checked; also caches the outer `<html>…<body>` shell for the matching `save_html_content`. |
 | `save_html_content(path, content, generation?)` | — | `{ok, error?}` | `generation` is a monotonic counter used to drop stale autosaves. Only the body is written; the cached shell is preserved. |
 | `create_collaboration_backup(path)` | path under Desktop or `SESSION_ROOT` | `{ok, backup_path?, error?}` | Path-traversal-checked; creates a `.collab-backup.html` snapshot on disk before entering live collaboration. |

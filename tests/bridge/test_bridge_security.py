@@ -101,7 +101,6 @@ class SystemControllerSecurityTests(unittest.TestCase):
     def test_open_url_accepts_allowlisted_prefixes(self):
         allowed_urls = [
             "https://github.com/vimuw/El-Sbobinator",
-            "https://ko-fi.com/support",
             "https://aistudio.google.com/app/apikey",
         ]
         with patch(

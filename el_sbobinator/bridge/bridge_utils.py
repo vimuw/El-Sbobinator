@@ -159,6 +159,5 @@ def _retry_no_failed_blocks_response(
 
 _ALLOWED_URL_PREFIXES: tuple[str, ...] = (
     "https://github.com/",
-    "https://ko-fi.com/",
     "https://aistudio.google.com/",
 )

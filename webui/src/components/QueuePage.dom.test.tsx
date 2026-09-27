@@ -5,7 +5,6 @@ import { QueuePage, type QueuePageProps } from './QueuePage';
 
 vi.mock('../branding', () => ({
   GITHUB_URL: 'https://github.com/test',
-  KOFI_URL: 'https://ko-fi.com/test',
 }));
 
 describe('QueuePage Component', () => {
