@@ -5,7 +5,7 @@ pytest==8.3.5
 pytest-cov==6.1.0
 pytest-xdist==3.8.0
 pip-audit==2.10.1
-fastapi>=0.115.0
+fastapi>=0.141.1
 uvicorn[standard]>=0.34.0
 python-multipart>=0.0.20
 httpx>=0.28.1
