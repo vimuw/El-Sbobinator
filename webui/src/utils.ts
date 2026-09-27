@@ -100,7 +100,8 @@ export function errorLabel(raw: string | undefined, detail?: string): string {
     if (isNetworkError(d)) {
       return `Errore di connessione al blocco ${chunkNum}: impossibile raggiungere i server Google. Verifica la connessione a Internet e clicca Riprendi.`;
     }
-    const detailText = d ? ` Dettaglio: ${sentence(d)}` : '';
+    const cleanD = d.replace(/CircuitBreakerExhaustedError:\s*/gi, '').replace(/RuntimeError:\s*/gi, '').trim();
+    const detailText = cleanD ? ` Dettaglio: ${sentence(cleanD)}` : '';
     return `Errore al blocco ${chunkNum} dopo 4 tentativi.${detailText} Clicca Riprendi per continuare dal blocco ${chunkNum}.`;
   }
   return r;

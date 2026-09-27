@@ -407,6 +407,22 @@ export default function App() {
 
   const handleQueueRetry = useCallback((id: string) => {
     dispatch({ type: 'queue/retry_one', id });
+    filesRef.current = filesRef.current.map(f =>
+      f.id === id && (f.status === 'error' || f.status === 'paused')
+        ? { ...f, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorText: undefined, errorDetail: undefined }
+        : f
+    );
+    void startProcessingRef.current();
+  }, [dispatch]);
+
+  const handleQueueResumeAll = useCallback(() => {
+    dispatch({ type: 'queue/retry_failed' });
+    filesRef.current = filesRef.current.map(f =>
+      f.status === 'error' || f.status === 'paused'
+        ? { ...f, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorText: undefined, errorDetail: undefined }
+        : f
+    );
+    void startProcessingRef.current();
   }, [dispatch]);
 
   const handleQueueStart = useCallback(() => {
@@ -500,6 +516,7 @@ export default function App() {
                 requestRemoveFile,
                 handleClearAll,
                 handleQueueRetry,
+                handleQueueResumeAll,
                 openPreview,
                 openFile,
                 handleQueueStart,

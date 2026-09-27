@@ -8,6 +8,7 @@ import { useQueuePersistence } from './hooks/useQueuePersistence';
 import { useUpdateChecker } from './hooks/useUpdateChecker';
 import { STORAGE_KEYS } from './storageKeys';
 import type { FileDonePayload, ProcessingAction } from './appState';
+import type { PywebviewApi } from './bridge';
 
 const motionCache = new Map<string, React.ForwardRefExoticComponent<React.PropsWithoutRef<Record<string, unknown>> & React.RefAttributes<unknown>>>();
 vi.mock('motion/react', () => ({
@@ -1387,6 +1388,50 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       window.dispatchEvent(event);
 
       expect(preventDefaultSpy).toHaveBeenCalled();
+    });
+
+    it('one-click resume: clicking Riprendi on a failed queue item starts processing immediately', async () => {
+      const startProcessing = vi.fn().mockResolvedValue({ ok: true });
+      window.pywebview = {
+        api: {
+          load_settings: vi.fn().mockResolvedValue({ api_key: 'AIzaSyTestKeyValidPatternXXXXXX12345' }),
+          get_archive_sessions: vi.fn().mockResolvedValue([]),
+          get_archive_folders: vi.fn().mockResolvedValue([]),
+          start_processing: startProcessing,
+        } as unknown as PywebviewApi,
+      };
+
+      vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
+        React.useEffect(() => {
+          dispatch({
+            type: 'queue/add',
+            files: [{
+              id: 'file-failed',
+              name: 'lesson-failed.mp3',
+              size: 1000,
+              duration: 60,
+              path: 'C:\\Media\\lesson.mp3',
+              status: 'error',
+              errorText: 'phase1_chunk_failed_1',
+              progress: 0,
+              phase: 0,
+            }],
+          });
+        }, [dispatch]);
+      });
+
+      await act(async () => {
+        render(<App />);
+      });
+
+      const riprendiBtn = await screen.findByRole('button', { name: 'Riprendi' });
+      expect(riprendiBtn).toBeTruthy();
+
+      await act(async () => {
+        fireEvent.click(riprendiBtn);
+      });
+
+      expect(startProcessing).toHaveBeenCalledTimes(1);
     });
   });
 });

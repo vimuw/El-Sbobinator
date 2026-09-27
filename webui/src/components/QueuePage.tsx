@@ -73,6 +73,7 @@ export interface QueueActionProps {
   requestRemoveFile: (id: string) => void;
   handleClearAll: () => void;
   handleQueueRetry: (id: string) => void;
+  handleQueueResumeAll?: () => void;
   openPreview: (htmlPath: string, title?: string, inputPath?: string, placeholder?: string, sessionDir?: string) => void;
   openFile: (path: string) => void;
   handleQueueStart: () => void;
@@ -164,6 +165,7 @@ export function QueuePage({
     requestRemoveFile,
     handleClearAll,
     handleQueueRetry,
+    handleQueueResumeAll,
     openPreview,
     openFile,
     handleQueueStart,
@@ -177,10 +179,14 @@ export function QueuePage({
 
   const pendingFiles = useMemo(() => getPendingFiles(files), [files]);
   const doneFiles = useMemo(() => getDoneFiles(files), [files]);
-  const { queuedCount } = useMemo(() => {
-    let count = 0;
-    for (const f of files) { if (f.status === 'queued') count++; }
-    return { queuedCount: count };
+  const { queuedCount, failedCount } = useMemo(() => {
+    let queued = 0;
+    let failed = 0;
+    for (const f of files) {
+      if (f.status === 'queued') queued++;
+      else if (f.status === 'error' || f.status === 'paused') failed++;
+    }
+    return { queuedCount: queued, failedCount: failed };
   }, [files]);
 
   const hasApiKey = Boolean(apiKey.trim() || hasProtectedKey);
@@ -194,6 +200,7 @@ export function QueuePage({
   }, [appendConsole]);
   const isOnline = useOnlineStatus(handleNetworkChange);
   const canStart = queuedCount > 0 && hasApiKey && isApiKeyValid && isOnline;
+  const canResumeAll = failedCount > 0 && hasApiKey && isApiKeyValid && isOnline;
 
   const uiMode: UiMode =
     !apiReady ? 'loading' :
@@ -206,7 +213,7 @@ export function QueuePage({
   const showProcessingBanner = appState === 'processing' || appState === 'canceling' || completionFlash;
   const apiKeyInsecureReasonLabel = apiKeyInsecureReason.trim() || 'DPAPI non disponibile.';
   const bannerFile = useMemo(
-    () => files.find(f => f.status === 'processing') ?? (completionFlash ? doneFiles[0] : undefined),
+    () => files.find(f => f.status === 'processing' || f.isRetryingBlocks) ?? (completionFlash ? doneFiles[0] : undefined),
     [files, completionFlash, doneFiles],
   );
   const isConsoleDisabled = !hasApiKey || !isApiKeyValid || !(pendingFiles.length > 0 || doneFiles.length > 0 || showProcessingBanner);
@@ -428,7 +435,9 @@ export function QueuePage({
               auth={auth}
               status={{
                 queuedCount,
+                failedCount,
                 canStart,
+                canResumeAll,
                 hasApiKey,
                 isApiKeyValid,
                 isOnline,
@@ -443,6 +452,7 @@ export function QueuePage({
                 onRemove: requestRemoveFile,
                 onClearAll: handleClearAll,
                 onRetry: handleQueueRetry,
+                onResumeAll: handleQueueResumeAll,
                 onPreview: openPreview,
                 onOpenFile: openFile,
                 onStart: handleQueueStart,

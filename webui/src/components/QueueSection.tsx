@@ -3,7 +3,7 @@ import { DndContext, closestCenter, useSensors, type DragEndEvent, type SensorDe
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { motion, AnimatePresence } from 'motion/react';
-import { FileAudio, MoreVertical, Play, Square, Trash2, Check, Zap, Plus } from 'lucide-react';
+import { FileAudio, MoreVertical, Play, RotateCcw, Square, Trash2, Check, Zap, Plus } from 'lucide-react';
 import type { AppStatus, FileItem } from '../appState';
 import { shortModelName } from '../utils';
 import { QueueFileCard } from './QueueFileCard';
@@ -20,7 +20,9 @@ export interface QueueSectionAuthProps {
 
 export interface QueueSectionStatusProps {
   queuedCount: number;
+  failedCount?: number;
   canStart: boolean;
+  canResumeAll?: boolean;
   hasApiKey: boolean;
   isApiKeyValid: boolean;
   isOnline?: boolean;
@@ -37,6 +39,7 @@ export interface QueueSectionActionProps {
   onRemove: (id: string) => void;
   onClearAll: () => void;
   onRetry: (id: string) => void;
+  onResumeAll?: () => void;
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string) => void;
   onOpenFile: (path: string) => void;
   onStart: () => void;
@@ -66,7 +69,9 @@ export const QueueSection = memo(function QueueSection({
   const { preferredModel } = auth;
   const {
     queuedCount,
+    failedCount = 0,
     canStart,
+    canResumeAll = false,
     hasApiKey,
     isApiKeyValid,
     isOnline = true,
@@ -78,6 +83,7 @@ export const QueueSection = memo(function QueueSection({
     onRemove,
     onClearAll,
     onRetry,
+    onResumeAll,
     onPreview,
     onOpenFile,
     onStart,
@@ -228,16 +234,26 @@ export const QueueSection = memo(function QueueSection({
             </div>
           </DndContext>
 
-          {(appState !== 'idle' || queuedCount > 0) && (
+          {(appState !== 'idle' || queuedCount > 0 || failedCount > 0) && (
             <div className="pt-4 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
               <AnimatePresence mode="wait">
-                {appState === 'idle' && (
+                {appState === 'idle' && queuedCount > 0 && (
                   <motion.div key="idle" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
                     <button onClick={onStart} disabled={!canStart}
                       className={`premium-button w-full${canStart ? ' premium-button--ready' : ''}`}
                       style={canStart ? {} : { cursor: 'not-allowed' }}>
                       <Play className="w-5 h-5 fill-current" />
                       {!isOnline ? '⚠️ Connessione Internet assente' : !hasApiKey ? '⚠️ Inserisci API Key nelle impostazioni' : !isApiKeyValid ? '⚠️ API Key non valida' : `Avvia sbobinatura (${queuedCount} file)`}
+                    </button>
+                  </motion.div>
+                )}
+                {appState === 'idle' && queuedCount === 0 && failedCount > 0 && onResumeAll && (
+                  <motion.div key="resume-all" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                    <button onClick={onResumeAll} disabled={!canResumeAll}
+                      className={`premium-button w-full${canResumeAll ? ' premium-button--ready' : ''}`}
+                      style={canResumeAll ? {} : { cursor: 'not-allowed' }}>
+                      <RotateCcw className="w-5 h-5" />
+                      {!isOnline ? '⚠️ Connessione Internet assente' : !hasApiKey ? '⚠️ Inserisci API Key nelle impostazioni' : !isApiKeyValid ? '⚠️ API Key non valida' : `Riprendi elaborazione (${failedCount} ${failedCount === 1 ? 'file' : 'file'})`}
                     </button>
                   </motion.div>
                 )}

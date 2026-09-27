@@ -23,7 +23,9 @@ interface TestOverrides {
   currentModel?: string;
   preferredModel?: string;
   queuedCount?: number;
+  failedCount?: number;
   canStart?: boolean;
+  canResumeAll?: boolean;
   hasApiKey?: boolean;
   isApiKeyValid?: boolean;
   isOnline?: boolean;
@@ -32,6 +34,7 @@ interface TestOverrides {
   onRemove?: (id: string) => void;
   onClearAll?: () => void;
   onRetry?: (id: string) => void;
+  onResumeAll?: () => void;
   onPreview?: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string) => void;
   onOpenFile?: (path: string) => void;
   onStart?: () => void;
@@ -42,6 +45,7 @@ interface TestOverrides {
 
 function makeProps(overrides: TestOverrides = {}): QueueSectionProps {
   const pending = overrides.pendingFiles !== undefined ? overrides.pendingFiles : [makeFile()];
+  const failed = pending.filter(f => f.status === 'error' || f.status === 'paused').length;
   return {
     pendingFiles: pending,
     progress: {
@@ -53,8 +57,10 @@ function makeProps(overrides: TestOverrides = {}): QueueSectionProps {
       preferredModel: overrides.preferredModel ?? 'gemini-2.5-flash',
     },
     status: {
-      queuedCount: overrides.queuedCount !== undefined ? overrides.queuedCount : pending.length,
+      queuedCount: overrides.queuedCount !== undefined ? overrides.queuedCount : pending.filter(f => f.status === 'queued').length,
+      failedCount: overrides.failedCount !== undefined ? overrides.failedCount : failed,
       canStart: overrides.canStart ?? true,
+      canResumeAll: overrides.canResumeAll ?? true,
       hasApiKey: overrides.hasApiKey ?? true,
       isApiKeyValid: overrides.isApiKeyValid ?? true,
       isOnline: overrides.isOnline ?? true,
@@ -69,6 +75,7 @@ function makeProps(overrides: TestOverrides = {}): QueueSectionProps {
       onRemove: overrides.onRemove ?? vi.fn(),
       onClearAll: overrides.onClearAll ?? vi.fn(),
       onRetry: overrides.onRetry ?? vi.fn(),
+      onResumeAll: overrides.onResumeAll,
       onPreview: overrides.onPreview ?? vi.fn(),
       onOpenFile: overrides.onOpenFile ?? vi.fn(),
       onStart: overrides.onStart ?? vi.fn(),
@@ -302,5 +309,25 @@ describe('QueueSection', () => {
     const scrollContainer = container.querySelector('.overflow-y-auto.app-scroll.is-chainable');
     expect(scrollContainer).toBeTruthy();
     expect(scrollContainer?.className).toContain('max-h-[390px]');
+  });
+
+  it('renders Riprendi elaborazione button when queuedCount is 0 and failedCount > 0', () => {
+    const onResumeAll = vi.fn();
+    render(
+      <QueueSection
+        {...makeProps({
+          pendingFiles: [makeFile({ status: 'error' })],
+          queuedCount: 0,
+          failedCount: 1,
+          canResumeAll: true,
+          onResumeAll,
+          appState: 'idle',
+        })}
+      />,
+    );
+    const resumeBtn = screen.getByText(/Riprendi elaborazione/);
+    expect(resumeBtn).toBeTruthy();
+    fireEvent.click(resumeBtn);
+    expect(onResumeAll).toHaveBeenCalledTimes(1);
   });
 });
