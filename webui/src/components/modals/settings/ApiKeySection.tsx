@@ -351,24 +351,37 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
 
   const effectivePreferredModel = preferredModel || 'gemini-2.5-flash';
 
+  const isCredWorkingForModel = useCallback(
+    (c?: CredentialProfile) => {
+      if (!c) return true;
+      if (
+        c.operational_status === 'invalid' ||
+        c.operational_status === 'permission_denied' ||
+        c.operational_status === 'request_error'
+      ) {
+        return false;
+      }
+      const exhausted = c.exhausted_models || [];
+      if (exhausted.includes(effectivePreferredModel)) {
+        return false;
+      }
+      // If temporarily_failing but it has exhausted_models that don't include effectivePreferredModel,
+      // the failure was strictly on those other models, so it IS working for effectivePreferredModel.
+      if (c.operational_status === 'temporarily_failing' && exhausted.length === 0) {
+        return false;
+      }
+      return true;
+    },
+    [effectivePreferredModel]
+  );
+
   const primaryCred = getCredentialFor(apiKey, true);
-  const isPrimaryWorking =
-    hasPrimaryConfigured &&
-    primaryCred?.operational_status !== 'temporarily_failing' &&
-    primaryCred?.operational_status !== 'invalid' &&
-    primaryCred?.operational_status !== 'permission_denied' &&
-    !(primaryCred?.exhausted_models || []).includes(effectivePreferredModel);
+  const isPrimaryWorking = hasPrimaryConfigured && isCredWorkingForModel(primaryCred);
 
   const activeFallbackKey = !isPrimaryWorking
     ? cleanedFallbackKeys.find((k, idx) => {
         const c = getCredentialFor(k, false, idx);
-        return (
-          !c ||
-          (c.operational_status !== 'temporarily_failing' &&
-            c.operational_status !== 'invalid' &&
-            c.operational_status !== 'permission_denied' &&
-            !(c.exhausted_models || []).includes(effectivePreferredModel))
-        );
+        return isCredWorkingForModel(c);
       })
     : null;
 
@@ -392,13 +405,19 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     if (!cred) {
       if (isPrimary) {
         return (
-          <span className={`${baseBadge} bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)]`}>
+          <span
+            className={`${baseBadge} bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)]`}
+            title={`Operativa per ${getModelDisplayName(effectivePreferredModel)}`}
+          >
             Operativa
           </span>
         );
       }
       return (
-        <span className={`${baseBadge} bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)]`}>
+        <span
+          className={`${baseBadge} bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)]`}
+          title={`Disponibile in riserva per ${getModelDisplayName(effectivePreferredModel)}`}
+        >
           In riserva
         </span>
       );
@@ -432,48 +451,49 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
       );
     }
 
-    const isQuotaExhausted =
+    const isCurrentModelQuotaExhausted =
       isCurrentModelExhausted ||
       (status === 'temporarily_failing' &&
+        exhaustedModels.length === 0 &&
         (!cred.last_error_message ||
           cred.last_error_message.toLowerCase().includes('quota') ||
           cred.last_error_message.toLowerCase().includes('rpd') ||
-          cred.last_error_code === 429 ||
-          exhaustedModels.length > 0));
+          cred.last_error_code === 429));
 
-    if (isCurrentModelExhausted || status === 'temporarily_failing') {
-      if (isQuotaExhausted) {
-        if (exhaustedModels.length === 1) {
-          return (
-            <span
-              className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}
-              title={`Quota esaurita per ${getModelDisplayName(exhaustedModels[0])}. Disponibile per gli altri modelli.`}
-            >
-              Quota esaurita per {getModelDisplayName(exhaustedModels[0])}
-            </span>
-          );
-        }
-        if (exhaustedModels.length > 1) {
-          const names = exhaustedModels.map(getModelDisplayName).join(', ');
-          const otherCount = exhaustedModels.length - 1;
-          const label = isCurrentModelExhausted
-            ? `Quota esaurita per ${getModelDisplayName(effectivePreferredModel)} (+${otherCount})`
-            : `Quota esaurita (${exhaustedModels.length} modelli)`;
-          return (
-            <span
-              className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}
-              title={`Quota esaurita per: ${names}. Disponibile per gli altri modelli.`}
-            >
-              {label}
-            </span>
-          );
-        }
+    if (isCurrentModelQuotaExhausted) {
+      if (exhaustedModels.length === 1) {
         return (
-          <span className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}>
-            Quota esaurita (oggi)
+          <span
+            className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}
+            title={`Quota esaurita per ${getModelDisplayName(exhaustedModels[0])}. Disponibile per gli altri modelli.`}
+          >
+            Quota esaurita per {getModelDisplayName(exhaustedModels[0])}
           </span>
         );
       }
+      if (exhaustedModels.length > 1) {
+        const names = exhaustedModels.map(getModelDisplayName).join(', ');
+        const otherCount = exhaustedModels.length - 1;
+        const label = isCurrentModelExhausted
+          ? `Quota esaurita per ${getModelDisplayName(effectivePreferredModel)} (+${otherCount})`
+          : `Quota esaurita (${exhaustedModels.length} modelli)`;
+        return (
+          <span
+            className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}
+            title={`Quota esaurita per: ${names}. Disponibile per gli altri modelli.`}
+          >
+            {label}
+          </span>
+        );
+      }
+      return (
+        <span className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}>
+          Quota esaurita (oggi)
+        </span>
+      );
+    }
+
+    if (status === 'temporarily_failing' && exhaustedModels.length === 0) {
       return (
         <span className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}>
           Non disponibile (temporaneo)
@@ -492,7 +512,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
           : otherExhaustedModels.length === 2
           ? `Esaurita per ${otherExhaustedModels.map(m => getModelDisplayName(m).replace('Gemini ', '')).join(' & ')}`
           : `Esaurita per ${otherExhaustedModels.length} modelli`;
-      const title = `Disponibile per il modello attuale. Quota esaurita oggi per: ${otherExhaustedModels.map(getModelDisplayName).join(', ')}`;
+      const title = `Disponibile per ${getModelDisplayName(effectivePreferredModel)}. Quota esaurita oggi per: ${otherExhaustedModels.map(getModelDisplayName).join(', ')}`;
       return (
         <span
           className="text-[10px] font-medium text-[var(--warning-text)] bg-[var(--warning-subtle,var(--bg-surface))] px-2 py-0.5 rounded-full border border-[var(--warning-ring)] leading-normal shrink-0"
@@ -507,7 +527,10 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     if (isPrimary || cred.is_primary) {
       return (
         <div className="flex items-center gap-1.5 flex-wrap justify-end">
-          <span className={`${baseBadge} bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)]`}>
+          <span
+            className={`${baseBadge} bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)]`}
+            title={`Operativa per ${getModelDisplayName(effectivePreferredModel)}`}
+          >
             Operativa
           </span>
           {renderExhaustedTag()}
@@ -518,7 +541,10 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     if (keyVal && keyVal === activeFallbackKey) {
       return (
         <div className="flex items-center gap-1.5 flex-wrap justify-end">
-          <span className={`${baseBadge} bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)]`}>
+          <span
+            className={`${baseBadge} bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)]`}
+            title={`In uso per ${getModelDisplayName(effectivePreferredModel)}`}
+          >
             In uso (riserva)
           </span>
           {renderExhaustedTag()}
@@ -528,7 +554,10 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
 
     return (
       <div className="flex items-center gap-1.5 flex-wrap justify-end">
-        <span className={`${baseBadge} bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)]`}>
+        <span
+          className={`${baseBadge} bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)]`}
+          title={`Disponibile in riserva per ${getModelDisplayName(effectivePreferredModel)}`}
+        >
           In riserva
         </span>
         {renderExhaustedTag()}
@@ -811,7 +840,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
 
       {/* 4. Quiet Footer Caption with AI Studio link */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-secondary)] leading-relaxed">
-        <span>Le chiavi di riserva subentrano in ordine quando la principale esaurisce la quota (RPD).</span>
+        <span>Le chiavi di riserva subentrano in ordine quando la principale esaurisce la quota (RPD). Le quote sono conteggiate per singolo modello.</span>
         <a
           href="https://aistudio.google.com/apikey"
           target="_blank"

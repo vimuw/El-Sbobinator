@@ -122,6 +122,7 @@ export interface ModelOption {
   summary: string;
   default_chunk_minutes: number;
   phase1_temperature?: number;
+  is_default?: boolean;
 }
 
 export interface SettingsPayload {

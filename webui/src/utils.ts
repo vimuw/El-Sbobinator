@@ -387,6 +387,8 @@ export const readAndOptimizeImageAsDataUrl = async (
   return optimizeDataUrlImage(rawDataUrl, options);
 };
 
+export const DEFAULT_MODEL = 'gemini-2.5-flash';
+
 export const MODEL_ORDER: string[] = [
   'gemini-2.5-flash',
   'gemini-3.5-flash',

@@ -617,4 +617,50 @@ describe('ApiKeySection component', () => {
     const exhaustedBadges = screen.getAllByText('Quota esaurita per Gemini 3.5 Flash');
     expect(exhaustedBadges).toHaveLength(2);
   });
+
+  it('correctly keeps reserve key as "In riserva" with tag when exhausted only on another model', () => {
+    const mockUsage = {
+      credentials: [
+        {
+          masked_key: 'AIzaSy...2345',
+          is_primary: true,
+          operational_status: 'active',
+          exhausted_models: ['gemini-2.5-flash'],
+        },
+        {
+          masked_key: 'AIzaSy...ABCD',
+          is_primary: false,
+          operational_status: 'temporarily_failing',
+          exhausted_models: ['gemini-2.5-flash'],
+        },
+        {
+          masked_key: 'AIzaSy...WXYZ',
+          is_primary: false,
+          operational_status: 'active',
+          exhausted_models: [],
+        },
+      ],
+    } as unknown as ApiUsageResult;
+
+    render(
+      <ApiKeySection
+        {...defaultProps}
+        fallbackKeys={[
+          'AIzaSyBackupKey11111111111111ABCD',
+          'AIzaSyBackupKey22222222222222WXYZ',
+        ]}
+        preferredModel="gemini-3.5-flash"
+        apiUsage={mockUsage}
+      />
+    );
+
+    // Primary is operative for Gemini 3.5 Flash
+    expect(screen.getByText('Operativa')).toBeTruthy();
+    // Fallback 1 is in reserve (NOT quota exhausted for current model)
+    const inReserveBadges = screen.getAllByText('In riserva');
+    expect(inReserveBadges).toHaveLength(2);
+    // Both primary and fallback 1 have the tag for 2.5 Flash
+    const tags = screen.getAllByText('Esaurita per Gemini 2.5 Flash');
+    expect(tags).toHaveLength(2);
+  });
 });

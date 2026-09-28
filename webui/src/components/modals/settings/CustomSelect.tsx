@@ -5,6 +5,7 @@ export interface CustomSelectOption {
   value: string;
   label: string;
   sublabel?: string;
+  badge?: string;
   disabled?: boolean;
 }
 
@@ -93,10 +94,15 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
         onClick={() => setIsOpen(prev => !prev)}
         className="custom-select-trigger w-full flex items-center justify-between gap-3 px-3.5 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--border-strong)] hover:border-[var(--accent-bg)] text-left text-sm font-semibold transition-all duration-180 focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)] disabled:opacity-50 disabled:cursor-not-allowed min-h-[40px]"
       >
-        <span className="truncate text-sm text-[var(--text-primary)] font-semibold">
+        <span className="truncate text-sm text-[var(--text-primary)] font-semibold inline-flex items-center gap-2">
           {selectedOption ? (
             <>
-              {selectedOption.label}
+              <span className="truncate">{selectedOption.label}</span>
+              {selectedOption.badge && (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)] leading-normal shrink-0">
+                  {selectedOption.badge}
+                </span>
+              )}
               {selectedOption.sublabel && (
                 <span className="text-xs text-[var(--text-secondary)] font-normal ml-1.5">
                   ({selectedOption.sublabel})
@@ -143,8 +149,19 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
                     : 'text-[var(--text-primary)] font-medium hover:bg-[var(--bg-hover)]'
                 }`}
               >
-                <div className="truncate pr-2">
-                  <span>{opt.label}</span>
+                <div className="flex items-center gap-2 truncate pr-2">
+                  <span className="truncate">{opt.label}</span>
+                  {opt.badge && (
+                    <span
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border leading-normal shrink-0 ${
+                        isSelected
+                          ? 'bg-[var(--bg-surface)] text-[var(--accent-text)] border-[var(--accent-ring)]'
+                          : 'bg-[var(--accent-subtle)] text-[var(--accent-text)] border-[var(--accent-ring)]'
+                      }`}
+                    >
+                      {opt.badge}
+                    </span>
+                  )}
                   {opt.sublabel && (
                     <span className="text-xs text-[var(--text-secondary)] font-normal ml-1.5">
                       ({opt.sublabel})

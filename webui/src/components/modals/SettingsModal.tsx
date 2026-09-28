@@ -601,7 +601,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </button>
                 <div className="app-scroll flex-1 overflow-y-auto overflow-x-hidden p-6 md:p-8 space-y-6 [scrollbar-gutter:stable]">
                   {activeTab === 'general' && (
-                    <div className="space-y-6 animate-fade-in">
+                    <div className="space-y-5 animate-fade-in pb-4">
                       <div>
                         <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Generale</h2>
                         <p className="text-xs text-[var(--text-secondary)] mt-0.5">

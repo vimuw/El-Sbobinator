@@ -84,4 +84,25 @@ describe('CustomSelect', () => {
 
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it('renders badge pill when provided in trigger and dropdown', () => {
+    const optionsWithBadge: CustomSelectOption[] = [
+      { value: 'm1', label: 'Model One', badge: 'Default' },
+      { value: 'm2', label: 'Model Two' },
+    ];
+    render(
+      <CustomSelect
+        value="m1"
+        onChange={vi.fn()}
+        options={optionsWithBadge}
+      />,
+    );
+
+    expect(screen.getByText('Default')).toBeTruthy();
+
+    const trigger = screen.getByRole('button', { name: /Model One/i });
+    fireEvent.click(trigger);
+
+    expect(screen.getAllByText('Default').length).toBe(2);
+  });
 });

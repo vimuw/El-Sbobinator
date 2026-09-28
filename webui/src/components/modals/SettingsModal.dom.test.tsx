@@ -86,7 +86,7 @@ const makeProps = (overrides: MakePropsOverrides = {}): SettingsModalProps => ({
     configuredFallbackKeyCount: overrides.configuredFallbackKeyCount ?? overrides.auth?.configuredFallbackKeyCount ?? 0,
   },
   models: {
-    preferredModel: overrides.preferredModel ?? overrides.models?.preferredModel ?? 'gemini-3.6-flash',
+    preferredModel: overrides.preferredModel ?? overrides.models?.preferredModel ?? 'gemini-2.5-flash',
     setPreferredModel: overrides.setPreferredModel ?? overrides.models?.setPreferredModel ?? vi.fn(),
     fallbackModels: overrides.fallbackModels ?? overrides.models?.fallbackModels ?? [],
     setFallbackModels: overrides.setFallbackModels ?? overrides.models?.setFallbackModels ?? vi.fn(),
@@ -306,7 +306,7 @@ describe('SettingsModal — save behavior', () => {
       fireEvent.click(screen.getByText('Salva e Chiudi'));
     });
 
-    expect(mockSave).toHaveBeenCalledWith('', [], 'gemini-3.6-flash', []);
+    expect(mockSave).toHaveBeenCalledWith('', [], 'gemini-2.5-flash', []);
   });
 
   it('preserves configured fallback keys when masked values were not edited', async () => {
@@ -326,7 +326,7 @@ describe('SettingsModal — save behavior', () => {
     expect(mockSave).toHaveBeenCalledWith(
       'AIzaSyTest123456',
       null,
-      'gemini-3.6-flash',
+      'gemini-2.5-flash',
       [],
     );
   });
@@ -730,10 +730,10 @@ describe('SettingsModal — session folder and cleanup', () => {
 });
 
 describe('SettingsModal — model section', () => {
-  it('renders primary model select and summary', async () => {
+  it('renders primary model select and default badge without summary description', async () => {
     const models = [
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast and capable', default_chunk_minutes: 12 },
-      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: 'Successore consigliato', default_chunk_minutes: 15 },
+      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: '', default_chunk_minutes: 12 },
+      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15 },
     ];
     render(
       <SettingsModal
@@ -747,7 +747,8 @@ describe('SettingsModal — model section', () => {
       fireEvent.click(screen.getAllByText('Generale')[0].closest('button')!);
     });
     expect(screen.getByText('Modello di Trascrizione (Primario)')).toBeTruthy();
-    expect(screen.getByText('Fast and capable')).toBeTruthy();
+    expect(screen.getAllByText('Default').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Fast and capable')).toBeNull();
   });
 
   it('calls setPreferredModel when another model is selected', async () => {

@@ -1,7 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { Cpu } from 'lucide-react';
 import type { ModelOption } from '../../../bridge';
-import { sortModelsByVersion } from '../../../utils';
+import { sortModelsByVersion, DEFAULT_MODEL } from '../../../utils';
 import { CustomSelect } from './CustomSelect';
 
 interface ModelSectionProps {
@@ -20,12 +20,6 @@ export const ModelSection: React.FC<ModelSectionProps> = React.memo(({
     [availableModels]
   );
 
-  const primaryModel = useMemo(
-    () => sortedModels.find(m => m.id === preferredModel),
-    [sortedModels, preferredModel],
-  );
-  const primaryModelSummary = primaryModel?.summary;
-
   const handlePrimaryModelChange = useCallback((nextPrimary: string) => {
     setPreferredModel(nextPrimary);
   }, [setPreferredModel]);
@@ -34,6 +28,7 @@ export const ModelSection: React.FC<ModelSectionProps> = React.memo(({
     () => sortedModels.map(m => ({
       value: m.id,
       label: m.label,
+      badge: (m.is_default || m.id === DEFAULT_MODEL || m.id === 'gemini-2.5-flash') ? 'Default' : undefined,
     })),
     [sortedModels],
   );
@@ -47,11 +42,6 @@ export const ModelSection: React.FC<ModelSectionProps> = React.memo(({
             Modello di Trascrizione (Primario)
           </h3>
         </div>
-        {primaryModelSummary && (
-          <p className="text-xs text-[var(--text-secondary)]">
-            {primaryModelSummary}
-          </p>
-        )}
       </div>
 
       <CustomSelect

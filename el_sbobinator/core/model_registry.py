@@ -8,7 +8,7 @@ place so config/session/UI logic stay aligned.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 
 class ModelOption(TypedDict):
@@ -18,6 +18,7 @@ class ModelOption(TypedDict):
     default_chunk_minutes: int
     default_macro_char_limit: int
     phase1_temperature: float
+    is_default: NotRequired[bool]
 
 
 SUPPORTED_MODELS: tuple[str, ...] = (
@@ -35,15 +36,16 @@ MODEL_OPTIONS: tuple[ModelOption, ...] = (
     {
         "id": "gemini-2.5-flash",
         "label": "Gemini 2.5 Flash",
-        "summary": "Primario collaudato (consigliato). In ritiro da Google il 20 ottobre 2026.",
+        "summary": "",
         "default_chunk_minutes": 15,
         "default_macro_char_limit": 22000,
         "phase1_temperature": 0.35,
+        "is_default": True,
     },
     {
         "id": "gemini-3.5-flash",
         "label": "Gemini 3.5 Flash",
-        "summary": "Generazione Flash orientata a workload ad alto throughput ed efficienza.",
+        "summary": "",
         "default_chunk_minutes": 15,
         "default_macro_char_limit": 22000,
         "phase1_temperature": 0.35,
@@ -51,7 +53,7 @@ MODEL_OPTIONS: tuple[ModelOption, ...] = (
     {
         "id": "gemini-3.6-flash",
         "label": "Gemini 3.6 Flash",
-        "summary": "Consigliato per la migrazione: successore ufficiale GA di 2.5 Flash, stabile e multimodale.",
+        "summary": "",
         "default_chunk_minutes": 15,
         "default_macro_char_limit": 22000,
         "phase1_temperature": 0.35,
@@ -59,7 +61,7 @@ MODEL_OPTIONS: tuple[ModelOption, ...] = (
     {
         "id": "gemini-3.7-flash",
         "label": "Gemini 3.7 Flash",
-        "summary": "Multimodale ad alte prestazioni della generazione Gemini 3.",
+        "summary": "",
         "default_chunk_minutes": 15,
         "default_macro_char_limit": 22000,
         "phase1_temperature": 0.35,
@@ -67,7 +69,7 @@ MODEL_OPTIONS: tuple[ModelOption, ...] = (
     {
         "id": "gemini-3.8-flash",
         "label": "Gemini 3.8 Flash",
-        "summary": "Frontiera più recente: finestre di contesto estese, ad alte prestazioni.",
+        "summary": "",
         "default_chunk_minutes": 15,
         "default_macro_char_limit": 22000,
         "phase1_temperature": 0.35,
