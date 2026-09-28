@@ -2892,8 +2892,28 @@ button {
   -webkit-text-security: disc;
 }
 
-input[type="password"]::-ms-reveal {
-  display: none;
+/* Hide Microsoft Edge / IE password reveal and clear buttons */
+input::-ms-reveal,
+input::-ms-clear,
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Hide Chromium / WebKit credentials autofill and contact buttons */
+input::-webkit-credentials-auto-fill-button,
+input::-webkit-contacts-auto-fill-button {
+  visibility: hidden !important;
+  display: none !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  right: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  clip-path: inset(50%) !important;
 }
 
 .app-logo {

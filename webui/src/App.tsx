@@ -543,6 +543,7 @@ export default function App() {
                 setApiKeyInsecureReason,
                 fallbackKeys,
                 preferredModel,
+                setPreferredModel,
                 fallbackModels,
               }}
               ingest={{

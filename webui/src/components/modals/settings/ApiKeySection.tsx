@@ -650,6 +650,13 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
                 : 'Inserisci chiave principale (AIzaSy... o AQ...)'
             }
             aria-label="Nuova chiave di riserva"
+            autoComplete="off"
+            data-lpignore="true"
+            data-1p-ignore="true"
+            data-form-type="other"
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
             className={`w-full app-input !py-1.5 !pl-3 !pr-9 text-xs font-mono border border-[var(--border-strong)] rounded-lg min-h-[38px] ${
               notice?.type === 'error' ? 'border-[var(--error-ring)]' : ''
             }`}

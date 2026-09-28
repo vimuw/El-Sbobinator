@@ -93,6 +93,13 @@ export function NewKeyModal({ isOpen, onClose }: NewKeyModalProps) {
                   value={newKeyInput}
                   onChange={(e) => setNewKeyInput(e.target.value)}
                   placeholder="Incolla qui la nuova API Key..."
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
+                  spellCheck={false}
+                  autoCorrect="off"
+                  autoCapitalize="off"
                   className="app-input font-mono text-sm w-full"
                   autoFocus
                 />

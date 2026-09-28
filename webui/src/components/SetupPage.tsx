@@ -5,7 +5,7 @@ import { GEMINI_KEY_PATTERN } from '../utils';
 
 interface SetupPageProps {
   hasProtectedKey: boolean;
-  onSaved: (key: string) => void;
+  onSaved: (key: string, model?: string) => void;
   preferredModel: string;
   fallbackKeys: string[];
   fallbackModels: string[];
@@ -28,6 +28,7 @@ export function SetupPage({
   const canSave = trimmedKey.length > 0 && isValidFormat && !setupKeySaving;
 
   const handleSetupSave = async () => {
+    if (setupKeySaving) return;
     setSetupKeySaving(true);
     setSetupKeyError(null);
     try {
@@ -35,12 +36,68 @@ export function SetupPage({
         setSetupKeyError('Bridge Python non disponibile — impostazioni non salvate.');
         return;
       }
+
+      let activeModel = preferredModel;
+
+      // 1. Live key and model validation if validate_environment is available
+      if (window.pywebview?.api?.validate_environment) {
+        try {
+          const valRes = await window.pywebview.api.validate_environment(
+            trimmedKey,
+            true,
+            activeModel,
+            fallbackModels,
+          );
+          if (valRes?.result?.checks) {
+            const apiCheck = valRes.result.checks.find(c => c.id === 'api_key');
+            if (apiCheck && apiCheck.status === 'error') {
+              const details = (apiCheck.details || '').toLowerCase();
+              const isNotFound =
+                details.includes('404') ||
+                details.includes('not_found') ||
+                details.includes('not found');
+
+              // If the chosen model is not available for this project, try auto-fallback to gemini-3.5-flash
+              if (isNotFound && activeModel !== 'gemini-3.5-flash') {
+                try {
+                  const retryVal = await window.pywebview.api.validate_environment(
+                    trimmedKey,
+                    true,
+                    'gemini-3.5-flash',
+                    fallbackModels,
+                  );
+                  const retryCheck = retryVal?.result?.checks?.find(c => c.id === 'api_key');
+                  if (retryCheck && retryCheck.status === 'ok') {
+                    activeModel = 'gemini-3.5-flash';
+                  } else {
+                    setSetupKeyError(
+                      `I modelli Gemini predefiniti non sono disponibili per questo progetto Google Cloud con la chiave inserita.`
+                    );
+                    return;
+                  }
+                } catch {
+                  setSetupKeyError(
+                    `Il modello ${activeModel} non è disponibile per questo progetto Google Cloud.`
+                  );
+                  return;
+                }
+              } else {
+                setSetupKeyError(apiCheck.message || 'Chiave API non valida o non attiva.');
+                return;
+              }
+            }
+          }
+        } catch (valErr: unknown) {
+          console.warn('Live API validation skipped or failed:', valErr);
+        }
+      }
+
       let result;
       try {
         result = await window.pywebview.api.save_settings(
           trimmedKey,
           fallbackKeys,
-          preferredModel,
+          activeModel,
           fallbackModels,
         );
       } catch (e: unknown) {
@@ -51,7 +108,7 @@ export function SetupPage({
         setSetupKeyError(`Errore salvataggio: ${result?.error || 'errore sconosciuto'}`);
         return;
       }
-      onSaved(trimmedKey);
+      onSaved(trimmedKey, activeModel);
     } finally {
       setSetupKeySaving(false);
     }
@@ -99,7 +156,8 @@ export function SetupPage({
             <div className="relative flex-1">
               <input
                 id="gemini-setup-api-key"
-                type={setupKeyShowRaw ? 'text' : 'password'}
+                type="text"
+                data-masked={!setupKeyShowRaw ? 'true' : 'false'}
                 value={setupKeyInput}
                 onChange={e => setSetupKeyInput(e.target.value)}
                 onKeyDown={async e => {
@@ -109,7 +167,16 @@ export function SetupPage({
                   await handleSetupSave();
                 }}
                 placeholder="Incolla qui la tua API Key (AIzaSy... o AQ...)"
-                className={`app-input w-full h-[42px] font-mono text-sm pl-3.5 pr-10 py-2.5 rounded-lg border outline-none bg-[var(--bg-input)] text-[var(--text-primary)] transition-all duration-150 ${
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-form-type="other"
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+                className={`app-input w-full h-[42px] font-mono text-sm !pl-3.5 !pr-12 !py-2.5 rounded-lg border outline-none bg-[var(--bg-input)] text-[var(--text-primary)] transition-all duration-150 ${
+                  !setupKeyShowRaw ? 'obscured-text' : ''
+                } ${
                   trimmedKey && isValidFormat
                     ? 'border-[var(--success-ring)] focus:border-[var(--success-text)] focus:ring-2 focus:ring-[var(--success-ring)]'
                     : trimmedKey
@@ -121,7 +188,7 @@ export function SetupPage({
                 type="button"
                 onClick={() => setSetupKeyShowRaw(v => !v)}
                 tabIndex={-1}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 z-10 p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
                 aria-label={setupKeyShowRaw ? 'Nascondi chiave' : 'Mostra chiave'}
               >
                 {setupKeyShowRaw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -132,18 +199,18 @@ export function SetupPage({
               type="button"
               disabled={!canSave}
               onClick={handleSetupSave}
-              className={`shrink-0 h-[42px] px-4 rounded-lg font-semibold text-sm inline-flex items-center justify-center gap-2 transition-all duration-150 select-none whitespace-nowrap border ${
+              className={`shrink-0 h-[42px] min-w-[175px] px-4 rounded-lg font-semibold text-sm inline-flex items-center justify-center gap-2 transition-all duration-150 select-none whitespace-nowrap border ${
                 canSave
                   ? 'border-transparent bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] hover:bg-[var(--btn-primary-hover)] active:scale-[0.98] cursor-pointer'
                   : 'border-[var(--border-default)] bg-[var(--bg-panel)] text-[var(--text-muted)] cursor-not-allowed opacity-80'
               }`}
             >
               {setupKeySaving ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
               ) : (
-                <ArrowRight className={`w-4 h-4 transition-transform ${canSave ? 'translate-x-0.5' : ''}`} />
+                <ArrowRight className={`w-4 h-4 shrink-0 transition-transform ${canSave ? 'translate-x-0.5' : ''}`} />
               )}
-              <span>{setupKeySaving ? 'Salvataggio…' : 'Salva e inizia'}</span>
+              <span>{setupKeySaving ? 'Verifica e salvataggio…' : 'Salva e inizia'}</span>
             </button>
           </div>
         </div>

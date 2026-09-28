@@ -49,6 +49,7 @@ export interface QueueAuthProps {
   setApiKeyInsecureReason: (val: string) => void;
   fallbackKeys: string[];
   preferredModel: string;
+  setPreferredModel?: (model: string) => void;
   fallbackModels: string[];
 }
 
@@ -141,6 +142,7 @@ export function QueuePage({
     setApiKeyInsecureReason,
     fallbackKeys,
     preferredModel,
+    setPreferredModel,
     fallbackModels,
   } = auth;
 
@@ -321,7 +323,12 @@ export function QueuePage({
           <React.Suspense fallback={null}>
             <SetupPage
               hasProtectedKey={hasProtectedKey}
-              onSaved={(key) => setApiKey(key)}
+              onSaved={(key, model) => {
+                setApiKey(key);
+                if (model && setPreferredModel) {
+                  setPreferredModel(model);
+                }
+              }}
               preferredModel={preferredModel}
               fallbackKeys={fallbackKeys}
               fallbackModels={fallbackModels}

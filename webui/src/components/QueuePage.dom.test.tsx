@@ -104,4 +104,18 @@ describe('QueuePage Component', () => {
     );
     expect(screen.getByText(/Connessione in corso/i)).toBeTruthy();
   });
+
+  it('renders SetupPage when in setup mode', async () => {
+    render(
+      <QueuePage
+        {...defaultProps}
+        auth={{
+          ...defaultProps.auth,
+          apiKey: '',
+          hasProtectedKey: false,
+        }}
+      />,
+    );
+    expect(await screen.findByText('Configura la tua API Key')).toBeTruthy();
+  });
 });
