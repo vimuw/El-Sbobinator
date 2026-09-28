@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from el_sbobinator.core.model_registry import (
     DEFAULT_FALLBACK_MODELS,
+    DEFAULT_MODEL,
     MODEL_OPTIONS,
     SUPPORTED_MODELS,
     build_model_state,
@@ -105,8 +106,8 @@ class SupportedModelsTests(unittest.TestCase):
                 settings, changed = load_and_sanitize_settings(session)
 
                 self.assertTrue(changed)
-                self.assertEqual(settings.model, "gemini-2.5-flash")
-                self.assertEqual(settings.effective_model, "gemini-2.5-flash")
+                self.assertEqual(settings.model, DEFAULT_MODEL)
+                self.assertEqual(settings.effective_model, DEFAULT_MODEL)
                 self.assertEqual(settings.fallback_models, ["gemini-3.6-flash"])
 
     def test_chain_with_current_default_fallbacks(self):
@@ -126,7 +127,7 @@ class SupportedModelsTests(unittest.TestCase):
 
     def test_unsupported_primary_falls_back_to_default(self):
         ms = build_model_state("gemini-2.5-pro", ["gemini-2.5-flash"])
-        self.assertEqual(ms.current, "gemini-2.5-flash")
+        self.assertEqual(ms.current, DEFAULT_MODEL)
         self.assertIn("gemini-2.5-flash", ms.chain)
 
 

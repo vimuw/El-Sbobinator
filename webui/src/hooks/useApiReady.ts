@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ModelOption, SettingsPayload } from '../bridge';
+import { DEFAULT_MODEL } from '../utils';
 
 export function useApiReady(appendConsole: (msg: string) => void) {
   const [apiReady, setApiReady] = useState(false);
@@ -11,7 +12,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
   const [configRecoveredFrom, setConfigRecoveredFrom] = useState('');
   const [fallbackKeys, setFallbackKeys] = useState<string[]>([]);
   const [configuredFallbackKeyCount, setConfiguredFallbackKeyCount] = useState(0);
-  const [preferredModel, setPreferredModel] = useState('gemini-2.5-flash');
+  const [preferredModel, setPreferredModel] = useState(DEFAULT_MODEL);
   const [fallbackModels, setFallbackModels] = useState<string[]>([]);
   const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
   const initDoneRef = useRef(false);
@@ -38,7 +39,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
     setConfigRecoveredFrom(String(cfg?.config_recovered_from ?? ''));
     setFallbackKeys(Array.isArray(cfg?.fallback_keys) ? cfg.fallback_keys : []);
     setConfiguredFallbackKeyCount(Number(cfg?.configuredFallbackKeyCount ?? 0));
-    setPreferredModel(cfg?.preferred_model || 'gemini-2.5-flash');
+    setPreferredModel(cfg?.preferred_model || DEFAULT_MODEL);
     setFallbackModels(Array.isArray(cfg?.fallback_models) ? cfg.fallback_models : []);
     setAvailableModels(Array.isArray(cfg?.available_models) ? cfg.available_models : []);
   }, []);
