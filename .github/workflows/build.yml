@@ -121,7 +121,7 @@ jobs:
         run: npm audit --audit-level=high --omit=dev --package-lock-only
 
   build:
-    needs: [checks, checks-windows]
+    needs: [checks, checks-windows, audit]
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
