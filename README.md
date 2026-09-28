@@ -54,7 +54,7 @@ L'applicazione opera in modalità BYOK (*Bring Your Own Key*) e non include chia
 All'avvio di **El Sbobinator**, incolla la chiave nel campo iniziale e clicca su **Salva e inizia**. La chiave viene memorizzata in modo protetto nel portachiavi sicuro del sistema operativo (Windows DPAPI o macOS Keychain).
 
 > [!NOTE]
-> **Costi, quote e termini Google**: El Sbobinator non include un accesso Gemini centralizzato: ogni utente configura e utilizza la propria API key e il proprio progetto Google. Quote, limiti di traffico, disponibilità dei modelli, condizioni contrattuali ed eventuali costi dipendono dal piano e dal progetto Google dell'utente ([Termini Gemini API](https://ai.google.dev/gemini-api/terms)). I tetti di richieste giornaliere (RPD) e al minuto (RPM) sono associati al **Progetto Google Cloud**. Al raggiungimento del limite di quota del piano attivo, l'elaborazione si arresta fino al ripristino della quota (ore 09:00 ora italiana / 00:00 PT).
+> **Costi, quote e termini Google**: El Sbobinator non include un accesso Gemini centralizzato: ogni utente configura e utilizza la propria API key e il proprio progetto Google. Quote, limiti di traffico, disponibilità dei modelli, condizioni contrattuali ed eventuali costi dipendono dal piano e dal progetto Google dell'utente ([Termini Gemini API](https://ai.google.dev/gemini-api/terms)). I tetti di richieste giornaliere (RPD) e al minuto (RPM) sono associati al **Progetto Google Cloud**. Al raggiungimento del limite di quota del piano attivo, l'elaborazione si arresta fino al ripristino della quota (ore 00:00 Pacific Time, circa le 09:00 italiane).
 
 
 ### 3. Trascina la registrazione e avvia
@@ -99,9 +99,6 @@ Poiché l'applicazione è open source e distribuita senza certificato a pagament
   ```
 - **Metodo rapido alternativo (versioni precedenti)**:
   Nella cartella **Applicazioni**, fare clic destro (o `Control` + clic) su *El Sbobinator* e selezionare **Apri**, quindi confermare nella finestra di dialogo.
-
-### Quota giornaliera API esaurita (Errore 429)
-Se durante l'elaborazione viene raggiunto il limite di quota del piano attivo, l'elaborazione si arresta. È possibile attendere il ripristino della quota (ore 09:00 ora italiana / 00:00 PT) per riprendere la trascrizione.
 
 ---
 
