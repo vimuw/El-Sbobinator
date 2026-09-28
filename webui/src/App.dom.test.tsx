@@ -1434,5 +1434,64 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
 
       expect(startProcessing).toHaveBeenCalledTimes(1);
     });
+
+    it('unified queue start: clicking Avvia sbobinatura with mixed queued and failed files resets failed to queued and starts processing', async () => {
+      const startProcessing = vi.fn().mockResolvedValue({ ok: true });
+      window.pywebview = {
+        api: {
+          load_settings: vi.fn().mockResolvedValue({ api_key: 'AIzaSyTestKeyValidPatternXXXXXX12345' }),
+          get_archive_sessions: vi.fn().mockResolvedValue([]),
+          get_archive_folders: vi.fn().mockResolvedValue([]),
+          start_processing: startProcessing,
+        } as unknown as PywebviewApi,
+      };
+
+      vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
+        React.useEffect(() => {
+          dispatch({
+            type: 'queue/add',
+            files: [
+              {
+                id: 'file-failed',
+                name: 'lesson-1-failed.mp3',
+                size: 1000,
+                duration: 60,
+                path: 'C:\\Media\\lesson1.mp3',
+                status: 'error',
+                errorText: 'phase1_chunk_failed_1',
+                progress: 0,
+                phase: 0,
+              },
+              {
+                id: 'file-queued',
+                name: 'lesson-2-waiting.mp3',
+                size: 1000,
+                duration: 60,
+                path: 'C:\\Media\\lesson2.mp3',
+                status: 'queued',
+                progress: 0,
+                phase: 0,
+              },
+            ],
+          });
+        }, [dispatch]);
+      });
+
+      await act(async () => {
+        render(<App />);
+      });
+
+      const startBtn = await screen.findByRole('button', { name: /Avvia sbobinatura \(2 file\)/i });
+      expect(startBtn).toBeTruthy();
+
+      await act(async () => {
+        fireEvent.click(startBtn);
+      });
+
+      expect(startProcessing).toHaveBeenCalledTimes(1);
+      // The first file processed is the failed file, which was reset to queued
+      const passedFiles = startProcessing.mock.calls[0][0];
+      expect(passedFiles[0].id).toBe('file-failed');
+    });
   });
 });

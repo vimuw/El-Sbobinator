@@ -47,6 +47,24 @@ describe('QueueFileCard', () => {
     expect(screen.getByLabelText('Trascina per riordinare')).toBeTruthy();
   });
 
+  it('shows drag handle for error file when idle and showDragHandle is true', () => {
+    render(
+      <QueueWrapper>
+        <QueueFileCard file={makeFile({ status: 'error', errorText: 'timeout' })} appState="idle" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} showDragHandle={true} />
+      </QueueWrapper>,
+    );
+    expect(screen.getByLabelText('Trascina per riordinare')).toBeTruthy();
+  });
+
+  it('shows drag handle for paused file when idle and showDragHandle is true', () => {
+    render(
+      <QueueWrapper>
+        <QueueFileCard file={makeFile({ status: 'paused', errorText: 'circuit_breaker_paused' })} appState="idle" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} showDragHandle={true} />
+      </QueueWrapper>,
+    );
+    expect(screen.getByLabelText('Trascina per riordinare')).toBeTruthy();
+  });
+
   it('hides drag handle when showDragHandle is false', () => {
     render(
       <QueueWrapper>

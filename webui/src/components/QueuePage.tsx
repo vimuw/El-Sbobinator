@@ -199,7 +199,7 @@ export function QueuePage({
     }
   }, [appendConsole]);
   const isOnline = useOnlineStatus(handleNetworkChange);
-  const canStart = queuedCount > 0 && hasApiKey && isApiKeyValid && isOnline;
+  const canStart = (queuedCount > 0 || failedCount > 0) && hasApiKey && isApiKeyValid && isOnline;
   const canResumeAll = failedCount > 0 && hasApiKey && isApiKeyValid && isOnline;
 
   const uiMode: UiMode =
@@ -207,7 +207,7 @@ export function QueuePage({
     appState === 'canceling' ? 'canceling' :
     appState === 'processing' ? 'processing' :
     (!hasApiKey || !isApiKeyValid) ? 'setup' :
-    queuedCount > 0 ? 'ready-with-files' : 'ready-empty';
+    (queuedCount > 0 || failedCount > 0) ? 'ready-with-files' : 'ready-empty';
 
   const lastConsoleMessage = consoleLogs.length > 0 ? consoleLogs[consoleLogs.length - 1] : 'Pronto per iniziare.';
   const showProcessingBanner = appState === 'processing' || appState === 'canceling' || completionFlash;

@@ -92,6 +92,13 @@ export const QueueSection = memo(function QueueSection({
     onAddFiles,
   } = actions;
   const sortableIds = useMemo(() => pendingFiles.map(f => f.id), [pendingFiles]);
+  const isBusy = appState === 'processing' || appState === 'canceling';
+  const canReorder = useMemo(() => {
+    const nonProcessingCount = isBusy
+      ? pendingFiles.filter(f => f.status !== 'processing').length
+      : pendingFiles.length;
+    return nonProcessingCount >= 2;
+  }, [isBusy, pendingFiles]);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -210,9 +217,6 @@ export const QueueSection = memo(function QueueSection({
               <AnimatePresence>
                 {pendingFiles.map((file) => {
                   const isActive = file.status === 'processing';
-                  const canReorder = (appState === 'processing' || appState === 'canceling')
-                    ? queuedCount >= 2
-                    : pendingFiles.length >= 2;
                   return (
                     <QueueFileCard
                       key={file.id}
@@ -243,7 +247,7 @@ export const QueueSection = memo(function QueueSection({
                       className={`premium-button w-full${canStart ? ' premium-button--ready' : ''}`}
                       style={canStart ? {} : { cursor: 'not-allowed' }}>
                       <Play className="w-5 h-5 fill-current" />
-                      {!isOnline ? '⚠️ Connessione Internet assente' : !hasApiKey ? '⚠️ Inserisci API Key nelle impostazioni' : !isApiKeyValid ? '⚠️ API Key non valida' : `Avvia sbobinatura (${queuedCount} file)`}
+                      {!isOnline ? '⚠️ Connessione Internet assente' : !hasApiKey ? '⚠️ Inserisci API Key nelle impostazioni' : !isApiKeyValid ? '⚠️ API Key non valida' : `Avvia sbobinatura (${queuedCount + failedCount} file)`}
                     </button>
                   </motion.div>
                 )}

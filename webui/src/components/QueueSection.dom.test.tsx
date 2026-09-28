@@ -330,4 +330,28 @@ describe('QueueSection', () => {
     fireEvent.click(resumeBtn);
     expect(onResumeAll).toHaveBeenCalledTimes(1);
   });
+
+  it('renders Avvia sbobinatura with sum of queued and failed files when both are > 0', () => {
+    const onStart = vi.fn();
+    render(
+      <QueueSection
+        {...makeProps({
+          pendingFiles: [
+            makeFile({ id: 'f1', status: 'error' }),
+            makeFile({ id: 'f2', status: 'queued' }),
+            makeFile({ id: 'f3', status: 'queued' }),
+          ],
+          queuedCount: 2,
+          failedCount: 1,
+          canStart: true,
+          onStart,
+          appState: 'idle',
+        })}
+      />,
+    );
+    const startBtn = screen.getByText('Avvia sbobinatura (3 file)');
+    expect(startBtn).toBeTruthy();
+    fireEvent.click(startBtn);
+    expect(onStart).toHaveBeenCalledTimes(1);
+  });
 });

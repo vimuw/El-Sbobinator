@@ -34,7 +34,7 @@ function QueueFileCardInner({
   showDragHandle = true,
 }: QueueFileCardProps) {
   const isCanceling = appState === 'canceling' && file.status === 'processing';
-  const isDraggable = file.status === 'queued' && showDragHandle;
+  const isDraggable = file.status !== 'processing' && file.status !== 'done' && showDragHandle;
   const isPhase1ChunkFailure = Boolean(file.errorText?.startsWith('phase1_chunk_failed_'));
   const isPaused = file.status === 'error' && isPausedError(file.errorText, file.errorDetail);
   const { attributes, listeners, setNodeRef, transform, transition: dndTransition, isDragging } = useSortable({
