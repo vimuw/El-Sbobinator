@@ -1,6 +1,6 @@
 # El Sbobinator
 
-Client desktop open source per trasformare lezioni audio e video in dispense di studio strutturate tramite modelli Google Gemini (BYOK), con player sincronizzato, formule scientifiche in LaTeX ed esportazione rapida.
+Applicazione desktop per trasformare lezioni audio e video in dispense di studio tramite Google Gemini.
 
 <p align="center">
   <a href="https://github.com/vimuw/El-Sbobinator/releases/latest"><img src="https://img.shields.io/github/v/release/vimuw/El-Sbobinator?style=flat-square&color=blue&label=Versione" alt="Ultima Versione" /></a>
@@ -54,13 +54,13 @@ L'applicazione opera in modalità BYOK (*Bring Your Own Key*) e non include chia
 All'avvio di **El Sbobinator**, incolla la chiave nel campo iniziale e clicca su **Salva e inizia**. La chiave viene memorizzata in modo protetto nel portachiavi sicuro del sistema operativo (Windows DPAPI o macOS Keychain).
 
 > [!NOTE]
-> **Costi, quote e termini Google**: El Sbobinator non include un accesso Gemini centralizzato: ogni utente configura e utilizza la propria API key e il proprio progetto Google. Quote, limiti di traffico, disponibilità dei modelli, condizioni contrattuali ed eventuali costi dipendono dal piano e dal progetto Google dell'utente ([Termini Gemini API](https://ai.google.dev/gemini-api/terms)). I tetti di richieste giornaliere (RPD) e al minuto (RPM) sono associati al **Progetto Google Cloud**: l'aggiunta di ulteriori chiavi per lo stesso account o progetto non moltiplica la quota complessiva. Al raggiungimento del limite di quota del piano attivo, l'elaborazione si arresta fino al ripristino della quota (ore 09:00 fuso Google PT) o all'eventuale inserimento di una chiave associata a un progetto differente.
+> **Costi, quote e termini Google**: El Sbobinator non include un accesso Gemini centralizzato: ogni utente configura e utilizza la propria API key e il proprio progetto Google. Quote, limiti di traffico, disponibilità dei modelli, condizioni contrattuali ed eventuali costi dipendono dal piano e dal progetto Google dell'utente ([Termini Gemini API](https://ai.google.dev/gemini-api/terms)). I tetti di richieste giornaliere (RPD) e al minuto (RPM) sono associati al **Progetto Google Cloud**. Al raggiungimento del limite di quota del piano attivo, l'elaborazione si arresta fino al ripristino della quota (ore 09:00 ora italiana / 00:00 PT).
 
 
 ### 3. Trascina la registrazione e avvia
 Trascina il file audio o video direttamente nella finestra dell'applicazione (è possibile inserire più registrazioni in coda) e clicca su **Avvia Sbobinatura**.
 - **Formati audio supportati**: `.m4a`, `.mp3`, `.wav`, `.aac`, `.flac`, `.ogg`, `.opus`.
-- **Formati video supportati**: `.mp4`, `.mkv`, `.webm`, `.mov`, `.avi`.
+- **Formati video supportati**: `.mp4`, `.mkv`, `.webm`, `.mov`, `.3gp`.
 
 ### 4. Rivedi ed esporta
 Al termine dell'elaborazione, la lezione viene aperta nell'editor integrato dell'applicazione, dove è possibile riascoltare l'audio e correggere il testo. L'esportazione della sbobina avviene tramite copia e incolla: clicca su **Copia per Google Docs** per copiare la sbobina con la formattazione preservata e incollarla in Google Docs o Microsoft Word.
@@ -101,7 +101,7 @@ Poiché l'applicazione è open source e distribuita senza certificato a pagament
   Nella cartella **Applicazioni**, fare clic destro (o `Control` + clic) su *El Sbobinator* e selezionare **Apri**, quindi confermare nella finestra di dialogo.
 
 ### Quota giornaliera API esaurita (Errore 429)
-Se durante l'elaborazione viene raggiunto il limite di quota del piano attivo, l'elaborazione si arresta. È possibile attendere il ripristino della quota o confermare una chiave di riserva tramite apposita finestra di dialogo.
+Se durante l'elaborazione viene raggiunto il limite di quota del piano attivo, l'elaborazione si arresta. È possibile attendere il ripristino della quota (ore 09:00 ora italiana / 00:00 PT) per riprendere la trascrizione.
 
 ---
 
@@ -110,16 +110,6 @@ Se durante l'elaborazione viene raggiunto il limite di quota del piano attivo, l
 El Sbobinator è pensato per l'utilizzo personale a fini di studio. L'utente è responsabile del rispetto della normativa applicabile, dei regolamenti del proprio ateneo, della tutela dei dati personali e dei termini d'uso delle API di Google.
 
 Per i termini completi, le condizioni vincolanti e l'esclusione di responsabilità, consultare il documento [**DISCLAIMER.md**](DISCLAIMER.md).
-
----
-
-## Supporta il Progetto
-
-Se l'applicazione ti è stata utile per lo studio e desideri supportarne lo sviluppo, puoi offrire un caffè su Ko-fi:
-
-<p align="center">
-  <a href="https://ko-fi.com/vimuw"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Supporta su Ko-fi" /></a>
-</p>
 
 ---
 
