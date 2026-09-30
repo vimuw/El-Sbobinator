@@ -11,6 +11,7 @@ import {
   type SettingsUpdateInstallState,
 } from './SettingsModal';
 import type { ModelOption } from '../../bridge';
+import { STORAGE_KEYS } from '../../storageKeys';
 
 const motionCache = new Map<string, React.ForwardRefExoticComponent<React.PropsWithoutRef<Record<string, unknown>> & React.RefAttributes<unknown>>>();
 vi.mock('motion/react', () => ({
@@ -108,6 +109,7 @@ const makeProps = (overrides: MakePropsOverrides = {}): SettingsModalProps => ({
 
 beforeEach(() => {
   setPywebview(undefined);
+  localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED);
 });
 
 afterEach(() => {
@@ -468,11 +470,55 @@ describe('SettingsModal — main-section interactions', () => {
     expect(setFallbackKeys).toHaveBeenCalledWith(['AIzaSyFallbackKey123456789']);
   });
 
-  it('toggles notifications when switch is clicked', async () => {
+  it('keeps notification changes in draft across tabs until a successful save', async () => {
+    const saveSettings = vi.fn().mockResolvedValue({ ok: true });
+    setPywebview({ save_settings: saveSettings });
     render(<SettingsModal {...makeProps()} />);
     const toggle = screen.getByRole('switch');
     fireEvent.click(toggle);
-    expect(localStorage.getItem('notifications_enabled')).toBeTruthy();
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    expect(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generale' }));
+    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('false');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Salva e Chiudi' }));
+    });
+    expect(saveSettings).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED)).toBe('false');
+  });
+
+  it.each(['Annulla', 'Chiudi finestra', 'Escape'])('discards notification drafts with %s and reloads saved state on reopening', (closeAction) => {
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED, 'false');
+    const onClose = vi.fn();
+    const props = makeProps({ onClose });
+    const { rerender } = render(<SettingsModal {...props} />);
+    fireEvent.click(screen.getByRole('switch'));
+    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true');
+    if (closeAction === 'Escape') {
+      fireEvent.keyDown(window, { key: 'Escape' });
+    } else {
+      fireEvent.click(screen.getByRole('button', { name: closeAction }));
+    }
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED)).toBe('false');
+    rerender(<SettingsModal {...props} isOpen={false} />);
+    rerender(<SettingsModal {...props} isOpen />);
+    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('preserves saved notification preferences when saving settings fails', async () => {
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED, 'true');
+    setPywebview({ save_settings: vi.fn().mockResolvedValue({ ok: false, error: 'Errore di salvataggio' }) });
+    const onClose = vi.fn();
+    render(<SettingsModal {...makeProps({ onClose })} />);
+    fireEvent.click(screen.getByRole('switch'));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Salva e Chiudi' }));
+    });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED)).toBe('true');
+    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('false');
   });
 
   it('toggles global key visibility on header eye click', async () => {

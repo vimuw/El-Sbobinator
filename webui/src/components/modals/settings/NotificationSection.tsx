@@ -1,17 +1,17 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Bell } from 'lucide-react';
-import { STORAGE_KEYS } from '../../../storageKeys';
 
-export const NotificationSection: React.FC = React.memo(() => {
-  const [notificationsEnabled, setNotificationsEnabled] = useState(
-    () => localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED) !== 'false',
-  );
+interface NotificationSectionProps {
+  notificationsEnabled: boolean;
+  onChange: (enabled: boolean) => void;
+  disabled?: boolean;
+}
 
-  const handleToggle = () => {
-    const next = !notificationsEnabled;
-    setNotificationsEnabled(next);
-    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED, String(next));
-  };
+export const NotificationSection: React.FC<NotificationSectionProps> = React.memo(({
+  notificationsEnabled,
+  onChange,
+  disabled = false,
+}) => {
 
   return (
     <div className="flex items-center justify-between gap-4">
@@ -31,9 +31,10 @@ export const NotificationSection: React.FC = React.memo(() => {
         type="button"
         role="switch"
         aria-checked={notificationsEnabled}
-        onClick={handleToggle}
+        onClick={() => onChange(!notificationsEnabled)}
+        disabled={disabled}
         aria-label="Attiva o disattiva notifiche di sistema"
-        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)] ${
+        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)] disabled:opacity-50 disabled:cursor-not-allowed ${
           notificationsEnabled ? 'bg-[var(--accent-bg)]' : 'bg-[var(--bg-input)] ring-1 ring-[var(--border-strong)]'
         }`}
       >

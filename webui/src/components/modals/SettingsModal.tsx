@@ -14,6 +14,7 @@ import { UpdaterSection, type SettingsUpdateInstallState } from './settings/Upda
 import { useSettingsStorage, SESSION_CLEANUP_DAYS } from '../../hooks/useSettingsStorage';
 import { formatSize } from '../../utils';
 import { getHostCapabilities } from '../../browserHost';
+import { STORAGE_KEYS } from '../../storageKeys';
 
 export type { SettingsUpdateInstallState };
 
@@ -71,6 +72,7 @@ interface SettingsSnapshot {
   fallbackKeys: string[];
   preferredModel: string;
   fallbackModels: string[];
+  notificationsEnabled: boolean;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -104,6 +106,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [activeTab, setActiveTab] = useState<TabType>('general');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(
+    () => localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED) !== 'false',
+  );
   const [apiKeyInsecure, setApiKeyInsecure] = useState(false);
   const [apiKeyInsecureReason, setApiKeyInsecureReason] = useState<string | null>(null);
 
@@ -178,6 +183,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         fallbackKeys: [...fallbackKeys],
         preferredModel,
         fallbackModels: [...fallbackModels],
+        notificationsEnabled: localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED) !== 'false',
       };
     } else if (!isOpen) {
       settingsSnapshotRef.current = null;
@@ -228,6 +234,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      setNotificationsEnabled(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED) !== 'false');
       setClearProtectedPrimary(false);
       setSaveError(null);
       setIsSaving(false);
@@ -419,6 +426,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         appendConsole(`❌ ${err}`);
         return;
       }
+      localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED, String(notificationsEnabled));
       try {
         await onSettingsSaved?.();
       } catch (e: unknown) {
@@ -433,6 +441,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleClose = useCallback(() => {
     if (isSavingRef.current) return;
+    setNotificationsEnabled(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED) !== 'false');
     const snapshot = settingsSnapshotRef.current;
     if (snapshot) {
       setApiKey(snapshot.apiKey);
@@ -637,7 +646,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                       <div className="border-t border-[var(--border-default)]" />
 
-                      <NotificationSection />
+                      <NotificationSection
+                        notificationsEnabled={notificationsEnabled}
+                        onChange={setNotificationsEnabled}
+                        disabled={isSaving}
+                      />
 
                       <div className="border-t border-[var(--border-default)]" />
 
