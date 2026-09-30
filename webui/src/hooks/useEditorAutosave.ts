@@ -51,8 +51,8 @@ export function useEditorAutosave({
     const autosaveGenRefAtCleanup = autosaveGenRef;
     const getHtmlAtCleanup = getHtmlRef;
     return () => {
-      if (!isDirtyRef.current || saveErrorOnCloseRef.current) return;
       if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
+      if (!isDirtyRef.current || saveErrorOnCloseRef.current) return;
       const path = htmlPathRef.current;
       const snap = getHtmlAtCleanup.current?.() ?? '';
       if (path && snap && snap !== lastPersistedRef.current) {
@@ -89,7 +89,8 @@ export function useEditorAutosave({
     }
     const path = htmlPathRef.current;
     const snap = getHtmlRef.current?.() ?? '';
-    if (path && snap && snap !== lastPersistedRef.current && window.pywebview?.api?.save_html_content) {
+    if (!path) return true;
+    if (snap && snap !== lastPersistedRef.current && window.pywebview?.api?.save_html_content) {
       const gen = nextHtmlAutosaveGeneration(path);
       autosaveGenRef.current = gen;
       try {
@@ -134,37 +135,11 @@ export function useEditorAutosave({
   }, [saveControllerRef, getDirtyContent, flushPendingAutosave, cancelPendingAutosave]);
 
   const flushAndClose = useCallback(async () => {
-    if (isDirtyRef.current && !saveErrorOnCloseRef.current) {
-      if (autosaveTimerRef.current) {
-        window.clearTimeout(autosaveTimerRef.current);
-        autosaveTimerRef.current = null;
-      }
-      const path = htmlPathRef.current;
-      const snap = getHtmlRef.current?.() ?? '';
-      if (path && snap && snap !== lastPersistedRef.current && window.pywebview?.api?.save_html_content) {
-        setAutosaveStatus('saving');
-        const gen = nextHtmlAutosaveGeneration(path);
-        autosaveGenRef.current = gen;
-        try {
-          const res = await window.pywebview.api.save_html_content(path, snap, gen);
-          if (isSaveCommitted(res)) {
-            lastPersistedRef.current = snap;
-            if (gen === autosaveGenRef.current) isDirtyRef.current = false;
-          } else {
-            saveErrorOnCloseRef.current = true;
-            setAutosaveStatus('error');
-            return;
-          }
-        } catch {
-          saveErrorOnCloseRef.current = true;
-          setAutosaveStatus('error');
-          return;
-        }
-      }
-    }
+    if (saveErrorOnCloseRef.current) {
+      cancelPendingAutosave();
+    } else if (!await flushPendingAutosave()) return;
     onClose();
-  }, [onClose, getHtmlRef]);
-
+  }, [flushPendingAutosave, cancelPendingAutosave, onClose]);
 
   const scheduleAutosave = useCallback(() => {
     if (!htmlPath || previewContent === null) return;

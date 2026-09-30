@@ -11,6 +11,25 @@ function setPywebview(api: Record<string, unknown> | undefined) {
 }
 
 describe('useEditorAutosave', () => {
+  it.each(['rejection', 'exception'])('allows discard after a close-time save %s without retrying on unmount', async failure => {
+    const saveMock = failure === 'exception'
+      ? vi.fn().mockRejectedValue(new Error('Bridge unavailable'))
+      : vi.fn().mockResolvedValue({ ok: false, saved: false });
+    setPywebview({ save_html_content: saveMock });
+    const onClose = vi.fn();
+    const { result, unmount } = renderHook(() => useEditorAutosave({
+      htmlPath: '/failed-close.html', previewContent: '<p>Original</p>',
+      getHtmlRef: { current: () => '<p>Unsaved changes</p>' }, onClose,
+    }));
+    act(() => result.current.scheduleAutosave());
+    await act(async () => { await result.current.flushAndClose(); });
+    expect(onClose).not.toHaveBeenCalled();
+    await act(async () => { await result.current.flushAndClose(); });
+    expect(onClose).toHaveBeenCalledOnce();
+    unmount();
+    expect(saveMock).toHaveBeenCalledTimes(1);
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
     setPywebview(undefined);
