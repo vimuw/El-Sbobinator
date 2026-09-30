@@ -10,156 +10,98 @@ import threading
 from html import escape
 from typing import Any
 
+from el_sbobinator.utils.logging_utils import get_logger, record_startup_diagnostic
 
-def _check_webview2_native() -> bool:
-    """Check if pywebview or WebView2 .NET/COM loader detects a usable runtime."""
+
+def _check_webview2_native(*, activate_renderer: bool = True) -> bool:
+    """Probe the same loader used by pywebview, optionally selecting its renderer.
+
+    Registry entries and leftover binaries are not evidence that the loader can
+    use a runtime. Even winforms.is_chromium is only a cached registry probe.
+    Polling a live recovery window must not change its backend before restart.
+    """
+    version = None
+    native_error = None
+
+    def finish(
+        available: bool, renderer: str, renderer_error: str | None = None
+    ) -> bool:
+        if activate_renderer:
+            record_startup_diagnostic(
+                status="detected" if available else "recovery",
+                runtime_available=available,
+                runtime_version=str(version) if version else None,
+                renderer=renderer,
+                native_error=native_error,
+                renderer_error=renderer_error,
+            )
+        return available
+
     try:
         import webview.platforms.winforms as wf
+    except Exception as exc:
+        native_error = f"{type(exc).__name__}: {exc}"
+        return finish(False, "unavailable")
 
-        if getattr(wf, "is_chromium", False):
-            return True
-
-        # If pywebview's initial probe missed the runtime, attempt to load edgechromium
-        # directly and verify CoreWebView2Environment; wire it up so pywebview avoids MSHTML.
-        try:
-            from webview.platforms import edgechromium as Chromium
-
-            env = getattr(Chromium, "CoreWebView2Environment", None)
-            if env is not None and hasattr(env, "GetAvailableBrowserVersionString"):
-                version = env.GetAvailableBrowserVersionString(None)
-                if version and str(version).strip():
-                    wf.Chromium = Chromium
-                    wf.is_chromium = True
-                    return True
-        except Exception:
-            pass
-    except Exception:
-        pass
-    return False
-
-
-def _check_webview2_registry() -> bool:
-    """Check Windows registry across channels, scopes (HKCU/HKLM), and 32/64-bit views."""
+    available = False
     try:
-        import winreg
-    except Exception:
-        return False
+        from webview.platforms import edgechromium as Chromium
 
-    guid_list = (
-        "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",  # Evergreen Runtime
-        "{2CD8A007-E189-409D-A2C8-9AF4EF3C72AA}",  # Beta
-        "{0D50BFEC-CD6A-4F9A-964C-C7416E3ACB10}",  # Dev
-        "{65C35B14-6C1D-4122-AC46-7148CC9D6497}",  # Canary
-    )
+        environment = getattr(Chromium, "CoreWebView2Environment", None)
+        if environment is not None:
+            version = environment.GetAvailableBrowserVersionString(None)
+            available = bool(version and str(version).strip())
+            if not available:
+                native_error = "Native loader returned no browser version"
+        else:
+            native_error = "CoreWebView2Environment is unavailable"
+    except Exception as exc:
+        native_error = f"{type(exc).__name__}: {exc}"
 
-    roots = (
-        getattr(winreg, "HKEY_CURRENT_USER", 1),
-        getattr(winreg, "HKEY_LOCAL_MACHINE", 2),
-    )
-    key_read = getattr(winreg, "KEY_READ", 0x20019)
-    access_flags = [key_read]
-    if hasattr(winreg, "KEY_WOW64_64KEY"):
-        access_flags.append(key_read | winreg.KEY_WOW64_64KEY)
-    if hasattr(winreg, "KEY_WOW64_32KEY"):
-        access_flags.append(key_read | winreg.KEY_WOW64_32KEY)
+    if not activate_renderer:
+        return available
 
-    # 1. EdgeUpdate Clients and ClientState keys across all channels
-    for root in roots:
-        for guid in guid_list:
-            for branch in (
-                rf"SOFTWARE\Microsoft\EdgeUpdate\Clients\{guid}",
-                rf"SOFTWARE\Microsoft\EdgeUpdate\ClientState\{guid}",
-                rf"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{guid}",
-                rf"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\ClientState\{guid}",
-            ):
-                for flag in access_flags:
-                    try:
-                        with winreg.OpenKey(root, branch, 0, flag) as key:
-                            for val_name in ("pv", "version", "EBWebView"):
-                                try:
-                                    val, _ = winreg.QueryValueEx(key, val_name)
-                                    if str(val).strip():
-                                        return True
-                                except Exception:
-                                    continue
-                    except Exception:
-                        continue
+    try:
+        if available:
+            wf.Chromium = Chromium
+            wf.is_cef = False
+            wf.is_chromium = True
+            wf.renderer = "edgechromium"
+        else:
+            # The registry probe may have selected Chromium despite stale entries.
+            # Explicitly select MSHTML so the recovery HTML can still be displayed.
+            from webview.platforms import mshtml as IE
 
-    # 2. Windows Uninstall keys
-    for root in roots:
-        for branch in (
-            r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft EdgeWebView",
-            r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft EdgeWebView",
-        ):
-            for flag in access_flags:
-                try:
-                    with winreg.OpenKey(root, branch, 0, flag) as key:
-                        for val_name in (
-                            "DisplayVersion",
-                            "Version",
-                            "InstallLocation",
-                        ):
-                            try:
-                                val, _ = winreg.QueryValueEx(key, val_name)
-                                if str(val).strip():
-                                    return True
-                            except Exception:
-                                continue
-                except Exception:
-                    continue
-
-    return False
+            IE._set_ie_mode()
+            wf.IE = IE
+            wf.is_cef = False
+            wf.is_chromium = False
+            wf.renderer = "mshtml"
+    except Exception as exc:
+        return finish(
+            False,
+            getattr(wf, "renderer", "unavailable"),
+            f"{type(exc).__name__}: {exc}",
+        )
+    return finish(available, wf.renderer)
 
 
-def _check_webview2_filesystem(extra_dirs: tuple[str, ...] | None = None) -> bool:
-    """Verify if msedgewebview2.exe or EmbeddedBrowserWebView.dll exist in known folders."""
-    base_dirs: list[str] = []
-    if extra_dirs:
-        base_dirs.extend(extra_dirs)
-    else:
-        for env_var in ("ProgramFiles(x86)", "ProgramFiles", "LOCALAPPDATA"):
-            val = os.environ.get(env_var, "")
-            if val:
-                base_dirs.append(
-                    os.path.join(val, "Microsoft", "EdgeWebView", "Application")
-                )
+def has_webview2_runtime(*, activate_renderer: bool = True) -> bool:
+    """Require native loader detection on Windows; other platforms use WebKit.
 
-    for base_dir in base_dirs:
-        if not os.path.isdir(base_dir):
-            continue
-        try:
-            for entry in os.scandir(base_dir):
-                if entry.is_dir():
-                    exe_path = os.path.join(entry.path, "msedgewebview2.exe")
-                    if os.path.isfile(exe_path) and os.path.getsize(exe_path) > 0:
-                        return True
-                    for sub in ("x64", "x86", "arm64"):
-                        dll_path = os.path.join(
-                            entry.path, "EBWebView", sub, "EmbeddedBrowserWebView.dll"
-                        )
-                        if os.path.isfile(dll_path) and os.path.getsize(dll_path) > 0:
-                            return True
-        except Exception:
-            continue
-    return False
-
-
-def has_webview2_runtime() -> bool:
-    """Robust multi-tier detection for WebView2 Runtime on Windows.
-
-    Checks:
-    1. Native pywebview / CoreWebView2Environment loader
-    2. Windows registry (all channels, scopes HKCU/HKLM, 32/64-bit views, Clients/ClientState/Uninstall)
-    3. Filesystem existence in standard EdgeWebView application directories
+    Set activate_renderer=False when polling a recovery window that already uses
+    MSHTML. The new process will select Chromium after the installation succeeds.
     """
     if sys.platform != "win32":
+        if activate_renderer:
+            record_startup_diagnostic(
+                status="not_required",
+                renderer="platform-default",
+                runtime_available=None,
+            )
         return True
 
-    return (
-        _check_webview2_native()
-        or _check_webview2_registry()
-        or _check_webview2_filesystem()
-    )
+    return _check_webview2_native(activate_renderer=activate_renderer)
 
 
 def build_missing_webview2_html() -> str:
@@ -431,8 +373,8 @@ def start_webview2_monitor(window: Any, stop_event: threading.Event) -> None:
             if stop_event.wait(1.5):
                 break
 
-            if has_webview2_runtime():
-                print("[*] WebView2 Runtime rilevato! Eseguo il riavvio...")
+            if has_webview2_runtime(activate_renderer=False):
+                get_logger().info("WebView2 rilevato dal monitor; riavvio richiesto.")
                 js_code = """
                 var box = document.getElementById('status-box');
                 var dot = document.getElementById('status-dot');

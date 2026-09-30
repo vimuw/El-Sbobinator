@@ -120,6 +120,92 @@ class BuildReleaseTests(unittest.TestCase):
             mock_run.assert_called_once()
 
 
+class Webview2BuildNoticeTests(unittest.TestCase):
+    def registry(self):
+        registry = MagicMock()
+        registry.HKEY_CURRENT_USER = 1
+        registry.HKEY_LOCAL_MACHINE = 2
+        registry.KEY_READ = 0x20019
+        registry.KEY_WOW64_32KEY = 0x200
+        registry.KEY_WOW64_64KEY = 0x100
+        return registry
+
+    def test_registered_evergreen_version_in_32_bit_view(self):
+        registry = self.registry()
+
+        def open_key(root, branch, reserved, flags):
+            if root == 2 and flags == registry.KEY_READ | registry.KEY_WOW64_32KEY:
+                return MagicMock()
+            raise FileNotFoundError()
+
+        registry.OpenKey.side_effect = open_key
+        registry.QueryValueEx.return_value = ("154.0.4258.48", 1)
+        with (
+            patch.object(build_release.os, "name", "nt"),
+            patch.object(build_release, "winreg", registry, create=True),
+        ):
+            self.assertEqual(
+                build_release.get_windows_webview2_runtime_version(), "154.0.4258.48"
+            )
+
+    def test_uninstalled_or_malformed_versions_are_not_reported(self):
+        for value in (None, "", "0.0.0.0", "broken", "1.2.3", 154):
+            with self.subTest(value=value):
+                registry = self.registry()
+                registry.QueryValueEx.return_value = (value, 1)
+                with (
+                    patch.object(build_release.os, "name", "nt"),
+                    patch.object(build_release, "winreg", registry, create=True),
+                ):
+                    self.assertIsNone(
+                        build_release.get_windows_webview2_runtime_version()
+                    )
+
+    def test_leftover_binary_and_uninstall_marker_do_not_count_as_registration(self):
+        registry = self.registry()
+
+        def open_key(root, branch, reserved, flags):
+            if "Uninstall" in branch or "ClientState" in branch:
+                return MagicMock()
+            raise FileNotFoundError()
+
+        registry.OpenKey.side_effect = open_key
+        registry.QueryValueEx.return_value = ("154.0.4258.48", 1)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            binary = (
+                Path(tmpdir)
+                / "Microsoft"
+                / "EdgeWebView"
+                / "Application"
+                / "154.0.4258.48"
+                / "msedgewebview2.exe"
+            )
+            binary.parent.mkdir(parents=True)
+            binary.write_bytes(b"x")
+            with (
+                patch.object(build_release.os, "name", "nt"),
+                patch.object(build_release, "winreg", registry, create=True),
+                patch.dict(
+                    build_release.os.environ,
+                    {
+                        "LOCALAPPDATA": tmpdir,
+                        "ProgramFiles": "",
+                        "ProgramFiles(x86)": "",
+                    },
+                ),
+            ):
+                self.assertIsNone(build_release.get_windows_webview2_runtime_version())
+
+    def test_non_windows_does_not_query_registry(self):
+        registry = self.registry()
+        with (
+            patch.object(build_release.os, "name", "posix"),
+            patch.object(build_release, "winreg", registry, create=True),
+        ):
+            self.assertIsNone(build_release.get_windows_webview2_runtime_version())
+        registry.OpenKey.assert_not_called()
+
+
 class WriteSha256Tests(unittest.TestCase):
     def test_round_trip_digest_matches_known_bytes(self):
         import hashlib

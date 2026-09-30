@@ -7,12 +7,12 @@ import tempfile
 import threading
 import time
 import unittest
+from types import ModuleType
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from el_sbobinator.utils.webview2_recovery import (
-    _check_webview2_filesystem,
     _check_webview2_native,
-    _check_webview2_registry,
     build_missing_webview2_html,
     clear_webview2_cache,
     get_boot_bg_color,
@@ -22,177 +22,164 @@ from el_sbobinator.utils.webview2_recovery import (
 
 
 class Webview2RecoveryTests(unittest.TestCase):
-    def test_has_webview2_runtime_non_windows(self):
-        with patch.object(sys, "platform", "linux"):
-            self.assertTrue(has_webview2_runtime())
+    def setUp(self):
+        recorder = patch(
+            "el_sbobinator.utils.webview2_recovery.record_startup_diagnostic"
+        )
+        self.record_startup = recorder.start()
+        self.addCleanup(recorder.stop)
 
-    def test_has_webview2_runtime_windows_found(self):
-        with patch.object(sys, "platform", "win32"):
-            mock_winreg = MagicMock()
-            mock_key = MagicMock()
-            mock_winreg.OpenKey.return_value.__enter__.return_value = mock_key
-            mock_winreg.QueryValueEx.return_value = ("120.0.2210.144", 1)
+    def native_modules(
+        self,
+        *,
+        selected: bool = False,
+        version: str | None = "120.0.2210.144",
+        error: Exception | None = None,
+    ):
+        platforms: Any = ModuleType("webview.platforms")
+        wf: Any = ModuleType("webview.platforms.winforms")
+        wf.is_chromium = selected
+        wf.is_cef = False
+        wf.renderer = "edgechromium" if selected else "mshtml"
+        wf.BrowserView = MagicMock()
+        chromium: Any = ModuleType("webview.platforms.edgechromium")
+        chromium.CoreWebView2Environment = MagicMock()
+        chromium.CoreWebView2Environment.GetAvailableBrowserVersionString.return_value = version
+        chromium.CoreWebView2Environment.GetAvailableBrowserVersionString.side_effect = error
+        ie: Any = ModuleType("webview.platforms.mshtml")
+        ie._set_ie_mode = MagicMock()
+        platforms.winforms = wf
+        platforms.edgechromium = chromium
+        platforms.mshtml = ie
+        return (
+            {
+                "webview.platforms": platforms,
+                "webview.platforms.winforms": wf,
+                "webview.platforms.edgechromium": chromium,
+                "webview.platforms.mshtml": ie,
+            },
+            wf,
+            chromium,
+            ie,
+        )
 
+    def test_has_webview2_runtime_non_windows_skips_native_probe(self):
+        for platform in ("darwin", "linux"):
             with (
-                patch.dict(sys.modules, {"winreg": mock_winreg}),
+                self.subTest(platform=platform),
+                patch.object(sys, "platform", platform),
                 patch(
-                    "el_sbobinator.utils.webview2_recovery._check_webview2_native",
-                    return_value=False,
-                ),
+                    "el_sbobinator.utils.webview2_recovery._check_webview2_native"
+                ) as probe,
             ):
                 self.assertTrue(has_webview2_runtime())
+                probe.assert_not_called()
 
-    def test_has_webview2_runtime_windows_not_found(self):
-        with patch.object(sys, "platform", "win32"):
-            mock_winreg = MagicMock()
-            mock_winreg.OpenKey.side_effect = OSError("Key not found")
-
-            with (
-                patch.dict(sys.modules, {"winreg": mock_winreg}),
-                patch(
-                    "el_sbobinator.utils.webview2_recovery._check_webview2_native",
-                    return_value=False,
-                ),
-                patch(
-                    "el_sbobinator.utils.webview2_recovery._check_webview2_filesystem",
-                    return_value=False,
-                ),
-            ):
-                self.assertFalse(has_webview2_runtime())
-
-    def test_has_webview2_runtime_native_detected(self):
-        with (
-            patch.object(sys, "platform", "win32"),
-            patch(
-                "el_sbobinator.utils.webview2_recovery._check_webview2_native",
-                return_value=True,
-            ),
-        ):
-            self.assertTrue(has_webview2_runtime())
-
-    def test_check_webview2_native_when_already_chromium(self):
-        mock_platforms = MagicMock()
-        mock_wf = MagicMock()
-        mock_wf.is_chromium = True
-        mock_platforms.winforms = mock_wf
-        with patch.dict(
-            sys.modules,
-            {
-                "webview.platforms": mock_platforms,
-                "webview.platforms.winforms": mock_wf,
-            },
-        ):
+    def test_native_loader_overrides_missing_registry_detection(self):
+        modules, wf, chromium, _ = self.native_modules(selected=False)
+        with patch.dict(sys.modules, modules):
             self.assertTrue(_check_webview2_native())
+        chromium.CoreWebView2Environment.GetAvailableBrowserVersionString.assert_called_once_with(
+            None
+        )
+        self.assertTrue(wf.is_chromium)
+        self.assertTrue(self.record_startup.call_args.kwargs["runtime_available"])
+        self.assertEqual(wf.renderer, "edgechromium")
+        self.assertIs(wf.Chromium, chromium)
 
-    def test_check_webview2_native_activates_edgechromium_fallback(self):
-        mock_platforms = MagicMock()
-        mock_wf = MagicMock()
-        mock_wf.is_chromium = False
-        mock_chromium = MagicMock()
-        mock_chromium.CoreWebView2Environment.GetAvailableBrowserVersionString.return_value = "120.0.2210.144"
-        mock_platforms.winforms = mock_wf
-        mock_platforms.edgechromium = mock_chromium
-        with (
-            patch.dict(
-                sys.modules,
-                {
-                    "webview.platforms": mock_platforms,
-                    "webview.platforms.winforms": mock_wf,
-                    "webview.platforms.edgechromium": mock_chromium,
-                },
-            ),
-        ):
+    def test_cached_chromium_selection_still_requires_native_confirmation(self):
+        modules, wf, _, ie = self.native_modules(
+            selected=True, error=FileNotFoundError()
+        )
+        with patch.dict(sys.modules, modules):
+            self.assertFalse(_check_webview2_native())
+        self.assertFalse(wf.is_chromium)
+        self.assertEqual(wf.renderer, "mshtml")
+        self.assertIs(wf.IE, ie)
+        ie._set_ie_mode.assert_called_once()
+        self.assertIn(
+            "FileNotFoundError", self.record_startup.call_args.kwargs["native_error"]
+        )
+
+    def test_native_loader_confirms_already_selected_chromium(self):
+        modules, wf, chromium, _ = self.native_modules(selected=True)
+        with patch.dict(sys.modules, modules):
             self.assertTrue(_check_webview2_native())
-            self.assertTrue(mock_wf.is_chromium)
-            self.assertEqual(mock_wf.Chromium, mock_chromium)
+        chromium.CoreWebView2Environment.GetAvailableBrowserVersionString.assert_called_once_with(
+            None
+        )
+        self.assertTrue(wf.is_chromium)
+
+    def test_empty_native_version_uses_recovery_renderer(self):
+        for version in (None, "", "   "):
+            with self.subTest(version=version):
+                modules, wf, _, _ = self.native_modules(selected=True, version=version)
+                with patch.dict(sys.modules, modules):
+                    self.assertFalse(_check_webview2_native())
+                self.assertEqual(wf.renderer, "mshtml")
 
     def test_check_webview2_native_handles_import_error(self):
         with patch.dict(sys.modules, {"webview.platforms.winforms": None}):
             self.assertFalse(_check_webview2_native())
 
-    def test_check_webview2_filesystem_scans_and_finds_dll(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            dll_dir = os.path.join(tmpdir, "154.0.4258.37", "EBWebView", "x64")
-            os.makedirs(dll_dir, exist_ok=True)
-            dll_file = os.path.join(dll_dir, "EmbeddedBrowserWebView.dll")
-            with open(dll_file, "wb") as f:
-                f.write(b"MZfakebinary")
-            self.assertTrue(_check_webview2_filesystem(extra_dirs=(tmpdir,)))
+    def test_missing_edge_loader_uses_recovery_renderer(self):
+        modules, wf, _, _ = self.native_modules(selected=True)
+        modules["webview.platforms"].edgechromium = None
+        modules["webview.platforms.edgechromium"] = None
+        with patch.dict(sys.modules, modules):
+            self.assertFalse(_check_webview2_native())
+        self.assertEqual(wf.renderer, "mshtml")
 
-    def test_check_webview2_registry_uninstall_key_detected(self):
-        mock_winreg = MagicMock()
-
-        # EdgeUpdate open fails, Uninstall open succeeds
-        def fake_open_key(root, branch, reserved, flag):
-            if "Uninstall" in branch:
-                key = MagicMock()
-                return key.__enter__.return_value
-            raise OSError("Key not found")
-
-        mock_winreg.OpenKey.side_effect = fake_open_key
-        mock_winreg.QueryValueEx.return_value = ("120.0.2210.144", 1)
-
-        with patch.dict(sys.modules, {"winreg": mock_winreg}):
-            self.assertTrue(_check_webview2_registry())
-
-    def test_check_webview2_registry_import_error(self):
-        with patch.dict(sys.modules, {"winreg": None}):
-            self.assertFalse(_check_webview2_registry())
-
-    def test_check_webview2_filesystem_default_env_vars(self):
+    def test_leftover_binary_and_stale_registry_cannot_unlock_webui(self):
+        modules, wf, _, _ = self.native_modules(
+            selected=True, error=FileNotFoundError()
+        )
+        registry = MagicMock()
+        registry.QueryValueEx.return_value = (r"C:\deleted-runtime", 1)
+        modules["winreg"] = registry
         with tempfile.TemporaryDirectory() as tmpdir:
             app_dir = os.path.join(
                 tmpdir, "Microsoft", "EdgeWebView", "Application", "154.0.4258.37"
             )
-            os.makedirs(app_dir, exist_ok=True)
-            exe_file = os.path.join(app_dir, "msedgewebview2.exe")
-            with open(exe_file, "wb") as f:
-                f.write(b"fake")
-
-            with patch.dict(
-                os.environ,
-                {"LOCALAPPDATA": tmpdir, "ProgramFiles": "", "ProgramFiles(x86)": ""},
+            os.makedirs(app_dir)
+            with open(os.path.join(app_dir, "msedgewebview2.exe"), "wb") as f:
+                f.write(b"x")
+            with (
+                patch.object(sys, "platform", "win32"),
+                patch.dict(sys.modules, modules),
+                patch.dict(
+                    os.environ,
+                    {
+                        "LOCALAPPDATA": tmpdir,
+                        "ProgramFiles": "",
+                        "ProgramFiles(x86)": "",
+                    },
+                ),
             ):
-                self.assertTrue(_check_webview2_filesystem())
+                self.assertFalse(has_webview2_runtime())
+        self.assertEqual(wf.renderer, "mshtml")
 
-    def test_check_webview2_filesystem_scandir_exception(self):
-        with (
-            patch("os.path.isdir", return_value=True),
-            patch("os.scandir", side_effect=OSError("Boom")),
-        ):
-            self.assertFalse(_check_webview2_filesystem(extra_dirs=("/fake/dir",)))
-
-    def test_has_webview2_runtime_filesystem_fallback_detected(self):
+    def test_polling_installation_preserves_live_mshtml_window(self):
+        modules, wf, _, ie = self.native_modules(selected=False)
+        wf.IE = ie
+        original_browser = wf.BrowserView
         with (
             patch.object(sys, "platform", "win32"),
-            patch(
-                "el_sbobinator.utils.webview2_recovery._check_webview2_native",
-                return_value=False,
-            ),
-            patch(
-                "el_sbobinator.utils.webview2_recovery._check_webview2_registry",
-                return_value=False,
-            ),
-            patch(
-                "el_sbobinator.utils.webview2_recovery._check_webview2_filesystem",
-                return_value=True,
-            ),
+            patch.dict(sys.modules, modules),
         ):
-            self.assertTrue(has_webview2_runtime())
+            self.assertTrue(has_webview2_runtime(activate_renderer=False))
+        self.assertFalse(wf.is_chromium)
+        self.assertEqual(wf.renderer, "mshtml")
+        self.assertIs(wf.IE, ie)
+        self.assertIs(wf.BrowserView, original_browser)
+        ie._set_ie_mode.assert_not_called()
+        self.record_startup.assert_not_called()
 
-    def test_check_webview2_filesystem_scans_and_finds_exe(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            ver_dir = os.path.join(tmpdir, "154.0.4258.37")
-            os.makedirs(ver_dir, exist_ok=True)
-            exe_file = os.path.join(ver_dir, "msedgewebview2.exe")
-            with open(exe_file, "wb") as f:
-                f.write(b"MZfakebinary")
-
-            self.assertTrue(_check_webview2_filesystem(extra_dirs=(tmpdir,)))
-
-    def test_check_webview2_filesystem_empty_dir_returns_false(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            self.assertFalse(_check_webview2_filesystem(extra_dirs=(tmpdir,)))
+    def test_renderer_setup_error_is_handled(self):
+        modules, _, _, ie = self.native_modules(error=FileNotFoundError())
+        ie._set_ie_mode.side_effect = OSError("Cannot configure recovery renderer")
+        with patch.dict(sys.modules, modules):
+            self.assertFalse(_check_webview2_native())
 
     def test_build_missing_webview2_html(self):
         html = build_missing_webview2_html()
@@ -311,12 +298,13 @@ class Webview2RecoveryTests(unittest.TestCase):
             patch(
                 "el_sbobinator.utils.webview2_recovery.has_webview2_runtime",
                 return_value=True,
-            ),
+            ) as probe,
             patch("subprocess.Popen") as mock_popen,
             patch("os._exit", side_effect=lambda code: stop_event.set()) as mock_exit,
         ):
             start_webview2_monitor(mock_window, stop_event)
             time.sleep(0.08)
+            probe.assert_called_once_with(activate_renderer=False)
             mock_window.evaluate_js.assert_called_once()
             mock_popen.assert_called_once()
             mock_window.destroy.assert_called_once()
