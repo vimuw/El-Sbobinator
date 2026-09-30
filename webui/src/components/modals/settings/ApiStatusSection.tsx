@@ -9,24 +9,22 @@ interface ApiStatusSectionProps {
 export function ApiStatusSection({ apiUsage, isLoadingUsage }: ApiStatusSectionProps) {
   const status = apiUsage?.primary_status;
   const hasCredentials = Boolean(apiUsage?.credentials?.length || apiUsage?.keys?.length);
-  const ready = !isLoadingUsage && hasCredentials && (status === 'operational' || status === 'degraded');
-  if (ready) return null;
+  const ready = hasCredentials && (status === 'operational' || status === 'degraded');
+  if (ready || (isLoadingUsage && !apiUsage)) return null;
 
-  const title = isLoadingUsage ? 'Verifica dello stato API…'
-    : !apiUsage ? 'Stato API non disponibile'
+  const title = !apiUsage ? 'Stato API non disponibile'
     : !hasCredentials ? 'Configura una chiave API'
     : status === 'rate_limited' ? 'In attesa: ripresa automatica'
     : status === 'quota_exhausted' ? 'Quota giornaliera esaurita'
     : status === 'credential_error' ? 'Verifica la chiave API'
     : 'Stato API da verificare';
-  const description = isLoadingUsage ? null
-    : !apiUsage ? 'Aggiorna lo stato o verifica la connessione in Diagnostica.'
+  const description = !apiUsage ? 'Premi “Verifica connessione” per riprovare.'
     : !hasCredentials ? 'Inserisci una chiave nella sezione qui sotto.'
     : status === 'rate_limited' ? apiUsage.status_message || 'Il limite temporaneo richiede una pausa; il sistema riprova automaticamente.'
     : status === 'quota_exhausted' ? `${apiUsage.next_reset_info || 'Attendi il ripristino della quota.'} Puoi verificare altre chiavi o scegliere un altro modello in questa scheda.`
-    : status === 'credential_error' ? 'Controlla la chiave e i permessi del progetto, poi aggiorna lo stato.'
+    : status === 'credential_error' ? 'Controlla la chiave e i permessi del progetto, poi premi “Verifica connessione”.'
     : null;
-  const Icon = isLoadingUsage || status === 'rate_limited' ? Clock : AlertCircle;
+  const Icon = status === 'rate_limited' ? Clock : AlertCircle;
 
   return (
     <div className="premium-panel p-3.5 space-y-3">

@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { QuotasSection } from './QuotasSection';
 import { ActivitySection } from './ActivitySection';
 import { ApiStatusSection } from './ApiStatusSection';
@@ -77,14 +77,12 @@ describe('QuotasSection', () => {
     expect(screen.queryByRole('button', { name: 'Configura modelli in Generale' })).toBeNull();
   });
 
-  it('keeps activity visible and refreshes without a collapse control', () => {
-    const refresh = vi.fn();
-    const { container } = render(<ActivitySection apiUsage={dummyUsage} onRefreshUsage={refresh} />);
+  it('keeps activity visible without a refresh or collapse control', () => {
+    const { container } = render(<ActivitySection apiUsage={dummyUsage} onRetry={vi.fn()} />);
     expect(container.querySelector('details')).toBeNull();
     expect(screen.getByText('Trascrizioni')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Aggiorna attività di oggi' }));
-    expect(refresh).toHaveBeenCalledOnce();
-    expect(screen.getByText('Trascrizioni')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Aggiorna attività di oggi' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Riprova' })).toBeNull();
     expect(screen.getByText('Ritentativi').title).toContain('automaticamente');
     expect(screen.getByText('Fallite').title).toContain('sbobine fallite');
     expect(screen.queryByText('Quote per modello')).toBeNull();
@@ -111,15 +109,27 @@ describe('QuotasSection', () => {
     const { rerender } = render(<ApiStatusSection {...props} apiUsage={null} />);
     expect(screen.getByText('Stato API non disponibile')).toBeTruthy();
     rerender(<ApiStatusSection {...props} apiUsage={dummyUsage} isLoadingUsage />);
-    expect(screen.getByText('Verifica dello stato API…')).toBeTruthy();
+    expect(screen.queryByRole('status')).toBeNull();
     expect(screen.queryByText('Puoi continuare a trascrivere')).toBeNull();
     rerender(<ApiStatusSection {...props} apiUsage={{ ...dummyUsage, credentials: [] }} />);
     expect(screen.getByText('Configura una chiave API')).toBeTruthy();
   });
 
+  it('keeps actionable errors visible while refreshing without a loading banner', () => {
+    render(<ApiStatusSection apiUsage={{ ...dummyUsage, primary_status: 'credential_error' }} isLoadingUsage />);
+    expect(screen.getByText('Verifica la chiave API')).toBeTruthy();
+    expect(screen.queryByText('Verifica dello stato API…')).toBeNull();
+  });
+
+  it('does not show a temporary unavailable banner during the initial verification', () => {
+    const { container } = render(<ApiStatusSection apiUsage={null} isLoadingUsage />);
+    expect(container.firstChild).toBeNull();
+  });
+
   it('reports missing activity without showing fabricated zero counts', () => {
-    render(<ActivitySection apiUsage={null} onRefreshUsage={vi.fn()} />);
-    expect(screen.getByText('Attività non disponibile. Aggiorna per riprovare.')).toBeTruthy();
+    render(<ActivitySection apiUsage={null} onRetry={vi.fn()} />);
+    expect(screen.getByText('Attività non disponibile.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Riprova' })).toBeTruthy();
     expect(screen.queryByText('0')).toBeNull();
   });
 });

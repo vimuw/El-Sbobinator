@@ -211,9 +211,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const showCloseOnly = activeTab === 'diagnostics' && !hasPendingChanges;
 
 
-  const fetchApiUsage = useCallback(async (forceRefresh = false) => {
+  const usageRequestInFlightRef = useRef(false);
+  const usageRequestIdRef = useRef(0);
+  const fetchApiUsage = useCallback(async (forceRefresh = false, background = false) => {
     if (!window.pywebview?.api?.get_api_usage) return;
-    setIsLoadingUsage(true);
+    if (background && usageRequestInFlightRef.current) return;
+    const requestId = ++usageRequestIdRef.current;
+    usageRequestInFlightRef.current = true;
+    if (!background) setIsLoadingUsage(true);
     try {
       const res = await window.pywebview.api.get_api_usage(
         clearProtectedPrimary
@@ -226,20 +231,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         fallbackModels,
         forceRefresh,
       );
-      if (isMountedRef.current) {
+      if (isMountedRef.current && requestId === usageRequestIdRef.current) {
         setApiUsage(res?.ok && res.result ? res.result : null);
       }
     } catch (e) {
-      if (isMountedRef.current) setApiUsage(null);
+      if (isMountedRef.current && requestId === usageRequestIdRef.current) setApiUsage(null);
       reportClientError('Failed to fetch api usage:', e);
     } finally {
-      if (isMountedRef.current) setIsLoadingUsage(false);
+      // A superseded request must not release the current request's busy state.
+      if (requestId === usageRequestIdRef.current) {
+        usageRequestInFlightRef.current = false;
+        if (!background && isMountedRef.current) setIsLoadingUsage(false);
+      }
     }
   }, [apiKey, clearProtectedPrimary, fallbackKeys, fallbackModels, hasProtectedKey, preferredModel]);
 
   const handleRefreshUsage = useCallback(() => {
     void fetchApiUsage(true);
   }, [fetchApiUsage]);
+
+  const handleRetryActivity = useCallback(() => {
+    void fetchApiUsage();
+  }, [fetchApiUsage]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'diagnostics') return;
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void fetchApiUsage(false, true);
+    }, 10_000);
+    return () => window.clearInterval(intervalId);
+  }, [isOpen, activeTab, fetchApiUsage]);
 
   useEffect(() => {
     if (isOpen) {
@@ -276,9 +297,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     setSaveError(null);
-    if (tab === 'diagnostics' || tab === 'general') {
-      void fetchApiUsage();
-    }
   };
 
   const runEnvironmentValidation = async () => {
@@ -699,7 +717,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <ActivitySection
                         apiUsage={apiUsage}
                         isLoadingUsage={isLoadingUsage}
-                        onRefreshUsage={handleRefreshUsage}
+                        onRetry={handleRetryActivity}
                       />
                       <div className="border-t border-[var(--border-default)]" />
 

@@ -579,7 +579,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
   return (
     <div className="space-y-3">
       {/* 1. Header with count & global actions */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <Key className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
           <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] truncate">
@@ -595,9 +595,10 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
         <div className="flex items-center gap-1.5 shrink-0">
           {onRefreshUsage && (
             <button type="button" onClick={onRefreshUsage} disabled={isLoadingUsage}
-              className="app-button-secondary is-settings-action is-icon"
-              title="Aggiorna stato API" aria-label="Aggiorna stato API">
+              className="app-button-secondary is-settings-action min-w-[166px]"
+              title={isLoadingUsage ? 'Verifica in corso…' : 'Verifica connessione'} aria-label="Verifica connessione">
               <RefreshCw className={`w-4 h-4 ${isLoadingUsage ? 'animate-spin' : ''}`} />
+              <span>{isLoadingUsage ? 'Verifica in corso…' : 'Verifica connessione'}</span>
             </button>
           )}
         </div>
@@ -814,7 +815,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
 
       {/* 4. Quiet Footer Caption with AI Studio link */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-secondary)] leading-relaxed">
-        <span>Le chiavi di riserva subentrano in ordine quando la principale esaurisce la quota (RPD). Le quote sono conteggiate per singolo modello.</span>
+        <span>Le chiavi di riserva subentrano in ordine quando la principale esaurisce la quota giornaliera.</span>
         <a
           href="https://aistudio.google.com/apikey"
           target="_blank"

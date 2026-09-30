@@ -134,6 +134,123 @@ describe('SettingsModal — model parameters chunk display', () => {
 });
 
 describe('SettingsModal — diagnostics environment pending checks', () => {
+  it.each(['success', 'failure', 'rejection'] as const)(
+    'ignores a stale background %s after a newer connection check', async outcome => {
+      vi.useFakeTimers();
+      const usage = (count: number) => ({ ok: true, result: { telemetry: { requests_sent: count } } });
+      let resolvePoll!: (value: unknown) => void;
+      let rejectPoll!: (reason: Error) => void;
+      const getUsage = vi.fn().mockResolvedValue(usage(7));
+      setPywebview({ get_api_usage: getUsage });
+      const { unmount } = render(<SettingsModal {...makeProps()} />);
+      try {
+        await act(async () => {});
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' })); });
+        getUsage.mockImplementationOnce(() => new Promise((resolve, reject) => {
+          resolvePoll = resolve;
+          rejectPoll = reject;
+        }));
+        await act(async () => { vi.advanceTimersByTime(10_000); });
+        getUsage.mockResolvedValue(usage(9));
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Generale' })); });
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Verifica connessione' })); });
+        expect(getUsage.mock.lastCall?.[4]).toBe(true);
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' })); });
+        expect(screen.getByText('9')).toBeTruthy();
+        await act(async () => {
+          if (outcome === 'rejection') rejectPoll(new Error('Delayed bridge failure'));
+          else resolvePoll(outcome === 'success' ? usage(7) : { ok: false });
+        });
+        expect(screen.getByText('9')).toBeTruthy();
+        expect(screen.queryByText('7')).toBeNull();
+        expect(screen.queryByText('Attività non disponibile.')).toBeNull();
+      } finally {
+        unmount();
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it('keeps the current request busy when a superseded request finishes', async () => {
+    vi.useFakeTimers();
+    let resolveOld!: (value: unknown) => void;
+    let resolveCurrent!: (value: unknown) => void;
+    const usage = { ok: true, result: { telemetry: { requests_sent: 9 } } };
+    const getUsage = vi.fn().mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }))
+      .mockImplementationOnce(() => new Promise(resolve => { resolveCurrent = resolve; }))
+      .mockResolvedValue(usage);
+    setPywebview({ get_api_usage: getUsage });
+    const { unmount } = render(<SettingsModal {...makeProps()} />);
+    try {
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' })); });
+      expect(getUsage).toHaveBeenCalledTimes(2);
+      await act(async () => { resolveOld(usage); });
+      expect(screen.getByText('Aggiornamento attività…')).toBeTruthy();
+      await act(async () => { vi.advanceTimersByTime(10_000); });
+      expect(getUsage).toHaveBeenCalledTimes(2);
+      await act(async () => { resolveCurrent(usage); });
+      expect(screen.queryByText('Aggiornamento attività…')).toBeNull();
+      expect(screen.getByText('9')).toBeTruthy();
+      await act(async () => { vi.advanceTimersByTime(10_000); });
+      expect(getUsage).toHaveBeenCalledTimes(3);
+    } finally {
+      unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it('refreshes activity locally every 10 seconds only while diagnostics is open', async () => {
+    vi.useFakeTimers();
+    const getUsage = vi.fn().mockResolvedValue({ ok: true, result: { telemetry: { requests_sent: 7 } } });
+    setPywebview({ get_api_usage: getUsage });
+    const props = makeProps();
+    const { rerender, unmount } = render(<SettingsModal {...props} />);
+    try {
+      await act(async () => {});
+      getUsage.mockClear();
+      await act(async () => { vi.advanceTimersByTime(20_000); });
+      expect(getUsage).not.toHaveBeenCalled();
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' })); });
+      expect(screen.queryByRole('button', { name: 'Aggiorna attività di oggi' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Riprova' })).toBeNull();
+      getUsage.mockResolvedValue({ ok: true, result: { telemetry: { requests_sent: 8 } } });
+      getUsage.mockClear();
+      await act(async () => { vi.advanceTimersByTime(10_000); });
+      expect(getUsage).toHaveBeenCalledTimes(1);
+      expect(getUsage.mock.calls[0][4]).toBe(false);
+      expect(screen.getByText('8')).toBeTruthy();
+      expect(screen.queryByText('Aggiornamento attività…')).toBeNull();
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Archiviazione' })); });
+      getUsage.mockClear();
+      await act(async () => { vi.advanceTimersByTime(20_000); });
+      expect(getUsage).not.toHaveBeenCalled();
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' })); });
+      await act(async () => { rerender(<SettingsModal {...props} isOpen={false} />); });
+      getUsage.mockClear();
+      await act(async () => { vi.advanceTimersByTime(20_000); });
+      expect(getUsage).not.toHaveBeenCalled();
+    } finally {
+      unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it('offers a local retry when activity loading fails', async () => {
+    const getUsage = vi.fn().mockResolvedValue({ ok: false });
+    setPywebview({ get_api_usage: getUsage });
+    render(<SettingsModal {...makeProps()} />);
+    await act(async () => {});
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' })); });
+    expect(screen.getByText('Attività non disponibile.')).toBeTruthy();
+    getUsage.mockResolvedValue({ ok: true, result: { telemetry: { requests_sent: 9 } } });
+    getUsage.mockClear();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Riprova' })); });
+    expect(getUsage).toHaveBeenCalledTimes(1);
+    expect(getUsage.mock.calls[0][4]).toBe(false);
+    expect(screen.getByText('9')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Riprova' })).toBeNull();
+  });
+
   it('shows pending environment checks with "da verificare" status initially', async () => {
     render(
       <SettingsModal

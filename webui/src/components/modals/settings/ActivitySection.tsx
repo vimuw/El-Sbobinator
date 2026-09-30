@@ -1,13 +1,13 @@
-import { Activity, Layers, RefreshCw } from 'lucide-react';
+import { Activity, Layers } from 'lucide-react';
 import type { ApiUsageResult } from '../../../bridge';
 
 interface ActivitySectionProps {
   apiUsage?: ApiUsageResult | null;
   isLoadingUsage?: boolean;
-  onRefreshUsage: () => void;
+  onRetry: () => void;
 }
 
-export function ActivitySection({ apiUsage, isLoadingUsage, onRefreshUsage }: ActivitySectionProps) {
+export function ActivitySection({ apiUsage, isLoadingUsage, onRetry }: ActivitySectionProps) {
   return (
     <div className="space-y-3" aria-busy={isLoadingUsage}>
       <div className="flex items-center justify-between gap-3">
@@ -15,15 +15,13 @@ export function ActivitySection({ apiUsage, isLoadingUsage, onRefreshUsage }: Ac
           <Activity className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
           Attività di oggi
         </h3>
-        <button type="button" onClick={onRefreshUsage} disabled={isLoadingUsage}
-          className="app-button-secondary is-settings-action is-icon shrink-0"
-          aria-label="Aggiorna attività di oggi" title="Aggiorna attività di oggi">
-          <RefreshCw className={`w-4 h-4 ${isLoadingUsage ? 'animate-spin' : ''}`} />
-        </button>
       </div>
 
       {isLoadingUsage && <p role="status" className="text-xs text-[var(--text-secondary)] mt-3">Aggiornamento attività…</p>}
-      {!isLoadingUsage && !apiUsage && <p role="status" className="text-xs text-[var(--text-secondary)] mt-3">Attività non disponibile. Aggiorna per riprovare.</p>}
+      {!isLoadingUsage && !apiUsage && <div className="flex items-center justify-between gap-3">
+        <p role="status" className="text-xs text-[var(--text-secondary)]">Attività non disponibile.</p>
+        <button type="button" onClick={onRetry} className="app-button-secondary is-settings-action">Riprova</button>
+      </div>}
       {apiUsage && <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* Card 1: Work Done */}
         <div className="premium-panel p-3.5 space-y-2">
