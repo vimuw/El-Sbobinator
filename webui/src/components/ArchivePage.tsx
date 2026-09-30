@@ -462,7 +462,7 @@ export function ArchivePage({
         </h3>
 
         {/* Search + Sort + Actions */}
-        <div className="sticky top-0 z-20 py-2 -my-2 bg-[var(--bg-base)]/95 backdrop-blur-md flex flex-col gap-1.5">
+        <div className="archive-sticky-toolbar sticky top-0 z-20 py-2 -my-2 bg-[var(--bg-base)]/95 backdrop-blur-md flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
             <div className="search-pill-wrap">
               {isSearching

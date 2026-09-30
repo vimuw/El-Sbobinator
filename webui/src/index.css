@@ -3454,6 +3454,17 @@ input::-webkit-contacts-auto-fill-button {
 
 /* ═══ SEARCH & FILTER CONTROLS ═══ */
 
+.archive-sticky-toolbar::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--border-subtle);
+  pointer-events: none;
+}
+
 .search-pill-wrap {
   position: relative;
   display: flex;
