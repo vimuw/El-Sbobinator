@@ -72,18 +72,18 @@ export function ArchiveSelectionBar({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 28, scale: 0.96 }}
       transition={{ duration: 0.18, ease: 'easeOut' }}
-      className="archive-selection-bar fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 p-1.5 sm:p-2 max-w-[95vw] overflow-visible"
+      className="archive-selection-bar fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-wrap justify-center items-center gap-1 sm:gap-2 p-2 w-max max-w-[95vw] overflow-visible"
     >
       {/* 1. Count & Toggle All (unified minimal button with micro-animation) */}
       <button
         type="button"
         onClick={allSelected ? onDeselectAll : onSelectAll}
-        className="group/toggle flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
+        className="group/toggle flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
         style={{ color: 'var(--text-primary)' }}
         title={allSelected ? 'Deseleziona tutte le sbobine' : `Seleziona tutte le ${totalCount} sbobine`}
       >
         <span
-          className="px-1.5 py-0.5 rounded text-[11px] font-bold shrink-0 transition-transform duration-200 group-hover/toggle:scale-110"
+          className="px-1.5 py-0.5 rounded text-xs font-bold shrink-0 transition-transform duration-200 group-hover/toggle:scale-110"
           style={{
             background: 'var(--accent-subtle)',
             color: 'var(--accent-text)',
@@ -96,15 +96,15 @@ export function ArchiveSelectionBar({
         <span>{allSelected ? 'Deseleziona' : 'Seleziona tutte'}</span>
       </button>
 
-      <div className="w-px h-5 shrink-0" style={{ background: 'var(--border-subtle)' }} />
+      <div className="w-px h-6 shrink-0" style={{ background: 'var(--border-subtle)' }} />
 
       {/* 2. Assign to Folder Popover ("Aggiungi" with micro-animation) */}
-      <div className="relative">
+      <div className="sm:relative">
         <button
           ref={folderButtonRef}
           type="button"
           onClick={() => setIsFolderMenuOpen(v => !v)}
-          className="group/add flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
+          className="group/add flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
           style={{
             background: isFolderMenuOpen ? 'var(--accent-subtle)' : undefined,
             color: 'var(--text-primary)',
@@ -127,19 +127,19 @@ export function ArchiveSelectionBar({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.95 }}
               transition={{ duration: 0.14, ease: 'easeOut' }}
-              className="absolute bottom-full left-0 mb-4 w-56 rounded-[10px] border overflow-hidden z-50 p-1.5 flex flex-col gap-0.5"
+              className="absolute bottom-full left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 mb-3 w-[280px] max-w-[90vw] rounded-[10px] border overflow-hidden z-50 p-2 flex flex-col gap-0.5"
               style={{
                 background: 'var(--bg-elevated)',
                 borderColor: 'var(--border-strong)',
                 boxShadow: 'var(--shadow-strong)',
               }}
             >
-              <div className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+              <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                 Seleziona raccolta
               </div>
 
               {folders.length === 0 && (
-                <div className="px-2.5 py-2 text-xs text-center" style={{ color: 'var(--text-muted)' }}>
+                <div className="px-3 py-2 text-sm text-center" style={{ color: 'var(--text-muted)' }}>
                   Nessuna cartella creata
                 </div>
               )}
@@ -153,12 +153,12 @@ export function ArchiveSelectionBar({
                       onAssignToFolder(folder.id);
                       setIsFolderMenuOpen(false);
                     }}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-semibold tracking-tight text-left transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
+                    className="w-full flex items-center gap-3 min-h-10 px-3 py-2 rounded-lg text-sm font-semibold tracking-tight text-left transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
                     style={{ color: 'var(--text-primary)' }}
                   >
                     <span className="folder-color-dot is-small" style={{ '--folder-color': folder.color || DEFAULT_FOLDER_COLOR } as React.CSSProperties} />
                     <span className="truncate flex-1">{folder.name}</span>
-                    <span className="text-[10px] shrink-0 font-medium" style={{ color: 'var(--text-muted)' }}>
+                    <span className="text-xs shrink-0 font-medium" style={{ color: 'var(--text-muted)' }}>
                       {folder.session_dirs.length}
                     </span>
                   </button>
@@ -173,10 +173,10 @@ export function ArchiveSelectionBar({
                   setIsFolderMenuOpen(false);
                   onNewFolder();
                 }}
-                className="group/newfolder w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold tracking-tight text-left transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
+                className="group/newfolder w-full flex items-center gap-2 min-h-10 px-3 py-2 rounded-lg text-sm font-semibold tracking-tight text-left transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
                 style={{ color: 'var(--accent-text)' }}
               >
-                <Plus className="w-3.5 h-3.5 shrink-0 transition-transform duration-200 group-hover/newfolder:rotate-90 group-hover/newfolder:scale-110" />
+                <Plus className="w-4 h-4 shrink-0 transition-transform duration-200 group-hover/newfolder:rotate-90 group-hover/newfolder:scale-110" />
                 <span>Nuova raccolta...</span>
               </button>
             </motion.div>
@@ -189,7 +189,7 @@ export function ArchiveSelectionBar({
         <button
           type="button"
           onClick={onRemoveFromFolder}
-          className="group/remove flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
+          className="group/remove flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
           style={{ color: 'var(--text-primary)' }}
           title="Rimuovi le sbobine selezionate dalla cartella"
         >
@@ -206,7 +206,7 @@ export function ArchiveSelectionBar({
         <button
           type="button"
           onClick={onDeleteSelected}
-          className="group/del flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--error-subtle)]"
+          className="group/del flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--error-subtle)]"
           style={{ color: 'var(--error-text)' }}
           title="Elimina le sbobine selezionate dal disco"
         >
@@ -220,13 +220,13 @@ export function ArchiveSelectionBar({
 
       {onClose && (
         <>
-          <div className="w-px h-5 shrink-0" style={{ background: 'var(--border-subtle)' }} />
+          <div className="w-px h-6 shrink-0" style={{ background: 'var(--border-subtle)' }} />
 
           {/* 5. Close / Cancel Selection ("X" with micro-animation) */}
           <button
             type="button"
             onClick={onClose}
-            className="group/close p-1.5 rounded-lg text-xs transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
+            className="group/close p-2.5 rounded-lg text-sm transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
             style={{ color: 'var(--text-primary)' }}
             aria-label="Annulla selezione"
             title="Annulla selezione"
