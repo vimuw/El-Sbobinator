@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 
 export interface CustomSelectOption {
@@ -30,8 +30,45 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuLayout, setMenuLayout] = useState({ opensUp: false, maxHeight: 240 });
 
   const selectedOption = options.find(opt => opt.value === value);
+
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const updateLayout = () => {
+      const container = containerRef.current;
+      const menu = menuRef.current;
+      if (!container || !menu) return;
+      const rect = container.getBoundingClientRect();
+      let top = 0;
+      let bottom = window.innerHeight;
+      // Stay inside scrollable/clipping ancestors, including the modal's content area.
+      for (let parent = container.parentElement; parent; parent = parent.parentElement) {
+        if (/(auto|scroll|hidden|clip)/.test(window.getComputedStyle(parent).overflowY)) {
+          const bounds = parent.getBoundingClientRect();
+          top = Math.max(top, bounds.top + parent.clientTop);
+          bottom = Math.min(bottom, bounds.top + parent.clientTop + parent.clientHeight);
+        }
+      }
+      const gap = 6;
+      const above = Math.max(0, rect.top - top - gap);
+      const below = Math.max(0, bottom - rect.bottom - gap);
+      const desiredHeight = Math.min(240, menu.scrollHeight + 2);
+      const opensUp = below < desiredHeight && above > below;
+      const maxHeight = Math.min(240, opensUp ? above : below);
+      setMenuLayout(previous => previous.opensUp === opensUp && previous.maxHeight === maxHeight
+        ? previous : { opensUp, maxHeight });
+    };
+    updateLayout();
+    window.addEventListener('resize', updateLayout);
+    document.addEventListener('scroll', updateLayout, true);
+    return () => {
+      window.removeEventListener('resize', updateLayout);
+      document.removeEventListener('scroll', updateLayout, true);
+    };
+  }, [isOpen, options]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | PointerEvent) => {
@@ -126,8 +163,10 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
       {/* Menu Overlay */}
       {isOpen && (
         <div
+          ref={menuRef}
           role="listbox"
-          className="select-dropdown absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-default)] overflow-hidden py-1 max-h-60 overflow-y-auto app-scroll"
+          style={{ maxHeight: menuLayout.maxHeight, transformOrigin: menuLayout.opensUp ? 'bottom center' : 'top center' }}
+          className={`select-dropdown absolute left-0 right-0 ${menuLayout.opensUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} z-50 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-default)] overflow-hidden py-1 overflow-y-auto app-scroll`}
         >
           {options.map(opt => {
             const isSelected = opt.value === value;

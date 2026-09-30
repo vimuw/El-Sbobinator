@@ -1,7 +1,9 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { CustomSelect, type CustomSelectOption } from './CustomSelect';
+
+afterEach(() => { vi.restoreAllMocks(); });
 
 describe('CustomSelect', () => {
   const options: CustomSelectOption[] = [
@@ -9,6 +11,34 @@ describe('CustomSelect', () => {
     { value: 'm2', label: 'Model Two', sublabel: 'gemini-1.5-pro' },
     { value: 'm3', label: 'Disabled Model', disabled: true },
   ];
+
+  it.each([
+    { triggerTop: 600, boundaryBottom: 700, direction: 'bottom-full', height: 240 },
+    { triggerTop: 200, boundaryBottom: 700, direction: 'top-full', height: 240 },
+    { triggerTop: 200, boundaryBottom: 300, direction: 'bottom-full', height: 94 },
+  ])('fits the menu inside the scroll area: $direction, $height pixels', ({ triggerTop, boundaryBottom, direction, height }) => {
+    const { getByTestId, unmount } = render(
+      <div data-testid="scroll-area" style={{ overflowY: 'auto' }}>
+        <CustomSelect value="m1" onChange={vi.fn()} options={options} />
+      </div>,
+    );
+    const boundary = getByTestId('scroll-area');
+    const trigger = screen.getByRole('button', { name: /Model One/i });
+    const container = trigger.parentElement!;
+    vi.spyOn(boundary, 'getBoundingClientRect').mockReturnValue({ top: 100, bottom: boundaryBottom } as DOMRect);
+    vi.spyOn(boundary, 'clientHeight', 'get').mockReturnValue(boundaryBottom - 100);
+    vi.spyOn(container, 'getBoundingClientRect').mockReturnValue({ top: triggerTop, bottom: triggerTop + 40 } as DOMRect);
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(400);
+    fireEvent.click(trigger);
+    const menu = screen.getByRole('listbox');
+    expect(menu.classList.contains(direction)).toBe(true);
+    expect(menu.style.maxHeight).toBe(`${height}px`);
+    // Reposition the open menu when its scroll container moves the trigger.
+    vi.mocked(container.getBoundingClientRect).mockReturnValue({ top: 110, bottom: 150 } as DOMRect);
+    fireEvent.scroll(boundary);
+    expect(menu.classList.contains('top-full')).toBe(true);
+    unmount();
+  });
 
   it('renders selected option and sublabel', () => {
     render(
