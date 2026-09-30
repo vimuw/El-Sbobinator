@@ -1140,6 +1140,28 @@ button {
   padding-top: 24px;
 }
 
+.settings-details.is-api-quota {
+  border-top: none;
+  padding-top: 0;
+}
+
+.settings-details.is-api-quota > summary {
+  min-height: 40px;
+  justify-content: flex-start;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: transparent;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.settings-details.is-api-quota > summary:hover {
+  background: var(--bg-hover);
+}
+
+.settings-details.is-api-quota[open] > summary {
+  margin-bottom: 12px;
+}
+
 .settings-details > summary {
   display: flex;
   align-items: center;

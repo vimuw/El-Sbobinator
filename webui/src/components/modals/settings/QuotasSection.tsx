@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import {
   Clock,
   Loader2,
-  Cpu,
+  Gauge,
   Sparkles,
   ChevronDown,
 } from 'lucide-react';
@@ -56,7 +56,7 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
     }, [apiUsage]);
 
     return (
-      <div className="space-y-3 pt-3 animate-fade-in">
+      <div className="space-y-3 animate-fade-in">
         {/* Loading Spinner */}
         {isLoadingUsage ? (
           <div className="py-3 flex items-center justify-center gap-2 text-xs font-medium text-[var(--text-secondary)]">
@@ -67,10 +67,10 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
           <>
             {/* 5. Panoramica Altri Modelli Supportati (Quote Separate) */}
             {allKnownModels.length > 0 && (
-              <details className="settings-details">
+              <details className="settings-details is-api-quota">
                 <summary>
                   <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
-                    <Cpu className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
+                    <Gauge className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
                     Quote per modello
                   </span>
                   <ChevronDown className="w-4 h-4 shrink-0" />
@@ -82,9 +82,6 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
                 </div>
 
                 <div className="settings-details-content divide-y divide-[var(--border-default)]">
-                  <p className="text-xs text-[var(--text-secondary)] pb-3 leading-relaxed">
-                    Le quote sono separate per modello. Il modello selezionato è indicato nella lista.
-                  </p>
                   {allKnownModels.map(mName => {
                     const lim = projectLimits[mName];
                     const readyForM = credentials.filter(
@@ -103,9 +100,16 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
                         className="py-3 flex items-center justify-between gap-3 text-xs"
                       >
                         <div className="min-w-0">
-                          <span className="font-bold text-[var(--text-primary)] block truncate">
-                            {getModelDisplayName(mName)}{mName === effectivePreferredModel ? ' · Selezionato' : ''}
-                          </span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-[var(--text-primary)]">
+                              {getModelDisplayName(mName)}
+                            </span>
+                            {mName === effectivePreferredModel && (
+                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)] leading-normal shrink-0">
+                                Selezionato
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[11px] text-[var(--text-secondary)] block">
                             {lim?.rpd_limit ? `${lim.rpd_limit} RPD` : '20 RPD standard'} •{' '}
                             {lim?.rpm_limit ? `${lim.rpm_limit} RPM` : '5 RPM'}
@@ -135,7 +139,7 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
                 <p className="text-xs text-[var(--text-secondary)] flex items-start gap-1.5 pt-3">
                   <Sparkles className="w-3.5 h-3.5 text-[var(--accent-text)] shrink-0" />
                   <span>
-                    RPD indica le richieste al giorno, RPM quelle al minuto. Le quote sono separate per modello: una chiave esaurita su un modello può essere disponibile sugli altri.
+                    RPD: richieste al giorno · RPM: richieste al minuto. Una chiave che ha esaurito la quota su un modello può essere ancora disponibile sugli altri.
                   </span>
                 </p>
               </details>
@@ -145,7 +149,7 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
           </>
         ) : (
           <div className="flex items-start gap-2 text-xs text-[var(--text-secondary)]">
-            <Cpu className="w-4 h-4 shrink-0 mt-0.5" />
+            <Gauge className="w-4 h-4 shrink-0 mt-0.5" />
             <p className="leading-relaxed">
               Inserisci una chiave API in Generale per visualizzare lo stato delle quote e la disponibilità delle risorse.
             </p>

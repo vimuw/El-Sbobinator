@@ -624,6 +624,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </p>
                       </div>
 
+                      <ModelSection
+                        preferredModel={preferredModel}
+                        setPreferredModel={setPreferredModel}
+                        availableModels={availableModels}
+                      />
+
+                      <div className="border-t border-[var(--border-default)]" />
+
                       <ApiKeySection
                         apiKey={apiKey}
                         setApiKey={key => {
@@ -642,14 +650,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         onAskDeleteKey={setKeyDeleteTarget}
                         onRefreshUsage={handleRefreshUsage}
                         statusSummary={<ApiStatusSection apiUsage={apiUsage} isLoadingUsage={isLoadingUsage} />}
-                      />
-
-                      <div className="border-t border-[var(--border-default)]" />
-
-                      <ModelSection
-                        preferredModel={preferredModel}
-                        setPreferredModel={setPreferredModel}
-                        availableModels={availableModels}
                       />
 
                       <div className="border-t border-[var(--border-default)]" />

@@ -103,29 +103,34 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
 
       {/* Update Available Banner Card */}
       {isUpdateAvailable && !isDone && (
-        <div className="p-4 rounded-lg bg-[var(--accent-subtle)] border border-[var(--accent-ring)] space-y-3 relative overflow-hidden transition-all">
+        <div className="p-4 rounded-lg bg-[var(--accent-subtle)] border border-[var(--border-subtle)] space-y-3 relative overflow-hidden">
           {/* Top/Inline Content */}
-          <div className="flex items-center justify-between gap-4">
-            <div className="space-y-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h4 className="text-sm font-bold text-[var(--text-primary)] leading-tight">
-                  Nuova versione disponibile
-                </h4>
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono bg-[var(--bg-surface)] text-[var(--accent-text)] border border-[var(--accent-ring)] tracking-wide shrink-0">
-                  {cleanLatestVersion}
-                </span>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-start gap-3 min-w-0 flex-1 basis-64">
+              <div aria-hidden="true" className="flex items-center justify-center w-9 h-9 rounded-full bg-[var(--bg-surface)] border border-[var(--accent-ring)] text-[var(--accent-text)] shrink-0">
+                <ArrowDownToLine className="w-4 h-4" />
               </div>
+              <div className="space-y-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-base font-bold text-[var(--text-primary)] leading-tight">
+                    Nuova versione disponibile
+                  </h4>
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono bg-[var(--bg-surface)] text-[var(--accent-text)] border border-[var(--accent-ring)] tracking-wide shrink-0">
+                    {cleanLatestVersion}
+                  </span>
+                </div>
 
-              <div>
-                <a
-                  href={GITHUB_RELEASES_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs font-semibold text-[var(--accent-text)] hover:underline inline-flex items-center gap-1 transition-colors"
-                >
-                  Note di rilascio su GitHub
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
+                <div>
+                  <a
+                    href={GITHUB_RELEASES_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-semibold text-[var(--accent-text)] hover:underline inline-flex items-center gap-1 transition-colors"
+                  >
+                    Note di rilascio su GitHub
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
               </div>
             </div>
 
@@ -142,12 +147,6 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
               </button>
             )}
           </div>
-
-          {!isInProgress && (
-            <p className="text-xs text-[var(--text-secondary)]">
-              L’installazione parte subito, senza salvare le preferenze.
-            </p>
-          )}
 
           {/* Download progress / verifying in progress */}
           {isDownloading && (
