@@ -39,7 +39,7 @@ export const ModelSection: React.FC<ModelSectionProps> = React.memo(({
         <div className="flex items-center gap-2">
           <Cpu className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
           <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-            Modello di Trascrizione (Primario)
+            Modello di trascrizione
           </h3>
         </div>
       </div>

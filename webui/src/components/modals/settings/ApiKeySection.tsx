@@ -16,8 +16,10 @@ import {
   Star,
   Loader2,
   Trash2,
+  RefreshCw,
 } from 'lucide-react';
 import { ConfirmActionModal } from '../ConfirmActionModal';
+import { QuotasSection } from './QuotasSection';
 import { KebabMenu, type KebabMenuItem } from '../../KebabMenu';
 import { GEMINI_KEY_PATTERN, getModelDisplayName } from '../../../utils';
 import type { ApiUsageResult, CredentialProfile } from '../../../bridge';
@@ -36,6 +38,7 @@ export interface ApiKeySectionProps {
   onRefreshUsage?: () => void;
   preferredModel?: string;
   onAskDeleteKey?: (target: DeleteKeyTarget) => void;
+  statusSummary?: React.ReactNode;
 }
 
 export interface DeleteKeyTarget {
@@ -56,14 +59,13 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
   onClearProtectedPrimary,
   apiUsage,
   isLoadingUsage = false,
-  onRefreshUsage: _onRefreshUsage,
+  onRefreshUsage,
   preferredModel,
   onAskDeleteKey,
+  statusSummary,
 }) => {
   const [newKeyInput, setNewKeyInput] = useState('');
   const [notice, setNotice] = useState<{ type: 'error' | 'warning'; message: string } | null>(null);
-  const [revealedKeys, setRevealedKeys] = useState<Record<string, boolean>>({});
-  const [showAllKeys, setShowAllKeys] = useState(false);
   const [showNewKeyInput, setShowNewKeyInput] = useState(false);
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteKeyTarget | null>(null);
@@ -306,27 +308,6 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     }
   };
 
-  const toggleRowReveal = (id: string) => {
-    setRevealedKeys(prev => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
-  };
-
-  const hasAnyRevealedKey =
-    showAllKeys ||
-    Boolean(revealedKeys.primary) ||
-    cleanedFallbackKeys.some(key => revealedKeys[`fallback-${key}`]);
-
-  const toggleAllReveal = () => {
-    if (hasAnyRevealedKey) {
-      setShowAllKeys(false);
-      setRevealedKeys({});
-      return;
-    }
-    setShowAllKeys(true);
-  };
-
   const handleConfirmDelete = () => {
     if (!deleteTarget) return;
 
@@ -566,12 +547,10 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     );
   };
   const primaryMaskedDisplay = apiKey
-    ? (apiKey.length > 8 ? `...${apiKey.slice(-4)}` : apiKey)
+    ? `...${apiKey.slice(-4)}`
     : (primaryCred?.masked_key
-        ? (primaryCred.masked_key.length > 8 ? `...${primaryCred.masked_key.slice(-4)}` : primaryCred.masked_key)
+        ? `...${primaryCred.masked_key.slice(-4)}`
         : (hasProtectedKey ? '••••••••••••' : ''));
-
-  const isPrimaryRevealed = showAllKeys || Boolean(revealedKeys['primary']);
 
   const primaryKebabItems: KebabMenuItem[] = [
     ...(apiKey
@@ -580,11 +559,6 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
             label: copiedKeyId === 'primary' ? 'Chiave copiata!' : 'Copia chiave',
             icon: copiedKeyId === 'primary' ? <Check className="w-3.5 h-3.5 text-[var(--success-text)]" /> : <Copy className="w-3.5 h-3.5" />,
             onClick: () => handleCopyKey(apiKey, 'primary'),
-          },
-          {
-            label: isPrimaryRevealed ? 'Nascondi chiave' : 'Mostra in chiaro',
-            icon: isPrimaryRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />,
-            onClick: () => toggleRowReveal('primary'),
           },
           { separator: true as const },
         ]
@@ -609,7 +583,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
         <div className="flex items-center gap-2 min-w-0">
           <Key className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
           <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] truncate">
-            Stato Chiavi Configurate
+            Chiavi API
           </h3>
           {totalKeysCount > 0 && (
             <span className="text-[11px] font-semibold text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-default)] px-2 py-0.5 rounded-full leading-normal shrink-0">
@@ -619,19 +593,17 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          {totalKeysCount > 0 && (
-            <button
-              type="button"
-              onClick={toggleAllReveal}
-              className="p-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
-              title={hasAnyRevealedKey ? 'Nascondi tutte le chiavi' : 'Mostra tutte le chiavi in chiaro'}
-              aria-label={hasAnyRevealedKey ? 'Nascondi tutte le chiavi' : 'Mostra chiavi'}
-            >
-              {hasAnyRevealedKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          {onRefreshUsage && (
+            <button type="button" onClick={onRefreshUsage} disabled={isLoadingUsage}
+              className="app-button-secondary is-settings-action is-icon"
+              title="Aggiorna stato API" aria-label="Aggiorna stato API">
+              <RefreshCw className={`w-4 h-4 ${isLoadingUsage ? 'animate-spin' : ''}`} />
             </button>
           )}
         </div>
       </div>
+
+      {statusSummary}
 
       {/* 2. Compact Add Key Bar */}
       <div className="flex items-center gap-2">
@@ -658,8 +630,8 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
             spellCheck={false}
             autoCorrect="off"
             autoCapitalize="off"
-            className={`w-full app-input !py-1.5 !pl-3 !pr-9 text-xs font-mono border border-[var(--border-strong)] rounded-lg min-h-[38px] ${
-              notice?.type === 'error' ? 'border-[var(--error-ring)]' : ''
+            className={`app-input is-settings-input ${
+              notice?.type === 'error' ? 'is-invalid' : ''
             }`}
           />
           <button
@@ -724,18 +696,18 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
 
               <span
                 className="px-2.5 py-0.5 rounded-full bg-[var(--bg-hover)] border border-[var(--border-default)] font-mono text-[11px] text-[var(--text-primary)] font-semibold inline-flex items-center leading-normal select-all"
-                title={isPrimaryRevealed ? apiKey : 'Chiave protetta'}
+                title="Chiave protetta"
               >
-                {isPrimaryRevealed && apiKey ? apiKey : primaryMaskedDisplay}
+                {primaryMaskedDisplay}
               </span>
 
               {hasProtectedKey && !apiKey && (
                 <span
                   className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[var(--bg-hover)] text-[var(--success-text)] border border-[var(--border-default)] inline-flex items-center gap-1 leading-normal"
-                  title="Salvata in sicurezza (Windows DPAPI / Keychain)"
+                  title="Credenziale cifrata dal sistema operativo (DPAPI su Windows, Keychain su macOS)"
                 >
                   <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                  <span>DPAPI</span>
+                  <span>Protetta</span>
                 </span>
               )}
             </div>
@@ -757,8 +729,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
         {/* Rows 2..N: Fallback Keys */}
         {cleanedFallbackKeys.map((key, idx) => {
           const rowId = `fallback-${key}`;
-          const isRevealed = showAllKeys || Boolean(revealedKeys[rowId]);
-          const masked = key.length > 8 ? `...${key.slice(-4)}` : key;
+          const masked = `...${key.slice(-4)}`;
           const cred = getCredentialFor(key, false, idx);
           const label = `Chiave Riserva ${idx + 1}`;
 
@@ -786,11 +757,6 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
               icon: copiedKeyId === rowId ? <Check className="w-3.5 h-3.5 text-[var(--success-text)]" /> : <Copy className="w-3.5 h-3.5" />,
               onClick: () => handleCopyKey(key, rowId),
             },
-            {
-              label: isRevealed ? 'Nascondi chiave' : 'Mostra in chiaro',
-              icon: isRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />,
-              onClick: () => toggleRowReveal(rowId),
-            },
             { separator: true as const },
             {
               label: 'Rimuovi chiave',
@@ -816,9 +782,9 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
 
                 <span
                   className="px-2.5 py-0.5 rounded-full bg-[var(--bg-hover)] border border-[var(--border-default)] font-mono text-[11px] text-[var(--text-primary)] font-semibold inline-flex items-center leading-normal select-all"
-                  title={isRevealed ? key : 'Chiave protetta'}
+                  title="Chiave protetta"
                 >
-                  {isRevealed ? key : masked}
+                  {masked}
                 </span>
               </div>
 
@@ -863,6 +829,12 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
           <ExternalLink className="w-3 h-3 shrink-0" />
         </a>
       </div>
+
+      <QuotasSection
+        apiUsage={apiUsage}
+        isLoadingUsage={isLoadingUsage}
+        preferredModel={preferredModel}
+      />
 
       {/* 5. Delete Confirmation Dialog (fallback for standalone rendering) */}
       {!onAskDeleteKey && (

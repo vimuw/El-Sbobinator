@@ -52,29 +52,32 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
 }) => {
   return (
     <div className="space-y-6">
+      <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+        Spostamento e pulizia hanno effetto immediato dopo la conferma e non vengono annullati con Annulla.
+      </p>
       {/* 1. Spazio Disco e Posizione Cartella */}
       <div className="space-y-3">
         {/* Header */}
         <div className="flex items-center gap-2">
           <HardDrive className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
           <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-            Spazio Disco & Archivio
+            Spazio disco e archivio
           </h3>
         </div>
 
         {/* Metric Stat Cards */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="p-3.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] space-y-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="premium-panel p-3.5 space-y-1">
             <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider block">
-              Dimensione Totale
+              Spazio occupato
             </span>
             <span className="text-2xl font-bold text-[var(--text-primary)] block">
               {isLoadingSessionInfo ? 'Calcolo…' : sessionInfo ? formatSize(sessionInfo.total_bytes) : '—'}
             </span>
           </div>
-          <div className="p-3.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] space-y-1">
+          <div className="premium-panel p-3.5 space-y-1">
             <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider block">
-              Totale Sbobine
+              Sbobine salvate
             </span>
             <span className="text-2xl font-bold text-[var(--text-primary)] block">
               {sessionInfo ? `${sessionInfo.total_sessions} ${sessionInfo.total_sessions === 1 ? 'sbobina' : 'sbobine'}` : '—'}
@@ -87,7 +90,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-0.5 min-w-0">
               <span className="text-sm font-bold text-[var(--text-primary)] block">
-                Cartella Sessioni
+                Cartella sessioni
               </span>
               <p className="text-xs text-[var(--text-secondary)]">
                 Posizione su disco delle trascrizioni e dei file di lavoro.
@@ -98,16 +101,16 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
                 type="button"
                 onClick={onAskMoveFolder}
                 disabled={isMoveInProgress}
-                aria-label="Cambia Cartella"
-                title="Cambia Cartella"
-                className="p-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 shrink-0 cursor-pointer"
+                aria-label="Cambia cartella"
+                title="Cambia cartella"
+                className="app-button-secondary is-settings-action"
               >
                 {isMoveInProgress ? (
                   <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-text)]" />
                 ) : (
                   <FolderInput className="w-4 h-4" />
                 )}
-                <span className="sr-only">Cambia Cartella</span>
+                <span>Cambia cartella</span>
               </button>
             )}
           </div>
@@ -167,7 +170,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
         <div className="flex items-center gap-2">
           <Trash2 className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
           <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-            Pulizia Archivio
+            Pulizia archivio
           </h3>
         </div>
 
@@ -188,7 +191,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
               disabled={isCleaningSession}
               aria-label="Pulisci elaborazioni incomplete"
               title="Conta ed elimina tutte le elaborazioni incomplete"
-              className="p-2 rounded-lg text-[var(--error-text)] hover:bg-[var(--error-subtle)] transition-colors disabled:opacity-40 shrink-0 cursor-pointer"
+              className="app-button-secondary is-settings-action is-icon is-danger"
             >
               {isCleaningSession ? (
                 <Loader2 className="w-4 h-4 animate-spin text-[var(--error-text)]" />
@@ -214,7 +217,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
               disabled={isCleaningCompletedSessions}
               aria-label={`Elimina sbobine completate archiviate da oltre ${SESSION_CLEANUP_DAYS} giorni`}
               title={`Conta ed elimina sbobine completate archiviate da oltre ${SESSION_CLEANUP_DAYS} giorni`}
-              className="p-2 rounded-lg text-[var(--error-text)] hover:bg-[var(--error-subtle)] transition-colors disabled:opacity-40 shrink-0 cursor-pointer"
+              className="app-button-secondary is-settings-action is-icon is-danger"
             >
               {isCleaningCompletedSessions ? (
                 <Loader2 className="w-4 h-4 animate-spin text-[var(--error-text)]" />

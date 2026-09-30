@@ -225,6 +225,16 @@ describe('SettingsModal — save behavior', () => {
     expect(contentColumn?.className).not.toMatch(/(?:^|\s)h-full(?:\s|$)/);
   });
 
+  it('starts each settings tab at the top after scrolling the previous tab', () => {
+    render(<SettingsModal {...makeProps()} />);
+    const content = screen.getByRole('heading', { name: 'Generale' }).closest('.app-scroll')!;
+    content.scrollTop = 250;
+    fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' }));
+    expect(content.scrollTop).toBe(0);
+    expect(screen.getByRole('button', { name: 'Diagnostica' }).getAttribute('aria-current')).toBe('page');
+    expect(screen.getByRole('button', { name: 'Generale' }).getAttribute('aria-current')).toBeNull();
+  });
+
   it('missing bridge: modal stays open, inline error displayed, console notified', async () => {
     const onClose = vi.fn();
     const appendConsole = vi.fn();
@@ -236,7 +246,7 @@ describe('SettingsModal — save behavior', () => {
     });
 
     expect(onClose).not.toHaveBeenCalled();
-    expect(screen.queryByText(/non disponibile/i)).not.toBeNull();
+    expect(screen.queryByText(/Bridge Python non disponibile/i)).not.toBeNull();
     expect(appendConsole).toHaveBeenCalledTimes(1);
     expect(appendConsole).toHaveBeenCalledWith(
       expect.stringMatching(/❌.*non disponibile|non disponibile.*❌/s),
@@ -270,7 +280,7 @@ describe('SettingsModal — save behavior', () => {
     });
 
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText(/non disponibile/i)).toBeNull();
+    expect(screen.queryByText(/Bridge Python non disponibile/i)).toBeNull();
   });
 
   it('successful save: refreshes settings before closing', async () => {
@@ -443,13 +453,11 @@ describe('SettingsModal — session info race condition', () => {
 });
 
 describe('SettingsModal — main-section interactions', () => {
-  it('toggles showPrimaryKey on show/hide button click without affecting fallback keys', async () => {
+  it('offers copying the saved primary key without revealing it', () => {
     render(<SettingsModal {...makeProps()} />);
-    const kebab = screen.getByRole('button', { name: 'Opzioni chiave principale' });
-    fireEvent.click(kebab);
-    fireEvent.click(screen.getByRole('button', { name: 'Mostra in chiaro' }));
-    fireEvent.click(kebab);
-    expect(screen.getByRole('button', { name: 'Nascondi chiave' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Opzioni chiave principale' }));
+    expect(screen.getByRole('button', { name: 'Copia chiave' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Mostra in chiaro' })).toBeNull();
   });
 
   it('calls setApiKey when API key is added to empty settings', async () => {
@@ -521,10 +529,13 @@ describe('SettingsModal — main-section interactions', () => {
     expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('false');
   });
 
-  it('toggles global key visibility on header eye click', async () => {
+  it('only allows revealing the new key input', () => {
     render(<SettingsModal {...makeProps()} />);
-    fireEvent.click(screen.getByLabelText('Mostra chiavi'));
-    expect(screen.getByLabelText('Nascondi tutte le chiavi')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Mostra chiavi' })).toBeNull();
+    const input = screen.getByLabelText('Nuova chiave di riserva');
+    expect(input.getAttribute('type')).toBe('password');
+    fireEvent.click(screen.getByRole('button', { name: 'Mostra nuova chiave' }));
+    expect(input.getAttribute('type')).toBe('text');
   });
 
   it('calls open_url when aistudio link is clicked', async () => {
@@ -753,7 +764,7 @@ describe('SettingsModal — session folder and cleanup', () => {
 
 
     await act(async () => {
-      fireEvent.click(screen.getByText('Cambia Cartella'));
+      fireEvent.click(screen.getByRole('button', { name: 'Cambia cartella' }));
     });
     expect(askFolder).toHaveBeenCalledTimes(1);
 
@@ -792,7 +803,7 @@ describe('SettingsModal — model section', () => {
     await act(async () => {
       fireEvent.click(screen.getAllByText('Generale')[0].closest('button')!);
     });
-    expect(screen.getByText('Modello di Trascrizione (Primario)')).toBeTruthy();
+    expect(screen.getByText('Modello di trascrizione')).toBeTruthy();
     expect(screen.getAllByText('Default').length).toBeGreaterThan(0);
     expect(screen.queryByText('Fast and capable')).toBeNull();
   });
@@ -997,7 +1008,7 @@ describe('SettingsModal — validate environment', () => {
     expect(statusBadges.length).toBeGreaterThanOrEqual(4);
   });
 
-  it('allows switching to Quote API tab', async () => {
+  it('puts activity first in diagnostics and keeps refresh with the keys in General', async () => {
     render(
       <SettingsModal
         {...makeProps({
@@ -1006,13 +1017,32 @@ describe('SettingsModal — validate environment', () => {
       />,
     );
     await act(async () => {
-      fireEvent.click(screen.getByText('Quote API').closest('button')!);
+      fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' }));
     });
 
-    expect(screen.getByRole('heading', { name: 'Quote API' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Diagnostica' })).toBeTruthy();
+    const activity = screen.getByText('Attività di oggi');
+    const checks = screen.getByText('Verifica ambiente e integrità');
+    expect(activity.compareDocumentPosition(checks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(activity.closest('details')).toBeNull();
+    expect(screen.queryByText('Quote per modello')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Chiudi' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Salva e Chiudi' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Annulla' })).toBeNull();
   });
 
-  it('renders sidebar tabs in the correct order: Generale, Quote API, Archiviazione, Diagnostica', () => {
+  it('keeps save and cancel in diagnostics when general settings have pending changes', async () => {
+    const props = makeProps();
+    const { rerender } = render(<SettingsModal {...props} />);
+    rerender(<SettingsModal {...props} models={{ ...props.models, preferredModel: 'gemini-3.5-flash' }} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' }));
+    });
+    expect(screen.getByRole('button', { name: 'Salva e Chiudi' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Annulla' })).toBeTruthy();
+  });
+
+  it('renders sidebar tabs in the correct order: Generale, Archiviazione, Diagnostica', () => {
     const { container } = render(
       <SettingsModal
         {...makeProps({
@@ -1021,14 +1051,13 @@ describe('SettingsModal — validate environment', () => {
       />,
     );
 
-    const sidebar = container.querySelector('.w-full.md\\:w-64');
+    const sidebar = container.querySelector('nav[aria-label="Sezioni delle impostazioni"]');
     expect(sidebar).toBeTruthy();
     const buttons = sidebar ? Array.from(sidebar.querySelectorAll('button')) : [];
     const buttonTexts = buttons.map(b => b.textContent?.trim() || '');
-    expect(buttonTexts).toHaveLength(4);
+    expect(buttonTexts).toHaveLength(3);
     expect(buttonTexts[0]).toContain('Generale');
-    expect(buttonTexts[1]).toContain('Quote API');
-    expect(buttonTexts[2]).toContain('Archiviazione');
-    expect(buttonTexts[3]).toContain('Diagnostica');
+    expect(buttonTexts[1]).toContain('Archiviazione');
+    expect(buttonTexts[2]).toContain('Diagnostica');
   });
 });

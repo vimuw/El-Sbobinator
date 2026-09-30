@@ -25,7 +25,7 @@ describe('UpdaterSection component', () => {
 
     const checkBtn = screen.getByRole('button', { name: 'Cerca aggiornamenti' });
     expect(checkBtn).toBeTruthy();
-    expect(checkBtn.className).toContain('rounded-lg');
+    expect(screen.getByText('Cerca aggiornamenti')).toBeTruthy();
     fireEvent.click(checkBtn);
     expect(checkForUpdates).toHaveBeenCalledWith(true);
   });

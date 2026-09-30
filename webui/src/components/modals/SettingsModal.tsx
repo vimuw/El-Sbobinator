@@ -1,7 +1,7 @@
 import { reportClientError } from '../../diagnostics';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings, HardDrive, Activity, SlidersHorizontal, Loader2, X, FlaskConical } from 'lucide-react';
+import { Settings, HardDrive, SlidersHorizontal, Loader2, X, FlaskConical } from 'lucide-react';
 import type { ApiUsageResult, ModelOption, ValidationResult } from '../../bridge';
 import { ConfirmActionModal } from './ConfirmActionModal';
 import { ApiKeySection, type DeleteKeyTarget } from './settings/ApiKeySection';
@@ -9,7 +9,8 @@ import { ModelSection } from './settings/ModelSection';
 import { NotificationSection } from './settings/NotificationSection';
 import { StorageSection } from './settings/StorageSection';
 import { DiagnosticsSection, type DisplayCheck } from './settings/DiagnosticsSection';
-import { QuotasSection } from './settings/QuotasSection';
+import { ActivitySection } from './settings/ActivitySection';
+import { ApiStatusSection } from './settings/ApiStatusSection';
 import { UpdaterSection, type SettingsUpdateInstallState } from './settings/UpdaterSection';
 
 import { useSettingsStorage, SESSION_CLEANUP_DAYS } from '../../hooks/useSettingsStorage';
@@ -67,7 +68,7 @@ export interface SettingsModalProps {
   storage?: SettingsStorageProps;
 }
 
-type TabType = 'general' | 'quotas' | 'storage' | 'diagnostics';
+type TabType = 'general' | 'storage' | 'diagnostics';
 
 interface SettingsSnapshot {
   apiKey: string;
@@ -125,6 +126,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const isMountedRef = useRef(true);
   const settingsSnapshotRef = useRef<SettingsSnapshot | null>(null);
   const wasOpenRef = useRef(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  }, [activeTab, isOpen]);
 
   const {
     sessionInfo,
@@ -193,6 +199,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     wasOpenRef.current = isOpen;
   }, [apiKey, fallbackKeys, fallbackModels, isOpen, preferredModel]);
 
+  const snapshot = settingsSnapshotRef.current;
+  const hasPendingChanges = Boolean(snapshot && (
+    apiKey !== snapshot.apiKey ||
+    preferredModel !== snapshot.preferredModel ||
+    JSON.stringify(fallbackKeys) !== JSON.stringify(snapshot.fallbackKeys) ||
+    JSON.stringify(fallbackModels) !== JSON.stringify(snapshot.fallbackModels) ||
+    notificationsEnabled !== snapshot.notificationsEnabled ||
+    clearProtectedPrimary
+  ));
+  const showCloseOnly = activeTab === 'diagnostics' && !hasPendingChanges;
+
 
   const fetchApiUsage = useCallback(async (forceRefresh = false) => {
     if (!window.pywebview?.api?.get_api_usage) return;
@@ -209,10 +226,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         fallbackModels,
         forceRefresh,
       );
-      if (isMountedRef.current && res?.ok && res.result) {
-        setApiUsage(res.result);
+      if (isMountedRef.current) {
+        setApiUsage(res?.ok && res.result ? res.result : null);
       }
     } catch (e) {
+      if (isMountedRef.current) setApiUsage(null);
       reportClientError('Failed to fetch api usage:', e);
     } finally {
       if (isMountedRef.current) setIsLoadingUsage(false);
@@ -225,7 +243,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      if (activeTab === 'quotas' || activeTab === 'general') {
+      if (activeTab === 'diagnostics' || activeTab === 'general') {
         void fetchApiUsage();
       }
       if (activeTab === 'storage') {
@@ -258,7 +276,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     setSaveError(null);
-    if (tab === 'quotas' || tab === 'general') {
+    if (tab === 'diagnostics' || tab === 'general') {
       void fetchApiUsage();
     }
   };
@@ -508,7 +526,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.12, ease: 'easeIn' } }}
               className="modal-card relative w-full max-w-md md:max-w-4xl h-[85vh] md:h-[80vh] overflow-hidden flex flex-col md:flex-row"
             >
-              <div className="w-full md:w-64 md:shrink-0 flex flex-row md:flex-col border-b md:border-b-0 md:border-r border-[var(--border-subtle)] bg-[var(--sidebar-bg)] overflow-x-auto md:overflow-x-visible md:overflow-y-auto shrink-0 py-4 px-3 gap-1">
+              <nav aria-label="Sezioni delle impostazioni" className="settings-nav app-scroll">
                 <div className="hidden md:flex items-center gap-2 px-3 py-2.5 mb-3 border-b border-[var(--border-subtle)]">
                   <Settings className="w-5 h-5 text-[var(--accent-text)] shrink-0" />
                   <span role="heading" aria-level={2} className="font-bold text-base tracking-wide uppercase text-[var(--text-primary)]">
@@ -519,11 +537,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleTabChange('general')}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-semibold tracking-wide text-left transition-all duration-150 whitespace-nowrap h-10 ${
-                    activeTab === 'general'
-                      ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-bold ring-1 ring-[var(--border-default)]'
-                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
-                  }`}
+                  aria-current={activeTab === 'general' ? 'page' : undefined}
+                  className={`settings-nav-item ${activeTab === 'general' ? 'is-active' : ''}`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <SlidersHorizontal className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'general' ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)]'}`} />
@@ -538,32 +553,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => handleTabChange('quotas')}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-semibold tracking-wide text-left transition-all duration-150 whitespace-nowrap h-10 ${
-                    activeTab === 'quotas'
-                      ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-bold ring-1 ring-[var(--border-default)]'
-                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <Activity className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'quotas' ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)]'}`} />
-                    <span className="truncate">Quote API</span>
-                  </div>
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full bg-[var(--accent-text)] shrink-0 hidden md:block transition-opacity duration-150 ${
-                      activeTab === 'quotas' ? 'opacity-100' : 'opacity-0'
-                    }`}
-                  />
-                </button>
-
-                <button
-                  type="button"
                   onClick={() => handleTabChange('storage')}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-semibold tracking-wide text-left transition-all duration-150 whitespace-nowrap h-10 ${
-                    activeTab === 'storage'
-                      ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-bold ring-1 ring-[var(--border-default)]'
-                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
-                  }`}
+                  aria-current={activeTab === 'storage' ? 'page' : undefined}
+                  className={`settings-nav-item ${activeTab === 'storage' ? 'is-active' : ''}`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <HardDrive className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'storage' ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)]'}`} />
@@ -579,11 +571,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleTabChange('diagnostics')}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-semibold tracking-wide text-left transition-all duration-150 whitespace-nowrap h-10 ${
-                    activeTab === 'diagnostics'
-                      ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-bold ring-1 ring-[var(--border-default)]'
-                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
-                  }`}
+                  aria-current={activeTab === 'diagnostics' ? 'page' : undefined}
+                  className={`settings-nav-item ${activeTab === 'diagnostics' ? 'is-active' : ''}`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <FlaskConical className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'diagnostics' ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)]'}`} />
@@ -595,21 +584,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     }`}
                   />
                 </button>
-              </div>
+              </nav>
 
               <div className="flex-1 min-h-0 flex flex-col min-w-0 bg-[var(--bg-surface)] relative">
                 <button
                   type="button"
                   onClick={handleClose}
                   disabled={isSaving}
-                  className="icon-button modal-icon-button absolute top-4 right-4 z-10"
+                  className="icon-button modal-icon-button absolute top-4 right-4 z-20"
                   aria-label="Chiudi finestra"
                 >
                   <X className="w-4 h-4" />
                 </button>
-                <div className="app-scroll flex-1 overflow-y-auto overflow-x-hidden p-6 md:p-8 space-y-6 [scrollbar-gutter:stable]">
+                <div ref={contentRef} className="app-scroll flex-1 overflow-y-auto overflow-x-hidden p-6 md:p-8 space-y-6 [scrollbar-gutter:stable]">
                   {activeTab === 'general' && (
-                    <div className="space-y-5 animate-fade-in pb-4">
+                    <div className="space-y-6 animate-fade-in">
                       <div>
                         <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Generale</h2>
                         <p className="text-xs text-[var(--text-secondary)] mt-0.5">
@@ -633,6 +622,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         isLoadingUsage={isLoadingUsage}
                         preferredModel={preferredModel}
                         onAskDeleteKey={setKeyDeleteTarget}
+                        onRefreshUsage={handleRefreshUsage}
+                        statusSummary={<ApiStatusSection apiUsage={apiUsage} isLoadingUsage={isLoadingUsage} />}
                       />
 
                       <div className="border-t border-[var(--border-default)]" />
@@ -696,25 +687,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   )}
 
-                  {activeTab === 'quotas' && (
-                    <div className="space-y-6 animate-fade-in">
-                      <div>
-                        <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Quote API</h2>
-                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                          Consumo quote, telemetria chiamate di rete e autonomia stimata.
-                        </p>
-                      </div>
-
-                      <QuotasSection
-                        apiUsage={apiUsage}
-                        isLoadingUsage={isLoadingUsage}
-                        onRefreshUsage={handleRefreshUsage}
-                        preferredModel={preferredModel}
-                        availableModels={availableModels}
-                      />
-                    </div>
-                  )}
-
                   {activeTab === 'diagnostics' && (
                     <div className="space-y-6 animate-fade-in">
                       <div>
@@ -723,6 +695,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           Verifica requisiti di sistema (FFmpeg, API, disco) e report di assistenza.
                         </p>
                       </div>
+
+                      <ActivitySection
+                        apiUsage={apiUsage}
+                        isLoadingUsage={isLoadingUsage}
+                        onRefreshUsage={handleRefreshUsage}
+                      />
+                      <div className="border-t border-[var(--border-default)]" />
 
                       <DiagnosticsSection
                         isValidatingEnvironment={isValidatingEnvironment}
@@ -733,6 +712,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         onOpenLogs={handleOpenLogs}
                         showOpenLogs={hostCapabilities.openLocalPath}
                       />
+
                     </div>
                   )}
                 </div>
@@ -740,29 +720,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="modal-footer flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     {saveError && (
-                      <p className="text-sm text-[var(--error-text)] font-semibold truncate">
+                      <p role="alert" className="text-xs text-[var(--error-text)] font-semibold break-words">
                         {saveError}
                       </p>
                     )}
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
-                    <button
+                    {!showCloseOnly && <button
                       type="button"
                       onClick={handleClose}
                       disabled={isSaving}
                       className="modal-action-button"
                     >
                       Annulla
-                    </button>
+                    </button>}
 
                     <button
                       type="button"
-                      onClick={handleSave}
+                      onClick={showCloseOnly ? handleClose : handleSave}
                       disabled={isSaving}
                       className="modal-action-button is-primary"
                     >
                       {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-                      Salva e Chiudi
+                      {showCloseOnly ? 'Chiudi' : 'Salva e Chiudi'}
                     </button>
                   </div>
                 </div>
@@ -776,7 +756,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       <ConfirmActionModal
         isOpen={showCleanupConfirm}
         title="Eliminare tutte le elaborazioni incomplete?"
-        description={`Questa operazione elimina tutte le elaborazioni incomplete per liberare spazio. Sbobine interessate: ${cleanupPreview?.candidates ?? 0}. Spazio stimato: ${formatSize(cleanupPreview?.freed_bytes ?? 0)}. L'operazione è irreversibile.`}
+        description={`Questa operazione elimina subito tutte le elaborazioni incomplete per liberare spazio. Sbobine interessate: ${cleanupPreview?.candidates ?? 0}. Spazio stimato: ${formatSize(cleanupPreview?.freed_bytes ?? 0)}. L'operazione è irreversibile.`}
         confirmLabel="Elimina incomplete"
         cancelLabel="Annulla"
         onClose={() => setShowCleanupConfirm(false)}
@@ -788,7 +768,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       <ConfirmActionModal
         isOpen={showCompletedCleanupConfirm}
         title="Eliminare le sbobine completate vecchie?"
-        description={`Questa operazione elimina le sbobine completate più vecchie di ${SESSION_CLEANUP_DAYS} giorni. Sbobine interessate: ${completedCleanupPreview?.candidates ?? 0}. Spazio stimato: ${formatSize(completedCleanupPreview?.freed_bytes ?? 0)}. L'operazione è irreversibile.`}
+        description={`Questa operazione elimina subito le sbobine completate più vecchie di ${SESSION_CLEANUP_DAYS} giorni. Sbobine interessate: ${completedCleanupPreview?.candidates ?? 0}. Spazio stimato: ${formatSize(completedCleanupPreview?.freed_bytes ?? 0)}. L'operazione è irreversibile.`}
         confirmLabel="Elimina sbobine completate"
         cancelLabel="Annulla"
         onClose={() => setShowCompletedCleanupConfirm(false)}
@@ -800,7 +780,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       <ConfirmActionModal
         isOpen={showMoveConfirm}
         title="Spostare la cartella sessioni?"
-        description={`Tutte le sessioni verranno spostate in:\n${pendingMovePath ?? ''}\n\nL'operazione è rapida se la destinazione è sullo stesso disco.`}
+        description={`Le sessioni verranno spostate subito in:\n${pendingMovePath ?? ''}\n\nL'operazione è rapida se la destinazione è sullo stesso disco.`}
         confirmLabel="Sposta"
         cancelLabel="Annulla"
         onClose={handleCancelMove}

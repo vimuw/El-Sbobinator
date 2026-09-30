@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiKeySection } from './ApiKeySection';
 import type { ApiUsageResult } from '../../../bridge';
@@ -312,67 +312,30 @@ describe('ApiKeySection component', () => {
     ]);
   });
 
-  it('keeps reveal state attached to the same key after reordering', () => {
+  it('keeps saved keys masked after reordering and offers no reveal actions', async () => {
     const firstKey = 'AIzaSyBackupKey11111111111111ABCD';
     const secondKey = 'AIzaSyBackupKey22222222222222WXYZ';
     const { rerender } = render(
       <ApiKeySection {...defaultProps} fallbackKeys={[firstKey, secondKey]} />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Opzioni Chiave Riserva 1' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Mostra in chiaro' }));
-    expect(screen.getByText(firstKey)).toBeTruthy();
+    expect(screen.getByText('...2345')).toBeTruthy();
+    expect(screen.queryByText(defaultProps.apiKey)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mostra chiavi' })).toBeNull();
+    for (const name of ['Opzioni chiave principale', 'Opzioni Chiave Riserva 1']) {
+      fireEvent.click(screen.getByRole('button', { name }));
+      expect(screen.getByRole('button', { name: 'Copia chiave' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Mostra in chiaro' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name }));
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Copia chiave' })).toBeNull());
+    }
 
     rerender(<ApiKeySection {...defaultProps} fallbackKeys={[secondKey, firstKey]} />);
 
-    expect(screen.getByText(firstKey)).toBeTruthy();
+    expect(screen.getByText('...ABCD')).toBeTruthy();
     expect(screen.getByText('...WXYZ')).toBeTruthy();
+    expect(screen.queryByText(firstKey)).toBeNull();
     expect(screen.queryByText(secondKey)).toBeNull();
-  });
-
-  it('toggles visibility of full fallback keys when header eye button is clicked', () => {
-    const fallbackKeys = ['AIzaSyBackupKey11111111111111ABCD'];
-    render(<ApiKeySection {...defaultProps} fallbackKeys={fallbackKeys} />);
-
-    // Initially masked
-    expect(screen.getByText('...ABCD')).toBeTruthy();
-    expect(screen.queryByText('AIzaSyBackupKey11111111111111ABCD')).toBeNull();
-
-    const eyeButton = screen.getByLabelText('Mostra chiavi');
-    fireEvent.click(eyeButton);
-
-    // Now full key is visible
-    expect(screen.getByText('AIzaSyBackupKey11111111111111ABCD')).toBeTruthy();
-  });
-
-  it('toggles visibility of a single fallback key via kebab menu', () => {
-    const fallbackKeys = ['AIzaSyBackupKey11111111111111ABCD'];
-    render(<ApiKeySection {...defaultProps} fallbackKeys={fallbackKeys} />);
-
-    expect(screen.getByText('...ABCD')).toBeTruthy();
-    expect(screen.queryByText('AIzaSyBackupKey11111111111111ABCD')).toBeNull();
-
-    const kebab = screen.getByRole('button', { name: 'Opzioni Chiave Riserva 1' });
-    fireEvent.click(kebab);
-
-    const revealBtn = screen.getByRole('button', { name: 'Mostra in chiaro' });
-    fireEvent.click(revealBtn);
-
-    expect(screen.getByText('AIzaSyBackupKey11111111111111ABCD')).toBeTruthy();
-  });
-
-  it('hides individually revealed keys with the global hide action', () => {
-    const fallbackKey = 'AIzaSyBackupKey11111111111111ABCD';
-    render(<ApiKeySection {...defaultProps} fallbackKeys={[fallbackKey]} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Opzioni Chiave Riserva 1' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Mostra in chiaro' }));
-    expect(screen.getByText(fallbackKey)).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Nascondi tutte le chiavi' }));
-
-    expect(screen.queryByText(fallbackKey)).toBeNull();
-    expect(screen.getByText('...ABCD')).toBeTruthy();
   });
 
   it('copies key to clipboard via kebab menu', async () => {

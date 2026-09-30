@@ -1286,7 +1286,7 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
 
       // Click move folder
       await act(async () => {
-        fireEvent.click(screen.getByText('Cambia Cartella'));
+        fireEvent.click(screen.getByRole('button', { name: 'Cambia cartella' }));
       });
 
       // Confirm move

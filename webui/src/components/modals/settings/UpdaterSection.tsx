@@ -88,15 +88,16 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
           disabled={isCheckingUpdate || isInProgress}
           aria-label="Cerca aggiornamenti"
           title={isCheckingUpdate ? 'Controllo in corso…' : 'Cerca aggiornamenti'}
-          className="p-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 group/refresh shrink-0 cursor-pointer"
+          className="app-button-secondary is-settings-action"
         >
           <RefreshCw
             className={`w-4 h-4 transition-transform duration-500 ease-out ${
               isCheckingUpdate
                 ? 'animate-spin text-[var(--accent-text)]'
-                : 'group-hover/refresh:rotate-180 group-hover/refresh:scale-105'
+                : 'settings-refresh-icon'
             }`}
           />
+          <span>{isCheckingUpdate ? 'Controllo in corso…' : 'Cerca aggiornamenti'}</span>
         </button>
       </div>
 
@@ -141,6 +142,12 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
               </button>
             )}
           </div>
+
+          {!isInProgress && (
+            <p className="text-xs text-[var(--text-secondary)]">
+              L’installazione parte subito, senza salvare le preferenze.
+            </p>
+          )}
 
           {/* Download progress / verifying in progress */}
           {isDownloading && (
