@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 import webview
 
 from el_sbobinator.core.media_server import LocalMediaServer
-from el_sbobinator.utils.logging_utils import redact_secrets
+from el_sbobinator.utils.logging_utils import prepare_startup, redact_secrets
 from el_sbobinator.utils.webview2_recovery import (
     build_missing_webview2_html,
     clear_webview2_cache,
@@ -158,6 +158,7 @@ def build_close_handler(
 
 
 def main():
+    prepare_startup()
     from el_sbobinator.app_webview import ElSbobinatorApi
 
     api = ElSbobinatorApi()

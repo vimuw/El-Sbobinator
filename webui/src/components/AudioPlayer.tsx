@@ -1,3 +1,4 @@
+import { reportClientError } from '../diagnostics';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Keyboard, Link, Pause, Play, RefreshCw, RotateCcw, SkipBack, SkipForward, Unlink, Volume2 } from 'lucide-react';
@@ -296,7 +297,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
     try {
       await onRelink?.();
     } catch (e) {
-      console.error('Failed to relink audio:', e);
+      reportClientError('Failed to relink audio:', e);
     } finally {
       setIsRelinking(false);
     }
@@ -314,7 +315,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
       }
       await onRemoveAudio?.();
     } catch (e) {
-      console.error('Failed to remove audio:', e);
+      reportClientError('Failed to remove audio:', e);
     } finally {
       setIsRemovingAudio(false);
     }

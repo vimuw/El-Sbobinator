@@ -351,7 +351,12 @@ export interface PywebviewApi {
     fallbackKeys?: string[],
     preferredModel?: string,
     fallbackModels?: string[],
+    sessionDir?: string,
+    frontendVersion?: string,
   ) => Promise<{ ok: boolean; report?: string; error?: string }>;
+  list_diagnostic_sessions?: () => Promise<{ ok: boolean; sessions?: Array<{ path: string; label: string }>; error?: string }>;
+  export_diagnostics?: (sessionDir?: string, frontendVersion?: string) => Promise<{ ok: boolean; target_path?: string; cancelled?: boolean; error?: string }>;
+  record_frontend_event?: (kind: string, message?: string, stack?: string) => Promise<{ ok: boolean; error?: string }>;
   open_logs_folder?: () => Promise<{ ok: boolean; error?: string }>;
   upload_browser_files?: (files: File[]) => Promise<FileDescriptor[]>;
   set_browser_scenario?: (scenario: string) => Promise<{ ok: boolean; scenario?: string; error?: string }>;

@@ -1,3 +1,4 @@
+import { reportClientError } from '../diagnostics';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -102,7 +103,7 @@ export function ArchivePage({
           if (onNotification) {
             onNotification('Importazione non riuscita', res.error, 'error');
           } else {
-            console.error('Importazione non riuscita:', res.error);
+            reportClientError('Importazione non riuscita:', res.error);
           }
         }
       }
@@ -110,7 +111,7 @@ export function ArchivePage({
       if (onNotification) {
         onNotification('Importazione non riuscita', String(e), 'error');
       } else {
-        console.error('Importazione non riuscita:', e);
+        reportClientError('Importazione non riuscita:', e);
       }
     } finally {
       setIsImporting(false);

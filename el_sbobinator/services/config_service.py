@@ -80,27 +80,11 @@ def debug_log(msg: str) -> None:
     if not is_debug:
         return
 
-    # Redact secrets to prevent leaking credentials in stdout or app.log
     try:
-        from el_sbobinator.utils.logging_utils import redact_secrets
+        from el_sbobinator.utils.logging_utils import get_logger, initialize_app_logging
 
-        msg = redact_secrets(msg)
-    except Exception:
-        pass
-
-    # Always print to stdout if debug is enabled
-    try:
-        print(f"[debug] {msg}", flush=True)
-    except Exception:
-        pass
-    # Log to a persistent file in user config directory
-    try:
-        log_dir = os.path.dirname(CONFIG_FILE)
-        if log_dir:
-            os.makedirs(log_dir, exist_ok=True)
-            log_file = os.path.join(log_dir, "app.log")
-            with open(log_file, "a", encoding="utf-8") as fh:
-                fh.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {msg}\n")
+        initialize_app_logging()
+        get_logger().info("[debug] %s", msg)
     except Exception:
         pass
 

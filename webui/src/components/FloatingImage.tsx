@@ -1,3 +1,4 @@
+import { reportClientError } from '../diagnostics';
 /* eslint-disable react-refresh/only-export-components */
 import React, { useEffect, useRef } from 'react';
 import { Node, mergeAttributes } from '@tiptap/core';
@@ -366,7 +367,7 @@ export const FloatingImage = Node.create({
                   }
                 }
               } catch (e) {
-                console.error('Error selecting image node on mousedown:', e);
+                reportClientError('Error selecting image node on mousedown:', e);
               }
               return false;
             },

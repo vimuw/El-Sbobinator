@@ -80,7 +80,10 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
 | `validate_environment(api_key?, check_api_key?, preferred_model?, fallback_models?)` | `{ok, result?: ValidationResult, error?}` | Cached environment check. | |
 | `get_api_usage(api_key?, fallback_keys?, preferred_model?, fallback_models?)` | API keys and models | `{ok, result?: ApiUsageResult, error?}` | Aggregated Gemini state-first operational status, project limits, single-authority telemetry, work stats, and credential profiles. |
 
-| `get_diagnostic_report(api_key?, fallback_keys?, preferred_model?, fallback_models?)` | API keys and models | `{ok, report?: string, error?}` | Sanitized technical support diagnostic report formatted in Markdown. |
+| `get_diagnostic_report(api_key?, fallback_keys?, preferred_model?, fallback_models?, session_dir?, frontend_version?)` | Legacy credential arguments ignored; optional archive session and frontend version | `{ok, report?: string, error?}` | Local Markdown support report; no remote API validation. |
+| `list_diagnostic_sessions()` | none | `{ok, sessions?: [{path, label, updated_at}], error?}` | Up to 100 recent archive sessions for optional selection. |
+| `export_diagnostics(session_dir?, frontend_version?)` | Optional archive session and frontend version | `{ok, target_path?, cancelled?, error?}` | Desktop native save dialog and atomic ZIP export of the same report data. Cancellation returns `ok=true, cancelled=true`. Browser host returns unavailable. |
+| `record_frontend_event(kind, message?, stack?)` | `ready`, `error`, `unhandledrejection`, `react`; bounded strings | `{ok, error?}` | Local bounded incidents or current boot readiness; browser host acknowledges without persisting. |
 | `open_logs_folder()` | — | `{ok, error?}` | Opens the local configuration and logs directory in the OS file explorer. |
 | `get_session_storage_info()` | — | `{ok, total_bytes, total_sessions, session_root, error?}` | Wraps `shared.get_session_storage_info` (30 s cache). |
 | `cleanup_old_sessions(max_age_days=0)` | — | `{ok, removed, freed_bytes, errors, candidates, preserved_completed, missing_completed_html, error?}` | Deletes incomplete session folders (default: all incomplete sessions). |

@@ -12,6 +12,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from el_sbobinator.utils.logging_utils import prepare_startup
+
+prepare_startup()
+
 from el_sbobinator.app_webview import main
 
 if __name__ == "__main__":

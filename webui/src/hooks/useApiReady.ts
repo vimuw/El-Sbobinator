@@ -1,3 +1,4 @@
+import { reportClientError } from '../diagnostics';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ModelOption, SettingsPayload } from '../bridge';
 import { DEFAULT_MODEL } from '../utils';
@@ -70,7 +71,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
         appendConsoleRef.current('Connesso a Python.');
         applySettings(cfg);
       } catch (e) {
-        console.error('Load settings failed:', e);
+        reportClientError('Load settings failed:', e);
         if (!alive || attempt !== bootstrapAttemptRef.current) return;
         if (!initDoneRef.current && retriesRef.current < 3) {
           retriesRef.current += 1;

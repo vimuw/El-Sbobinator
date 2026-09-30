@@ -1,3 +1,4 @@
+import { reportClientError } from '../diagnostics';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import type { FileItem, ProcessingAction } from '../appState';
@@ -290,7 +291,7 @@ export function useArchiveSync({
     try {
       await handleRetryFailedRevisionBlocks(session.session_dir, fileId);
     } catch (err) {
-      console.error('Archive retry error:', err);
+      reportClientError('Archive retry error:', err);
     } finally {
       dispatch({ type: 'queue/set_retrying_blocks', id: fileId, value: false });
     }

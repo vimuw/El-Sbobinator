@@ -166,6 +166,9 @@ def build_missing_webview2_html() -> str:
     """Generate HTML fallback error page shown when WebView2 is missing on Windows."""
     download_url = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
     repo_url = "https://developer.microsoft.com/en-us/microsoft-edge/webview2/"
+    from el_sbobinator.services.config_service import get_config_dir
+
+    log_path = os.path.join(get_config_dir(), "el_sbobinator.log")
     return f"""<!doctype html>
 <html lang="it">
   <head>
@@ -309,6 +312,8 @@ def build_missing_webview2_html() -> str:
         <li>Avvia il file scaricato e completa l&apos;installazione.</li>
         <li>El Sbobinator rileverà il completamento e si riavvierà automaticamente!</li>
       </ol>
+      <p>Se il problema persiste, il log per l&apos;assistenza si trova qui:</p>
+      <p><code style="word-break: break-all;">{escape(log_path)}</code></p>
       <div id="status-box" class="status-box">
         <span id="status-dot" class="status-dot"></span>
         <span id="status-msg" class="status-msg">Verifica dello stato di WebView2 in corso...</span>

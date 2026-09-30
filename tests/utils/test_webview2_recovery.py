@@ -198,6 +198,7 @@ class Webview2RecoveryTests(unittest.TestCase):
         html = build_missing_webview2_html()
         self.assertIn("<!doctype html>", html)
         self.assertIn("Serve WebView2", html)
+        self.assertIn("el_sbobinator.log", html)
         self.assertIn("status-box", html)
         self.assertIn("status-dot", html)
         self.assertIn("Scarica WebView2 Runtime", html)

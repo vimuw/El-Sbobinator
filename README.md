@@ -77,6 +77,8 @@ Al termine dell'elaborazione, la lezione viene aperta nell'editor integrato dell
 
 ## Risoluzione Problemi Comuni
 
+Per segnalare un problema, aprire **Impostazioni → Diagnostica → Esporta diagnostica** e, se pertinente, selezionare la sbobina coinvolta. Lo ZIP include versione/build, avvio, errori recenti e log selezionati; esclude audio, trascrizioni e configurazione completa. **Copia report diagnostico** raccoglie gli stessi dati in testo. Se la WebUI non parte, il percorso del log è indicato nella schermata di recupero WebView2. Dettagli in [docs/diagnostics.md](docs/diagnostics.md).
+
 ### Avviso SmartScreen su Windows ("PC protetto da Windows")
 Nei software open source distribuiti senza certificato commerciale a pagamento, Windows può mostrare questo avviso al primo avvio:
 1. Nella schermata blu, cliccare su **Ulteriori informazioni**.

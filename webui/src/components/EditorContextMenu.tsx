@@ -1,3 +1,4 @@
+import { reportClientError } from '../diagnostics';
 import React from 'react';
 import { createPortal } from 'react-dom';
 import type { Editor as TiptapEditor } from '@tiptap/core';
@@ -54,7 +55,7 @@ async function copySelectionToClipboard(editor: TiptapEditor) {
       await navigator.clipboard.writeText(plainText);
     }
   } catch (err) {
-    console.error('Clipboard error', err);
+    reportClientError('Clipboard error', err);
   }
 }
 
@@ -113,7 +114,7 @@ export function EditorContextMenu({
             const text = await navigator.clipboard.readText();
             editor.commands.insertContent(text);
           } catch (_) {
-            console.error('Clipboard error');
+            reportClientError('Clipboard error');
           }
         }}
       >
@@ -133,7 +134,7 @@ export function EditorContextMenu({
             const plain = text.replace(/<[^>]*>?/gm, '');
             editor.commands.insertContent(plain);
           } catch (_) {
-            console.error('Clipboard error');
+            reportClientError('Clipboard error');
           }
         }}
       >

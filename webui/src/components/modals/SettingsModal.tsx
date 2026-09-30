@@ -1,3 +1,4 @@
+import { reportClientError } from '../../diagnostics';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Settings, HardDrive, Activity, SlidersHorizontal, Loader2, X, FlaskConical } from 'lucide-react';
@@ -14,6 +15,7 @@ import { UpdaterSection, type SettingsUpdateInstallState } from './settings/Upda
 import { useSettingsStorage, SESSION_CLEANUP_DAYS } from '../../hooks/useSettingsStorage';
 import { formatSize } from '../../utils';
 import { getHostCapabilities } from '../../browserHost';
+import { APP_VERSION } from '../../branding';
 import { STORAGE_KEYS } from '../../storageKeys';
 
 export type { SettingsUpdateInstallState };
@@ -211,7 +213,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         setApiUsage(res.result);
       }
     } catch (e) {
-      console.error('Failed to fetch api usage:', e);
+      reportClientError('Failed to fetch api usage:', e);
     } finally {
       if (isMountedRef.current) setIsLoadingUsage(false);
     }
@@ -290,13 +292,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  const handleCopyReport = async () => {
+  const handleCopyReport = async (sessionDir?: string) => {
     if (!window.pywebview?.api?.get_diagnostic_report) return;
     const res = await window.pywebview.api.get_diagnostic_report(
-      apiKey.trim(),
-      fallbackKeys,
-      preferredModel,
-      fallbackModels,
+      undefined, undefined, undefined, undefined, sessionDir, APP_VERSION,
     );
     if (res?.ok && res.report) {
       await navigator.clipboard.writeText(res.report);

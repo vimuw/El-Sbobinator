@@ -1,8 +1,11 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { DiagnosticsSection, type DisplayCheck } from './DiagnosticsSection';
 import type { ApiUsageResult } from '../../../bridge';
+import { APP_VERSION } from '../../../branding';
+
+afterEach(() => { delete window.pywebview; });
 
 describe('DiagnosticsSection', () => {
   const dummyChecks: DisplayCheck[] = [
@@ -20,6 +23,29 @@ describe('DiagnosticsSection', () => {
     },
   ];
 
+  it('exports the selected sbobina and handles cancellation and export failure', async () => {
+    const exportBundle = vi.fn().mockResolvedValueOnce({ ok: true, cancelled: true }).mockResolvedValueOnce({ ok: false, error: 'Disk full' }).mockResolvedValue({ ok: true });
+    window.pywebview = { api: {
+      list_diagnostic_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [{ path: 'archive/lesson', label: 'Lezione' }] }),
+      export_diagnostics: exportBundle,
+    } } as unknown as NonNullable<typeof window.pywebview>;
+    const copy = vi.fn().mockResolvedValue(undefined);
+    render(<DiagnosticsSection isValidatingEnvironment={false} onRunValidation={vi.fn()} validationResult={null} displayChecks={[]} onCopyReport={copy} />);
+    await screen.findByText('Lezione');
+    fireEvent.click(screen.getByLabelText('Sbobina interessata (facoltativa)'));
+    fireEvent.click(screen.getByRole('option', { name: 'Lezione' }));
+    const button = screen.getByRole('button', { name: 'Esporta diagnostica' });
+    await act(async () => { fireEvent.click(button); });
+    expect(exportBundle).toHaveBeenLastCalledWith('archive/lesson', APP_VERSION);
+    expect(screen.queryByText('Pacchetto diagnostico salvato.')).toBeNull();
+    await act(async () => { fireEvent.click(button); });
+    expect(screen.getByRole('alert').textContent).toContain('Disk full');
+    await act(async () => { fireEvent.click(button); });
+    expect(screen.getByRole('status').textContent).toContain('Pacchetto diagnostico salvato.');
+    await act(async () => { fireEvent.click(screen.getByLabelText('Copia report diagnostico')); });
+    expect(copy).toHaveBeenCalledWith('archive/lesson');
+  });
+
   it('renders diagnostics checks and handles run validation', () => {
     const onRunValidation = vi.fn();
     render(
@@ -31,15 +57,52 @@ describe('DiagnosticsSection', () => {
       />
     );
 
-    expect(screen.getByText('Verifica Ambiente e Integrità')).toBeTruthy();
+    expect(screen.getByText('Verifica ambiente e integrità')).toBeTruthy();
     expect(screen.getByText('API Key Gemini')).toBeTruthy();
     expect(screen.getByText('Chiave API valida')).toBeTruthy();
     expect(screen.getByText('FFmpeg')).toBeTruthy();
     expect(screen.getByText('da verificare')).toBeTruthy();
     expect(screen.queryByText('In attesa di verifica')).toBeNull();
 
+    expect(screen.getByText('Verifica ora')).toBeTruthy();
+
     const validateBtn = screen.getByLabelText('Verifica ambiente');
     fireEvent.click(validateBtn);
+    expect(onRunValidation).toHaveBeenCalled();
+  });
+
+  it('renders "Verifica in corso..." and is disabled when isValidatingEnvironment is true', () => {
+    render(
+      <DiagnosticsSection
+        isValidatingEnvironment={true}
+        onRunValidation={vi.fn()}
+        validationResult={null}
+        displayChecks={dummyChecks}
+      />
+    );
+
+    const btn = screen.getByTitle('Verifica in corso…');
+    expect(btn).toBeTruthy();
+    expect(btn.hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText('Verifica in corso...')).toBeTruthy();
+  });
+
+  it('renders "Riesegui" button with appropriate label when validationResult is present', () => {
+    const onRunValidation = vi.fn();
+    render(
+      <DiagnosticsSection
+        isValidatingEnvironment={false}
+        onRunValidation={onRunValidation}
+        validationResult={{ ok: true, summary: 'Tutti i controlli superati', checks: [] }}
+        displayChecks={dummyChecks}
+      />
+    );
+
+    const rieseguiBtn = screen.getByLabelText('Riesegui verifica ambiente');
+    expect(rieseguiBtn).toBeTruthy();
+    expect(screen.getByText('Riesegui')).toBeTruthy();
+
+    fireEvent.click(rieseguiBtn);
     expect(onRunValidation).toHaveBeenCalled();
   });
 

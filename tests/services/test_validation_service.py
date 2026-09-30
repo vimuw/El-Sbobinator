@@ -504,10 +504,22 @@ class TestValidationKeyringCheck(unittest.TestCase):
             preferred_model="gemini-2.5-flash",
         )
 
-        self.assertIn("# 🩺 Report Diagnostico El Sbobinator", report)
-        self.assertIn("Quote & Utilizzo Google AI Studio", report)
+        self.assertIn("Report Diagnostico El Sbobinator", report)
+        self.assertIn("no remote API validation", report)
         self.assertNotIn(fake_key, report)
-        self.assertIn("AIzaSy...2345", report)
+        self.assertNotIn("AIzaSy...2345", report)
+
+    @patch("el_sbobinator.services.diagnostics_service.collect_files")
+    def test_report_does_not_run_remote_checks(self, collect, *_mocks):
+        from el_sbobinator.services.validation_service import generate_diagnostic_report
+
+        collect.return_value = {"report.md": "Local report"}
+        with patch(
+            "el_sbobinator.services.validation_service.validate_environment"
+        ) as validate:
+            report = generate_diagnostic_report(api_key="should_not_be_sent")
+        self.assertEqual(report, "Local report")
+        validate.assert_not_called()
 
     @patch(
         "el_sbobinator.services.validation_service.platform.system",

@@ -1,8 +1,10 @@
+import argparse
 import importlib.util
+import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 _MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "build_release.py"
 _SPEC = importlib.util.spec_from_file_location("build_release_module", _MODULE_PATH)
@@ -13,6 +15,88 @@ _SPEC.loader.exec_module(build_release)
 
 
 class BuildReleaseTests(unittest.TestCase):
+    def test_command_build_refreshes_manifest_before_packaging(self):
+        for target in ("windows", "macos"):
+            for existing in (False, True):
+                with self.subTest(target=target, existing=existing):
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        root = Path(tmpdir)
+                        webui = root / "webui"
+                        webui.mkdir()
+                        (webui / "package.json").write_text('{"version":"1.0.0"}')
+                        manifest = root / "build" / "diagnostic_build.json"
+                        if existing:
+                            manifest.parent.mkdir()
+                            manifest.write_text('{"version":"stale"}')
+                        args = argparse.Namespace(
+                            target=target,
+                            ui="webui",
+                            install_deps=False,
+                            skip_checks=True,
+                            skip_npm_install=True,
+                            skip_postbuild_smoke=True,
+                            version="v2.1.0",
+                        )
+
+                        def verify_manifest(command, manifest_path=manifest, **kwargs):
+                            info = json.loads(manifest_path.read_text())
+                            self.assertEqual(info["version"], "2.1.0")
+                            self.assertEqual(info["commit"], "current-commit")
+                            self.assertTrue(
+                                any(str(manifest_path) in arg for arg in command)
+                            )
+
+                        with (
+                            patch.object(build_release, "ROOT", root),
+                            patch.object(build_release, "WEBUI_DIR", webui),
+                            patch.object(
+                                build_release, "print_windows_webview2_notice"
+                            ),
+                            patch.object(build_release, "build_webui"),
+                            patch.object(
+                                build_release, "run", side_effect=verify_manifest
+                            ) as run,
+                            patch.object(build_release, "run_inno_setup"),
+                            patch.object(build_release, "run_create_dmg"),
+                            patch.object(
+                                build_release.subprocess,
+                                "run",
+                                return_value=MagicMock(stdout="current-commit\n"),
+                            ),
+                        ):
+                            build_release.command_build(args)
+                        run.assert_called_once()
+
+    def test_build_manifest_records_release_version_and_is_packaged(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            webui = root / "webui"
+            webui.mkdir()
+            (webui / "package.json").write_text('{"version":"1.0.0"}')
+            with (
+                patch.object(build_release, "ROOT", root),
+                patch.object(build_release, "WEBUI_DIR", webui),
+                patch.object(
+                    build_release.subprocess,
+                    "run",
+                    return_value=MagicMock(stdout="abc123\n"),
+                ),
+            ):
+                build_release.write_build_metadata("v2.1.0")
+                info = json.loads(
+                    (root / "build" / "diagnostic_build.json").read_text()
+                )
+                self.assertEqual(info["version"], "2.1.0")
+                self.assertEqual(info["commit"], "abc123")
+                self.assertTrue(
+                    any(
+                        "diagnostic_build.json" in item
+                        for item in build_release.pyinstaller_command(
+                            "windows", "webview"
+                        )
+                    )
+                )
+
     def test_postbuild_smoke_fails_when_artifact_is_missing(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch.object(build_release, "ROOT", Path(tmpdir)):

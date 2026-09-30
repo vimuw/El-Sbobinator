@@ -67,6 +67,7 @@ from el_sbobinator.utils.logging_utils import (
     attach_file_handler,
     detach_file_handler,
     get_logger,
+    operation_id,
 )
 
 # Maximum seconds to wait for a user response in the "regenerate?" dialog before
@@ -281,6 +282,7 @@ def _run_phase1_transcription(
     initial_prev_memory: str,
 ) -> tuple[Any, str | None]:
     """Execute phase 1 chunked transcription."""
+    logger.info("Trascrizione avviata.", extra={"stage": "phase1"})
     print(
         f"[*] INIZIO FASE 1: Trascrizione a blocchi (circa {settings.chunk_minutes} min per blocco)"
     )
@@ -339,6 +341,7 @@ def _run_phase2_revision(
     settings,
 ) -> tuple[Any, str, bool]:
     """Execute phase 2 macro revision. Returns (client, revised_text, should_exit)."""
+    logger.info("Revisione avviata.", extra={"stage": "phase2"})
     print("\n--------------------------------------")
     runtime.phase("Fase 2/3: revisione")
 
@@ -664,13 +667,15 @@ def _esegui_sbobinatura_impl(
         session = session_ctx.session
         logger = get_logger(
             "el_sbobinator.pipeline",
-            run_id=os.path.basename(session_ctx.session_dir),
+            run_id=operation_id(session_ctx.session_dir),
             session_dir=session_ctx.session_dir,
             input_file=os.path.basename(input_path),
         )
         log_handler = attach_file_handler(
             os.path.join(session_ctx.session_dir, "run.log")
         )
+
+        logger.info("Elaborazione avviata.", extra={"stage": "startup"})
 
         def _on_autosave_fatal(msg: str) -> None:
             print(msg)

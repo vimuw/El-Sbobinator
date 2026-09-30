@@ -1,3 +1,4 @@
+import { reportClientError } from '../diagnostics';
 import { useEffect, useRef, useState } from 'react';
 import * as Y from 'yjs';
 import * as awarenessProtocol from 'y-protocols/awareness';
@@ -82,7 +83,7 @@ export function useEditorCollaboration(
         },
       });
     } catch (err) {
-      console.error('Errore inizializzazione WebRTC provider:', err);
+      reportClientError('Errore inizializzazione WebRTC provider:', err);
     }
 
     setCollabState({ ydoc: doc, provider: webrtc });
@@ -116,14 +117,14 @@ export function useEditorCollaboration(
               const update = base64ToBytes(event.data.update);
               Y.applyUpdate(doc, update, 'local-bc');
             } catch (e) {
-              console.error('Error applying BC update:', e);
+              reportClientError('Error applying BC update:', e);
             }
           } else if (event.data?.type === 'yjs-awareness' && event.data?.update && awareness) {
             try {
               const update = base64ToBytes(event.data.update);
               awarenessProtocol.applyAwarenessUpdate(awareness, update, 'local-bc');
             } catch (e) {
-              console.error('Error applying BC awareness:', e);
+              reportClientError('Error applying BC awareness:', e);
             }
           } else if (event.data?.type === 'yjs-request-state') {
             const state = Y.encodeStateAsUpdate(doc);
@@ -158,7 +159,7 @@ export function useEditorCollaboration(
           }
         }
       } catch (e) {
-        console.error('Error parsing collab signal:', e);
+        reportClientError('Error parsing collab signal:', e);
       }
     };
     const unregisterSignal = registerCollabSignalListener(receiveSignalHandler);

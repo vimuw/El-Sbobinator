@@ -1,8 +1,18 @@
-import React, { StrictMode } from 'react';
+import React, { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import { initBrowserHost } from './browserHost';
 import './index.css';
+import { installFrontendDiagnostics, reportClientError, reportFrontendReady } from './diagnostics';
+
+installFrontendDiagnostics();
+
+// This component belongs to the entry point, which is not a Fast Refresh boundary.
+// eslint-disable-next-line react-refresh/only-export-components
+function DiagnosedApp() {
+  useEffect(() => { reportFrontendReady(); }, []);
+  return <App />;
+}
 
 
 class RootErrorBoundary extends React.Component<React.PropsWithChildren, { hasError: boolean; message: string; stack: string }> {
@@ -20,7 +30,7 @@ class RootErrorBoundary extends React.Component<React.PropsWithChildren, { hasEr
   }
 
   componentDidCatch(error: unknown) {
-    console.error('Root render failed:', error);
+    reportClientError('react', error);
   }
 
   render() {
@@ -70,6 +80,11 @@ class RootErrorBoundary extends React.Component<React.PropsWithChildren, { hasEr
             >
               {this.state.stack || this.state.message || 'Errore sconosciuto'}
             </pre>
+            {window.pywebview?.api?.export_diagnostics && (
+              <button type="button" className="app-button-secondary" onClick={() => {
+                void window.pywebview?.api?.export_diagnostics?.().catch(error => reportClientError('support-export', error));
+              }}>Esporta diagnostica</button>
+            )}
           </div>
         </div>
       );
@@ -84,10 +99,10 @@ async function mountApp() {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <RootErrorBoundary>
-        <App />
+        <DiagnosedApp />
       </RootErrorBoundary>
     </StrictMode>,
   );
 }
 
-void mountApp();
+void mountApp().catch(error => reportClientError('mount', error));

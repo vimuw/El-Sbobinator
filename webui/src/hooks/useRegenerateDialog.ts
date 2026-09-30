@@ -1,3 +1,4 @@
+import { reportClientError } from '../diagnostics';
 import { useCallback, useState } from 'react';
 import { normalizeSessionPath } from '../utils';
 import type { EditorSaveController } from './useEditorAutosave';
@@ -39,7 +40,7 @@ export function useRegenerateDialog({
               if (!flushed) {
                 try {
                   if (window.pywebview?.api?.answer_regenerate) await window.pywebview.api.answer_regenerate(false);
-                } catch (e) { console.error('Failed to send regen cancel after flush error:', e); }
+                } catch (e) { reportClientError('Failed to send regen cancel after flush error:', e); }
                 return;
               }
             }
@@ -53,7 +54,7 @@ export function useRegenerateDialog({
         }
       }
       if (window.pywebview?.api?.answer_regenerate) await window.pywebview.api.answer_regenerate(ans);
-    } catch (e) { console.error('Failed to send answer to Python:', e); }
+    } catch (e) { reportClientError('Failed to send answer to Python:', e); }
   }, [closePreview, editorControllerRef, isPreviewOpen, previewSessionDir, regeneratePrompt]);
 
   const handleRegenDirtyConfirm = useCallback(async () => {
@@ -65,14 +66,14 @@ export function useRegenerateDialog({
     closePreview();
     try {
       if (window.pywebview?.api?.answer_regenerate) await window.pywebview.api.answer_regenerate(true);
-    } catch (e) { console.error('Failed to send regen answer:', e); }
+    } catch (e) { reportClientError('Failed to send regen answer:', e); }
   }, [closePreview, editorControllerRef]);
 
   const handleRegenDirtyCancel = useCallback(async () => {
     setRegenDirtyConfirm(null);
     try {
       if (window.pywebview?.api?.answer_regenerate) await window.pywebview.api.answer_regenerate(false);
-    } catch (e) { console.error('Failed to send regen cancel:', e); }
+    } catch (e) { reportClientError('Failed to send regen cancel:', e); }
   }, []);
 
   return {

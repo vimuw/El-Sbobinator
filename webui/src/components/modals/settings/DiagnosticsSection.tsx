@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { reportClientError } from '../../../diagnostics';
+import React, { useState, useEffect } from 'react';
 import {
   FlaskConical,
   Loader2,
@@ -10,7 +11,10 @@ import {
   Copy,
   FolderOpen,
   RefreshCw,
+  Download,
 } from 'lucide-react';
+import { APP_VERSION } from '../../../branding';
+import { CustomSelect } from './CustomSelect';
 import type { ValidationResult, ApiUsageResult } from '../../../bridge';
 
 export interface DisplayCheck {
@@ -29,7 +33,7 @@ interface DiagnosticsSectionProps {
   validationResult: ValidationResult | null;
   displayChecks: DisplayCheck[];
   onOpenLogs?: () => void;
-  onCopyReport?: () => Promise<void>;
+  onCopyReport?: (sessionDir?: string) => Promise<void>;
   apiUsage?: ApiUsageResult | null;
   showOpenLogs?: boolean;
 }
@@ -46,25 +50,60 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
 }) => {
   const [copiedToast, setCopiedToast] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
+  const hasRun = Boolean(validationResult);
+  const [sessions, setSessions] = useState<Array<{ path: string; label: string }>>([]);
+  const [sessionDir, setSessionDir] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [supportMessage, setSupportMessage] = useState('');
+  const [supportError, setSupportError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    if (showOpenLogs && window.pywebview?.api?.list_diagnostic_sessions) {
+      void window.pywebview.api.list_diagnostic_sessions().then(result => {
+        if (!active) return;
+        if (result.ok) setSessions(result.sessions || []);
+        else setSupportError(result.error || 'Impossibile elencare le sbobine.');
+      }).catch(() => { if (active) setSupportError('Impossibile elencare le sbobine.'); });
+    }
+    return () => { active = false; };
+  }, [showOpenLogs]);
+
+  const handleExport = async () => {
+    const api = window.pywebview?.api?.export_diagnostics;
+    if (!api || exporting) return;
+    setExporting(true);
+    setSupportError('');
+    setSupportMessage('');
+    try {
+      const result = await api(sessionDir || undefined, APP_VERSION);
+      if (!result.ok) throw new Error(result.error || 'Esportazione non riuscita.');
+      if (!result.cancelled) setSupportMessage('Pacchetto diagnostico salvato.');
+    } catch (error) {
+      setSupportError(error instanceof Error ? error.message : String(error));
+    } finally { setExporting(false); }
+  };
 
   const handleCopyReport = async () => {
     if (isCopying) return;
     setIsCopying(true);
+    setSupportError('');
     try {
       if (onCopyReport) {
-        await onCopyReport();
+        await onCopyReport(sessionDir || undefined);
         setCopiedToast(true);
         setTimeout(() => setCopiedToast(false), 2500);
       } else if (window.pywebview?.api?.get_diagnostic_report) {
-        const res = await window.pywebview.api.get_diagnostic_report();
+        const res = await window.pywebview.api.get_diagnostic_report(undefined, undefined, undefined, undefined, sessionDir || undefined, APP_VERSION);
         if (res?.ok && res.report) {
           await navigator.clipboard.writeText(res.report);
           setCopiedToast(true);
           setTimeout(() => setCopiedToast(false), 2500);
-        }
+        } else { throw new Error(res?.error || 'Report non disponibile.'); }
       }
     } catch (e) {
-      console.error('Copy diagnostic report failed:', e);
+      setSupportError(e instanceof Error ? e.message : String(e));
+      reportClientError('Copy diagnostic report failed:', e);
     } finally {
       setIsCopying(false);
     }
@@ -79,22 +118,58 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Verifica Ambiente e Integrità */}
+    <div className="space-y-3 animate-fade-in">
+      {/* Verifica ambiente e integrità */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <FlaskConical className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
           <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-            Verifica Ambiente e Integrità
+            Verifica ambiente e integrità
           </h3>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={onRunValidation}
+            disabled={isValidatingEnvironment}
+            className="app-button-secondary is-settings-action"
+            title={
+              isValidatingEnvironment
+                ? 'Verifica in corso…'
+                : hasRun
+                  ? 'Riesegui verifica ambiente'
+                  : 'Verifica ambiente'
+            }
+            aria-label={
+              hasRun ? 'Riesegui verifica ambiente' : 'Verifica ambiente'
+            }
+          >
+            {isValidatingEnvironment ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent-text)]" />
+                <span>Verifica in corso...</span>
+              </>
+            ) : hasRun ? (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 text-[var(--accent-text)] transition-transform duration-500 ease-out settings-refresh-icon" />
+                <span>Riesegui</span>
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 text-[var(--accent-text)] transition-transform duration-500 ease-out settings-refresh-icon" />
+                <span>Verifica ora</span>
+              </>
+            )}
+          </button>
+
+          <div className="w-px h-5 bg-[var(--border-default)] shrink-0 mx-0.5" aria-hidden="true" />
+
           <button
             type="button"
             onClick={handleCopyReport}
             disabled={isCopying}
-            className="p-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 shrink-0 cursor-pointer"
+            className="app-button-secondary is-settings-action is-icon"
             title={copiedToast ? 'Report copiato!' : 'Copia report per assistenza'}
             aria-label="Copia report diagnostico"
           >
@@ -107,35 +182,44 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
             )}
           </button>
 
+          {showOpenLogs && window.pywebview?.api?.export_diagnostics && (
+            <button type="button" className="app-button-secondary is-settings-action is-icon" disabled={exporting || isCopying} onClick={handleExport}
+              title={exporting ? 'Esportazione in corso…' : 'Esporta diagnostica'} aria-label="Esporta diagnostica">
+              {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            </button>
+          )}
           {showOpenLogs && (
             <button
               type="button"
               onClick={handleOpenLogsFolder}
-              className="p-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors shrink-0 cursor-pointer"
+              className="app-button-secondary is-settings-action is-icon"
               title="Apri cartella log"
               aria-label="Apri cartella log"
             >
               <FolderOpen className="w-4 h-4" />
             </button>
           )}
-
-          <button
-            type="button"
-            onClick={onRunValidation}
-            disabled={isValidatingEnvironment}
-            className="p-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 shrink-0 cursor-pointer"
-            title="Verifica ambiente"
-            aria-label="Verifica ambiente"
-          >
-            {isValidatingEnvironment ? (
-              <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-text)]" />
-            ) : (
-              <RefreshCw className="w-4 h-4 text-[var(--accent-text)]" />
-            )}
-          </button>
         </div>
       </div>
 
+      {showOpenLogs && window.pywebview?.api?.export_diagnostics && (
+        <div className="flex flex-col gap-2">
+          <label htmlFor="diagnostic-session" className="text-xs text-[var(--text-secondary)]">Sbobina interessata (facoltativa)</label>
+          <CustomSelect
+            id="diagnostic-session"
+            value={sessionDir}
+            disabled={exporting || isCopying}
+            onChange={setSessionDir}
+            options={[
+              { value: '', label: 'Solo diagnostica generale' },
+              ...sessions.map(session => ({ value: session.path, label: session.label })),
+            ]}
+          />
+          <p className="text-xs text-[var(--text-secondary)]">Crea un pacchetto locale per l’assistenza. Include errori e log, senza audio, trascrizioni o chiavi API. Controllalo prima di condividerlo.</p>
+        </div>
+      )}
+      {supportError && <p role="alert" className="text-xs text-[var(--error-text)]">{supportError}</p>}
+      {supportMessage && <p role="status" className="text-xs text-[var(--success-text)]">{supportMessage}</p>}
       {/* Validation Result Banner */}
       {validationResult && (() => {
         const hasErrors = !validationResult.ok || validationResult.checks?.some(c => c.status === 'error');

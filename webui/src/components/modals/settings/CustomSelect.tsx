@@ -10,6 +10,7 @@ export interface CustomSelectOption {
 }
 
 interface CustomSelectProps {
+  id?: string;
   value: string;
   onChange: (value: string) => void;
   options: CustomSelectOption[];
@@ -19,6 +20,7 @@ interface CustomSelectProps {
 }
 
 export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
+  id,
   value,
   onChange,
   options,
@@ -87,6 +89,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
 
       {/* Trigger Button */}
       <button
+        id={id}
         type="button"
         disabled={disabled}
         aria-haspopup="listbox"
@@ -99,7 +102,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
             <>
               <span className="truncate">{selectedOption.label}</span>
               {selectedOption.badge && (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)] leading-normal shrink-0">
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)] leading-normal shrink-0">
                   {selectedOption.badge}
                 </span>
               )}
@@ -153,7 +156,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
                   <span className="truncate">{opt.label}</span>
                   {opt.badge && (
                     <span
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border leading-normal shrink-0 ${
+                      className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border leading-normal shrink-0 ${
                         isSelected
                           ? 'bg-[var(--bg-surface)] text-[var(--accent-text)] border-[var(--accent-ring)]'
                           : 'bg-[var(--accent-subtle)] text-[var(--accent-text)] border-[var(--accent-ring)]'

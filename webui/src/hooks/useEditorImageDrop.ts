@@ -1,3 +1,4 @@
+import { reportClientError } from '../diagnostics';
 import { useCallback, useRef } from 'react';
 import type { EditorView } from '@tiptap/pm/view';
 import type { Node as ProsemirrorNode } from '@tiptap/pm/model';
@@ -24,7 +25,7 @@ export function useEditorImageDrop({ editorRef }: UseEditorImageDropOptions) {
           { type: 'floatingImage', attrs: { src, alt: file.name, title: file.name, width: 56 } },
         ]).run();
       } catch (err) {
-        console.error(`Errore durante la lettura dell'immagine ${file.name}:`, err);
+        reportClientError(`Errore durante la lettura dell'immagine ${file.name}:`, err);
       }
     }
   }, [editorRef]);

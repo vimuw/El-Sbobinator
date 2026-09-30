@@ -1,3 +1,4 @@
+import { reportClientError } from '../../../diagnostics';
 import React, { useState, useMemo, useCallback } from 'react';
 import {
   Key,
@@ -301,7 +302,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
         setCopiedKeyId(prev => (prev === id ? null : prev));
       }, 2000);
     } catch (e) {
-      console.error('Failed to copy key to clipboard:', e);
+      reportClientError('Failed to copy key to clipboard:', e);
     }
   };
 

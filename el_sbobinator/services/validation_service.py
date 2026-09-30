@@ -27,9 +27,6 @@ from el_sbobinator.core.shared import DEFAULT_MODEL, get_session_root
 from el_sbobinator.services.audio_service import resolve_ffmpeg
 from el_sbobinator.services.config_service import CONFIG_FILE, get_config_dir
 from el_sbobinator.services.generation_service import create_gemini_client
-from el_sbobinator.services.usage_service import (
-    get_daily_usage,
-)
 from el_sbobinator.utils.logging_utils import redact_secrets
 
 MIN_FREE_DISK_BYTES: int = 2 * 1024 * 1024 * 1024  # 2 GB minimum
@@ -347,130 +344,10 @@ def generate_diagnostic_report(
     fallback_keys: list[str] | None = None,
     preferred_model: str | None = None,
     fallback_models: list[str] | None = None,
+    session_dir: str | None = None,
+    frontend_version: str | None = None,
 ) -> str:
-    """Generates an exhaustive, sanitized Markdown report for technical support."""
-    val_result = validate_environment(
-        api_key=api_key,
-        validate_api_key=bool(api_key),
-        preferred_model=preferred_model,
-        fallback_models=fallback_models,
-    )
+    """Compatibility entry point for an entirely local support report."""
+    from el_sbobinator.services.diagnostics_service import collect_files
 
-    usage_info = get_daily_usage(
-        primary_key=api_key,
-        fallback_keys=fallback_keys,
-        primary_model=preferred_model or DEFAULT_MODEL,
-        fallback_models=fallback_models,
-    )
-
-    logs = get_recent_log_tail(30)
-
-    lines: list[str] = [
-        "# 🩺 Report Diagnostico El Sbobinator",
-        f"- **Data/Ora Locale**: {platform.node()} • {platform.system()} {platform.release()} ({platform.machine()})",
-        f"- **Python Runtime**: {sys.version.split()[0]} ({sys.executable})",
-        f"- **Cartella Config**: `{get_config_dir()}`",
-        f"- **Cartella Sessioni**: `{get_session_root()}`",
-        "",
-        "## 📊 Quote & Utilizzo Google AI Studio (Oggi)",
-        f"- **Data Quota (PT)**: {usage_info.get('quota_date', 'N/A')}",
-        f"- **Reset Giornaliero**: {usage_info.get('next_reset_info', 'Ore 09:00')}",
-        f"- **Stato Operativo**: {usage_info.get('primary_status', 'operational')} ({usage_info.get('primary_status_detail', 'N/A')})",
-    ]
-
-    if usage_info.get("is_degraded_mode"):
-        lines.append(f"- ⚠️ **Modalità Riserva**: {usage_info.get('degraded_reason')}")
-
-    work_stats = usage_info.get("work_stats", {})
-    if work_stats:
-        lines.append("")
-        lines.append("### Lavoro Svolto Oggi")
-        lines.append(
-            f"- **Chunk completati**: {work_stats.get('chunks_completed', 0)} | "
-            f"**Revisioni completate**: {work_stats.get('revisions_completed', 0)} | "
-            f"**Sbobine completate**: {work_stats.get('sbobine_completed', 0)}"
-        )
-
-    telemetry = usage_info.get("telemetry", {})
-    if telemetry:
-        lines.append("")
-        lines.append("### Telemetria Chiamate API")
-        lines.append(
-            f"- **Totale Inviate**: {telemetry.get('requests_sent', 0)} | "
-            f"**Successi**: {telemetry.get('responses_succeeded', 0)} | "
-            f"**Retry Eseguiti**: {telemetry.get('retries_total', 0)} | "
-            f"**Errori Finali**: {telemetry.get('final_failures', 0)}"
-        )
-        retries_by_type = telemetry.get("retries_by_type", {})
-        if retries_by_type:
-            breakdowns = [f"{k}: {v}" for k, v in retries_by_type.items() if v > 0]
-            if breakdowns:
-                lines.append(f"- **Dettaglio Retry**: {', '.join(breakdowns)}")
-
-    proj_limits = usage_info.get("project_limits", {})
-    if proj_limits:
-        lines.append("")
-        lines.append("### Limiti di Progetto / Modello")
-        for m_id, m_lim in proj_limits.items():
-            lines.append(
-                f"- `{m_id}` ({m_lim.get('quota_state', 'normal')}): {m_lim.get('rpd_limit', 'N/A')} RPD • "
-                f"{m_lim.get('rpm_limit', 'N/A')} RPM • {m_lim.get('tpm_limit', 'N/A')} TPM"
-            )
-
-    credentials = usage_info.get("credentials", [])
-    if credentials:
-        lines.append("")
-        lines.append("### Credenziali Configurate")
-        for cred in credentials:
-            proj_str = (
-                f" [Project: {cred['project_id']}]" if cred.get("project_id") else ""
-            )
-            status_val = cred.get("operational_status") or cred.get("status", "unknown")
-            lines.append(
-                f"- **{cred.get('label', 'Chiave')}** (`{cred.get('masked_key', '***')}`): **{status_val}**{proj_str}"
-            )
-            if cred.get("last_error_message"):
-                err_iso = cred.get("last_error_iso") or cred.get("last_error_at", "N/A")
-                lines.append(
-                    f"  > Ultimo errore ({err_iso}): `{cred['last_error_message']}`"
-                )
-    elif usage_info.get("keys"):
-        lines.append("")
-        lines.append("### Dettaglio Chiavi")
-        for key_entry in usage_info.get("keys", []):
-            lines.append(
-                f"- **{key_entry.get('label', 'Chiave')}** (`{key_entry.get('masked_key', '***')}`)"
-            )
-
-    lines.append("")
-    lines.append("## 🔍 Esito Controlli di Sistema")
-    if not val_result["ok"]:
-        general_status = "❌ DA RISOLVERE"
-    elif val_result.get("has_warnings"):
-        general_status = "⚠️ CON AVVISI"
-    else:
-        general_status = "✅ PRONTO"
-    lines.append(f"**Stato Generale**: {general_status} ({val_result['summary']})")
-    lines.append("")
-    for check in val_result["checks"]:
-        icon = (
-            "✅"
-            if check["status"] == "ok"
-            else "⚠️"
-            if check["status"] == "warning"
-            else "❌"
-        )
-        lines.append(f"- {icon} **{check['label']}**: {check['message']}")
-        details = check.get("details")
-        if details:
-            detail_lines = str(details).splitlines()
-            for dl in detail_lines:
-                lines.append(f"  > `{dl}`")
-
-    lines.append("")
-    lines.append("## 📜 Ultimi Log di Sistema (Sanitizzati)")
-    lines.append("```text")
-    lines.extend(logs)
-    lines.append("```")
-
-    return "\n".join(lines)
+    return collect_files(get_session_root(), session_dir, frontend_version)["report.md"]

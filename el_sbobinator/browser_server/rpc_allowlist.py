@@ -40,6 +40,9 @@ ALLOWED_RPC_METHODS: frozenset[str] = frozenset(
         "retry_failed_revision_blocks",
         "get_api_usage",
         "get_diagnostic_report",
+        "list_diagnostic_sessions",
+        "export_diagnostics",
+        "record_frontend_event",
         "save_theme_preference",
         "export_sbobina_package",
         "import_sbobina_package",
@@ -60,6 +63,8 @@ ALLOWED_RPC_METHODS: frozenset[str] = frozenset(
 )
 
 DESKTOP_ONLY_RESPONSES: dict[str, Any] = {
+    "export_diagnostics": {"ok": False, "error": "Disponibile nell'app desktop"},
+    "record_frontend_event": {"ok": True},
     "open_file": {"ok": False, "error": "Disponibile nell'app desktop"},
     "open_url": {"ok": True},
     "show_notification": {"ok": True},

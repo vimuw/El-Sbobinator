@@ -11,6 +11,8 @@ import threading
 from collections import deque
 from typing import Any, Literal, Protocol, get_args, runtime_checkable
 
+from el_sbobinator.utils.logging_utils import get_logger
+
 
 @runtime_checkable
 class EventDispatcher(Protocol):
@@ -117,6 +119,14 @@ class _BridgeDispatcher:
                 for fn_name, data, retry_count in events:
                     if retry_count < self.MAX_RETRIES:
                         self._pending.append((fn_name, data, retry_count + 1))
+            dropped = [
+                name for name, _, attempt in events if attempt >= self.MAX_RETRIES
+            ]
+            if dropped:
+                get_logger("el_sbobinator.bridge").warning(
+                    "Eventi bridge scartati: %s (finestra non disponibile)",
+                    sorted(set(dropped)),
+                )
             self._ensure_timer()
             return
 
@@ -136,6 +146,13 @@ class _BridgeDispatcher:
                 for fn_name, data, retry_count in events:
                     if retry_count < self.MAX_RETRIES:
                         self._pending.append((fn_name, data, retry_count + 1))
+            dropped = [
+                name for name, _, attempt in events if attempt >= self.MAX_RETRIES
+            ]
+            if dropped:
+                get_logger("el_sbobinator.bridge").exception(
+                    "Invio bridge fallito definitivamente: %s", sorted(set(dropped))
+                )
             self._ensure_timer()
 
     def _ensure_timer(self):

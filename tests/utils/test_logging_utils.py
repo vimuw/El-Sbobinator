@@ -1,8 +1,11 @@
 import io
+import json
 import logging
 import os
 import tempfile
 import unittest
+from logging.handlers import RotatingFileHandler
+from unittest.mock import patch
 
 from el_sbobinator.utils.logging_utils import (
     LOGGER_NAME,
@@ -11,6 +14,9 @@ from el_sbobinator.utils.logging_utils import (
     configure_logging,
     detach_file_handler,
     get_logger,
+    get_startup_diagnostic,
+    initialize_app_logging,
+    record_startup_diagnostic,
     redact_secrets,
 )
 
@@ -164,6 +170,83 @@ class AttachDetachFileHandlerTests(unittest.TestCase):
         mock_handler = MagicMock()
         mock_handler.close.side_effect = Exception("close err")
         detach_file_handler(mock_handler)
+
+
+class AppLoggingTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.directory_patch = patch(
+            "el_sbobinator.services.config_service.get_config_dir",
+            return_value=self.directory.name,
+        )
+        self.directory_patch.start()
+
+    def tearDown(self):
+        for handler in list(configure_logging().handlers):
+            if getattr(handler, "_el_general_log", False):
+                detach_file_handler(handler)
+        self.directory_patch.stop()
+        self.directory.cleanup()
+
+    def test_general_log_is_idempotent_and_sanitized(self):
+        path = initialize_app_logging()
+        assert path is not None
+        self.assertEqual(initialize_app_logging(), path)
+        handlers = [
+            h
+            for h in configure_logging().handlers
+            if getattr(h, "_el_general_log", False)
+        ]
+        self.assertEqual(len(handlers), 1)
+        secret = "AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345"
+        get_logger().warning("loader failure api_key=%s", secret)
+        with open(path, encoding="utf-8") as handle:
+            content = handle.read()
+        self.assertNotIn(secret, content)
+        self.assertIn("API_KEY_REDACTED", content)
+
+    def test_rotation_preserves_startup_snapshot_and_excludes_session_details(self):
+        path = initialize_app_logging()
+        assert path is not None
+        handler = next(
+            h
+            for h in configure_logging().handlers
+            if getattr(h, "_el_general_log", False)
+        )
+        assert isinstance(handler, RotatingFileHandler)
+        handler.maxBytes = 250
+        record_startup_diagnostic(renderer="mshtml", native_error="missing runtime")
+        get_logger(session_dir="private_session", input_file="private_audio.wav").info(
+            "private transcript"
+        )
+        for n in range(20):
+            get_logger().info("ordinary event %s %s", n, "x" * 80)
+        self.assertTrue(os.path.isfile(path + ".1"))
+        self.assertFalse(os.path.exists(path + ".4"))
+        for filename in os.listdir(self.directory.name):
+            if filename.startswith("el_sbobinator.log"):
+                with open(
+                    os.path.join(self.directory.name, filename), encoding="utf-8"
+                ) as handle:
+                    self.assertNotIn("private transcript", handle.read())
+        self.assertEqual(get_startup_diagnostic()["native_error"], "missing runtime")
+
+    def test_snapshot_redacts_errors_and_survives_corruption(self):
+        secret = "AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345"
+        record_startup_diagnostic(native_error=secret)
+        self.assertNotIn(secret, json.dumps(get_startup_diagnostic()))
+        with open(
+            os.path.join(self.directory.name, "startup_diagnostic.json"),
+            "w",
+            encoding="utf-8",
+        ) as handle:
+            handle.write("invalid json")
+        self.assertEqual(get_startup_diagnostic(), {})
+
+    def test_unwritable_log_does_not_interrupt_startup(self):
+        with patch("os.makedirs", side_effect=PermissionError()):
+            self.assertIsNone(initialize_app_logging())
+            record_startup_diagnostic(status="starting")
 
 
 if __name__ == "__main__":

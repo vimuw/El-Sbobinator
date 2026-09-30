@@ -1460,16 +1460,22 @@ class TestLogDebugAndSessionRoot(unittest.TestCase):
 
     def test_log_debug_enabled(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            log_file = os.path.join(tmpdir, "app.log")
+            log_file = os.path.join(tmpdir, "el_sbobinator.log")
             cfg_file = os.path.join(tmpdir, "config.json")
             with (
                 patch.dict(os.environ, {"EL_SBOBINATOR_DEBUG": "1"}),
                 patch("el_sbobinator.services.config_service.CONFIG_FILE", cfg_file),
-                patch("builtins.print") as mock_print,
             ):
                 cs.debug_log("hello secret_key_AIzaSy123")
-                mock_print.assert_called_once()
                 self.assertTrue(os.path.exists(log_file))
+                from el_sbobinator.utils.logging_utils import (
+                    configure_logging,
+                    detach_file_handler,
+                )
+
+                for handler in list(configure_logging().handlers):
+                    if getattr(handler, "_el_general_log", False):
+                        detach_file_handler(handler)
 
     def test_save_session_root_to_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

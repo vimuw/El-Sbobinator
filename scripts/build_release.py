@@ -12,10 +12,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import shutil
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 if os.name == "nt":
@@ -245,6 +247,8 @@ def pyinstaller_command(target: str, ui: str) -> list[str]:
         command.extend(["--windowed"])
         command.extend(["--icon", str(ROOT / "assets" / "icon.icns")])
 
+    metadata = ROOT / "build" / "diagnostic_build.json"
+    command.extend(["--add-data", f"{metadata}{';' if os.name == 'nt' else ':'}."])
     command.extend(
         [
             "--add-data",
@@ -399,6 +403,36 @@ def command_check(args: argparse.Namespace) -> None:
         )
 
 
+def write_build_metadata(version: str) -> None:
+    package = json.loads((WEBUI_DIR / "package.json").read_text(encoding="utf-8"))
+    resolved_version = package["version"] if version == "0.0.0" else version.lstrip("v")
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=True,
+        )
+        commit = result.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        commit = "unknown"
+    path = ROOT / "build" / "diagnostic_build.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "version": resolved_version,
+                "commit": commit,
+                "built_at": datetime.now().astimezone().isoformat(),
+                "mode": "packaged",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def command_build(args: argparse.Namespace) -> None:
     print_windows_webview2_notice(args.target, args.ui)
 
@@ -414,6 +448,7 @@ def command_build(args: argparse.Namespace) -> None:
     if args.ui == "webui":
         build_webui(skip_npm_install=bool(args.skip_npm_install))
 
+    write_build_metadata(args.version)
     run(pyinstaller_command(args.target, args.ui), cwd=ROOT)
     if not args.skip_postbuild_smoke:
         run_postbuild_smoke(args.target)

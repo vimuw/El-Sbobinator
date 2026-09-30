@@ -53,6 +53,11 @@ class SystemControllerMixin:
                 preferred_model=preferred_model,
                 fallback_models=fallback_models,
             )
+            from el_sbobinator.services.diagnostics_service import (
+                save_validation_snapshot,
+            )
+
+            save_validation_snapshot(result)
             return bridge_ok(result=result)
         except Exception as e:
             self._logger.exception("Validazione ambiente fallita.")
@@ -105,40 +110,84 @@ class SystemControllerMixin:
         fallback_keys: list[str] | None = None,
         preferred_model: str | None = None,
         fallback_models: list[str] | None = None,
+        session_dir: str | None = None,
+        frontend_version: str | None = None,
     ) -> dict:
-        """Generate a complete, sanitized Markdown diagnostic report for technical support."""
+        """Keep legacy arguments compatible; collect support data locally."""
         try:
-            from el_sbobinator.services.config_service import load_config
-            from el_sbobinator.services.validation_service import (
-                generate_diagnostic_report,
-            )
+            from el_sbobinator.services.diagnostics_service import collect_files
 
-            cfg = load_config()
-            key_val = api_key if api_key is not None else cfg.get("api_key")
-            fb_keys = (
-                fallback_keys
-                if fallback_keys is not None
-                else cfg.get("fallback_keys", [])
+            files = collect_files(
+                self._get_session_root(), session_dir, frontend_version
             )
-            pref_model = preferred_model or cfg.get(
-                "preferred_model", "gemini-2.5-flash"
-            )
-            fb_models = (
-                fallback_models
-                if fallback_models is not None
-                else cfg.get("fallback_models", [])
-            )
-
-            report = generate_diagnostic_report(
-                api_key=key_val,
-                fallback_keys=fb_keys,
-                preferred_model=pref_model,
-                fallback_models=fb_models,
-            )
-            return bridge_ok(report=report)
-        except Exception as e:
+            return bridge_ok(report=files["report.md"])
+        except Exception as exc:
             self._logger.exception("Generazione report diagnostico fallita.")
-            return bridge_error(e)
+            return bridge_error(exc)
+
+    def list_diagnostic_sessions(self) -> dict:
+        try:
+            from el_sbobinator.services.diagnostics_service import list_sessions
+
+            return bridge_ok(sessions=list_sessions(self._get_session_root()))
+        except Exception as exc:
+            return bridge_error(exc)
+
+    def export_diagnostics(
+        self, session_dir: str | None = None, frontend_version: str | None = None
+    ) -> dict:
+        try:
+            from el_sbobinator.services.diagnostics_service import (
+                collect_files,
+                export_bundle,
+            )
+
+            files = collect_files(
+                self._get_session_root(), session_dir, frontend_version
+            )
+            window = getattr(self, "_window", None)
+            if not window:
+                return bridge_error("Esportazione disponibile nell'app desktop.")
+            selected = window.create_file_dialog(
+                webview.SAVE_DIALOG,
+                save_filename="El-Sbobinator-diagnostica.zip",
+                file_types=("Diagnostica (*.zip)",),
+            )
+            if not selected:
+                return bridge_ok(cancelled=True)
+            target = str(
+                selected[0] if isinstance(selected, list | tuple) else selected
+            )
+            return bridge_ok(target_path=export_bundle(target, files))
+        except Exception as exc:
+            self._logger.exception("Esportazione diagnostica fallita.")
+            return bridge_error(exc)
+
+    def record_frontend_event(
+        self, kind: str, message: str = "", stack: str = ""
+    ) -> dict:
+        if kind not in ("ready", "error", "unhandledrejection", "react"):
+            return bridge_error("Evento diagnostico non supportato.")
+        if not isinstance(message, str) or not isinstance(stack, str):
+            return bridge_error("Evento diagnostico non valido.")
+        from el_sbobinator.utils.logging_utils import (
+            BOOT_ID,
+            get_startup_diagnostic,
+            record_incident,
+            record_startup_diagnostic,
+        )
+
+        if kind == "ready":
+            snapshot = get_startup_diagnostic()
+            if (
+                snapshot.get("boot_id") != BOOT_ID
+                or snapshot.get("status") == "ui_ready"
+            ):
+                return bridge_ok()
+            record_startup_diagnostic(**{**snapshot, "status": "ui_ready"})
+        else:
+            record_incident("frontend." + kind, message[:3000], stack[:6000])
+        return bridge_ok()
 
     def open_logs_folder(self) -> dict:
         """Open the local logs directory in the default system file manager."""
