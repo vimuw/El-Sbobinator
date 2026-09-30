@@ -11,41 +11,155 @@ from html import escape
 from typing import Any
 
 
-def has_webview2_runtime() -> bool:
-    """Mirror pywebview's Windows runtime detection to avoid silent MSHTML fallback."""
-    if sys.platform != "win32":
-        return True
+def _check_webview2_native() -> bool:
+    """Check if pywebview or WebView2 .NET/COM loader detects a usable runtime."""
+    try:
+        import webview.platforms.winforms as wf
 
+        if getattr(wf, "is_chromium", False):
+            return True
+
+        # If pywebview's initial probe missed the runtime, attempt to load edgechromium
+        # directly and verify CoreWebView2Environment; wire it up so pywebview avoids MSHTML.
+        try:
+            from webview.platforms import edgechromium as Chromium
+
+            env = getattr(Chromium, "CoreWebView2Environment", None)
+            if env is not None and hasattr(env, "GetAvailableBrowserVersionString"):
+                version = env.GetAvailableBrowserVersionString(None)
+                if version and str(version).strip():
+                    wf.Chromium = Chromium
+                    wf.is_chromium = True
+                    return True
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return False
+
+
+def _check_webview2_registry() -> bool:
+    """Check Windows registry across channels, scopes (HKCU/HKLM), and 32/64-bit views."""
     try:
         import winreg
     except Exception:
         return False
 
-    runtime_keys = (
-        (
-            winreg.HKEY_CURRENT_USER,
-            r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
-        ),
-        (
-            winreg.HKEY_LOCAL_MACHINE,
-            r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
-        ),
-        (
-            winreg.HKEY_LOCAL_MACHINE,
-            r"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
-        ),
+    guid_list = (
+        "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",  # Evergreen Runtime
+        "{2CD8A007-E189-409D-A2C8-9AF4EF3C72AA}",  # Beta
+        "{0D50BFEC-CD6A-4F9A-964C-C7416E3ACB10}",  # Dev
+        "{65C35B14-6C1D-4122-AC46-7148CC9D6497}",  # Canary
     )
 
-    for root, key_path in runtime_keys:
-        try:
-            with winreg.OpenKey(root, key_path) as key:
-                version, _ = winreg.QueryValueEx(key, "pv")
-                if str(version).strip():
-                    return True
-        except Exception:
-            continue
+    roots = (
+        getattr(winreg, "HKEY_CURRENT_USER", 1),
+        getattr(winreg, "HKEY_LOCAL_MACHINE", 2),
+    )
+    key_read = getattr(winreg, "KEY_READ", 0x20019)
+    access_flags = [key_read]
+    if hasattr(winreg, "KEY_WOW64_64KEY"):
+        access_flags.append(key_read | winreg.KEY_WOW64_64KEY)
+    if hasattr(winreg, "KEY_WOW64_32KEY"):
+        access_flags.append(key_read | winreg.KEY_WOW64_32KEY)
+
+    # 1. EdgeUpdate Clients and ClientState keys across all channels
+    for root in roots:
+        for guid in guid_list:
+            for branch in (
+                rf"SOFTWARE\Microsoft\EdgeUpdate\Clients\{guid}",
+                rf"SOFTWARE\Microsoft\EdgeUpdate\ClientState\{guid}",
+                rf"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{guid}",
+                rf"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\ClientState\{guid}",
+            ):
+                for flag in access_flags:
+                    try:
+                        with winreg.OpenKey(root, branch, 0, flag) as key:
+                            for val_name in ("pv", "version", "EBWebView"):
+                                try:
+                                    val, _ = winreg.QueryValueEx(key, val_name)
+                                    if str(val).strip():
+                                        return True
+                                except Exception:
+                                    continue
+                    except Exception:
+                        continue
+
+    # 2. Windows Uninstall keys
+    for root in roots:
+        for branch in (
+            r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft EdgeWebView",
+            r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft EdgeWebView",
+        ):
+            for flag in access_flags:
+                try:
+                    with winreg.OpenKey(root, branch, 0, flag) as key:
+                        for val_name in (
+                            "DisplayVersion",
+                            "Version",
+                            "InstallLocation",
+                        ):
+                            try:
+                                val, _ = winreg.QueryValueEx(key, val_name)
+                                if str(val).strip():
+                                    return True
+                            except Exception:
+                                continue
+                except Exception:
+                    continue
 
     return False
+
+
+def _check_webview2_filesystem(extra_dirs: tuple[str, ...] | None = None) -> bool:
+    """Verify if msedgewebview2.exe or EmbeddedBrowserWebView.dll exist in known folders."""
+    base_dirs: list[str] = []
+    if extra_dirs:
+        base_dirs.extend(extra_dirs)
+    else:
+        for env_var in ("ProgramFiles(x86)", "ProgramFiles", "LOCALAPPDATA"):
+            val = os.environ.get(env_var, "")
+            if val:
+                base_dirs.append(
+                    os.path.join(val, "Microsoft", "EdgeWebView", "Application")
+                )
+
+    for base_dir in base_dirs:
+        if not os.path.isdir(base_dir):
+            continue
+        try:
+            for entry in os.scandir(base_dir):
+                if entry.is_dir():
+                    exe_path = os.path.join(entry.path, "msedgewebview2.exe")
+                    if os.path.isfile(exe_path) and os.path.getsize(exe_path) > 0:
+                        return True
+                    for sub in ("x64", "x86", "arm64"):
+                        dll_path = os.path.join(
+                            entry.path, "EBWebView", sub, "EmbeddedBrowserWebView.dll"
+                        )
+                        if os.path.isfile(dll_path) and os.path.getsize(dll_path) > 0:
+                            return True
+        except Exception:
+            continue
+    return False
+
+
+def has_webview2_runtime() -> bool:
+    """Robust multi-tier detection for WebView2 Runtime on Windows.
+
+    Checks:
+    1. Native pywebview / CoreWebView2Environment loader
+    2. Windows registry (all channels, scopes HKCU/HKLM, 32/64-bit views, Clients/ClientState/Uninstall)
+    3. Filesystem existence in standard EdgeWebView application directories
+    """
+    if sys.platform != "win32":
+        return True
+
+    return (
+        _check_webview2_native()
+        or _check_webview2_registry()
+        or _check_webview2_filesystem()
+    )
 
 
 def build_missing_webview2_html() -> str:

@@ -81,30 +81,48 @@ def get_windows_webview2_runtime_version() -> str | None:
     if os.name != "nt":
         return None
 
-    registry_paths = (
-        (
-            winreg.HKEY_CURRENT_USER,
-            r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
-        ),
-        (
-            winreg.HKEY_LOCAL_MACHINE,
-            r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
-        ),
-        (
-            winreg.HKEY_LOCAL_MACHINE,
-            r"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
-        ),
+    # 1. Registry across all channels, Clients and ClientState
+    guid_list = (
+        "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+        "{2CD8A007-E189-409D-A2C8-9AF4EF3C72AA}",
+        "{0D50BFEC-CD6A-4F9A-964C-C7416E3ACB10}",
+        "{65C35B14-6C1D-4122-AC46-7148CC9D6497}",
     )
+    roots = (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE)
+    for root in roots:
+        for guid in guid_list:
+            for branch in (
+                rf"SOFTWARE\Microsoft\EdgeUpdate\Clients\{guid}",
+                rf"SOFTWARE\Microsoft\EdgeUpdate\ClientState\{guid}",
+                rf"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{guid}",
+                rf"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\ClientState\{guid}",
+            ):
+                try:
+                    with winreg.OpenKey(root, branch) as key:
+                        for val_name in ("pv", "version"):
+                            try:
+                                value, _ = winreg.QueryValueEx(key, val_name)
+                                version = str(value).strip()
+                                if version:
+                                    return version
+                            except OSError:
+                                continue
+                except OSError:
+                    continue
 
-    for root, path in registry_paths:
-        try:
-            with winreg.OpenKey(root, path) as key:
-                value, _ = winreg.QueryValueEx(key, "pv")
-                version = str(value).strip()
-                if version:
-                    return version
-        except OSError:
+    # 2. Filesystem check
+    for env_var in ("ProgramFiles(x86)", "ProgramFiles", "LOCALAPPDATA"):
+        val = os.environ.get(env_var, "")
+        if not val:
             continue
+        app_dir = Path(val) / "Microsoft" / "EdgeWebView" / "Application"
+        if app_dir.is_dir():
+            try:
+                for child in app_dir.iterdir():
+                    if child.is_dir() and (child / "msedgewebview2.exe").is_file():
+                        return child.name
+            except OSError:
+                continue
 
     return None
 
