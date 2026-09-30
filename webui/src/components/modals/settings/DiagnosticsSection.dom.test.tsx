@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { DiagnosticsSection, type DisplayCheck } from './DiagnosticsSection';
 import type { ApiUsageResult } from '../../../bridge';
 import { APP_VERSION } from '../../../branding';
@@ -30,10 +30,22 @@ describe('DiagnosticsSection', () => {
       export_diagnostics: exportBundle,
     } } as unknown as NonNullable<typeof window.pywebview>;
     const copy = vi.fn().mockResolvedValue(undefined);
-    render(<DiagnosticsSection isValidatingEnvironment={false} onRunValidation={vi.fn()} validationResult={null} displayChecks={[]} onCopyReport={copy} />);
+    const validate = vi.fn();
+    render(<DiagnosticsSection isValidatingEnvironment={false} onRunValidation={validate} validationResult={null} displayChecks={dummyChecks} onCopyReport={copy} />);
     await screen.findByText('Lezione');
-    fireEvent.click(screen.getByLabelText('Sbobina interessata (facoltativa)'));
+    const environment = within(screen.getByRole('region', { name: 'Verifica ambiente' }));
+    const support = within(screen.getByRole('region', { name: 'Report per assistenza' }));
+    expect(environment.getByText('FFmpeg')).toBeTruthy();
+    expect(environment.queryByRole('button', { name: 'Esporta diagnostica' })).toBeNull();
+    expect(environment.queryByLabelText('Sbobina con il problema (facoltativa)')).toBeNull();
+    expect(support.getByLabelText('Sbobina con il problema (facoltativa)')).toBeTruthy();
+    expect(support.getByRole('button', { name: 'Copia report diagnostico' })).toBeTruthy();
+    expect(support.getByRole('button', { name: 'Apri cartella log' })).toBeTruthy();
+    expect(support.queryByRole('button', { name: 'Verifica ambiente' })).toBeNull();
+    fireEvent.click(screen.getByLabelText('Sbobina con il problema (facoltativa)'));
     fireEvent.click(screen.getByRole('option', { name: 'Lezione' }));
+    fireEvent.click(environment.getByRole('button', { name: 'Verifica ambiente' }));
+    expect(validate).toHaveBeenCalledOnce();
     const button = screen.getByRole('button', { name: 'Esporta diagnostica' });
     await act(async () => { fireEvent.click(button); });
     expect(exportBundle).toHaveBeenLastCalledWith('archive/lesson', APP_VERSION);
@@ -57,7 +69,7 @@ describe('DiagnosticsSection', () => {
       />
     );
 
-    expect(screen.getByText('Verifica ambiente e integrità')).toBeTruthy();
+    expect(screen.getByText('Verifica ambiente')).toBeTruthy();
     expect(screen.getByText('API Key Gemini')).toBeTruthy();
     expect(screen.getByText('Chiave API valida')).toBeTruthy();
     expect(screen.getByText('FFmpeg')).toBeTruthy();
@@ -66,7 +78,7 @@ describe('DiagnosticsSection', () => {
 
     expect(screen.getByText('Verifica ora')).toBeTruthy();
 
-    const validateBtn = screen.getByLabelText('Verifica ambiente');
+    const validateBtn = screen.getByRole('button', { name: 'Verifica ambiente' });
     fireEvent.click(validateBtn);
     expect(onRunValidation).toHaveBeenCalled();
   });

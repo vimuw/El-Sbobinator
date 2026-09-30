@@ -1022,7 +1022,7 @@ describe('SettingsModal — validate environment', () => {
 
     expect(screen.getByRole('heading', { name: 'Diagnostica' })).toBeTruthy();
     const activity = screen.getByText('Attività di oggi');
-    const checks = screen.getByText('Verifica ambiente e integrità');
+    const checks = screen.getByText('Verifica ambiente');
     expect(activity.compareDocumentPosition(checks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(activity.closest('details')).toBeNull();
     expect(screen.queryByText('Quote per modello')).toBeNull();

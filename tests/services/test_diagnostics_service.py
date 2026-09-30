@@ -84,6 +84,22 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertIn("OLDER_FAILURE", files["report.md"])
         self.assertNotIn("session_summary.json", files)
 
+    def test_session_labels_prefer_title_then_filename_without_extension(self):
+        metadata = self.session / "session.json"
+        data = json.loads(metadata.read_text(encoding="utf-8"))
+        self.assertEqual(
+            ds.list_sessions(str(self.root))[0]["label"], "private_lecture"
+        )
+        data["title"] = "  Fisiologia - Lezione 2  "
+        metadata.write_text(json.dumps(data), encoding="utf-8")
+        self.assertEqual(
+            ds.list_sessions(str(self.root))[0]["label"], "Fisiologia - Lezione 2"
+        )
+        data["title"] = " "
+        data["input"] = {}
+        metadata.write_text(json.dumps(data), encoding="utf-8")
+        self.assertEqual(ds.list_sessions(str(self.root))[0]["label"], "lesson")
+
     def test_selection_cannot_read_outside_archive_or_follow_log_symlink(self):
         with self.assertRaises(ValueError):
             ds.collect_files(str(self.root), str(self.config))
@@ -118,7 +134,7 @@ class DiagnosticsTests(unittest.TestCase):
     def test_listing_returns_labels_and_export_failure_leaves_no_partial_zip(self):
         sessions = ds.list_sessions(str(self.root))
         self.assertEqual(sessions[0]["path"], str(self.session))
-        self.assertEqual(sessions[0]["label"], "private_lecture.wav")
+        self.assertEqual(sessions[0]["label"], "private_lecture")
         destination = self.base / "existing.zip"
         destination.write_bytes(b"original")
         with patch("os.replace", side_effect=PermissionError()):

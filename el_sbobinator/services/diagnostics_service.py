@@ -106,15 +106,16 @@ def list_sessions(root: str) -> list[dict]:
         if not data:
             continue
         source = data.get("input", {})
-        title = (
+        source_name = (
             os.path.basename(str(source.get("path", "")))
             if isinstance(source, dict)
             else ""
         )
+        title = str(data.get("title") or "").strip()
         candidates.append(
             {
                 "path": str(child),
-                "label": title or child.name,
+                "label": title or Path(source_name).stem or child.name,
                 "updated_at": str(data.get("updated_at", "")),
             }
         )
