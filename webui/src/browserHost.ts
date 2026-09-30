@@ -34,7 +34,6 @@ export function getHostCapabilities(): HostCapabilities {
 
 let sessionToken = '';
 let lastSequence = 0;
-let collabChannel: BroadcastChannel | null = null;
 type BrowserBridgeEvent = { sequence?: number; name?: string; payload?: unknown };
 const pendingBridgeEvents: BrowserBridgeEvent[] = [];
 let pendingBridgeDrainTimer: ReturnType<typeof setTimeout> | null = null;
@@ -156,19 +155,6 @@ async function uploadSelectedFiles(fileList: FileList | File[]): Promise<FileDes
   return (data.files || []) as FileDescriptor[];
 }
 
-function setupCollaborationChannel() {
-  if (typeof BroadcastChannel !== 'undefined' && !collabChannel) {
-    collabChannel = new BroadcastChannel('el-sbobinator-collab');
-    collabChannel.onmessage = (event) => {
-      const { room, payload } = event.data || {};
-      const win = window as unknown as Record<string, unknown>;
-      if (typeof win.__elSbobinatorReceiveCollabSignal === 'function' && room && payload) {
-        (win.__elSbobinatorReceiveCollabSignal as (r: string, p: string) => void)(room, payload);
-      }
-    };
-  }
-}
-
 function setupWebSocket() {
   if (typeof WebSocket === 'undefined') return;
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -201,7 +187,6 @@ function setupWebSocket() {
 }
 
 export function createBrowserPywebviewApi(): PywebviewApi {
-  setupCollaborationChannel();
 
   return {
     load_settings: () => callRpc('load_settings'),
@@ -216,7 +201,6 @@ export function createBrowserPywebviewApi(): PywebviewApi {
     answer_new_key: (key) => callRpc('answer_new_key', key),
     read_html_content: (path) => callRpc('read_html_content', path),
     save_html_content: (path, content, generation) => callRpc('save_html_content', path, content, generation),
-    create_collaboration_backup: (path) => callRpc('create_collaboration_backup', path),
     validate_environment: (apiKey, checkApiKey, preferredModel, fallbackModels) =>
       callRpc('validate_environment', apiKey, checkApiKey, preferredModel, fallbackModels),
     get_session_storage_info: () => callRpc('get_session_storage_info'),
@@ -308,14 +292,6 @@ export function createBrowserPywebviewApi(): PywebviewApi {
       }
       const data = await res.json();
       return data as { ok: boolean; url?: string; has_audio?: boolean; error?: string };
-    },
-
-    // Collaboration
-    send_collaboration_signal: async (room, payload) => {
-      if (collabChannel) {
-        collabChannel.postMessage({ room, payload });
-      }
-      return { ok: true };
     },
 
     // Browser fallbacks for desktop-only features

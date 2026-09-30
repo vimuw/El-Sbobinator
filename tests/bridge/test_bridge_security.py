@@ -183,15 +183,6 @@ class HtmlControllerSecurityTests(unittest.TestCase):
         self.assertFalse(res["ok"])
         self.assertIn("Accesso negato", res["error"])
 
-    def test_create_collaboration_backup_rejects_unauthorized_paths(self):
-        outside_html = os.path.join(self.temp_dir, "unauthorized.html")
-        with open(outside_html, "w", encoding="utf-8") as f:
-            f.write("<html><body>test</body></html>")
-
-        res = self.host.create_collaboration_backup(outside_html)
-        self.assertFalse(res["ok"])
-        self.assertIn("accesso negato", res["error"].lower())
-
 
 class SessionControllerSecurityTests(unittest.TestCase):
     def setUp(self):

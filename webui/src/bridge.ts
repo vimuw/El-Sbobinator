@@ -274,7 +274,6 @@ export interface PywebviewApi {
   open_url?: (url: string) => Promise<{ ok: boolean; error?: string }>;
   read_html_content?: (path: string) => Promise<{ ok: boolean; content?: string; error?: string }>;
   save_html_content?: (path: string, content: string, generation?: number) => Promise<SaveHtmlResult>;
-  create_collaboration_backup?: (path: string) => Promise<{ ok: boolean; backup_path?: string; error?: string }>;
   stream_media_file?: (path: string, sessionDir?: string) => Promise<{ ok: boolean; url?: string; has_audio?: boolean; error?: string }>;
   show_notification?: (title: string, message: string) => Promise<void>;
   flash_window?: () => Promise<{ ok: boolean; error?: string }>;
@@ -338,7 +337,6 @@ export interface PywebviewApi {
     html_path?: string;
     has_audio?: boolean;
   }>;
-  send_collaboration_signal?: (room: string, payload: string) => Promise<{ ok: boolean; error?: string }>;
   get_api_usage?: (
     apiKey?: string,
     fallbackKeys?: string[],
@@ -442,28 +440,5 @@ export function createBridge(options: {
     apiUsageUpdated: data => { onApiUsageUpdated?.(data); },
     retryStateChanged: data => { onRetryStateChanged?.(data); },
     requestQuitConfirmation: () => { onRequestQuitConfirmation?.(); },
-  };
-}
-
-export type CollabSignalHandler = (room: string, payloadStr: string) => void;
-
-export function registerCollabSignalListener(handler: CollabSignalHandler): () => void {
-  const win = window as unknown as Record<string, unknown>;
-  if (!win.__elSbobinatorCollabListeners) {
-    win.__elSbobinatorCollabListeners = new Set<CollabSignalHandler>();
-    win.__elSbobinatorReceiveCollabSignal = (room: string, payloadStr: string) => {
-      const listeners = win.__elSbobinatorCollabListeners as Set<CollabSignalHandler>;
-      listeners.forEach(fn => {
-        try {
-          fn(room, payloadStr);
-        } catch (e) {
-          console.error('Collab signal listener error:', e);
-        }
-      });
-    };
-  }
-  (win.__elSbobinatorCollabListeners as Set<CollabSignalHandler>).add(handler);
-  return () => {
-    (win.__elSbobinatorCollabListeners as Set<CollabSignalHandler>)?.delete(handler);
   };
 }

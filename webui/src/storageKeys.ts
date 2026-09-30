@@ -6,8 +6,6 @@ export const STORAGE_KEYS = {
   AUTO_CONTINUE: 'auto_continue',
   NOTIFICATIONS_ENABLED: 'notifications_enabled',
   EDITOR_ZOOM: 'editor_zoom',
-  COLLAB_USERNAME: 'collab_username',
-  COLLAB_USERCOLOR: 'collab_usercolor',
   HAS_SESSIONS_V1: 'el-sbobinator.has_sessions.v1',
   EDITOR_SESSIONS_V1: 'el-sbobinator.editor-sessions.v1',
   QUEUE_V1: 'el-sbobinator.queue.v1',

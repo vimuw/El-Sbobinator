@@ -15,16 +15,14 @@ import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 import { Menu, X } from 'lucide-react';
 import { FloatingImage } from './FloatingImage';
-import { type Heading, SearchHighlight, FontSize, CustomHeading, CustomParagraph, MathInline, MathBlock, SmartArrows, CollaborationCursor, extractHeadings } from '../editorExtensions';
+import { type Heading, SearchHighlight, FontSize, CustomHeading, CustomParagraph, MathInline, MathBlock, SmartArrows, extractHeadings } from '../editorExtensions';
 import Youtube from '@tiptap/extension-youtube';
 import Typography from '@tiptap/extension-typography';
-import Collaboration from '@tiptap/extension-collaboration';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import { MenuBar } from './EditorToolbar';
 import { getWordRangeAtPos } from '../editorUtils';
 import { EditorBubbleMenu } from './EditorBubbleMenu';
 import { FindReplacePanel } from './EditorFindReplace';
-import { useEditorCollaboration, type CollaborationUser } from '../hooks/useEditorCollaboration';
 import { useEditorImageDrop } from '../hooks/useEditorImageDrop';
 import { useTocScrollSpy } from '../hooks/useTocScrollSpy';
 import { EditorContextMenu } from './EditorContextMenu';
@@ -46,8 +44,6 @@ interface RichTextEditorProps {
   onScrollToHeading?: (heading: Heading) => void;
   zoomLevel?: number;
   onZoomChange?: (zoomLevel: number) => void;
-  collaborationRoom?: string;
-  collaborationUser?: CollaborationUser;
 }
 
 export function RichTextEditor({
@@ -64,8 +60,6 @@ export function RichTextEditor({
   onScrollToHeading,
   zoomLevel,
   onZoomChange,
-  collaborationRoom,
-  collaborationUser,
 }: RichTextEditorProps) {
   const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number } | null>(null);
   const [findMode, setFindMode] = useState<null | 'find' | 'replace'>(initialSearchTerm ? 'find' : null);
@@ -74,10 +68,9 @@ export function RichTextEditor({
   useEffect(() => { findModeRef.current = findMode; }, [findMode]);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<TiptapEditor | null>(null);
+  const initialContentRef = useRef(initialContent);
   const onChangeRef = useRef(onChange);
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
-  const userRef = useRef(collaborationUser);
-  useEffect(() => { userRef.current = collaborationUser; }, [collaborationUser]);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const lastKnownScrollTopRef = useRef<number>(initialScrollTop ?? 0);
@@ -102,8 +95,6 @@ export function RichTextEditor({
     scrollContainerRef,
   });
 
-  const { ydoc, provider } = useEditorCollaboration(collaborationRoom, collaborationUser);
-
   const {
     insertImageFiles,
     handleDragStart,
@@ -112,11 +103,6 @@ export function RichTextEditor({
     transformPastedHTML,
   } = useEditorImageDrop({ editorRef });
 
-  const isPlaceholderContent = typeof initialContent === 'string' && initialContent.includes('Connessione in corso alla stanza');
-  const effectiveInitialContent = collaborationRoom ? undefined : initialContent;
-
-  const isCollaborationActive = Boolean(collaborationRoom && ydoc && provider);
-
   const extensions = useMemo(() => [
     StarterKit.configure({
       heading: false,
@@ -124,7 +110,6 @@ export function RichTextEditor({
       link: false,
       underline: false,
       horizontalRule: false,
-      ...(isCollaborationActive ? { undoRedo: false } : {}),
     }),
     CustomHeading,
     CustomParagraph,
@@ -156,18 +141,11 @@ export function RichTextEditor({
     TableRow,
     TableHeader,
     TableCell,
-    ...(isCollaborationActive && ydoc && provider ? [
-      Collaboration.configure({ document: ydoc }),
-      CollaborationCursor.configure({
-        provider,
-        user: userRef.current || { name: 'Studente', color: '#3b82f6' },
-      }),
-    ] : []),
-  ], [isCollaborationActive, ydoc, provider]);
+  ], []);
 
   const editor = useEditor({
     extensions,
-    content: effectiveInitialContent,
+    content: initialContent,
     onCreate: ({ editor }) => {
       editorRef.current = editor;
       if (editor.utils?.getUpdatedPosition) {
@@ -250,33 +228,6 @@ export function RichTextEditor({
   }, [editor]);
 
   useEffect(() => {
-    if (!editor || editor.isDestroyed || !collaborationUser) return;
-    try {
-      const commands = editor.commands as unknown as { updateUser?: (user: { name: string; color: string }) => boolean };
-      commands?.updateUser?.(collaborationUser);
-    } catch (_) {
-      // The editor instance may have been destroyed during collaboration connection
-    }
-  }, [editor, collaborationUser]);
-
-  useEffect(() => {
-    if (!collaborationRoom || !editor || editor.isDestroyed || !initialContent || isPlaceholderContent) return;
-    const xml = ydoc?.getXmlFragment('default');
-    if (xml && xml.length === 0) {
-      const timer = setTimeout(() => {
-        if (!editor.isDestroyed && xml && xml.length === 0) {
-          try {
-            editor.commands.setContent(initialContent);
-          } catch (_) {
-            // Guard against destroyed editor instance
-          }
-        }
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [collaborationRoom, editor, initialContent, isPlaceholderContent, ydoc]);
-
-  useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
       if ((event.target as HTMLElement | null)?.closest('.gdocs-context-menu')) return;
       setContextMenu(null);
@@ -329,6 +280,8 @@ export function RichTextEditor({
   };
 
   useEffect(() => {
+    if (initialContentRef.current === initialContent) return;
+    initialContentRef.current = initialContent;
     if (!editor || editor.isDestroyed) return;
     try {
       if (initialContent !== editor.getHTML() && !editor.isFocused && editor.isEmpty) {

@@ -65,7 +65,6 @@ describe('QueuePage Component', () => {
     },
     autoContinue: true,
     setAutoContinue: vi.fn(),
-    setIsJoinRoomOpen: vi.fn(),
     archiveSessions: [],
     isArchiveLoaded: true,
     dndSensors: [],

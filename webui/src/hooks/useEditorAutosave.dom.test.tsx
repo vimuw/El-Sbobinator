@@ -65,64 +65,6 @@ describe('useEditorAutosave', () => {
     expect(result.current.autosaveStatus).toBe('idle');
   });
 
-  it('suspends autosave during collaborative session if content drops >75%', async () => {
-    const saveMock = vi.fn().mockResolvedValue({ ok: true, saved: true });
-    setPywebview({ save_html_content: saveMock });
-
-    const longContent = '<p>' + 'A'.repeat(500) + '</p>';
-    let currentHtml = longContent;
-    const getHtmlRef = { current: () => currentHtml };
-    const onClose = vi.fn();
-
-    const { result } = renderHook(() =>
-      useEditorAutosave({
-        htmlPath: '/path/to/test.html',
-        previewContent: longContent,
-        collabRoom: 'room-123',
-        getHtmlRef,
-        onClose,
-      })
-    );
-
-    // Drastically truncate text in collab mode
-    currentHtml = '<p>Short</p>';
-    act(() => {
-      result.current.scheduleAutosave();
-    });
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(750);
-    });
-
-    expect(saveMock).not.toHaveBeenCalled();
-    expect(result.current.isAutosaveSuspended).toBe(true);
-    expect(result.current.autosaveStatus).toBe('error');
-  });
-
-  it('handles force save immediately', async () => {
-    const saveMock = vi.fn().mockResolvedValue({ ok: true, saved: true });
-    setPywebview({ save_html_content: saveMock });
-
-    const getHtmlRef = { current: () => '<p>Forced save text</p>' };
-    const onClose = vi.fn();
-
-    const { result } = renderHook(() =>
-      useEditorAutosave({
-        htmlPath: '/path/to/test.html',
-        previewContent: '<p>Initial</p>',
-        getHtmlRef,
-        onClose,
-      })
-    );
-
-    await act(async () => {
-      await result.current.handleForceSave();
-    });
-
-    expect(saveMock).toHaveBeenCalledWith('/path/to/test.html', '<p>Forced save text</p>', expect.any(Number));
-    expect(result.current.autosaveStatus).toBe('saved');
-  });
-
   it('registers window global dirty content and flush hooks', async () => {
     const saveMock = vi.fn().mockResolvedValue({ ok: true, saved: true });
     setPywebview({ save_html_content: saveMock });

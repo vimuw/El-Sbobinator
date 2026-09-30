@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { type DragEndEvent, type SensorDescriptor, type SensorOptions } from '@dnd-kit/core';
-import { AlertTriangle, ArrowRight, Loader2, Trash2, Users } from 'lucide-react';
+import { AlertTriangle, Loader2, Trash2 } from 'lucide-react';
 import { GithubIcon } from './icons/GithubIcon';
 import { GITHUB_URL } from '../branding';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
@@ -99,7 +99,6 @@ export interface QueuePageProps {
   completedSessionFolderMap: Map<string, ArchiveFolder>;
   dndSensors: SensorDescriptor<SensorOptions>[];
   handleDragEnd: (event: DragEndEvent) => void;
-  setIsJoinRoomOpen: (val: boolean) => void;
 }
 
 export function QueuePage({
@@ -116,7 +115,6 @@ export function QueuePage({
   completedSessionFolderMap,
   dndSensors,
   handleDragEnd,
-  setIsJoinRoomOpen,
 }: QueuePageProps) {
   const {
     appState,
@@ -366,68 +364,15 @@ export function QueuePage({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.15, ease: 'easeOut' }}
-                  className={!(pendingFiles.length > 0 || doneFiles.length > 0) ? 'space-y-3' : undefined}
                 >
-                  {pendingFiles.length > 0 || doneFiles.length > 0 ? (
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 min-w-0">
-                        <DropZone
-                          compact={true}
-                          isDragging={isDragging}
-                          onDragOver={handleDragOver}
-                          onDragLeave={handleDragLeave}
-                          onDrop={handleDrop}
-                          onClick={handleBrowseClick}
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setIsJoinRoomOpen(true)}
-                        className="dropzone-compact-join-btn"
-                        title="Partecipa a una sessione live con codice stanza"
-                        aria-label="Partecipa a una sessione live con codice stanza"
-                      >
-                        <Users className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-                        <span className="hidden sm:inline">Codice stanza</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <DropZone
-                        compact={false}
-                        isDragging={isDragging}
-                        onDragOver={handleDragOver}
-                        onDragLeave={handleDragLeave}
-                        onDrop={handleDrop}
-                        onClick={handleBrowseClick}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setIsJoinRoomOpen(true)}
-                        className="join-room-hero-card"
-                        title="Partecipa a una sessione collaborativa live con codice stanza"
-                        aria-label="Partecipa alla sessione live"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="join-room-hero-icon">
-                            <Users className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0 text-left">
-                            <div className="text-sm font-semibold text-[var(--text-primary)]">
-                              Hai un codice stanza?
-                            </div>
-                            <div className="text-xs text-[var(--text-muted)] truncate">
-                              Partecipa alla sessione di gruppo in tempo reale
-                            </div>
-                          </div>
-                        </div>
-                        <div className="join-room-hero-action">
-                          <span>Partecipa</span>
-                          <ArrowRight className="w-3.5 h-3.5 join-room-hero-arrow" />
-                        </div>
-                      </button>
-                    </>
-                  )}
+                  <DropZone
+                    compact={pendingFiles.length > 0 || doneFiles.length > 0}
+                    isDragging={isDragging}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onClick={handleBrowseClick}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>

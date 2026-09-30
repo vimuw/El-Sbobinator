@@ -3,7 +3,6 @@ import type { SaveHtmlResult } from '../bridge';
 import { nextHtmlAutosaveGeneration, seedHtmlAutosaveGeneration } from '../autosaveGeneration';
 
 const isSaveCommitted = (res: SaveHtmlResult) => res.ok && res.saved !== false;
-
 export type AutosaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 export interface EditorSaveController {
@@ -15,28 +14,19 @@ export interface EditorSaveController {
 export interface UseEditorAutosaveOptions {
   htmlPath: string;
   previewContent: string | null;
-  collabRoom?: string;
   getHtmlRef: React.MutableRefObject<(() => string) | null>;
   onClose: () => void;
-  setCollabRoom?: (room: string | undefined) => void;
-  setCollabUser?: (user: { name: string; color: string } | undefined) => void;
-  onCollaborationStateChange?: (room?: string, user?: { name: string; color: string }) => void;
   saveControllerRef?: React.RefObject<EditorSaveController | null>;
 }
 
 export function useEditorAutosave({
   htmlPath,
   previewContent,
-  collabRoom,
   getHtmlRef,
   onClose,
-  setCollabRoom,
-  setCollabUser,
-  onCollaborationStateChange,
   saveControllerRef,
 }: UseEditorAutosaveOptions) {
   const [autosaveStatus, setAutosaveStatus] = useState<AutosaveStatus>('idle');
-  const [isAutosaveSuspended, setIsAutosaveSuspended] = useState(false);
   const isDirtyRef = useRef(false);
   const lastPersistedRef = useRef(previewContent ?? '');
   const autosaveTimerRef = useRef<number | null>(null);
@@ -144,10 +134,6 @@ export function useEditorAutosave({
   }, [saveControllerRef, getDirtyContent, flushPendingAutosave, cancelPendingAutosave]);
 
   const flushAndClose = useCallback(async () => {
-    const isCollabActive = Boolean(collabRoom);
-    setCollabRoom?.(undefined);
-    setCollabUser?.(undefined);
-    onCollaborationStateChange?.(undefined, undefined);
     if (isDirtyRef.current && !saveErrorOnCloseRef.current) {
       if (autosaveTimerRef.current) {
         window.clearTimeout(autosaveTimerRef.current);
@@ -156,11 +142,6 @@ export function useEditorAutosave({
       const path = htmlPathRef.current;
       const snap = getHtmlRef.current?.() ?? '';
       if (path && snap && snap !== lastPersistedRef.current && window.pywebview?.api?.save_html_content) {
-        if (isCollabActive && lastPersistedRef.current.length > 200 && snap.length < lastPersistedRef.current.length * 0.25) {
-          console.warn('Salvataggio di chiusura ignorato: rilevata riduzione drastica in sessione collaborativa.');
-          onClose();
-          return;
-        }
         setAutosaveStatus('saving');
         const gen = nextHtmlAutosaveGeneration(path);
         autosaveGenRef.current = gen;
@@ -182,32 +163,11 @@ export function useEditorAutosave({
       }
     }
     onClose();
-  }, [collabRoom, setCollabRoom, setCollabUser, onCollaborationStateChange, onClose, getHtmlRef]);
+  }, [onClose, getHtmlRef]);
 
-  const handleForceSave = useCallback(async () => {
-    const path = htmlPathRef.current;
-    const snap = getHtmlRef.current?.() ?? '';
-    if (!path || !snap || !window.pywebview?.api?.save_html_content) return;
-    setAutosaveStatus('saving');
-    const gen = nextHtmlAutosaveGeneration(path);
-    autosaveGenRef.current = gen;
-    try {
-      const res = await window.pywebview.api.save_html_content(path, snap, gen);
-      if (isSaveCommitted(res)) {
-        lastPersistedRef.current = snap;
-        if (gen === autosaveGenRef.current) isDirtyRef.current = false;
-        setIsAutosaveSuspended(false);
-        setAutosaveStatus('saved');
-      } else {
-        setAutosaveStatus('error');
-      }
-    } catch {
-      setAutosaveStatus('error');
-    }
-  }, [getHtmlRef]);
 
   const scheduleAutosave = useCallback(() => {
-    if (!htmlPath || previewContent === null || htmlPath.startsWith('collaboration://')) return;
+    if (!htmlPath || previewContent === null) return;
     isDirtyRef.current = true;
     saveErrorOnCloseRef.current = false;
     if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
@@ -221,16 +181,6 @@ export function useEditorAutosave({
         isDirtyRef.current = false;
         return;
       }
-
-      // Safeguard: se siamo in modalità collaborativa e il documento subisce una riduzione >75%,
-      // blocchiamo l'autosave per evitare la distruzione accidentale del file locale dell'host.
-      if (collabRoom && lastPersistedRef.current.length > 200 && snap.length < lastPersistedRef.current.length * 0.25) {
-        console.warn('Autosave sospeso in sessione collaborativa: rilevata riduzione drastica del testo.');
-        setAutosaveStatus('error');
-        setIsAutosaveSuspended(true);
-        return;
-      }
-      setIsAutosaveSuspended(false);
 
       setAutosaveStatus('saving');
       try {
@@ -248,7 +198,7 @@ export function useEditorAutosave({
         setAutosaveStatus('error');
       }
     }, 700);
-  }, [htmlPath, previewContent, collabRoom, getHtmlRef]);
+  }, [htmlPath, previewContent, getHtmlRef]);
 
   useEffect(() => {
     if (autosaveStatus !== 'saved') return;
@@ -264,11 +214,9 @@ export function useEditorAutosave({
 
   return {
     autosaveStatus,
-    isAutosaveSuspended,
     isDirtyRef,
     lastPersistedRef,
     scheduleAutosave,
-    handleForceSave,
     flushAndClose,
   };
 }

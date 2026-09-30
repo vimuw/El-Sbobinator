@@ -178,22 +178,4 @@ describe('browserHost', () => {
     expect(closeRes?.ok).toBe(true);
   });
 
-  it('handles collaboration signals via BroadcastChannel', async () => {
-    const api = createBrowserPywebviewApi();
-    const postMessageMock = vi.fn();
-
-    class MockBroadcastChannel {
-      name: string;
-      onmessage: ((ev: MessageEvent) => void) | null = null;
-      constructor(name: string) {
-        this.name = name;
-      }
-      postMessage = postMessageMock;
-      close = vi.fn();
-    }
-    vi.stubGlobal('BroadcastChannel', MockBroadcastChannel);
-
-    const res = await api.send_collaboration_signal?.('room-123', '{"type":"sync"}');
-    expect(res?.ok).toBe(true);
-  });
 });

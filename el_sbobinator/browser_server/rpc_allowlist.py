@@ -23,7 +23,6 @@ ALLOWED_RPC_METHODS: frozenset[str] = frozenset(
         "answer_new_key",
         "read_html_content",
         "save_html_content",
-        "create_collaboration_backup",
         "stream_media_file",
         "validate_environment",
         "get_session_storage_info",
@@ -58,7 +57,6 @@ ALLOWED_RPC_METHODS: frozenset[str] = frozenset(
         "get_session_move_status",
         "download_and_install_update",
         "open_logs_folder",
-        "send_collaboration_signal",
     }
 )
 
@@ -82,7 +80,6 @@ DESKTOP_ONLY_RESPONSES: dict[str, Any] = {
         "error": "Disponibile nell'app desktop",
     },
     "open_logs_folder": {"ok": False, "error": "Disponibile nell'app desktop"},
-    "send_collaboration_signal": {"ok": True},
 }
 
 

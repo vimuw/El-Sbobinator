@@ -21,8 +21,9 @@ Applicazione desktop per trasformare lezioni audio e video in dispense di studio
 - **Trascrizione e Sintesi**: Converte registrazioni audio e video in dispense di studio strutturate, ripulendo il parlato da intercalari e ripetizioni e organizzando i contenuti in capitoli, paragrafi ed elenchi puntati.
 - **Modello BYOK (Bring Your Own Key)**: L'applicazione è un client desktop autonomo e gratuito, senza abbonamenti né server intermediari gestiti dallo sviluppatore. La comunicazione avviene in forma diretta e cifrata tra il computer locale e le API ufficiali di Google Gemini.
 - **Editor Sincronizzato**: Permette di riascoltare la lezione con il player audio sincronizzato (velocità da 1.0x a 3.0x) mentre si corregge la bozza, con supporto per formule scientifiche (LaTeX) e copia rapida formattata per Google Docs e Microsoft Word.
-- **Collaborazione P2P in Tempo Reale**: Supporta sessioni di studio condivise con compagni di corso tramite stanze collaborative peer-to-peer (WebRTC + CRDT Yjs), senza memorizzare testi su server esterni.
 - **Archivio Locale & Ricerca Istantanea**: Conserva lo storico delle lezioni elaborate sul computer in cartelle organizzabili, con ricerca testuale full-text ad alta velocità tra tutte le sbobine salvate.
+
+Per modificare una sbobina insieme ad altre persone, usa **Copia per Google Docs** nell'editor, incolla il contenuto in un documento Google e condividilo con i tuoi compagni.
 
 ---
 

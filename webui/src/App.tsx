@@ -33,7 +33,6 @@ import { ConfirmActionModal } from './components/modals/ConfirmActionModal';
 import { DuplicateFileModal } from './components/modals/DuplicateFileModal';
 import { NavSidebar, type ActivePage } from './components/NavSidebar';
 import { NotificationDropdown } from './components/NotificationDropdown';
-import { JoinRoomModal } from './components/modals/JoinRoomModal';
 
 const EditorFullPage = React.lazy(() => import('./components/EditorFullPage').then(m => ({ default: m.EditorFullPage })));
 const SettingsModal = React.lazy(() => import('./components/modals/SettingsModal').then(m => ({ default: m.SettingsModal })));
@@ -278,7 +277,7 @@ export default function App() {
     refreshArchiveSessions,
   });
 
-  const { preview, openPreview, openSharedSession, closePreview, relinkPreviewAudio, removePreviewAudio, handleAudioStateChange, handleScrollTopChange, handleCollaborationStateChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
+  const { preview, openPreview, closePreview, relinkPreviewAudio, removePreviewAudio, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
 
   const {
     regeneratePrompt,
@@ -301,7 +300,6 @@ export default function App() {
     removeNotificationByDedupeKey,
   });
 
-  const [isJoinRoomOpen, setIsJoinRoomOpen] = useState(false);
   const [hasOpenedPreview, setHasOpenedPreview] = useState(false);
   const shouldRenderPreview = preview.content !== null || hasOpenedPreview;
 
@@ -582,7 +580,6 @@ export default function App() {
               completedSessionFolderMap={completedSessionFolderMap}
               dndSensors={dndSensors}
               handleDragEnd={handleDragEnd}
-              setIsJoinRoomOpen={setIsJoinRoomOpen}
             />
           ) : (
             <motion.main
@@ -709,11 +706,6 @@ export default function App() {
               init: preview.initAudio,
               onStateChange: handleAudioStateChange,
             }}
-            collab={{
-              initialRoom: preview.initialRoom,
-              initialUser: preview.initialUser,
-              onStateChange: handleCollaborationStateChange,
-            }}
             theme={{
               mode: themeMode,
               setMode: setThemeMode,
@@ -724,13 +716,6 @@ export default function App() {
           />
         </React.Suspense>
       )}
-      <JoinRoomModal
-        isOpen={isJoinRoomOpen}
-        onClose={() => setIsJoinRoomOpen(false)}
-        onJoinRoom={(room, user) => {
-          openSharedSession(room, user.name, user.color);
-        }}
-      />
       <NotificationDropdown
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}

@@ -1,4 +1,5 @@
 import React from 'react';
+import type { Editor } from '@tiptap/core';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { RichTextEditor } from './RichTextEditor';
@@ -62,6 +63,25 @@ describe('RichTextEditor Component', () => {
     );
 
     expect(pageWrapper.style.zoom).toBe('1.5');
+  });
+
+  it('preserves local edits through toolbar undo and redo', async () => {
+    const onChange = vi.fn();
+    render(<RichTextEditor initialContent="<p>Appunti originali</p>" onChange={onChange} />);
+    const element = document.querySelector('.tiptap-editor') as HTMLElement & { editor: Editor };
+    await waitFor(() => expect(element.editor).toBeTruthy());
+
+    act(() => element.editor.commands.insertContentAt(element.editor.state.doc.content.size - 1, ' corretti'));
+    expect(element.textContent).toBe('Appunti originali corretti');
+    expect(onChange).toHaveBeenLastCalledWith('<p>Appunti originali corretti</p>');
+
+    act(() => fireEvent.click(screen.getByTitle('Annulla (Ctrl+Z)')));
+    expect(element.textContent).toBe('Appunti originali');
+    expect(onChange).toHaveBeenLastCalledWith('<p>Appunti originali</p>');
+
+    act(() => fireEvent.click(screen.getByTitle('Ripeti (Ctrl+Y)')));
+    expect(element.textContent).toBe('Appunti originali corretti');
+    expect(onChange).toHaveBeenLastCalledWith('<p>Appunti originali corretti</p>');
   });
 
   it('extracts headings and triggers onHeadingsChange', async () => {
@@ -143,41 +163,5 @@ describe('RichTextEditor Component', () => {
     expect(outputHtml).toContain('ID Soggetto');
     expect(outputHtml).toContain('Maschio');
     expect(outputHtml).not.toContain('IDSoggettoSessoEtà');
-  });
-
-  it('renders successfully without throwing undo/redo TypeError when collaborationRoom is provided', async () => {
-    let renderError: unknown = null;
-    try {
-      render(
-        <RichTextEditor
-          collaborationRoom="stanza-studio"
-          initialContent="<p>Testo collaborativo</p>"
-        />
-      );
-    } catch (err) {
-      renderError = err;
-    }
-
-    expect(renderError).toBeNull();
-    expect(document.querySelector('.editor-shell')).toBeTruthy();
-    expect(screen.getByTitle('Annulla (Ctrl+Z)')).toBeTruthy();
-  });
-
-  it('renders successfully without throwing when joining an active room with collaborationUser', async () => {
-    let renderError: unknown = null;
-    try {
-      render(
-        <RichTextEditor
-          collaborationRoom="stanza-avviata"
-          collaborationUser={{ name: 'Luigi', color: '#10b981' }}
-          initialContent="<p>Sessione condivisa attiva</p>"
-        />
-      );
-    } catch (err) {
-      renderError = err;
-    }
-
-    expect(renderError).toBeNull();
-    expect(document.querySelector('.editor-shell')).toBeTruthy();
   });
 });

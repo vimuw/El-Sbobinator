@@ -17,8 +17,6 @@ export type PreviewState = {
   initAudio: { time?: number; playbackRate?: number; volume?: number };
   initScrollTop?: number;
   initialSearchTerm?: string;
-  initialRoom?: string;
-  initialUser?: { name: string; color: string };
 };
 
 export const initialPreviewState: PreviewState = {
@@ -32,8 +30,6 @@ export const initialPreviewState: PreviewState = {
   audioRelinkNeeded: false,
   initAudio: {},
   initScrollTop: undefined,
-  initialRoom: undefined,
-  initialUser: undefined,
 };
 
 type UsePreviewOptions = {
@@ -121,8 +117,6 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
           initAudio: { time: savedSession.audioTime, playbackRate: savedSession.playbackRate, volume: savedSession.volume },
           initScrollTop: savedSession.scrollTop,
           initialSearchTerm: searchTerm || undefined,
-          initialRoom: undefined,
-          initialUser: undefined,
         });
         await loadPreviewAudio(sourcePath, sessionDir);
       } else {
@@ -267,44 +261,13 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
     currentEditorSessionRef.current = { ...currentEditorSessionRef.current, scrollTop };
   }, []);
 
-  const handleCollaborationStateChange = useCallback((room?: string, user?: { name: string; color: string }) => {
-    setPreview(prev => ({
-      ...prev,
-      initialRoom: room,
-      initialUser: user,
-    }));
-  }, []);
-
-  const openSharedSession = useCallback((roomCode: string, userName: string, userColor: string) => {
-    const cleanRoom = roomCode.trim().toLowerCase();
-    const cleanUser = userName.trim();
-    if (!cleanRoom) return;
-
-    setPreview({
-      content: '',
-      title: `Sessione Condivisa: ${cleanRoom}`,
-      path: `collaboration://${cleanRoom}`,
-      fileId: null,
-      sourcePath: '',
-      sessionDir: '',
-      audioSrc: null,
-      audioRelinkNeeded: false,
-      initAudio: {},
-      initScrollTop: 0,
-      initialRoom: cleanRoom,
-      initialUser: { name: cleanUser, color: userColor },
-    });
-  }, []);
-
   return {
     preview,
     openPreview,
-    openSharedSession,
     closePreview,
     relinkPreviewAudio,
     removePreviewAudio,
     handleAudioStateChange,
     handleScrollTopChange,
-    handleCollaborationStateChange,
   };
 }

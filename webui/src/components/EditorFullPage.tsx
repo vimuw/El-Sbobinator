@@ -1,11 +1,9 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Check, Copy, ExternalLink, FileText, Headphones, Loader2, Moon, Plus, Sun, Users, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Check, Copy, ExternalLink, FileText, Headphones, Loader2, Moon, Plus, Sun } from 'lucide-react';
 import type { Heading } from './RichTextEditor';
-import { registerCollabSignalListener } from '../bridge';
 import { normalizePreviewHtmlContent } from '../previewHtml';
 import { prepareHtmlForClipboard } from '../utils';
-import { CollaborationModal } from './modals/CollaborationModal';
 import { ConfirmActionModal } from './modals/ConfirmActionModal';
 import { useTheme } from '../hooks/useTheme';
 import { useEditorAutosave, type EditorSaveController } from '../hooks/useEditorAutosave';
@@ -36,12 +34,6 @@ export interface EditorAudioProps {
   onStateChange: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
 }
 
-export interface EditorCollabProps {
-  initialRoom?: string;
-  initialUser?: { name: string; color: string };
-  onStateChange?: (room?: string, user?: { name: string; color: string }) => void;
-}
-
 export interface EditorThemeProps {
   mode?: 'light' | 'dark';
   setMode?: React.Dispatch<React.SetStateAction<'light' | 'dark'>>;
@@ -50,7 +42,6 @@ export interface EditorThemeProps {
 export interface EditorFullPageProps {
   document?: EditorDocumentProps;
   audio?: EditorAudioProps;
-  collab?: EditorCollabProps;
   theme?: EditorThemeProps;
   onClose: () => void;
   onScrollTopChange?: (scrollTop: number) => void;
@@ -67,18 +58,14 @@ export interface EditorFullPageProps {
   previewInitAudio?: { time?: number; playbackRate?: number; volume?: number };
   previewInitScrollTop?: number | undefined;
   initialSearchTerm?: string;
-  initialRoom?: string;
-  initialUser?: { name: string; color: string };
   themeMode?: 'light' | 'dark';
   setThemeMode?: React.Dispatch<React.SetStateAction<'light' | 'dark'>>;
   onAudioStateChange?: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
-  onCollaborationStateChange?: (room?: string, user?: { name: string; color: string }) => void;
 }
 
 export function EditorFullPage({
   document: docProp,
   audio: audioProp,
-  collab: collabProp,
   theme: themeProp,
   onClose,
   onScrollTopChange: propOnScrollTopChange,
@@ -93,12 +80,9 @@ export function EditorFullPage({
   previewInitAudio: flatPreviewInitAudio,
   previewInitScrollTop: flatPreviewInitScrollTop,
   initialSearchTerm: flatInitialSearchTerm,
-  initialRoom: flatInitialRoom,
-  initialUser: flatInitialUser,
   themeMode: flatThemeMode,
   setThemeMode: flatSetThemeMode,
   onAudioStateChange: flatOnAudioStateChange,
-  onCollaborationStateChange: flatOnCollaborationStateChange,
 }: EditorFullPageProps) {
   const previewContent = docProp?.content !== undefined ? docProp.content : (flatPreviewContent ?? null);
   const previewTitle = docProp?.title ?? flatPreviewTitle ?? '';
@@ -113,10 +97,6 @@ export function EditorFullPage({
   const previewInitAudio = audioProp?.init ?? flatPreviewInitAudio ?? {};
   const onAudioStateChange = audioProp?.onStateChange ?? flatOnAudioStateChange ?? (() => {});
 
-  const initialRoom = collabProp?.initialRoom ?? flatInitialRoom;
-  const initialUser = collabProp?.initialUser ?? flatInitialUser;
-  const onCollaborationStateChange = collabProp?.onStateChange ?? flatOnCollaborationStateChange;
-
   const propThemeMode = themeProp?.mode ?? flatThemeMode;
   const propSetThemeMode = themeProp?.setMode ?? flatSetThemeMode;
   const onScrollTopChange = propOnScrollTopChange ?? (() => {});
@@ -124,43 +104,6 @@ export function EditorFullPage({
   const themeMode = propThemeMode ?? fallbackTheme.themeMode;
   const setThemeMode = propSetThemeMode ?? fallbackTheme.setThemeMode;
   const [isTocOpen, setIsTocOpen] = useState(false);
-  const [isCollabModalOpen, setIsCollabModalOpen] = useState(false);
-  const [collabRoom, setCollabRoom] = useState<string | undefined>(initialRoom);
-  const [collabUser, setCollabUser] = useState<{ name: string; color: string } | undefined>(initialUser);
-  const [detectedLocalRoom, setDetectedLocalRoom] = useState<string | null>(null);
-
-  useEffect(() => {
-    setCollabRoom(initialRoom);
-    setCollabUser(initialUser);
-  }, [htmlPath, initialRoom, initialUser]);
-
-  useEffect(() => {
-    if (!collabRoom) return;
-    const roomClean = collabRoom.trim().toLowerCase();
-    const sendAnnounce = () => {
-      const payload = JSON.stringify({ type: 'room-announcement', room: roomClean });
-      window.pywebview?.api?.send_collaboration_signal?.(roomClean, payload);
-    };
-    sendAnnounce();
-    const interval = setInterval(sendAnnounce, 1500);
-    return () => clearInterval(interval);
-  }, [collabRoom]);
-
-  useEffect(() => {
-    if (collabRoom) {
-      setDetectedLocalRoom(null);
-      return;
-    }
-    const handler = (_room: string, payloadStr: string) => {
-      try {
-        const data = JSON.parse(payloadStr);
-        if (data.type === 'room-announcement' && data.room) {
-          setDetectedLocalRoom(data.room);
-        }
-      } catch (_) {}
-    };
-    return registerCollabSignalListener(handler);
-  }, [collabRoom]);
   const [headings, setHeadings] = useState<Heading[]>([]);
   const [isCopied, setIsCopied] = useState(false);
   const [relinkSuccess, setRelinkSuccess] = useState(false);
@@ -205,20 +148,14 @@ export function EditorFullPage({
 
   const {
     autosaveStatus,
-    isAutosaveSuspended,
     lastPersistedRef,
     scheduleAutosave,
-    handleForceSave,
     flushAndClose,
   } = useEditorAutosave({
     htmlPath,
     previewContent,
-    collabRoom,
     getHtmlRef,
     onClose,
-    setCollabRoom,
-    setCollabUser,
-    onCollaborationStateChange,
     saveControllerRef,
   });
 
@@ -242,23 +179,6 @@ export function EditorFullPage({
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [previewContent, flushAndClose, handleZoomChange]);
-
-  useEffect(() => {
-    if (collabRoom && htmlPath && !htmlPath.startsWith('collaboration://')) {
-      const currentContent = getHtmlRef.current?.() ?? lastPersistedRef.current;
-      if (currentContent) {
-        try {
-          sessionStorage.setItem(`collab_pre_backup_${htmlPath}`, JSON.stringify({
-            room: collabRoom,
-            timestamp: Date.now(),
-            content: currentContent,
-          }));
-        } catch (_) {}
-      }
-      // Backup fisico su disco locale tramite backend Python per resistere a crash
-      void window.pywebview?.api?.create_collaboration_backup?.(htmlPath);
-    }
-  }, [collabRoom, htmlPath, lastPersistedRef]);
 
   const handleCopy = async () => {
     const rawHtml = getHtmlRef.current?.() ?? lastPersistedRef.current;
@@ -288,8 +208,6 @@ export function EditorFullPage({
       .filter(el => el.textContent?.trim() === text.trim());
     els[occurrencesBefore]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
-
-
 
   return (
     <AnimatePresence>
@@ -347,25 +265,6 @@ export function EditorFullPage({
 
             <div className="editor-fullpage-actions">
               <button
-                onClick={() => setIsCollabModalOpen(true)}
-                className={`editor-collab-btn${collabRoom ? ' is-active' : ''}`}
-                title={collabRoom ? `Collaborazione attiva: ${collabRoom}` : 'Inizia sessione (Collaborazione P2P)'}
-                aria-label="Inizia sessione"
-              >
-                {collabRoom ? (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-[var(--accent-bg)] animate-pulse shrink-0" />
-                    <Users className="w-3.5 h-3.5" />
-                    <span className="max-w-[120px] truncate">{collabRoom}</span>
-                  </>
-                ) : (
-                  <>
-                    <Users className="w-3.5 h-3.5 text-[var(--accent-text)]" />
-                    <span>Collabora</span>
-                  </>
-                )}
-              </button>
-              <button
                 onClick={() => void handleCopy()}
                 className="icon-button"
                 style={isCopied ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : {}}
@@ -395,59 +294,10 @@ export function EditorFullPage({
             </div>
           </div>
 
-          {detectedLocalRoom && !collabRoom && (
-            <div className="notice-banner is-info shrink-0 !rounded-none !border-x-0 !border-t-0 text-xs py-2 px-4">
-              <div className="flex items-center gap-2 font-medium">
-                <Users className="w-4 h-4" style={{ color: 'var(--accent-text)' }} />
-                <span className="text-[var(--text-primary)]">
-                  Stanza di collaborazione attiva trovata:{' '}
-                  <strong className="font-mono font-semibold px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
-                    {detectedLocalRoom}
-                  </strong>
-                </span>
-              </div>
-              <button
-                onClick={() => {
-                  let joinName = 'Partecipante';
-                  let joinColor = '#10b981';
-                  try {
-                    joinName = localStorage.getItem(STORAGE_KEYS.COLLAB_USERNAME) || 'Partecipante';
-                    joinColor = localStorage.getItem(STORAGE_KEYS.COLLAB_USERCOLOR) || '#10b981';
-                  } catch (_) {}
-                  setCollabRoom(detectedLocalRoom);
-                  setCollabUser({ name: joinName, color: joinColor });
-                  setDetectedLocalRoom(null);
-                  onCollaborationStateChange?.(detectedLocalRoom, { name: joinName, color: joinColor });
-                }}
-                className="premium-button compact-button text-xs font-semibold shrink-0"
-              >
-                <span>Unisciti ora</span>
-              </button>
-            </div>
-          )}
-
-          {isAutosaveSuspended && (
-            <div className="notice-banner is-warning shrink-0 !rounded-none !border-x-0 !border-t-0 text-xs py-2 px-4">
-              <div className="flex items-center gap-2 font-medium">
-                <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: 'var(--warning-text)' }} />
-                <span>
-                  Autosave sospeso: rilevata una riduzione drastica del testo in modalità collaborativa.
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => void handleForceSave()}
-                className="premium-button compact-button text-xs font-semibold shrink-0"
-              >
-                Forza salvataggio
-              </button>
-            </div>
-          )}
-
           <div className="editor-fullpage-body">
             <Suspense fallback={<div className="p-6 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento editor...</div>}>
               <LazyRichTextEditor
-                key={collabRoom ? `collab-${collabRoom}` : 'standalone'}
+                key={htmlPath}
                 initialContent={previewContent}
                 onChange={scheduleAutosave}
                 onEditorReady={getHtml => { getHtmlRef.current = getHtml; }}
@@ -461,8 +311,6 @@ export function EditorFullPage({
                 onScrollToHeading={scrollToHeading}
                 zoomLevel={zoomLevel}
                 onZoomChange={handleZoomChange}
-                collaborationRoom={collabRoom}
-                collaborationUser={collabUser}
               />
             </Suspense>
 
@@ -574,24 +422,6 @@ export function EditorFullPage({
               )}
             </div>
           </div>
-
-          <CollaborationModal
-            isOpen={isCollabModalOpen}
-            onClose={() => setIsCollabModalOpen(false)}
-            activeRoom={collabRoom}
-            activeUser={collabUser}
-            onStartCollaboration={(room, user) => {
-              setCollabRoom(room);
-              setCollabUser(user);
-              setIsCollabModalOpen(false);
-              onCollaborationStateChange?.(room, user);
-            }}
-            onStopCollaboration={() => {
-              setCollabRoom(undefined);
-              setCollabUser(undefined);
-              onCollaborationStateChange?.(undefined, undefined);
-            }}
-          />
 
           <ConfirmActionModal
             isOpen={showConfirmRemove}

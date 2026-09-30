@@ -146,30 +146,25 @@ describe('EditorFullPage autosave', () => {
     expect(secondGeneration).toBeGreaterThan(firstGeneration);
   });
 
-  it('renders top actions in order: inizia sessione / collabora, copy html, open html, theme toggle', async () => {
+  it('renders top actions in order: copy html, open html, theme toggle', async () => {
     const setThemeMode = vi.fn();
     render(<EditorFullPage {...baseProps} themeMode="dark" setThemeMode={setThemeMode} />);
 
-    const collabBtn = screen.getByTitle('Inizia sessione (Collaborazione P2P)');
     const copyBtn = screen.getByTitle('Copia per Google Docs');
     const openBtn = screen.getByTitle('Apri file HTML');
     const themeBtn = screen.getByTitle('Tema chiaro');
 
-    expect(collabBtn).toBeTruthy();
-    expect(screen.getByText('Collabora')).toBeTruthy();
     expect(copyBtn).toBeTruthy();
     expect(openBtn).toBeTruthy();
     expect(themeBtn).toBeTruthy();
 
-    // Verify order: collabBtn -> copyBtn -> openBtn -> themeBtn
+    // Verify order: copyBtn -> openBtn -> themeBtn
     const buttons = screen.getAllByRole('button');
-    const collabIndex = buttons.indexOf(collabBtn);
     const copyIndex = buttons.indexOf(copyBtn);
     const openIndex = buttons.indexOf(openBtn);
     const themeIndex = buttons.indexOf(themeBtn);
 
-    expect(collabIndex).toBeGreaterThan(-1);
-    expect(copyIndex).toBeGreaterThan(collabIndex);
+    expect(copyIndex).toBeGreaterThan(-1);
     expect(openIndex).toBeGreaterThan(copyIndex);
     expect(themeIndex).toBeGreaterThan(openIndex);
 
@@ -177,62 +172,38 @@ describe('EditorFullPage autosave', () => {
     fireEvent.click(themeBtn);
     expect(setThemeMode).toHaveBeenCalled();
   });
-  it('renders active room pill when collabRoom is set', async () => {
-    render(<EditorFullPage {...baseProps} initialRoom="anatomia-stanza-1" />);
-
-    const activeCollabBtn = screen.getByTitle('Collaborazione attiva: anatomia-stanza-1');
-    expect(activeCollabBtn).toBeTruthy();
-    expect(screen.getByText('anatomia-stanza-1')).toBeTruthy();
-  });
-
-  it('records pre-collaboration backup snapshot in sessionStorage and on-disk on collaboration start', async () => {
-    const longHtml = '<p>' + 'A'.repeat(500) + '</p>';
-    editorMockState.html = longHtml;
-    const createCollabBackup = vi.fn().mockResolvedValue({ ok: true, backup_path: '/sessions/out.collab-backup.html' });
-    setPywebview({ create_collaboration_backup: createCollabBackup });
-
-    render(<EditorFullPage {...baseProps} previewContent={longHtml} initialRoom="sbobina-test-room" />);
-    await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
-
-    const snapshot = sessionStorage.getItem('collab_pre_backup_/sessions/out.html');
-    expect(snapshot).toBeTruthy();
-    const parsed = JSON.parse(snapshot!);
-    expect(parsed.room).toBe('sbobina-test-room');
-    expect(parsed.content).toBe(longHtml);
-    expect(createCollabBackup).toHaveBeenCalledWith('/sessions/out.html');
-  });
-
-  it('blocks destructive autosave reduction (>75% drop) in active collaboration session and allows Forza salvataggio override', async () => {
-    const longHtml = '<p>' + 'A'.repeat(600) + '</p>';
-    editorMockState.html = longHtml;
-    const saveHtmlContent = vi.fn().mockResolvedValue({ ok: true, saved: true });
-    setPywebview({ save_html_content: saveHtmlContent });
-
-    render(<EditorFullPage {...baseProps} previewContent={longHtml} initialRoom="sbobina-safe-room" />);
-    await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
-
-    // Drastic drop from 600 chars to 5 chars (e.g. accidental wipe)
-    editorMockState.html = '<p></p>';
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('rich-text-editor'));
+  it('copies the edited document as formatted HTML and plain text for Google Docs', async () => {
+    const write = vi.fn().mockResolvedValue(undefined);
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    const clipboardItemDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'ClipboardItem');
+    class TestClipboardItem {
+      constructor(public data: Record<string, Blob>) {}
+    }
+    const readBlob = (blob: Blob) => new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(blob);
     });
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 750));
-    });
-
-    // save_html_content should NOT be called with the wiped content
-    expect(saveHtmlContent).not.toHaveBeenCalled();
-    expect(screen.getByText('Errore salvataggio')).toBeTruthy();
-    expect(screen.getByText(/Autosave sospeso: rilevata una riduzione drastica del testo in modalità collaborativa/)).toBeTruthy();
-    expect(screen.getByText('Forza salvataggio')).toBeTruthy();
-
-    // Clicking Forza salvataggio manually forces the save
-    await act(async () => {
-      fireEvent.click(screen.getByText('Forza salvataggio'));
-    });
-    expect(saveHtmlContent).toHaveBeenCalledWith('/sessions/out.html', '<p></p>', expect.any(Number));
-    expect(screen.getByText('Salvato')).toBeTruthy();
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write } });
+    Object.defineProperty(globalThis, 'ClipboardItem', { configurable: true, value: TestClipboardItem });
+    try {
+      editorMockState.html = '<h2>Appunti corretti</h2><p>Testo <strong>importante</strong></p>';
+      render(<EditorFullPage {...baseProps} />);
+      await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
+      fireEvent.click(screen.getByTitle('Copia per Google Docs'));
+      await waitFor(() => expect(write).toHaveBeenCalledOnce());
+      const [item] = write.mock.calls[0][0] as TestClipboardItem[];
+      expect(await readBlob(item.data['text/html'])).toContain('<strong>importante</strong>');
+      expect(await readBlob(item.data['text/html'])).toContain('Appunti corretti');
+      expect(await readBlob(item.data['text/plain'])).toContain('Testo importante');
+      expect(item.data['text/html'].type).toBe('text/html');
+    } finally {
+      if (clipboardDescriptor) Object.defineProperty(navigator, 'clipboard', clipboardDescriptor);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+      if (clipboardItemDescriptor) Object.defineProperty(globalThis, 'ClipboardItem', clipboardItemDescriptor);
+      else Reflect.deleteProperty(globalThis, 'ClipboardItem');
+    }
   });
 
   it('supports domain-grouped props and binds saveControllerRef', async () => {
