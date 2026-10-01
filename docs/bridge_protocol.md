@@ -187,3 +187,26 @@ File: `el_sbobinator/pipeline_hooks.py`. The pipeline never touches `PipelineAda
 - [`architecture.md`](./architecture.md) — module map and threading model.
 - [`pipeline.md`](./pipeline.md) — which events each phase emits and in which order.
 - [`session_model.md`](./session_model.md) — the durable state that the UI is visualizing.
+
+## Credential persistence status
+
+`load_settings` and successful `save_settings` responses include the additive
+`credential_storage: { primary, fallback }` field. Each group is `protected`,
+`session_only`, `legacy_plaintext`, or `absent`. Existing fields and RPC arguments
+remain compatible: omitted (`null`) credentials preserve the current value;
+explicit empty strings/lists clear it.
+
+`ok: true` means the settings are usable in this process. `session_only` means
+protected persistence failed: the new value (including a clear) overrides the
+previously stored credential until exit. After restart, the last stored credentials
+are available again. The UI must display this warning, including failures affecting
+fallback credentials. The existing `api_key_insecure` flag and reason remain true
+when an older plaintext credential is still on disk beneath a process override;
+load and save responses expose both facts. `legacy_plaintext` indicates an existing unprotected record;
+its migration removes plaintext only after protected storage succeeds. No new
+plaintext credential is written when protection fails.
+
+New package imports rebuild all HTML documents using the central sanitizer and
+trusted export shell before registering the session. Existing imported documents
+are unchanged. Import failure removes the incomplete session and does not publish
+it to the archive.
