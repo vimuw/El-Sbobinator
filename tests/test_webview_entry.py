@@ -193,5 +193,22 @@ class CloseHandlerTests(unittest.TestCase):
             mock_shutdown.assert_called_once()
 
 
+class WebuiCspTests(unittest.TestCase):
+    def test_webui_csp_allows_pywebview_bridge(self):
+        """Verify webui/index.html CSP permits pywebview's dynamic API bridge construction on macOS/WebKit."""
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        index_html = root / "webui" / "index.html"
+        self.assertTrue(index_html.exists(), "webui/index.html must exist")
+        content = index_html.read_text(encoding="utf-8")
+
+        self.assertIn("Content-Security-Policy", content)
+        # pywebview uses new Function(...) in api.js to expose Python bridge methods to React.
+        # Without 'unsafe-eval', WebKit (macOS) raises an EvalError and completely breaks the bridge.
+        self.assertIn("'unsafe-eval'", content)
+        self.assertIn("'unsafe-inline'", content)
+
+
 if __name__ == "__main__":
     unittest.main()
