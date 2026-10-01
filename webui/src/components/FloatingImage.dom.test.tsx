@@ -3,6 +3,20 @@ import { describe, expect, it } from 'vitest';
 import { RichTextEditor } from './RichTextEditor';
 
 describe('FloatingImage selection and resize handles', () => {
+  it.each([
+    '<div data-editor-image="true" data-width="56"><img src="caption.png" alt="caption test"><figcaption class="editor-image-caption">Figura 1: schema &amp; formula</figcaption></div>',
+    '<div data-editor-image="true" data-width="56" data-caption="Figura 1: schema &amp; formula"><img src="caption.png" alt="caption test"></div>',
+  ])('preserves an imported caption when the editor serializes %s', async htmlContent => {
+    let getHtml: (() => string) | undefined;
+    render(<RichTextEditor initialContent={htmlContent} onEditorReady={fn => { getHtml = fn; }} />);
+
+    await screen.findByAltText('caption test');
+    const serialized = new DOMParser().parseFromString(getHtml!(), 'text/html');
+    const image = serialized.querySelector('[data-editor-image]');
+    expect(image?.getAttribute('data-caption')).toBe('Figura 1: schema & formula');
+    expect(image?.querySelector('figcaption')?.textContent).toBe('Figura 1: schema & formula');
+  });
+
   it('selects image node on mousedown and renders selection handles', async () => {
     const htmlContent = '<div data-editor-image="true" data-width="56"><img src="test.png" alt="test image" /></div>';
     render(<RichTextEditor initialContent={htmlContent} />);

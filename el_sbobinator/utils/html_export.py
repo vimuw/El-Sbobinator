@@ -47,6 +47,7 @@ _ALLOWED_TAGS: frozenset[str] = frozenset(
         "span",
         "div",
         "img",
+        "figcaption",
     }
 )
 
@@ -58,6 +59,7 @@ _ALLOWED_ATTRS: dict[str, set[str]] = {
         "data-layout",
         "data-align",
         "data-width",
+        "data-caption",
         "data-math",
         "data-math-block",
         "align",
@@ -74,7 +76,7 @@ _ALLOWED_ATTRS: dict[str, set[str]] = {
 _ALLOWED_URL_SCHEMES: frozenset[str] = frozenset({"http", "https", "mailto", "data"})
 
 
-def sanitize_html_basic(html: str) -> str:
+def sanitize_html_basic(html: str, *, strip_document_head: bool = False) -> str:
     # Sanitizzazione tramite allowlist (nh3/ammonia) — blocca tag/attributi non permessi
     # e schemi URL pericolosi (javascript:, vbscript:). data: è permesso per src img inline.
     try:
@@ -92,6 +94,9 @@ def sanitize_html_basic(html: str) -> str:
         attributes=_ALLOWED_ATTRS,
         url_schemes=set(_ALLOWED_URL_SCHEMES),
         strip_comments=True,
+        clean_content_tags={"head", "title", "script", "style"}
+        if strip_document_head
+        else None,
     )
 
 
@@ -221,7 +226,19 @@ def build_html_document(title: str, markdown_text: str) -> str:
     html_body = markdown.markdown(
         normalized_markdown, extensions=["extra", "sane_lists"], output_format="html"
     )
-    html_body = sanitize_html_basic(html_body)
+    return build_html_document_from_body(title, html_body)
+
+
+def normalize_imported_html(title: str, html: str) -> str:
+    # nh3's HTML5 parser also handles omitted head/body tags without losing text.
+    return build_html_document_from_body(title, html, strip_document_head=True)
+
+
+def build_html_document_from_body(
+    title: str, html_body: str, *, strip_document_head: bool = False
+) -> str:
+    """Wrap sanitized HTML in the same trusted document used by Markdown exports."""
+    html_body = sanitize_html_basic(html_body, strip_document_head=strip_document_head)
     safe_title = (title or "Sbobina").strip()
     safe_title_html = _html.escape(safe_title, quote=True)
     # CSP: evita script e richieste di rete anche se l'AI inserisse tag HTML.

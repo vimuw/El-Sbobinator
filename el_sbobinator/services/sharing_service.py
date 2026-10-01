@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import uuid
 import zipfile
@@ -20,9 +21,49 @@ from el_sbobinator.core.shared import (
     _now_iso,
     _safe_mkdir,
 )
+from el_sbobinator.utils.file_ops import _atomic_write_text
+from el_sbobinator.utils.html_export import normalize_imported_html
 
 MAX_FILE_COUNT = 500
 MAX_TOTAL_UNCOMPRESSED_SIZE = 1500 * 1024 * 1024  # 1.5 GB
+MAX_JSON_SIZE = 1024 * 1024
+# Macro blocks contain the full transcript, rather than small session metadata.
+MAX_TRANSCRIPT_JSON_SIZE = 32 * 1024 * 1024
+MAX_HTML_SIZE = 32 * 1024 * 1024
+EXTRACTION_BLOCK_SIZE = 64 * 1024
+DISK_SPACE_MARGIN = 64 * 1024 * 1024
+
+
+def _archive_destination(name: str, target_dir: str) -> str:
+    portable = name.replace("\\", "/")
+    parts = portable.rstrip("/").split("/")
+    for part in parts:
+        if (
+            not part
+            or part in {".", ".."}
+            or part.endswith((".", " "))
+            or re.search(r'[<>:"|?*\x00-\x1f]', part)
+            or re.fullmatch(
+                r"(?i)(CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])(?:\..*)?", part
+            )
+        ):
+            raise ValueError(f"Attacco Zip Slip rilevato o nome non consentito: {name}")
+    destination = os.path.realpath(os.path.join(target_dir, *parts))
+    root = os.path.realpath(target_dir)
+    if os.path.commonpath([root, destination]) != root:
+        raise ValueError(f"Attacco Zip Slip rilevato per il file: {name}")
+    return destination
+
+
+def _member_size_limit(name: str) -> int:
+    if name.replace("\\", "/").casefold() == "phase2_macro_blocks.json":
+        return MAX_TRANSCRIPT_JSON_SIZE
+    suffix = os.path.splitext(name)[1].lower()
+    if suffix == ".json":
+        return MAX_JSON_SIZE
+    if suffix in {".html", ".htm"}:
+        return MAX_HTML_SIZE
+    return MAX_TOTAL_UNCOMPRESSED_SIZE
 
 
 def _safe_zip_extract(zip_file: zipfile.ZipFile, target_dir: str) -> None:
@@ -36,6 +77,8 @@ def _safe_zip_extract(zip_file: zipfile.ZipFile, target_dir: str) -> None:
         )
 
     total_uncompressed_size = 0
+    destinations: set[str] = set()
+    members: list[tuple[zipfile.ZipInfo, str]] = []
 
     for member in infolist:
         # 1. Rifiuto Symlink (is_symlink() su Python 3.13+ o bitmask POSIX)
@@ -57,9 +100,13 @@ def _safe_zip_extract(zip_file: zipfile.ZipFile, target_dir: str) -> None:
             raise ValueError(
                 "Dimensione decompressa totale eccede la soglia massima consentita."
             )
+        if member.file_size > _member_size_limit(member.filename):
+            raise ValueError(
+                f"File eccede la soglia massima consentita: {member.filename}"
+            )
 
         # 3. Path Traversal Check
-        destination_path = os.path.realpath(os.path.join(target_dir, member.filename))
+        destination_path = _archive_destination(member.filename, target_dir)
         if (
             not destination_path.startswith(resolved_target + os.sep)
             and destination_path != resolved_target
@@ -67,8 +114,46 @@ def _safe_zip_extract(zip_file: zipfile.ZipFile, target_dir: str) -> None:
             raise ValueError(
                 f"Attacco Zip Slip rilevato per il file: {member.filename}"
             )
+        identity = destination_path.replace("\\", "/").casefold()
+        if identity in destinations:
+            raise ValueError(f"Destinazione duplicata nel pacchetto: {member.filename}")
+        destinations.add(identity)
+        members.append((member, destination_path))
 
-    zip_file.extractall(target_dir)
+    if shutil.disk_usage(target_dir).free < total_uncompressed_size + DISK_SPACE_MARGIN:
+        raise ValueError("Spazio su disco insufficiente per importare il pacchetto.")
+    actual_total = 0
+    for member, destination in members:
+        if member.is_dir() or member.filename.endswith(("/", "\\")):
+            os.makedirs(destination, exist_ok=True)
+            continue
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        actual_member = 0
+        with zip_file.open(member) as source, open(destination, "xb") as output:
+            while block := source.read(EXTRACTION_BLOCK_SIZE):
+                actual_member += len(block)
+                actual_total += len(block)
+                if (
+                    actual_total > MAX_TOTAL_UNCOMPRESSED_SIZE
+                    or actual_member > _member_size_limit(member.filename)
+                ):
+                    raise ValueError(
+                        "Dimensione decompressa effettiva eccede la soglia massima consentita."
+                    )
+                output.write(block)
+
+
+def _load_package_metadata(path: str) -> dict:
+    if not os.path.isfile(path):
+        return {}
+    with open(path, "rb") as handle:
+        raw = handle.read(MAX_JSON_SIZE + 1)
+    if len(raw) > MAX_JSON_SIZE:
+        raise ValueError("Metadati del pacchetto troppo grandi.")
+    value = json.loads(raw)
+    if not isinstance(value, dict):
+        raise ValueError("I metadati del pacchetto devono essere un oggetto JSON.")
+    return value
 
 
 def find_audio_for_session(session_dir: str, session_data: dict) -> str | None:
@@ -208,6 +293,25 @@ def create_sbobina_package(
     }
 
 
+def _normalize_package_html(
+    new_session_dir: str, manifest: dict, session_data: dict
+) -> None:
+    title = str(
+        manifest.get("session_name") or session_data.get("title") or "Sbobina importata"
+    )
+    for root, _dirs, files in os.walk(new_session_dir):
+        for name in files:
+            if os.path.splitext(name)[1].lower() in {".html", ".htm"}:
+                path = os.path.join(root, name)
+                with open(path, "rb") as handle:
+                    raw_html = handle.read(MAX_HTML_SIZE + 1)
+                if len(raw_html) > MAX_HTML_SIZE:
+                    raise ValueError("Documento HTML troppo grande.")
+                _atomic_write_text(
+                    path, normalize_imported_html(title, raw_html.decode("utf-8"))
+                )
+
+
 def unpack_and_import_package(package_path: str, session_root: str) -> dict:
     """Extract a `.sbobina` package into a new session directory inside session_root."""
     if not os.path.isfile(package_path):
@@ -230,10 +334,12 @@ def unpack_and_import_package(package_path: str, session_root: str) -> dict:
 
         # Inspect manifest
         manifest_path = os.path.join(new_session_dir, "manifest.json")
-        manifest = _load_json(manifest_path) if os.path.isfile(manifest_path) else {}
+        manifest = _load_package_metadata(manifest_path)
 
         session_path = os.path.join(new_session_dir, "session.json")
-        session_data = _load_json(session_path) if os.path.isfile(session_path) else {}
+        session_data = _load_package_metadata(session_path)
+
+        _normalize_package_html(new_session_dir, manifest, session_data)
 
         # Locate extracted audio
         audio_dir = os.path.join(new_session_dir, "audio")
@@ -250,7 +356,7 @@ def unpack_and_import_package(package_path: str, session_root: str) -> dict:
         if not os.path.isfile(html_path):
             # Check for any .html in new_session_dir
             for entry in os.listdir(new_session_dir):
-                if entry.endswith(".html"):
+                if entry.lower().endswith(".html"):
                     html_path = os.path.join(new_session_dir, entry)
                     break
 
@@ -269,11 +375,10 @@ def unpack_and_import_package(package_path: str, session_root: str) -> dict:
         session_data["updated_at"] = _now_iso()
         session_data["imported_at"] = _now_iso()
 
+        if not isinstance(session_data.get("outputs"), dict):
+            session_data["outputs"] = {}
+        session_data["outputs"].pop("html", None)
         if os.path.isfile(html_path):
-            if "outputs" not in session_data or not isinstance(
-                session_data["outputs"], dict
-            ):
-                session_data["outputs"] = {}
             session_data["outputs"]["html"] = html_path
 
         if extracted_audio_path and os.path.isfile(extracted_audio_path):
