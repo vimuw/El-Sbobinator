@@ -117,6 +117,16 @@ afterEach(() => {
 });
 
 describe('SettingsModal — model parameters chunk display', () => {
+  it('keeps the saved modal open when credentials are session-only', async () => {
+    const onClose = vi.fn();
+    setPywebview({ save_settings: vi.fn().mockResolvedValue({ ok: true, credential_storage: { primary: 'session_only', fallback: 'absent' } }) });
+    render(<SettingsModal {...makeProps({ onClose })} />);
+    await act(async () => { fireEvent.click(screen.getByText('Salva e Chiudi')); });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByText('Credenziali temporanee')).toBeTruthy();
+    expect(screen.getByText(/al riavvio saranno disponibili/)).toBeTruthy();
+  });
+
   it('does not display technical chunk duration or temperature parameters in UI', async () => {
     const models = [
       { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15 },

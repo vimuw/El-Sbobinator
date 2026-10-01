@@ -303,10 +303,15 @@ class TestSettingsController(unittest.TestCase):
                 "has_protected_key": True,
                 "api_key_insecure": False,
                 "config_recovered_from": "backup.json",
+                "credential_storage": {
+                    "primary": "protected",
+                    "fallback": "session_only",
+                },
             }
             res = host.load_settings()
             self.assertEqual(res["api_key"], "k")
             self.assertEqual(res["config_recovered_from"], "backup.json")
+            self.assertEqual(res["credential_storage"]["fallback"], "session_only")
             self.assertTrue(res["has_protected_key"])
 
     def test_load_settings_fallback_on_exception(self):
@@ -321,10 +326,22 @@ class TestSettingsController(unittest.TestCase):
 
     def test_save_settings(self):
         host = DummySettingsHost()
-        with patch(
-            "el_sbobinator.bridge.controllers.settings_controller.save_config"
-        ) as mock_save:
+        with (
+            patch(
+                "el_sbobinator.bridge.controllers.settings_controller.save_config"
+            ) as mock_save,
+            patch(
+                "el_sbobinator.bridge.controllers.settings_controller.load_config",
+                return_value={"api_key_insecure": True},
+            ),
+        ):
+            mock_save.return_value = {
+                "primary": "session_only",
+                "fallback": "protected",
+            }
             res = host.save_settings("k", ["k2"], "m1", ["m2"])
+            self.assertEqual(res["credential_storage"], mock_save.return_value)
+            self.assertTrue(res["api_key_insecure"])
             self.assertTrue(res.get("ok"))
             mock_save.assert_called_once_with(
                 "k", fallback_keys=["k2"], preferred_model="m1", fallback_models=["m2"]

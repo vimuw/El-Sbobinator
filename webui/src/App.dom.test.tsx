@@ -1035,8 +1035,8 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
     });
   });
 
-  describe('App — Insecure API key removal', () => {
-    it('shows insecure key banner and handles removal successfully', async () => {
+  describe('App — Credential storage warning', () => {
+    it('opens settings from the warning without deleting credentials', async () => {
       const saveSettings = vi.fn().mockResolvedValue({ ok: true });
       const setApiKey = vi.fn();
       const setApiKeyInsecure = vi.fn();
@@ -1055,15 +1055,16 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       });
 
       await act(async () => { render(<App />); });
-      expect(screen.getByText(/La tua chiave API è salvata in chiaro/i)).toBeTruthy();
+      expect(screen.getByText(/DPAPI fallback/i)).toBeTruthy();
 
       await act(async () => {
-        fireEvent.click(screen.getByText('Rimuovi chiave'));
+        fireEvent.click(screen.getByRole('button', { name: 'Gestisci credenziali' }));
       });
 
-      expect(saveSettings).toHaveBeenCalled();
-      expect(setApiKey).toHaveBeenCalledWith('');
-      expect(setApiKeyInsecure).toHaveBeenCalledWith(false);
+      expect(await screen.findByRole('heading', { name: /Impostazioni/ })).toBeTruthy();
+      expect(saveSettings).not.toHaveBeenCalled();
+      expect(setApiKey).not.toHaveBeenCalled();
+      expect(setApiKeyInsecure).not.toHaveBeenCalled();
     });
   });
 

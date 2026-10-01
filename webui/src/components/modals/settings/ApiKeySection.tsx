@@ -22,12 +22,15 @@ import { ConfirmActionModal } from '../ConfirmActionModal';
 import { QuotasSection } from './QuotasSection';
 import { KebabMenu, type KebabMenuItem } from '../../KebabMenu';
 import { GEMINI_KEY_PATTERN, getModelDisplayName } from '../../../utils';
-import type { ApiUsageResult, CredentialProfile } from '../../../bridge';
+import type { ApiUsageResult, CredentialProfile, CredentialStorage } from '../../../bridge';
+
+import { credentialStorageWarning } from '../../../credentialStorage';
 
 export interface ApiKeySectionProps {
   apiKey: string;
   setApiKey: (key: string) => void;
   hasProtectedKey: boolean;
+  credentialStorage?: CredentialStorage;
   apiKeyInsecure: boolean;
   apiKeyInsecureReason: string;
   fallbackKeys: string[];
@@ -52,6 +55,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
   apiKey,
   setApiKey,
   hasProtectedKey,
+  credentialStorage,
   apiKeyInsecure,
   apiKeyInsecureReason,
   fallbackKeys,
@@ -64,6 +68,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
   onAskDeleteKey,
   statusSummary,
 }) => {
+  const storageWarning = credentialStorageWarning(credentialStorage, credentialStorage ? apiKeyInsecure : false) || (apiKeyInsecure ? (apiKeyInsecureReason || 'Credenziali presenti in chiaro nel file di configurazione.') : '');
   const [newKeyInput, setNewKeyInput] = useState('');
   const [notice, setNotice] = useState<{ type: 'error' | 'warning'; message: string } | null>(null);
   const [showNewKeyInput, setShowNewKeyInput] = useState(false);
@@ -674,15 +679,14 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
       )}
 
       {/* Storage / Security notice */}
-      {apiKeyInsecure && (
+      {storageWarning && (
         <div className="alert-card is-warning text-xs space-y-1">
           <div className="font-bold flex items-center gap-1.5">
             <AlertTriangle className="w-4 h-4 shrink-0" />
-            Memorizzazione in chiaro
+            {credentialStorage?.primary === 'session_only' || credentialStorage?.fallback === 'session_only' ? 'Credenziali temporanee' : 'Memorizzazione in chiaro'}
           </div>
           <p className="text-[var(--text-secondary)]">
-            {apiKeyInsecureReason ||
-              "Impossibile cifrare l'API key sul sistema corrente. Verrà salvata in modo sicuro ma non cifrato."}
+            {storageWarning}
           </p>
         </div>
       )}

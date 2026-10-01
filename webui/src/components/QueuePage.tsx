@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { credentialStorageWarning } from '../credentialStorage';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { type DragEndEvent, type SensorDescriptor, type SensorOptions } from '@dnd-kit/core';
-import { AlertTriangle, Loader2, Trash2 } from 'lucide-react';
+import { AlertTriangle, Loader2, Settings } from 'lucide-react';
 import { GithubIcon } from './icons/GithubIcon';
 import { GITHUB_URL } from '../branding';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
@@ -18,10 +19,6 @@ import type { ConfirmAction } from '../hooks/useConfirmModal';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 
 const SetupPage = React.lazy(() => import('./SetupPage').then(m => ({ default: m.SetupPage })));
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 export type UiMode = 'loading' | 'setup' | 'ready-empty' | 'ready-with-files' | 'processing' | 'canceling';
 
@@ -175,7 +172,6 @@ export function QueuePage({
     setConfirmAction,
     handleRetryFailedRevisionBlocks,
   } = actions;
-  const [isRemovingInsecureKey, setIsRemovingInsecureKey] = useState(false);
 
   const pendingFiles = useMemo(() => getPendingFiles(files), [files]);
   const doneFiles = useMemo(() => getDoneFiles(files), [files]);
@@ -211,7 +207,7 @@ export function QueuePage({
 
   const lastConsoleMessage = consoleLogs.length > 0 ? consoleLogs[consoleLogs.length - 1] : 'Pronto per iniziare.';
   const showProcessingBanner = appState === 'processing' || appState === 'canceling' || completionFlash;
-  const apiKeyInsecureReasonLabel = apiKeyInsecureReason.trim() || 'DPAPI non disponibile.';
+  const apiKeyInsecureReasonLabel = apiKeyInsecureReason.trim() || 'Credenziali presenti in chiaro nel file di configurazione.';
   const bannerFile = useMemo(
     () => files.find(f => f.status === 'processing' || f.isRetryingBlocks) ?? (completionFlash ? doneFiles[0] : undefined),
     [files, completionFlash, doneFiles],
@@ -224,35 +220,6 @@ export function QueuePage({
       localStorage.setItem(STORAGE_KEYS.SHOW_CONSOLE, 'false');
     }
   }, [isConsoleDisabled, showConsole, setShowConsole]);
-
-  const handleRemoveInsecureApiKey = useCallback(async () => {
-    if (isRemovingInsecureKey) return;
-    setIsRemovingInsecureKey(true);
-    try {
-      const result = await window.pywebview?.api?.save_settings?.('', fallbackKeys, preferredModel, fallbackModels);
-      if (!result?.ok) {
-        appendConsole(`❌ Errore rimozione chiave API: ${result?.error ?? 'errore sconosciuto'}`);
-        return;
-      }
-      setApiKey('');
-      setApiKeyInsecure(false);
-      setApiKeyInsecureReason('');
-      appendConsole('Chiave API rimossa dal disco.');
-    } catch (error: unknown) {
-      appendConsole(`❌ Errore rimozione chiave API: ${getErrorMessage(error)}`);
-    } finally {
-      setIsRemovingInsecureKey(false);
-    }
-  }, [
-    appendConsole,
-    fallbackKeys,
-    fallbackModels,
-    isRemovingInsecureKey,
-    preferredModel,
-    setApiKey,
-    setApiKeyInsecure,
-    setApiKeyInsecureReason,
-  ]);
 
   return (
     <motion.main
@@ -277,17 +244,16 @@ export function QueuePage({
             <div className="flex items-start gap-3 text-sm leading-relaxed text-[var(--warning-text)]">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>
-                La tua chiave API è salvata in chiaro su disco perché la protezione Windows (DPAPI) non è disponibile. Motivo: {apiKeyInsecureReasonLabel} Cancella e reinserisci la chiave, oppure conservala in un password manager.
+                {apiKeyInsecureReasonLabel}
               </span>
             </div>
             <button
               type="button"
-              onClick={() => void handleRemoveInsecureApiKey()}
-              disabled={isRemovingInsecureKey}
+              onClick={handleOpenSettings}
               className="shrink-0 premium-button-secondary compact-button is-warning flex items-center justify-center gap-2"
             >
-              <Trash2 className="w-4 h-4" />
-              {isRemovingInsecureKey ? 'Rimozione...' : 'Rimuovi chiave'}
+              <Settings className="w-4 h-4" />
+              Gestisci credenziali
             </button>
           </motion.div>
         )}
@@ -321,7 +287,10 @@ export function QueuePage({
           <React.Suspense fallback={null}>
             <SetupPage
               hasProtectedKey={hasProtectedKey}
-              onSaved={(key, model) => {
+              onSaved={(key, model, storage, legacyPlaintext) => {
+                const warning = credentialStorageWarning(storage, legacyPlaintext);
+                setApiKeyInsecure(Boolean(warning));
+                setApiKeyInsecureReason(warning);
                 setApiKey(key);
                 if (model && setPreferredModel) {
                   setPreferredModel(model);

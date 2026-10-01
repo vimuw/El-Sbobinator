@@ -106,6 +106,8 @@ def keyring_delete_api_key() -> bool:
             return False
         import keyring  # type: ignore
 
+        if keyring.get_password(KEYRING_SERVICE, KEYRING_USER_API) is None:
+            return True
         keyring.delete_password(KEYRING_SERVICE, KEYRING_USER_API)
         return True
     except Exception:
@@ -162,10 +164,9 @@ def keyring_delete_fallback_keys() -> bool:
             return False
         import keyring  # type: ignore
 
-        try:
-            keyring.delete_password(KEYRING_SERVICE, KEYRING_USER_FALLBACK_KEYS)
-        except Exception:
-            pass
+        if keyring.get_password(KEYRING_SERVICE, KEYRING_USER_FALLBACK_KEYS) is None:
+            return True
+        keyring.delete_password(KEYRING_SERVICE, KEYRING_USER_FALLBACK_KEYS)
         return True
     except Exception as e:
         _debug_log(f"keyring: failed to delete fallback keys: {e}")

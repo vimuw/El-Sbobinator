@@ -2,7 +2,7 @@ import { reportClientError } from '../../diagnostics';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Settings, HardDrive, SlidersHorizontal, Loader2, X, FlaskConical } from 'lucide-react';
-import type { ApiUsageResult, ModelOption, ValidationResult } from '../../bridge';
+import type { ApiUsageResult, CredentialStorage, ModelOption, ValidationResult } from '../../bridge';
 import { ConfirmActionModal } from './ConfirmActionModal';
 import { ApiKeySection, type DeleteKeyTarget } from './settings/ApiKeySection';
 import { ModelSection } from './settings/ModelSection';
@@ -15,6 +15,7 @@ import { UpdaterSection, type SettingsUpdateInstallState } from './settings/Upda
 
 import { useSettingsStorage, SESSION_CLEANUP_DAYS } from '../../hooks/useSettingsStorage';
 import { formatSize } from '../../utils';
+import { credentialStorageWarning } from '../../credentialStorage';
 import { getHostCapabilities } from '../../browserHost';
 import { APP_VERSION } from '../../branding';
 import { STORAGE_KEYS } from '../../storageKeys';
@@ -112,6 +113,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [notificationsEnabled, setNotificationsEnabled] = useState(
     () => localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED) !== 'false',
   );
+  const [credentialStorage, setCredentialStorage] = useState<CredentialStorage | undefined>();
   const [apiKeyInsecure, setApiKeyInsecure] = useState(false);
   const [apiKeyInsecureReason, setApiKeyInsecureReason] = useState<string | null>(null);
 
@@ -283,6 +285,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       if (window.pywebview?.api?.load_settings) {
         window.pywebview.api.load_settings().then(res => {
           if (isMountedRef.current && res) {
+            setCredentialStorage(res.credential_storage);
             setApiKeyInsecure(!!res.api_key_insecure);
             setApiKeyInsecureReason(res.api_key_insecure_reason || null);
           }
@@ -461,13 +464,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         appendConsole(`❌ ${err}`);
         return;
       }
+      settingsSnapshotRef.current = { apiKey, fallbackKeys: [...fallbackKeys], preferredModel, fallbackModels: [...fallbackModels], notificationsEnabled };
+      setCredentialStorage(result.credential_storage);
+      setApiKeyInsecure(Boolean(result.api_key_insecure));
+      setApiKeyInsecureReason(result.api_key_insecure_reason || null);
       localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED, String(notificationsEnabled));
       try {
         await onSettingsSaved?.();
       } catch (e: unknown) {
         appendConsole(`Avviso: impostazioni salvate, ma il refresh dello stato non e riuscito: ${getErrorMessage(e)}`);
       }
-      onClose();
+      if (credentialStorageWarning(result.credential_storage, result.api_key_insecure)) {
+        setActiveTab('general');
+      } else {
+        onClose();
+      }
     } finally {
       isSavingRef.current = false;
       if (isMountedRef.current) setIsSaving(false);
@@ -639,6 +650,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           setApiKey(key);
                         }}
                         hasProtectedKey={hasProtectedKey && !clearProtectedPrimary}
+                        credentialStorage={credentialStorage}
                         apiKeyInsecure={apiKeyInsecure}
                         apiKeyInsecureReason={apiKeyInsecureReason || ''}
                         fallbackKeys={fallbackKeys}

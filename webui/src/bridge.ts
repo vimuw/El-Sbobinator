@@ -125,6 +125,12 @@ export interface ModelOption {
   is_default?: boolean;
 }
 
+export type CredentialStorageState = 'protected' | 'session_only' | 'legacy_plaintext' | 'absent';
+export interface CredentialStorage {
+  primary: CredentialStorageState;
+  fallback: CredentialStorageState;
+}
+
 export interface SettingsPayload {
   api_key?: string;
   fallback_keys?: string[];
@@ -134,6 +140,7 @@ export interface SettingsPayload {
   has_protected_key?: boolean;
   api_key_insecure?: boolean;
   api_key_insecure_reason?: string;
+  credential_storage?: CredentialStorage;
   config_recovered_from?: string;
   configuredFallbackKeyCount?: number;
   configured_fallback_key_count?: number;
@@ -251,7 +258,7 @@ export interface PywebviewApi {
     fallbackKeys: string[] | null,
     preferredModel: string,
     fallbackModels: string[],
-  ) => Promise<{ ok: boolean; error?: string }>;
+  ) => Promise<{ ok: boolean; error?: string; credential_storage?: CredentialStorage; api_key_insecure?: boolean; api_key_insecure_reason?: string }>;
   ask_files?: () => Promise<FileDescriptor[]>;
   ask_media_file?: () => Promise<FileDescriptor | null>;
   check_path_exists?: (path: string) => Promise<{ ok: boolean; exists: boolean }>;

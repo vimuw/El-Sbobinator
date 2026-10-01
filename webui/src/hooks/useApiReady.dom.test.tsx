@@ -21,6 +21,20 @@ afterEach(() => {
 });
 
 describe('useApiReady — bootstrap guard', () => {
+  it('hydrates temporary credentials and retains the old plaintext warning through refresh', async () => {
+    const load = vi.fn().mockResolvedValue({ api_key: 'temporary', credential_storage: { primary: 'session_only', fallback: 'absent' }, api_key_insecure: true });
+    setPywebview({ load_settings: load });
+    const { result } = renderHook(() => useApiReady(vi.fn()));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(result.current.apiKey).toBe('temporary');
+    expect(result.current.apiKeyInsecureReason).toContain('solo per questa sessione');
+    expect(result.current.apiKeyInsecureReason).toContain('in chiaro');
+    load.mockResolvedValue({ api_key: 'protected', credential_storage: { primary: 'protected', fallback: 'absent' }, api_key_insecure: false });
+    await act(async () => { await result.current.refreshSettings(); });
+    expect(result.current.apiKeyInsecure).toBe(false);
+    expect(result.current.apiKeyInsecureReason).toBe('');
+  });
+
   it('5-second timeout does not set apiReady when bridge is absent', async () => {
     const { result } = renderHook(() => useApiReady(vi.fn()));
 

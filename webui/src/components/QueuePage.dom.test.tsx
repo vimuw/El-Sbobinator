@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { QueuePage, type QueuePageProps } from './QueuePage';
+import { credentialStorageWarning } from '../credentialStorage';
 
 vi.mock('../branding', () => ({
   GITHUB_URL: 'https://github.com/test',
@@ -88,8 +89,38 @@ describe('QueuePage Component', () => {
         }}
       />,
     );
-    expect(screen.getByText(/La tua chiave API è salvata in chiaro/i)).toBeTruthy();
+    expect(screen.getByText(/DPAPI non disponibile/i)).toBeTruthy();
   });
+
+  it.each(['session_only', 'legacy_plaintext'] as const)(
+    'opens credential settings without clearing the protected primary for %s fallback keys',
+    fallback => {
+      const handleOpenSettings = vi.fn();
+      const setApiKey = vi.fn();
+      const warning = credentialStorageWarning({ primary: 'protected', fallback });
+      render(
+        <QueuePage
+          {...defaultProps}
+          auth={{
+            ...defaultProps.auth,
+            apiKey: '',
+            hasProtectedKey: true,
+            fallbackKeys: ['fallback-key'],
+            apiKeyInsecure: true,
+            apiKeyInsecureReason: warning,
+            setApiKey,
+          }}
+          actions={{ ...defaultProps.actions, handleOpenSettings }}
+        />,
+      );
+
+      expect(screen.getByText(warning)).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Gestisci credenziali' }));
+      expect(handleOpenSettings).toHaveBeenCalledOnce();
+      expect(setApiKey).not.toHaveBeenCalled();
+      expect(screen.queryByRole('button', { name: 'Rimuovi chiave' })).toBeNull();
+    },
+  );
 
   it('renders loading view when apiReady is false', () => {
     render(

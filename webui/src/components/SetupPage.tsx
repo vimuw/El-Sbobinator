@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { AlertCircle, ArrowRight, CheckCircle2, ExternalLink, Eye, EyeOff, Key, Lightbulb, Loader2 } from 'lucide-react';
+import type { CredentialStorage } from '../bridge';
 import { GEMINI_KEY_PATTERN } from '../utils';
 
 interface SetupPageProps {
   hasProtectedKey: boolean;
-  onSaved: (key: string, model?: string) => void;
+  onSaved: (key: string, model?: string, storage?: CredentialStorage, legacyPlaintext?: boolean) => void;
   preferredModel: string;
   fallbackKeys: string[];
   fallbackModels: string[];
@@ -108,7 +109,13 @@ export function SetupPage({
         setSetupKeyError(`Errore salvataggio: ${result?.error || 'errore sconosciuto'}`);
         return;
       }
-      onSaved(trimmedKey, activeModel);
+      if (result.api_key_insecure !== undefined) {
+        onSaved(trimmedKey, activeModel, result.credential_storage, result.api_key_insecure);
+      } else if (result.credential_storage) {
+        onSaved(trimmedKey, activeModel, result.credential_storage);
+      } else {
+        onSaved(trimmedKey, activeModel);
+      }
     } finally {
       setSetupKeySaving(false);
     }

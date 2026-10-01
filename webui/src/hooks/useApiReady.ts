@@ -1,6 +1,7 @@
 import { reportClientError } from '../diagnostics';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ModelOption, SettingsPayload } from '../bridge';
+import { credentialStorageWarning } from '../credentialStorage';
 import { DEFAULT_MODEL } from '../utils';
 
 export function useApiReady(appendConsole: (msg: string) => void) {
@@ -35,8 +36,9 @@ export function useApiReady(appendConsole: (msg: string) => void) {
     const nextApiKey = String(cfg?.api_key ?? '');
     setApiKey(nextApiKey);
     setHasProtectedKey(Boolean(cfg?.has_protected_key) && !nextApiKey);
-    setApiKeyInsecure(Boolean(cfg?.api_key_insecure));
-    setApiKeyInsecureReason(String(cfg?.api_key_insecure_reason ?? ''));
+    const storageWarning = credentialStorageWarning(cfg?.credential_storage, cfg?.credential_storage ? cfg.api_key_insecure : false);
+    setApiKeyInsecure(Boolean(storageWarning || cfg?.api_key_insecure));
+    setApiKeyInsecureReason(storageWarning || String(cfg?.api_key_insecure_reason ?? ''));
     setConfigRecoveredFrom(String(cfg?.config_recovered_from ?? ''));
     setFallbackKeys(Array.isArray(cfg?.fallback_keys) ? cfg.fallback_keys : []);
     setConfiguredFallbackKeyCount(Number(cfg?.configuredFallbackKeyCount ?? 0));

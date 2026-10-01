@@ -22,6 +22,16 @@ beforeEach(() => setPywebview(undefined));
 afterEach(() => setPywebview(undefined));
 
 describe('SetupPage', () => {
+  it('passes temporary credential storage to the queue after setup', async () => {
+    const onSaved = vi.fn();
+    const storage = { primary: 'session_only', fallback: 'absent' };
+    setPywebview({ save_settings: vi.fn().mockResolvedValue({ ok: true, credential_storage: storage }) });
+    render(<SetupPage {...baseProps} onSaved={onSaved} />);
+    fireEvent.change(screen.getByPlaceholderText(/Incolla qui la tua API Key/), { target: { value: 'AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Salva e inizia/i })); });
+    expect(onSaved).toHaveBeenCalledWith('AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345', 'gemini-2.5-flash', storage);
+  });
+
   it('shows "Configura la tua API Key" when no protected key', () => {
     render(<SetupPage {...baseProps} />);
     expect(screen.getByText('Configura la tua API Key')).toBeTruthy();

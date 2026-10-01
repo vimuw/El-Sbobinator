@@ -105,6 +105,32 @@ class TestKeyringHelpers(unittest.TestCase):
             creds.KEYRING_SERVICE, creds.KEYRING_USER_API
         )
 
+    def test_clearing_absent_entries_succeeds_without_delete(self) -> None:
+        mock_kr = MagicMock()
+        mock_kr.get_password.return_value = None
+        with (
+            patch(
+                "el_sbobinator.core.credentials.platform.system", return_value="Darwin"
+            ),
+            patch.dict(sys.modules, {"keyring": mock_kr}),
+        ):
+            self.assertTrue(creds.keyring_delete_api_key())
+            self.assertTrue(creds.keyring_delete_fallback_keys())
+        mock_kr.delete_password.assert_not_called()
+
+    def test_failed_delete_is_reported_for_both_credential_groups(self) -> None:
+        mock_kr = MagicMock()
+        mock_kr.get_password.return_value = "stored"
+        mock_kr.delete_password.side_effect = RuntimeError("locked backend")
+        with (
+            patch(
+                "el_sbobinator.core.credentials.platform.system", return_value="Darwin"
+            ),
+            patch.dict(sys.modules, {"keyring": mock_kr}),
+        ):
+            self.assertFalse(creds.keyring_delete_api_key())
+            self.assertFalse(creds.keyring_delete_fallback_keys())
+
     def test_keyring_fallback_keys_get_set_delete(self) -> None:
         mock_kr = MagicMock()
         mock_kr.get_password.return_value = json.dumps(["k1", "k2"])

@@ -15,6 +15,13 @@ describe('ApiKeySection component', () => {
     setFallbackKeys: vi.fn(),
   };
 
+  it('warns for temporary fallback credentials without claiming plaintext storage', () => {
+    render(<ApiKeySection {...defaultProps} credentialStorage={{ primary: 'protected', fallback: 'session_only' }} />);
+    expect(screen.getByText('Credenziali temporanee')).toBeTruthy();
+    expect(screen.getByText(/solo per questa sessione/)).toBeTruthy();
+    expect(screen.queryByText('Memorizzazione in chiaro')).toBeNull();
+  });
+
   it('renders primary API key in the card table and shows count', () => {
     render(<ApiKeySection {...defaultProps} />);
 

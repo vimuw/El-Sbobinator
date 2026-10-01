@@ -62,6 +62,9 @@ class SettingsControllerMixin:
                 "api_key_insecure_reason": str(
                     cfg.get("api_key_insecure_reason") or ""
                 ),
+                "credential_storage": cfg.get(
+                    "credential_storage", {"primary": "absent", "fallback": "absent"}
+                ),
             }
             if cfg.get("config_recovered_from"):
                 result["config_recovered_from"] = cfg["config_recovered_from"]
@@ -76,6 +79,7 @@ class SettingsControllerMixin:
                 "has_protected_key": False,
                 "api_key_insecure": False,
                 "api_key_insecure_reason": "",
+                "credential_storage": {"primary": "absent", "fallback": "absent"},
             }
 
     def save_settings(
@@ -87,13 +91,18 @@ class SettingsControllerMixin:
     ) -> dict:
         """Save config to disk."""
         try:
-            save_config(
+            storage = save_config(
                 api_key,
                 fallback_keys=fallback_keys,
                 preferred_model=preferred_model,
                 fallback_models=fallback_models,
             )
-            return bridge_ok()
+            cfg = load_config()
+            return bridge_ok(
+                credential_storage=cfg.get("credential_storage", storage),
+                api_key_insecure=bool(cfg.get("api_key_insecure")),
+                api_key_insecure_reason=str(cfg.get("api_key_insecure_reason") or ""),
+            )
         except Exception as e:
             return bridge_error(e)
 

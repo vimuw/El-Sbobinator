@@ -22,6 +22,7 @@ _FAKE_CFG: dict = {
 
 
 def _reset_cache() -> None:
+    cs._credential_overrides.clear()
     cs._config_cache = None
     cs._config_cache_ts = 0.0
     cs._config_cache_gen = 0
@@ -428,7 +429,11 @@ class TestLoadConfigFromRealFile(unittest.TestCase):
                 ),
                 patch(
                     "el_sbobinator.services.config_service._dpapi_protect_text_windows",
-                    return_value="",
+                    return_value="protected-legacy",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service._dpapi_unprotect_text_windows",
+                    return_value="legacy-key",
                 ),
             ):
                 result = cs.load_config()
@@ -457,7 +462,7 @@ class TestLoadConfigFromRealFile(unittest.TestCase):
                     return_value="Windows",
                 ),
                 patch(
-                    "el_sbobinator.services.config_service.save_config",
+                    "el_sbobinator.services.config_service._atomic_write_json",
                     side_effect=OSError("disk full"),
                 ),
             ):
@@ -576,6 +581,10 @@ class TestLoadConfigFromRealFile(unittest.TestCase):
                     "el_sbobinator.services.config_service.platform.system",
                     return_value="Windows",
                 ),
+                patch(
+                    "el_sbobinator.services.config_service._dpapi_protect_text_windows",
+                    return_value="",
+                ),
             ):
                 result = cs.load_config()
 
@@ -605,6 +614,10 @@ class TestLoadConfigFromRealFile(unittest.TestCase):
                 patch(
                     "el_sbobinator.services.config_service.platform.system",
                     return_value="Windows",
+                ),
+                patch(
+                    "el_sbobinator.services.config_service._dpapi_protect_text_windows",
+                    return_value="",
                 ),
             ):
                 result = cs.load_config()
@@ -679,9 +692,8 @@ class TestSaveConfigToDisk(unittest.TestCase):
             with open(cfg_path, encoding="utf-8") as fh:
                 data = json.load(fh)
 
-        self.assertEqual(data["api_key"], "stored-key")
-        self.assertTrue(data.get("api_key_insecure"))
-        self.assertIn("CryptProtectData", data.get("api_key_insecure_reason", ""))
+        self.assertEqual(data["api_key"], "")
+        self.assertNotIn("stored-key", json.dumps(data))
         self.assertEqual(data["preferred_model"], "gemini-2.5-flash")
 
     def test_save_config_none_key_preserves_existing_protected_on_windows(self) -> None:
@@ -773,7 +785,8 @@ class TestSaveConfigToDisk(unittest.TestCase):
             with open(legacy_path, encoding="utf-8") as fh:
                 data = json.load(fh)
 
-        self.assertEqual(data["api_key"], "legacy-key")
+        self.assertEqual(data["api_key"], "")
+        self.assertNotIn("legacy-key", json.dumps(data))
 
 
 class TestMacOSKeyringHelpers(unittest.TestCase):
