@@ -113,6 +113,51 @@ class ConfigureLoggingTests(unittest.TestCase):
         self.assertIs(logger1, logger2)
         self.assertEqual(len(logger2.handlers), handler_count_before)
 
+    def test_missing_standard_streams_preserve_file_logging(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "run.log")
+            with patch("sys.stdout", None), patch("sys.stderr", None):
+                logger = configure_logging()
+                handler = attach_file_handler(path)
+                try:
+                    with patch.object(logging.Handler, "handleError") as error:
+                        logger.info("Elaborazione avviata.")
+                        error.assert_not_called()
+                    with open(path, encoding="utf-8") as handle:
+                        self.assertIn("Elaborazione avviata.", handle.read())
+                finally:
+                    detach_file_handler(handler)
+
+    def test_console_can_be_attached_after_startup_without_standard_streams(self):
+        with patch("sys.stdout", None), patch("sys.stderr", None):
+            configure_logging()
+        stream = io.StringIO()
+        configure_logging(stream=stream)
+        get_logger().info("Elaborazione avviata.")
+        self.assertIn("Elaborazione avviata.", stream.getvalue())
+
+    def test_explicit_stream_replaces_console_without_replacing_file_handler(self):
+        original = io.StringIO()
+        replacement = io.StringIO()
+        logger = configure_logging(stream=original)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "run.log")
+            handler = attach_file_handler(path)
+            try:
+                count = len(logger.handlers)
+                configure_logging(stream=replacement)
+                configure_logging()
+                logger.info("Elaborazione avviata.")
+                self.assertEqual(len(logger.handlers), count)
+                self.assertEqual(original.getvalue(), "")
+                self.assertEqual(
+                    replacement.getvalue().count("Elaborazione avviata."), 1
+                )
+                with open(path, encoding="utf-8") as handle:
+                    self.assertIn("Elaborazione avviata.", handle.read())
+            finally:
+                detach_file_handler(handler)
+
 
 class GetLoggerTests(unittest.TestCase):
     def test_returns_logger_adapter(self):

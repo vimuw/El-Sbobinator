@@ -1,9 +1,22 @@
+import io
+import logging
+import os
+import tempfile
 import threading
 import time
 import unittest
+from functools import partial
 from unittest.mock import MagicMock, patch
 
 from el_sbobinator.bridge.bridge_dispatcher import _BridgeDispatcher
+from el_sbobinator.utils.logging_utils import (
+    LOGGER_NAME,
+    attach_file_handler,
+    configure_logging,
+    detach_file_handler,
+    get_logger,
+)
+from el_sbobinator.webview_entry import _ConsoleTee
 
 
 class BridgeDispatcherTests(unittest.TestCase):
@@ -146,6 +159,65 @@ class BridgeDispatcherTests(unittest.TestCase):
             pending_count = len(d._pending)
 
         self.assertEqual(pending_count, 0)
+
+    def test_retry_exhaustion_logs_to_file_without_reentering_ui_bridge(self):
+        base_logger = logging.getLogger(LOGGER_NAME)
+        for failure in ("missing_window", "evaluate_js_failure"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as tmpdir:
+                window = None
+                if failure == "evaluate_js_failure":
+                    window = MagicMock()
+                    window.evaluate_js.side_effect = RuntimeError("WebView unavailable")
+                dispatcher = self._make(window=window)
+                api = MagicMock()
+                api._push_console.side_effect = partial(
+                    dispatcher.emit, "appendConsole", batched=False
+                )
+                log_path = os.path.join(tmpdir, "run.log")
+                with (
+                    patch.object(base_logger, "handlers", []),
+                    patch.dict(
+                        base_logger.__dict__, {"_el_sbobinator_configured": False}
+                    ),
+                    patch.object(dispatcher, "_ensure_timer") as schedule,
+                ):
+                    configure_logging(stream=io.StringIO())
+                    configure_logging(stream=_ConsoleTee(None, api))
+                    handler = attach_file_handler(log_path)
+                    self.assertIsNotNone(handler)
+                    try:
+                        get_logger().info("Console ready.")
+                        api._push_console.assert_called_once()
+                        for _ in range(dispatcher.MAX_RETRIES + 1):
+                            dispatcher.flush()
+
+                        self.assertFalse(dispatcher._queue)
+                        self.assertFalse(dispatcher._pending)
+                        self.assertFalse(dispatcher._latest)
+                        api._push_console.assert_called_once()
+                        schedule.reset_mock()
+                        dispatcher.flush()
+                        schedule.assert_not_called()
+                        if window is not None:
+                            self.assertEqual(
+                                window.evaluate_js.call_count,
+                                dispatcher.MAX_RETRIES + 1,
+                            )
+
+                        with open(log_path, encoding="utf-8") as handle:
+                            diagnostic = handle.read()
+                        expected = (
+                            "Eventi bridge scartati"
+                            if window is None
+                            else "Invio bridge fallito definitivamente"
+                        )
+                        self.assertEqual(diagnostic.count(expected), 1)
+                        self.assertIn("appendConsole", diagnostic)
+                        if window is not None:
+                            self.assertIn("Traceback", diagnostic)
+                            self.assertIn("WebView unavailable", diagnostic)
+                    finally:
+                        detach_file_handler(handler)
 
     # ------------------------------------------------------------------
     # Ordering: retries come after fresh events

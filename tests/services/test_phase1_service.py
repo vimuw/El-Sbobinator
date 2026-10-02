@@ -1,3 +1,5 @@
+import io
+import logging
 import os
 import tempfile
 import threading
@@ -7,12 +9,20 @@ from unittest.mock import MagicMock, patch
 
 from el_sbobinator.core.model_registry import build_model_state
 from el_sbobinator.pipeline.pipeline_hooks import PipelineRuntime
+from el_sbobinator.services.gemini_errors import CircuitBreakerExhaustedError
 from el_sbobinator.services.generation_service import (
     AllModelsUnavailableError,
     DegenerateOutputError,
     QuotaDailyLimitError,
 )
 from el_sbobinator.services.phase1_service import process_phase1_transcription
+from el_sbobinator.utils.logging_utils import (
+    LOGGER_NAME,
+    attach_file_handler,
+    configure_logging,
+    detach_file_handler,
+    get_logger,
+)
 
 
 class _FakeRuntime:
@@ -1120,6 +1130,84 @@ class TestPhase1EdgeCases(unittest.TestCase):
                 )
 
     # ── prefetch disabled ──────────────────────────────────────────────────────
+
+    def test_exhausted_retries_keep_traceback_in_file_and_preserve_resume_state(self):
+        for reason in (
+            "Server Gemini temporaneamente indisponibile dopo 4 tentativi (test-model).",
+            "Rate limit persistente per il modello test-model.",
+        ):
+            with self.subTest(reason=reason), tempfile.TemporaryDirectory() as tmpdir:
+                chunks_dir = os.path.join(tmpdir, "chunks")
+                os.makedirs(chunks_dir)
+                saved_chunk = os.path.join(chunks_dir, "chunk_001_0_60.md")
+                with open(saved_chunk, "w", encoding="utf-8") as handle:
+                    handle.write("Testo precedente.")
+                progress = {
+                    "chunks_done": 1,
+                    "next_start_sec": 60,
+                    "memoria_precedente": "Testo precedente.",
+                }
+                session = {"stage": "phase1", "phase1": progress.copy()}
+                save_session = MagicMock(return_value=True)
+                console = io.StringIO()
+                log_path = os.path.join(tmpdir, "run.log")
+                base_logger = logging.getLogger(LOGGER_NAME)
+                with (
+                    patch.object(base_logger, "handlers", []),
+                    patch.dict(
+                        base_logger.__dict__, {"_el_sbobinator_configured": False}
+                    ),
+                    patch("sys.stdout", console),
+                    patch(
+                        "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                        return_value=(True, None),
+                    ),
+                    patch(
+                        "el_sbobinator.services.phase1_service.retry_with_quota",
+                        side_effect=CircuitBreakerExhaustedError(reason),
+                    ),
+                ):
+                    configure_logging(stream=console)
+                    handler = attach_file_handler(log_path)
+                    try:
+                        kwargs = {
+                            **self._COMMON_KWARGS,
+                            "start_sec": 60,
+                            "total_duration_sec": 120,
+                            "initial_full_transcript": "Testo precedente.",
+                            "initial_prev_memory": "Testo precedente.",
+                            "logger": get_logger(session_dir=tmpdir, stage="phase1"),
+                        }
+                        _, transcript, _ = process_phase1_transcription(
+                            client=object(),
+                            input_path="fake.mp3",
+                            preconv_used_path=None,
+                            phase1_chunks_dir=chunks_dir,
+                            session=session,
+                            save_session=save_session,
+                            **kwargs,  # type: ignore[arg-type]
+                        )
+                    finally:
+                        detach_file_handler(handler)
+                self.assertIsNone(transcript)
+                self.assertEqual(session["phase1"], progress)
+                self.assertEqual(session["last_error"], "phase1_chunk_failed_2")
+                self.assertIn(reason, session["last_error_detail"])
+                save_session.assert_called_once()
+                with open(saved_chunk, encoding="utf-8") as handle:
+                    self.assertEqual(handle.read(), "Testo precedente.")
+                output = console.getvalue()
+                self.assertEqual(output.count(reason), 1)
+                self.assertIn("progressi salvati. Potrai riprendere", output)
+                self.assertNotIn("Traceback", output)
+                self.assertNotIn("Errore non gestito", output)
+                self.assertNotIn("Errore critico", output)
+                with open(log_path, encoding="utf-8") as handle:
+                    diagnostic = handle.read()
+                self.assertIn("Traceback", diagnostic)
+                self.assertIn("CircuitBreakerExhaustedError", diagnostic)
+                self.assertIn(reason, diagnostic)
+                self.assertIn("stage=phase1", diagnostic)
 
     def test_prefetch_disabled_never_calls_start_prefetch(self):
         """prefetch_enabled=False → only 1 cut call, no thread started."""

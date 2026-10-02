@@ -15,7 +15,7 @@ import traceback
 import uuid
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
-from typing import IO
+from typing import Protocol
 
 LOGGER_NAME = "el_sbobinator"
 _CONTEXT_KEYS = ("boot_id", "run_id", "session_dir", "stage", "input_file")
@@ -64,16 +64,43 @@ class StructuredFormatter(logging.Formatter):
         return base
 
 
-def configure_logging(stream: IO[str] | None = None) -> logging.Logger:
+class LogStream(Protocol):
+    def write(self, text: str, /) -> object: ...
+
+    def flush(self) -> object: ...
+
+
+class ConsoleLogFilter(logging.Filter):
+    """Keep explicitly diagnostic records in file logs only."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not getattr(record, "diagnostic_only", False)
+
+
+def configure_logging(stream: LogStream | None = None) -> logging.Logger:
     logger = logging.getLogger(LOGGER_NAME)
-    if getattr(logger, "_el_sbobinator_configured", False):
+    configured = getattr(logger, "_el_sbobinator_configured", False)
+    if configured and stream is None:
         return logger
 
-    handler = logging.StreamHandler(stream or sys.stdout)
-    handler.setFormatter(
-        StructuredFormatter("%(asctime)s %(levelname)s %(message)s", "%H:%M:%S")
-    )
-    logger.addHandler(handler)
+    target = stream if stream is not None else sys.stdout
+    # pythonw.exe has no standard streams. File logging can still be configured
+    # now; the UI explicitly supplies its console stream once it is available.
+    if target is not None:
+        handler = next(
+            (h for h in logger.handlers if getattr(h, "_el_console_log", False)),
+            None,
+        )
+        if isinstance(handler, logging.StreamHandler):
+            handler.setStream(target)
+        else:
+            handler = logging.StreamHandler(target)
+            handler._el_console_log = True  # type: ignore[attr-defined]
+            handler.addFilter(ConsoleLogFilter())
+            handler.setFormatter(
+                StructuredFormatter("%(asctime)s %(levelname)s %(message)s", "%H:%M:%S")
+            )
+            logger.addHandler(handler)
     logger.setLevel(logging.INFO)
     logger.propagate = False
     logger._el_sbobinator_configured = True  # type: ignore[attr-defined]

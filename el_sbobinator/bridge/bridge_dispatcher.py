@@ -126,6 +126,7 @@ class _BridgeDispatcher:
                 get_logger("el_sbobinator.bridge").warning(
                     "Eventi bridge scartati: %s (finestra non disponibile)",
                     sorted(set(dropped)),
+                    extra={"diagnostic_only": True},
                 )
             self._ensure_timer()
             return
@@ -151,7 +152,9 @@ class _BridgeDispatcher:
             ]
             if dropped:
                 get_logger("el_sbobinator.bridge").exception(
-                    "Invio bridge fallito definitivamente: %s", sorted(set(dropped))
+                    "Invio bridge fallito definitivamente: %s",
+                    sorted(set(dropped)),
+                    extra={"diagnostic_only": True},
                 )
             self._ensure_timer()
 

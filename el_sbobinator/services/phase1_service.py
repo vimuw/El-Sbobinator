@@ -24,6 +24,7 @@ from el_sbobinator.pipeline.pipeline_session import record_step_metric
 from el_sbobinator.services import generation_service, usage_service
 from el_sbobinator.services.audio_service import cut_audio_chunk_to_mp3
 from el_sbobinator.services.config_service import debug_log
+from el_sbobinator.services.gemini_errors import CircuitBreakerExhaustedError
 from el_sbobinator.services.generation_service import (
     AllModelsUnavailableError,
     DegenerateOutputError,
@@ -578,6 +579,7 @@ def _process_single_phase1_chunk_iteration(
 
     success = False
     last_failure_detail: str | None = None
+    retry_exhausted_message: str | None = None
 
     try:
         print("   -> (1/3) Estrazione e taglio in corso...")
@@ -704,6 +706,18 @@ def _process_single_phase1_chunk_iteration(
                     next_cut=next_cut,
                 )
 
+        except CircuitBreakerExhaustedError as e:
+            last_failure_detail = _sanitize_error_detail(e)
+            retry_exhausted_message = redact_secrets(e, max_len=500)
+            if logger is not None:
+                logger.warning(
+                    "Tentativi esauriti nel chunk %d: %s",
+                    chunk_idx,
+                    e,
+                    exc_info=True,
+                    extra={"diagnostic_only": True},
+                )
+
         except Exception as e:
             last_failure_detail = _sanitize_error_detail(e)
             if logger is not None:
@@ -731,9 +745,15 @@ def _process_single_phase1_chunk_iteration(
             last_failure_detail or "Errore sconosciuto durante il blocco."
         )
         save_session()
-        print(
-            "   [!] Errore critico durante l'elaborazione del blocco. Interrompo (progressi salvati)."
-        )
+        if retry_exhausted_message is not None:
+            print(
+                f"   [!] {retry_exhausted_message} "
+                "Elaborazione interrotta, progressi salvati. Potrai riprendere piu' tardi."
+            )
+        else:
+            print(
+                "   [!] Errore critico durante l'elaborazione del blocco. Interrompo (progressi salvati)."
+            )
         return Phase1ChunkIterationResult(
             client=client,
             full_transcript=full_transcript,
