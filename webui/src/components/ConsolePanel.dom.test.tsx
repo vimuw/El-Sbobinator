@@ -3,6 +3,25 @@ import { describe, expect, it, vi } from 'vitest';
 import { ConsolePanel } from './ConsolePanel';
 
 describe('ConsolePanel', () => {
+  it('preserves traceback indentation and copies complete lines', () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+    const logs = [
+      '[12:00:00]     notify_data = NOTIFYICONDATAW(*largs)',
+      '[12:00:00]                   ^^^^^^^^^^^^^^^^^^^^^^',
+      '[12:00:00] ValueError: string too long (65, maximum length 64)',
+    ];
+    const { container } = render(<ConsolePanel consoleLogs={logs} lastConsoleMessage="" appState="idle" isConsoleExpanded />);
+    const scrollArea = container.querySelector('.console-scroll') as HTMLElement;
+    expect(scrollArea.style.whiteSpace).toBe('pre-wrap');
+    expect(Array.from(scrollArea.children, entry => entry.textContent)).toEqual(logs);
+    fireEvent.click(screen.getByTitle('Copia tutto'));
+    expect(writeText).toHaveBeenCalledWith(logs.join('\n'));
+  });
+
   it('shows last console message when collapsed', () => {
     render(<ConsolePanel consoleLogs={[]} lastConsoleMessage="Ultimo messaggio" appState="idle" />);
     expect(screen.getByText('Ultimo messaggio')).toBeTruthy();

@@ -9,6 +9,7 @@ import os
 import tempfile
 import threading
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -25,6 +26,37 @@ from el_sbobinator.browser_server.scenarios import (
 from el_sbobinator.browser_server.server import create_browser_app
 from el_sbobinator.browser_server.ws_dispatcher import WebSocketDispatcher
 from el_sbobinator.pipeline.pipeline_adapter import PipelineAdapter
+
+
+def test_lifespan_keeps_stdout_and_stderr_separate():
+    import asyncio
+    import sys
+
+    stdout, stderr = io.StringIO(), io.StringIO()
+
+    async def exercise():
+        with tempfile.TemporaryDirectory() as root:
+            app = create_browser_app(session_root=root)
+            with (
+                patch("sys.stdout", stdout),
+                patch("sys.stderr", stderr),
+                patch.object(app.state.api, "_push_console") as emit,
+            ):
+                async with app.router.lifespan_context(app):
+                    sys.stdout.write("out ")
+                    sys.stderr.write("err ")
+                    sys.stdout.write("line\n")
+                    sys.stderr.write("line\n")
+                    assert [call.args[0] for call in emit.call_args_list] == [
+                        "out line",
+                        "err line",
+                    ]
+                assert sys.stdout is stdout
+                assert sys.stderr is stderr
+
+    asyncio.run(exercise())
+    assert stdout.getvalue() == "out line\n"
+    assert stderr.getvalue() == "err line\n"
 
 
 @pytest.fixture

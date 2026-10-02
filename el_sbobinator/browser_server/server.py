@@ -42,6 +42,7 @@ from el_sbobinator.browser_server.scenarios import run_deterministic_scenario
 from el_sbobinator.browser_server.ws_dispatcher import WebSocketDispatcher
 from el_sbobinator.core.model_registry import DEFAULT_MODEL, MODEL_OPTIONS
 from el_sbobinator.core.shared import get_session_root, set_session_root
+from el_sbobinator.utils.console_utils import MAX_CONSOLE_LINE_LEN, LineConsoleTee
 from el_sbobinator.utils.logging_utils import redact_secrets
 
 
@@ -519,40 +520,23 @@ def _register_media_routes(app: FastAPI) -> None:
         return FileResponse(real_path, media_type="text/html")
 
 
-_MAX_CONSOLE_LINE_LEN = 2000
+_MAX_CONSOLE_LINE_LEN = MAX_CONSOLE_LINE_LEN
 
 
-class _BrowserConsoleTee:
+class _BrowserConsoleTee(LineConsoleTee):
     """Intercept print() calls from Python pipeline and push to browser console."""
 
     def __init__(self, original, api: ElSbobinatorApi):
-        self._original = original
         self._api = api
+        super().__init__(original, api._push_console, keep_line=self._keep_browser_line)
 
-    def write(self, text: str) -> None:
-        if self._original is not None:
-            try:
-                self._original.write(text)
-            except Exception:
-                pass
-        if text and text.strip():
-            line = redact_secrets(text.rstrip())
-            if (
-                "HTTP/1.1" in line
-                or line.startswith("INFO:     127.0.0.1")
-                or line.startswith("INFO:     connection")
-            ):
-                return
-            if len(line) > _MAX_CONSOLE_LINE_LEN:
-                line = line[:_MAX_CONSOLE_LINE_LEN] + "… [troncato]"
-            self._api._push_console(line)
-
-    def flush(self) -> None:
-        if self._original is not None:
-            try:
-                self._original.flush()
-            except Exception:
-                pass
+    @staticmethod
+    def _keep_browser_line(line: str) -> bool:
+        return not (
+            "HTTP/1.1" in line
+            or line.startswith("INFO:     127.0.0.1")
+            or line.startswith("INFO:     connection")
+        )
 
 
 def create_browser_app(
@@ -589,9 +573,8 @@ def create_browser_app(
         ws_dispatcher.set_loop(loop)
         old_stdout = sys.stdout
         old_stderr = sys.stderr
-        tee = _BrowserConsoleTee(old_stdout, api)
-        sys.stdout = tee
-        sys.stderr = tee
+        sys.stdout = _BrowserConsoleTee(old_stdout, api)
+        sys.stderr = _BrowserConsoleTee(old_stderr, api)
         try:
             yield
         finally:

@@ -67,7 +67,7 @@ export const ConsolePanel = memo(function ConsolePanel({
         <div
           ref={consoleScrollRef}
           className="console-scroll p-4 overflow-y-auto font-mono text-xs space-y-1 h-52 select-text"
-          style={{ color: 'var(--console-text)', background: 'var(--console-bg)' }}
+          style={{ color: 'var(--console-text)', background: 'var(--console-bg)', whiteSpace: 'pre-wrap' }}
           onMouseEnter={() => { isMouseInConsoleRef.current = true; }}
           onMouseLeave={() => { isMouseInConsoleRef.current = false; }}
         >

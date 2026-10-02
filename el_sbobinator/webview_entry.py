@@ -18,10 +18,10 @@ import webview
 
 from el_sbobinator.core.desktop_startup import DesktopStartupServer
 from el_sbobinator.core.media_server import LocalMediaServer
+from el_sbobinator.utils.console_utils import MAX_CONSOLE_LINE_LEN, LineConsoleTee
 from el_sbobinator.utils.logging_utils import (
     configure_logging,
     prepare_startup,
-    redact_secrets,
 )
 from el_sbobinator.utils.webview2_recovery import (
     build_missing_webview2_html,
@@ -53,34 +53,15 @@ warnings.filterwarnings(
 # Console interceptor
 # ---------------------------------------------------------------------------
 
-_MAX_CONSOLE_LINE_LEN = 2000
+_MAX_CONSOLE_LINE_LEN = MAX_CONSOLE_LINE_LEN
 
 
-class _ConsoleTee:
+class _ConsoleTee(LineConsoleTee):
     """Intercept print() calls and forward to React console too."""
 
     def __init__(self, original, api: ElSbobinatorApi):  # type: ignore[name-defined]  # noqa: F821
-        self._original = original  # May be None for .pyw on Windows
         self._api = api
-
-    def write(self, text):
-        if self._original is not None:
-            try:
-                self._original.write(text)
-            except Exception:
-                pass
-        if text and text.strip():
-            line = redact_secrets(text.rstrip())
-            if len(line) > _MAX_CONSOLE_LINE_LEN:
-                line = line[:_MAX_CONSOLE_LINE_LEN] + "\u2026 [troncato]"
-            self._api._push_console(line)
-
-    def flush(self):
-        if self._original is not None:
-            try:
-                self._original.flush()
-            except Exception:
-                pass
+        super().__init__(original, api._push_console)
 
 
 # ---------------------------------------------------------------------------
