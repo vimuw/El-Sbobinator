@@ -212,7 +212,7 @@ def build_default_pipeline_settings(config: dict | None = None) -> dict:
         "fallback_models": fallback_models,
         "effective_model": preferred_model,
         "chunk_minutes": default_chunk_minutes_for_model(preferred_model),
-        "overlap_seconds": 30,
+        "overlap_seconds": 60,
         "macro_char_limit": default_macro_char_limit_for_model(preferred_model),
         "preconvert_audio": True,
         "prefetch_next_chunk": True,
