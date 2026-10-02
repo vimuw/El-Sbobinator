@@ -165,6 +165,8 @@ class LocalMediaServer:
             cls._evict_oldest_if_needed()
 
             server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), MediaHandler)
+            # An open player connection must not block window or process shutdown.
+            server.daemon_threads = True
             port = server.server_address[1]
             cls._servers[file_path] = (server, port, token)
         threading.Thread(

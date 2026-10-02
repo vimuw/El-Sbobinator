@@ -2,12 +2,14 @@
 
 import os
 import re
+import socket
 import tempfile
 import threading
 import unittest
 import urllib.error
 import urllib.request
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+from urllib.parse import urlsplit
 
 from el_sbobinator.core.media_server import (
     LocalMediaServer,
@@ -190,6 +192,83 @@ class RangeRequestTests(unittest.TestCase):
             self.assertEqual(response.status, 206)
             self.assertEqual(response.headers.get("Content-Range"), "bytes 6-9/10")
             self.assertEqual(response.read(), b"6789")
+
+
+class ShutdownTests(unittest.TestCase):
+    def _assert_shutdown_with_open_client(self, *, stream_body: bool) -> None:
+        LocalMediaServer.shutdown_all()
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "track.mp3")
+            with open(path, "wb") as handle:
+                handle.truncate(64 * 1024 * 1024 if stream_body else 10)
+            url = urlsplit(LocalMediaServer.stream_url_for_file(path))
+            server = LocalMediaServer._servers[path][0]
+            request_started = threading.Event()
+            request_threads: list[threading.Thread] = []
+            original_process_request = server.process_request_thread
+
+            def process_request(request, client_address):
+                request_threads.append(threading.current_thread())
+                request_started.set()
+                original_process_request(request, client_address)
+
+            client = socket.socket()
+            client.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
+            client.settimeout(5)
+            closer = threading.Thread(target=LocalMediaServer.shutdown_all, daemon=True)
+            with patch.object(server, "process_request_thread", process_request):
+                try:
+                    client.connect(server.server_address)
+                    request = f"GET {url.path} HTTP/1.1\r\n"
+                    if stream_body:
+                        request += "Host: localhost\r\nConnection: close\r\n\r\n"
+                    client.sendall(request.encode("ascii"))
+                    self.assertTrue(request_started.wait(5), "Request was not accepted")
+                    if stream_body:
+                        headers = b""
+                        while not headers.endswith(b"\r\n\r\n"):
+                            byte = client.recv(1)
+                            self.assertTrue(
+                                byte, "Connection closed before the headers"
+                            )
+                            headers += byte
+                        self.assertTrue(headers.startswith(b"HTTP/1.0 200"))
+                        # Keep the body unread, as with a full player buffer or pause.
+
+                    closer.start()
+                    closer.join(timeout=1)
+                    self.assertFalse(
+                        closer.is_alive(), "Shutdown waited for the open audio request"
+                    )
+                    self.assertEqual(LocalMediaServer._servers, {})
+                    with self.assertRaises(OSError):
+                        with socket.create_connection(
+                            ("127.0.0.1", server.server_address[1]), timeout=1
+                        ):
+                            self.fail("Audio listener is still accepting connections")
+                finally:
+                    # Release blocked requests even when testing the broken behavior.
+                    try:
+                        client.shutdown(socket.SHUT_RDWR)
+                    except OSError:
+                        pass
+                    client.close()
+                    if closer.ident is not None:
+                        closer.join(timeout=5)
+                        self.assertFalse(closer.is_alive(), "Shutdown did not clean up")
+                    else:
+                        LocalMediaServer.shutdown_all()
+                    for request_thread in request_threads:
+                        request_thread.join(timeout=5)
+                        self.assertFalse(
+                            request_thread.is_alive(), "Audio request did not clean up"
+                        )
+
+    def test_shutdown_does_not_wait_for_unread_audio_body(self):
+        self._assert_shutdown_with_open_client(stream_body=True)
+
+    def test_shutdown_does_not_wait_for_incomplete_request_headers(self):
+        self._assert_shutdown_with_open_client(stream_body=False)
 
 
 class DetectContentTypeTests(unittest.TestCase):
