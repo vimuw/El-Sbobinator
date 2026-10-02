@@ -49,10 +49,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
-def run(cmd: list[str], cwd: Path | None = None) -> None:
+def run(
+    cmd: list[str], cwd: Path | None = None, *, env: dict[str, str] | None = None
+) -> None:
     if os.name == "nt" and cmd and cmd[0] == "npm":
         cmd = ["npm.cmd", *cmd[1:]]
-    subprocess.run(cmd, cwd=str(cwd or ROOT), check=True)
+    subprocess.run(cmd, cwd=str(cwd or ROOT), check=True, env=env)
 
 
 def ensure_supported_node_version() -> None:
@@ -202,9 +204,13 @@ def run_webui_checks(
         run(["npm", "run", "test:e2e"], cwd=WEBUI_DIR)
 
 
-def build_webui(skip_npm_install: bool) -> None:
+def build_webui(skip_npm_install: bool, version: str) -> None:
     install_node_dependencies(skip_npm_install=skip_npm_install)
-    run(["npm", "run", "build"], cwd=WEBUI_DIR)
+    run(
+        ["npm", "run", "build"],
+        cwd=WEBUI_DIR,
+        env={**os.environ, "EL_SBOBINATOR_BUILD_VERSION": version},
+    )
 
 
 def pyinstaller_command(target: str, ui: str) -> list[str]:
@@ -381,9 +387,14 @@ def command_check(args: argparse.Namespace) -> None:
         )
 
 
+def resolve_build_version(version: str) -> str:
+    if version == "0.0.0":
+        package = json.loads((WEBUI_DIR / "package.json").read_text(encoding="utf-8"))
+        version = str(package["version"])
+    return version.lstrip("v")
+
+
 def write_build_metadata(version: str) -> None:
-    package = json.loads((WEBUI_DIR / "package.json").read_text(encoding="utf-8"))
-    resolved_version = package["version"] if version == "0.0.0" else version.lstrip("v")
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -401,7 +412,7 @@ def write_build_metadata(version: str) -> None:
     path.write_text(
         json.dumps(
             {
-                "version": resolved_version,
+                "version": version.lstrip("v"),
                 "commit": commit,
                 "built_at": datetime.now().astimezone().isoformat(),
                 "mode": "packaged",
@@ -413,6 +424,7 @@ def write_build_metadata(version: str) -> None:
 
 def command_build(args: argparse.Namespace) -> None:
     print_windows_webview2_notice(args.target, args.ui)
+    version = resolve_build_version(args.version)
 
     if args.install_deps:
         install_python_dependencies(include_dev=bool(args.dev_deps))
@@ -424,17 +436,17 @@ def command_build(args: argparse.Namespace) -> None:
             run_webui_checks(skip_npm_install=bool(args.skip_npm_install))
 
     if args.ui == "webui":
-        build_webui(skip_npm_install=bool(args.skip_npm_install))
+        build_webui(skip_npm_install=bool(args.skip_npm_install), version=version)
 
-    write_build_metadata(args.version)
+    write_build_metadata(version)
     run(pyinstaller_command(args.target, args.ui), cwd=ROOT)
     if not args.skip_postbuild_smoke:
         run_postbuild_smoke(args.target)
 
     if args.target == "windows":
-        run_inno_setup(args.version)
+        run_inno_setup(version)
     elif args.target == "macos":
-        run_create_dmg(args.version)
+        run_create_dmg(version)
 
 
 def command_validate(args: argparse.Namespace) -> None:

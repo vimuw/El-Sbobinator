@@ -4,6 +4,8 @@ import App from './App.tsx';
 import { initBrowserHost } from './browserHost';
 import './index.css';
 import { installFrontendDiagnostics, reportClientError, reportFrontendReady } from './diagnostics';
+import { APP_VERSION } from './branding';
+import { validateDesktopBuild } from './desktopStartup';
 
 installFrontendDiagnostics();
 
@@ -95,7 +97,8 @@ class RootErrorBoundary extends React.Component<React.PropsWithChildren, { hasEr
 }
 
 async function mountApp() {
-  await initBrowserHost();
+  validateDesktopBuild(APP_VERSION);
+  if (!window.elDesktopStartup) await initBrowserHost();
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <RootErrorBoundary>

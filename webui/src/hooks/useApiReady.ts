@@ -1,4 +1,5 @@
 import { reportClientError } from '../diagnostics';
+import { beginDesktopSettingsLoad, completeDesktopStartup } from '../desktopStartup';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ModelOption, SettingsPayload } from '../bridge';
 import { credentialStorageWarning } from '../credentialStorage';
@@ -65,7 +66,11 @@ export function useApiReady(appendConsole: (msg: string) => void) {
       inFlightRef.current = true;
       const attempt = ++bootstrapAttemptRef.current;
       try {
+        await beginDesktopSettingsLoad();
+        if (!alive || attempt !== bootstrapAttemptRef.current) return;
         const cfg = await window.pywebview.api.load_settings();
+        if (!alive || attempt !== bootstrapAttemptRef.current) return;
+        await completeDesktopStartup();
         if (!alive || attempt !== bootstrapAttemptRef.current) return;
         initDoneRef.current = true;
         setBridgeDelayed(false);

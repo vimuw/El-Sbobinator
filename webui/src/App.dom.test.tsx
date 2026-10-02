@@ -150,7 +150,8 @@ afterEach(() => {
 describe('App', () => {
   it('renders the app header with logo', async () => {
     await act(async () => { render(<App />); });
-    expect(screen.getByAltText('El Sbobinator')).toBeTruthy();
+    const sidebar = screen.getByRole('navigation');
+    expect(within(sidebar).getByRole('img', { name: 'El Sbobinator' }).getAttribute('src')).toBe('./icon.png');
   });
 
   it('renders in setup mode when no API key is set', async () => {

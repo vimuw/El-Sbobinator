@@ -131,7 +131,7 @@ export function SetupPage({
       {/* Document Header */}
       <div className="space-y-3 text-left">
         <img
-          src="/icon.png"
+          src="./icon.png"
           alt="El Sbobinator"
           className="w-11 h-11 object-contain select-none pointer-events-none"
           draggable={false}

@@ -1,6 +1,7 @@
 import argparse
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -52,7 +53,7 @@ class BuildReleaseTests(unittest.TestCase):
                             patch.object(
                                 build_release, "print_windows_webview2_notice"
                             ),
-                            patch.object(build_release, "build_webui"),
+                            patch.object(build_release, "build_webui") as build_webui,
                             patch.object(
                                 build_release, "run", side_effect=verify_manifest
                             ) as run,
@@ -66,6 +67,62 @@ class BuildReleaseTests(unittest.TestCase):
                         ):
                             build_release.command_build(args)
                         run.assert_called_once()
+                        build_webui.assert_called_once_with(
+                            skip_npm_install=True, version="2.1.0"
+                        )
+
+    def test_webui_build_passes_resolved_version_only_to_child_process(self):
+        with (
+            patch.object(build_release, "install_node_dependencies") as install,
+            patch.object(build_release.subprocess, "run") as run,
+            patch.dict(os.environ, {"EL_SBOBINATOR_BUILD_VERSION": "stale"}),
+        ):
+            build_release.build_webui(skip_npm_install=True, version="2.7.3")
+            install.assert_called_once_with(skip_npm_install=True)
+            self.assertEqual(
+                run.call_args.kwargs["env"]["EL_SBOBINATOR_BUILD_VERSION"], "2.7.3"
+            )
+            self.assertEqual(os.environ["EL_SBOBINATOR_BUILD_VERSION"], "stale")
+
+    def test_default_build_uses_package_version_for_frontend_and_packaging(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            webui = root / "webui"
+            webui.mkdir()
+            package_path = webui / "package.json"
+            package_content = '{"version":"1.0.0"}'
+            package_path.write_text(package_content)
+            args = build_release.build_parser().parse_args(
+                [
+                    "build",
+                    "--target",
+                    "windows",
+                    "--skip-checks",
+                    "--skip-npm-install",
+                    "--skip-postbuild-smoke",
+                ]
+            )
+            with (
+                patch.object(build_release, "ROOT", root),
+                patch.object(build_release, "WEBUI_DIR", webui),
+                patch.object(build_release, "print_windows_webview2_notice"),
+                patch.object(build_release, "build_webui") as build_webui,
+                patch.object(build_release, "run"),
+                patch.object(build_release, "run_inno_setup") as installer,
+                patch.object(
+                    build_release.subprocess,
+                    "run",
+                    return_value=MagicMock(stdout="current-commit\n"),
+                ),
+            ):
+                build_release.command_build(args)
+            build_webui.assert_called_once_with(skip_npm_install=True, version="1.0.0")
+            installer.assert_called_once_with("1.0.0")
+            metadata = json.loads(
+                (root / "build" / "diagnostic_build.json").read_text()
+            )
+            self.assertEqual(metadata["version"], "1.0.0")
+            self.assertEqual(package_path.read_text(), package_content)
 
     def test_build_manifest_records_release_version_and_is_packaged(self):
         with tempfile.TemporaryDirectory() as tmpdir:

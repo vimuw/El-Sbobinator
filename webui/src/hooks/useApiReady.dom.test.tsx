@@ -18,9 +18,108 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   setPywebview(undefined);
+  delete window.elDesktopStartup;
 });
 
 describe('useApiReady — bootstrap guard', () => {
+  it('announces settings before the Python request and waits for a slow result', async () => {
+    const order: string[] = [];
+    let finish!: (cfg: Record<string, unknown>) => void;
+    const load = vi.fn(() => {
+      order.push('load_settings');
+      return new Promise<Record<string, unknown>>(resolve => { finish = resolve; });
+    });
+    window.elDesktopStartup = {
+      validate: vi.fn().mockReturnValue(true),
+      settingsStarted: vi.fn(async () => { order.push('settings-started'); return true; }),
+      ready: vi.fn(async () => { order.push('ready'); return true; }),
+    };
+    setPywebview({ load_settings: load });
+    const { result } = renderHook(() => useApiReady(vi.fn()));
+    await act(async () => { await vi.advanceTimersByTimeAsync(20_000); });
+    expect(order).toEqual(['settings-started', 'load_settings']);
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(result.current.apiReady).toBe(false);
+    await act(async () => { finish({ preferred_model: 'slow-model' }); });
+    expect(order).toEqual(['settings-started', 'load_settings', 'ready']);
+    expect(result.current.apiReady).toBe(true);
+    expect(result.current.preferredModel).toBe('slow-model');
+  });
+
+  it('retries the full bootstrap when Python accepts ready but its response is lost', async () => {
+    const order: string[] = [];
+    let backendReady = false;
+    const appendConsole = vi.fn();
+    const load = vi.fn(async () => {
+      order.push('load_settings');
+      return { api_key: 'recovered-key', preferred_model: 'recovered-model' };
+    });
+    window.elDesktopStartup = {
+      validate: vi.fn().mockReturnValue(true),
+      settingsStarted: vi.fn(async () => {
+        order.push(backendReady ? 'settings-started:already-ready' : 'settings-started');
+        return true;
+      }),
+      ready: vi.fn(async () => {
+        order.push('ready');
+        const responseDelivered = backendReady;
+        backendReady = true;
+        return responseDelivered;
+      }),
+    };
+    setPywebview({ load_settings: load });
+    const { result } = renderHook(() => useApiReady(appendConsole));
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(backendReady).toBe(true);
+    expect(result.current.apiReady).toBe(false);
+    expect(result.current.apiKey).toBe('');
+    expect(appendConsole).not.toHaveBeenCalled();
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    expect(order).toEqual([
+      'settings-started', 'load_settings', 'ready',
+      'settings-started:already-ready', 'load_settings', 'ready',
+    ]);
+    expect(result.current.apiReady).toBe(true);
+    expect(result.current.bridgeDelayed).toBe(false);
+    expect(result.current.apiKey).toBe('recovered-key');
+    expect(result.current.preferredModel).toBe('recovered-model');
+    expect(appendConsole).toHaveBeenCalledExactlyOnceWith('Connesso a Python.');
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(window.elDesktopStartup.ready).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not invoke Python if the settings phase acknowledgement fails', async () => {
+    const load = vi.fn();
+    window.elDesktopStartup = {
+      validate: vi.fn().mockReturnValue(true),
+      settingsStarted: vi.fn().mockResolvedValue(false),
+      ready: vi.fn(),
+    };
+    setPywebview({ load_settings: load });
+    const { result } = renderHook(() => useApiReady(vi.fn()));
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(load).not.toHaveBeenCalled();
+    expect(window.elDesktopStartup.ready).not.toHaveBeenCalled();
+    expect(result.current.apiReady).toBe(false);
+  });
+
+  it('ignores a settings phase acknowledgement after the hook unmounts', async () => {
+    let acknowledge!: (ok: boolean) => void;
+    window.elDesktopStartup = {
+      validate: vi.fn().mockReturnValue(true),
+      settingsStarted: vi.fn(() => new Promise<boolean>(resolve => { acknowledge = resolve; })),
+      ready: vi.fn(),
+    };
+    const load = vi.fn();
+    setPywebview({ load_settings: load });
+    const { unmount } = renderHook(() => useApiReady(vi.fn()));
+    unmount();
+    await act(async () => { acknowledge(true); });
+    expect(load).not.toHaveBeenCalled();
+  });
+
   it('hydrates temporary credentials and retains the old plaintext warning through refresh', async () => {
     const load = vi.fn().mockResolvedValue({ api_key: 'temporary', credential_storage: { primary: 'session_only', fallback: 'absent' }, api_key_insecure: true });
     setPywebview({ load_settings: load });

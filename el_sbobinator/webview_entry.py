@@ -16,8 +16,13 @@ from typing import TYPE_CHECKING, Any
 
 import webview
 
+from el_sbobinator.core.desktop_startup import DesktopStartupServer
 from el_sbobinator.core.media_server import LocalMediaServer
-from el_sbobinator.utils.logging_utils import prepare_startup, redact_secrets
+from el_sbobinator.utils.logging_utils import (
+    configure_logging,
+    prepare_startup,
+    redact_secrets,
+)
 from el_sbobinator.utils.webview2_recovery import (
     build_missing_webview2_html,
     clear_webview2_cache,
@@ -166,6 +171,7 @@ def main():
     # Intercept stdout/stderr to forward to React console
     sys.stdout = _ConsoleTee(sys.__stdout__, api)
     sys.stderr = _ConsoleTee(sys.__stderr__, api)
+    configure_logging(stream=sys.stdout)
 
     dist_path = get_dist_path()
     webview2_available = has_webview2_runtime()
@@ -184,19 +190,25 @@ def main():
     _pos_kwargs = _get_window_position(win_w, win_h)
 
     stop_event: threading.Event | None = None
+    startup_server: DesktopStartupServer | None = None
 
     if webview2_available:
-        window = webview.create_window(
-            "El Sbobinator",
-            dist_path,
-            js_api=api,
-            width=win_w,
-            height=win_h,
-            **_pos_kwargs,
-            min_size=(750, 620),
-            background_color=_boot_bg_color(),
-            maximized=True,
-        )
+        startup_server = DesktopStartupServer(dist_path)
+        try:
+            window = webview.create_window(
+                "El Sbobinator",
+                startup_server.entry_url(),
+                js_api=api,
+                width=win_w,
+                height=win_h,
+                **_pos_kwargs,
+                min_size=(750, 620),
+                background_color=_boot_bg_color(),
+                maximized=True,
+            )
+        except Exception:
+            startup_server.close()
+            raise
     else:
         print(
             "[!] Microsoft Edge WebView2 Runtime non trovato. Mostro schermata di recupero."
@@ -235,11 +247,24 @@ def main():
     except Exception:
         pass
 
-    webview.start(
-        private_mode=False,
-        storage_path=storage_dir,
-        debug=False,
+    if startup_server is not None:
+        window.events.closed += startup_server.stop.set
+    startup_monitor = (
+        startup_server.monitor
+        if startup_server is not None and not startup_server.port_fallback
+        else None
     )
+    try:
+        webview.start(
+            startup_monitor,
+            (window,) if startup_monitor is not None else None,
+            private_mode=False,
+            storage_path=storage_dir,
+            debug=False,
+        )
+    finally:
+        if startup_server is not None:
+            startup_server.close()
 
 
 if __name__ == "__main__":

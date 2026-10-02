@@ -78,7 +78,7 @@ export const NavSidebar = memo(function NavSidebar({
     >
       {/* Logo */}
       <div className="flex justify-center pt-3 pb-1">
-        <img src="/icon.png" alt="El Sbobinator" style={{ width: 30, height: 30, borderRadius: 8 }} />
+        <img src="./icon.png" alt="El Sbobinator" style={{ width: 30, height: 30, borderRadius: 8 }} />
       </div>
 
       {/* Navigation items */}

@@ -4,11 +4,17 @@ import { readFileSync } from 'node:fs';
 import path from 'path';
 import { defineConfig } from 'vite';
 
-const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')) as { version: string };
+const packageInfo = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')) as { version: string };
+const version = (process.env.EL_SBOBINATOR_BUILD_VERSION ?? packageInfo.version).replace(/^v/, '');
 const backendPort = Number.parseInt(process.env.EL_SBOBINATOR_BACKEND_PORT ?? '8000', 10);
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), {
+    name: 'desktop-build-version',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'desktop-build.json', source: JSON.stringify({ version }) });
+    },
+  }],
   define: {
     __APP_VERSION__: JSON.stringify(`v${version}`),
     'process.env': {},
