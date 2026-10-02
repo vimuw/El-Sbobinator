@@ -5,6 +5,7 @@ System integration IPC bridge controller.
 from __future__ import annotations
 
 import os
+import sys
 from typing import TYPE_CHECKING
 
 import webview
@@ -23,6 +24,21 @@ if TYPE_CHECKING:
     import logging
 
     from el_sbobinator.pipeline.pipeline_adapter import PipelineAdapter
+
+
+def _truncate_notification_text(text: str, max_units: int) -> str:
+    """Fit Windows WCHAR buffers, reserving the caller's terminator space."""
+    if sum(2 if ord(char) > 0xFFFF else 1 for char in text) <= max_units:
+        return text
+    units = 0
+    end = 0
+    for char in text:
+        width = 2 if ord(char) > 0xFFFF else 1
+        if units + width > max_units - 1:
+            break
+        units += width
+        end += 1
+    return text[:end] + "…"
 
 
 class SystemControllerMixin:
@@ -278,6 +294,10 @@ class SystemControllerMixin:
             pass
         try:
             from plyer import notification
+
+            if sys.platform == "win32":
+                title = _truncate_notification_text(title, 63)
+                message = _truncate_notification_text(message, 255)
 
             # On windows, notify requires an absolute path to a .ico file if we want an icon.
             # We'll omit the app_icon for simplicity and cross-platform compatibility.
