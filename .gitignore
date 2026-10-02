@@ -36,6 +36,7 @@ Thumbs.db
 coverage.xml
 coverage-python.xml
 htmlcov/
+webui/coverage/
 pyright_clean.txt
 pyright_errors.txt
 pyright_full.txt
@@ -90,6 +91,7 @@ pnpm-debug.log*
 .agents/
 progress.md
 ORIGINAL_REQUEST.md
+learning_proposal.md
 
 # Developer local scratch tools
 tools/resize_icon.py
@@ -99,6 +101,7 @@ tools/resize_icon.py
 
 # Generated quick-guide document
 /docs/Guida_rapida_El_Sbobinator.docx
+/docs/Guida_rapida_El_Sbobinator.pdf
 
 # Browser E2E artifacts
 /test-results/
