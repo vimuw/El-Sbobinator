@@ -15,7 +15,7 @@ from el_sbobinator.utils import logging_utils as lu
 class DiagnosticsTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.base = Path(self.temp.name)
+        self.base = Path(self.temp.name).resolve()
         self.config = self.base / "config"
         self.config.mkdir()
         self.root = self.base / "archive"
