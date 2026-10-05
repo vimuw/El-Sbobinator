@@ -56,6 +56,43 @@ class TestFoldersService(unittest.TestCase):
             fh.write("not valid json {{")
         self.assertEqual(get_folders(), [])
 
+    def test_nested_folders_and_automatic_colors_survive_root_migration(self):
+        from el_sbobinator.services.folders_service import (
+            get_folders,
+            migrate_session_roots,
+            save_folders,
+        )
+
+        old_root = os.path.join(self.tmp_dir, "old")
+        new_root = os.path.join(self.tmp_dir, "new")
+        folders = [
+            {"id": "year", "name": "Anno", "color": "", "session_dirs": []},
+            {
+                "id": "course",
+                "name": "Materia",
+                "color": "#4D96FF",
+                "parent_id": "year",
+                "session_dirs": [],
+            },
+            {
+                "id": "module",
+                "name": "Modulo",
+                "color": "",
+                "parent_id": "course",
+                "session_dirs": [os.path.join(old_root, "session")],
+            },
+        ]
+        save_folders(folders)
+        self.assertEqual(get_folders(), folders)
+        migrated = migrate_session_roots(old_root, new_root)
+        self.assertEqual(
+            migrated[2]["session_dirs"], [os.path.join(new_root, "session")]
+        )
+        for before, after in zip(folders, migrated, strict=True):
+            self.assertEqual(before.get("parent_id"), after.get("parent_id"))
+            self.assertEqual(before["color"], after["color"])
+        self.assertEqual(get_folders(), migrated)
+
     def test_get_folders_returns_empty_when_top_level_not_dict(self):
         from el_sbobinator.services.folders_service import get_folders
 

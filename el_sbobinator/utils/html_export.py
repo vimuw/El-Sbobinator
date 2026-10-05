@@ -7,7 +7,15 @@ Used for local HTML output (copy/paste into Docs) with basic sanitization.
 from __future__ import annotations
 
 import html as _html
+import json
 import re
+from pathlib import Path
+
+_DOCUMENT_FORMATTING = json.loads(
+    (Path(__file__).resolve().parent.parent / "document_formatting.json").read_text(
+        encoding="utf-8"
+    )
+)
 
 _ALLOWED_TAGS: frozenset[str] = frozenset(
     {
@@ -52,6 +60,10 @@ _ALLOWED_TAGS: frozenset[str] = frozenset(
 )
 
 _ALLOWED_ATTRS: dict[str, set[str]] = {
+    **{
+        tag: {"data-editor-empty-marks"}
+        for tag in ("p", "h1", "h2", "h3", "h4", "h5", "h6")
+    },
     "*": {
         "style",
         "class",
@@ -59,12 +71,18 @@ _ALLOWED_ATTRS: dict[str, set[str]] = {
         "data-layout",
         "data-align",
         "data-width",
+        "data-position",
+        "data-offset-y",
+        "data-offset-x",
+        "data-aspect-ratio",
         "data-caption",
         "data-math",
         "data-math-block",
+        "data-document-line-spacing",
         "align",
     },
     "a": {"href", "title", "target"},
+    "ol": {"start", "type"},
     "img": {"src", "alt", "width", "height", "align"},
     "th": {"colspan", "rowspan", "colwidth", "width", "scope"},
     "td": {"colspan", "rowspan", "colwidth", "width"},
@@ -241,6 +259,17 @@ def build_html_document_from_body(
     html_body = sanitize_html_basic(html_body, strip_document_head=strip_document_head)
     safe_title = (title or "Sbobina").strip()
     safe_title_html = _html.escape(safe_title, quote=True)
+    formatting = _DOCUMENT_FORMATTING
+    heading_css = "\n    ".join(
+        f"h{level} {{ font-size: {style['fontSizePt']}pt; "
+        f"line-height: {style['lineHeight']}; "
+        f"margin: {style['beforePt']}pt 0 {style['afterPt']}pt; "
+        f"font-weight: {style['fontWeight']}; color: {style['color']}; }}"
+        for level, style in enumerate(formatting["headings"], 1)
+    )
+    suppress_heading_css = ", ".join(
+        f"h{level} + p" for level in formatting["suppressMarginAfterHeadingLevels"]
+    )
     # CSP: evita script e richieste di rete anche se l'AI inserisse tag HTML.
     csp = (
         "default-src 'none'; "
@@ -263,34 +292,34 @@ def build_html_document_from_body(
   <title>{safe_title_html} - Sbobina</title>
   <style>
     :root {{
-      --text: #111;
+      --text: #000;
       --muted: #444;
       --bg: #fff;
       --rule: #e6e6e6;
     }}
     body {{
-      font-family: Arial, Helvetica, sans-serif;
-      line-height: 1.6;
+      font-family: {formatting["fontFamily"]}, Helvetica, sans-serif;
+      font-size: {formatting["fontSizePt"]}pt;
+      line-height: {formatting["lineHeight"]};
       color: var(--text);
       background: var(--bg);
       max-width: 980px;
       margin: 0 auto;
       padding: 48px 22px;
     }}
-    h1, h2, h3, h4, h5 {{ line-height: 1.3; font-weight: 700; }}
-    h1 {{ font-size: 20pt; margin: 0 0 0.9rem; }}
-    h2 {{ font-size: 16pt; margin: 1.4rem 0 0.6rem; }}
-    h3 {{ font-size: 14pt; margin: 1.15rem 0 0.45rem; }}
-    h4 {{ font-size: 11pt; margin: 1rem 0 0.4rem; }}
-    h5 {{ font-size: 10pt; margin: 0.95rem 0 0.35rem; }}
-    p, li {{ margin: 0.55rem 0; }}
-    ul, ol {{ padding-left: 1.25rem; }}
+    {heading_css}
+    p {{ margin: {formatting["paragraphGapPt"]}pt 0; }}
+    body > p:first-child{", " + suppress_heading_css if suppress_heading_css else ""} {{ margin-top: 0; }}
+    body > p:last-child {{ margin-bottom: 0; }}
+    li {{ margin: 0; }}
+    ul, ol {{ padding-left: 36pt; margin-top: 0; margin-bottom: 0; }}
     strong {{ font-weight: 700; }}
+    a {{ color: #1155cc; }}
     hr {{ display: none; }}
     code {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 0.95em; }}
     blockquote {{ margin: 0.9rem 0; padding: 0.1rem 0 0.1rem 1rem; border-left: 3px solid var(--rule); color: var(--muted); }}
     table {{ border-collapse: collapse; width: 100%; margin: 1.2rem 0; font-size: 0.95em; }}
-    th, td {{ border: 1px solid var(--rule); padding: 8px 12px; text-align: left; vertical-align: top; }}
+    th, td {{ border: 1px solid var(--rule); padding: {formatting["table"]["paddingVerticalPt"]}pt {formatting["table"]["paddingHorizontalPt"]}pt; text-align: left; vertical-align: top; }}
     th {{ background: #f8f9fa; font-weight: 700; }}
   </style>
 </head>

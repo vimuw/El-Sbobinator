@@ -12,11 +12,15 @@ Data model::
           "id": "<uuid>",
           "name": "Anatomia",
           "color": "#FF6B6B",
+          "parent_id": null,
           "session_dirs": ["<absolute/session/dir>", ...]
         },
         ...
       ]
     }
+
+``parent_id`` is optional for existing root collections. An empty ``color``
+inherits from the nearest colored ancestor (resolved by the UI).
 """
 
 from __future__ import annotations

@@ -2,9 +2,10 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { ChevronDown } from 'lucide-react';
+import { DOCUMENT_FORMATTING, pointSize } from '../../../documentFormatting';
 
 const FONT_FAMILIES = [
-  { label: 'Arial', value: '', cssFamily: 'Arial, sans-serif' },
+  { label: DOCUMENT_FORMATTING.fontFamily, value: '', cssFamily: `${DOCUMENT_FORMATTING.fontFamily}, sans-serif` },
   { label: 'Times New Roman', value: '"Times New Roman", serif', cssFamily: '"Times New Roman", serif' },
   { label: 'Georgia', value: 'Georgia, serif', cssFamily: 'Georgia, serif' },
   { label: 'Courier New', value: '"Courier New", monospace', cssFamily: '"Courier New", monospace' },
@@ -23,8 +24,6 @@ const HEADING_OPTIONS = [
   { label: 'Titolo 5', value: 'h5', level: 5 },
 ];
 
-// Matches CSS: h1=20pt, h2=16pt, h3=14pt, h4=11pt, h5=10pt (same as HTML export)
-const HEADING_PT: Record<number, number> = { 1: 20, 2: 16, 3: 14, 4: 11, 5: 10 };
 
 export const FontFamilySelect = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -32,9 +31,10 @@ export const FontFamilySelect = ({ editor }: { editor: TiptapEditor }) => {
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
 
-  const rawFamily = editor.getAttributes('textStyle').fontFamily ?? '';
-  const currentFamily = (rawFamily === '' || rawFamily === 'Arial, sans-serif' || rawFamily === 'Arial') ? '' : rawFamily;
-  const currentLabel = FONT_FAMILIES.find(f => f.value === currentFamily)?.label || (currentFamily ? currentFamily.replace(/['"]/g, '') : 'Arial');
+  const blockStyle = editor.getAttributes(editor.isActive('heading') ? 'heading' : 'paragraph').documentStyle;
+  const rawFamily = editor.getAttributes('textStyle').fontFamily ?? blockStyle?.['font-family'] ?? '';
+  const currentFamily = (rawFamily === '' || rawFamily === `${DOCUMENT_FORMATTING.fontFamily}, sans-serif` || rawFamily === DOCUMENT_FORMATTING.fontFamily) ? '' : rawFamily;
+  const currentLabel = FONT_FAMILIES.find(f => f.value === currentFamily)?.label || (currentFamily ? currentFamily.replace(/['"]/g, '') : DOCUMENT_FORMATTING.fontFamily);
 
   const toggleOpen = () => {
     if (!isOpen && buttonRef.current) {
@@ -122,19 +122,22 @@ export const FontSizeSelect = ({ editor }: { editor: TiptapEditor }) => {
   const panelRef = React.useRef<HTMLDivElement>(null);
 
   const getCurrentSize = (): string => {
-    if (!editor) return '11';
+    if (!editor) return String(DOCUMENT_FORMATTING.fontSizePt);
 
     // 1. Explicit inline fontSize mark
     const fontSize = editor.getAttributes('textStyle').fontSize;
-    if (fontSize) return String(fontSize).replace(/px|pt/, '').trim();
+    if (fontSize) return String(pointSize(String(fontSize), DOCUMENT_FORMATTING.fontSizePt));
+
+    const blockStyle = editor.getAttributes(editor.isActive('heading') ? 'heading' : 'paragraph').documentStyle;
+    if (blockStyle?.['font-size']) return String(pointSize(blockStyle['font-size'], DOCUMENT_FORMATTING.fontSizePt));
 
     // 2. Heading level
     for (let i = 1; i <= 5; i++) {
-      if (editor.isActive('heading', { level: i })) return String(HEADING_PT[i]);
+      if (editor.isActive('heading', { level: i })) return String(DOCUMENT_FORMATTING.headings[i - 1].fontSizePt);
     }
 
-    // 3. Default body text is 11pt
-    return '11';
+    // 3. Default body text uses the same profile as the document.
+    return String(DOCUMENT_FORMATTING.fontSizePt);
   };
 
   const currentSize = getCurrentSize();

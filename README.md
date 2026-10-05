@@ -20,10 +20,10 @@ Applicazione desktop per trasformare lezioni audio e video in dispense di studio
 
 - **Trascrizione e Sintesi**: Converte registrazioni audio e video in dispense di studio strutturate, ripulendo il parlato da intercalari e ripetizioni e organizzando i contenuti in capitoli, paragrafi ed elenchi puntati.
 - **Modello BYOK (Bring Your Own Key)**: L'applicazione è un client desktop autonomo e gratuito, senza abbonamenti né server intermediari gestiti dallo sviluppatore. La comunicazione avviene in forma diretta e cifrata tra il computer locale e le API ufficiali di Google Gemini.
-- **Editor Sincronizzato**: Permette di riascoltare la lezione con il player audio sincronizzato (velocità da 1.0x a 3.0x) mentre si corregge la bozza, con supporto per formule scientifiche (LaTeX) e copia rapida formattata per Google Docs e Microsoft Word.
+- **Editor Sincronizzato**: Permette di riascoltare la lezione con il player audio sincronizzato (velocità da 1.0x a 3.0x) mentre si corregge la bozza, con supporto per formule scientifiche (LaTeX) e copia rapida formattata per altri editor di documenti.
 - **Archivio Locale & Ricerca Istantanea**: Conserva lo storico delle lezioni elaborate sul computer in cartelle organizzabili, con ricerca testuale full-text ad alta velocità tra tutte le sbobine salvate.
 
-Per modificare una sbobina insieme ad altre persone, usa **Copia per Google Docs** nell'editor, incolla il contenuto in un documento Google e condividilo con i tuoi compagni.
+Per modificare una sbobina insieme ad altre persone, usa **Copia formattata** nell'editor, incolla il contenuto in un editor di documenti condivisi e condividilo con i tuoi compagni.
 
 ---
 
@@ -64,7 +64,7 @@ Trascina il file audio o video direttamente nella finestra dell'applicazione (è
 - **Formati video supportati**: `.mp4`, `.mkv`, `.webm`, `.mov`, `.3gp`.
 
 ### 4. Rivedi ed esporta
-Al termine dell'elaborazione, la lezione viene aperta nell'editor integrato dell'applicazione, dove è possibile riascoltare l'audio e correggere il testo. L'esportazione della sbobina avviene tramite copia e incolla: clicca su **Copia per Google Docs** per copiare la sbobina con la formattazione preservata e incollarla in Google Docs o Microsoft Word.
+Al termine dell'elaborazione, la lezione viene aperta nell'editor integrato dell'applicazione, dove è possibile riascoltare l'audio e correggere il testo. L'esportazione della sbobina avviene tramite copia e incolla: clicca su **Copia formattata** per copiare la sbobina con la formattazione preservata e incollarla in un altro editor di documenti.
 
 ---
 

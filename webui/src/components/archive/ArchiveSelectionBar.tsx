@@ -19,6 +19,7 @@ export interface ArchiveSelectionBarProps {
   onRemoveFromFolder?: () => void;
   onDeleteSelected?: () => void;
   onClose?: () => void;
+  onMove?: () => void;
 }
 
 export function ArchiveSelectionBar({
@@ -33,6 +34,7 @@ export function ArchiveSelectionBar({
   onRemoveFromFolder,
   onDeleteSelected,
   onClose,
+  onMove,
 }: ArchiveSelectionBarProps) {
   const [isFolderMenuOpen, setIsFolderMenuOpen] = useState(false);
   const folderMenuRef = useRef<HTMLDivElement>(null);
@@ -103,20 +105,20 @@ export function ArchiveSelectionBar({
         <button
           ref={folderButtonRef}
           type="button"
-          onClick={() => setIsFolderMenuOpen(v => !v)}
+          onClick={() => onMove ? onMove() : setIsFolderMenuOpen(v => !v)}
           className="group/add flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
           style={{
             background: isFolderMenuOpen ? 'var(--accent-subtle)' : undefined,
             color: 'var(--text-primary)',
             border: isFolderMenuOpen ? '1px solid var(--accent-text)' : '1px solid transparent',
           }}
-          title="Aggiungi le sbobine selezionate a una cartella"
+          title={onMove ? 'Sposta le sbobine selezionate in una raccolta' : 'Aggiungi le sbobine selezionate a una raccolta'}
         >
           <FolderPlus
             className="w-4 h-4 shrink-0 transition-transform duration-200 group-hover/add:scale-110 group-hover/add:-translate-y-0.5"
             style={{ color: 'var(--accent-text)' }}
           />
-          <span>Aggiungi</span>
+          <span>{onMove ? 'Sposta in…' : 'Aggiungi'}</span>
         </button>
 
         <AnimatePresence>
@@ -140,7 +142,7 @@ export function ArchiveSelectionBar({
 
               {folders.length === 0 && (
                 <div className="px-3 py-2 text-sm text-center" style={{ color: 'var(--text-muted)' }}>
-                  Nessuna cartella creata
+                  Nessuna raccolta creata
                 </div>
               )}
 
@@ -191,7 +193,7 @@ export function ArchiveSelectionBar({
           onClick={onRemoveFromFolder}
           className="group/remove flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
           style={{ color: 'var(--text-primary)' }}
-          title="Rimuovi le sbobine selezionate dalla cartella"
+          title="Rimuovi le sbobine selezionate dalla raccolta"
         >
           <FolderMinus
             className="w-4 h-4 shrink-0 transition-transform duration-200 group-hover/remove:scale-110 group-hover/remove:-translate-y-0.5"

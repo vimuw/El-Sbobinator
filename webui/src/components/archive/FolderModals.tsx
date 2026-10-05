@@ -1,23 +1,28 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Trash2, X } from 'lucide-react';
+import { Check, Trash2, X } from 'lucide-react';
 import type { ArchiveFolder } from '../../bridge';
 import { DEFAULT_FOLDER_COLOR, FOLDER_COLORS, type FolderModalState } from './types';
+import { getFolderColor, NEUTRAL_FOLDER_COLOR } from '../../archiveFolders';
 
 interface FolderModalProps {
   state: FolderModalState;
   onClose: () => void;
   onSave: (name: string, color: string) => void;
+  folders?: ArchiveFolder[];
 }
 
-export function FolderModal({ state, onClose, onSave }: FolderModalProps) {
+export function FolderModal({ state, onClose, onSave, folders = [] }: FolderModalProps) {
   const [name, setName] = useState(state.type === 'edit' ? state.folder.name : '');
-  const [color, setColor] = useState(state.type === 'edit' ? (state.folder.color || DEFAULT_FOLDER_COLOR) : DEFAULT_FOLDER_COLOR);
+  const [color, setColor] = useState(state.type === 'edit' ? state.folder.color ?? '' : '');
+  const parentId = state.type === 'edit' ? state.folder.parent_id : state.parentId;
+  const parent = folders.find(folder => folder.id === parentId);
+  const previewColor = color || (parent ? getFolderColor(parent, folders) : NEUTRAL_FOLDER_COLOR);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setName(state.type === 'edit' ? state.folder.name : '');
-    setColor(state.type === 'edit' ? (state.folder.color || DEFAULT_FOLDER_COLOR) : DEFAULT_FOLDER_COLOR);
+    setColor(state.type === 'edit' ? state.folder.color ?? '' : '');
   }, [state]);
 
   useEffect(() => {
@@ -39,7 +44,7 @@ export function FolderModal({ state, onClose, onSave }: FolderModalProps) {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onSave(name.trim(), color || DEFAULT_FOLDER_COLOR);
+    onSave(name.trim(), color);
   };
 
   return (
@@ -63,9 +68,9 @@ export function FolderModal({ state, onClose, onSave }: FolderModalProps) {
         {/* Header */}
         <div className="modal-header">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="folder-color-dot" style={{ '--folder-color': color } as React.CSSProperties} />
+            <span className="folder-color-dot" style={{ '--folder-color': previewColor } as React.CSSProperties} />
             <h2 className="text-lg font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-              {state.type === 'create' ? 'Nuova cartella' : 'Modifica cartella'}
+              {state.type === 'create' ? 'Nuova raccolta' : 'Modifica raccolta'}
             </h2>
           </div>
           <button
@@ -81,11 +86,12 @@ export function FolderModal({ state, onClose, onSave }: FolderModalProps) {
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto flex flex-col">
           <div className="modal-body space-y-4">
             <div>
-              <label className="text-xs font-semibold block mb-1.5" style={{ color: 'var(--text-muted)' }}>
+              <label htmlFor="folder-name" className="text-xs font-semibold block mb-1.5" style={{ color: 'var(--text-muted)' }}>
                 NOME RACCOLTA
               </label>
               <input
                 ref={inputRef}
+                id="folder-name"
                 type="text"
                 value={name}
                 onChange={e => setName(e.target.value)}
@@ -95,10 +101,23 @@ export function FolderModal({ state, onClose, onSave }: FolderModalProps) {
               />
             </div>
             <div>
-              <label className="text-xs font-semibold block mb-2" style={{ color: 'var(--text-muted)' }}>
-                COLORE IDENTIFICATIVO
-              </label>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <span id="folder-color-label" className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+                  COLORE IDENTIFICATIVO
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setColor('')}
+                  aria-pressed={!color}
+                  title="Usa il colore ereditato o neutro"
+                  className="inline-flex items-center gap-1 h-7 px-1.5 rounded text-xs font-medium cursor-pointer transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-text)]"
+                  style={{ color: !color ? 'var(--text-primary)' : 'var(--text-muted)' }}
+                >
+                  <Check className={`w-3 h-3 ${color ? 'invisible' : ''}`} aria-hidden="true" />
+                  Automatico
+                </button>
+              </div>
+              <div role="group" aria-labelledby="folder-color-label" className="flex flex-wrap gap-2">
                 {FOLDER_COLORS.map(c => {
                   const isSelected = color.trim().toLowerCase() === c.trim().toLowerCase();
                   return (
@@ -119,6 +138,7 @@ export function FolderModal({ state, onClose, onSave }: FolderModalProps) {
                   );
                 })}
               </div>
+              {!color && <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>{parent ? `Colore ereditato da ${parent.name}.` : 'Colore neutro; eredita quello della raccolta superiore quando viene spostata.'}</p>}
             </div>
           </div>
           {/* Footer Actions */}
@@ -144,12 +164,14 @@ interface DeleteFolderConfirmModalProps {
   folder: ArchiveFolder;
   onClose: () => void;
   onConfirm: () => void;
+  childCount?: number;
 }
 
 export function DeleteFolderConfirmModal({
   folder,
   onClose,
   onConfirm,
+  childCount = 0,
 }: DeleteFolderConfirmModalProps) {
   const sessionCount = folder.session_dirs.length;
 
@@ -221,6 +243,7 @@ export function DeleteFolderConfirmModal({
             <strong style={{ color: 'var(--text-primary)' }}>non verranno cancellate</strong>{' '}
             e resteranno disponibili nell&apos;archivio.
           </p>
+          {childCount > 0 && <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Le sottoraccolte verranno spostate al livello superiore insieme alle lezioni presenti direttamente in questa raccolta.</p>}
         </div>
 
         <div className="modal-footer">

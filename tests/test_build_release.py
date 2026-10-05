@@ -160,6 +160,19 @@ class BuildReleaseTests(unittest.TestCase):
                 with self.assertRaises(FileNotFoundError):
                     build_release.run_postbuild_smoke("windows")
 
+    def test_document_formatting_profile_is_packaged_for_both_platforms(self):
+        for target in ("windows", "macos"):
+            with self.subTest(target=target):
+                command = build_release.pyinstaller_command(target, "webview")
+                self.assertTrue(
+                    any(
+                        "document_formatting.json" in value
+                        and value.endswith("el_sbobinator")
+                        and command[index - 1] == "--add-data"
+                        for index, value in enumerate(command)
+                    )
+                )
+
     def test_postbuild_smoke_runs_smoke_script_when_artifact_exists(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

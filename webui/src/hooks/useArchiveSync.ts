@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import type { FileItem, ProcessingAction } from '../appState';
 import { filterArchiveSessionsByInputPath } from '../duplicateDetection';
+import { getFolderPresentation } from '../archiveFolders';
 import type { ActivePage } from '../components/NavSidebar';
 
 export type PendingArchiveReplacement = {
@@ -53,6 +54,7 @@ export function useArchiveSync({
   const [archiveTotal, setArchiveTotal] = useState(0);
   const [isArchiveLoaded, setIsArchiveLoaded] = useState(false);
   const [folders, setFolders] = useState<ArchiveFolder[]>([]);
+  const folderSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   const archiveLimitRef = useRef(0);
   const prevSessionDirsRef = useRef<Map<string, string>>(new Map());
@@ -118,11 +120,19 @@ export function useArchiveSync({
   }, [addNotification, normalizeSessionDir]);
 
   const handleFoldersChange = useCallback(async (next: ArchiveFolder[]) => {
+    foldersRef.current = next;
     setFolders(next);
-    try {
-      await window.pywebview?.api?.save_archive_folders?.(next);
-    } catch (_) {}
-  }, []);
+    const save = folderSaveQueueRef.current.then(async () => {
+      try {
+        const response = await window.pywebview?.api?.save_archive_folders?.(next);
+        if (response && !response.ok) throw new Error(response.error || 'Salvataggio non riuscito');
+      } catch (error) {
+        addNotification('Raccolte non salvate', getErrorMessage(error), 'error', 'system');
+      }
+    });
+    folderSaveQueueRef.current = save;
+    await save;
+  }, [addNotification]);
 
   const handleSessionRootMoved = useCallback(async (payload?: { oldRoot?: string; newRoot?: string }) => {
     if (payload?.oldRoot && payload?.newRoot) {
@@ -180,8 +190,7 @@ export function useArchiveSync({
           ...folder,
           session_dirs: folder.session_dirs.filter(d => !deletedNorm.has(normalizeSessionDir(d))),
         }));
-        setFolders(updated);
-        void window.pywebview?.api?.save_archive_folders?.(updated).catch(() => {});
+        void handleFoldersChange(updated);
       }
       if (deletedSessionDirs.length !== deletableSessions.length) {
         await refreshArchiveSessions();
@@ -190,7 +199,7 @@ export function useArchiveSync({
       pendingArchiveReplacementsRef.current.delete(fileId);
       archiveReplacementCleanupInFlightRef.current.delete(fileId);
     }
-  }, [appendConsole, refreshArchiveSessions, normalizeSessionDir]);
+  }, [appendConsole, refreshArchiveSessions, normalizeSessionDir, handleFoldersChange]);
 
   useEffect(() => {
     const currentFileIds = new Set(files.map(f => f.id));
@@ -325,7 +334,10 @@ export function useArchiveSync({
 
   const completedSessionFolderMap = useMemo(() => {
     const map = new Map<string, ArchiveFolder>();
-    for (const folder of folders) for (const dir of folder.session_dirs) map.set(normalizeSessionDir(dir), folder);
+    for (const folder of folders) {
+      const displayFolder = getFolderPresentation(folder, folders);
+      for (const dir of folder.session_dirs) map.set(normalizeSessionDir(dir), displayFolder);
+    }
     return map;
   }, [folders, normalizeSessionDir]);
 

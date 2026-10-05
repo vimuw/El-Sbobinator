@@ -92,7 +92,7 @@ describe('ArchiveSelectionBar component', () => {
       />,
     );
 
-    const addBtn = screen.getByTitle('Aggiungi le sbobine selezionate a una cartella');
+    const addBtn = screen.getByTitle('Aggiungi le sbobine selezionate a una raccolta');
     fireEvent.click(addBtn);
 
     expect(screen.getByText('Cardiologia')).toBeTruthy();

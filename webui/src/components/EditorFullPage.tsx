@@ -2,8 +2,10 @@ import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Check, Copy, ExternalLink, FileText, Headphones, Loader2, Moon, Plus, Sun } from 'lucide-react';
 import type { Heading } from './RichTextEditor';
-import { normalizePreviewHtmlContent } from '../previewHtml';
 import { prepareHtmlForClipboard } from '../utils';
+import { writeEditorClipboard } from '../editorClipboard';
+import { clipboardPlainText } from '../documentFormatting';
+import { reportClientError } from '../diagnostics';
 import { ConfirmActionModal } from './modals/ConfirmActionModal';
 import { useTheme } from '../hooks/useTheme';
 import { useEditorAutosave, type EditorSaveController } from '../hooks/useEditorAutosave';
@@ -182,15 +184,15 @@ export function EditorFullPage({
 
   const handleCopy = async () => {
     const rawHtml = getHtmlRef.current?.() ?? lastPersistedRef.current;
-    const normalizedHtml = normalizePreviewHtmlContent(rawHtml);
-    const clipboardHtml = await prepareHtmlForClipboard(normalizedHtml);
+    const clipboardHtml = await prepareHtmlForClipboard(rawHtml);
     const temp = document.createElement('div');
     temp.innerHTML = clipboardHtml;
     try {
-      const htmlBlob = new Blob([clipboardHtml], { type: 'text/html' });
-      const textBlob = new Blob([temp.textContent || temp.innerText || ''], { type: 'text/plain' });
-      await navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]);
-    } catch (_) { navigator.clipboard.writeText(temp.textContent || temp.innerText || ''); }
+      await writeEditorClipboard(clipboardHtml, clipboardPlainText(temp), document.querySelector<HTMLElement>('.tiptap-editor') ?? undefined);
+    } catch (error) {
+      reportClientError('Clipboard error', error);
+      return;
+    }
     setIsCopied(true);
     if (copiedTimerRef.current) window.clearTimeout(copiedTimerRef.current);
     copiedTimerRef.current = window.setTimeout(() => setIsCopied(false), 2000);
@@ -268,8 +270,8 @@ export function EditorFullPage({
                 onClick={() => void handleCopy()}
                 className="icon-button"
                 style={isCopied ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : {}}
-                title={isCopied ? 'Copiato!' : 'Copia per Google Docs'}
-                aria-label="Copia per Google Docs"
+                title={isCopied ? 'Copiato!' : 'Copia formattata'}
+                aria-label="Copia formattata"
               >
                 {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
               </button>

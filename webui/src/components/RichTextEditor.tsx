@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { TextSelection } from '@tiptap/pm/state';
-import { DOMSerializer } from '@tiptap/pm/model';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Color } from '@tiptap/extension-color';
@@ -15,7 +14,7 @@ import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 import { Menu, X } from 'lucide-react';
 import { FloatingImage } from './FloatingImage';
-import { type Heading, SearchHighlight, FontSize, CustomHeading, CustomParagraph, MathInline, MathBlock, SmartArrows, extractHeadings } from '../editorExtensions';
+import { type Heading, SearchHighlight, FontSize, CustomHeading, CustomParagraph, CustomHardBreak, MathInline, MathBlock, SmartArrows, extractHeadings } from '../editorExtensions';
 import Youtube from '@tiptap/extension-youtube';
 import Typography from '@tiptap/extension-typography';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
@@ -26,7 +25,10 @@ import { FindReplacePanel } from './EditorFindReplace';
 import { useEditorImageDrop } from '../hooks/useEditorImageDrop';
 import { useTocScrollSpy } from '../hooks/useTocScrollSpy';
 import { EditorContextMenu } from './EditorContextMenu';
-import { prepareHtmlForClipboard } from '../utils';
+import { handleEditorClipboardEvent } from '../editorSelectionClipboard';
+import { editorFormattingVariables } from '../documentFormatting';
+import { EditorDocumentStyle } from '../editorDocumentStyle';
+import { EditorListItem, EditorOrderedList } from '../editorLists';
 
 export type { Heading };
 
@@ -110,9 +112,16 @@ export function RichTextEditor({
       link: false,
       underline: false,
       horizontalRule: false,
+      orderedList: false,
+      listItem: false,
+      hardBreak: false,
     }),
     CustomHeading,
     CustomParagraph,
+    CustomHardBreak,
+    EditorDocumentStyle,
+    EditorOrderedList,
+    EditorListItem,
     FloatingImage,
     TextStyle,
     Color,
@@ -147,7 +156,6 @@ export function RichTextEditor({
     extensions,
     content: initialContent,
     onCreate: ({ editor }) => {
-      editorRef.current = editor;
       if (editor.utils?.getUpdatedPosition) {
         const origGetUpdatedPosition = editor.utils.getUpdatedPosition;
         editor.utils.getUpdatedPosition = (
@@ -161,7 +169,6 @@ export function RichTextEditor({
           }
         };
       }
-      onEditorReady?.(() => (editorRef.current && !editorRef.current.isDestroyed) ? editorRef.current.getHTML() : '');
     },
     onUpdate: ({ editor }) => {
       onChange?.(editor.getHTML());
@@ -174,6 +181,7 @@ export function RichTextEditor({
       attributes: {
         class: 'prose prose-sm sm:prose-base max-w-none focus:outline-none tiptap-editor',
         spellcheck: 'false',
+        style: editorFormattingVariables(),
       },
       handleDoubleClick: (view, pos) => {
         const range = getWordRangeAtPos(view, pos);
@@ -188,34 +196,22 @@ export function RichTextEditor({
       },
       handleDOMEvents: {
         dragstart: (view, event) => handleDragStart(view, event as DragEvent),
-        copy: (view) => {
-          const { from, to, empty } = view.state.selection;
-          if (empty) return false;
-          const slice = view.state.selection.content();
-          const serializer = DOMSerializer.fromSchema(view.state.schema);
-          const dom = document.createElement('div');
-          dom.appendChild(serializer.serializeFragment(slice.content));
-          const rawHtml = dom.innerHTML;
-          if (rawHtml.includes('<img') || rawHtml.includes('data-editor-image')) {
-            const plainText = view.state.doc.textBetween(from, to, '\n');
-            void prepareHtmlForClipboard(rawHtml).then(clipboardHtml => {
-              if (clipboardHtml && typeof ClipboardItem !== 'undefined') {
-                const htmlBlob = new Blob([clipboardHtml], { type: 'text/html' });
-                const textBlob = new Blob([plainText], { type: 'text/plain' });
-                navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]).catch(() => {
-                  navigator.clipboard.writeText(plainText);
-                });
-              }
-            });
-          }
-          return false;
-        },
+        copy: (view, event) => handleEditorClipboardEvent(view, event as ClipboardEvent),
+        cut: (view, event) => handleEditorClipboardEvent(view, event as ClipboardEvent, true),
       },
       handlePaste: (view, event) => handlePaste(view, event as ClipboardEvent),
       handleDrop: (view, event) => handleDrop(view, event as DragEvent),
       transformPastedHTML,
     },
   }, [extensions]);
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    // React can reconnect the view after a reopen. Publish the current instance
+    // instead of retaining the getter from an earlier create event.
+    editorRef.current = editor;
+    onEditorReady?.(() => (editorRef.current && !editorRef.current.isDestroyed) ? editorRef.current.getHTML() : '');
+  }, [editor, onEditorReady]);
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
@@ -229,7 +225,7 @@ export function RichTextEditor({
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
-      if ((event.target as HTMLElement | null)?.closest('.gdocs-context-menu')) return;
+      if ((event.target as HTMLElement | null)?.closest('.editor-context-menu')) return;
       setContextMenu(null);
     };
     const handleScroll = () => {

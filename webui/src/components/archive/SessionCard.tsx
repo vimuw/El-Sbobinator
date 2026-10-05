@@ -26,6 +26,7 @@ export interface DraggableSessionCardProps {
   onDeleteSession: ArchivePageProps['onDeleteSession'];
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
   onShareSession?: (session: ArchiveSession) => void;
+  onMove?: () => void;
 }
 
 export function DraggableSessionCard({
@@ -42,6 +43,7 @@ export function DraggableSessionCard({
   onDeleteSession,
   onRetryFailedRevisionBlocks,
   onShareSession,
+  onMove,
 }: DraggableSessionCardProps) {
   const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
   const openedAtMs = getOpenedAtMs(session, editorSessionsMap ?? loadAllEditorSessions());
@@ -92,7 +94,7 @@ export function DraggableSessionCard({
       icon: <Download className="w-3.5 h-3.5" />,
       onClick: () => onShareSession(session),
     } as KebabMenuItem] : []),
-    ...(folderChildren.length > 0 ? [
+    ...(onMove ? [{ label: 'Sposta in…', icon: <Folder className="w-3.5 h-3.5" />, onClick: onMove }] : folderChildren.length > 0 ? [
       { separator: true } as KebabMenuItem,
       {
         label: 'Raccolta',
@@ -140,7 +142,7 @@ export function DraggableSessionCard({
 
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{session.name}</p>
-          <div className="flex items-center gap-2 mt-0.5 text-xs min-w-0 flex-nowrap overflow-hidden" style={{ color: 'var(--text-muted)' }}>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5 text-xs min-w-0" style={{ color: 'var(--text-muted)' }}>
             {ts > 0 && <span className="shrink-0">{formatRelativeTime(ts)}</span>}
             {session.effective_model && (
               <><span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} /><span className="shrink-0">{shortModelName(session.effective_model)}</span></>
@@ -155,10 +157,10 @@ export function DraggableSessionCard({
               </>
             )}
             {currentFolder && (
-              <>
+              <span className="inline-flex items-center gap-2 min-w-0 max-w-full">
                 <span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} />
-                <FolderIndicatorChip folder={currentFolder} />
-              </>
+                <FolderIndicatorChip folder={currentFolder} folders={allFolders} />
+              </span>
             )}
             {hasRevisionWarnings && (
               <><span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} /><span className="shrink-0" style={{ color: 'var(--warning-text)', fontWeight: 600 }}>Completata con avvisi</span></>
@@ -264,6 +266,8 @@ export interface SortableSessionCardProps {
   canMoveToNextPage?: boolean;
   onMoveToPreviousPage?: () => void;
   onMoveToNextPage?: () => void;
+  onMove?: () => void;
+  collectionIndicator?: React.ReactNode;
 }
 
 export function SortableSessionCard({
@@ -283,6 +287,8 @@ export function SortableSessionCard({
   canMoveToNextPage,
   onMoveToPreviousPage,
   onMoveToNextPage,
+  onMove,
+  collectionIndicator,
 }: SortableSessionCardProps) {
   const {
     attributes,
@@ -312,6 +318,7 @@ export function SortableSessionCard({
   };
 
   const kebabItems: KebabMenuItem[] = [
+    ...(onMove ? [{ label: 'Sposta in…', icon: <Folder className="w-3.5 h-3.5" />, onClick: onMove }] : []),
     {
       label: 'Apri cartella',
       icon: <FolderOpen className="w-3.5 h-3.5" />,
@@ -329,7 +336,7 @@ export function SortableSessionCard({
     } as KebabMenuItem] : []),
     { separator: true },
     {
-      label: 'Rimuovi dalla cartella',
+      label: 'Rimuovi dalla raccolta',
       icon: <X className="w-3.5 h-3.5" />,
       onClick: onRemove,
     },
@@ -390,7 +397,7 @@ export function SortableSessionCard({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{session.name}</p>
-          <div className="flex items-center gap-2 mt-0.5 text-xs min-w-0 flex-nowrap overflow-hidden" style={{ color: 'var(--text-muted)' }}>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5 text-xs min-w-0" style={{ color: 'var(--text-muted)' }}>
             {ts > 0 && <span className="shrink-0">{formatRelativeTime(ts)}</span>}
             {session.effective_model && (
               <><span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} /><span className="shrink-0">{shortModelName(session.effective_model)}</span></>
@@ -403,6 +410,12 @@ export function SortableSessionCard({
                   Aperto {formatRelativeTime(openedAtMs)}
                 </span>
               </>
+            )}
+            {collectionIndicator && (
+              <span className="inline-flex items-center gap-2 min-w-0 max-w-full">
+                <span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} />
+                {collectionIndicator}
+              </span>
             )}
             {hasRevisionWarnings && (
               <><span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} /><span className="shrink-0" style={{ color: 'var(--warning-text)', fontWeight: 600 }}>Completata con avvisi</span></>

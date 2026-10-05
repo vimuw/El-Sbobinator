@@ -293,7 +293,7 @@ export const EditorBubbleMenu: React.FC<EditorBubbleMenuProps> = ({ editor, isCo
 
         <button
           type="button"
-          onMouseDown={e => { e.preventDefault(); editor.chain().focus().unsetAllMarks().run(); }}
+          onMouseDown={e => { e.preventDefault(); editor.chain().focus().clearDocumentFormatting().run(); }}
           className="editor-bubble-btn"
           title="Rimuovi formattazione"
         >
