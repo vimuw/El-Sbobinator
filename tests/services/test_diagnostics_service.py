@@ -150,6 +150,115 @@ class DiagnosticsTests(unittest.TestCase):
         with patch.object(ds.sys, "_MEIPASS", str(self.base), create=True):
             self.assertEqual(ds.build_info()["version"], "2.0.0")
 
+    def test_macos_build_info_resolves_internal_metadata_link(self):
+        contents = self.base / "El Sbobinator.app" / "Contents"
+        frameworks = contents / "Frameworks"
+        resources = contents / "Resources"
+        frameworks.mkdir(parents=True)
+        resources.mkdir()
+        metadata = resources / "diagnostic_build.json"
+        metadata.write_text('{"version":"2.7.3","commit":"abc","mode":"packaged"}')
+        link = frameworks / metadata.name
+        resolve = Path.resolve
+
+        def resolve_metadata(path, *args, **kwargs):
+            return metadata if path == link else resolve(path, *args, **kwargs)
+
+        with (
+            patch.object(ds.sys, "_MEIPASS", str(frameworks), create=True),
+            patch.object(ds.sys, "frozen", True, create=True),
+            patch.object(ds.sys, "platform", "darwin"),
+            patch.object(Path, "resolve", resolve_metadata),
+        ):
+            self.assertEqual(
+                ds.build_info(),
+                {"version": "2.7.3", "commit": "abc", "mode": "packaged"},
+            )
+
+    def test_macos_build_info_reads_real_pyinstaller_symlink(self):
+        contents = self.base / "El Sbobinator.app" / "Contents"
+        frameworks = contents / "Frameworks"
+        resources = contents / "Resources"
+        frameworks.mkdir(parents=True)
+        resources.mkdir()
+        metadata = resources / "diagnostic_build.json"
+        metadata.write_text('{"version":"2.7.3","commit":"abc"}')
+        link = frameworks / metadata.name
+        try:
+            link.symlink_to(Path("..") / "Resources" / metadata.name)
+        except OSError as exc:
+            self.skipTest(f"Symlinks unavailable: {exc}")
+        self.assertEqual(ds.read_json(link), {})
+        with (
+            patch.object(ds.sys, "_MEIPASS", str(frameworks), create=True),
+            patch.object(ds.sys, "frozen", True, create=True),
+            patch.object(ds.sys, "platform", "darwin"),
+        ):
+            self.assertEqual(ds.build_info()["version"], "2.7.3")
+
+    def test_build_metadata_rejects_link_outside_installation(self):
+        contents = self.base / "El Sbobinator.app" / "Contents"
+        frameworks = contents / "Frameworks"
+        frameworks.mkdir(parents=True)
+        outside = self.base / "outside.json"
+        outside.write_text('{"version":"2.7.3"}')
+        link = frameworks / "diagnostic_build.json"
+        resolve = Path.resolve
+
+        def resolve_metadata(path, *args, **kwargs):
+            return outside if path == link else resolve(path, *args, **kwargs)
+
+        with patch.object(Path, "resolve", resolve_metadata):
+            self.assertEqual(ds.read_build_metadata(frameworks, macos_bundle=True), {})
+
+    def test_build_metadata_rejects_frameworks_directory_outside_bundle(self):
+        contents = self.base / "El Sbobinator.app" / "Contents"
+        frameworks = contents / "Frameworks"
+        contents.mkdir(parents=True)
+        outside = self.base / "outside"
+        outside.mkdir()
+        (outside / "diagnostic_build.json").write_text('{"version":"2.7.3"}')
+        resolve = Path.resolve
+
+        def resolve_frameworks(path, *args, **kwargs):
+            return outside if path == frameworks else resolve(path, *args, **kwargs)
+
+        with patch.object(Path, "resolve", resolve_frameworks):
+            self.assertEqual(ds.read_build_metadata(frameworks, macos_bundle=True), {})
+
+    def test_packaged_build_info_does_not_fallback_to_frontend_version(self):
+        webui = self.base / "webui"
+        (webui / "dist").mkdir(parents=True)
+        (webui / "package.json").write_text('{"version":"2.7.3"}')
+        (webui / "dist" / "desktop-build.json").write_text('{"version":"2.7.3"}')
+        with (
+            patch.object(ds.sys, "_MEIPASS", str(self.base), create=True),
+            patch.object(ds.sys, "frozen", True, create=True),
+        ):
+            self.assertEqual(
+                ds.build_info(), {"version": "unknown", "mode": "packaged"}
+            )
+        with (
+            patch.object(ds.sys, "_MEIPASS", str(self.base), create=True),
+            patch.object(ds.sys, "frozen", False, create=True),
+        ):
+            self.assertEqual(ds.build_info(), {"version": "2.7.3", "mode": "source"})
+
+    def test_build_metadata_rejects_invalid_versions_and_malformed_json(self):
+        metadata = self.base / "diagnostic_build.json"
+        for version in (None, 123, "", " ", "unknown", "broken", {"version": "2.7.3"}):
+            with self.subTest(version=version):
+                metadata.write_text(json.dumps({"version": version}))
+                self.assertEqual(ds.read_build_metadata(self.base), {})
+        for content in ("not json", "[]", '{"version":"2.7.3"' + " " * ds.MAX_BYTES):
+            with self.subTest(content=content[:30]):
+                metadata.write_text(content)
+                self.assertEqual(ds.read_build_metadata(self.base), {})
+        metadata.write_text('{"version":" v2.7.3-rc.1+build.2 "}')
+        self.assertEqual(
+            ds.read_build_metadata(self.base)["version"], "2.7.3-rc.1+build.2"
+        )
+
     def controller(self):
         root = str(self.root)
 
