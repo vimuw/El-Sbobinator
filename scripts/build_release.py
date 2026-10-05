@@ -236,6 +236,13 @@ def pyinstaller_command(target: str, ui: str) -> list[str]:
     command.extend(
         [
             "--add-data",
+            f"{ROOT / 'el_sbobinator' / 'document_formatting.json'}"
+            f"{';' if os.name == 'nt' else ':'}el_sbobinator",
+        ]
+    )
+    command.extend(
+        [
+            "--add-data",
             f"{ROOT / 'webui' / 'dist'};webui/dist"
             if os.name == "nt"
             else f"{ROOT / 'webui' / 'dist'}:webui/dist",

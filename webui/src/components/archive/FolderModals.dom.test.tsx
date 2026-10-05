@@ -19,7 +19,7 @@ describe('FolderModals and AddSessionsToFolderModal', () => {
   };
 
   describe('FolderModal', () => {
-    it('renders create modal with design system classes and saves new folder with default saturated color', () => {
+    it('renders create modal with design system classes and saves an automatic color', () => {
       const handleClose = vi.fn();
       const handleSave = vi.fn();
 
@@ -61,7 +61,7 @@ describe('FolderModals and AddSessionsToFolderModal', () => {
       const submitBtn = screen.getByRole('button', { name: 'Crea raccolta' });
       fireEvent.click(submitBtn);
 
-      expect(handleSave).toHaveBeenCalledWith('Biochimica', DEFAULT_FOLDER_COLOR);
+      expect(handleSave).toHaveBeenCalledWith('Biochimica', '');
     });
 
     it('allows selecting a different saturated color from the palette', () => {
@@ -105,7 +105,7 @@ describe('FolderModals and AddSessionsToFolderModal', () => {
       expect(saveBtn).toBeTruthy();
     });
 
-    it('matches color swatch case-insensitively and falls back to default when empty', () => {
+    it('matches color swatch case-insensitively and preserves automatic color when empty', () => {
       const handleSave = vi.fn();
 
       // Test lowercase hex matching
@@ -131,11 +131,11 @@ describe('FolderModals and AddSessionsToFolderModal', () => {
       );
 
       expect(screen.getByDisplayValue('Neurologia')).toBeTruthy();
-      const defaultSwatch = screen.getByLabelText(`Colore ${DEFAULT_FOLDER_COLOR}`);
+      const defaultSwatch = screen.getByRole('button', { name: 'Automatico' });
       expect(defaultSwatch.getAttribute('aria-pressed')).toBe('true');
 
       fireEvent.click(screen.getByRole('button', { name: 'Salva modifiche' }));
-      expect(handleSave).toHaveBeenCalledWith('Neurologia', DEFAULT_FOLDER_COLOR);
+      expect(handleSave).toHaveBeenCalledWith('Neurologia', '');
     });
 
     it('closes on cancel button and close icon button click', () => {

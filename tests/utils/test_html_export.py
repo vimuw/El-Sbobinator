@@ -2,6 +2,7 @@ import unittest
 
 from el_sbobinator.utils.html_export import (
     build_html_document,
+    build_html_document_from_body,
     normalize_heading_levels,
     normalize_inline_star_lists,
     sanitize_html_basic,
@@ -9,6 +10,46 @@ from el_sbobinator.utils.html_export import (
 
 
 class NormalizeInlineStarListsTests(unittest.TestCase):
+    def test_empty_paragraph_typing_marks_survive_save_sanitization(self):
+        result = sanitize_html_basic(
+            '<p data-editor-empty-marks="[{&quot;type&quot;:&quot;bold&quot;}]" '
+            'onclick="bad()"></p><span data-editor-empty-marks="[]">Testo</span>'
+        )
+        self.assertIn("data-editor-empty-marks", result)
+        self.assertNotIn("onclick", result)
+        self.assertNotIn("<span data-editor-empty-marks", result)
+
+    def test_standalone_export_uses_shared_editor_typography(self):
+        from el_sbobinator.utils.html_export import build_html_document_from_body
+
+        exported = build_html_document_from_body(
+            "Appunti", "<h3>Sezione</h3><p>Testo</p>"
+        )
+        self.assertIn("font-size: 11pt;", exported)
+        self.assertIn(
+            "h3 { font-size: 14pt; line-height: 1.38; margin: 16pt 0 4pt;", exported
+        )
+        self.assertIn("p { margin: 0pt 0; }", exported)
+        self.assertIn("body > p:first-child { margin-top: 0; }", exported)
+        self.assertIn("<h3>Sezione</h3><p>Testo</p>", exported)
+
+    def test_editor_image_layout_survives_sanitization(self):
+        source = '<div data-editor-image="true" data-layout="wrap" data-align="right" data-position="100" data-width="35" style="float:right;width:35%"><img src="https://example.com/image.png" width="222"></div>'
+        result = sanitize_html_basic(source)
+        self.assertIn('data-position="100"', result)
+        self.assertIn('data-layout="wrap"', result)
+        self.assertIn('data-align="right"', result)
+        self.assertIn("float:right", result)
+
+    def test_resized_image_dimensions_survive_sanitization(self):
+        source = '<span data-editor-image="true" data-layout="inline" data-width="35" data-aspect-ratio="2.5" data-offset-x="-25" data-offset-y="-30"><img src="https://example.com/image.png" width="222" height="89" style="width:100%;height:auto;aspect-ratio:2.5;object-fit:fill"></span>'
+        result = sanitize_html_basic(source)
+        self.assertIn('data-aspect-ratio="2.5"', result)
+        self.assertIn('data-offset-x="-25"', result)
+        self.assertIn('data-offset-y="-30"', result)
+        self.assertIn('height="89"', result)
+        self.assertIn("aspect-ratio:2.5", result)
+
     def test_empty_string(self):
         self.assertEqual(normalize_inline_star_lists(""), "")
 
@@ -128,6 +169,22 @@ class NormalizeHeadingLevelsTests(unittest.TestCase):
 
 
 class BuildHtmlDocumentTests(unittest.TestCase):
+    def test_defaults_match_docs_without_overriding_direct_block_styles(self):
+        result = build_html_document_from_body(
+            "Profilo", '<h2 style="font-size:24pt;color:#123abc">Scelto</h2>'
+        )
+        self.assertIn("line-height: 1.38", result)
+        self.assertIn("font-weight: 400; color: #666666", result)
+        self.assertIn("p { margin: 0pt 0; }", result)
+        self.assertIn('style="font-size:24pt;color:#123abc"', result)
+        self.assertNotIn("body > p:first-child,  {", result)
+
+    def test_keeps_native_line_spacing_metadata_on_import(self):
+        result = build_html_document_from_body(
+            "Profilo", '<p data-document-line-spacing="1.15">Testo</p>'
+        )
+        self.assertIn('data-document-line-spacing="1.15"', result)
+
     def test_output_is_valid_html_shell(self):
         result = build_html_document("Test", "# Ciao")
         self.assertTrue(result.strip().startswith("<!DOCTYPE html>"))
@@ -169,6 +226,15 @@ class BuildHtmlDocumentTests(unittest.TestCase):
 
 
 class SanitizeHtmlBasicTests(unittest.TestCase):
+    def test_preserves_ordered_list_start_and_marker_type_on_save(self):
+        raw = '<ol start="4" type="A"><li><p>Prima</p><ol start="2" type="i"><li><p>Figlia</p></li></ol></li><li><p>Seconda</p></li></ol>'
+        cleaned = sanitize_html_basic(raw)
+        self.assertIn('start="4"', cleaned)
+        self.assertIn('type="A"', cleaned)
+        self.assertIn('start="2"', cleaned)
+        self.assertIn('type="i"', cleaned)
+        self.assertEqual(cleaned.count("<li>"), 3)
+
     def test_preserves_data_math_attributes(self):
         raw = '<p><span data-math="E=mc^2" class="math-node-inline">formula</span></p>'
         cleaned = sanitize_html_basic(raw)

@@ -206,7 +206,7 @@ class DesktopStartupServer:
         p{{line-height:1.6}}small{{color:#aaa}}</style><main>
         <h1>{heading}</h1><p>{html.escape(self.failure)}</p>
         <p>{next_steps}</p>
-        <p>Scarica la diagnostica e condividila con chi ti sta aiutando.</p>
+        <p>Scarica la diagnostica per ricevere assistenza.</p>
         <a href="{self.control}report" target="_blank" rel="noopener">Scarica diagnostica</a>
         <p><small>Versione {html.escape(self.version)} · Build {self.build_id}</small></p>
         </main></html>""".encode()

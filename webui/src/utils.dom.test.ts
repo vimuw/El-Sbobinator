@@ -194,7 +194,7 @@ describe('optimizeDataUrlImage (browser / jsdom environment)', () => {
     expect(await optimizeDataUrlImage(gifUrl)).toBe(gifUrl);
   });
 
-  it('converts WebP data URLs to JPEG for Google Docs compatibility', async () => {
+  it('converts WebP data URLs to JPEG for clipboard compatibility', async () => {
     const inputWebp = 'data:image/webp;base64,smallwebp';
     const mockJpegResult = 'data:image/jpeg;base64,convertedjpeg';
     const originalImage = (globalThis as unknown as { Image: unknown }).Image;
@@ -284,9 +284,12 @@ describe('optimizeDataUrlImage (browser / jsdom environment)', () => {
 });
 
 describe('prepareHtmlForClipboard / convertWebpImagesInHtml', () => {
-  it('returns original HTML if no images are present', async () => {
+  it('includes portable paragraph styles even if no images are present', async () => {
     const html = '<p>Test text without images</p>';
-    expect(await convertWebpImagesInHtml(html)).toBe(html);
+    const result = new DOMParser().parseFromString(await convertWebpImagesInHtml(html), 'text/html');
+    expect(result.querySelector('p')?.textContent).toBe('Test text without images');
+    expect(result.querySelector('p')?.style.fontSize).toBe('11pt');
+    expect(result.querySelector('p')?.style.lineHeight).toBe('1.38');
   });
 
   it('resamples images to target pixel width based on data-width', async () => {

@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
-import { FolderPlus, Pencil, Trash2 } from 'lucide-react';
+import { FolderPlus, Pencil, Trash2, FolderInput } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import type { ArchiveFolder, ArchiveSession } from '../../bridge';
-import { DEFAULT_FOLDER_COLOR } from './types';
 import { normalizeSessionPath } from '../../utils';
 import { KebabMenu, type KebabMenuItem } from '../KebabMenu';
+import { FolderCardTitle } from './FolderCardTitle';
+import { getFolderChildren, getFolderColor, getFolderSessionDirs } from '../../archiveFolders';
 
 export interface FolderCardProps {
   folder: ArchiveFolder;
@@ -12,6 +13,8 @@ export interface FolderCardProps {
   onNavigate: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  allFolders?: ArchiveFolder[];
+  onMove?: () => void;
 }
 
 export function FolderCard({
@@ -20,13 +23,17 @@ export function FolderCard({
   onNavigate,
   onEdit,
   onDelete,
+  allFolders = [folder],
+  onMove,
 }: FolderCardProps) {
   const count = useMemo(
-    () => folder.session_dirs.filter(d => sessionsByDir.has(normalizeSessionPath(d))).length,
-    [folder.session_dirs, sessionsByDir],
+    () => getFolderSessionDirs(folder, allFolders).filter(d => sessionsByDir.has(normalizeSessionPath(d))).length,
+    [folder, allFolders, sessionsByDir],
   );
+  const childCount = getFolderChildren(allFolders, folder.id).length;
 
   const kebabItems: KebabMenuItem[] = [
+    ...(onMove ? [{ label: 'Sposta in…', icon: <FolderInput className="w-3.5 h-3.5" />, onClick: onMove }] : []),
     {
       label: 'Modifica',
       icon: <Pencil className="w-3.5 h-3.5" />,
@@ -43,20 +50,17 @@ export function FolderCard({
   return (
     <div
       className="folder-card cursor-pointer group/folder"
-      style={{ '--folder-color': folder.color || DEFAULT_FOLDER_COLOR } as React.CSSProperties}
+      style={{ '--folder-color': getFolderColor(folder, allFolders) } as React.CSSProperties}
       onClick={onNavigate}
     >
-      <div className="flex items-center gap-3 px-4 pt-3 pb-1">
-        <span className="folder-color-dot is-large" />
-        <span className="flex-1 text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-          {folder.name}
-        </span>
-        <div onClick={e => e.stopPropagation()}>
+      <div className="grid grid-cols-[16px_minmax(0,1fr)_36px] gap-x-3 gap-y-2 px-4 py-3">
+        <span className="folder-color-dot is-large mt-0.5" />
+        <FolderCardTitle name={folder.name} onNavigate={onNavigate} />
+        <div className="shrink-0 -my-2" onClick={e => e.stopPropagation()}>
           <KebabMenu items={kebabItems} />
         </div>
-      </div>
-      <div className="px-4 pb-3">
-        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+        <p className="col-start-2 col-span-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+          {childCount > 0 && `${childCount} ${childCount === 1 ? 'raccolta' : 'raccolte'} · `}
           {count === 1 ? '1 lezione' : `${count} lezioni`}
         </p>
       </div>
@@ -70,6 +74,8 @@ export function SortableFolderCard({
   onNavigate,
   onEdit,
   onDelete,
+  allFolders,
+  onMove,
 }: FolderCardProps) {
   const {
     attributes,
@@ -92,6 +98,11 @@ export function SortableFolderCard({
       }}
       {...attributes}
       {...listeners}
+      onKeyDown={event => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === 'Enter') { event.preventDefault(); onNavigate(); }
+        else listeners?.onKeyDown?.(event);
+      }}
     >
       <FolderCard
         folder={folder}
@@ -99,6 +110,8 @@ export function SortableFolderCard({
         onNavigate={onNavigate}
         onEdit={onEdit}
         onDelete={onDelete}
+        allFolders={allFolders}
+        onMove={onMove}
       />
     </div>
   );
@@ -107,27 +120,28 @@ export function SortableFolderCard({
 export function FolderCardOverlay({
   folder,
   sessionsByDir,
+  allFolders = [folder],
 }: {
   folder: ArchiveFolder;
   sessionsByDir: Map<string, ArchiveSession>;
+  allFolders?: ArchiveFolder[];
 }) {
-  const count = folder.session_dirs.filter(d => sessionsByDir.has(normalizeSessionPath(d))).length;
+  const count = getFolderSessionDirs(folder, allFolders).filter(d => sessionsByDir.has(normalizeSessionPath(d))).length;
   return (
     <div
       className="folder-card opacity-95 pointer-events-none cursor-grabbing"
       style={{
-        '--folder-color': folder.color || DEFAULT_FOLDER_COLOR,
+        '--folder-color': getFolderColor(folder, allFolders),
         boxShadow: 'var(--shadow-strong)',
       } as React.CSSProperties}
     >
-      <div className="flex items-center gap-3 px-4 pt-3 pb-1">
-        <span className="folder-color-dot is-large" />
-        <span className="flex-1 text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+      <div className="grid grid-cols-[16px_minmax(0,1fr)_36px] gap-x-3 gap-y-2 px-4 py-3">
+        <span className="folder-color-dot is-large mt-0.5" />
+        <span className="folder-card-title flex-1 min-w-0 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
           {folder.name}
         </span>
-      </div>
-      <div className="px-4 pb-3">
-        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+        <div className="compact-icon-button shrink-0 -my-2" aria-hidden="true" />
+        <p className="col-start-2 col-span-2 text-xs" style={{ color: 'var(--text-muted)' }}>
           {count === 1 ? '1 lezione' : `${count} lezioni`}
         </p>
       </div>

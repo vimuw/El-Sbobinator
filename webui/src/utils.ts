@@ -1,3 +1,6 @@
+import { imageWrapperCss, imageAssetCss, normalizeImageAspectRatio, normalizeImageOffsetY, normalizeImageAlignment, normalizeImageLayout, normalizeImagePosition, normalizeImageWidth } from './imageLayout';
+import { EDITOR_CONTENT_WIDTH_PX, formatPortableHtml } from './documentFormatting';
+
 export const GEMINI_KEY_PATTERN = /^(AIza[0-9A-Za-z_-]{20,}|AQ\.[0-9A-Za-z_-]{20,})$/;
 
 /** Normalise a session directory path so that Windows backslashes, trailing
@@ -280,15 +283,35 @@ export const optimizeDataUrlImage = async (
   });
 };
 
-export const EDITOR_CONTENT_WIDTH_PX = 634;
+export { EDITOR_CONTENT_WIDTH_PX } from './documentFormatting';
 
-export const clampWidthPercent = (value: unknown): number => {
-  const numeric = typeof value === 'number' ? value : Number.parseFloat(String(value ?? '56'));
-  if (!Number.isFinite(numeric)) return 56;
-  return Math.min(100, Math.max(20, Math.round(numeric)));
+export const clampWidthPercent = normalizeImageWidth;
+
+// The copy event must remain synchronous. Reuse an already loaded editor
+// image to resize its bitmap without starting a later clipboard write.
+const resampleClipboardImageSync = (img: HTMLImageElement, targetPx: number, sourceRoot?: HTMLElement) => {
+  const src = img.getAttribute('src');
+  if (!src?.startsWith('data:image/') || src.startsWith('data:image/svg+xml') || src.startsWith('data:image/gif')) return;
+  const displayed = Array.from(sourceRoot?.querySelectorAll('img') ?? [])
+    .find(candidate => candidate.getAttribute('src') === src);
+  if (!displayed?.complete || !displayed.naturalWidth || !displayed.naturalHeight) return;
+  try {
+    const { width, height } = calculateOptimalDimensions(displayed.naturalWidth, displayed.naturalHeight, targetPx, Math.round(targetPx * 3));
+    if (src.startsWith('data:image/jpeg') && displayed.naturalWidth <= targetPx && displayed.naturalHeight <= targetPx * 3 && src.length < 200_000) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, width, height);
+    context.drawImage(displayed, 0, 0, width, height);
+    const resampled = canvas.toDataURL('image/jpeg', 0.92);
+    if (resampled.startsWith('data:image/jpeg')) img.setAttribute('src', resampled);
+  } catch { /* Keep the original asset if the browser cannot read its pixels. */ }
 };
 
-export const prepareHtmlForClipboard = async (html: string): Promise<string> => {
+export const prepareHtmlForClipboardSync = (html: string, sourceRoot?: HTMLElement): string => {
   if (!html || typeof html !== 'string') {
     return html;
   }
@@ -302,64 +325,75 @@ export const prepareHtmlForClipboard = async (html: string): Promise<string> => 
     const doc = parser.parseFromString(`<body>${html}</body>`, 'text/html');
     const images = Array.from(doc.body.querySelectorAll<HTMLImageElement>('img'));
 
-    if (!images.length) {
-      return doc.body.innerHTML;
-    }
+    images.forEach((img) => {
+      const parentContainer = img.closest('[data-editor-image]') as HTMLElement | null;
 
-    await Promise.all(
-      images.map(async (img) => {
-        const parentContainer = img.closest('[data-editor-image]') as HTMLElement | null;
-
-        let widthPercent = 56;
-        if (parentContainer?.hasAttribute('data-width')) {
-          widthPercent = clampWidthPercent(parentContainer.getAttribute('data-width'));
-        } else if (img.hasAttribute('data-width')) {
-          widthPercent = clampWidthPercent(img.getAttribute('data-width'));
-        } else if (img.getAttribute('width')) {
-          const px = Number.parseFloat(img.getAttribute('width') || '');
-          if (Number.isFinite(px) && px > 0) {
-            widthPercent = clampWidthPercent(Math.round((px / EDITOR_CONTENT_WIDTH_PX) * 100));
-          }
-        } else if (img.style.width && img.style.width.endsWith('%')) {
-          widthPercent = clampWidthPercent(img.style.width);
+      let widthPercent = 56;
+      if (parentContainer?.hasAttribute('data-width')) {
+        widthPercent = clampWidthPercent(parentContainer.getAttribute('data-width'));
+      } else if (img.hasAttribute('data-width')) {
+        widthPercent = clampWidthPercent(img.getAttribute('data-width'));
+      } else if (img.getAttribute('width')) {
+        const px = Number.parseFloat(img.getAttribute('width') || '');
+        if (Number.isFinite(px) && px > 0) {
+          widthPercent = clampWidthPercent(Math.round((px / EDITOR_CONTENT_WIDTH_PX) * 100));
         }
+      } else if (img.style.width && img.style.width.endsWith('%')) {
+        widthPercent = clampWidthPercent(img.style.width);
+      }
 
-        const targetPx = Math.round((EDITOR_CONTENT_WIDTH_PX * widthPercent) / 100);
+      const targetPx = Math.round((EDITOR_CONTENT_WIDTH_PX * widthPercent) / 100);
 
-        img.setAttribute('width', String(targetPx));
-        img.setAttribute(
+      resampleClipboardImageSync(img, targetPx, sourceRoot);
+      img.setAttribute('width', String(targetPx));
+      img.setAttribute(
+        'style',
+        `display:block;width:${widthPercent}%;max-width:100%;height:auto;margin:0 auto;padding:0;text-align:center;`
+      );
+      img.setAttribute('align', 'center');
+
+      if (parentContainer) {
+        parentContainer.setAttribute(
           'style',
-          `display:block;width:${widthPercent}%;max-width:100%;height:auto;margin:0 auto;padding:0;text-align:center;`
+          'width:100%;max-width:100%;position:relative;float:none;margin:14px auto;margin-left:auto;margin-right:auto;display:block;clear:both;text-align:center;'
         );
-        img.setAttribute('align', 'center');
-
-        if (parentContainer) {
-          parentContainer.setAttribute(
-            'style',
-            'width:100%;max-width:100%;position:relative;float:none;margin:14px auto;margin-left:auto;margin-right:auto;display:block;clear:both;text-align:center;'
-          );
-          parentContainer.setAttribute('align', 'center');
+        parentContainer.setAttribute('align', 'center');
+        // New editor images carry their layout explicitly. Keep it intact when copying.
+        if (parentContainer.hasAttribute('data-layout')) {
+          const layout = normalizeImageLayout(parentContainer.getAttribute('data-layout'));
+          const align = normalizeImageAlignment(parentContainer.getAttribute('data-align'));
+          const position = normalizeImagePosition(parentContainer.getAttribute('data-position'), align);
+          parentContainer.setAttribute('style', imageWrapperCss(widthPercent, layout, align, position, normalizeImageOffsetY(parentContainer.getAttribute('data-offset-x')), normalizeImageOffsetY(parentContainer.getAttribute('data-offset-y'))));
+          parentContainer.setAttribute('align', align);
+          const ratio = normalizeImageAspectRatio(parentContainer.getAttribute('data-aspect-ratio'));
+          img.setAttribute('style', imageAssetCss(ratio));
+          if (ratio) img.setAttribute('height', String(Math.round(targetPx / ratio)));
+          img.removeAttribute('align');
         }
+      }
+    });
 
-        const src = img.getAttribute('src');
-        if (src && src.startsWith('data:image/')) {
-          const resampled = await optimizeDataUrlImage(src, {
-            format: 'image/jpeg',
-            maxWidth: targetPx,
-            maxHeight: Math.round(targetPx * 3),
-            quality: 0.92,
-          });
-          if (resampled) {
-            img.setAttribute('src', resampled);
-          }
-        }
-      })
-    );
-
+    formatPortableHtml(doc.body);
     return doc.body.innerHTML;
   } catch {
     return html;
   }
+};
+
+export const prepareHtmlForClipboard = async (html: string): Promise<string> => {
+  const prepared = prepareHtmlForClipboardSync(html);
+  if (!prepared || typeof DOMParser === 'undefined') return prepared;
+  const doc = new DOMParser().parseFromString(prepared, 'text/html');
+  await Promise.all(Array.from(doc.body.querySelectorAll('img')).map(async img => {
+    const src = img.getAttribute('src');
+    if (!src?.startsWith('data:image/')) return;
+    const targetPx = Number(img.getAttribute('width')) || EDITOR_CONTENT_WIDTH_PX;
+    const resampled = await optimizeDataUrlImage(src, {
+      format: 'image/jpeg', maxWidth: targetPx, maxHeight: Math.round(targetPx * 3), quality: 0.92,
+    });
+    if (resampled) img.setAttribute('src', resampled);
+  }));
+  return doc.body.innerHTML;
 };
 
 export const convertWebpImagesInHtml = async (html: string): Promise<string> => {

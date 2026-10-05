@@ -21,7 +21,7 @@ const createMockEditor = (overrideProps: Record<string, unknown> = {}) => {
     toggleHeading: vi.fn().mockReturnThis(),
     setLink: vi.fn().mockReturnThis(),
     unsetLink: vi.fn().mockReturnThis(),
-    unsetAllMarks: vi.fn().mockReturnThis(),
+    clearDocumentFormatting: vi.fn().mockReturnThis(),
     run: runMock,
   };
 
@@ -269,7 +269,7 @@ describe('EditorBubbleMenu', () => {
     act(() => {
       fireEvent.mouseDown(screen.getByTitle('Rimuovi formattazione'));
     });
-    expect(chainMock.unsetAllMarks).toHaveBeenCalled();
+    expect(chainMock.clearDocumentFormatting).toHaveBeenCalled();
   });
 
   it('unsubscribes listeners on unmount', () => {

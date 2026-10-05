@@ -2,6 +2,45 @@ import { describe, expect, it } from 'vitest';
 import { normalizePreviewHtmlContent, ALLOWED_STYLE_PROPS, EDITOR_IMAGE_ALLOWED_DATA_ATTRS } from './previewHtml';
 
 describe('normalizePreviewHtmlContent', () => {
+  it('preserves explicit paragraph layout and native spacing when reopening a saved document', () => {
+    const source = '<h2 style="line-height:1.6;margin-top:8pt;margin-bottom:10pt" data-document-line-spacing="1.6" data-extra="x">Titolo</h2><p style="line-height:1.8;margin-top:12pt;margin-bottom:6pt" data-document-line-spacing="1.8">Testo</p><span data-document-line-spacing="2">Inline</span>';
+    const result = new DOMParser().parseFromString(normalizePreviewHtmlContent(source), 'text/html');
+    for (const [selector, spacing, before, after] of [['h2', '1.6', '8pt', '10pt'], ['p', '1.8', '12pt', '6pt']]) {
+      const block = result.querySelector<HTMLElement>(selector)!;
+      expect(block.style.lineHeight).toBe(spacing);
+      expect(block.style.marginTop).toBe(before);
+      expect(block.style.marginBottom).toBe(after);
+      expect(block.getAttribute('data-document-line-spacing')).toBe(spacing);
+    }
+    expect(result.querySelector('h2')!.hasAttribute('data-extra')).toBe(false);
+    expect(result.querySelector('span')!.hasAttribute('data-document-line-spacing')).toBe(false);
+  });
+
+  it('preserves equation source only on its corresponding inline or block node', () => {
+    const source = '<p>Prima <span data-math="x^2" data-extra="x"><span class="katex">Rendered x</span></span> dopo</p><div data-math-block="x+y">Rendered block</div><p data-math="fake" data-math-block="fake">Ordinary text</p>';
+    const result = new DOMParser().parseFromString(normalizePreviewHtmlContent(source), 'text/html');
+    expect(result.querySelector('span[data-math]')!.getAttribute('data-math')).toBe('x^2');
+    expect(result.querySelector('div[data-math-block]')!.getAttribute('data-math-block')).toBe('x+y');
+    expect(result.querySelector('span[data-math]')!.hasAttribute('data-extra')).toBe(false);
+    expect(result.querySelectorAll('[data-math]')).toHaveLength(1);
+    expect(result.querySelectorAll('[data-math-block]')).toHaveLength(1);
+  });
+
+  it('preserves saved empty-line typing marks only on text paragraphs', () => {
+    const html = '<p data-editor-empty-marks="[{&quot;type&quot;:&quot;bold&quot;}]" data-extra="x"></p><span data-editor-empty-marks="[]">Testo</span>';
+    const result = new DOMParser().parseFromString(normalizePreviewHtmlContent(html), 'text/html');
+    expect(result.querySelector('p')!.getAttribute('data-editor-empty-marks')).toBe('[{"type":"bold"}]');
+    expect(result.querySelector('p')!.hasAttribute('data-extra')).toBe(false);
+    expect(result.querySelector('span')!.hasAttribute('data-editor-empty-marks')).toBe(false);
+  });
+  it('preserves a removed list marker without changing its children or following numbering', () => {
+    const html = '<ol><li style="list-style-type:none"><p>Prima</p><ol type="a"><li><p>Figlia</p></li></ol></li><li><p>Seconda</p></li></ol>';
+    const result = new DOMParser().parseFromString(normalizePreviewHtmlContent(html), 'text/html');
+    expect(result.querySelector('ol > li')?.getAttribute('style')).toBe('list-style-type: none');
+    expect(result.querySelector('ol > li > ol')?.getAttribute('type')).toBe('a');
+    expect(result.querySelectorAll('ol > li')).toHaveLength(3);
+  });
+
   it('returns empty string for empty input', () => {
     const result = normalizePreviewHtmlContent('');
     expect(result).toBe('');

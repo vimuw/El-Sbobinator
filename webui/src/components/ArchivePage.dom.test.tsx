@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { ArchivePage } from './ArchivePage';
@@ -53,6 +53,72 @@ function renderArchive(overrides: Partial<{
 }
 
 describe('ArchivePage', () => {
+  const hierarchy: ArchiveFolder[] = [
+    { id: 'year', name: '3° anno', color: '', session_dirs: [] },
+    { id: 'course', name: 'Microbiologia', color: '#4D96FF', parent_id: 'year', session_dirs: ['/sessions/s1'] },
+    { id: 'module', name: 'Modulo 1', color: '', parent_id: 'course', session_dirs: ['/sessions/s2'] },
+  ];
+
+  it('shows only the current collection level and searches lessons in descendants', () => {
+    const sessions = [makeSession('s1', 'Introduzione'), makeSession('s2', 'Batteri')];
+    renderArchive({ folders: hierarchy, sessions });
+    expect(within(screen.getByRole('region', { name: 'Raccolte' })).queryByText('Microbiologia')).toBeNull();
+    fireEvent.click(within(screen.getByRole('region', { name: 'Raccolte' })).getByText('3° anno'));
+    expect(screen.getByText('Introduzione')).toBeTruthy();
+    expect(screen.getByText('Batteri')).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText('Cerca per nome...'), { target: { value: 'Batteri' } });
+    expect(screen.queryByText('Introduzione')).toBeNull();
+    expect(screen.getByText('Batteri')).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('region', { name: 'Raccolte' })).getByText('Microbiologia'));
+    expect(screen.getByRole('heading', { name: 'Microbiologia' })).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Torna al livello superiore'));
+    expect(screen.getByRole('heading', { name: '3° anno' })).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('navigation')).getByRole('button', { name: 'Archivio' }));
+    expect(screen.getByRole('heading', { name: 'Archivio Sbobine' })).toBeTruthy();
+  });
+
+  it('creates a nested collection with automatic color without altering existing membership', () => {
+    const onFoldersChange = vi.fn();
+    renderArchive({ folders: hierarchy, onFoldersChange });
+    fireEvent.click(within(screen.getByRole('region', { name: 'Raccolte' })).getByText('3° anno'));
+    fireEvent.click(screen.getByRole('button', { name: 'Nuova raccolta' }));
+    fireEvent.change(screen.getByLabelText('NOME RACCOLTA'), { target: { value: '1° semestre' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Crea raccolta' }));
+    const updated = onFoldersChange.mock.calls[0][0] as ArchiveFolder[];
+    expect(updated.slice(0, 3)).toEqual(hierarchy);
+    expect(updated[3]).toMatchObject({ name: '1° semestre', parent_id: 'year', color: '', session_dirs: [] });
+  });
+
+  it('moves selected nested lessons to the parent and clears selection only on confirmation', () => {
+    const onFoldersChange = vi.fn();
+    renderArchive({ folders: hierarchy, sessions: [makeSession('s1'), makeSession('s2')], onFoldersChange });
+    fireEvent.click(within(screen.getByRole('region', { name: 'Raccolte' })).getByText('3° anno'));
+    fireEvent.click(screen.getByLabelText('Seleziona Lezione s2'));
+    fireEvent.click(screen.getByTitle('Sposta le sbobine selezionate in una raccolta'));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Annulla' }));
+    expect(screen.getByLabelText('Deseleziona Lezione s2')).toBeTruthy();
+    fireEvent.click(screen.getByTitle('Sposta le sbobine selezionate in una raccolta'));
+    fireEvent.click(screen.getByRole('button', { name: 'Sposta qui' }));
+    const updated = onFoldersChange.mock.calls[0][0] as ArchiveFolder[];
+    expect(updated[0].session_dirs).toEqual(['/sessions/s2']);
+    expect(updated[2].session_dirs).toEqual([]);
+    expect(screen.queryByLabelText('Deseleziona Lezione s2')).toBeNull();
+  });
+
+  it('reparents child collections and keeps lessons when a collection is deleted', () => {
+    const onFoldersChange = vi.fn();
+    renderArchive({ folders: hierarchy, onFoldersChange });
+    fireEvent.click(within(screen.getByRole('region', { name: 'Raccolte' })).getByText('3° anno'));
+    fireEvent.click(within(screen.getByRole('region', { name: 'Raccolte' })).getByText('Microbiologia'));
+    fireEvent.click(screen.getAllByLabelText('Altre opzioni')[0]);
+    fireEvent.click(screen.getByText('Elimina raccolta'));
+    expect(screen.getByText(/Le sottoraccolte verranno spostate/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Elimina raccolta' }));
+    const updated = onFoldersChange.mock.calls[0][0] as ArchiveFolder[];
+    expect(updated.find(folder => folder.id === 'year')?.session_dirs).toEqual(['/sessions/s1']);
+    expect(updated.find(folder => folder.id === 'module')).toMatchObject({ parent_id: 'year', session_dirs: ['/sessions/s2'] });
+  });
+
   it('shows the folder indicator on archive session cards', () => {
     const folder: ArchiveFolder = {
       id: 'f1',
@@ -161,15 +227,17 @@ describe('ArchivePage', () => {
     fireEvent.click(selectButtons[1]);
 
     // Action bar is visible with 2 selected
-    expect(screen.getByText('Aggiungi')).toBeTruthy();
-    expect(screen.getByTitle('Aggiungi le sbobine selezionate a una cartella')).toBeTruthy();
+    expect(screen.getByText('Sposta in…')).toBeTruthy();
+    expect(screen.getByTitle('Sposta le sbobine selezionate in una raccolta')).toBeTruthy();
 
     // Click Aggiungi
-    fireEvent.click(screen.getByTitle('Aggiungi le sbobine selezionate a una cartella'));
+    fireEvent.click(screen.getByTitle('Sposta le sbobine selezionate in una raccolta'));
 
     // Click the folder in the dropdown
     const folderMenuItems = screen.getAllByText('Corso Biologia');
     fireEvent.click(folderMenuItems[folderMenuItems.length - 1]);
+    expect(onFoldersChange).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Sposta qui' }));
 
     expect(onFoldersChange).toHaveBeenCalled();
     const updatedFolders = onFoldersChange.mock.calls[0][0] as ArchiveFolder[];

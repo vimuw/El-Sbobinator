@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { useArchiveSync } from './useArchiveSync';
-import type { PywebviewApi, ArchiveSession } from '../bridge';
+import type { PywebviewApi, ArchiveSession, ArchiveFolder } from '../bridge';
 import type { FileItem } from '../appState';
 
 describe('useArchiveSync', () => {
@@ -27,6 +27,30 @@ describe('useArchiveSync', () => {
     vi.clearAllMocks();
     delete window.pywebview;
     localStorage.clear();
+  });
+
+  it('saves consecutive hierarchy edits in order and reports failed persistence', async () => {
+    let release: (value: { ok: boolean }) => void = () => {};
+    const firstSave = new Promise<{ ok: boolean }>(resolve => { release = resolve; });
+    const save = vi.fn().mockReturnValueOnce(firstSave).mockResolvedValueOnce({ ok: false, error: 'Disk full' }).mockResolvedValue({ ok: true });
+    window.pywebview = { api: { save_archive_folders: save } as unknown as PywebviewApi };
+    const { result } = renderHook(() => useArchiveSync({ files: [], dispatch, activePage: 'queue', setActivePage, appState: 'idle', apiReady: false, appendConsole, addNotification, handleRetryFailedRevisionBlocks }));
+    const first: ArchiveFolder[] = [{ id: 'year', name: 'Anno', color: '', session_dirs: [] }];
+    const second: ArchiveFolder[] = [...first, { id: 'course', name: 'Corso', color: '', parent_id: 'year', session_dirs: [mockSession.session_dir] }];
+    let save1!: Promise<void>; let save2!: Promise<void>;
+    await act(async () => {
+      save1 = result.current.handleFoldersChange(first);
+      save2 = result.current.handleFoldersChange(second);
+      await Promise.resolve();
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(result.current.folders).toEqual(second);
+    await act(async () => { release({ ok: true }); await Promise.all([save1, save2]); });
+    expect(save.mock.calls.map(call => call[0])).toEqual([first, second]);
+    expect(addNotification).toHaveBeenCalledWith('Raccolte non salvate', 'Disk full', 'error', 'system');
+    await act(async () => { await result.current.handleFoldersChange(second); });
+    expect(save).toHaveBeenCalledTimes(3);
+    expect(result.current.completedSessionFolderMap.get(mockSession.session_dir)).toMatchObject({ displayName: 'Anno › Corso', fullPath: 'Anno › Corso', color: '#94A3B8' });
   });
 
   it('loads sessions when API is ready', async () => {

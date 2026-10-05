@@ -2,16 +2,9 @@ import { reportClientError } from '../diagnostics';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  ArrowRight, Clock, Eye, FileSearch, FileText,
+  ArrowRight, Eye, FileSearch, FileText,
   Loader2, Pencil, RefreshCw, Search, Upload, X,
 } from 'lucide-react';
-import {
-  DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors,
-  type DragEndEvent, type DragStartEvent,
-} from '@dnd-kit/core';
-import {
-  SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates,
-} from '@dnd-kit/sortable';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { loadAllEditorSessions } from '../editorSessions';
 import { formatRelativeTime, normalizeSessionPath, shortModelName } from '../utils';
@@ -20,7 +13,6 @@ import { ShareExportModal } from './modals/ShareExportModal';
 
 import {
   type ArchivePageProps,
-  DEFAULT_FOLDER_COLOR,
   type DeleteFolderConfirmState,
   type DeleteMultipleSessionsConfirmState,
   type FolderModalState,
@@ -30,7 +22,9 @@ import {
   type SortOption,
 } from './archive/types';
 import { SortMenu } from './archive/SortMenu';
-import { FolderCardOverlay, NewFolderCard, SortableFolderCard } from './archive/FolderCard';
+import { FolderCollectionGrid } from './archive/FolderCollectionGrid';
+import { MoveToFolderModal } from './archive/MoveToFolderModal';
+import { deleteFolder, getFolderChildren, getFolderParentId, moveFolder, moveSessionsToFolder } from '../archiveFolders';
 import { DraggableSessionCard } from './archive/SessionCard';
 import { FolderDetailView } from './archive/FolderDetailView';
 import { DeleteFolderConfirmModal, DeleteMultipleSessionsConfirmModal, FolderModal } from './archive/FolderModals';
@@ -67,26 +61,7 @@ export function ArchivePage({
   const [deleteMultipleConfirm, setDeleteMultipleConfirm] = useState<DeleteMultipleSessionsConfirmState | null>(null);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeDragFolderId, setActiveDragFolderId] = useState<string | null>(null);
-
-  const folderDndSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  const handleFolderDragStart = useCallback((event: DragStartEvent) => {
-    setActiveDragFolderId(String(event.active.id));
-  }, []);
-
-  const handleFolderDragEnd = useCallback((event: DragEndEvent) => {
-    setActiveDragFolderId(null);
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = folders.findIndex(f => f.id === String(active.id));
-    const newIndex = folders.findIndex(f => f.id === String(over.id));
-    if (oldIndex === -1 || newIndex === -1) return;
-    onFoldersChange(arrayMove(folders, oldIndex, newIndex));
-  }, [folders, onFoldersChange]);
+  const [moveTarget, setMoveTarget] = useState<{ folderId?: string; dirs?: string[]; parentId: string | null; onComplete?: () => void } | null>(null);
 
   const [sharingSession, setSharingSession] = useState<ArchiveSession | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -237,7 +212,7 @@ export function ArchivePage({
 
   const handleFolderSave = (name: string, color?: string) => {
     if (!folderModal) return;
-    const finalColor = color || DEFAULT_FOLDER_COLOR;
+    const finalColor = color ?? '';
     if (folderModal.type === 'create') {
       const pending = folderModal.pendingSessionDirs ?? [];
       const pendingNorm = new Set(pending.map(d => normalizeSessionPath(d)));
@@ -245,6 +220,7 @@ export function ArchivePage({
         id: crypto.randomUUID(),
         name: name.trim(),
         color: finalColor,
+        parent_id: folderModal.parentId ?? null,
         session_dirs: pending,
       };
       const updated = folders.map(f => ({
@@ -263,9 +239,9 @@ export function ArchivePage({
 
   const handleFolderDelete = () => {
     if (!deleteFolderConfirm) return;
-    onFoldersChange(folders.filter(f => f.id !== deleteFolderConfirm.folder.id));
+    onFoldersChange(deleteFolder(folders, deleteFolderConfirm.folder.id));
     if (selectedFolderId === deleteFolderConfirm.folder.id) {
-      setSelectedFolderId(null);
+      setSelectedFolderId(getFolderParentId(deleteFolderConfirm.folder, folders));
     }
     setDeleteFolderConfirm(null);
   };
@@ -280,9 +256,18 @@ export function ArchivePage({
   const renderModals = () => (
     <>
       <AnimatePresence>
+        {moveTarget && <MoveToFolderModal folders={folders} movingFolderId={moveTarget.folderId} initialParentId={moveTarget.parentId}
+          onClose={() => setMoveTarget(null)} onConfirm={(targetId, created) => {
+            const updated = [...folders, ...created];
+            onFoldersChange(moveTarget.folderId ? moveFolder(updated, moveTarget.folderId, targetId) : moveSessionsToFolder(updated, moveTarget.dirs ?? [], targetId));
+            clearSelection(); moveTarget.onComplete?.(); setMoveTarget(null);
+          }} />}
+      </AnimatePresence>
+      <AnimatePresence>
         {folderModal && (
           <FolderModal
             state={folderModal}
+            folders={folders}
             onClose={() => setFolderModal(null)}
             onSave={handleFolderSave}
           />
@@ -292,6 +277,7 @@ export function ArchivePage({
         {deleteFolderConfirm && (
           <DeleteFolderConfirmModal
             folder={deleteFolderConfirm.folder}
+            childCount={getFolderChildren(folders, deleteFolderConfirm.folder.id).length}
             onClose={() => setDeleteFolderConfirm(null)}
             onConfirm={handleFolderDelete}
           />
@@ -319,14 +305,22 @@ export function ArchivePage({
     return (
       <>
         <FolderDetailView
+          key={selectedFolder.id}
           folder={selectedFolder}
           allFolders={folders}
           sessionsByDir={sessionsByDir}
           editorSessionsMap={editorSessionsMap}
-          onBack={() => setSelectedFolderId(null)}
+          onBack={() => setSelectedFolderId(getFolderParentId(selectedFolder, folders))}
+          onNavigate={setSelectedFolderId}
+          collectionGrid={<FolderCollectionGrid folders={folders} parentId={selectedFolder.id} sessionsByDir={sessionsByDir}
+            onNavigate={setSelectedFolderId} onCreate={() => setFolderModal({ type: 'create', parentId: selectedFolder.id })}
+            onEdit={folder => setFolderModal({ type: 'edit', folder })} onDelete={folder => setDeleteFolderConfirm({ folder })}
+            onMove={folder => setMoveTarget({ folderId: folder.id, parentId: getFolderParentId(folder, folders) })} onFoldersChange={onFoldersChange} />}
+          onMove={() => setMoveTarget({ folderId: selectedFolder.id, parentId: getFolderParentId(selectedFolder, folders) })}
+          onMoveSessions={(dirs, onComplete) => setMoveTarget({ dirs, parentId: selectedFolder.id, onComplete })}
           onEdit={() => setFolderModal({ type: 'edit', folder: selectedFolder })}
           onDelete={() => setDeleteFolderConfirm({ folder: selectedFolder })}
-          onRemoveSession={dir => removeFromFolder(dir, selectedFolder.id)}
+          onRemoveSession={dir => bulkRemoveFromFolders([dir])}
           onRemoveMultipleSessions={dirs => bulkRemoveFromFolders(dirs)}
           onAddSession={dir => assignToFolder(dir, selectedFolder.id)}
           onAddMultipleSessions={dirs => bulkAssignToFolder(selectedFolder.id, dirs)}
@@ -334,7 +328,7 @@ export function ArchivePage({
             f.id === selectedFolder.id ? { ...f, session_dirs: dirs } : f,
           ))}
           onAssignMultipleToFolder={(dirs, fId) => bulkAssignToFolder(fId, dirs)}
-          onNewFolder={() => setFolderModal({ type: 'create' })}
+          onNewFolder={() => setFolderModal({ type: 'create', parentId: selectedFolder.id })}
           onPreview={onPreview}
           onOpenFile={onOpenFile}
           onDeleteSession={onDeleteSession}
@@ -359,44 +353,17 @@ export function ArchivePage({
         </div>
       </div>
 
-      {/* Folders grid — always visible, first card is "new folder" */}
-      <DndContext
-        sensors={folderDndSensors}
-        onDragStart={handleFolderDragStart}
-        onDragEnd={handleFolderDragEnd}
-      >
-        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-          <NewFolderCard onClick={() => setFolderModal({ type: 'create' })} />
-          <SortableContext items={folders.map(f => f.id)} strategy={rectSortingStrategy}>
-            {folders.map(folder => (
-              <SortableFolderCard
-                key={folder.id}
-                folder={folder}
-                sessionsByDir={sessionsByDir}
-                onNavigate={() => setSelectedFolderId(folder.id)}
-                onEdit={() => setFolderModal({ type: 'edit', folder })}
-                onDelete={() => setDeleteFolderConfirm({ folder })}
-              />
-            ))}
-          </SortableContext>
-        </div>
-        <DragOverlay>
-          {activeDragFolderId ? (() => {
-            const f = folders.find(x => x.id === activeDragFolderId);
-            return f ? <FolderCardOverlay folder={f} sessionsByDir={sessionsByDir} /> : null;
-          })() : null}
-        </DragOverlay>
-      </DndContext>
+      <FolderCollectionGrid folders={folders} parentId={null} sessionsByDir={sessionsByDir}
+        onNavigate={setSelectedFolderId} onCreate={() => setFolderModal({ type: 'create' })}
+        onEdit={folder => setFolderModal({ type: 'edit', folder })} onDelete={folder => setDeleteFolderConfirm({ folder })}
+        onMove={folder => setMoveTarget({ folderId: folder.id, parentId: getFolderParentId(folder, folders) })} onFoldersChange={onFoldersChange} />
 
       {/* Mini Section: Ultima sbobina aperta / modificata */}
       {lastOpenedOrModifiedSessionData && (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <Clock className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
-            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-              Ultima sbobina aperta / modificata
-            </span>
-          </div>
+        <div className="flex flex-col gap-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+            Ultima sbobina aperta / modificata
+          </h3>
           <div
             onClick={() => onPreview(
               lastOpenedOrModifiedSessionData.session.html_path,
@@ -415,15 +382,10 @@ export function ArchivePage({
                 <FileText className="w-5 h-5" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-                    {lastOpenedOrModifiedSessionData.session.name}
-                  </p>
-                  {lastOpenedOrModifiedSessionData.folder && (
-                    <FolderIndicatorChip folder={lastOpenedOrModifiedSessionData.folder} />
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                <p className="text-sm font-semibold truncate tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                  {lastOpenedOrModifiedSessionData.session.name}
+                </p>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5 text-xs min-w-0" style={{ color: 'var(--text-muted)' }}>
                   {lastOpenedOrModifiedSessionData.isOpened ? (
                     <span className="inline-flex items-center gap-1 shrink-0" title={`Ultima apertura: ${new Date(lastOpenedOrModifiedSessionData.activityTimeMs).toLocaleString('it-IT')}`}>
                       <Eye className="w-3 h-3" style={{ opacity: 0.7 }} />
@@ -437,16 +399,22 @@ export function ArchivePage({
                   )}
                   {lastOpenedOrModifiedSessionData.session.effective_model && (
                     <>
-                      <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
-                      <span>{shortModelName(lastOpenedOrModifiedSessionData.session.effective_model)}</span>
+                      <span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} />
+                      <span className="shrink-0">{shortModelName(lastOpenedOrModifiedSessionData.session.effective_model)}</span>
                     </>
+                  )}
+                  {lastOpenedOrModifiedSessionData.folder && (
+                    <span className="inline-flex items-center gap-2 min-w-0 max-w-full">
+                      <span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} />
+                      <FolderIndicatorChip folder={lastOpenedOrModifiedSessionData.folder} folders={folders} />
+                    </span>
                   )}
                 </div>
               </div>
             </div>
             <button
               type="button"
-              className="recent-session-action cursor-pointer"
+              className="archive-action-button is-accent recent-session-action"
             >
               <span>Riprendi</span>
               <ArrowRight className="w-3.5 h-3.5 recent-session-arrow" />
@@ -621,6 +589,7 @@ export function ArchivePage({
                     editorSessionsMap={editorSessionsMap}
                     selected={selectedSessionDirs.has(session.session_dir)}
                     onToggleSelect={() => toggleSelectSession(session.session_dir)}
+                    onMove={() => setMoveTarget({ dirs: [session.session_dir], parentId: sessionFolderMap.get(normalizeSessionPath(session.session_dir))?.id ?? null })}
                     onAssignToFolder={fId => assignToFolder(session.session_dir, fId)}
                     onRemoveFromFolder={() => {
                       const f = sessionFolderMap.get(normalizeSessionPath(session.session_dir));
@@ -648,6 +617,7 @@ export function ArchivePage({
             folders={folders}
             onSelectAll={selectAllSessions}
             onDeselectAll={handleDeselectOrRestore}
+            onMove={() => setMoveTarget({ dirs: Array.from(selectedSessionDirs), parentId: null })}
             onAssignToFolder={fId => bulkAssignToFolder(fId)}
             onNewFolder={() => setFolderModal({ type: 'create', pendingSessionDirs: Array.from(selectedSessionDirs) })}
             hasAssignedFolder={Array.from(selectedSessionDirs).some(d => sessionFolderMap.has(normalizeSessionPath(d)))}

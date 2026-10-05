@@ -29,7 +29,7 @@ export interface ArchivePageProps {
 }
 
 export type FolderModalState =
-  | { type: 'create'; pendingSessionDirs?: string[] }
+  | { type: 'create'; parentId?: string | null; pendingSessionDirs?: string[] }
   | { type: 'edit'; folder: ArchiveFolder };
 
 export type DeleteFolderConfirmState = { folder: ArchiveFolder };

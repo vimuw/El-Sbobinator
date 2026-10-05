@@ -150,7 +150,7 @@ describe('EditorFullPage autosave', () => {
     const setThemeMode = vi.fn();
     render(<EditorFullPage {...baseProps} themeMode="dark" setThemeMode={setThemeMode} />);
 
-    const copyBtn = screen.getByTitle('Copia per Google Docs');
+    const copyBtn = screen.getByTitle('Copia formattata');
     const openBtn = screen.getByTitle('Apri file HTML');
     const themeBtn = screen.getByTitle('Tema chiaro');
 
@@ -172,37 +172,42 @@ describe('EditorFullPage autosave', () => {
     fireEvent.click(themeBtn);
     expect(setThemeMode).toHaveBeenCalled();
   });
-  it('copies the edited document as formatted HTML and plain text for Google Docs', async () => {
+  it('copies the edited document as formatted HTML and plain text', async () => {
     const write = vi.fn().mockResolvedValue(undefined);
     const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
     const clipboardItemDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'ClipboardItem');
+    const execDescriptor = Object.getOwnPropertyDescriptor(document, 'execCommand');
+    const formats: Record<string, string> = {};
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: vi.fn(() => {
+      const event = new Event('copy', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'clipboardData', { value: { setData: (type: string, value: string) => { formats[type] = value; } } });
+      document.activeElement!.dispatchEvent(event);
+      return true;
+    }) });
     class TestClipboardItem {
       constructor(public data: Record<string, Blob>) {}
     }
-    const readBlob = (blob: Blob) => new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(reader.error);
-      reader.readAsText(blob);
-    });
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write } });
     Object.defineProperty(globalThis, 'ClipboardItem', { configurable: true, value: TestClipboardItem });
     try {
       editorMockState.html = '<h2>Appunti corretti</h2><p>Testo <strong>importante</strong></p>';
       render(<EditorFullPage {...baseProps} />);
       await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
-      fireEvent.click(screen.getByTitle('Copia per Google Docs'));
-      await waitFor(() => expect(write).toHaveBeenCalledOnce());
-      const [item] = write.mock.calls[0][0] as TestClipboardItem[];
-      expect(await readBlob(item.data['text/html'])).toContain('<strong>importante</strong>');
-      expect(await readBlob(item.data['text/html'])).toContain('Appunti corretti');
-      expect(await readBlob(item.data['text/plain'])).toContain('Testo importante');
-      expect(item.data['text/html'].type).toBe('text/html');
+      fireEvent.click(screen.getByTitle('Copia formattata'));
+      await waitFor(() => expect(formats['text/html']).toBeTruthy());
+      const copied = new DOMParser().parseFromString(formats['text/html'], 'text/html');
+      expect(copied.querySelector('strong')?.textContent).toBe('importante');
+      expect(copied.querySelector('h2')?.style.fontSize).toBe('16pt');
+      expect(formats['text/plain']).toBe('Appunti corretti\nTesto importante\n');
+      expect(formats['application/x-vnd.google-docs-document-slice-clip+wrapped']).toBeTruthy();
+      expect(write).not.toHaveBeenCalled();
     } finally {
       if (clipboardDescriptor) Object.defineProperty(navigator, 'clipboard', clipboardDescriptor);
       else Reflect.deleteProperty(navigator, 'clipboard');
       if (clipboardItemDescriptor) Object.defineProperty(globalThis, 'ClipboardItem', clipboardItemDescriptor);
       else Reflect.deleteProperty(globalThis, 'ClipboardItem');
+      if (execDescriptor) Object.defineProperty(document, 'execCommand', execDescriptor);
+      else Reflect.deleteProperty(document, 'execCommand');
     }
   });
 

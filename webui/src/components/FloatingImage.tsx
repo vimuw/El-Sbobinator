@@ -4,46 +4,30 @@ import React, { useEffect, useRef } from 'react';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react';
 import { NodeSelection, Plugin, PluginKey } from '@tiptap/pm/state';
+import { closeHistory } from '@tiptap/pm/history';
 import { optimizeDataUrlImage } from '../utils';
+import { imageWrapperStyle, imageWrapperCss, imageAssetCss, normalizeImageAspectRatio, normalizeImageAlignment, normalizeImageLayout, normalizeImagePosition, normalizeImageOffsetY, normalizeImageWidth } from '../imageLayout';
+import { createImageWrapPlugin } from '../imageWrap';
+import { startImageDrag } from '../imageDrag';
+import { startImageResize, type ImageResizeHandle } from '../imageResize';
+import './FloatingImage.css';
+import { EDITOR_CONTENT_WIDTH_PX } from '../documentFormatting';
 
-export type ImageAlignment = 'center';
+export type { ImageAlignment } from '../imageLayout';
 
-export const EDITOR_CONTENT_WIDTH_PX = 634;
+export { EDITOR_CONTENT_WIDTH_PX } from '../documentFormatting';
 
-export const clampWidth = (value: unknown) => {
-  const numeric = typeof value === 'number' ? value : Number.parseFloat(String(value ?? '56'));
-  if (!Number.isFinite(numeric)) return 56;
-  return Math.min(100, Math.max(20, Math.round(numeric)));
-};
+export const clampWidth = normalizeImageWidth;
 
 export const calculateImagePixelWidth = (widthPercent: unknown) =>
   Math.round((EDITOR_CONTENT_WIDTH_PX * clampWidth(widthPercent)) / 100);
-
-const buildWrapperReactStyle = (width: number): React.CSSProperties => ({
-  width: `${width}%`,
-  maxWidth: '100%',
-  position: 'relative',
-  userSelect: 'none',
-  margin: '14px auto',
-  marginLeft: 'auto',
-  marginRight: 'auto',
-  display: 'block',
-  clear: 'both',
-  textAlign: 'center',
-});
-
-const buildWrapperStyle = (_width: number) =>
-  'width:100%;max-width:100%;position:relative;float:none;margin:14px auto;margin-left:auto;margin-right:auto;display:block;clear:both;text-align:center;';
-
-const buildImageStyle = (width: number) =>
-  `display:block;width:${width}%;max-width:100%;height:auto;margin:0 auto;margin-left:auto;margin-right:auto;padding:0;text-align:center;`;
 
 const extractImageAttrs = (element: HTMLElement) => {
   const img = element.tagName.toLowerCase() === 'img' ? (element as HTMLImageElement) : element.querySelector('img');
   if (!img) {
     return false;
   }
-  const figcaption = element.querySelector('figcaption');
+  const figcaption = element.querySelector('figcaption, .editor-image-caption');
 
   let widthVal = element.getAttribute('data-width') || img.getAttribute('data-width') || '';
   if (!widthVal) {
@@ -62,19 +46,42 @@ const extractImageAttrs = (element: HTMLElement) => {
     }
   }
 
+  const layout = normalizeImageLayout(element.getAttribute('data-layout') || (element.style.float === 'left' || element.style.float === 'right' ? 'wrap' : 'inline'));
+  const align = normalizeImageAlignment(element.getAttribute('data-align') || element.getAttribute('align') || element.style.float || img.getAttribute('align'));
   return {
     src: img.getAttribute('src') || '',
     alt: img.getAttribute('alt') || '',
     title: img.getAttribute('title') || '',
     width: clampWidth(widthVal || '56'),
-    align: 'center',
+    align,
+    layout,
+    position: normalizeImagePosition(element.getAttribute('data-position'), align),
+    offsetY: normalizeImageOffsetY(element.getAttribute('data-offset-y')),
+    offsetX: normalizeImageOffsetY(element.getAttribute('data-offset-x')),
+    aspectRatio: normalizeImageAspectRatio(element.getAttribute('data-aspect-ratio')),
     caption: figcaption ? figcaption.textContent || '' : element.getAttribute('data-caption') || '',
   };
 };
 
+function ImageLayoutIcon({ wrap = false }: { wrap?: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
+      <path d="M1 2h14M1 14h14" />
+      {wrap ? <><rect x="5.5" y="5" width="5" height="6" /><path d="M1 5h3M1 8h3M1 11h3M12 5h3M12 8h3M12 11h3" /></> : <><rect x="1.5" y="5" width="6" height="6" /><path d="M9 11h6" /></>}
+    </svg>
+  );
+}
+
 function FloatingImageView({ node, updateAttributes, selected, getPos, editor }: NodeViewProps) {
   const anchorRef = useRef<HTMLSpanElement | null>(null);
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => { resizeCleanupRef.current?.(); dragCleanupRef.current?.(); }, []);
   const width = clampWidth(node.attrs.width);
+  const layout = normalizeImageLayout(node.attrs.layout);
+  const align = normalizeImageAlignment(node.attrs.align);
+  const position = normalizeImagePosition(node.attrs.position, align);
+  const aspectRatio = normalizeImageAspectRatio(node.attrs.aspectRatio);
   const caption: string = String(node.attrs.caption || '');
   const src = String(node.attrs.src || '');
 
@@ -98,123 +105,117 @@ function FloatingImageView({ node, updateAttributes, selected, getPos, editor }:
   }, [src, updateAttributes]);
 
   const selectImageNode = (e: React.SyntheticEvent) => {
-    if ((e.target as HTMLElement)?.closest('.gdocs-handle')) return;
+    if ((e.target as HTMLElement)?.closest('.editor-image-resize-handle, .editor-image-toolbar')) return;
     if (typeof getPos === 'function') {
       const pos = getPos();
       if (typeof pos === 'number' && pos >= 0) {
         const { selection } = editor?.state || {};
         if (!(selection instanceof NodeSelection && selection.from === pos)) {
-          editor?.chain().focus().setNodeSelection(pos).run();
+          editor.view.dispatch(editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, pos)));
+          editor.view.focus();
         }
       }
     }
   };
 
-  // Resize handler for 8 handles
-  const startResizeHandle = (
-    event: React.PointerEvent<HTMLDivElement>,
-    handle: 'tl' | 'tc' | 'tr' | 'ml' | 'mr' | 'bl' | 'bc' | 'br'
-  ) => {
+  const handlePointerDown = (event: React.PointerEvent) => {
+    if ((event.target as HTMLElement).closest('.editor-image-resize-handle, .editor-image-toolbar')) return;
+    selectImageNode(event);
+    const pos = getPos();
+    if (layout === 'wrap' && event.button === 0 && typeof pos === 'number' && anchorRef.current) {
+      event.preventDefault();
+      event.stopPropagation();
+      dragCleanupRef.current?.();
+      dragCleanupRef.current = startImageDrag(editor.view, pos, anchorRef.current, event.nativeEvent);
+    }
+  };
+
+  const changeImage = (attrs: Record<string, unknown>, separateUndo = false) => {
+    const pos = getPos();
+    if (typeof pos !== 'number') return;
+    const current = editor.state.doc.nodeAt(pos);
+    if (!current) return;
+    const tr = separateUndo ? closeHistory(editor.state.tr) : editor.state.tr;
+    tr.setNodeMarkup(pos, undefined, { ...current.attrs, ...attrs });
+    tr.setSelection(NodeSelection.create(tr.doc, pos));
+    editor.view.dispatch(tr);
+  };
+
+  const startResizeHandle = (event: React.PointerEvent<HTMLDivElement>, handle: ImageResizeHandle) => {
+    if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
-
-    const handleEl = event.currentTarget;
-    const pointerId = event.pointerId;
-    handleEl.setPointerCapture?.(pointerId);
-
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const startWidth = width;
-    const editorRoot = anchorRef.current?.closest('.tiptap-editor') as HTMLElement | null;
-
-    let contentWidth = 320;
-    if (editorRoot) {
-      const style = window.getComputedStyle(editorRoot);
-      const paddingLeft = Number.parseFloat(style.paddingLeft) || 0;
-      const paddingRight = Number.parseFloat(style.paddingRight) || 0;
-      contentWidth = Math.max(editorRoot.clientWidth - paddingLeft - paddingRight, 320);
-    }
-
-    const imgEl = anchorRef.current?.querySelector('img');
-    const aspectRatio = imgEl && imgEl.clientHeight > 0 ? imgEl.clientWidth / imgEl.clientHeight : 16 / 9;
-
-    const move = (moveEvent: PointerEvent) => {
-      let deltaPx = 0;
-      const dx = moveEvent.clientX - startX;
-      const dy = moveEvent.clientY - startY;
-
-      if (handle === 'mr' || handle === 'tr' || handle === 'br') {
-        deltaPx = 2 * dx;
-      } else if (handle === 'ml' || handle === 'tl' || handle === 'bl') {
-        deltaPx = -2 * dx;
-      } else if (handle === 'bc') {
-        deltaPx = 2 * dy * aspectRatio;
-      } else if (handle === 'tc') {
-        deltaPx = -2 * dy * aspectRatio;
-      }
-
-      const deltaPercent = (deltaPx / contentWidth) * 100;
-      updateAttributes({ width: clampWidth(startWidth + deltaPercent) });
-    };
-
-    const stop = () => {
-      handleEl.releasePointerCapture?.(pointerId);
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', stop);
-      window.removeEventListener('pointercancel', stop);
-    };
-
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', stop);
-    window.addEventListener('pointercancel', stop);
+    resizeCleanupRef.current?.();
+    const pos = getPos();
+    if (typeof pos !== 'number' || !anchorRef.current) return;
+    resizeCleanupRef.current = startImageResize(editor.view, pos, anchorRef.current, event.currentTarget, event.nativeEvent, handle);
   };
 
   return (
     <NodeViewWrapper
-      as="div"
+      as="span"
       ref={anchorRef}
       className={`editor-image-node group ${selected ? 'is-selected' : ''}`}
       data-editor-image="true"
       data-width={width}
-      data-align="center"
-      align="center"
+      data-align={align}
+      data-layout={layout}
+      data-position={position}
+      data-offset-y={normalizeImageOffsetY(node.attrs.offsetY)}
+      data-offset-x={normalizeImageOffsetY(node.attrs.offsetX)}
+      data-aspect-ratio={aspectRatio ?? undefined}
+      align={align}
       data-caption={caption}
-      style={buildWrapperReactStyle(width)}
+      style={imageWrapperStyle(width, layout, align, position, normalizeImageOffsetY(node.attrs.offsetX), normalizeImageOffsetY(node.attrs.offsetY))}
       onClick={selectImageNode}
-      onPointerDown={selectImageNode}
+      onPointerDown={handlePointerDown}
     >
-      {/* Asset Wrapper with Google Docs Blue Border */}
-      <span className="editor-image-asset-wrapper relative block transition-all overflow-hidden" data-drag-handle>
+      <span className="editor-image-surface" style={layout === 'wrap' ? { position: 'absolute', width: `${calculateImagePixelWidth(width)}px` } : { position: 'relative', display: 'block', left: 0, top: 0 }}>
+      {/* Image Selection Border */}
+      <span className="editor-image-asset-wrapper relative block" data-drag-handle={layout === 'inline' ? '' : undefined}>
         <img
           src={String(node.attrs.src || '')}
           alt={String(node.attrs.alt || '')}
           title={String(node.attrs.title || '')}
           draggable={false}
           className="editor-image-asset cursor-grab active:cursor-grabbing block w-full h-auto"
+          style={aspectRatio ? { aspectRatio, objectFit: 'fill' } : undefined}
         />
-      </span>
 
-      {/* 8 Google Docs Blue Resize Handles */}
+      {/* 8 Image Resize Handles */}
       {selected && (
-        <span className="gdocs-handles-container" contentEditable={false}>
-          <div className="gdocs-handle gdocs-handle-tl" onPointerDown={e => startResizeHandle(e, 'tl')} />
-          <div className="gdocs-handle gdocs-handle-tc" onPointerDown={e => startResizeHandle(e, 'tc')} />
-          <div className="gdocs-handle gdocs-handle-tr" onPointerDown={e => startResizeHandle(e, 'tr')} />
-          <div className="gdocs-handle gdocs-handle-ml" onPointerDown={e => startResizeHandle(e, 'ml')} />
-          <div className="gdocs-handle gdocs-handle-mr" onPointerDown={e => startResizeHandle(e, 'mr')} />
-          <div className="gdocs-handle gdocs-handle-bl" onPointerDown={e => startResizeHandle(e, 'bl')} />
-          <div className="gdocs-handle gdocs-handle-bc" onPointerDown={e => startResizeHandle(e, 'bc')} />
-          <div className="gdocs-handle gdocs-handle-br" onPointerDown={e => startResizeHandle(e, 'br')} />
+        <span className="editor-image-resize-handles" contentEditable={false}>
+          <div className="editor-image-resize-handle editor-image-resize-handle-tl" onPointerDown={e => startResizeHandle(e, 'tl')} />
+          <div className="editor-image-resize-handle editor-image-resize-handle-tc" onPointerDown={e => startResizeHandle(e, 'tc')} />
+          <div className="editor-image-resize-handle editor-image-resize-handle-tr" onPointerDown={e => startResizeHandle(e, 'tr')} />
+          <div className="editor-image-resize-handle editor-image-resize-handle-ml" onPointerDown={e => startResizeHandle(e, 'ml')} />
+          <div className="editor-image-resize-handle editor-image-resize-handle-mr" onPointerDown={e => startResizeHandle(e, 'mr')} />
+          <div className="editor-image-resize-handle editor-image-resize-handle-bl" onPointerDown={e => startResizeHandle(e, 'bl')} />
+          <div className="editor-image-resize-handle editor-image-resize-handle-bc" onPointerDown={e => startResizeHandle(e, 'bc')} />
+          <div className="editor-image-resize-handle editor-image-resize-handle-br" onPointerDown={e => startResizeHandle(e, 'br')} />
         </span>
       )}
+      </span>
+      {caption && <span className="editor-image-caption" contentEditable={false}>{caption}</span>}
+      {selected && (
+        <div className="editor-image-toolbar" contentEditable={false} role="toolbar" aria-label="Disposizione immagine" onMouseDown={event => event.preventDefault()}>
+          <button type="button" className={`editor-image-toolbar-button ${layout === 'inline' ? 'active' : ''}`} aria-pressed={layout === 'inline'} title="In-line" aria-label="In-line" onClick={() => changeImage({ layout: 'inline', offsetX: 0, offsetY: 0 }, true)}>
+            <ImageLayoutIcon /><span>In-line</span>
+          </button>
+          <button type="button" className={`editor-image-toolbar-button ${layout === 'wrap' ? 'active' : ''}`} aria-pressed={layout === 'wrap'} title="Wrap" aria-label="Wrap" onClick={() => changeImage({ layout: 'wrap', offsetX: 0, offsetY: 0 }, true)}>
+            <ImageLayoutIcon wrap /><span>Wrap</span>
+          </button>
+        </div>
+      )}
+      </span>
     </NodeViewWrapper>
   );
 }
 
 export const FloatingImage = Node.create({
   name: 'floatingImage',
-  group: 'block',
-  inline: false,
+  group: 'inline',
+  inline: true,
   atom: true,
   draggable: true,
   selectable: true,
@@ -251,7 +252,27 @@ export const FloatingImage = Node.create({
       },
       align: {
         default: 'center',
-        parseHTML: () => 'center',
+        parseHTML: element => { const attrs = extractImageAttrs(element as HTMLElement); return attrs ? attrs.align : 'center'; },
+      },
+      layout: {
+        default: 'inline',
+        parseHTML: element => { const attrs = extractImageAttrs(element as HTMLElement); return attrs ? attrs.layout : 'inline'; },
+      },
+      position: {
+        default: null,
+        parseHTML: element => { const attrs = extractImageAttrs(element as HTMLElement); return attrs ? attrs.position : 50; },
+      },
+      offsetY: {
+        default: 0,
+        parseHTML: element => { const attrs = extractImageAttrs(element as HTMLElement); return attrs ? attrs.offsetY : 0; },
+      },
+      offsetX: {
+        default: 0,
+        parseHTML: element => { const attrs = extractImageAttrs(element as HTMLElement); return attrs ? attrs.offsetX : 0; },
+      },
+      aspectRatio: {
+        default: null,
+        parseHTML: element => { const attrs = extractImageAttrs(element as HTMLElement); return attrs ? attrs.aspectRatio : null; },
       },
       caption: {
         default: '',
@@ -265,10 +286,8 @@ export const FloatingImage = Node.create({
 
   parseHTML() {
     return [
-      {
-        tag: 'span[data-editor-image]',
-        getAttrs: element => extractImageAttrs(element as HTMLElement),
-      },
+      { tag: 'span[data-editor-image]', priority: 100, getAttrs: element => extractImageAttrs(element as HTMLElement) },
+      { tag: 'figure[data-editor-image]', getAttrs: element => extractImageAttrs(element as HTMLElement) },
       {
         tag: 'div[data-editor-image]',
         getAttrs: element => extractImageAttrs(element as HTMLElement),
@@ -282,8 +301,12 @@ export const FloatingImage = Node.create({
 
   renderHTML({ HTMLAttributes }) {
     const width = clampWidth(HTMLAttributes.width);
+    const layout = normalizeImageLayout(HTMLAttributes.layout);
+    const align = normalizeImageAlignment(HTMLAttributes.align);
+    const position = normalizeImagePosition(HTMLAttributes.position, align);
     const caption: string = HTMLAttributes.caption || '';
     const pixelWidth = calculateImagePixelWidth(width);
+    const aspectRatio = normalizeImageAspectRatio(HTMLAttributes.aspectRatio);
 
     const children: Array<[string, Record<string, string>] | [string, Record<string, string>, string]> = [
       [
@@ -293,32 +316,38 @@ export const FloatingImage = Node.create({
           alt: HTMLAttributes.alt || '',
           title: HTMLAttributes.title || '',
           width: String(pixelWidth),
-          align: 'center',
-          style: buildImageStyle(width),
+          ...(aspectRatio ? { height: String(Math.round(pixelWidth / aspectRatio)) } : {}),
+          style: imageAssetCss(HTMLAttributes.aspectRatio),
         },
       ],
     ];
 
     if (caption) {
-      children.push(['figcaption', { class: 'editor-image-caption' }, caption]);
+      children.push(['span', { class: 'editor-image-caption', style: 'display:block;margin-top:8px;font-size:12px;line-height:1.4;' }, caption]);
     }
 
     return [
-      'div',
+      'span',
       mergeAttributes({
         'data-editor-image': 'true',
         'data-width': String(width),
-        'data-align': 'center',
+        'data-align': align,
+        'data-layout': layout,
+        'data-position': String(position),
+        'data-offset-y': String(normalizeImageOffsetY(HTMLAttributes.offsetY)),
+        'data-offset-x': String(normalizeImageOffsetY(HTMLAttributes.offsetX)),
+        ...(normalizeImageAspectRatio(HTMLAttributes.aspectRatio) ? { 'data-aspect-ratio': String(normalizeImageAspectRatio(HTMLAttributes.aspectRatio)) } : {}),
         'data-caption': caption,
-        align: 'center',
-        style: buildWrapperStyle(width),
+        align,
+        style: imageWrapperCss(width, layout, align, position, normalizeImageOffsetY(HTMLAttributes.offsetX), normalizeImageOffsetY(HTMLAttributes.offsetY)),
       }),
-      ...children,
+      ['span', { class: 'editor-image-surface', style: 'display:block;position:relative;' }, ...children],
     ];
   },
 
   addProseMirrorPlugins() {
     return [
+      createImageWrapPlugin(),
       new Plugin({
         key: new PluginKey('floatingImageClick'),
         props: {
@@ -327,7 +356,7 @@ export const FloatingImage = Node.create({
               const target = event.target as HTMLElement | null;
               if (!target) return false;
 
-              if (target.closest('.gdocs-handle') || target.closest('.gdocs-image-pill-toolbar')) {
+              if (target.closest('.editor-image-resize-handle') || target.closest('.editor-image-toolbar')) {
                 return false;
               }
 
@@ -363,7 +392,9 @@ export const FloatingImage = Node.create({
                       view.dispatch(tr);
                     }
                     view.focus();
-                    return true;
+                    // Let the browser start a native drag from the image handle.
+                    // Returning true here makes ProseMirror prevent the mousedown default.
+                    return false;
                   }
                 }
               } catch (e) {

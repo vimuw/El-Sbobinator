@@ -178,7 +178,9 @@ export interface SearchSessionResult {
 export interface ArchiveFolder {
   id: string;
   name: string;
+  /** Empty color inherits from the parent; legacy explicit colors are preserved. */
   color: string;
+  parent_id?: string | null;
   session_dirs: string[];
 }
 

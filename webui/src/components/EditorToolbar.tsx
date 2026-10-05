@@ -135,7 +135,7 @@ export const MenuBar = ({
       <HighlightPickerButton editor={editor} />
       <button
         type="button"
-        onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
+        onClick={() => editor.chain().focus().clearDocumentFormatting().run()}
         className="editor-button"
         title="Rimuovi formattazione"
       >

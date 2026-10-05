@@ -8,6 +8,37 @@ import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 
 import HeadingExtension from '@tiptap/extension-heading';
 import ParagraphExtension from '@tiptap/extension-paragraph';
+import HardBreakExtension from '@tiptap/extension-hard-break';
+
+// A soft break owns a character style in Docs. StarterKit keeps the typing
+// marks after the break but inserts the break itself without any marks.
+export const CustomHardBreak = HardBreakExtension.extend({
+  addCommands() {
+    return {
+      setHardBreak: () => ({ commands, chain, state, editor }) => commands.first([
+        () => commands.exitCode(),
+        () => commands.command(() => {
+          const { selection, storedMarks } = state;
+          if (selection.$from.parent.type.spec.isolating) return false;
+          // At the start of a text block, a caret inherits the first character's
+          // marks. Explicit stored marks (including an empty set) still win.
+          // A range within one block inherits its first selected character,
+          // rather than the preceding character at a formatting boundary.
+          const selectedMarks = !selection.empty && selection.$from.sameParent(selection.$to)
+            ? selection.$from.nodeAfter?.marks
+            : undefined;
+          const marks = storedMarks ?? selectedMarks ?? (selection.empty || selection.$to.parentOffset ? selection.$from.marks() : []);
+          const kept = this.options.keepMarks ? marks.filter(mark => editor.extensionManager.splittableMarks.includes(mark.type.name)) : [];
+          return chain()
+            .insertContent({ type: this.name, marks: kept.map(mark => mark.toJSON()) })
+            .command(({ tr }) => { if (this.options.keepMarks) tr.ensureMarks(kept); return true; })
+            .scrollIntoView()
+            .run();
+        }),
+      ]),
+    };
+  },
+});
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -102,9 +133,8 @@ export const SearchHighlight = Extension.create({
             const searchStr = matchCase ? searchTerm : searchTerm.toLowerCase();
             let matchIdx = 0;
 
-            newState.doc.descendants((node: ProseMirrorNode, pos: number) => {
-              if (!node.isText || !node.text) return;
-              const nodeText = matchCase ? node.text : node.text.toLowerCase();
+            const searchRun = (text: string, pos: number) => {
+              const nodeText = matchCase ? text : text.toLowerCase();
               let idx = 0;
               while ((idx = nodeText.indexOf(searchStr, idx)) !== -1) {
                 const from = pos + idx;
@@ -121,6 +151,22 @@ export const SearchHighlight = Extension.create({
                 idx += searchStr.length;
                 matchIdx++;
               }
+            };
+            newState.doc.descendants((node: ProseMirrorNode, pos: number) => {
+              if (!node.isTextblock) return;
+              let text = '';
+              let start = pos + 1;
+              node.forEach((child, offset) => {
+                if (child.isText) {
+                  if (!text) start = pos + 1 + offset;
+                  text += child.text;
+                } else {
+                  searchRun(text, start);
+                  text = '';
+                }
+              });
+              searchRun(text, start);
+              return false;
             });
 
             return {
@@ -254,6 +300,17 @@ export const escapeHtml = (text: string): string =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 
+function renderedMathContent(latex: string, displayMode: boolean): HTMLElement {
+  const rendered = document.createElement(displayMode ? 'div' : 'span');
+  rendered.className = 'math-rendered-html';
+  try {
+    // KaTeX generates the markup with trust disabled. A DOM node prevents the
+    // serializer from escaping that markup into visible HTML source on paste.
+    rendered.innerHTML = katex.renderToString(latex, { displayMode, throwOnError: false, trust: false });
+  } catch { rendered.textContent = latex; }
+  return rendered;
+}
+
 function MathNodeView({ node, updateAttributes, selected }: NodeViewProps) {
   const [isEditing, setIsEditing] = React.useState(false);
   const [latex, setLatex] = React.useState(node.attrs.latex || '');
@@ -328,12 +385,6 @@ export const MathInline = Node.create({
   },
 
   renderHTML({ HTMLAttributes }) {
-    let katexHtml = '';
-    try {
-      katexHtml = katex.renderToString(HTMLAttributes.latex || '', { displayMode: false, throwOnError: false });
-    } catch {
-      katexHtml = HTMLAttributes.latex ? escapeHtml(HTMLAttributes.latex) : '';
-    }
     return [
       'span',
       mergeAttributes({
@@ -341,7 +392,7 @@ export const MathInline = Node.create({
         class: 'math-node-inline',
         title: HTMLAttributes.latex || '',
       }),
-      ['span', { class: 'math-rendered-html' }, katexHtml],
+      renderedMathContent(HTMLAttributes.latex || '', false),
     ];
   },
 
@@ -444,12 +495,6 @@ export const MathBlock = Node.create({
   },
 
   renderHTML({ HTMLAttributes }) {
-    let katexHtml = '';
-    try {
-      katexHtml = katex.renderToString(HTMLAttributes.latex || '', { displayMode: true, throwOnError: false });
-    } catch {
-      katexHtml = HTMLAttributes.latex ? escapeHtml(HTMLAttributes.latex) : '';
-    }
     return [
       'div',
       mergeAttributes({
@@ -457,7 +502,7 @@ export const MathBlock = Node.create({
         class: 'math-node-block',
         title: HTMLAttributes.latex || '',
       }),
-      ['div', { class: 'math-rendered-html' }, katexHtml],
+      renderedMathContent(HTMLAttributes.latex || '', true),
     ];
   },
 

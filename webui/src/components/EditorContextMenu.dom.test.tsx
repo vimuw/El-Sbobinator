@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { EditorContextMenu } from './EditorContextMenu';
 import type { Editor as TiptapEditor } from '@tiptap/core';
+import { Editor } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
+import { TextStyle } from '@tiptap/extension-text-style';
+import { Color } from '@tiptap/extension-color';
+import * as clipboard from '../editorClipboard';
 
 describe('EditorContextMenu', () => {
   it('does not render when contextMenu is null', () => {
@@ -88,5 +93,61 @@ describe('EditorContextMenu', () => {
 
     const cutBtn = screen.getByText('Taglia').closest('button');
     if (cutBtn) fireEvent.click(cutBtn);
+  });
+  it('does not delete the selection when the clipboard transfer fails', async () => {
+    const write = vi.spyOn(clipboard, 'writeEditorClipboard').mockRejectedValue(new Error('Clipboard unavailable'));
+    const editor = new Editor({ extensions: [StarterKit], content: '<p>Hello</p>' });
+    editor.commands.selectAll();
+    const original = editor.getJSON();
+    try {
+      render(<EditorContextMenu contextMenu={{ x: 50, y: 50 }} onClose={vi.fn()} editor={editor} onOpenImagePicker={vi.fn()} onOpenFind={vi.fn()} />);
+      fireEvent.click(screen.getByRole('button', { name: /Taglia/ }));
+      await waitFor(() => expect(write).toHaveBeenCalledOnce());
+      expect(editor.getJSON()).toEqual(original);
+    } finally {
+      write.mockRestore();
+      editor.destroy();
+    }
+  });
+
+  it('does not cut a new selection while the original clipboard write is pending', async () => {
+    let finish!: () => void;
+    const write = vi.spyOn(clipboard, 'writeEditorClipboard').mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+    const editor = new Editor({ extensions: [StarterKit], content: '<p>Prima dopo</p>' });
+    editor.commands.setTextSelection({ from: 1, to: 6 });
+    const original = editor.getJSON();
+    try {
+      render(<EditorContextMenu contextMenu={{ x: 50, y: 50 }} onClose={vi.fn()} editor={editor} onOpenImagePicker={vi.fn()} onOpenFind={vi.fn()} />);
+      fireEvent.click(screen.getByRole('button', { name: /Taglia/ }));
+      expect(write.mock.calls[0][1]).toContain('Prima');
+      editor.commands.setTextSelection({ from: 7, to: 11 });
+      await act(async () => { finish(); });
+      expect(editor.getJSON()).toEqual(original);
+    } finally { write.mockRestore(); editor.destroy(); }
+  });
+
+  it('pastes HTML through the editor schema and keeps literal text in plain paste', async () => {
+    const editor = new Editor({ extensions: [StarterKit, TextStyle, Color], content: '<p></p>' });
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    const html = '<p><span style="color:#123abc"><strong>Colorato</strong></span><script>bad()</script><img src="bad" onerror="bad()"></p>';
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+      read: vi.fn().mockResolvedValue([{ types: ['text/html', 'text/plain'], getType: () => Promise.resolve({ text: () => Promise.resolve(html) }) }]),
+      readText: vi.fn().mockResolvedValue('a < b e <testo>'),
+    } });
+    try {
+      render(<EditorContextMenu contextMenu={{ x: 50, y: 50 }} onClose={vi.fn()} editor={editor} onOpenImagePicker={vi.fn()} onOpenFind={vi.fn()} />);
+      fireEvent.click(screen.getByRole('button', { name: /^Incolla\s*Ctrl/ }));
+      await waitFor(() => expect(editor.getHTML()).toContain('rgb(18, 58, 188)'));
+      expect(editor.getHTML()).toContain('<strong>Colorato</strong>');
+      expect(editor.getHTML()).not.toMatch(/script|onerror|bad\(\)/);
+      editor.commands.selectAll();
+      fireEvent.click(screen.getByRole('button', { name: /Incolla senza formattazione/ }));
+      await waitFor(() => expect(editor.getText()).toBe('a < b e <testo>'));
+      expect(editor.getHTML()).not.toMatch(/<strong>|style=/);
+    } finally {
+      if (clipboardDescriptor) Object.defineProperty(navigator, 'clipboard', clipboardDescriptor);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+      editor.destroy();
+    }
   });
 });

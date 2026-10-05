@@ -1,5 +1,5 @@
-export const EDITOR_IMAGE_ALLOWED_DATA_ATTRS = new Set(['data-editor-image', 'data-layout', 'data-align', 'data-width']);
-export const ALLOWED_STYLE_PROPS = new Set(['font-size', 'color', 'font-family', 'background-color', 'text-align', 'font-weight', 'font-style', 'text-decoration', 'margin-left', 'margin-right', 'margin', 'width']);
+export const EDITOR_IMAGE_ALLOWED_DATA_ATTRS = new Set(['data-editor-image', 'data-layout', 'data-align', 'data-width', 'data-position', 'data-offset-y', 'data-offset-x', 'data-aspect-ratio', 'data-caption']);
+export const ALLOWED_STYLE_PROPS = new Set(['font-size', 'color', 'font-family', 'background-color', 'text-align', 'font-weight', 'font-style', 'text-decoration', 'line-height', 'margin-top', 'margin-bottom', 'margin-left', 'margin-right', 'margin', 'width']);
 
 export const normalizePreviewHtmlContent = (content: string) => {
   const parsed = new DOMParser().parseFromString(`<body>${content || ''}</body>`, 'text/html');
@@ -12,14 +12,14 @@ export const normalizePreviewHtmlContent = (content: string) => {
 
   parsed.body.querySelectorAll('*').forEach(element => {
     const tag = element.tagName.toLowerCase();
-    const isEditorImageContainer = tag === 'div' && element.hasAttribute('data-editor-image');
-    const isEditorImageAsset = tag === 'img' && element.parentElement?.hasAttribute('data-editor-image');
+    const isEditorImageContainer = ['div', 'span', 'figure'].includes(tag) && element.hasAttribute('data-editor-image');
+    const isEditorImageAsset = tag === 'img' && !!element.closest('[data-editor-image]');
 
     if (!isEditorImageContainer && !isEditorImageAsset) {
       element.removeAttribute('align');
       const htmlEl = element as HTMLElement;
-      const allowedStyles = Array.from(htmlEl.style)
-        .filter(prop => ALLOWED_STYLE_PROPS.has(prop))
+      const allowedStyles = Array.from(htmlEl.style ?? [])
+        .filter(prop => ALLOWED_STYLE_PROPS.has(prop) || (tag === 'li' && prop === 'list-style-type' && htmlEl.style.listStyleType === 'none'))
         .map(prop => `${prop}: ${htmlEl.style.getPropertyValue(prop)}`)
         .join('; ');
       if (allowedStyles) {
@@ -28,7 +28,10 @@ export const normalizePreviewHtmlContent = (content: string) => {
         element.removeAttribute('style');
       }
       Array.from(element.attributes)
-        .filter(attribute => attribute.name.startsWith('data-'))
+        .filter(attribute => attribute.name.startsWith('data-')
+          && !(['data-editor-empty-marks', 'data-document-line-spacing'].includes(attribute.name) && /^(p|h[1-6])$/.test(tag))
+          && !(attribute.name === 'data-math' && tag === 'span')
+          && !(attribute.name === 'data-math-block' && tag === 'div'))
         .forEach(attribute => element.removeAttribute(attribute.name));
       return;
     }
@@ -47,13 +50,13 @@ export const normalizePreviewHtmlContent = (content: string) => {
         .filter(attribute => attribute.name.startsWith('data-'))
         .forEach(attribute => element.removeAttribute(attribute.name));
 
-      const parentContainer = element.parentElement;
+      const parentContainer = element.closest<HTMLElement>('[data-editor-image]');
       const widthAttr = element.getAttribute('width');
       if (!widthAttr && parentContainer) {
         const rawWidth = parentContainer.getAttribute('data-width') || parentContainer.style.width || '56';
         const numeric = Number.parseFloat(rawWidth);
         const validPercent = Number.isFinite(numeric) ? Math.min(100, Math.max(20, Math.round(numeric))) : 56;
-        const targetPx = Math.round((634 * validPercent) / 100);
+        const targetPx = Math.round((EDITOR_CONTENT_WIDTH_PX * validPercent) / 100);
         element.setAttribute('width', String(targetPx));
       }
       return;
@@ -67,3 +70,4 @@ export const normalizePreviewHtmlContent = (content: string) => {
 
   return parsed.body.innerHTML;
 };
+import { EDITOR_CONTENT_WIDTH_PX } from './documentFormatting';

@@ -33,10 +33,10 @@ describe('Math nodes KaTeX fallback escaping', () => {
     spy.mockRestore();
 
     expect(rendered).toBeDefined();
-    // In TipTap/ProseMirror DOM output format: ['span', attrs, ['span', { class: ... }, content]]
-    const innerSpan = (rendered as [string, Record<string, unknown>, [string, Record<string, unknown>, string]])[2];
-    expect(innerSpan[2]).not.toContain('<img');
-    expect(innerSpan[2]).toContain('&lt;img');
+    const innerSpan = (rendered as [string, Record<string, unknown>, HTMLElement])[2];
+    expect(innerSpan.querySelector('img')).toBeNull();
+    expect(innerSpan.innerHTML).toContain('&lt;img');
+    expect(innerSpan.textContent).toBe(maliciousLatex);
   });
 
   it('escapes latex in MathBlock.renderHTML fallback when katex throws', () => {
@@ -53,8 +53,9 @@ describe('Math nodes KaTeX fallback escaping', () => {
     spy.mockRestore();
 
     expect(rendered).toBeDefined();
-    const innerDiv = (rendered as [string, Record<string, unknown>, [string, Record<string, unknown>, string]])[2];
-    expect(innerDiv[2]).not.toContain('<script');
-    expect(innerDiv[2]).toContain('&lt;script');
+    const innerDiv = (rendered as [string, Record<string, unknown>, HTMLElement])[2];
+    expect(innerDiv.querySelector('script')).toBeNull();
+    expect(innerDiv.innerHTML).toContain('&lt;script');
+    expect(innerDiv.textContent).toBe(maliciousLatex);
   });
 });
