@@ -3,10 +3,11 @@ import { createPortal } from 'react-dom';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
-  Highlighter, Eraser, Link2, Link2Off, Heading1, Heading2, Heading3,
+  Eraser, Link2, Link2Off, Heading1, Heading2, Heading3,
   RemoveFormatting
 } from 'lucide-react';
 import { getLastHighlightColor } from '../editorUtils';
+import { HighlightIcon } from './HighlightIcon';
 
 interface EditorBubbleMenuProps {
   editor: TiptapEditor | null;
@@ -223,13 +224,7 @@ export const EditorBubbleMenu: React.FC<EditorBubbleMenuProps> = ({ editor, isCo
           className={btn(editor.isActive('highlight'))}
           title="Evidenzia testo"
         >
-          <span className="relative inline-flex items-center justify-center">
-            <Highlighter className="h-3.5 w-3.5 shrink-0" />
-            <span
-              className="absolute -bottom-1 left-0 right-0 h-[2.5px] rounded-full"
-              style={{ background: activeHighlightColor }}
-            />
-          </span>
+          <HighlightIcon color={activeHighlightColor} />
         </button>
 
         {hasHighlight && (
