@@ -11,7 +11,7 @@ import { StorageSection } from './settings/StorageSection';
 import { DiagnosticsSection, type DisplayCheck } from './settings/DiagnosticsSection';
 import { ActivitySection } from './settings/ActivitySection';
 import { ApiStatusSection } from './settings/ApiStatusSection';
-import { UpdaterSection, type SettingsUpdateInstallState } from './settings/UpdaterSection';
+import { UpdaterSection, UpdateNotice, type SettingsUpdateInstallState } from './settings/UpdaterSection';
 
 import { useSettingsStorage, SESSION_CLEANUP_DAYS } from '../../hooks/useSettingsStorage';
 import { formatSize } from '../../utils';
@@ -573,11 +573,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <SlidersHorizontal className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'general' ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)]'}`} />
                     <span className="truncate">Generale</span>
                   </div>
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full bg-[var(--accent-text)] shrink-0 hidden md:block transition-opacity duration-150 ${
-                      activeTab === 'general' ? 'opacity-100' : 'opacity-0'
-                    }`}
-                  />
                 </button>
 
                 <button
@@ -590,11 +585,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <HardDrive className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'storage' ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)]'}`} />
                     <span className="truncate">Archiviazione</span>
                   </div>
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full bg-[var(--accent-text)] shrink-0 hidden md:block transition-opacity duration-150 ${
-                      activeTab === 'storage' ? 'opacity-100' : 'opacity-0'
-                    }`}
-                  />
                 </button>
 
                 <button
@@ -607,11 +597,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <FlaskConical className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'diagnostics' ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)]'}`} />
                     <span className="truncate">Diagnostica</span>
                   </div>
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full bg-[var(--accent-text)] shrink-0 hidden md:block transition-opacity duration-150 ${
-                      activeTab === 'diagnostics' ? 'opacity-100' : 'opacity-0'
-                    }`}
-                  />
                 </button>
               </nav>
 
@@ -634,6 +619,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           Chiave API Google Gemini, modello di trascrizione e preferenze di sistema.
                         </p>
                       </div>
+
+                      <UpdateNotice
+                        latestVersion={latestVersion}
+                        updateInstallState={updateInstallState}
+                        onInstallUpdate={onInstallUpdate}
+                      />
 
                       <ModelSection
                         preferredModel={preferredModel}
@@ -681,7 +672,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         hasChecked={hasChecked}
                         checkFailed={checkFailed}
                         updateInstallState={updateInstallState}
-                        onInstallUpdate={onInstallUpdate}
                       />
                     </div>
                   )}
