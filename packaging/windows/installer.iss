@@ -37,7 +37,8 @@ DisableProgramGroupPage=yes
 DisableReadyPage=yes
 DisableFinishedPage=yes
 ShowLanguageDialog=no
-CloseApplications=force
+; Respect the editor's save-failure close veto; force can discard unsaved work.
+CloseApplications=yes
 
 [Languages]
 Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"

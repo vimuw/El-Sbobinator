@@ -21,6 +21,7 @@ from el_sbobinator.core.media_server import LocalMediaServer
 from el_sbobinator.utils.console_utils import MAX_CONSOLE_LINE_LEN, LineConsoleTee
 from el_sbobinator.utils.logging_utils import (
     configure_logging,
+    get_logger,
     prepare_startup,
 )
 from el_sbobinator.utils.webview2_recovery import (
@@ -94,16 +95,68 @@ def build_close_handler(
     window: webview.Window,
     stop_event: threading.Event | None = None,
 ) -> Callable[[], bool | None]:
-    """Return a closing event handler that prompts for confirmation if busy."""
+    """Confirm ongoing work and flush the editor before destroying the window."""
+    close_ready = threading.Event()
+    close_lock = threading.Lock()
+    close_pending = False
+
+    def _flush_editor_and_close() -> None:
+        nonlocal close_pending
+        completed = threading.Event()
+
+        def _finish(saved: Any) -> None:
+            nonlocal close_pending
+            with close_lock:
+                if completed.is_set():
+                    return
+                completed.set()
+                close_pending = False
+                if saved is True:
+                    close_ready.set()
+            if saved is True:
+                window.destroy()
+
+        try:
+            # The native closing event runs on the UI thread. Evaluate and save
+            # from a worker so WebView2 can service the asynchronous bridge call.
+            window.evaluate_js(
+                "(async () => { try { "
+                "const flush = window.__elSbobinatorFlushPendingAutosave; "
+                "return typeof flush !== 'function' || await flush(); "
+                "} catch (_) { return false; } })()",
+                callback=_finish,
+            )
+            if not completed.wait(10):
+                _finish(False)
+                get_logger(__name__).warning(
+                    "Chiusura annullata: il salvataggio dell'editor non risponde."
+                )
+        except Exception:
+            _finish(False)
+            get_logger(__name__).exception(
+                "Chiusura annullata: verifica del salvataggio dell'editor fallita."
+            )
+
+    def _request_saved_close() -> bool:
+        nonlocal close_pending
+        with close_lock:
+            if close_pending:
+                return False
+            close_pending = True
+        threading.Thread(target=_flush_editor_and_close, daemon=True).start()
+        return False
 
     def _on_closing() -> bool | None:
-        if getattr(api, "_force_close", False):
+        if close_ready.is_set():
             if stop_event is not None:
                 stop_event.set()
             LocalMediaServer.shutdown_all()
             return None
 
-        if getattr(api, "is_busy", lambda: False)():
+        if (
+            not getattr(api, "_force_close", False)
+            and getattr(api, "is_busy", lambda: False)()
+        ):
             adapter = getattr(api, "_adapter", None)
             if adapter is not None and getattr(adapter, "window", None) is not None:
                 try:
@@ -135,10 +188,7 @@ def build_close_handler(
                 except Exception:
                     pass
 
-        if stop_event is not None:
-            stop_event.set()
-        LocalMediaServer.shutdown_all()
-        return None
+        return _request_saved_close()
 
     return _on_closing
 
