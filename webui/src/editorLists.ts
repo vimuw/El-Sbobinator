@@ -405,7 +405,13 @@ export const EditorOrderedList = OrderedList.extend({
               if (dispatch) closeHistory(tr).insertText('\t').scrollIntoView();
               return true;
             });
-            return this.editor.commands.sinkListItem(itemName);
+            this.editor.commands.sinkListItem(itemName);
+            return true;
+          },
+          'Shift-Tab': () => {
+            if (!this.editor.isActive(itemName)) return false;
+            this.editor.commands.liftListItem(itemName);
+            return true;
           },
         };
       },

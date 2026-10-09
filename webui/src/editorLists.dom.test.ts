@@ -23,6 +23,26 @@ function select(editor: Editor, label: string, end?: string) {
 afterEach(() => { editors.splice(0).forEach(editor => editor.destroy()); document.body.innerHTML = ''; });
 
 describe('Ordered list gestures and selected clipboard', () => {
+  it.each(['ul', 'ol'])('consumes repeated Tab at first-item and nested boundaries of %s', tag => {
+    const editor = open(`<${tag}><li><p>Prima</p></li><li><p>Seconda</p></li></${tag}>`);
+    const press = (shiftKey = false) => {
+      const event = new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true });
+      editor.view.dom.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(editor.view.dom);
+    };
+    select(editor, 'Prima'); editor.commands.setTextSelection(editor.state.selection.from); editor.view.focus();
+    const before = editor.getJSON();
+    press(); press(); press();
+    expect(editor.getJSON()).toEqual(before);
+    select(editor, 'Seconda'); editor.commands.setTextSelection(editor.state.selection.from);
+    press();
+    const nested = editor.getJSON();
+    press(); press();
+    expect(editor.getJSON()).toEqual(nested);
+    press(true);
+    expect(editor.getJSON()).toEqual(before);
+  });
   it.each(['ol', 'ul'].flatMap(tag => [false, true].flatMap(nested => [0, 5].map(offset => ({ tag, nested, offset })))))('exits an empty $tag parent after Enter at $offset without moving descendants (nested=$nested)', ({ tag, nested, offset }) => {
     const branch = `<${tag}${tag === 'ol' && nested ? ' type="a"' : ''}><li><p><strong>Prima</strong></p><${tag}${tag === 'ol' ? ` type="${nested ? 'i' : 'a'}"` : ''}><li><p>Figlia</p></li><li><p>Sorella</p></li></${tag}></li><li><p>Seconda</p></li></${tag}>`;
     const editor = open((nested ? `<ol><li><p>Madre</p>${branch}</li><li><p>Ultima</p></li></ol>` : branch) + '<p></p>');
