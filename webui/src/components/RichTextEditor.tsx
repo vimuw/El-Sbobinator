@@ -228,7 +228,8 @@ export function RichTextEditor({
       if ((event.target as HTMLElement | null)?.closest('.editor-context-menu')) return;
       setContextMenu(null);
     };
-    const handleScroll = () => {
+    const handleScroll = (event: Event) => {
+      if ((event.target as HTMLElement | null)?.closest?.('.editor-context-menu')) return;
       setContextMenu(null);
     };
     document.addEventListener('pointerdown', handlePointerDown, true);
@@ -269,10 +270,7 @@ export function RichTextEditor({
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    const menuWidth = 280, menuHeight = 360, padding = 12;
-    const x = Math.min(e.clientX, window.innerWidth - menuWidth - padding);
-    const y = Math.min(e.clientY, window.innerHeight - menuHeight - padding);
-    setContextMenu({ x: Math.max(padding, x), y: Math.max(padding, y) });
+    setContextMenu({ x: e.clientX, y: e.clientY });
   };
 
   useEffect(() => {
