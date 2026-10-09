@@ -1,3 +1,5 @@
+import { normalizeImageWidth } from './imageLayout';
+
 export const EDITOR_IMAGE_ALLOWED_DATA_ATTRS = new Set(['data-editor-image', 'data-layout', 'data-align', 'data-width', 'data-position', 'data-offset-y', 'data-offset-x', 'data-aspect-ratio', 'data-caption']);
 export const ALLOWED_STYLE_PROPS = new Set(['font-size', 'color', 'font-family', 'background-color', 'text-align', 'font-weight', 'font-style', 'text-decoration', 'line-height', 'margin-top', 'margin-bottom', 'margin-left', 'margin-right', 'margin', 'width', 'white-space']);
 
@@ -58,8 +60,7 @@ export const normalizePreviewHtmlContent = (content: string) => {
       const widthAttr = element.getAttribute('width');
       if (!widthAttr && parentContainer) {
         const rawWidth = parentContainer.getAttribute('data-width') || parentContainer.style.width || '56';
-        const numeric = Number.parseFloat(rawWidth);
-        const validPercent = Number.isFinite(numeric) ? Math.min(100, Math.max(20, Math.round(numeric))) : 56;
+        const validPercent = normalizeImageWidth(rawWidth);
         const targetPx = Math.round((EDITOR_CONTENT_WIDTH_PX * validPercent) / 100);
         element.setAttribute('width', String(targetPx));
       }

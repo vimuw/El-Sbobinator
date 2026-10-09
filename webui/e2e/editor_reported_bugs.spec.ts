@@ -192,6 +192,83 @@ test('generated block gaps survive save and copy without spreading to new paragr
   await page.screenshot({ path: info.outputPath('generated-spacing.png') });
 });
 
+for (const layout of ['inline', 'wrap']) for (const zoom of [75, 100, 150]) {
+  test(`top height handle keeps the image top in ${layout} at ${zoom}%`, async ({ page }) => {
+    const src = `data:image/jpeg;base64,${fs.readFileSync('e2e/fixtures/image-layout.jpg').toString('base64')}`;
+    await paste(page, `<p><span data-editor-image data-layout="${layout}" data-width="35"><img src="${src}" alt="Altezza"></span>${'Testo adiacente. '.repeat(50)}</p>`);
+    await page.getByTitle('Livello di zoom').click(); await page.locator('.zoom-dropdown-panel').getByRole('button', { name: `${zoom}%`, exact: true }).click();
+    const image = page.getByAltText('Altezza'); await image.click();
+    const initial = (await image.boundingBox())!;
+    const handle = (await page.locator('.editor-image-resize-handle-tc').boundingBox())!;
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2); await page.mouse.down();
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2 + 30 * zoom / 100, { steps: 5 });
+    const preview = (await page.locator('.editor-image-resize-preview img').boundingBox())!;
+    expect(Math.abs(preview.y - initial.y)).toBeLessThan(1);
+    await page.mouse.up();
+    await expect.poll(async () => Math.abs((await image.boundingBox())!.y - initial.y)).toBeLessThan(1);
+    expect((await image.boundingBox())!.height).toBeLessThan(initial.height);
+    await page.keyboard.press('Control+z');
+    await expect.poll(async () => Math.abs((await image.boundingBox())!.height - initial.height)).toBeLessThan(1);
+  });
+}
+
+test('Wrap crosses the page edge, keeps geometry on release and returns with toolbar undo', async ({ page }) => {
+  const src = `data:image/jpeg;base64,${fs.readFileSync('e2e/fixtures/image-layout.jpg').toString('base64')}`;
+  await paste(page, `<p><span data-editor-image data-layout="wrap" data-width="35"><img src="${src}" alt="Libera"></span>${'Testo vicino alla figura. '.repeat(100)}</p><p>Fine</p>`);
+  const image = page.getByAltText('Libera'); await image.click();
+  const initial = (await image.boundingBox())!;
+  const sheet = (await page.locator('.editor-page').boundingBox())!;
+  await page.mouse.move(initial.x + 20, initial.y + 20); await page.mouse.down();
+  await page.mouse.move(sheet.x - 25 + 20, initial.y + 20, { steps: 10 });
+  const preview = (await page.locator('.editor-image-drag-preview img').boundingBox())!;
+  expect(preview.x).toBeLessThan(sheet.x);
+  await page.mouse.up();
+  await expect.poll(async () => Math.abs((await image.boundingBox())!.x - preview.x)).toBeLessThan(1);
+  await expect(page.getByRole('button', { name: 'Riporta nella pagina', exact: true })).toHaveCount(0);
+  await page.getByTitle('Annulla (Ctrl+Z)', { exact: true }).click();
+  await expect.poll(async () => Math.abs((await image.boundingBox())!.x - initial.x)).toBeLessThan(1);
+  await page.keyboard.press('Control+Shift+z');
+  await expect.poll(async () => Math.abs((await image.boundingBox())!.x - preview.x)).toBeLessThan(1);
+});
+
+test('Wrap drag avoids repeated layout reads on a long document and keeps the last pointer position', async ({ page }, info) => {
+  const src = `data:image/jpeg;base64,${fs.readFileSync('e2e/fixtures/image-layout.jpg').toString('base64')}`;
+  const paragraphs = `<p>${'Contenuto lungo. '.repeat(30)}</p>`.repeat(80);
+  await paste(page, `<p><span data-editor-image data-layout="wrap" data-width="35"><img src="${src}" alt="Fluida"></span>${'Testo adiacente. '.repeat(60)}</p>${paragraphs}`);
+  const image = page.getByAltText('Fluida'); await image.click();
+  const initial = (await image.boundingBox())!;
+  await page.evaluate(() => {
+    const root = document.querySelector('.tiptap-editor')!;
+    const css = window.getComputedStyle; const bounds = Element.prototype.getBoundingClientRect;
+    const sample = { cssReads: 0, boundsReads: 0, pointerEvents: 0, frames: 0, documentUpdates: 0 };
+    let active = true;
+    window.getComputedStyle = (...args) => { if (active && args[0] === root) sample.cssReads++; return css(...args); };
+    Element.prototype.getBoundingClientRect = function () { if (active && this === root) sample.boundsReads++; return bounds.call(this); };
+    const pointer = () => { sample.pointerEvents++; }; window.addEventListener('pointermove', pointer);
+    const editor = (root as HTMLElement & { editor: import('@tiptap/core').Editor }).editor;
+    const updated = () => { sample.documentUpdates++; }; editor.on('update', updated);
+    const frame = () => { if (active) { sample.frames++; requestAnimationFrame(frame); } }; requestAnimationFrame(frame);
+    Object.assign(window, { finishDragSample: () => { active = false; window.getComputedStyle = css; Element.prototype.getBoundingClientRect = bounds; window.removeEventListener('pointermove', pointer); editor.off('update', updated); return sample; } });
+  });
+  await page.mouse.move(initial.x + 20, initial.y + 20); await page.mouse.down();
+  for (let i = 0; i < 4; i++) await page.mouse.move(initial.x + 80 + (i % 2 ? 0 : 90), initial.y + 70, { steps: 30 });
+  const sample = await page.evaluate(() => (window as typeof window & { finishDragSample: () => object }).finishDragSample());
+  fs.mkdirSync('../_smoke/wrap-smooth', { recursive: true });
+  fs.writeFileSync('../_smoke/wrap-smooth/browser-sample.json', JSON.stringify(sample));
+  const stats = sample as { cssReads: number; boundsReads: number; pointerEvents: number; documentUpdates: number };
+  expect(stats.pointerEvents).toBeGreaterThan(100);
+  expect(stats.cssReads).toBeLessThanOrEqual(2);
+  expect(stats.boundsReads).toBeLessThanOrEqual(3);
+  expect(stats.documentUpdates).toBe(0);
+  await expect.poll(async () => (await page.locator('.editor-image-drag-preview img').boundingBox())!.x).toBeCloseTo(initial.x + 60, 0);
+  const preview = (await page.locator('.editor-image-drag-preview img').boundingBox())!;
+  await page.mouse.up();
+  await expect.poll(async () => Math.abs((await image.boundingBox())!.x - preview.x)).toBeLessThan(1);
+  await page.keyboard.press('Control+z');
+  await expect.poll(async () => Math.abs((await image.boundingBox())!.x - initial.x)).toBeLessThan(1);
+  await page.screenshot({ path: info.outputPath('wrap-smooth.png') });
+});
+
 test('captures both copy paths for minimal and representative Docs round trips', async ({ page }) => {
   const directory = '../_smoke/editor-reported-bugs';
   fs.mkdirSync(directory, { recursive: true });
@@ -225,4 +302,30 @@ test('captures both copy paths for minimal and representative Docs round trips',
       fs.writeFileSync(`${directory}/${name}-${method}.json`, JSON.stringify(formats));
     }
   }
+});
+
+test('Wrap excludes only the intersection with text and persists signed offsets', async ({ page }) => {
+  const src = `data:image/jpeg;base64,${fs.readFileSync('e2e/fixtures/image-layout.jpg').toString('base64')}`;
+  await paste(page, `<p><span data-editor-image data-layout="wrap" data-width="100" data-position="50" data-offset-x="-800" data-offset-y="300"><img src="${src}" alt="Fuori testo"></span>${'Testo normale senza ostacoli. '.repeat(50)}</p><p>Fine</p>`);
+  const editor = page.locator('.tiptap-editor');
+  await expect(editor.locator('.image-wrap-gap')).toHaveCount(0);
+  const serialized = await editor.evaluate(root => (root as HTMLElement & { editor: import('@tiptap/core').Editor }).editor.getHTML());
+  expect(serialized).toContain('data-offset-x="-800"');
+  expect(serialized).toContain('data-offset-y="300"');
+  await editor.evaluate((root, html) => (root as HTMLElement & { editor: import('@tiptap/core').Editor }).editor.commands.setContent(html), serialized);
+  await expect(editor.locator('.editor-image-node')).toHaveAttribute('data-offset-x', '-800');
+  await expect(editor.locator('.image-wrap-gap')).toHaveCount(0);
+  await editor.evaluate(root => {
+    const instance = (root as HTMLElement & { editor: import('@tiptap/core').Editor }).editor;
+    instance.commands.setNodeSelection(1); instance.commands.updateAttributes('floatingImage', { offsetX: -150, offsetY: -20 });
+  });
+  await expect.poll(() => editor.locator('.image-wrap-gap').count()).toBeGreaterThan(0);
+  await editor.getByAltText('Fuori testo').click();
+  const original = (await editor.getByAltText('Fuori testo').boundingBox())!;
+  const handle = (await editor.locator('.editor-image-resize-handle-tc').boundingBox())!;
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2); await page.mouse.down();
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2 + 25, { steps: 5 }); await page.mouse.up();
+  await expect.poll(async () => Math.abs((await editor.getByAltText('Fuori testo').boundingBox())!.x - original.x)).toBeLessThan(1);
+  await expect.poll(async () => Math.abs((await editor.getByAltText('Fuori testo').boundingBox())!.y - original.y)).toBeLessThan(1);
+  await expect(editor.locator('.editor-image-node')).toHaveAttribute('data-offset-x', '-150');
 });

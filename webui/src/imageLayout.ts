@@ -8,7 +8,8 @@ export const normalizeImageLayout = (value: unknown): ImageLayout => value === '
 
 export const normalizeImageWidth = (value: unknown): number => {
   const numeric = typeof value === 'number' ? value : Number.parseFloat(String(value ?? '56'));
-  return Number.isFinite(numeric) ? Math.min(100, Math.max(20, Math.round(numeric * 100) / 100)) : 56;
+  // Width is relative to the text area, and can exceed it after a resize.
+  return Number.isFinite(numeric) ? Math.max(20, Math.round(numeric * 100) / 100) : 56;
 };
 
 export const normalizeImageOffsetY = (value: unknown): number => {
@@ -39,7 +40,7 @@ export const imageWrapperStyle = (width: number, layout: ImageLayout, _align: Im
   return {
     width: layout === 'wrap' ? '0px' : `${width}%`,
     height: layout === 'wrap' ? '0px' : 'auto',
-    maxWidth: '100%',
+    maxWidth: 'none',
     position: 'relative' as const,
     display: 'inline-block',
     verticalAlign: 'baseline',
@@ -64,7 +65,7 @@ export const imageWrapperCss = (width: number, layout: ImageLayout, align: Image
   return Object.entries(style)
     .filter(([, value]) => value !== undefined)
     .map(([key, value]) => `${key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}:${value}`)
-    .join(';') + ';';
+    .join(';') + (layout === 'wrap' && (offsetX || offsetY) ? `;transform:translate(${offsetX}px,${offsetY}px)` : '') + ';';
 };
 
 export const IMAGE_ASSET_CSS = 'display:block;width:100%;max-width:100%;height:auto;margin:0;padding:0;';

@@ -35,7 +35,7 @@ async function copySelectionToClipboard(editor: TiptapEditor, cut = false) {
     const { doc, selection } = editor.state;
     const prepared = prepareSelectionClipboard(editor.view);
     if (!prepared) return false;
-    await writeEditorClipboard(prepared.html, prepared.plainText, editor.view.dom);
+    await writeEditorClipboard(prepared.html, prepared.plainText, editor.view.dom, prepared.formats);
     if (cut && !editor.isDestroyed && editor.state.doc === doc && editor.state.selection.eq(selection)) {
       editor.view.dispatch(closeHistory(editor.state.tr).deleteSelection().scrollIntoView().setMeta('uiEvent', 'cut'));
       editor.view.focus();

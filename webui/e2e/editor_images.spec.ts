@@ -1331,6 +1331,83 @@ test('partial clear and empty caret preserve paragraph layout, future typing and
 });
 
 for (const layout of ['inline', 'wrap']) {
+  test(`${layout} resize crosses page edges and saves widths above 100 percent`, async ({ page, context }, testInfo) => {
+    test.setTimeout(120000);
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    // This fixture runs the deterministic offline transcription scenario.
+    // OS network changes must not prevent reaching the editor under test.
+    await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => true }));
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    const audio = testInfo.outputPath(`${layout}_resize_outside.wav`);
+    await openImageEditor(page, audio);
+    const editor = page.locator('.tiptap-editor');
+    const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+    const html = `<p>Paragrafo prima della figura.</p><p><span data-editor-image data-layout="${layout}" data-width="35" data-position="45" data-offset-y="${layout === 'wrap' ? 40 : 0}"><img src="${src}" alt="Resize fuori pagina"></span>${' Testo attorno.'.repeat(30)}</p><p>Fine documento.</p>`;
+    const image = editor.getByAltText('Resize fuori pagina');
+    const node = editor.locator('.editor-image-node');
+    const close = (actual: number, expected: number) => expect(Math.abs(actual - expected)).toBeLessThan(1.2);
+    const results = [];
+    for (const handleName of ['ml', 'mr', 'tl', 'br']) {
+      await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, html);
+      await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
+      await image.click();
+      const initial = (await image.boundingBox())!;
+      const paragraphWidth = await node.evaluate(el => el.closest('p')!.getBoundingClientRect().width);
+      const handle = (await node.locator(`.editor-image-resize-handle-${handleName}`).boundingBox())!;
+      const leftHandle = handleName.endsWith('l');
+      // Left handles cross the sheet edge; right handles grow past 100%.
+      const delta = paragraphWidth * (leftHandle ? 0.5 : 0.85);
+      const x = handle.x + handle.width / 2, y = handle.y + handle.height / 2;
+      await page.mouse.move(x, y); await page.mouse.down();
+      await page.mouse.move(x + (leftHandle ? -delta : delta), y, { steps: 12 });
+      const preview = (await page.locator('.editor-image-resize-preview img').boundingBox())!;
+      close(preview.width, initial.width + delta);
+      close(leftHandle ? preview.x + preview.width : preview.x, leftHandle ? initial.x + initial.width : initial.x);
+      close(handleName === 'tl' ? preview.y + preview.height : preview.y, handleName === 'tl' ? initial.y + initial.height : initial.y);
+      if (handleName === 'ml' || handleName === 'mr') close(preview.height, initial.height);
+      else close(preview.width / preview.height, initial.width / initial.height);
+      await expect(node).toHaveAttribute('data-width', '35');
+      if (handleName === 'mr') await page.screenshot({ path: testInfo.outputPath(`${layout}-outside-preview.png`) });
+      await page.mouse.up();
+      await expect(page.locator('.editor-image-resize-preview')).toHaveCount(0);
+      await expect.poll(async () => Math.abs((await image.boundingBox())!.width - preview.width)).toBeLessThan(1.2);
+      const final = (await image.boundingBox())!;
+      close(final.height, preview.height); close(final.x, preview.x); close(final.y, preview.y);
+      const saved = await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getHTML());
+      await page.keyboard.press('Control+z'); await expect(node).toHaveAttribute('data-width', '35');
+      await page.keyboard.press('Control+Shift+z');
+      await expect.poll(() => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getHTML())).toBe(saved);
+      await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+      await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
+      await page.locator('.queue-card.is-completed', { hasText: audio.split(/[\\/]/).pop()! }).getByRole('heading').click();
+      await expect(editor).toBeVisible();
+      await expect.poll(() => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getHTML())).toBe(saved);
+      close((await image.boundingBox())!.width, preview.width);
+      await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+c');
+      const clipboard = await readClipboardFormats(page);
+      const native = JSON.parse(JSON.parse(clipboard['application/x-vnd.google-docs-document-slice-clip+wrapped']).data).resolved;
+      const entity = Object.values(native.dsl_entitymap).find(value => (value as { ee_eo?: unknown }).ee_eo) as { ee_eo: { i_wth: number; i_ht: number } };
+      close(entity.ee_eo.i_wth / 0.75, preview.width);
+      close(entity.ee_eo.i_ht / 0.75, preview.height);
+      results.push({ handleName, initial, preview, final, saved, clipboard });
+      if (layout === 'wrap' && handleName === 'br') {
+        const beforeDrag = (await image.boundingBox())!;
+        const grabX = beforeDrag.x + beforeDrag.width / 2, grabY = beforeDrag.y + beforeDrag.height / 2;
+        await page.mouse.move(grabX, grabY); await page.mouse.down();
+        await page.mouse.move(grabX + 30, grabY + 15, { steps: 4 });
+        const dragPreview = (await page.locator('.editor-image-drag-preview img').boundingBox())!;
+        await page.mouse.up();
+        await expect.poll(async () => Math.abs((await image.boundingBox())!.x - dragPreview.x)).toBeLessThan(1.2);
+        close((await image.boundingBox())!.y, dragPreview.y);
+        close((await image.boundingBox())!.width, beforeDrag.width);
+        await page.keyboard.press('Control+z');
+        await expect.poll(() => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getHTML())).toBe(saved);
+      }
+      if (handleName === 'br') await page.screenshot({ path: testInfo.outputPath(`${layout}-outside-reopened.png`) });
+    }
+    fs.writeFileSync(testInfo.outputPath(`${layout}-outside-results.json`), JSON.stringify(results));
+  });
+
   test(`${layout} resize keeps opposite edges fixed for all eight handles`, async ({ page, context }, testInfo) => {
     test.setTimeout(120000);
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -1367,7 +1444,8 @@ for (const layout of ['inline', 'wrap']) {
         else if (handleName === 'ml' || handleName === 'mr') close(preview.height, initial.height);
         else close(preview.width / preview.height, initial.width / initial.height);
         close(handleName.endsWith('l') ? preview.x + preview.width : preview.x, handleName.endsWith('l') ? initial.x + initial.width : initial.x);
-        close(handleName.startsWith('t') ? preview.y + preview.height : preview.y, handleName.startsWith('t') ? initial.y + initial.height : initial.y);
+        const bottomAnchored = handleName.startsWith('t') && handleName !== 'tc';
+        close(bottomAnchored ? preview.y + preview.height : preview.y, bottomAnchored ? initial.y + initial.height : initial.y);
         expect(await ghost.evaluate(el => getComputedStyle(el).opacity)).toBe('1');
         expect(await ghost.evaluate(el => getComputedStyle(el).outlineColor)).toBe(accentColor);
         if (handleName === 'br' && delta > 0) await page.screenshot({ path: testInfo.outputPath(`${layout}-anchored-resize.png`) });
@@ -1574,6 +1652,109 @@ test('inline selection keeps the image and its handles at the same position afte
   await page.keyboard.press('Control+z');
   await expect(editor.locator('p').nth(1).getByAltText('Selezione stabile')).toHaveCount(1);
 });
+
+test('wrap drag keeps the destination table cell through history and saved reopen', async ({ page, context }, testInfo) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await openImageEditor(page, testInfo.outputPath('table_drag_anchor.wav'));
+  const editor = page.locator('.tiptap-editor');
+  const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+  // Fixed columns keep the drop-position assertion independent of table auto-sizing.
+  const html = `<table><tr><td colwidth="300"><p>Prima cella</p></td><td colwidth="300"><p><span data-editor-image data-layout="wrap" data-width="35"><img src="${src}" alt="Figura nella seconda cella"></span>${'Testo nella seconda cella. '.repeat(12)}</p></td></tr></table><p>Fine</p>`;
+  await page.evaluate(async value => navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]), html);
+  await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
+  const image = editor.getByAltText('Figura nella seconda cella');
+  const cells = editor.locator('td');
+  await expect(cells.nth(1).locator('[data-editor-image]')).toHaveCount(1);
+  await expect.poll(async () => {
+    const paragraphs = await cells.locator('p').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().top));
+    return Math.abs(paragraphs[0] - paragraphs[1]);
+  }).toBeLessThan(1);
+  const read = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
+  const original = await read();
+  const drag = async (left: number) => {
+    const start = (await image.boundingBox())!;
+    await page.mouse.move(start.x + 15, start.y + 15); await page.mouse.down();
+    await page.mouse.move(left + 15, start.y + 15, { steps: 8 });
+    const preview = (await page.locator('.editor-image-drag-preview img').boundingBox())!;
+    await page.mouse.up();
+    await expect.poll(async () => Math.abs((await image.boundingBox())!.x - preview.x)).toBeLessThan(2);
+  };
+  await drag((await image.boundingBox())!.x + 20);
+  await expect(cells.nth(0).locator('[data-editor-image]')).toHaveCount(0);
+  await expect(cells.nth(1).locator('[data-editor-image]')).toHaveCount(1);
+  const moved = await read();
+  await page.keyboard.press('Control+z');
+  await expect.poll(read).toEqual(original);
+  await page.keyboard.press('Control+Shift+z');
+  await expect.poll(read).toEqual(moved);
+  await drag((await cells.nth(0).locator('p').boundingBox())!.x + 20);
+  await expect(cells.nth(0).locator('[data-editor-image]')).toHaveCount(1);
+  await expect(cells.nth(1).locator('[data-editor-image]')).toHaveCount(0);
+  await page.keyboard.press('Control+z');
+  await expect.poll(read).toEqual(moved);
+  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
+  await page.locator('.queue-card.is-completed', { hasText: 'table_drag_anchor.wav' }).getByRole('heading').click();
+  await expect.poll(read).toEqual(moved);
+  await expect(cells.nth(1).locator('[data-editor-image]')).toHaveCount(1);
+});
+
+for (const zoom of [{ key: 'Control+=', value: '1.1' }, { key: 'Control+-', value: '0.9' }]) {
+  test(`wrap drag survives zoom to ${zoom.value} through release, history and saved reopen`, async ({ page, context }, testInfo) => {
+    await page.setViewportSize({ width: 1400, height: 1000 });
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    const audio = testInfo.outputPath('drag_zoom.wav');
+    await openImageEditor(page, audio);
+    const editor = page.locator('.tiptap-editor');
+    const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+    const html = `<p><span data-editor-image data-layout="wrap" data-width="35"><img src="${src}" alt="Figura zoom"></span>${'Testo accanto alla figura. '.repeat(60)}</p><p>Fine</p>`;
+    await page.evaluate(async value => navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]), html);
+    await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
+    await page.keyboard.press('Control+0');
+    await expect(page.locator('.editor-page')).toHaveCSS('zoom', '1');
+    const image = editor.getByAltText('Figura zoom');
+    await image.click();
+    const read = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
+    const original = await read();
+    const initial = (await image.boundingBox())!;
+    await page.mouse.move(initial.x + 20, initial.y + 20); await page.mouse.down();
+    await page.mouse.move(initial.x + 80, initial.y + 70);
+    await expect(page.locator('.editor-image-drag-preview')).toBeVisible();
+    await page.keyboard.press(zoom.key);
+    await expect(page.locator('.editor-page')).toHaveCSS('zoom', zoom.value);
+    await page.mouse.move(initial.x + 110, initial.y + 90);
+    const preview = page.locator('.editor-image-drag-preview img');
+    await expect.poll(async () => {
+      const bounds = (await preview.boundingBox())!;
+      return Math.max(Math.abs(bounds.x - initial.x - 90), Math.abs(bounds.y - initial.y - 70));
+    }).toBeLessThan(2);
+    expect(await read()).toEqual(original);
+    const ghost = (await preview.boundingBox())!;
+    await page.mouse.up();
+    await expect(page.locator('.editor-image-drag-preview, .editor-image-alignment-guide')).toHaveCount(0);
+    await expect.poll(async () => {
+      const bounds = (await image.boundingBox())!;
+      return Math.max(Math.abs(bounds.x - ghost.x), Math.abs(bounds.y - ghost.y), Math.abs(bounds.width - ghost.width), Math.abs(bounds.height - ghost.height));
+    }).toBeLessThan(2);
+    const committed = (await image.boundingBox())!;
+    const moved = await read();
+    expect(moved).not.toEqual(original);
+    await page.keyboard.press('Control+z');
+    await expect.poll(read).toEqual(original);
+    await page.keyboard.press('Control+Shift+z');
+    await expect.poll(read).toEqual(moved);
+    await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+    await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
+    await page.locator('.queue-card.is-completed', { hasText: 'drag_zoom.wav' }).getByRole('heading').click();
+    await expect(editor).toBeVisible();
+    await expect.poll(read).toEqual(moved);
+    await expect.poll(async () => {
+      const bounds = (await image.boundingBox())!;
+      return Math.max(Math.abs(bounds.x - committed.x), Math.abs(bounds.y - committed.y), Math.abs(bounds.width - committed.width), Math.abs(bounds.height - committed.height));
+    }).toBeLessThan(2);
+    fs.writeFileSync(testInfo.outputPath('drag-zoom-readback.json'), JSON.stringify({ zoom: zoom.value, initial, preview: ghost, committed, original, moved, reopened: await read() }, null, 2));
+  });
+}
 
 test('wrap dragging moves immediately without cloning the document on pointer movement', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);

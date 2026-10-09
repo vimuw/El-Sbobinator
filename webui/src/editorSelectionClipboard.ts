@@ -43,8 +43,16 @@ export function prepareSelectionClipboard(view: EditorView) {
   // A slice can omit the table shell, including for a word inside a cell.
   // Materialize the selected blocks' actual sizes before portable defaults.
   const blocks = Array.from(fragment.querySelectorAll<HTMLElement>('p,h1,h2,h3,h4,h5,h6,pre'));
+  const sourceFigures: HTMLElement[] = [];
   let blockIndex = 0;
   doc.descendants((node, pos) => {
+    if (node.type.name === 'floatingImage' && selection.ranges.some(range => pos < range.$to.pos && pos + node.nodeSize > range.$from.pos)) {
+      const source = view.nodeDOM(pos);
+      if (source instanceof HTMLElement) {
+        const figure = source.matches('.editor-image-node') ? source : source.querySelector<HTMLElement>('.editor-image-node');
+        if (figure) sourceFigures.push(figure);
+      }
+    }
     if (!selection.ranges.some(range => pos + node.nodeSize - 1 > range.$from.pos && pos + 1 < range.$to.pos)) return false;
     if (!node.isTextblock) return;
     const block = blocks[blockIndex++];
@@ -76,7 +84,7 @@ export function prepareSelectionClipboard(view: EditorView) {
     html = fragment.innerHTML;
   }
   const plainText = clipboardPlainText(fragment);
-  const nativeFormats = createNativeClipboardFormats(html, view.dom, inlineSelection);
+  const nativeFormats = createNativeClipboardFormats(html, view.dom, inlineSelection, sourceFigures);
   if (!nativeFormats) html = prepareHtmlLineSpacing(html);
   const formats = nativeFormats ?? { 'text/html': html, 'text/plain': plainText };
   return { html, plainText, formats };

@@ -62,6 +62,8 @@
   pointer-events: none;
   user-select: none;
   line-height: 0;
+  will-change: transform;
+  contain: layout style;
 }
 
 .editor-image-resize-preview {

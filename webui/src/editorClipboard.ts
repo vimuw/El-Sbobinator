@@ -1,4 +1,4 @@
-import { normalizeImageAspectRatio, normalizeImageAlignment, normalizeImageLayout, normalizeImagePosition, normalizeImageOffsetY } from './imageLayout';
+import { normalizeImageAspectRatio, normalizeImageAlignment, normalizeImageLayout, normalizeImagePosition, normalizeImageOffsetY, normalizeImageWidth } from './imageLayout';
 import { clipboardPlainText, DOCUMENT_FORMATTING, EDITOR_CONTENT_WIDTH_PX, formatPortableHtml, headingStyle, orderedListStyle, paragraphSpacing, pointSize } from './documentFormatting';
 import { createClipboardEquation, type ClipboardEquation } from './clipboardEquations';
 import { resampleClipboardImageSync } from './utils';
@@ -59,15 +59,17 @@ export const clipboardImageSize = (img: HTMLImageElement, sourceRoot?: HTMLEleme
 };
 
 /** Return null for content we cannot represent faithfully in the native format. */
-export function createNativeClipboardFormats(html: string, sourceRoot?: HTMLElement, inlineSelection = false): ClipboardFormats | null {
+export function createNativeClipboardFormats(html: string, sourceRoot?: HTMLElement, inlineSelection = false, sourceFigures?: readonly HTMLElement[]): ClipboardFormats | null {
   const body = new DOMParser().parseFromString(html, 'text/html').body;
+  const displayedFigures = sourceFigures ?? Array.from(sourceRoot?.querySelectorAll<HTMLElement>('.editor-image-node') ?? []);
+  let figureIndex = 0;
   if (body.querySelector('iframe, video, figcaption:not([data-editor-image] figcaption)')) return null;
   for (const figure of body.querySelectorAll<HTMLElement>('[data-editor-image]')) {
     const caption = figure.querySelector('figcaption, .editor-image-caption')?.textContent ?? figure.getAttribute('data-caption');
     // Docs resets floating-table X coordinates even on its own native paste.
     // A caption groups with its image in a table, so wrapping at a nonzero X cannot use
     // this adapter without moving the figure.
-    if (caption && normalizeImageLayout(figure.getAttribute('data-layout')) === 'wrap' && normalizeImagePosition(figure.getAttribute('data-position'), normalizeImageAlignment(figure.getAttribute('data-align'))) > 0) return null;
+    if (caption && normalizeImageLayout(figure.getAttribute('data-layout')) === 'wrap' && (normalizeImagePosition(figure.getAttribute('data-position'), normalizeImageAlignment(figure.getAttribute('data-align'))) > 0 || normalizeImageOffsetY(figure.getAttribute('data-offset-x')) !== 0)) return null;
   }
   const equations = new Map<HTMLElement, ClipboardEquation>();
   for (const element of body.querySelectorAll<HTMLElement>('[data-math], [data-math-block]')) {
@@ -164,17 +166,29 @@ export function createNativeClipboardFormats(html: string, sourceRoot?: HTMLElem
     setStyle('paragraph', at, style);
   };
   const image = (img: HTMLImageElement, container: HTMLElement) => {
+    const displayed = displayedFigures[figureIndex++];
     const size = sizes.get(img)!;
-    const rawWidth = Number.parseFloat(container.getAttribute('data-width') ?? '56');
-    const width = Math.round(EDITOR_CONTENT_WIDTH_PX * Math.min(100, Math.max(20, Number.isFinite(rawWidth) ? rawWidth : 56)) / 100);
+    const width = Math.round(EDITOR_CONTENT_WIDTH_PX * normalizeImageWidth(container.getAttribute('data-width') ?? 56) / 100);
     const height = width / (normalizeImageAspectRatio(container.getAttribute('data-aspect-ratio')) ?? size.width / size.height);
     const align = normalizeImageAlignment(container.getAttribute('data-align'));
     const layout = normalizeImageLayout(container.getAttribute('data-layout'));
     const position = normalizeImagePosition(container.getAttribute('data-position'), align);
+    const caption = container.querySelector('figcaption, .editor-image-caption')?.textContent ?? container.getAttribute('data-caption') ?? '';
+    let offsetY = normalizeImageOffsetY(container.getAttribute('data-offset-y'));
+    // Wrap decorations can move the paragraph while keeping its image fixed.
+    // Docs offsets are relative to that paragraph, so export the displayed
+    // offset, not the unadjusted saved value. HTML/internal paste stays intact.
+    const surface = displayed?.querySelector<HTMLElement>('.editor-image-surface');
+    const paragraph = displayed?.closest<HTMLElement>('p,h1,h2,h3,h4,h5,h6');
+    if (!caption && layout === 'wrap' && displayed && sourceRoot?.offsetWidth && sourceRoot.contains(displayed) &&
+        displayed.querySelector('img')?.getAttribute('src') === img.getAttribute('src') && surface && paragraph) {
+      const scale = sourceRoot.getBoundingClientRect().width / sourceRoot.offsetWidth;
+      const rect = surface.getBoundingClientRect();
+      if (scale > 0 && rect.width > 0 && rect.height > 0) offsetY = (rect.top - paragraph.getBoundingClientRect().top) / scale;
+    }
 
     const entityId = id();
     const placeholder = `PLACEHOLDER_sbobinator_${serial}`;
-    const caption = container.querySelector('figcaption, .editor-image-caption')?.textContent ?? container.getAttribute('data-caption') ?? '';
     const wrapMargins = !caption && layout === 'wrap' ? { top: 3, bottom: 12, left: 12, right: 12 } : { top: 0, bottom: 0, left: 0, right: 0 };
     const nativeImage = img.cloneNode(true) as HTMLImageElement;
     resampleClipboardImageSync(nativeImage, width, sourceRoot);
@@ -218,7 +232,7 @@ export function createNativeClipboardFormats(html: string, sourceRoot?: HTMLElem
       },
       // Docs positions the outside of the wrapping margins; editor attributes
       // position the image itself. Translate the origin as well as the units.
-      ...(!caption && layout === 'wrap' ? { pe_l: 0, pe_lo: (EDITOR_CONTENT_WIDTH_PX - width) * position / 100 * 0.75 - wrapMargins.left, pe_to: normalizeImageOffsetY(container.getAttribute('data-offset-y')) * 0.75 - wrapMargins.top } : {}),
+      ...(!caption && layout === 'wrap' ? { pe_l: 0, pe_lo: ((EDITOR_CONTENT_WIDTH_PX - width) * position / 100 + normalizeImageOffsetY(container.getAttribute('data-offset-x'))) * 0.75 - wrapMargins.left, pe_to: offsetY * 0.75 - wrapMargins.top } : {}),
     };
     entityTypes[entityId] = caption || layout === 'inline' ? 'inline' : 'positioned';
     if (caption) {
@@ -424,12 +438,12 @@ export function setClipboardFormats(event: ClipboardEvent, formats: ClipboardFor
 }
 
 /** Button/context-menu copies use the same ClipboardEvent formats as Ctrl+C. */
-export async function writeEditorClipboard(html: string, plainText: string, sourceRoot?: HTMLElement): Promise<void> {
-  const formats = createNativeClipboardFormats(html, sourceRoot);
-  if (!formats) {
+export async function writeEditorClipboard(html: string, plainText: string, sourceRoot?: HTMLElement, preparedFormats?: ClipboardFormats): Promise<void> {
+  const formats = preparedFormats ?? createNativeClipboardFormats(html, sourceRoot);
+  if (!formats || !formats[NATIVE_SLICE_MIME]) {
     await navigator.clipboard.write([new ClipboardItem({
-      'text/html': new Blob([prepareHtmlLineSpacing(html)], { type: 'text/html' }),
-      'text/plain': new Blob([plainText], { type: 'text/plain' }),
+      'text/html': new Blob([formats?.['text/html'] ?? prepareHtmlLineSpacing(html)], { type: 'text/html' }),
+      'text/plain': new Blob([formats?.['text/plain'] ?? plainText], { type: 'text/plain' }),
     })]);
     return;
   }
