@@ -29,7 +29,7 @@ SUPPORTED_MODELS: tuple[str, ...] = (
     "gemini-3.8-flash",
 )
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3.5-flash"
 DEFAULT_FALLBACK_MODELS: tuple[str, ...] = ()
 
 MODEL_OPTIONS: tuple[ModelOption, ...] = (
@@ -40,7 +40,6 @@ MODEL_OPTIONS: tuple[ModelOption, ...] = (
         "default_chunk_minutes": 15,
         "default_macro_char_limit": 22000,
         "phase1_temperature": 0.35,
-        "is_default": True,
     },
     {
         "id": "gemini-3.5-flash",
@@ -49,6 +48,7 @@ MODEL_OPTIONS: tuple[ModelOption, ...] = (
         "default_chunk_minutes": 15,
         "default_macro_char_limit": 22000,
         "phase1_temperature": 0.35,
+        "is_default": True,
     },
     {
         "id": "gemini-3.6-flash",

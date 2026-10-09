@@ -7,7 +7,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import type { ApiUsageResult, CredentialProfile } from '../../../bridge';
-import { getModelDisplayName, sortModelsByVersion, MODEL_ORDER } from '../../../utils';
+import { DEFAULT_MODEL, getModelDisplayName, sortModelsByVersion, MODEL_ORDER } from '../../../utils';
 
 interface QuotasSectionProps {
   apiUsage?: ApiUsageResult | null;
@@ -19,9 +19,9 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
   ({
     apiUsage,
     isLoadingUsage,
-    preferredModel = 'gemini-2.5-flash',
+    preferredModel = DEFAULT_MODEL,
   }) => {
-    const effectivePreferredModel = preferredModel || 'gemini-2.5-flash';
+    const effectivePreferredModel = preferredModel || DEFAULT_MODEL;
 
     const projectLimits = useMemo(
       () => apiUsage?.project_limits || {},

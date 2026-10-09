@@ -16,6 +16,7 @@ from el_sbobinator.bridge.bridge_utils import (
     bridge_error,
     bridge_ok,
 )
+from el_sbobinator.core.model_registry import DEFAULT_MODEL
 from el_sbobinator.services import config_service
 from el_sbobinator.utils import file_ops
 from el_sbobinator.utils.logging_utils import redact_secrets
@@ -99,9 +100,7 @@ class SystemControllerMixin:
                 if fallback_keys is not None
                 else cfg.get("fallback_keys", [])
             )
-            pref_model = preferred_model or cfg.get(
-                "preferred_model", "gemini-2.5-flash"
-            )
+            pref_model = preferred_model or cfg.get("preferred_model", DEFAULT_MODEL)
             fb_models = (
                 fallback_models
                 if fallback_models is not None

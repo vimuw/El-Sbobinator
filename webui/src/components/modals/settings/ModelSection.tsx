@@ -28,7 +28,8 @@ export const ModelSection: React.FC<ModelSectionProps> = React.memo(({
     () => sortedModels.map(m => ({
       value: m.id,
       label: m.label,
-      badge: (m.is_default || m.id === DEFAULT_MODEL || m.id === 'gemini-2.5-flash') ? 'Default' : undefined,
+      badge: (m.is_default || m.id === DEFAULT_MODEL) ? 'Default' : undefined,
+      tooltip: m.id === 'gemini-2.5-flash' ? 'Google consente l’uso solo a chi ha già usato questo modello. Se è la prima volta che lo usi, potrebbe non funzionare.' : undefined,
     })),
     [sortedModels],
   );
