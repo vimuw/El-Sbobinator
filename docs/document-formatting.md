@@ -20,12 +20,48 @@ se prevale lo spazio prima del titolo, non viene trasferita al paragrafo precede
 Il profilo corrente non sopprime lo spazio dopo h2/h3/h4.
 Preparare più volte lo stesso frammento non accumula contenitori o distanze.
 
-Dal 3 ottobre 2026 il testo normale usa Arial 11, interlinea CSS 1,38 e spazio
-prima/dopo 0 pt. Il valore nativo Docs corrispondente nel riferimento osservato
-è 1,15. I titoli 1–5 usano peso 400, dimensioni 20/16/14/12/11 pt, colori
-nero/nero/`#434343`/`#666666`/`#666666` e spazi prima 20/18/16/14/12 pt e dopo
-6/6/4/4/4 pt. Il titolo 6 importato conserva il profilo precedente.
+La dimensione ereditata della tabella è `table.fontSizeEm` (0,875): con il
+profilo Arial 11 pt, una cella senza dimensione esplicita usa 9,625 pt.
+Editor e copia portabile leggono lo stesso valore; ripreparare l'HTML non
+applica nuovamente il fattore a una tabella già dimensionata. Se una selezione
+omette il contenitore tabella, la copia materializza la dimensione effettiva
+dei blocchi della cella prima di rimuovere il loro involucro. La parola copiata
+mantiene 9,625 pt nel formato nativo di Docs; nel ripiego HTML Docs arrotonda
+il campione a 9,5 pt. L'interlinea ereditata è `table.lineHeight`
+(1,7142857), il valore già usato dalla tipografia dell'editor. Dal gruppo 41
+editor e copia leggono lo stesso profilo: paragrafi senza interlinea esplicita
+mantengono il valore anche con font diretto o span relativo. Titoli e
+interlinee esplicite conservano i propri valori. Una selezione senza tabella
+materializza anche l'interlinea ereditata, senza cambiare il documento sorgente.
+Nel corpus Docs conserva il rapporto nativo misurato 1,49004 dopo riapertura;
+il rapporto non è un valore CSS da reinserire direttamente nell'app.
+
+Dal 5 ottobre 2026 il testo normale usa Arial 11, interlinea CSS 1,38 e spazio
+prima/dopo predefinito zero, come il riferimento Docs. Un solo Invio crea il
+paragrafo successivo senza una riga aggiuntiva; due Invii lasciano un paragrafo
+vuoto della normale altezza di riga. Shift+Invio resta nel paragrafo corrente.
+Il primo fix da 15,18 pt automatici è stato corretto dopo la segnalazione di
+spazio eccessivo con Invio. Gli spazi espliciti rimangono preservati.
+Liste e celle mantengono spazio predefinito zero. Il valore nativo Docs
+corrispondente all'interlinea nel riferimento osservato è 1,15.
+Tutti i titoli usano peso 700 e colore `#000000`. I livelli 1–5 conservano
+dimensioni 20/16/14/12/11 pt e spazi prima 20/18/16/14/12 pt e dopo
+6/6/4/4/4 pt. Il livello 6 mantiene dimensione 10 pt e spazi 7,2/3,6 pt.
 I valori espliciti prevalgono; non si riscrivono i documenti storici in massa.
+
+La separazione richiesta per le **nuove sbobine generate** viene applicata
+da `build_html_document` ai confini paragrafo/paragrafo, paragrafo/elenco,
+elenco/paragrafo ed elenco/elenco. Vale una riga del profilo, calcolata da
+font e interlinea (11 × 1,38 = 15,18 pt); non viene applicata fra le voci,
+nelle liste annidate o nelle celle. Non si inseriscono paragrafi vuoti.
+Un attributo `data-generated-space-before` conserva lo spazio iniziale
+sul paragrafo che apre il blocco, anche dopo salvataggio e copia.
+`generatedSpaceBefore` usa `keepOnSplit: false`: Invio conserva quel confine
+sul blocco originale e crea il nuovo paragrafo o la nuova voce senza
+ereditarne lo spazio. Gli stili diretti restano distinti e vengono preservati.
+L'importazione di documenti esistenti non applica la formattazione generata.
+Rimuovi formattazione su un blocco intero azzera anche questo spazio; undo
+lo ripristina. Prove e limiti aggiornati nel gruppo 36 della matrice.
 
 `EditorDocumentStyle` conserva e serializza gli stili diretti di paragrafi e
 titoli e l’eventuale `data-document-line-spacing`. Il selettore della dimensione

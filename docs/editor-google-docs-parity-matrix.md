@@ -1,7 +1,7 @@
 # Matrice di parità dell’editor e del trasferimento a Google Docs
 
-Data: 5 ottobre 2026. Collegamento al [piano](editor-google-docs-parity-plan.md).
-Stato: inventario iniziale e primi trentaquattro gruppi di verifica e correzione; il piano completo è
+Data: 8 ottobre 2026. Collegamento al [piano](editor-google-docs-parity-plan.md).
+Stato: inventario iniziale e primi quarantasette gruppi di verifica e correzione; il piano completo è
 ancora aperto. Ogni riga copre soltanto le proprietà e le azioni indicate.
 
 Priorità aggiornata il 4 ottobre: editor continuo, documenti misti, fedeltà
@@ -9,6 +9,59 @@ app → Docs e verifica nella build desktop. PAGE-01 è rinviato e non blocca
 il completamento delle funzioni correnti. Le nuove microvarianti di tastiera
 hanno priorità quando riproducono un difetto o proteggono una correzione;
 le prove precedenti rimangono conservate.
+
+SAFE-UPDATE-01 dell'8 ottobre aggiunge il percorso updater dalle impostazioni
+con endpoint locali, SHA-256 reale, Setup interattivo e riavvio `[Run]`.
+Checksum errato, veto di salvataggio, annullamento e recupero passano;
+68 controlli delle evidenze verificano modelli completi e persistenza.
+Identità e versioni Setup artificiali, stesso payload corrente strumentato;
+distribuzione GitHub, UAC/migrazione HKLM e release reale rimangono aperti.
+
+Decisione di perimetro dell'8 ottobre: su indicazione dell'utente, macOS è
+escluso dal collaudo operativo attivo e dai requisiti di chiusura Windows.
+Le righe che riportano macOS aperto conservano il limite delle prove storiche:
+il percorso nativo rimane non verificato, senza bloccare l'accettazione Windows.
+
+Consolidamento Windows del 7 ottobre: [tre documenti rappresentativi](editor-desktop-acceptance-2026-10-07.md).
+WebView2 reale con dist di produzione/bridge Python, appunti OS e Docs nel
+browser integrato verificati separatamente; titolo predefinito dopo incolla
+HTML corretto. Anche PyInstaller onedir verificato sui tre campioni con
+cronologia, autosave, riavvio e ricopia OS. Completato sui tre campioni il
+passaggio diretto OS → Brave → Docs, digitazione/undo, salvataggio, reload e
+ricopia; installer e macOS aperti. Limiti del fallback HTML confermati.
+Nuove microvarianti MIX-13 sospese; Fase P rinviata.
+
+Affidabilità, 8 ottobre: SAVE-04 misura due chiusure prima del timer nel
+PyInstaller/WebView2 di prova; flush a 146,6/158,4 ms dalla modifica, successo
+o errore reale con finestra aperta, poi sblocco/salvataggio/riapertura.
+SAVE-03 aggiunge la prova nel medesimo pacchetto con eccezioni vecchie dopo
+salvataggio più recente e cambio A → archivio → B. Osservatore e ritardi
+sintetici solo nel pacchetto di collaudo; corpus testuale delimitato.
+SAFE-EDIT-01 aggiunge taglio completo dei tre campioni e Canc/sostituzione
+di una selezione estesa nel misto, con undo/redo, salvataggio e riavvio.
+Corretto lo stile perso da Sostituisci singolo/tutto; nuovo PyInstaller
+conserva i formati nelle tre sostituzioni del misto, anche dopo riavvio.
+La soglia quotidiana complessiva, altri gesti SEARCH-02, installer e macOS
+restano aperti.
+
+SAFE-REAL-01 dell'8 ottobre verifica apertura, modifica, undo/redo, autosave
+e riavvio su copie di quattro sbobine reali: 303.695 caratteri iniziali,
+16 immagini e due tabelle. Modelli riaperti identici a quelli modificati;
+hash degli originali invariati. SAVE-05 corregge spazi/tabulazioni persi
+nel caricamento HTML, con regressione DOM, salva/riapri Chromium e spazio
+iniziale verificato nel nuovo PyInstaller/WebView2. SAFE-LONG-01 aggiunge una
+sessione di 31 minuti e 43 secondi su Immunologia: almeno 30 minuti e 11 secondi
+campionati di audio attivo a volume zero, sei modifiche, grassetto, cronologia,
+seek/pausa/ripresa, autosave e nuovo processo con modello finale identico.
+SAFE-SETUP-01 aggiunge il ciclo Setup per utente con identità isolata:
+installazione/aggiornamento, modifica/cronologia/audio, riapertura,
+disinstallazione e reinstallazione conservano il corpus e la configurazione.
+SAVE-06 corregge una perdita riprodotta con Restart Manager e salvataggio
+fallito: `CloseApplications=yes` conserva app e testo e interrompe il Setup
+con codice 5; sblocco, chiusura, aggiornamento e riapertura recuperano il modello.
+64 controlli delle evidenze e gate completo passano. Inno Setup 6.7.3 portatile
+ora disponibile; identità reale v2.7.3, updater online, migrazione HKLM,
+wizard interattivo e macOS restano aperti.
 
 ## Ambiente e riferimento
 
@@ -26,8 +79,11 @@ le prove precedenti rimangono conservate.
   risultati di rimozione della formattazione, preservando Tab 1.
 - Il formato e i margini fisici del foglio non sono ancora misurati/allineati:
   questa prova certifica le proprietà elencate, non identità di a capo o pagine.
-- WebView2/WKWebView impacchettate: da verificare. Il browser integrato non
-  certifica il trasferimento degli appunti della build desktop.
+- WebView2 PyInstaller onedir: tre campioni verificati il 7 ottobre nel
+  [resoconto desktop](editor-desktop-acceptance-2026-10-07.md). Installer e
+  WKWebView impacchettata restano da verificare. Prova diretta separata in
+  Brave esterno: copia dal pacchetto, Ctrl+V, digitazione/undo, Saved to Drive,
+  reload, ricopia OS e confronto API, sui soli tre campioni rappresentativi.
 
 Nel nuovo documento Docs osservato, il testo normale è Arial 11, nero, peso
 400, interlinea nativa 1,15 e spazio prima/dopo 0 pt. I titoli 1–5 osservati
@@ -92,12 +148,22 @@ la verifica dopo riapertura di questo caso rimane aperta.
 | --- | --- | --- | --- | --- |
 | COPY-01 | Selezionare parte di un titolo con font/colore/corsivo; copiare conservando stili e testo selezionato | Nessuna nel caso eseguito | Verificato nel payload/DOM; confronto di questa selezione in Docs e build desktop ancora aperto | `editorParity.dom.test.tsx` |
 | SAVE-01 | Modificare, salvare e riaprire un documento con layout diretto e formule inline/blocco | La normalizzazione della preview eliminava line-height, margini verticali, interlinea nativa e attributi sorgente delle formule; la formula inline diventava testo duplicato | Corretto; regressioni DOM con schema reale e ciclo Chromium di modifica/undo/redo/taglio/riapertura. Testo e formati nativi persistono. La correzione non recupera formule già sovrascritte come testo | `previewHtml.ts`, test DOM, `editor_images.spec.ts` |
+| SAVE-02 | Chiudere la finestra Windows con modifiche non salvate; mantenere aperto l'editor se il salvataggio fallisce, riprovare e riaprire | Nel PyInstaller reale, file bloccato → Errore salvataggio → Alt+F4 chiudeva e perdeva la modifica | Corretto e verificato nel nuovo PyInstaller/WebView2: Alt+F4 bloccato su errore, testo recuperabile; file sbloccato → nuova richiesta salva e chiude; riapertura e arresto dopo salvataggio confermato mantengono lo stesso HTML. Regressioni su bridge assente, digitazione durante flush e risposta del documento precedente. L'8 ottobre SAVE-04 misura la chiusura sotto 700 ms e SAVE-03 ripete le risposte obsolete nel pacchetto strumentato. Altri documenti/tempistiche, installer e macOS aperti | `webview_entry.py`, `useEditorAutosave.ts`, relativi test, [resoconto SAVE-02/04](editor-desktop-acceptance-2026-10-07.md), `_smoke/editor-safety-2026-10-07/`, `_smoke/editor-close-debounce-2026-10-08/` |
+| SAVE-03 | Ignorare un'eccezione autosave obsoleta dopo il salvataggio di una modifica più recente o un cambio documento | Il catch del timer impostava Errore salvataggio anche se documento/generazione non erano più correnti | Corretto con la stessa guardia delle risposte riuscite; due regressioni inizialmente rosse e gate finale verde. WebView2 dal sorgente: prima falso errore, dopo Autosave con testo salvato; A → archivio → B e riapertura A passano. L'8 ottobre stesso corpus nel nuovo PyInstaller strumentato: eccezione vecchia dopo seconda scrittura e dopo apertura B non alterano testo/indicatore; B invariato e riapertura A passa. Ritardi/eccezioni indotti dall'osservatore, scritture reali; altri corpus, installer e macOS aperti | `useEditorAutosave.ts`, `useEditorAutosave.dom.test.tsx`, [resoconto SAVE-03/04](editor-desktop-acceptance-2026-10-07.md), `_smoke/editor-save-latency-2026-10-07/`, `_smoke/editor-close-debounce-2026-10-08/` |
+| SAVE-04 | Chiudere Windows prima dei 700 ms del debounce, con file libero o sostituzione atomica bloccata; riprovare e riaprire | Confine desktop non misurato nelle precedenti prove SAVE-02/03 | Verificato l'8 ottobre nel PyInstaller/WebView2 di prova: flush a 146,6 ms con dirty vero → una richiesta salva prima di chiudere; a 158,4 ms con file bloccato → errore reale e finestra aperta, token recuperabile e assente dal file. Sblocco → nuovo Alt+F4 salva e chiude, riapertura conserva i token. HTML finale identico al baseline tolti i soli token; altri due HTML invariati. Osservatore solo nel pacchetto di collaudo, corpus testuale; altre tempistiche/documenti, scritture parziali, installer e macOS aperti | [resoconto SAVE-04](editor-desktop-acceptance-2026-10-07.md), `_smoke/editor-close-debounce-2026-10-08/check.py`, `results.json`, cronologie JSONL e snapshot UI |
 | MIX-04 | Trasferire il documento misto con tabella a colonne diverse/cella unita, immagine inline e formula supportata; salvare e riaprire in Docs | Il ciclo nell'app perdeva layout e formula prima della copia, risolto in SAVE-01 | Verificato dopo riapertura Docs: testo, 18 campioni di stile, D/b/E, colonne 157,5/292,5 pt, cinque celle visibili, immagine 166,5×111 pt e comandi frazione/apice. Wrap, didascalie, HTML, selezioni miste e desktop restano aperti | `editor-parity-mixed.html`, `representative-transfer-readback.json`, `representative-api-readback.json` |
 | MIX-05 | Trasferire il documento misto con wrap destra e con didascalia sinistra dopo la tabella dati; salvare e riaprire in Docs | Due tabelle native adiacenti, la seconda per la didascalia, venivano mostrate ma il servizio rifiutava il salvataggio | Corretto il separatore; Docs salva e dopo riapertura coincidono testo, 18/19 campioni di stile, lista, celle visibili, larghezze, dimensioni immagine e formula. Wrap senza didascalia conserva coordinate/margini. Il gruppo 32 corregge la coordinata Y emessa, ma Docs la azzera all'incolla anche nella propria ricopia: geometria completa e desktop aperti | `editorClipboard.ts`, test DOM/browser, `mixed-caption-left-readback.json`, `caption-offset-positive-readback.json`, `caption-offset-self-paste-readback.json` |
 | MIX-07 | Ripetere il documento misto con didascalia sinistra wrap e offset Y -20/0/18 px, cronologia, salvataggio e riapertura | Un offset negativo faceva spostare ripetutamente la tabella precedente insieme all'ancora immagine, fino a un layout enorme; la copia nativa azzerava la coordinata sorgente | Corretto il ciclo del wrap e l'emissione Y; cinque configurazioni Chromium passano. In Docs contenuto e struttura persistono, zero coincide, ma -15/+13,5 pt diventano zero. Nessuna chiusura della geometria nel destinatario | `imageWrap.ts`, `editorClipboard.ts`, `editor_images.spec.ts`, `caption-offset-*-readback.json` |
 | MIX-08 | Verificare ancoraggio fisso, padding e spazio prima come alternative per il gruppo immagine/didascalia | La coordinata flottante viene riscritta all'incolla; gli spazi interni possono conservare Y visivo ma occupano anche l'area vuota nel wrap | Alternative misurate, nessuna correzione applicata: «Fix on page» modifica Y; padding/spazio prima conservano 18/120 px e struttura dopo riapertura, ma a 120 px le righe sopra la figura restano respinte a destra, diversamente dal riferimento nativo. Y non nullo e desktop aperti | `caption-alternatives-readback.json`, `caption-alternatives-geometry.json`, `caption-alternatives-api-readback.json` |
-| MIX-06 | Copiare lo stesso documento con didascalia wrap a destra, che impone HTML all'intero frammento | Il ripiego degrada anche il contenuto circostante | Incompatibilità confermata dopo salvataggio/riapertura: immagine inline, interlinea 1,38 invece di 1,15, frazione non nativa e testo «yx2», seconda colonna 291,75 invece di 292,5 pt. Didascalia, celle unite, padding e bordi delle celle 0,75 pt rimangono presenti. MIX-09 verifica che i flag di allineamento destro non evitano il ripiego conservando la geometria. Nessuna chiusura della fedeltà HTML | `mixed-caption-right-html-readback.json`, `mixed-wrap-api-readback.json`, tab sintetico HTML |
+| MIX-06 | Copiare lo stesso documento con didascalia wrap a destra, che impone HTML all'intero frammento | Il ripiego degrada anche il contenuto circostante | Gruppo 39 corregge l'interlinea dei paragrafi non vuoti. Gruppo 44 corregge l'altezza assente negli appunti dell'immagine caricata: Docs passa dalla misura intrinseca 180×120 a 167×111 pt per il gruppo previsto a 166,5×111 pt; rapporto esplicito previsto 199,5×99,75 → 200×100 pt. Pixel e geometria interna conservati, tastiera/pulsante concordi. Restano immagine inline senza wrap/offset, arrotondamento, frazione non nativa «yx2», seconda colonna 291,75 invece di 292,5 pt e vuoti dipendenti dalla destinazione. Didascalia, celle unite, padding e bordi rimangono presenti. MIX-09 mantiene il limite della copia nativa a destra. Nessuna chiusura della fedeltà HTML | `image-html-44-results.json`, `image-html-44-check.log`, `image-html-44-trusted-intrinsic/`, `image-html-44-trusted-explicit/`, precedenti readback misti |
 | MIX-09 | Verificare allineamento nativo a destra con Y zero per il gruppo immagine/didascalia | Il riferimento Docs conserva X dopo riapertura, ma ricopia/incolla azzera X anche con allineamento destro | Verifica del destinatario/prototipo, nessuna modifica applicativa: X 284,315 -> 0 pt nella ricopia Docs; `tbls_al: 2` e `hp_a: 2` persistono ma non spostano la figura a destra. PNG: figura a X 778 nel riferimento e X 400 dopo incolla, stessa quota Y; il testo cambia lato. Contenuto, stili e frazione nativa persistono; 66 altri tab invariati. MIX-06, altri formati possibili e desktop restano aperti | `caption-right-readback.json`, `caption-right-geometry.json`, `caption-right-api-readback.json`, `caption-right-check.mjs` |
+| SAFE-EDIT-01 | Selezioni ampie, taglio/Canc/sostituzione, undo/redo, autosave e riavvio Windows | Confine quotidiano desktop aperto; Sostituisci tutto perdeva il grassetto nel misto | Verificato l'8 ottobre nel corpus sintetico isolato: taglio completo dei tre campioni; selezione da paragrafo a fine misto attraverso lista/tabella/immagine/formule, Canc e inserimento sostitutivo. Undo ripristina contenuto e stili, redo ripete il gesto, riavvio conserva il modello. Corretto lo stile di Sostituisci singolo/tutto; nuovo pacchetto mantiene le tre sostituzioni e tutti gli altri valori. Selezioni di celle, clipboard fallita desktop, altri gesti/search, corpus reali diversi da SAFE-REAL-01, installer e macOS restano aperti | `EditorFindReplace.tsx`, quattro regressioni DOM, [resoconto SAFE-EDIT-01](editor-desktop-acceptance-2026-10-07.md), `_smoke/editor-destructive-2026-10-08/` |
+| SAFE-REAL-01 | Aprire, modificare, annullare/ripetere, salvare e riaprire sbobine reali preesistenti in Windows | Corpus reale non ancora collaudato nel pacchetto aggiornato | Verificato l'8 ottobre su copie isolate di quattro lezioni da 38 mila a 106 mila caratteri: testo, enfasi esplicite, struttura e dati di 16 immagini/tabelle importati; undo recupera il modello, redo ripete la modifica; autosave, Alt+F4 e nuovo processo conservano esattamente i modelli modificati. Hash di HTML/metadati/audio originali invariati; 113 confronti sulle evidenze. Altri documenti, sessione lunga audio, installer e macOS aperti | [resoconto SAFE-REAL-01](editor-desktop-acceptance-2026-10-07.md), `_smoke/editor-real-transcripts-2026-10-08/` |
+| SAFE-LONG-01 | Sessione prolungata Windows con audio, modifiche, cronologia, salvataggio e riavvio | Sessione lunga audio ancora aperta dopo SAFE-REAL-01 | Verificato l'8 ottobre su una nuova copia isolata di Immunologia (76.157 caratteri/12 immagini): 31 min 43 s, almeno 30 min 11 s campionati di audio attivo a 1×/1,25×; sei inserimenti, grassetto dei token 05/06, due cicli undo/redo, lettera da tastiera in grassetto annullata, navigazione, seek ±10 s e pausa/ripresa. 13 scritture riuscite, modello riaperto esatto, originali invariati e processi chiusi; 41 controlli sulle evidenze. Volume zero e nessuna prova acustica; reset del player a 0:00/1×/volume 1 nel nuovo processo. Altri documenti, carichi, tempi, installer e macOS aperti | [resoconto SAFE-LONG-01](editor-desktop-acceptance-2026-10-07.md), `_smoke/editor-long-audio-2026-10-08/` |
+| SAVE-06 | Aggiornamento Setup con testo non salvato ed errore di scrittura | Restart Manager con `CloseApplications=force` termina l'app e perde il token non salvato | Riprodotto l'8 ottobre nel pacchetto installato con HTML realmente bloccato: errore visibile, chiusura forzata e token assente alla riapertura. Corretto a `CloseApplications=yes`; variante equivalente allo script corretto mantiene app e modello intero, interrompe Setup con codice 5 e lascia la versione installata invariata. Sblocco, flush riuscito, aggiornamento corretto e riapertura conservano esattamente il modello recuperato. Identità Setup isolata, esecuzione silenziosa; il successivo SAFE-UPDATE-01 aggiunge updater con endpoint locali e wizard interattivo, senza chiudere la distribuzione online reale | `packaging/windows/installer.iss`, [resoconto SAVE-06](editor-desktop-acceptance-2026-10-07.md), `_smoke/editor-installer-2026-10-08/` |
+| SAFE-UPDATE-01 | Updater dalle impostazioni, checksum errato, errore di salvataggio, recupero e ritorno al lavoro | Percorso updater e wizard interattivo non ancora collaudati in SAFE-SETUP-01 | Verificato l'8 ottobre nel nuovo PyInstaller/WebView2 installato: checksum errato visibile senza avvio Setup; download rallentato con modifica nell'editor e HTML bloccato; chiusura updater e Restart Manager rispettano il veto, app/modello/versione rimangono intatti; annullamento del wizard termina con codice 5. Sblocco e chiusura normale salvano il modello esatto; nuovo aggiornamento interattivo riavvia automaticamente l'app, conserva dati/config e tutti i 982 file del payload coincidono. Modifica successiva, undo/redo e ultima riapertura restituiscono i modelli attesi. 68 controlli delle evidenze e gate completo verdi; nessuna nuova correzione applicativa. Endpoint locali, identità isolata, versioni Setup 9.9.0/9.9.1 con stesso payload strumentato. GitHub reale, UAC/HKLM, identità reale, release senza strumentazione e pulizia automatica del temporaneo aperti | [resoconto SAFE-UPDATE-01](editor-desktop-acceptance-2026-10-07.md), `_smoke/editor-updater-2026-10-08/` |
+| SAFE-SETUP-01 | Installazione, aggiornamento, disinstallazione e reinstallazione Windows per utente | Compilatore assente e Setup non collaudato | Verificato l'8 ottobre con Inno Setup 6.7.3 portatile: Setup da script originale compilato e variante con GUID/nome/collegamenti separati installata silenziosamente sotto `_smoke`. 982 file del pacchetto precedente e 996 del nuovo coincidono con quelli installati; modifica, undo/redo, audio a volume zero e modelli riaperti esatti. Aggiornamento corretto, disinstallazione e reinstallazione conservano i dati/config; originali e installazione reale v2.7.3 invariati nei confronti registrati. Rimossa l'installazione di prova e tutti i suoi processi/collegamenti. 64 controlli evidenze e gate completo passano. Versioni Setup artificiali e payload strumentato; nessuna release. Migrazione HKLM, identità reale, updater online, wizard interattivo e macOS aperti | [resoconto SAFE-SETUP-01](editor-desktop-acceptance-2026-10-07.md), `_smoke/editor-installer-2026-10-08/` |
+| SAVE-05 | Conservare spazi iniziali/finali, spazi ripetuti e tabulazioni nei paragrafi/titoli salvati e riaperti | Spazio iniziale presente nell'HTML della sbobina reale perso alla riapertura; DOM riproduce compressione degli altri spazi | Corretto: serializzazione pre-wrap sui soli blocchi che ne hanno bisogno, parser dedicato e lettura esplicita dello shorthand nella preview Chromium, con guardia MathML. DOM setContent/nuova istanza, regressione Chromium del percorso reale salva/riapri e spazio inserito con evento tastiera nel PyInstaller verificati. Non recupera spazi già persi e sovrascritti; altri destinatari/Docs non ricollaudati qui | `editorExtensions.ts`, `previewHtml.ts`, `editorParity.dom.test.tsx`, `editor_saved_whitespace.spec.ts`, [resoconto SAVE-05](editor-desktop-acceptance-2026-10-07.md) |
 | CUT-01 | Copiare e tagliare lo stesso documento misto; confrontare tutti i formati e annullare il taglio | Ctrl+X usava HTML standard e testo con separatori diversi da Ctrl+C | Corretto; DOM e gesto browser verificati | `editorSelectionClipboard.ts`, `RichTextEditor.tsx`, `editor_images.spec.ts` |
 | CUT-02 | Tagliare con appunti assenti, formato rifiutato o trasferimento fallito | Il percorso standard poteva eliminare comunque la selezione | Corretto; regressioni DOM, incluso fallimento del menu contestuale | `editorParity.dom.test.tsx`, `EditorContextMenu.dom.test.tsx` |
 | CUT-03 | Cambiare selezione mentre la copia del menu è ancora in corso | Il menu tagliava la selezione corrente dopo l’attesa | Corretto; regressione con promessa controllata | `EditorContextMenu.tsx`, relativi test |
@@ -112,9 +178,13 @@ la verifica dopo riapertura di questo caso rimane aperta.
 | MARK-02 | Usare colore insieme a evidenziatura in entrambi gli ordini di annidamento | CSS e conversione forzavano il testo evidenziato nero | Corretto; regressioni DOM, gesto browser e colore `#123abc` su sfondo `#ffee00` conservati in Docs nei due percorsi | CSS, conversioni, corpus e readback |
 | FONT-02 | Incollare uno stile diretto sul blocco e leggere il selettore della dimensione | Stile del blocco non serializzato e valori px mostrati come punti | Corretto; 24px mostrati come 18pt, parser/serializzazione verificati; stili diretti del titolo conservati in Docs. Selezioni miste ancora aperte | `editorDocumentStyle.ts`, `TypographySelects.tsx` |
 | CLEAR-02 | Rimuovere formattazione da toolbar, menu, bubble e Ctrl+Backslash; annullare | Comandi discordanti; alcuni trasformavano titoli/liste e rimuovevano link | Comando comune; quattro gesti browser conservano titoli, liste, tabelle e link, azzerano stile diretto/allineamento e permettono undo. Formule e selezione parziale coperte da DOM; comportamento strutturale, link e allineamento confrontati in Docs | `editorDocumentStyle.ts`, controlli, `editorParity.dom.test.tsx`, Playwright |
-| MIX-02 | Copiare il corpus con matrice; verificare anche il testo e gli elenchi circostanti | HTML KaTeX escapato visibile, layer accessibile duplicava formula e annotazione LaTeX | Corretto rendering/duplicazione; HTML reale conserva colore, evidenziatura e lista 4–5. Incompatibilità aperta: interlinea nativa 1,38 anziché 1,15; formule ridotte a testo, matrice senza struttura matematica editabile | `editorExtensions.ts`, `documentFormatting.ts`, `fallback-readback.json` |
+| MIX-02 | Copiare il corpus con matrice; verificare anche il testo e gli elenchi circostanti | HTML KaTeX escapato visibile, layer accessibile duplicava formula e annotazione LaTeX | Corretto rendering/duplicazione; gruppo 39 corregge l'interlinea dei paragrafi testuali. Gruppo 45 delimita la perdita dopo salvataggio/reload/API: frazione, indici/radice, sommatoria e matrice diventano testo, zero equazioni; MathML diretto non recupera la struttura. Nell'app LaTeX, modifica/undo/redo e riapertura conservati. Selezione mista nativa senza matrice: tre alberi matematici esatti, modifica di un parametro e undo verificati. MIX-02 resta aperto per parità HTML; nessuna compensazione runtime | `editor_html_equations.spec.ts`, `equations-html-45-results.json`, `equations-html-45-check.log`, precedenti readback |
 | CLEAR-03 | Rimuovere formattazione da selezione parziale, cursore vuoto e selezione su più paragrafi | Il comando ripristinava allineamento, interlinea e margini anche senza selezionare tutto il testo del blocco; le modifiche del documento azzeravano i mark per la digitazione successiva | Corretto; Docs confrontato su titolo parziale, paragrafo intero, cursore con digitazione e tre paragrafi. DOM/browser verificano layout, stili esterni, digitazione, undo e copia. Due risultati dell’app incollati e riletti in Docs mantengono font, colori, centratura, interlinea 1,6 e spazi 8/10 pt anche dopo riapertura | `editorDocumentStyle.ts`, `editorParity.dom.test.tsx`, Playwright, `clear-reference-readback.json`, `clear-transfer-readback.json` |
-| MIX-03 | Provare varianti HTML in destinazioni con interlinea 1,15 e 2 | L’interlinea CSS e quella nativa hanno unità differenti nel parser HTML di Docs | Varianti non adottate: `calc(1.38)` eredita 2 dalla destinazione doppia, un wrapper sintetico di provenienza Docs non corregge il rapporto. Un’interlinea nel figlio conserva quella nativa del paragrafo nei campioni, ma non dimostra fedeltà generale. MIX-02 resta aperto | `fallback-variants-readback.json`, Tab 2 sintetico |
+| MIX-03 | Provare varianti HTML in destinazioni con interlinea 1,15 e 2 | L’interlinea CSS e quella nativa hanno unità differenti nel parser HTML di Docs | Gruppo 39: adottata nel ripiego clipboard la conversione misurata del font, con ripristino CSS nell'app; standard 1,15, personalizzato circa 1,3907 e didascalia 1,4 persistono in Docs, anche con destinazione 2. Verificati altri font e primo paragrafo personalizzato di una sottolista. Geometria portabile e incolla interno conservati rispetto al controllo HTML precedente. Paragrafi vuoti, MIX-10 e altri limiti HTML restano aperti | `editorLineSpacing.ts`, `editor_html_leading.spec.ts`, `html-leading-39-check.log`, `html-leading-39-api-readback.json`; gruppo 38 conserva il controesempio precedente |
+| MIX-10 | Copiare e reincollare una cella senza dimensione del font esplicita | La copia materializzava 11 pt invece dei 9,625 pt ereditati dalla tabella | Gruppo 40: corretto nell'app, con dimensioni dei blocchi, cella a interlinea 1,8, undo/redo e riapertura conservati. La parola senza contenitore tabella mantiene 9,625 pt nella copia nativa e in Docs salvato/riaperto. La copia nativa di tabelle più ampie e il desktop restano da verificare; l'arrotondamento del ripiego HTML è MIX-11 | `documentFormatting.ts`, `editorSelectionClipboard.ts`, `editor_html_leading.spec.ts`, `table-font-40-check.log` |
+| MIX-11 | Incollare in Docs font frazionari attraverso il ripiego HTML | Nel corpus Docs arrotonda 9,625 → 9,5 pt e 14,4375 → 14,5 pt | Gruppo 43: incompatibilità del destinatario delimitata su 16 font e due campioni di tabella; HTML arrotonda al mezzo punto più vicino dopo riapertura/API, anche con px/em/percentuali. App e copia nativa conservano tutti i valori, inclusa la tabella. Nessun aggiramento nelle rappresentazioni provate; parità HTML ancora aperta, senza arrotondare il documento sorgente | `editor_fractional_fonts.spec.ts`, `fractional-font-43-check.log`, `fractional-font-43-results.json` |
+| MIX-12 | Copiare celle senza interlinea esplicita | L'interlinea CSS ereditata della tabella veniva sostituita dal profilo del paragrafo | Gruppo 41: corretto nel corpus, CSS 1,7142857 ereditata; altezza 32 px del paragrafo 14 pt e 33 px della testata conservate dopo copia, incolla, cronologia e riapertura. Rapporto nativo 1,49004 in Docs salvato/riaperto, confermato dalla API. Selezione senza tabella conserva font e interlinea; WebView2/WKWebView aperti | `documentFormatting.ts`, `editorSelectionClipboard.ts`, `editor_html_leading.spec.ts`, `table-leading-41-check.log` |
+| MIX-13 | Conservare i paragrafi vuoti interni fra lista e tabella nel ripiego HTML | Il corpus dell'app contiene i blocchi vuoti, ma Docs li omette e passa direttamente dalla lista alla tabella | Gruppo 42: un vuoto; gruppo 46: due vuoti normali consecutivi. Gruppo 47: due vuoti con Georgia 18 pt grassetto / Courier New 10 pt corsivo, interlinee e margini distinti conservati in nativo e HTML dopo reload, API, digitazione nei due offset e undo. App conserva stili/marche/cronologia/riapertura. Altre posizioni/marche, selezioni e desktop aperti | `editorLineSpacing.ts`, `CustomParagraph`, `editor_html_empty_paragraphs.spec.ts`, `editor_html_styled_empty.spec.ts`, `empty-html-46-results.json`, `styled-empty-html-47-results.json`, precedenti prove gruppo 42 |
 | MATH-02 | Copiare funzioni nominate, limiti inline/blocco, sommatoria, integrale, prodotto e frazione annidata; salvare e riaprire in Docs | `sin`, `cos`, `log` e altre funzioni diventavano lettere ordinarie; limiti inferiori usavano la funzione a due argomenti; operatori inline usavano apice/pedice generici anziché estremi | Corretto; nove equazioni e 26 comandi con posizioni identiche alla fonte dopo incolla e riapertura; dieci campioni di stile del testo/paragrafo uguali. `sin x` modificato in `sin y` da tastiera e ripristinato con undo. Matrici, nomi/stili non verificati e ripiego HTML restano aperti | `clipboardEquations.ts`, test DOM/browser, `editor-parity-equations.html`, `equations-reference-readback.json`, `equations-transfer-readback.json` |
 | LIST-02 | Copiare elenchi alfabetici/romani con numeri iniziali, tre livelli e più paragrafi nella stessa voce | La copia nativa convertiva tutti i marcatori in decimali e aggiungeva un numero a ogni paragrafo; Typography sovrascriveva i marcatori importati | Corretto nel percorso nativo; 21 paragrafi conservano marcatori, livelli, inizi, rientri e spaziatura dopo incolla e riapertura. Continuazioni senza marcatori; D–E, ii–iii, c–d e III–IV verificati. HTML puro ha ancora differenze strutturali | `editorLists.ts`, CSS, `documentFormatting.ts`, `editorClipboard.ts`, DOM/Playwright, `lists-transfer-readback.json` |
 | LIST-03 | Salvare e rileggere numero iniziale e tipo di un elenco numerato | La sanitizzazione backend eliminava `start` e `type` da `ol` | Corretto; regressione backend e incolla/serializzazione nell'app conservano gerarchia, tipo e numero iniziale. Il browser verifica copia/taglio identici e undo; non certifica il ciclo nella build desktop | `html_export.py`, relativo test, `editor-parity-lists.html` |
@@ -168,10 +238,11 @@ La ricerca attraversa mark contigui, ma non attraversa nodi non testuali.
 | LIST-01 — elenchi | Toolbar, scorciatoie, Enter/Tab/Shift+Tab, split/merge, livelli e numero iniziale | LIST-02/03 coprono import, continuazioni native e salvataggio. LIST-04/05/06 coprono i gesti e le selezioni indicati. LIST-07 corregge il primo Backspace su voci composte da paragrafi/titoli, con testo separato, rientro e numerazione successiva conservati. LIST-08 azzera il rientro al secondo Backspace senza unire il testo. LIST-09 unisce al terzo gesto il testo alla voce precedente con undo separato. LIST-10 separa la cronologia di Canc e digitazione fra voci composte da paragrafi della stessa lista. LIST-11 corregge i tre confini con sottoliste di paragrafi indicati nella riga dedicata. LIST-12 corregge il primo Backspace con sottolista nei due corpus, conservando posizione e livelli. Prima voce, precedente con sottoliste/oggetti, altri confini di Canc, annidamento della prima voce, livelli misti, selezioni generali, split/merge e percorso inverso completo aperti. Nel ripiego HTML la continuazione dopo la sottolista diventa una nuova voce e altera il numero successivo | StarterKit, `editorLists.ts`, `editorClipboard.ts` |
 | MATH-01 — formule | Inserimento inline, blocchi importati, input/textarea LaTeX, navigazione e annullamento | Editing atomico nell’app diverso da Docs; MATH-02 chiude funzioni nominate e limiti nei casi provati, inclusa una modifica da tastiera in Docs. Conversione generale, matrici e altri gesti aperti | `MathInline`, `MathBlock`, `clipboardEquations.ts` |
 | IMAGE-01 — immagini | File, drop/paste, inline/wrap, drag/resize, proporzioni, didascalia, undo | Invarianti dei gesti già coperti dai test esistenti; confronto Docs combinato e desktop aperto | Moduli immagini e `FloatingImage.tsx` |
+| IMAGE-RESIZE-OUTSIDE | Ingrandire trascinando una maniglia oltre i margini/bordi del foglio | 8 ottobre: rimossi i limiti di posizione e larghezza al 100%; ml/mr/tl/br in In-line e Wrap verificati in Chromium con anteprima, rilascio, undo/redo, save/reopen e copia. La successiva traslazione Wrap di una figura sovradimensionata conserva la geometria. Riferimento Docs 763 × 147 px persistente; copia nativa della figura Wrap dell'app al 120% conserva dimensioni dopo save/reopen e digitazione annullata. Posizione inline al rilascio diversa in Docs; HTML fallback in Docs e gesto nei runtime confezionati aperti | `imageResize.ts`, `imageLayout.ts`, `imageDrag.ts`, `_smoke/resize-outside-2026-10-08-final/`, `resize-outside-docs-reference.json`, `resize-outside-docs-transfer.json` |
 | TABLE-01 — tabelle | Tabelle importate, editing/tastiera, selezioni di celle, resize, celle unite | Due celle trasferite in DOCS-01; bordi, padding e larghezze non ancora equivalenti | Kit Table, CSS e adattatore |
 | LINK-01 — link | Toolbar/menu/bubble, inserimento/modifica/rimozione, testo circostante | Da confrontare e uniformare | Controlli link, Link extension |
 | QUOTE-01 — citazioni | Toolbar e blockquote importati; rientri e modifica | Equivalente Docs da verificare; CSS Typography interferisce | StarterKit, CSS, adattatore |
-| SEARCH-02 — sostituzione | Successivo/precedente, selezione corrente, sostituisci singolo/tutto, formattazione e undo | SEARCH-01 non chiude focus, selezione o stile del testo sostitutivo | `EditorFindReplace.tsx` |
+| SEARCH-02 — sostituzione | Successivo/precedente, selezione corrente, sostituisci singolo/tutto, formattazione e undo | SAFE-EDIT-01 corregge lo stile perso: ogni sostituzione eredita i formati del primo carattere trovato, inclusi link e stili espliciti. Quattro regressioni DOM su singolo/tutto, confine di marche e cancellazione; Sostituisci tutto nel nuovo PyInstaller passa undo/redo, salvataggio e riavvio sul misto. Focus, navigazione/selezione corrente e altri gesti rimangono aperti | `EditorFindReplace.tsx`, `EditorFindReplace.dom.test.tsx`, [resoconto SAFE-EDIT-01](editor-desktop-acceptance-2026-10-07.md) |
 | OUTLINE-01 — indice | Titoli, annidamento, navigazione, focus | Da confrontare; estrazione attuale dei nodi principali | `extractHeadings`, `useTocScrollSpy.ts` |
 | ZOOM-01 — zoom | Selettore e scroll, caret/selezione, larghezza fisica e futuro numero di pagine | Da confrontare nei casi combinati | `RichTextEditor.tsx`, `TypographySelects.tsx` |
 | AUTO-01 — conversioni | Typography e SmartArrows da tastiera, undo | Da inventariare per sequenza e confrontare | `editorExtensions.ts`, Typography |
@@ -180,7 +251,7 @@ La ricerca attraversa mark contigui, ma non attraversa nodi non testuali.
 | MIX-01 — ripiego dell’intero frammento | Aggiungere formula non rappresentabile/video/immagine wrap con didascalia al corpus | Caso matrice misurato in MIX-02: formule appiattite e interlinea diversa. Video e immagini con didascalia ancora da provare | `createNativeClipboardFormats` |
 | ROUNDTRIP-01 — percorso inverso | Docs → app → salva → riapri, con strutture miste | Parser HTML conserva ora gli stili coperti; equazioni native, interlinea e altri attributi ancora aperti | Import, schema, persistenza |
 | PAGE-01 — pagine e numerazione (rinviato) | Perimetro futuro: A4, margini, paragrafo lungo, lista annidata, tabella multipagina, wrap a fondo pagina, caret/undo | Fuori dal lavoro corrente e dai suoi criteri di completamento; editor continuo. Prototipo, rapporto e artefatti di questa chat rimossi su richiesta. Rivalutare dopo l'accettazione delle funzioni correnti e del trasferimento nella build desktop | Fase P rinviata nel piano; nessuna integrazione corrente |
-| DESKTOP-01 — appunti nativi | Copia/taglio/incolla nella build WebView2 e WKWebView reale | Da verificare; nessuna prova browser chiude questo requisito | Runtime desktop |
+| DESKTOP-01 — appunti nativi | Copia/taglio/incolla nella build WebView2 e WKWebView reale | Parziale, 7 ottobre: tre corpus in WebView2 reale dal sorgente e da PyInstaller onedir; digitazione, undo/redo, autosave, riavvio, copia tastiera/pulsante e ricopie Windows. Consumo separato dei payload in Docs nella prova dal sorgente; completato poi il Ctrl+V diretto OS → Brave → Docs dal pacchetto, con digitazione/undo, Saved to Drive, reload, ricopia OS e confronti API/stili. Corretto colore predefinito dei titoli nell’incolla interno HTML, confermato nel pacchetto. Formule/geometria HTML mantengono i limiti misurati. Installer, taglio/selezioni più ampie e macOS aperti | [Resoconto desktop](editor-desktop-acceptance-2026-10-07.md), `_smoke/desktop-acceptance-2026-10-07/`, `_smoke/packaged-acceptance-2026-10-07/` |
 
 ## Verifica ripetibile del primo gruppo
 
@@ -2691,3 +2762,838 @@ nel ripiego HTML in destinazioni 1,15 e 2 prima di cambiare l'adattatore.
 Formule HTML, geometria delle didascalie, selezioni miste e desktop rimangono
 aperti. Paginazione e numeri di pagina restano rinviati.
 Nessun commit, push o release.
+
+
+## Gruppo 35 — sette segnalazioni e riporto WIP su main, 5 ottobre 2026
+
+Il piano esplicito dell'utente precede il prossimo confronto generale MIX-03.
+L'intero WIP, archivio compreso, è integrato localmente con fast-forward a
+`0ab9437`; le nuove correzioni restano nel working tree. Stash di sicurezza
+conservato. Nessun nuovo commit, push o release.
+
+| Caso | Stato e prova | Limite aperto |
+| --- | --- | --- |
+| BUG-01 — DOCX vuoto | Due percorsi × due corpus × tre download. Il misto immediato durante Saving è vuoto; salvato/riaperto mantiene testo, immagine, tabella e formula. XML vuoto identico all'originale. Dodici import e readback; apertura DOCX anche senza conversione riuscita. | Tempistica storica del download originale non dimostrata. Export immediato misurato tramite export autenticato, menu UI provato dopo salvataggio. |
+| BUG-02 — resize superiore | Maniglia tc: bordo superiore/X stabili entro 1 px in Chromium, In-line/Wrap a 75/100/150%. | Gesto mouse WebView2 non avviato dal helper Windows. |
+| BUG-03 — qualità della copia interna | Sorgente HTML invariata, derivative bitmap solo nativo Docs; montaggio senza ricompressione. PNG trasparente 1600×1000 conservato dopo copie/resize/undo/salvataggio. | Sequenza completa nativa copia interna/resize ancora da accettare. |
+| BUG-04 — titoli | Profilo livelli 1–6 nero/700, stili espliciti conservati. Backend/editor/clipboard/Docs e titolo WebView2 verificati. | Nessuna migrazione in massa dei documenti storici. |
+| BUG-05 — Wrap libero | Offset X/Y firmati, guide attraversabili, intersezione testuale, spostamento annullabile dalla toolbar; parser/resize/clipboard conservano offset. Il comando dedicato di recupero è stato rimosso su richiesta dell'utente. | Non chiude geometria Docs delle didascalie e parità HTML float centrale. Gesto desktop ancora aperto. |
+| BUG-06 — spazio paragrafi | 15,18 pt normali, liste/celle compatte, stili espliciti preservati. API Docs conferma spaceBelow 15.18 PT; WebView2 mostra 20,24 px. | Rimane differenza d'interlinea del ripiego HTML MIX-03. |
+| BUG-07 — Tab/audio | Consumato Tab non annidabile e Shift+Tab nel gestore liste; Tab letterale interno conservato. Chromium con audio e tre Tab su prima voce in WebView2 conservano focus/caret. | Altri percorsi completi di liste e macOS restano nel piano generale. |
+
+Gate con coverage passato (Python 88,25%; frontend linee 85,61%, rami 76,12%,
+funzioni 79,78%); 230 regressioni mirate, 50 casi browser esistenti con i cinque
+assert del profilo aggiornati e ripassati, 11 nuove regressioni Chromium.
+Build, lint/typecheck e diff-check passati. Frontend di produzione riaperto nel
+renderer reale WebView2 154.0.4258.53 tramite sorgente/bridge isolato; nessun
+nuovo installer. Payload realmente letto dal clipboard OS e importato in Docs,
+salvato e riaperto tramite browser integrato/file: non certifica il passaggio
+diretto app → browser esterno. Il helper non avvia drag/resize nella finestra:
+nessuna accettazione desktop di quei gesti dichiarata.
+
+Rapporto, tabella dei download, documenti sintetici e artefatti:
+[correzioni del 5 ottobre](editor-reported-bugs-2026-10-05.md).
+Questo gruppo non chiude MIX-02/MIX-03/MIX-06 o la parità generale.
+Editor continuo; Fase P e numeri di pagina rinviati.
+
+## Gruppo 36 — separazione della sbobina generata e Invio, 5 ottobre 2026
+
+La precisazione dell'utente sostituisce il default del gruppo 35: la sbobina
+appena generata deve separare paragrafi e blocchi elenco, mentre Invio deve
+creare il paragrafo o la voce seguente senza aggiungere un vuoto artificiale.
+Il profilo normale torna a zero; il generatore applica uno spazio prima,
+calcolato come una riga del profilo, soltanto ai confini dei blocchi originali.
+Il parser distingue questo spazio dagli stili diretti; l'attributo non si
+eredita quando il blocco viene diviso. Importazioni e documenti storici
+non ricevono una nuova formattazione automatica.
+
+| Caso | Prova e risultato | Limite |
+| --- | --- | --- |
+| Invio normale | Regressione iniziale: 20,24 px di margine dopo il paragrafo. Dopo correzione: zero; due Invii lasciano un paragrafo vuoto, Shift+Invio un'interruzione interna. Chromium misura la distanza entro 1 px e verifica salvataggio/riapertura. | Riferimento Docs normale verificato separatamente; nessuna certificazione di ogni stile importato. |
+| Nuova sbobina | Generatore reale da Markdown: Prima, Seconda, elenco Uno/Due, Dopo elenco. 15,18 pt prima di Seconda, Uno e Dopo elenco; zero fra le voci e nelle celle/liste annidate. Nessun paragrafo vuoto inserito. | I titoli mantengono le proprie distanze. Non cambia il riconoscimento semantico dei paragrafi nel testo prodotto dall'AI. |
+| Invio nella sbobina | Chromium e WebView2: Invio dopo Seconda e dopo Uno crea Nuova e Inserita senza spazio ereditato; il confine iniziale conserva il proprio spazio. Distanza dalla riga precedente pari alla sua altezza. | Windows verificato con sorgente, dist di produzione e bridge reale, senza nuovo installer. macOS non eseguito. |
+| Persistenza e clipboard | HTML, sanitizzazione, normalizzazione preview, parser e clipboard conservano tre spazi iniziali. DOM verifica copia nativa, split paragrafo/lista, rimozione formattazione e undo; browser verifica salvataggio/riapertura. | Test di trasferimento attuale da clipboard Chromium tramite file al browser integrato, non clipboard OS direttamente a browser esterno. |
+| Docs salvato/riaperto | Nel [documento sintetico](https://docs.google.com/document/d/171qk8qGmL3xB3YpPDzpDErYMuEh6kMhvte_-cVQTQ7Q/edit), API conferma 15,18 pt prima dei tre blocchi originali e zero per Nuova, Inserita, Due e Fine, conservando i bullet. | Rimane il paragrafo terminale vuoto della copia completa, distinto dalle distanze interne. Restano i limiti generali MIX-03 del ripiego HTML. |
+
+Gate completo passato: backend 88,29%, frontend 1335 test in 96 file;
+coverage linee 85,62%, rami 76,18%, funzioni 79,81%. 54 test backend mirati,
+130 test DOM pertinenti e due casi browser specifici passati; il caso generato
+è ripassato dopo l'aggiunta della cattura dei quattro formati clipboard.
+Build e diff-check passati. WebView2 154.0.4258.53 usa la build
+`e33e027655bd1d72c8c9399b`; audio presente e focus conservato durante Invio.
+Evidenze in `_smoke/paragraph-enter/`: `generated-release-check.log`,
+`generated-browser-check.log`, `generated-browser-copy.log`,
+`generated-docs-reopened.png`, `generated-docs-readback.json`,
+`generated-desktop-paragraph.json` e `generated-desktop-final.json`.
+Gli altri fix del gruppo 35 restano presenti. Nessun commit, push o release.
+
+## Gruppo 37 — riduzione del lavoro durante il drag Wrap, 5 ottobre 2026
+
+Segnalazione: leggero lag durante il movimento in Wrap libero. Il percorso
+precedente rileggeva stili, larghezza e rettangolo dell'editor a ogni
+pointermove; vicino alle guide rileggeva anche stili e rettangoli degli
+antenati, alternando letture di layout e scritture dell'anteprima.
+
+Il gestore ora raggruppa gli eventi in requestAnimationFrame e usa l'ultima
+posizione. La geometria viene conservata durante il gesto e aggiornata dopo
+scroll (anche automatico) o resize della finestra. L'anteprima dispone di
+un suggerimento di composizione e isolamento del layout. Il documento resta
+immutato fino al rilascio; il rilascio applica le coordinate più recenti anche
+prima del fotogramma pendente. Guide a 6 px, spostamenti oltre i bordi,
+annullamento, undo e recupero conservano le regole precedenti.
+
+Prova Chromium con immagine e 80 paragrafi lunghi: 121 eventi del puntatore,
+120 letture degli stili e 120 del rettangolo dell'editor prima del fix;
+una lettura di ciascun tipo dopo il fix, zero aggiornamenti del documento
+durante il gesto. Il test iniziale fallisce e quello corretto passa. La
+regressione DOM conferma che 21 eventi nello stesso intervallo disegnano
+l'ultima posizione in un solo fotogramma, senza nuove letture del layout;
+conferma anche invalidazione della cache e pulizia dopo annullamento.
+
+51 test DOM mirati e 12 browser passati: guide, auto-scroll In-line/Wrap,
+assenza di cloni durante il movimento, resize superiore ai tre zoom,
+attraversamento del bordo, recupero, rilascio e undo. Gate completo con
+coverage passato; build aggiornata e app riaperta. Le misure non sono una
+prova di FPS o della fluidità percepita in WebView2: il gesto nativo mantiene
+l'accettazione manuale aperta già registrata nel gruppo 35. Nessun confronto
+aggiuntivo di parità con Docs e nessun nuovo installer.
+
+Evidenze: `_smoke/wrap-smooth/before-unit.log`, `before-browser.log`,
+`before-browser-sample.json`, `browser-sample.json`, `after-unit.log`,
+`browser-regressions.log`, `release-check.log`, `build.log` e
+`reopen.stdout.log`. Nessun commit, push o release.
+
+## Gruppo 38 — interlinea HTML separata e controesempio dell'incolla interno
+
+**Data:** 6 ottobre 2026. **Perimetro:** MIX-03 sul documento misto con
+didascalia a destra, che richiede HTML per tutto il frammento. Ripresa dalla
+chat `01a10c26-6f97-75c1-a3b9-3c770369cd20`, tenendo conto delle correzioni
+della chat `01a10cce-c403-7153-b138-234ac752d61c`. Nessuna modifica al codice
+applicativo; prototipo diagnostico e verifica di accettabilità.
+
+La prova HTML precedente, non allora aggiunta alla matrice per il cambio di
+branch, resta in `_smoke/editor-parity/html-spacing-group35.md`: CSS numerica
+1,38 produce 1,38 in Docs; `calc` eredita la destinazione e perde i valori
+personalizzati; dividere per 1,2 conserva lo standard ma altera personalizzato
+e didascalia. Il numero storico di quel rapporto è distinto dal gruppo 35
+delle sette segnalazioni. Non vengono ripristinati quei vecchi default nel
+checkout corrente.
+
+**Prototipo:** sui paragrafi/titoli il valore numerico rappresenta il rapporto
+nativo; uno span inline contiene i figli originali e usa `calc` sul loro
+rapporto CSS. Le voci con un proprio paragrafo cambiano solo la proprietà
+della voce, senza avvolgere la sottolista. Lo standard usa l'attributo nativo
+1,15 già presente nel corpus. Il rapporto personalizzato
+1,3906996957844417 proviene dal riferimento nativo ed è riconfermato negli
+appunti del corpus esportato dal codice corrente. È un valore diagnostico
+del campione, non una calibrazione fissata per tutti i font. Il CSS della
+didascalia rimane 1,4.
+
+**Corpus corrente:** rieseguito il caso Chromium `mixed wrap images and
+captions preserve surrounding content through history, save and clipboard
+fallback`: cinque varianti, modifica della cella, undo/redo, copia/taglia,
+salvataggio e riapertura nell'app. Il nuovo HTML include i titoli e le regole
+di spaziatura del checkout corrente. Non si presume equivalenza byte per
+byte con il corpus precedente; i confronti Docs usano il rispettivo controllo.
+
+Cinque nuovi cicli completano incolla formattata, «Saved to Drive», reload,
+ricopia con appunti nativi e confronto: due prototipi del vecchio corpus,
+il controllo HTML corrente in destinazione 2 e due prototipi correnti.
+Le destinazioni sono impostate dai menu Docs e verificate mediante ricopia
+del testo iniziale; il solo tab sintetico `t.inhcdc2rlnfw` è svuotato prima
+delle prove. Nessuna scrittura sugli altri tab.
+
+| Variante corrente | Destinazione | Standard | Personalizzato | Didascalia | Paragrafo aggiunto dopo la tabella |
+| --- | --- | --- | --- | --- | --- |
+| HTML realmente esportato | 2 | 1,38 | 1,6 | 1,4 | 2 |
+| Interlinee separate | 1,15 | 1,15 | 1,3907 | 1,4 | 1,15 |
+| Interlinee separate | 2 | 1,15 | 1,3907 | 1,4 | 2 |
+
+Il readback nativo arrotonda il rapporto personalizzato a cinque decimali;
+la API finale restituisce 139,06999%. Il confronto col riferimento misurato
+usa una tolleranza 0,00001 e non dichiara uguaglianza numerica esatta.
+In ogni riapertura persistono testo, otto proprietà dei caratteri, paragrafi,
+livelli/marcatori D/b/E, tabella, celle e dimensioni dell'immagine. Fra
+controllo e prototipo dello stesso corpus cambiano soltanto le interlinee
+campionate; l'immagine è ancora inline e `yx2` non è un'equazione nativa.
+
+**Geometria portabile:** rendering Chromium dell'HTML a larghezza 634 px;
+stesso testo, immagini decodificate e font caricati. Sono confrontati i
+rettangoli dei 633 caratteri e dei 27 blocchi/celle/immagine/didascalia,
+nel vecchio corpus e in quello corrente. Nessuna differenza oltre 0,1 px.
+Questa misura riguarda l'HTML autonomo, non tutti i renderer di incolla.
+Nel browser integrato Docs a 1280×1000, zoom 100%, la distanza fra le bande
+di inchiostro delle due righe con ritorno interno passa da 26 px del controllo
+HTML a 21 px di entrambi i prototipi correnti. È una misura dell'inchiostro,
+non una certificazione di tutte le baseline o della geometria delle immagini.
+
+**Controesempio nell'app:** lo stesso HTML prototipo viene incollato nel
+checkout corrente attraverso la clipboard Chromium. Il parser conserva
+il contenuto ma importa il valore numerico del paragrafo come CSS, ignorando
+l'interlinea del wrapper inline:
+
+| Paragrafo | CSS originale → CSS reimportata | Altezza originale → reimportata |
+| --- | --- | --- |
+| Normale con ritorno interno | 1,38 → 1,15 | 40,46875 → 33,71875 px |
+| Personalizzato | 1,6 → 1,3907 | 23,46875 → 20,390625 px |
+
+Il test diagnostico passa perché riproduce queste differenze; non è una
+regressione risolta. La rappresentazione non viene adottata nell'adattatore:
+prima deve distinguere le due unità nell'importazione interna e conservare
+stili, strutture, selezioni, cronologia e HTML salvato. Restano da provare
+font diversi, blocchi vuoti e selezioni parziali; il rapporto misurato del
+solo campione non diventa una costante applicativa.
+
+La API confronta tutti i 67 tab prima/dopo: gli altri 66 restano invariati
+in contenuto, struttura, stili e metadati, escludendo soltanto `contentUri`
+delle immagini. Il tab finale contiene il prototipo corrente in destinazione
+2, salvato/riaperto; la API conferma una tabella, un'immagine inline, zero
+immagini posizionate, interlinea personalizzata e didascalia. Il paragrafo
+vuoto interno e quello terminale ereditano 2: non sono ignorati per chiudere
+la fedeltà del documento.
+
+**Controlli:** caso misto corrente passato; diagnosi di reimportazione
+passata; `html-leading-check.mjs` passato per cinque riaperture, proprietà,
+geometria, controesempio e preservazione dei tab; diff-check passato.
+Non cambia il codice applicativo: nessun nuovo gate completo, build o
+test desktop WebView2/WKWebView. Le verifiche dell'altra chat restano prove
+dei suoi cambiamenti e non sono rieseguite o attribuite a questo gruppo.
+
+Evidenze in `_smoke/editor-parity/`: `html-leading-current-browser.log`,
+`html-leading-current-playwright/`, `html-leading-prototype.py`,
+`html-leading-current-prototype.json`, `html-leading-readback.json`,
+`html-leading-api-readback.json`, `html-leading-portable-geometry.json`,
+`html-leading-portable-current-geometry.json`, `html-leading-docs-geometry.json`,
+`html-leading-reimport-readback.json`, `html-leading-reimport-check.log`,
+`html-leading-check.mjs`, `html-leading-check.log`, cinque PNG dei confronti
+e `html-leading-final.png`. I readback non conservano URL firmati.
+
+MIX-03 rimane aperto. Il prossimo caso è il ripristino della CSS originale
+nel percorso di incolla interno prima dell'adozione del formato separato,
+con conversione misurata dei font. Geometria delle didascalie, formule HTML,
+selezioni miste e desktop restano aperti; editor continuo, Fase P e numeri
+di pagina rinviati. Nessun commit, push o release.
+
+## Gruppo 39 — interlinea HTML adottata con ripristino CSS nell'app
+
+**Data:** 6 ottobre 2026. **Perimetro:** prossimo caso aperto del gruppo 38,
+chat `01a10e0e-6014-76d3-a0ff-fc3b131fb2af`; conservati tutti i cambiamenti
+preesistenti del working tree. La correzione riguarda il ripiego HTML della
+clipboard e la sua reimportazione, senza certificare la parità del documento
+misto nel suo insieme o il percorso Docs → app.
+
+**Implementazione:** `editorLineSpacing.ts` condivide con la copia nativa la
+misura della riga normale del font, a 1.000 pt per contenere l'arrotondamento,
+con cache per famiglia/peso/corsivo durante una copia. Il rapporto nativo
+viene scritto sul blocco e la CSS originale sul wrapper inline `calc(...)`.
+Un attributo di trasporto validato consente a `EditorDocumentStyle` di
+ripristinare la CSS originale. Wrapper e attributo non sono salvati nel
+documento. Sottoliste e oggetti restano fuori dagli span; le selezioni inline
+non ricevono una struttura di paragrafo. Le funzioni di copia applicano la
+conversione solo quando l'adattatore nativo non rappresenta il frammento.
+`formatPortableHtml`, export autonomo e struttura salvata non cambiano contratto.
+
+**Caso aggiuntivo riprodotto in Docs:** una voce annidata con primo paragrafo
+CSS 1,6 importava inizialmente 1,15. Il parser Docs legge il rapporto da `li`:
+la correzione scrive sulla voce quello del primo paragrafo, coerentemente con
+il modello nativo. La regressione DOM fallisce prima del fix; ricopia Docs
+prima/dopo e lettura API dopo riapertura confermano 1,15 → 1,3907.
+
+| Corpus / proprietà | Incolla interno nell'app | Docs salvato e riaperto |
+| --- | --- | --- |
+| Standard, Arial 11 pt | CSS 1,38, altezza della coppia di righe 40,46875 px conservata | 1,15 |
+| Personalizzato, Arial 11 pt | CSS 1,6 e altezza conservate | circa 1,3907 |
+| Georgia 18 pt corsivo | CSS 1,8 e dimensione conservate | circa 1,58416 |
+| Times New Roman 14 pt | CSS 22 pt e dimensione conservate | circa 1,36676 |
+| Courier New 10 pt | CSS `normal` e dimensione conservate | 1 |
+| Primo paragrafo della sottolista | CSS 1,6 e struttura conservate | circa 1,3907 dopo il fix su `li` |
+| Didascalia del documento misto | Percorso originale preservato nel caso misto | 1,4 |
+
+I valori numerici in Docs sono multipli della riga normale del font; non
+sono valori CSS unitless da reincollare direttamente nel documento dell'app.
+La tolleranza del rapporto trasferito è 0,00001, coerente con la precisione
+della serializzazione del browser/Docs. La tabella non misura la geometria
+completa del documento in Docs né ogni font disponibile.
+
+**Browser/app:** il caso misto corrente passa con cinque configurazioni
+immagine/didascalia, modifica della cella, cronologia, copia/taglia, pulsante
+e riapertura. Il nuovo caso copre i quattro font, ritorni interni, lista
+annidata, cella, paragrafo vuoto, matrice non supportata e selezione `Geo`.
+La copia richiede HTML per la matrice; l'incolla ripristina le interlinee e
+undo/redo annullano/ripristinano il documento. Salvataggio e riapertura non
+mantengono il dato di trasporto o gli span `calc`. Le geometrie importate
+coincidono con il controllo HTML precedente; le differenze già presenti
+fra il documento originario e quel controllo sono registrate separatamente.
+
+**Geometria HTML autonoma:** su 633 caratteri e 27 blocchi del documento misto,
+135 caratteri e 14 blocchi del corpus font, nessuna differenza nei rettangoli
+X/Y/larghezza/altezza oltre 0,1 px. Immagini decodificate e font pronti prima
+della lettura. Questa è una prova della resa portabile in Chromium.
+
+**Docs:** quattro cicli con «Saved to Drive», reload e ricopia con nuovi
+appunti nativi: misto sul punto iniziale 1,15 con due paragrafi vuoti a 2;
+misto su destinazione 2, confermata dal testo iniziale; font su destinazione
+2, prima e dopo la correzione della sottolista. Il codice finale produce per
+il misto lo stesso HTML verificato nei primi cicli. Il comparatore conserva
+testo e otto proprietà effettive dei caratteri, valori del paragrafo, tabella,
+cinque celle visibili e dimensioni dell'immagine rispetto al prototipo del
+gruppo 38. La lettura API finale conferma la voce personalizzata a 139,06999%
+e 66 tab su 66 invariati, esclusi soltanto gli URI temporanei delle immagini.
+
+**Limiti:** paragrafo vuoto interno omesso nel corpus font e vuoti del
+destinatario che ereditano 2, immagine ancora inline nel ripiego, formula
+ancora appiattita (zero equazioni native), seconda colonna 291,75 pt nel
+corpus misto. Selezioni miste più ampie, font assenti e WebView2/WKWebView
+restano da verificare. Il nuovo test isola inoltre MIX-10: la cella senza
+dimensione esplicita passa da 9,625 a 11 pt già nel controllo portabile
+precedente, con due righe da 46,15625 a 52,8125 px. Il nuovo trasporto ha la
+stessa geometria del controllo: questo difetto non è corretto da questo gruppo.
+
+**Verifica finale:** 10 regressioni del nuovo modulo, 1.343 test frontend / 96
+file nel gate, backend coverage 88,29%, frontend linee 85,71% e branch 76,25%,
+due casi Chromium, comparatore Docs/HTML, build e diff-check passati. Nessuna
+prova della nuova correzione in WebView2/WKWebView; la build non è un installer.
+
+Evidenze in `_smoke/editor-parity/`: `html-leading-39-final-browser/`,
+`html-leading-39-final-browser.log`, `html-leading-39-final-gate.log`,
+`html-leading-39-final-build.log`, `html-leading-39-geometry.json`,
+`html-leading-39-docs-mixed-115.json`, `html-leading-39-docs-mixed-2.json`,
+`html-leading-39-docs-fonts.json`, `html-leading-39-docs-fonts-final.json`,
+`html-leading-39-api-readback.json`, `html-leading-39-trusted/`,
+`html-leading-39-check.mjs`, `html-leading-39-check.log` e
+`html-leading-39-docs-final.png`. Readback sintetici senza URL firmati.
+
+MIX-03 resta aperto per i limiti documentati; il controesempio specifico del
+gruppo 38 è corretto e la conversione è adottata. Il prossimo caso è MIX-10
+sul font ereditato nelle celle. Nessun commit, push o release. Editor continuo,
+paginazione e numeri di pagina ancora rinviati.
+
+## Gruppo 40 — font ereditato nelle celle e nelle selezioni inline
+
+**Data:** 6 ottobre 2026. **Perimetro:** MIX-10, prossimo caso della chat
+`01a10e1b-64e0-71b3-aa77-5901719e2604`. Modifiche preesistenti conservate.
+
+**Riproduzione:** il nuovo test DOM fallisce prima della correzione:
+paragrafo normale 11 pt, cella e testata 11 pt nella copia, contro 9,625 pt
+effettivi nell'app; un paragrafo esplicito 14 pt rimane 14 pt.
+`table.fontSizeEm = 0.875` rende esplicito nel profilo comune il fattore
+già applicato dal CSS della tipografia. La copia risolve il fattore una
+volta, mentre font espliciti e ripreparazione rimangono stabili. Quando
+il frammento selezionato omette la tabella, `prepareSelectionClipboard`
+materializza la dimensione del blocco dalla sua posizione nel documento.
+La lettura usa le range della selezione e non modifica il documento sorgente.
+
+| Caso | App / clipboard | Docs dopo salvataggio e riapertura |
+| --- | --- | --- |
+| Cella senza dimensione, CSS interlinea 1,8 | 9,625 pt e altezza 46,15625 px conservati; prima 11 pt e 52,8125 px | Nel ripiego HTML 9,5 pt; rapporto interlinea 1,56454 conservato |
+| Cella con dimensione esplicita | 14 pt conservati | HTML 14 pt conservati |
+| Testata e span 150% | Font base 9,625 pt e span portabile 14,4375 pt | HTML 9,5 / 14,5 pt |
+| Parola «Cella», selezione senza tabella | Font 9,625 pt in HTML e nello slice nativo; incolla esterno nel paragrafo senza aggiungere blocchi | Percorso nativo 9,625 pt esatti, anche dopo riapertura; conferma API |
+
+**Browser:** corpus Arial/Georgia/Times/Courier, ritorni interni, lista
+annidata, matrice che impone il ripiego, tre celle, font esplicito, testata
+e span relativo. Tutti i font dei blocchi coincidono prima/dopo copia,
+incolla, undo/redo e riapertura. La geometria esatta è verificata per la
+cella a interlinea 1,8; non viene estesa ai blocchi con altre differenze.
+La parola è letta anche tramite evento nativo paste: la API clipboard
+asincrona di Chromium non enumera i formati custom. Lo slice effettivo
+contiene «Cella», nessun invio terminale e `ts_fs: 9.625`.
+
+Il documento misto passa nuovamente nelle cinque configurazioni di
+immagine/didascalia, incluse concordanza tastiera/pulsante, cronologia
+e riapertura. Questa prova non chiude la geometria del ripiego in Docs.
+
+**Docs:** incolla formattata dell'HTML realmente copiato, «Saved to Drive»,
+reload, nuova ricopia; poi incolla della parola realmente copiata nel
+formato nativo, salvataggio/reload/ricopia. API e slice confermano il font
+frazionario esatto del percorso nativo e quello arrotondato del ripiego.
+La lettura confronta i 66 tab estranei per contenuti, metadati, stili,
+intestazioni, note e oggetti, escludendo solo gli URI temporanei delle
+immagini: nessuna variazione. L'inventario iniziale non rileva controlli
+protetti nel tab diagnostico. Nessuna nuova condivisione del documento.
+
+**Limiti e prossimi casi:** MIX-11 è l'arrotondamento nel parser HTML di
+Docs, non corretto. MIX-12 riguarda la CSS ereditata della tabella: il
+font esplicito 14 pt conserva la dimensione ma il controllo portabile
+e l'incolla interno riducono l'altezza 32 → 25,765625 px; la testata con
+span relativo passa da 33 → 26,5625 px. La differenza resta separata dalla
+cella a interlinea esplicita corretta e diventa il prossimo gruppo.
+Paragrafi vuoti, strutture matematiche HTML, geometria immagini, selezioni
+di celle più ampie e native-table Docs restano da verificare o correggere.
+Nessuna prova WebView2/WKWebView di questo cambiamento; Fase P rinviata.
+
+**Controlli:** 173 test focalizzati; gate completo con 1.344 test frontend,
+backend coverage 88,31%, frontend linee 85,72% e branch 76,26%; due casi
+Chromium, più il caso con la lettura custom della clipboard nativa; build,
+comparatore semantico Docs/API e diff-check passati.
+
+Evidenze in `_smoke/editor-parity/`: `table-font-40-before.log`,
+`table-font-40-focused.log`, `table-font-40-verified/`,
+`table-font-40-native/`, `table-font-40-gate.log`, `table-font-40-build.log`,
+`table-font-40-trusted-3/`, `table-font-40-docs-pasted.json`,
+`table-font-40-docs-reopened.json`, `table-font-40-docs-native-word.json`,
+`table-font-40-docs-native-word-reopened.json`, `table-font-40-api-readback.json`,
+`table-font-40-check.mjs`, `table-font-40-check.log` e `table-font-40-docs-final.png`.
+MIX-10 corretto entro il corpus dichiarato; nessuna chiusura generale del
+trasferimento misto. Nessun commit, push o release.
+
+## Gruppo 41 — interlinea ereditata della tabella
+
+**Data:** 6 ottobre 2026. **Perimetro:** MIX-12, prossimo caso della chat
+`01a10e32-d8be-7b00-81d5-a47d25b1f46f`. Modifiche preesistenti conservate.
+
+**Riproduzione e correzione:** il nuovo test DOM fallisce con CSS 1,38 sulle
+tre celle prive di interlinea esplicita. Il valore già visualizzato dalla
+tipografia dell'editor, 1,7142857, diventa `table.lineHeight` nel profilo
+comune e viene letto da CSS e copia portabile. Titoli e CSS esplicita 1,8
+conservano la propria precedenza. Nessun fattore aggiunto ai font o
+riscrittura del documento sorgente. Le copie ripetute restano stabili.
+I tre test nativi DOM aggiornano l'aspettativa della cella: JSDOM non misura
+la riga normale del font e usa il fallback CSS; Chromium e Docs misurano
+invece il rapporto nativo effettivo.
+
+| Caso | Prima | App dopo incolla e riapertura | Docs salvato/riaperto |
+| --- | --- | --- | --- |
+| Paragrafo Arial 14 pt senza interlinea diretta | Altezza 32 → 25,765625 px | 32 px conservati | Rapporto nativo 1,49004; API 149,004% |
+| Testata, font base 9,625 pt e span 150% | Altezza 33 → 26,5625 px | 33 px conservati | Rapporto nativo 1,49004; font frazionari ancora arrotondati in HTML |
+| Cella CSS esplicita 1,8 | Già corretta nel gruppo 40 | Font 9,625 pt, due righe da 46,15625 px conservati | Rapporto 1,56454 conservato |
+| Parola «Esplicita» senza tabella | Interlinea ereditata assente dal frammento | HTML inline 14 pt / CSS 1,71429, nessuna modifica del sorgente | Questo nuovo frammento specifico non è stato incollato in Docs |
+
+Il test Chromium confronta direttamente i tre blocchi con il documento
+originale, oltre al precedente controllo HTML: font e altezze esatti,
+interlinea calcolata entro 0,001 px per arrotondamento CSS (32 → 32,0001 px;
+22 → 22,0001 px). Copia/taglia, undo/redo, incolla interno e riapertura
+mantengono il corpus. Il documento misto passa anche nelle cinque
+disposizioni immagine/didascalia, con tastiera e pulsante concordanti.
+
+**Docs e conservazione:** incollato l'HTML realmente prodotto da Ctrl+C,
+atteso «Saved to Drive», ricopiato, riaperto e ricopiato con identificativo
+nuovo. Il comparatore verifica i rapporti degli altri font e della sottolista,
+il testo dopo riapertura e le altezze nell'app. La lettura API conferma
+149,004% per «Esplicita» e «Testata Grande». Confrontati tutti i campi dei
+66 tab estranei (contenuti, metadati, stili, liste, tabelle, oggetti,
+intestazioni e note), escludendo soltanto `contentUri` temporanei: invariati.
+Il trusted read non rileva controlli protetti nel tab diagnostico.
+
+**Controlli:** 174 test focalizzati; gate con 1.345 test frontend / 96 file,
+backend coverage 88,29%, frontend linee 85,69% e branch 76,24%; due casi
+Chromium più un ciclo finale della selezione senza tabella; build, lint
+finale, comparatore Docs/API e `git diff --check` passati.
+
+**Limiti e prossima prova:** MIX-11 rimane aperto, con font HTML 9,625 → 9,5
+e 14,4375 → 14,5 pt. Il blocco vuoto interno dopo «Figlia» è conservato
+nell'app ma omesso in Docs: MIX-13 diventa il prossimo caso, già osservato
+nei gruppi 39–40 e persistente dopo riapertura. Non sono chiusi trasferimento
+misto generale, immagini/didascalie, matrici editabili, selezioni di celle
+più ampie, percorso inverso o desktop WebView2/WKWebView. Fase P rinviata.
+
+Evidenze in `_smoke/editor-parity/`: `table-leading-41-before.log`,
+`table-leading-41-focused-final.log`, `table-leading-41-final-browser/`,
+`table-leading-41-selection-browser/`, `table-leading-41-gate.log`,
+`table-leading-41-build.log`, `table-leading-41-final-lint.log`,
+`table-leading-41-trusted-before/`, `table-leading-41-trusted-final/`,
+`table-leading-41-docs-pasted.json`, `table-leading-41-docs-reopened.json`,
+`table-leading-41-docs-clipboard-ids.json`, `table-leading-41-api-readback.json`,
+`table-leading-41-check.mjs`, `table-leading-41-check.log` e
+`table-leading-41-docs-final.png`. Nessun commit, push o release.
+
+## Gruppo 42 — paragrafo vuoto fra lista e tabella nel ripiego HTML
+
+**Data:** 6 ottobre 2026. **Perimetro:** MIX-13, prossimo caso della chat
+`01a11202-9ec0-7ff2-8e5d-ae80e99203de`. Modifiche preesistenti conservate.
+
+**Riproduzione:** la nuova regressione fallisce prima del fix. Il corpus
+dei gruppi 39–41 contiene il paragrafo vuoto dopo «Figlia», ma la clipboard
+nativa di Docs passa direttamente al marcatore della tabella. Un vuoto
+creato nell'UI di Docs si esporta come `br` fuori dalla lista. Provati tre
+trasporti: `p` con `br` perde ancora il vuoto interno; `br` alla radice lo
+conserva ma eredita il rapporto 1,38 della destinazione; `div` stilizzato
+con `br` conserva il blocco con rapporto 1,15, senza aggiungere testo.
+
+**Correzione delimitata:** `prepareHtmlLineSpacing()` trasforma soltanto
+un `p` senza figli alla radice (anche nell'involucro portabile), con lista
+immediatamente prima e tabella subito dopo. Il contenitore conserva gli
+attributi del paragrafo ed è marcato `data-editor-empty-paragraph="true"`.
+`CustomParagraph` accetta come paragrafo vuoto soltanto un contenitore
+marcato con un unico `br`: testo o oggetti in un involucro malformato non
+vengono eliminati. Il parser recupera interlinea CSS, margini e segni di
+digitazione; il salvataggio torna a un normale `p` senza soft break o
+attributo di trasporto. Altri vuoti, interruzioni reali, liste/celle e
+selezioni inline non ricevono questa conversione.
+
+| Verifica | Risultato |
+| --- | --- |
+| Incolla interno, undo/redo e riapertura | Un solo paragrafo vuoto conservato fra lista e tabella, senza `br` nel contenuto persistito |
+| Font/interlinee del corpus precedente | Geometria conservata nell'app; campi di formato dei caratteri e dei paragrafi Docs allineati dopo l'inserimento del separatore |
+| Docs salvato, riaperto e ricopiato | Sequenza `Figlia\n\n` prima del marcatore tabella; paragrafo vuoto senza lista/rientri, nativo 1,15 |
+| API Docs | Paragrafo vuoto `NORMAL_TEXT`, 115% ereditato dallo stile del tab; livelli lista 0/1 conservati |
+| Modifica in Docs | «Prova separatore» occupa il blocco; undo ripristina il vuoto senza cambiare lista/tabella |
+| Conservazione | Tutti gli altri 66 tab invariati nei campi confrontati, esclusi `contentUri` temporanei |
+
+**Controlli:** 180 test focalizzati, due casi Chromium, build e gate
+completo con 1.347 test frontend / 96 file; coverage backend 88,29%,
+frontend linee 85,71% e branch 76,28%. Comparatore semantico Docs/API,
+integrità hash dei trusted read e `git diff --check` passati.
+
+**Limiti e prossimo caso:** MIX-13 chiuso soltanto per il separatore
+singolo verificato. Due vuoti finali aggiunti da Docs (uno eredita la
+formattazione della destinazione) restano fuori dal confronto del vuoto
+interno. Vuoti consecutivi, altre posizioni, celle e stili vuoti
+personalizzati non sono certificati in Docs. Il prossimo residuo è MIX-11,
+font frazionari HTML 9,625 → 9,5 e 14,4375 → 14,5 pt; occorre delimitare
+l'importazione del destinatario prima di proporre ulteriori adattamenti.
+Formule non native, immagini/didascalie, selezioni più ampie, percorso
+inverso e desktop WebView2/WKWebView mantengono i limiti già registrati.
+Editor continuo; Fase P rinviata.
+
+Evidenze in `_smoke/editor-parity/`: `empty-html-42-before.log`,
+`empty-html-42-focused-final.log`, `empty-html-42-final-browser/`,
+`empty-html-42-gate.log`, `empty-html-42-build.log`,
+`empty-html-42-native-reference-final.json`, `empty-html-42-*-trial.json`,
+`empty-html-42-trusted-before/`, `empty-html-42-trusted-final/`,
+`empty-html-42-docs-pasted.json`, `empty-html-42-docs-reopened.json`,
+`empty-html-42-docs-typed.json`, `empty-html-42-docs-undo.json`,
+`empty-html-42-docs-clipboard-ids.json`, `empty-html-42-api-readback.json`,
+`empty-html-42-check.mjs`, `empty-html-42-check.log` e
+`empty-html-42-docs-final.png`. Nessun commit, push o release.
+
+## Gruppo 43 — font frazionari nel ripiego HTML
+
+6 ottobre 2026. Ripresa della chat `01a11215-ed8c-7b11-b083-a90bea524a01`,
+prossimo residuo MIX-11 dopo MIX-13. Diagnosi e protezione della precisione
+nell'app; nessuna modifica al runtime o al documento sorgente per compensare
+il destinatario.
+
+**Corpus:** sedici paragrafi Arial con font espliciti 9,49 / 9,5 / 9,51 /
+9,624 / 9,625 / 9,626 / 9,749 / 9,75 / 9,751 / 9,875 / 10,001 / 10,125 /
+14,4375 / 14,5 / 14,625 / 18,2 pt, CSS leading 1,38. Tabella a due celle:
+font ereditato 9,625 pt e testata con span 150%, effettivo 14,4375 pt.
+Matrice non supportata nativamente per attivare il ripiego dell'intero
+documento. La selezione nativa termina prima della matrice e comprende
+paragrafi e tabella; quella HTML comprende la matrice e il paragrafo finale.
+
+| Campione sorgente | HTML Docs dopo reload/API | Nativo Docs dopo reload/API |
+| --- | --- | --- |
+| 9,49 / 9,5 / 9,51 pt | 9,5 pt | Valori esatti |
+| 9,624 / 9,625 / 9,626 / 9,749 pt | 9,5 pt | Valori esatti |
+| 9,75 / 9,751 / 9,875 / 10,001 / 10,125 pt | 10 pt | Valori esatti |
+| 14,4375 / 14,5 / 14,625 pt | 14,5 pt | Valori esatti |
+| 18,2 pt | 18 pt | 18,2 pt |
+| Cella e span testata | 9,5 / 14,5 pt | 9,625 / 14,4375 pt |
+
+La quantizzazione osservata coincide con `Math.round(size * 2) / 2`,
+inclusa la soglia 9,75. Non è una specifica generale del servizio:
+font/famiglie, intervalli di dimensione e altre destinazioni non provati
+mantengono il proprio perimetro aperto.
+
+**Prove alternative:** HTML diretto con gli stessi sedici valori, più
+9,625 pt espresso in px, 0,875 em e 87,5% del contenitore Arial 11 pt.
+Tutte le tre alternative producono 9,5 pt. `calc(9.625pt)` e
+`var(--size,9.625pt)` producono 11 pt: peggiorano la fedeltà del campione
+e non sono adottate. Questo controllo non deriva dall'adattatore dell'app;
+anche il semplice HTML diretto riproduce l'arrotondamento del destinatario.
+
+**Accettazione:** il test Chromium cattura la clipboard nativa attraverso
+un vero paste event, compresi i MIME non visibili alla Clipboard API.
+I diciotto campioni conservano i valori nella copia nativa e nell'HTML
+realmente generato. Incolla HTML interno, undo/redo e riapertura dell'app
+conservano testo e font. Due trasferimenti reali in Docs, nativo e HTML,
+passano «Saved to Drive» → reload → ricopia con ID distinto → API.
+La tabella nativa conserva i font frazionari anche quando si seleziona
+insieme ai sedici paragrafi; non si estende il risultato ad altre tabelle.
+Il testo HTML importato resta editabile: «Prova » e undo ripristinano testo
+e font. Gli altri 66 tab sono invariati nelle letture API, esclusi i
+`contentUri` temporanei delle immagini; verificati gli hash dei file trusted.
+
+**Verifica automatica:** due casi Chromium finali (font frazionari e corpus
+interlinea/tabella/vuoto del gruppo 42), lint del nuovo test e comparatore
+Docs/API passati. Gate completo passato con 1.347 test frontend / 96 file,
+coverage backend 88,30%, frontend linee 85,71% / branch 76,28%.
+Diff-check passato. Test e documentazione soltanto: nessuna nuova modifica
+runtime o build frontend. Il primo tentativo del test raggruppava nella
+cronologia l'inserimento programmatico della matrice e l'incolla successivo;
+il corpus finale importa la matrice dall'inizio e ottiene la copia nativa
+con una selezione del testo precedente, senza dipendere dalla cache Vite.
+
+**Stato:** MIX-11 delimitato come incompatibilità del destinatario HTML,
+ancora aperto per parità esatta; nessun aggiramento nelle rappresentazioni
+provate. Non arrotondare i font salvati o quelli degli appunti dell'app.
+Prossima prova MIX-06: geometria dell'immagine nel ripiego HTML del corpus
+misto con didascalia a destra. Formule non native, altre selezioni/vuoti e
+WebView2/WKWebView restano aperti; editor continuo e Fase P rinviata.
+
+Evidenze in `_smoke/editor-parity/`: `fractional-font-43-final/`,
+`fractional-font-43-raw-probes.json`, `fractional-font-43-raw-docs*.json`,
+`fractional-font-43-native-docs-*.json`, `fractional-font-43-fallback-docs-*.json`,
+`fractional-font-43-clipboard-ids.json`, `fractional-font-43-trusted-before/`,
+`fractional-font-43-trusted-native/`, `fractional-font-43-trusted-final/`,
+`fractional-font-43-check.mjs`, `fractional-font-43-check.log`,
+`fractional-font-43-results.json`, `fractional-font-43-gate.log` e
+`fractional-font-43-docs-final.png`. Nuovo test in
+`webui/e2e/editor_fractional_fonts.spec.ts`. Nessun commit, push o release.
+
+## Verifica del quarantaquattresimo gruppo
+
+**Data:** 6 ottobre 2026. **Perimetro:** MIX-06, dimensioni HTML dell'immagine
+caricata nel documento misto con didascalia a destra. Editor continuo.
+
+| Caso | App / dimensioni dichiarate | Docs prima | Docs corretto dopo salvataggio e reload |
+| --- | --- | --- | --- |
+| Larghezza 35%, rapporto intrinseco 1,5, X 100%, Y 18 px | Circa 222×148 px, richiesti 166,5×111 pt | 180×120 pt, misura intrinseca dell'asset 240×160 px | 167×111 pt, arrotondamento del destinatario |
+| Larghezza 42%, rapporto esplicito 2, offset X −12 px, Y 18 px | Circa 266×133 px, richiesti 199,5×99,75 pt | Rapporto già dichiarato tramite altezza; nessun nuovo difetto attribuito a questo caso | 200×100 pt, ratio 2 conservato e punti arrotondati |
+
+La prima immagine negli appunti reali non aveva `height`: solo `width="222"`
+e CSS `width:100%;height:auto` dentro il contenitore. La prova indipendente
+con dimensione percentuale, pixel CSS o attributo larghezza lascia 180×120 pt.
+Dichiarare anche l'altezza, tramite CSS o attributi, produce 167×111 pt; esprimerle
+in punti non evita l'arrotondamento nei tre campioni provati. La regressione DOM
+fallisce prima del fix (`null` invece di `148`).
+
+La correzione in `utils.ts` legge le dimensioni naturali già disponibili nel
+DOM sorgente e materializza l'altezza della figura; `data-aspect-ratio` esplicito
+ha precedenza. `EditorFullPage.tsx` passa il sorgente anche per «Copia formattata».
+Il documento salvato non riceve un rapporto nuovo e il bitmap resta identico.
+Senza immagine caricata e senza rapporto esplicito la preparazione conserva il
+percorso precedente: nessun caricamento asincrono durante Ctrl+C.
+
+Il nuovo `editor_html_images.spec.ts` verifica entrambe le figure attraverso
+incolla HTML interno, undo/redo, modifica della cella e annullamento, taglio/undo,
+autosave e riapertura. Attributi, pixel, rettangolo rispetto al testo e contenuto
+restano confrontabili. Tastiera e pulsante dichiarano entrambe le misure.
+Il test precedente passa nelle cinque disposizioni, quattro native e una HTML.
+
+In Docs, appunti reali → «Saved to Drive» → reload → nuova ricopia verificata
+con ID distinto → lettura API conferma 167×111 / 200×100 pt. Il comparatore
+conserva 21 campioni tipografici/livello lista e tutti gli altri 66 tab, esclusi
+soltanto gli URI temporanei `contentUri`. Digitazione «Prova » e undo ripristinano
+testo e misure, senza certificare il resize o la modifica della didascalia in Docs.
+
+Le cinque rappresentazioni dirette (float su span, float sull'immagine,
+`align="right"`, posizione assoluta, tabella con float) restano immagini inline
+dopo salvataggio/riapertura. La API dei due corpus corretti contiene un oggetto
+inline e zero oggetti posizionati. Wrap e offset non sono risolti. Restano
+frazione «yx2» senza struttura matematica nativa, perdita dei punti frazionari,
+seconda colonna ridotta e gli altri limiti MIX-06 già documentati.
+
+**Controlli:** 156 test DOM mirati, due test Chromium finali, build Vite isolata,
+gate completo con 1.348 test frontend / 96 file, backend coverage 88,29%, frontend
+linee 85,74%, branch 76,34%, funzioni 80,10%. Comparatore e hash delle letture
+Docs/API passati; `git diff --check` passato. La build non sostituisce gli asset
+di produzione dell'app aperta. Nessuna nuova prova desktop WebView2/WKWebView.
+
+**Evidenze:** `_smoke/editor-parity/image-html-44-fixed-dimensions/`,
+`image-html-44-regression-before.log`, `image-html-44-focused.log`,
+`image-html-44-gate-final.log`, `image-html-44-build.log`,
+`image-html-44-raw-pasted.json`, `image-html-44-raw-reopened.json`,
+`image-html-44-size-probes.json`, `image-html-44-exact-size-probes.json`,
+`image-html-44-fixed-intrinsic-*.json`, `image-html-44-explicit-*.json`,
+`image-html-44-unfixed-reopened.json`, `image-html-44-trusted-*/`,
+`image-html-44-clipboard-ids.json`, `image-html-44-check.mjs`,
+`image-html-44-check.log`, `image-html-44-results.json` e
+`image-html-44-docs-final.png`. Readback delle clipboard senza `i_cid`/`i_src`;
+nessun URL firmato nella documentazione.
+
+MIX-06 corretto soltanto per il ritorno alla dimensione intrinseca della figura
+caricata; geometria complessiva HTML ancora aperta. Prossima prova MIX-02,
+struttura delle formule nel ripiego HTML. Altri vuoti/selezioni, percorso inverso,
+desktop WebView2/WKWebView restano aperti; Fase P rinviata. Modifiche preesistenti
+preservate, nessun commit, push o release.
+## Verifica del quarantacinquesimo gruppo
+
+**Data:** 6 ottobre 2026. **Perimetro:** MIX-02, struttura delle formule
+nel ripiego HTML; tre formule native come controllo nello stesso corpus misto.
+
+| Formula nell'app | Docs nativo dopo reload e ricopia | Docs HTML dopo reload, ricopia e API |
+| --- | --- | --- |
+| Frazione x²/y | Albero frazione con apice, due comandi | Testo «yx2», nessuna frazione |
+| x con pedice i/apice 2 + radice di y | Alberi apice-pedice e radice, due comandi | Testo «xi2+y», nessuna radice strutturata |
+| Sommatoria i da zero a n | Funzione sommatoria con limiti, un comando | Testo «i=0∑ni», limiti non strutturati |
+| Matrice 2×2 a/b/c/d | Esclusa dalla selezione nativa: non supportata dall'adattatore | Testo «(acbd)», righe/colonne perdute |
+
+I testi HTML indicati omettono per leggibilità i separatori U+200B presenti
+negli appunti riletti. Non sono una trascrizione matematica equivalente.
+I tre alberi nativi e i cinque comandi coincidono con l'export dell'app,
+non soltanto con la schermata. La lettura API conserva tre elementi
+`equation`, senza esporre i parametri. La modifica da tastiera nell'apice
+della frazione aggiunge q al parametro 2, verificato fra i delimitatori
+nativi; undo ripristina esattamente gli alberi precedenti. La matrice non
+viene eliminata o convertita per forzare l'export nativo del documento intero.
+
+**Fonte/app:** `editor-parity-mixed.html` più indici/radice, sommatoria,
+matrice e testo prima/dopo. `editor_html_equations.spec.ts` confronta i
+quattro attributi LaTeX e il modello, tastiera/pulsante, assenza MIME nativo
+nel ripiego, incolla HTML interno, cronologia, modifica dei veri input LaTeX,
+salvataggio/riapertura. Frazione y → z e matrice d → e restano editabili
+nell'app dopo il ripiego interno. Quattro rendering KaTeX senza errori,
+nessun layer MathML/annotazione duplicato nel formato portabile.
+
+**Docs:** nuovo documento isolato, nessuna modifica ai precedenti 67 tab.
+Appunti reali → normale incolla → «Saved to Drive» → reload → ricopia con
+ID distinto → API. Ripiego: zero equazioni, una tabella e un'immagine.
+Confrontati 22 campioni di font/mark, paragrafi e livelli di lista fra
+incolla, riapertura, undo e ricopia finale: stabili nel risultato Docs.
+Questo non certifica le altre perdite geometriche HTML già documentate.
+Digitazione «Prova » nel testo e undo verificati; la formula importata
+non acquista per questo la struttura matematica. Il primo tentativo della
+prova di digitazione aveva cambiato il focus durante la ricerca; scartato,
+corpus ripristinato e prova finale eseguita sul locator Document content.
+I confronti finali verificano l'intero testo e un nuovo ID della clipboard.
+
+**Alternative HTML dirette:** MathML standard della frazione → «x2y»;
+con semantics/annotazione → «x2y\\frac{x^2}{y}»; matrice → «(abcd)».
+Tutte senza equazioni nella ricopia dopo reload e nell'API. HTML `sub`/`sup`
+conserva stili SUBSCRIPT/SUPERSCRIPT, senza oggetto matematico. Questi tentativi
+non recuperano la struttura e non vengono adottati. Nessun bitmap o tabella
+sostitutiva viene presentato come formula editabile.
+
+**Verifiche:** due casi Chromium finali (nuovo caso misto, funzioni/limiti
+nativi precedenti), lint e typecheck passati. Gate completo passato: 1.348
+test frontend / 96 file, backend coverage 88,28%, frontend linee 85,72%,
+branch 76,34%, funzioni 80,02%. Comparatore semantico, ID delle ricopie,
+hash degli artefatti e `git diff --check` passati. Nessuna nuova modifica
+runtime; nessuna build frontend aggiuntiva necessaria.
+
+**Stato:** MIX-02 delimitato e ancora aperto per parità HTML delle formule.
+Il formato salvato nell'app conserva i sorgenti; l'import Docs li appiattisce
+nel corpus provato, inclusi quelli supportati se una matrice impone HTML
+all'intero frammento. Selezionare solo la porzione rappresentabile conserva
+le tre formule in questa prova; non chiude la copia dell'intero documento.
+Prossimo residuo MIX-13: due vuoti consecutivi fra lista e tabella in HTML.
+Altri vuoti/selezioni, immagini/didascalie, arrotondamenti, percorso inverso
+e desktop WebView2/WKWebView restano aperti. Editor continuo, Fase P rinviata.
+
+Evidenze locali in `_smoke/editor-parity/`: `equations-html-45-browser/`,
+`equations-html-45-final/`, `equations-html-45-*-clipboard.json`,
+`equations-html-45-raw-api.json`, `equations-html-45-native-api.json`,
+`equations-html-45-fallback-api.json`, `equations-html-45-check.mjs`,
+`equations-html-45-check.log`, `equations-html-45-results.json`,
+`equations-html-45-gate.log`, `equations-html-45-native-docs.png` e
+`equations-html-45-fallback-docs.png`. Documento finale:
+[confronto HTML gruppo 45](https://docs.google.com/document/d/1ua8IWtZ8X9EcTMA1lha2tbTfov2z5G1WpbruVK7PgGU/edit).
+Modifiche preesistenti preservate; nessun commit, push o release.
+
+## Verifica del quarantaseiesimo gruppo
+
+**Data:** 6 ottobre 2026. **Perimetro:** MIX-13, due paragrafi vuoti normali
+consecutivi fra lista D/b/E e tabella unita del corpus misto con matrice.
+
+| Prova | Prima | Dopo la correzione |
+| --- | --- | --- |
+| Tastiera e Copia formattata | Nessun blocco di trasporto per i due vuoti | Due blocchi distinti, senza testo aggiunto; HTML senza MIME nativo |
+| Docs incolla → salvataggio → reload → ricopia/API | Lista seguita direttamente dalla tabella | Due veri paragrafi, NORMAL_TEXT, leading 115%, nessun marker/rientro |
+| Digitazione in Docs | Non applicabile ai vuoti perduti | «Vuoto uno» e «Vuoto due» agli offset distinti; ciascun undo ripristina entrambi i vuoti |
+| App incolla interno e cronologia | Due vuoti presenti nel sorgente | Due paragrafi senza br/marker di trasporto, digitazione e undo/redo distinti |
+| App salva/riapri | Caso non coperto dal gruppo 42 | Posizioni, testo e tipografia effettiva dei due vuoti conservati |
+
+Il vecchio adattatore richiedeva che ogni p toccasse direttamente lista e
+tabella: con due p nessuno soddisfaceva il predicato. La correzione riconosce
+prima l'intera sequenza contigua, poi trasporta ciascun p con gli attributi
+originali. Confini con testo, br reali o destinazione diversa non vengono
+convertiti. DOM copre ol/ul, stili/marche distinti e idempotenza; questa
+protezione interna non certifica gli stili dei vuoti personalizzati in Docs.
+
+Appunti da veri eventi paste Chromium, tastiera/pulsante entrambi verificati.
+Documento Docs nuovo e isolato; i documenti precedenti non sono modificati.
+Ricopie prima/dopo reload con ID distinti. Il comparatore verifica il
+numero dei vuoti, interlinea e rientri, digitazione nei due offset, undo,
+allineamento di tutti gli stili di carattere/paragrafo del risultato
+precedente con offset +2; normalizza soltanto i vuoti finali del destinatario.
+API dopo undo identica alla riapertura salvo contentUri temporanei.
+Restano le perdite HTML già note del corpus: formule come testo e geometria
+dell'immagine; la conservazione dei due vuoti non le corregge.
+
+**Verifiche:** 29 test mirati; due casi Chromium passati (nuovo caso e
+regressione del singolo vuoto); lint, typecheck, build Vite isolata e gate
+completo passati. 1.351 test frontend / 96 file; backend coverage 88,28%,
+frontend linee 85,73%, branch 76,34%, funzioni 80,02%. Comparatore semantico,
+ID delle ricopie, hash delle letture API e diff-check passati. Il dist
+dell'app aperta non è sostituito. Cattura screenshot Docs in timeout in tre
+tentativi tramite API previste; non è disponibile una prova PNG del
+destinatario. Screenshot Chromium dell'app presente.
+
+**Evidenze:** `_smoke/editor-parity/empty-html-46-before/`,
+`empty-html-46-final/`, `empty-html-46-*-clipboard.json`,
+`empty-html-46-before-api.json`, `empty-html-46-reopened-api.json`,
+`empty-html-46-final-api.json`, `empty-html-46-check.mjs`,
+`empty-html-46-check.log`, `empty-html-46-results.json`,
+`empty-html-46-focused.log`, `empty-html-46-gate.log`,
+`empty-html-46-build.log` e `empty-html-46-dist/`.
+[Documento di prova gruppo 46](https://docs.google.com/document/d/18CTR-KQBZyEovVo1mXdRlSqF1tAAxAIagr8TaulTfV8/edit).
+
+**Stato/prossimo caso:** due vuoti normali chiusi nel corpus indicato;
+proseguire con interlinee/margini e marche differenti nei due vuoti,
+compresa digitazione in Docs. Altre posizioni/selezioni, formule, geometria,
+percorso inverso e WebView2/WKWebView restano aperti. Fase P rinviata.
+Modifiche preesistenti preservate; nessun commit, push o release.
+
+## Verifica del quarantasettesimo gruppo
+
+**Data:** 7 ottobre 2026. **Perimetro:** MIX-13, due vuoti con font, marche,
+interlinee e margini distinti nel corpus misto del gruppo 46.
+
+| Proprietà | Primo vuoto | Secondo vuoto | Risultato dopo reload e digitazione in Docs |
+| --- | --- | --- | --- |
+| Font e dimensione | Georgia 18 pt | Courier New 10 pt | Conservati in nativo e ripiego HTML |
+| Marca vuota / nuova digitazione | Grassetto | Corsivo | «Vuoto uno» / «Vuoto due» usano le rispettive marche |
+| Interlinea CSS sorgente | 1,6 | 1,8 | Native 1,408140814 / 1,589403974; HTML 1,40814 / 1,5894; API 140,814% / 158,94% |
+| Spazio prima/dopo | Prima 8 pt, dopo 0 | Prima 0, dopo 10 pt | Conservato, senza marker/rientri di lista |
+| Annullamento | Ripristina il primo vuoto | Ripristina il secondo vuoto | Contenuto e stili tornano a quelli della riapertura |
+
+I rapporti Docs sono adattati alle metriche reali dei font dal trasporto
+già presente; non vanno confrontati direttamente con il CSS unitless.
+Nel campione lo scarto dall'export nativo resta <0,00001.
+
+**App:** nuovo `editor_html_styled_empty.spec.ts`. Appunti da veri paste
+event: selezione nativa termina prima della matrice, copia completa forza
+HTML. Tastiera e pulsante, due blocchi di trasporto senza testo, incolla
+interno, conservazione delle marche vuote, digitazione separata e relativa
+tipografia, undo/redo, autosave/riapertura passano. Confronto semantico del
+grassetto: CSS strong usa 600 mentre la decorazione della riga vuota usa 700;
+entrambi rappresentano la stessa marca bold verificata, senza certificare
+una corrispondenza di ogni peso numerico CSS. Nessuna nuova modifica runtime.
+
+**Docs:** due documenti sintetici nuovi e isolati. Controllo nativo mantiene
+la frazione editabile; la matrice resta esclusa. HTML completo mantiene le
+perdite matematiche già documentate. I due vuoti personalizzati persistono
+in entrambi dopo «Saved to Drive», reload, nuova ricopia e API. Digitazione
+ai due offset e undo in ciascun percorso; comparatore su testo e tutti gli
+stili di carattere/paragrafo fra incolla/riapertura/undo. I due ID clipboard
+di incolla/riapertura sono distinti per ciascun percorso. API finali dopo
+undo coincidono con quelle riaperte salvo URI temporanei delle immagini.
+Gli altri documenti non sono modificati.
+
+**Verifiche:** due casi Chromium finali, lint/typecheck e gate completo
+passati: 1.351 test frontend / 96 file; backend coverage 88,30%, frontend
+linee 85,73%, branch 76,34%, funzioni 80,02%. Comparatore, hash API e
+diff-check passati. Non è necessaria un'altra build per i soli nuovi test;
+build isolata e runtime del gruppo 46 già verificati. PNG Docs finali
+disponibili per primo e secondo caret.
+
+**Evidenze:** `_smoke/editor-parity/styled-empty-html-47-before/`,
+`styled-empty-html-47-final/`, `styled-empty-html-47-*-clipboard.json`,
+`styled-empty-html-47-native-api.json`, `styled-empty-html-47-fallback-api.json`,
+`styled-empty-html-47-*-final-api.json`, `styled-empty-html-47-check.mjs`,
+`styled-empty-html-47-check.log`, `styled-empty-html-47-results.json`,
+`styled-empty-html-47-gate.log`, `styled-empty-html-47-fallback-docs.png` e
+`styled-empty-html-47-fallback-second-docs.png`.
+[Controllo nativo gruppo 47](https://docs.google.com/document/d/1JxCScoTbDZLmISPF3NCx7W9kvewnAEH3B1LjhzJeevo/edit),
+[ripiego HTML gruppo 47](https://docs.google.com/document/d/1_mghIB7q7Avbkh8cNQKDPB1ggVV2SwestSGGM7iu_FY/edit).
+
+**Stato/prossimo caso:** due vuoti con questi due stili chiusi; nessuna
+generalizzazione ad altre marche/font/posizioni. Prossima selezione parziale:
+inizio dai due vuoti, poi tabella e matrice che forza HTML, senza la lista
+precedente; provare destinazione vuota e paragrafo popolato con cronologia
+e riapertura. Formule non native, geometria, selezioni più ampie, percorso
+inverso e desktop WebView2/WKWebView restano aperti. Fase P rinviata.
+Modifiche preesistenti preservate; nessun commit, push o release.
+
+
+## Immagini Wrap: offset della clipboard dopo disposizione del testo — 9 ottobre 2026
+
+Segnalazione riprodotta nell'estratto «Patologia generale I lez. 4»: l'offset salvato della seconda figura era 240,63 px, ma la superficie era a 18,046875 px dal paragrafo dopo la compensazione del Wrap. L'ancoraggio era corretto; la clipboard esportava l'offset errato.
+
+`createNativeClipboardFormats` ora esporta l'offset visualizzato delle figure Wrap senza didascalia, compensando lo zoom. `prepareSelectionClipboard` associa le esatte occorrenze selezionate, anche per uno stesso asset ripetuto. HTML salvato, modello e cronologia restano invariati.
+
+Verificati tre zoom, copia da tastiera/pulsante, selezione della seconda figura e save/reopen in Chromium; estratto reale; Docs nel browser integrato con testo, ancoraggi, coordinate e dimensioni esatti tramite API dopo `Saved to Drive` e reload; sorgenti Windows/WebView2 con copia sintetica e bridge reale. Controllo completo passato (1.419 test frontend; righe frontend 86,15%, Python 88,29%). Frontend ricompilato; nessun exe, installer, commit, push o release.
+
+Dettagli e limiti: `docs/editor-wrap-clipboard-2026-10-09.md`. Evidenze: `_smoke/wrap-clipboard-2026-10-09/`. Didascalie/tabelle flottanti, HTML fallback e altri runtime mantengono il loro stato precedente.
