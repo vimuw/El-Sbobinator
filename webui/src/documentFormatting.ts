@@ -120,7 +120,10 @@ export function formatPortableHtml(root: HTMLElement): void {
     // Rendered KaTeX and image surfaces have their own geometry; keep it intact.
     if (element.closest('[data-editor-image],.katex')) return;
     element.style.fontFamily = font;
-    element.style.fontSize = `${size}pt`;
+    // Preserve the browser's semantic sup/sub reduction. Materializing the
+    // base size on these tags or their descendants cancels that reduction.
+    // Authored sizes remain intact and the native adapter inherits the base.
+    if (!element.closest('sup,sub')) element.style.fontSize = `${size}pt`;
     if (element.matches(DOCUMENT_PARAGRAPH_SELECTOR) || element.matches('li')) {
       element.style.lineHeight ||= leading;
       if (!explicitLeading && leading === String(formatting.lineHeight)) element.setAttribute('data-document-line-spacing', String(formatting.nativeLineHeight));
