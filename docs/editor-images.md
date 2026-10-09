@@ -13,27 +13,63 @@ disposizione non vengono salvati né copiati. Tabelle e blocchi complessi estern
 alla figura mantengono la loro geometria passando sotto l'ostacolo. Il movimento
 e il ridimensionamento sono annullabili. Le vecchie immagini senza modalità e
 quelle con `break` vengono riaperte in linea; la conversione cambia la precedente
-disposizione centrata a blocco. `data-position` e `data-offset-y` conservano le
-coordinate delle immagini con testo attorno.
+disposizione centrata a blocco. `data-position` conserva l'allineamento di base;
+`data-offset-x` e `data-offset-y` conservano gli spostamenti liberi, anche negativi,
+delle immagini con testo attorno. Il trascinamento attraversa margini e bordi
+del foglio. Soltanto la parte che interseca l'area testuale riserva spazio al testo.
+Per tornare alla posizione precedente si usa **Annulla**, anche quando la
+figura è stata trascinata fuori dal foglio. Il comando dedicato di recupero
+è stato rimosso su richiesta dell'utente.
+
+Durante il trascinamento Wrap l'anteprima viene aggiornata una volta per
+fotogramma, usando l'ultima posizione del puntatore. Geometria, padding e
+limiti delle guide vengono riutilizzati finché non cambia lo scroll o la
+dimensione della finestra. Il rilascio applica comunque l'ultima posizione,
+anche se il fotogramma in attesa non è ancora stato disegnato; annullamento
+e chiusura del gesto cancellano gli aggiornamenti pendenti. L'anteprima
+usa una trasformazione composita con `will-change: transform` e isolamento
+del layout, senza ricalcolare il wrap del documento durante il movimento.
+Nel corpus lungo del gruppo 37, 121 eventi del puntatore producono una sola
+lettura di stili e una di geometria dell'editor, contro 120 e 120 prima del fix.
+Questa misura riguarda il lavoro del gestore, non certifica FPS o fluidità
+percepita della build Windows su ogni documento.
 
 Anche il ridimensionamento (`imageResize.ts`) usa un'anteprima semitrasparente
 con contorno verde opaco del tema e contrasto bianco. Durante il gesto le maniglie aggiornano
 solo la sagoma, lasciando fermi il testo e l'immagine originale. Gli angoli
 mantengono le proporzioni correnti e l'angolo opposto fermo, anche trascinando
 solo in verticale. Le maniglie centrali cambiano soltanto larghezza o altezza,
-tenendo fermo il bordo opposto e i due bordi perpendicolari. L'allineamento
+tenendo fermo il bordo opposto e i due bordi perpendicolari. La maniglia superiore
+centrale fa eccezione: modifica l'altezza mantenendo fermi il bordo superiore
+e la posizione orizzontale, sia nell'anteprima sia al rilascio. L'allineamento
 orizzontale non sposta l'immagine durante il resize.
 Al rilascio dimensioni e posizione vengono applicate con una sola transazione
 annullabile. Per le immagini inline l'altezza della riga viene misurata una sola
 volta al rilascio, prima della transazione, per mantenere la posizione mostrata
 dall'anteprima. `data-aspect-ratio` conserva le proporzioni modificate anche
 negli appunti HTML e nativi di Docs; `data-offset-x` conserva lo spostamento
-inline e `data-offset-y` ammette anche valori negativi per gli angoli superiori.
-Le dimensioni restano entro i margini orizzontali e il bordo superiore dell'area
-di testo, con la larghezza minima già prevista dall'editor e altezza minima 24 px.
+libero di entrambe le modalità e `data-offset-y` ammette anche valori negativi.
+Il puntatore e la sagoma possono superare i margini e i bordi del foglio:
+la larghezza può superare il 100% dell'area testuale, anche dopo salvataggio,
+riapertura e copia formattata. Restano la larghezza minima già prevista
+dall'editor e l'altezza minima di 24 px. Il movimento successivo di una figura
+Wrap più larga del testo conserva l'origine mostrata dall'anteprima.
 Le maniglie racchiudono l'immagine, lasciando la didascalia fuori dal contorno.
 Esc, perdita del focus o pointercancel annullano il gesto; un'altra modifica del
 documento durante il resize invalida il rilascio.
+
+La verifica dell'8 ottobre 2026 copre in Chromium le maniglie ml/mr/tl/br
+fuori dal foglio in entrambe le modalità, dimensioni superiori al 100%,
+annulla/ripeti, autosave/riapertura e dimensioni della copia HTML/nativa.
+Il riferimento Google Docs accetta il trascinamento oltre il bordo e conserva
+763 × 147 px dopo riapertura e nuova copia. La figura Wrap dell'app al 120%
+conserva in Docs 570,75 × 380,486603 pt dopo incolla nativo, salvataggio,
+riapertura, digitazione annullabile e nuova copia. Docs riadatta la posizione
+delle figure inline al rilascio; questa prova riguarda il resize oltre il bordo,
+senza cambiare l'ancoraggio già adottato dall'app. Il gesto nel pacchetto
+Windows WebView2 e nel runtime macOS rimane da verificare separatamente.
+Evidenze in `_smoke/resize-outside-2026-10-08-final/`,
+`resize-outside-docs-reference.json` e `resize-outside-docs-transfer.json`.
 
 Il wrap usa un gesto pointer separato dal drag-and-drop nativo del testo.
 Durante il movimento segue il punto afferrato solo un'anteprima semitrasparente,
@@ -45,6 +81,7 @@ di testo, compare una guida verticale rossa e la posizione si aggancia entro
 6 pixel visibili. Le guide seguono lo scorrimento e lo zoom, restano nella zona
 visibile del documento e scompaiono al rilascio o all'interruzione del gesto.
 Sono elementi temporanei esterni al contenuto: non vengono salvate o copiate.
+L'aggancio non è un limite: il puntatore può attraversare la guida e proseguire.
 Al rilascio si salva un solo movimento annullabile e
 l'ancora viene scelta alla quota superiore della figura. Esc/pointercancel
 ripristinano la disposizione senza salvare il movimento; Esc durante il gesto
@@ -72,9 +109,18 @@ pulsante di copia e dal menu contestuale. L'evento di copia è sincrono: una
 scrittura asincrona successiva non deve sovrascrivere gli appunti dell'utente.
 Un taglio elimina la selezione solo dopo una copia riuscita.
 
-La copia nativa usa interlinea singola e conserva la separazione fra blocchi.
+Il formato `text/html` conserva il sorgente dell'immagine del documento e
+separa le dimensioni di visualizzazione dal bitmap. Soltanto la copia destinata
+al formato nativo Docs viene ricampionata alle dimensioni mostrate, in modo
+sincrono durante la copia. Tastiera, menu e pulsante condividono questo percorso.
+Il montaggio del nodo non ricomprime il sorgente: l'ottimizzazione del file
+avviene una volta all'inserimento. Copie successive, incolla e resize mantengono
+la risoluzione conservata nell'app.
+
+La copia nativa usa l'interlinea del profilo comune e conserva la separazione fra blocchi.
 I margini adiacenti vengono collassati in un solo spazio dopo il blocco
-precedente: normalmente 13,75 pt fra paragrafi e voci di elenco, senza sommare
+precedente: il default aggiornato dopo la segnalazione su Invio è zero
+fra paragrafi e voci/celle senza stili espliciti, senza sommare
 uno spazio prima e uno dopo. Dopo h2/h3/h4 resta il margine inferiore del titolo,
 come nell'editor. Ogni cella di tabella ha un gruppo di paragrafi indipendente.
 Gli elenchi usano la modalità esplicita di spaziatura (`ps_sm: 1`): Google Docs
