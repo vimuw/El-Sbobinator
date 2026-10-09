@@ -1073,7 +1073,7 @@ test('representative mixed document preserves edits, merged table widths, image 
     const img = new Image(); img.src = new DOMParser().parseFromString(value, 'text/html').querySelector('img')!.src; await img.decode();
     return { width: img.naturalWidth, height: img.naturalHeight };
   }, copied['text/html']);
-  expect(pixels.width).toBe(222);
+  expect(pixels.width).toBe(edited.image[0].sourceWidth);
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+x');
   expect(await readClipboardFormats(page)).toEqual(copied);
   await editor.focus(); await page.keyboard.press('Control+z'); expect((await read()).html).toBe(edited.html);
@@ -1627,7 +1627,7 @@ async function readClipboardFormats(page: Page): Promise<Record<string, string>>
 }
 
 for (const native of [true, false]) {
-  test(`Ctrl+C resamples image pixels synchronously for ${native ? 'native format' : 'HTML fallback'} copy`, async ({ page, context }, testInfo) => {
+  test(`Ctrl+C preserves HTML image pixels for ${native ? 'native format' : 'HTML fallback'} copy`, async ({ page, context }, testInfo) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await openImageEditor(page, testInfo.outputPath(`resample_${native}.wav`));
     const source = await page.evaluate(() => {
@@ -1664,7 +1664,11 @@ for (const native of [true, false]) {
       await image.decode();
       return { declaredWidth: copied.getAttribute('width'), width: image.naturalWidth, height: image.naturalHeight };
     }, html);
-    expect(await dimensions(keyboardFormats['text/html'])).toEqual({ declaredWidth: '127', width: 127, height: 79 });
+    expect(await dimensions(keyboardFormats['text/html'])).toEqual({ declaredWidth: '127', width: 1600, height: 1000 });
+    if (native) {
+      const nativeImages = JSON.parse(JSON.parse(keyboardFormats['application/x-vnd.google-docs-image-clip+wrapped']).data).image_urls;
+      expect(await dimensions(`<img width="127" src="${Object.values(nativeImages)[0]}">`)).toEqual({ declaredWidth: '127', width: 127, height: 79 });
+    }
     await page.getByRole('button', { name: 'Copia formattata', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Copia formattata' })).toHaveAttribute('title', 'Copiato!');
     const buttonFormats = await readClipboardFormats(page);

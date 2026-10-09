@@ -289,7 +289,7 @@ export const clampWidthPercent = normalizeImageWidth;
 
 // The copy event must remain synchronous. Reuse an already loaded editor
 // image to resize its bitmap without starting a later clipboard write.
-const resampleClipboardImageSync = (img: HTMLImageElement, targetPx: number, sourceRoot?: HTMLElement) => {
+export const resampleClipboardImageSync = (img: HTMLImageElement, targetPx: number, sourceRoot?: HTMLElement) => {
   const src = img.getAttribute('src');
   if (!src?.startsWith('data:image/') || src.startsWith('data:image/svg+xml') || src.startsWith('data:image/gif')) return;
   const displayed = Array.from(sourceRoot?.querySelectorAll('img') ?? [])
@@ -344,7 +344,6 @@ export const prepareHtmlForClipboardSync = (html: string, sourceRoot?: HTMLEleme
 
       const targetPx = Math.round((EDITOR_CONTENT_WIDTH_PX * widthPercent) / 100);
 
-      resampleClipboardImageSync(img, targetPx, sourceRoot);
       img.setAttribute('width', String(targetPx));
       img.setAttribute(
         'style',
@@ -367,7 +366,14 @@ export const prepareHtmlForClipboardSync = (html: string, sourceRoot?: HTMLEleme
           parentContainer.setAttribute('align', align);
           const ratio = normalizeImageAspectRatio(parentContainer.getAttribute('data-aspect-ratio'));
           img.setAttribute('style', imageAssetCss(ratio));
-          if (ratio) img.setAttribute('height', String(Math.round(targetPx / ratio)));
+          // Docs HTML import needs both dimensions; a width alone can leave
+          // the asset at its intrinsic size. Read loaded pixels without
+          // resampling them or adding a fixed aspect ratio to the document.
+          const displayed = Array.from(sourceRoot?.querySelectorAll('img') ?? [])
+            .find(candidate => candidate.getAttribute('src') === img.getAttribute('src'));
+          const displayRatio = ratio ?? (displayed?.naturalWidth && displayed.naturalHeight
+            ? displayed.naturalWidth / displayed.naturalHeight : null);
+          if (displayRatio) img.setAttribute('height', String(Math.round(targetPx / displayRatio)));
           img.removeAttribute('align');
         }
       }
@@ -380,20 +386,8 @@ export const prepareHtmlForClipboardSync = (html: string, sourceRoot?: HTMLEleme
   }
 };
 
-export const prepareHtmlForClipboard = async (html: string): Promise<string> => {
-  const prepared = prepareHtmlForClipboardSync(html);
-  if (!prepared || typeof DOMParser === 'undefined') return prepared;
-  const doc = new DOMParser().parseFromString(prepared, 'text/html');
-  await Promise.all(Array.from(doc.body.querySelectorAll('img')).map(async img => {
-    const src = img.getAttribute('src');
-    if (!src?.startsWith('data:image/')) return;
-    const targetPx = Number(img.getAttribute('width')) || EDITOR_CONTENT_WIDTH_PX;
-    const resampled = await optimizeDataUrlImage(src, {
-      format: 'image/jpeg', maxWidth: targetPx, maxHeight: Math.round(targetPx * 3), quality: 0.92,
-    });
-    if (resampled) img.setAttribute('src', resampled);
-  }));
-  return doc.body.innerHTML;
+export const prepareHtmlForClipboard = async (html: string, sourceRoot?: HTMLElement): Promise<string> => {
+  return prepareHtmlForClipboardSync(html, sourceRoot);
 };
 
 export const convertWebpImagesInHtml = async (html: string): Promise<string> => {

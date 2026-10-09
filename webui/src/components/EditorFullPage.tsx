@@ -184,11 +184,12 @@ export function EditorFullPage({
 
   const handleCopy = async () => {
     const rawHtml = getHtmlRef.current?.() ?? lastPersistedRef.current;
-    const clipboardHtml = await prepareHtmlForClipboard(rawHtml);
+    const sourceRoot = document.querySelector<HTMLElement>('.tiptap-editor') ?? undefined;
+    const clipboardHtml = await prepareHtmlForClipboard(rawHtml, sourceRoot);
     const temp = document.createElement('div');
     temp.innerHTML = clipboardHtml;
     try {
-      await writeEditorClipboard(clipboardHtml, clipboardPlainText(temp), document.querySelector<HTMLElement>('.tiptap-editor') ?? undefined);
+      await writeEditorClipboard(clipboardHtml, clipboardPlainText(temp), sourceRoot);
     } catch (error) {
       reportClientError('Clipboard error', error);
       return;

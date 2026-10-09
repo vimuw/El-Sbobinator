@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { readAndOptimizeImageAsDataUrl, optimizeDataUrlImage, convertWebpImagesInHtml } from './utils';
+import { readAndOptimizeImageAsDataUrl, optimizeDataUrlImage, convertWebpImagesInHtml, prepareHtmlForClipboardSync } from './utils';
 
 describe('readAndOptimizeImageAsDataUrl (browser / jsdom environment)', () => {
   it('preserves SVG files without raster optimization', async () => {
@@ -284,6 +284,21 @@ describe('optimizeDataUrlImage (browser / jsdom environment)', () => {
 });
 
 describe('prepareHtmlForClipboard / convertWebpImagesInHtml', () => {
+  it('declares both display dimensions without resampling a loaded caption image', () => {
+    const root = document.createElement('div');
+    root.innerHTML = '<img src="data:image/jpeg;base64,original-pixels">';
+    Object.defineProperties(root.querySelector('img')!, { naturalWidth: { value: 240 }, naturalHeight: { value: 160 } });
+    const source = '<span data-editor-image data-layout="wrap" data-align="right" data-width="35" data-caption="Figura"><img src="data:image/jpeg;base64,original-pixels"></span>';
+    const result = new DOMParser().parseFromString(prepareHtmlForClipboardSync(source, root), 'text/html');
+    expect(result.querySelector('img')!.getAttribute('width')).toBe('222');
+    expect(result.querySelector('img')!.getAttribute('height')).toBe('148');
+    expect(result.querySelector('img')!.getAttribute('src')).toBe(root.querySelector('img')!.getAttribute('src'));
+    expect(result.querySelector('[data-editor-image]')!.hasAttribute('data-aspect-ratio')).toBe(false);
+    const explicit = new DOMParser().parseFromString(prepareHtmlForClipboardSync(source.replace('data-width="35"', 'data-width="35" data-aspect-ratio="2"'), root), 'text/html');
+    expect(explicit.querySelector('img')!.getAttribute('height')).toBe('111');
+    const unloaded = new DOMParser().parseFromString(prepareHtmlForClipboardSync(source), 'text/html');
+    expect(unloaded.querySelector('img')!.hasAttribute('height')).toBe(false);
+  });
   it('includes portable paragraph styles even if no images are present', async () => {
     const html = '<p>Test text without images</p>';
     const result = new DOMParser().parseFromString(await convertWebpImagesInHtml(html), 'text/html');
@@ -292,101 +307,14 @@ describe('prepareHtmlForClipboard / convertWebpImagesInHtml', () => {
     expect(result.querySelector('p')?.style.lineHeight).toBe('1.38');
   });
 
-  it('resamples images to target pixel width based on data-width', async () => {
-    const inputHtml = '<div data-editor-image="true" data-width="35"><img src="data:image/jpeg;base64,largejpeg" /></div>';
-    const mockJpegResult = 'data:image/jpeg;base64,smalljpeg';
-    const originalImage = (globalThis as unknown as { Image: unknown }).Image;
-
-    class MockImage {
-      naturalWidth = 1200;
-      naturalHeight = 900;
-      width = 1200;
-      height = 900;
-      onload: (() => void) | null = null;
-      set src(_val: string) {
-        setTimeout(() => {
-          if (this.onload) this.onload();
-        }, 0);
-      }
-    }
-    (globalThis as unknown as { Image: unknown }).Image = MockImage;
-
-    let canvasWidth = 0;
-    const originalCreateElement = document.createElement.bind(document);
-    vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
-      if (tagName === 'canvas') {
-        const c = {
-          width: 0,
-          height: 0,
-          getContext: () => ({
-            fillRect: vi.fn(),
-            drawImage: vi.fn(),
-          }),
-          toDataURL: () => mockJpegResult,
-        };
-        Object.defineProperty(c, 'width', {
-          set(v: number) { canvasWidth = v; },
-          get() { return canvasWidth; },
-        });
-        return c as unknown as HTMLCanvasElement;
-      }
-      return originalCreateElement(tagName);
-    });
-
-    try {
-      const result = await convertWebpImagesInHtml(inputHtml);
-      expect(result).toContain('data:image/jpeg;base64,smalljpeg');
-      expect(result).toContain('width="222"');
-      expect(result).toMatch(/width:\s*35%/);
-      expect(canvasWidth).toBe(222);
-    } finally {
-      (globalThis as unknown as { Image: unknown }).Image = originalImage;
-      vi.restoreAllMocks();
-    }
-  });
-
-  it('converts webp images to JPEG inside HTML string', async () => {
-    const inputHtml = '<p>Intro</p><img src="data:image/webp;base64,webpdata" alt="test" /><p>Outro</p>';
-    const mockJpegResult = 'data:image/jpeg;base64,jpegdata';
-    const originalImage = (globalThis as unknown as { Image: unknown }).Image;
-
-    class MockImage {
-      naturalWidth = 400;
-      naturalHeight = 300;
-      width = 400;
-      height = 300;
-      onload: (() => void) | null = null;
-      set src(_val: string) {
-        setTimeout(() => {
-          if (this.onload) this.onload();
-        }, 0);
-      }
-    }
-    (globalThis as unknown as { Image: unknown }).Image = MockImage;
-
-    const originalCreateElement = document.createElement.bind(document);
-    vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
-      if (tagName === 'canvas') {
-        return {
-          width: 0,
-          height: 0,
-          getContext: () => ({
-            fillRect: vi.fn(),
-            drawImage: vi.fn(),
-          }),
-          toDataURL: () => mockJpegResult,
-        } as unknown as HTMLCanvasElement;
-      }
-      return originalCreateElement(tagName);
-    });
-
-    try {
-      const result = await convertWebpImagesInHtml(inputHtml);
-      expect(result).toContain('data:image/jpeg;base64,jpegdata');
-      expect(result).not.toContain('data:image/webp;base64,webpdata');
-    } finally {
-      (globalThis as unknown as { Image: unknown }).Image = originalImage;
-      vi.restoreAllMocks();
-    }
+  it.each(['image/jpeg', 'image/png', 'image/webp'])('preserves %s source pixels and transparency in HTML while declaring display dimensions', async format => {
+    const src = `data:${format};base64,original-pixels`;
+    const html = `<span data-editor-image data-layout="inline" data-width="35"><img src="${src}"></span>`;
+    const canvas = vi.spyOn(document, 'createElement');
+    const result = new DOMParser().parseFromString(await convertWebpImagesInHtml(html), 'text/html');
+    expect(result.querySelector('img')!.getAttribute('src')).toBe(src);
+    expect(result.querySelector('img')!.getAttribute('width')).toBe('222');
+    expect(canvas.mock.calls.some(([tag]) => tag === 'canvas')).toBe(false);
+    canvas.mockRestore();
   });
 });
