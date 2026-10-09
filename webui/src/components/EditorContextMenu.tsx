@@ -8,7 +8,6 @@ import {
   Calculator,
   Clipboard,
   Copy,
-  Highlighter,
   ImagePlus,
   Italic,
   Link2,
@@ -19,6 +18,7 @@ import {
   Underline as UnderlineIcon,
 } from 'lucide-react';
 import { getLastHighlightColor } from '../editorUtils';
+import { HighlightIcon } from './HighlightIcon';
 import { writeEditorClipboard } from '../editorClipboard';
 import { pasteEditorClipboard, prepareSelectionClipboard } from '../editorSelectionClipboard';
 
@@ -192,7 +192,7 @@ export function EditorContextMenu({
         onClick={() => editor.chain().focus().toggleHighlight({ color: getLastHighlightColor() }).run()}
       >
         <span className="flex items-center gap-2.5 font-medium">
-          <Highlighter className="h-4 w-4 shrink-0" style={{ color: getLastHighlightColor() }} />
+          <HighlightIcon color={getLastHighlightColor()} className="h-4 w-4" />
           <span>Evidenzia</span>
         </span>
       </button>
