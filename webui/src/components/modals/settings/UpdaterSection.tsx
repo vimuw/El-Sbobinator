@@ -42,7 +42,6 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
   hasChecked,
   checkFailed,
   updateInstallState,
-  onInstallUpdate,
 }) => {
   const cleanAppVersion = formatVersion(APP_VERSION);
   const cleanLatestVersion = formatVersion(latestVersion);
@@ -101,6 +100,45 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
         </button>
       </div>
 
+      {/* Error Banner */}
+      {hasChecked && checkFailed && !isCheckingUpdate && !isError && (
+        <div className="alert-card is-error text-xs flex-row items-center gap-2 p-3 font-bold animate-fade-in">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>Verifica aggiornamenti non riuscita.</span>
+        </div>
+      )}
+
+      {/* Up to date Banner */}
+      {hasChecked && !isCheckingUpdate && !isUpdateAvailable && !checkFailed && !isError && !isDone && (
+        <div className="flex items-center gap-2 text-xs text-[var(--success-text)] font-bold">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>Sei aggiornato alla versione più recente.</span>
+        </div>
+      )}
+    </div>
+  );
+});
+
+UpdaterSection.displayName = 'UpdaterSection';
+
+export const UpdateNotice: React.FC<Pick<UpdaterSectionProps, 'latestVersion' | 'updateInstallState' | 'onInstallUpdate'>> = React.memo(({
+  latestVersion,
+  updateInstallState,
+  onInstallUpdate,
+}) => {
+  const cleanLatestVersion = formatVersion(latestVersion);
+  const isUpdateAvailable = Boolean(cleanLatestVersion && cleanLatestVersion !== formatVersion(APP_VERSION));
+  const isDownloading = updateInstallState?.status === 'downloading';
+  const isVerifying = updateInstallState?.status === 'verifying';
+  const isInstalling = updateInstallState?.status === 'installing';
+  const isDone = updateInstallState?.status === 'done';
+  const isError = updateInstallState?.status === 'error';
+  const isInProgress = isDownloading || isVerifying || isInstalling;
+
+  if (!isUpdateAvailable && !isDone && !isError) return null;
+
+  return (
+    <div className="space-y-3">
       {/* Update Available Banner Card */}
       {isUpdateAvailable && !isDone && (
         <div className="p-4 rounded-lg bg-[var(--accent-subtle)] border border-[var(--border-subtle)] space-y-3 relative overflow-hidden">
@@ -193,23 +231,14 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
         </div>
       )}
 
-      {/* Error Banner */}
-      {(isError || (hasChecked && checkFailed && !isCheckingUpdate)) && (
+      {isError && (
         <div className="alert-card is-error text-xs flex-row items-center gap-2 p-3 font-bold animate-fade-in">
           <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{updateInstallState?.error || (checkFailed ? 'Verifica aggiornamenti non riuscita.' : 'Aggiornamento non riuscito.')}</span>
-        </div>
-      )}
-
-      {/* Up to date Banner */}
-      {hasChecked && !isCheckingUpdate && !isUpdateAvailable && !checkFailed && !isError && !isDone && (
-        <div className="flex items-center gap-2 text-xs text-[var(--success-text)] font-bold">
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>Sei aggiornato alla versione più recente.</span>
+          <span>{updateInstallState?.error || 'Aggiornamento non riuscito.'}</span>
         </div>
       )}
     </div>
   );
 });
 
-UpdaterSection.displayName = 'UpdaterSection';
+UpdateNotice.displayName = 'UpdateNotice';

@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import { UpdaterSection } from './UpdaterSection';
+import { UpdaterSection, UpdateNotice } from './UpdaterSection';
 
 describe('UpdaterSection component', () => {
   const defaultProps = {
@@ -9,7 +9,7 @@ describe('UpdaterSection component', () => {
     isCheckingUpdate: false,
     hasChecked: false,
     checkFailed: false,
-    updateInstallState: null,
+    updateInstallState: undefined,
     onInstallUpdate: vi.fn(),
   };
 
@@ -33,7 +33,7 @@ describe('UpdaterSection component', () => {
   it('renders update available banner with clean styling', () => {
     const onInstall = vi.fn();
     const { container } = render(
-      <UpdaterSection
+      <UpdateNotice
         {...defaultProps}
         latestVersion="v2.5.1"
         onInstallUpdate={onInstall}
@@ -63,7 +63,7 @@ describe('UpdaterSection component', () => {
 
   it('renders download progress state', () => {
     render(
-      <UpdaterSection
+      <UpdateNotice
         {...defaultProps}
         latestVersion="v2.5.1"
         updateInstallState={{
