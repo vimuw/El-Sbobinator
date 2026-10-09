@@ -1,3 +1,4 @@
+import html
 import io
 import json
 import socket
@@ -759,5 +760,93 @@ def test_packaged_backend_version_is_authoritative(server):
             )
             assert other.failed.is_set()
             assert not other.ready.is_set()
+        finally:
+            other.close()
+
+
+@pytest.mark.parametrize("kind", ["mismatch", "error", "ready"])
+@pytest.mark.parametrize("frontend_version", ["2.7.3", "unknown"])
+def test_missing_packaged_metadata_keeps_startup_blocked_with_specific_reason(
+    server, kind, frontend_version
+):
+    with (
+        patch("el_sbobinator.core.desktop_startup.sys.frozen", True, create=True),
+        patch(
+            "el_sbobinator.services.diagnostics_service.build_info",
+            return_value={"version": "unknown", "mode": "packaged"},
+        ),
+    ):
+        other = DesktopStartupServer(str(server.root / "index.html"), port=0)
+        try:
+            assert other.version == "unknown"
+            assert other.receive_event(
+                {
+                    "kind": kind,
+                    "attempt": 0,
+                    "version": frontend_version,
+                    "build_id": other.build_id,
+                }
+            )
+            assert other.failed.is_set()
+            assert not other.ready.is_set()
+            assert "Impossibile leggere la versione dell'app installata." in (
+                html.unescape(other.failure_html().decode())
+            )
+            with (
+                patch.object(other, "report", return_value=b"metadata unavailable"),
+                request(other, other.control + "report") as response,
+            ):
+                assert response.read() == b"metadata unavailable"
+        finally:
+            other.close()
+
+
+@pytest.mark.parametrize("backend_version", ["2.7.3", "2.7.4"])
+def test_macos_metadata_link_controls_real_http_handshake(
+    server, tmp_path, backend_version
+):
+    contents = tmp_path / "El Sbobinator.app" / "Contents"
+    frameworks = contents / "Frameworks"
+    resources = contents / "Resources"
+    frameworks.mkdir(parents=True)
+    resources.mkdir()
+    metadata = resources / "diagnostic_build.json"
+    metadata.write_text(json.dumps({"version": backend_version, "mode": "packaged"}))
+    link = frameworks / metadata.name
+    resolve = Path.resolve
+
+    def resolve_metadata(path, *args, **kwargs):
+        return metadata if path == link else resolve(path, *args, **kwargs)
+
+    with (
+        patch("el_sbobinator.core.desktop_startup.sys.frozen", True, create=True),
+        patch("el_sbobinator.core.desktop_startup.sys.platform", "darwin"),
+        patch(
+            "el_sbobinator.core.desktop_startup.sys._MEIPASS",
+            str(frameworks),
+            create=True,
+        ),
+        patch.object(Path, "resolve", resolve_metadata),
+    ):
+        other = DesktopStartupServer(str(server.root / "index.html"), port=0)
+        try:
+            assert other.version == backend_version
+            with urlopen(other.entry_url(), timeout=3) as response:
+                document = response.read().decode()
+            assert f'"version": "{backend_version}"' in html.unescape(document)
+            with request(
+                other,
+                other.control + "event",
+                method="POST",
+                body={
+                    "kind": "ready",
+                    "attempt": 0,
+                    "version": "2.7.3",
+                    "build_id": other.build_id,
+                },
+            ) as response:
+                assert response.status == 200
+            assert other.ready.is_set() == (backend_version == "2.7.3")
+            assert other.failed.is_set() == (backend_version != "2.7.3")
         finally:
             other.close()

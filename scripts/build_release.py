@@ -297,7 +297,36 @@ def run_postbuild_smoke(target: str) -> None:
     else:
         if not any(expected.iterdir()):
             raise RuntimeError(f"Artifact vuoto o corrotto: {expected}")
+        verify_macos_build_metadata(expected)
     run([sys.executable, "scripts/smoke_test.py"], cwd=ROOT)
+
+
+def verify_macos_build_metadata(artifact: Path) -> None:
+    from el_sbobinator.services.diagnostics_service import (
+        read_build_metadata,
+        read_json,
+    )
+
+    contents = (artifact / "Contents").resolve()
+    metadata = read_build_metadata(contents / "Frameworks", macos_bundle=True)
+    if not metadata:
+        raise RuntimeError(
+            "Metadati della versione mancanti o invalidi nel bundle macOS"
+        )
+    try:
+        frontend = (
+            contents / "Frameworks" / "webui" / "dist" / "desktop-build.json"
+        ).resolve(strict=True)
+        manifest = read_json(frontend) if frontend.is_relative_to(contents) else {}
+    except (OSError, RuntimeError):
+        manifest = {}
+    expected = read_build_metadata(ROOT / "build")
+    if (
+        not expected
+        or metadata["version"] != expected["version"]
+        or metadata["version"] != str(manifest.get("version", "")).lstrip("v")
+    ):
+        raise RuntimeError("Versioni backend e frontend incoerenti nel bundle macOS")
 
 
 def write_sha256(artifact: Path) -> Path:
