@@ -27,6 +27,23 @@ test.beforeEach(async ({ context, page }, info) => {
   await openEditor(page, info);
 });
 
+test('internal fallback copy keeps default headings readable in dark mode and preserves direct colors', async ({ page }, info) => {
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await paste(page, '<h1>Predefinito</h1><h2 style="color:#000000">Nero scelto</h2><h3 style="color:#123abc">Blu scelto</h3><div data-math-block="\\begin{matrix}a&amp;b\\end{matrix}">Matrice</div>');
+  const editor = page.locator('.tiptap-editor');
+  const colors = () => editor.locator('h1,h2,h3').evaluateAll(headings => headings.map(h => getComputedStyle(h).color));
+  const original = await colors();
+  expect(original[0]).not.toBe('rgb(0, 0, 0)');
+  expect(original.slice(1)).toEqual(['rgb(0, 0, 0)', 'rgb(18, 58, 188)']);
+  await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+c'); await page.keyboard.press('Control+v');
+  await expect.poll(colors).toEqual(original);
+  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
+  await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
+  await expect.poll(colors).toEqual(original);
+  await page.screenshot({ path: info.outputPath('heading-colors-reopened.png') });
+});
+
 test('repeated list Tab retains editor focus while the audio bar is present', async ({ page }) => {
   await paste(page, '<ol><li><p>Prima</p></li><li><p>Seconda</p></li></ol>');
   const editor = page.locator('.tiptap-editor');
@@ -40,6 +57,40 @@ test('repeated list Tab retains editor focus while the audio bar is present', as
     for (let i = 0; i < 3; i++) { await page.keyboard.press('Tab'); await expect(editor).toBeFocused(); }
   }
   await page.keyboard.press('Shift+Tab'); await expect(editor).toBeFocused();
+});
+
+test('Enter adds no automatic gap and a second Enter leaves exactly one blank line', async ({ page }, info) => {
+  await paste(page, '<p></p>');
+  const editor = page.locator('.tiptap-editor');
+  await editor.focus(); await page.keyboard.type('Prima');
+  await page.keyboard.press('Enter'); await page.keyboard.type('Seconda');
+  const lines = () => editor.locator('p').evaluateAll(paragraphs => paragraphs.map(p => ({ text: p.textContent, top: p.getBoundingClientRect().top, height: p.getBoundingClientRect().height, gap: getComputedStyle(p).marginBottom })));
+  let geometry = await lines();
+  expect(geometry.map(p => p.text)).toEqual(['Prima', 'Seconda']);
+  expect(geometry[0].gap).toBe('0px');
+  expect(Math.abs(geometry[1].top - geometry[0].top - geometry[0].height)).toBeLessThan(1);
+  await page.keyboard.press('Enter'); await page.keyboard.press('Enter'); await page.keyboard.type('Terza');
+  await page.keyboard.press('Shift+Enter'); await page.keyboard.type('Continua');
+  geometry = await lines();
+  expect(geometry.map(p => p.text)).toEqual(['Prima', 'Seconda', '', 'TerzaContinua']);
+  await expect(editor.locator('br')).toHaveCount(2); // Empty caret line plus explicit soft return.
+  expect(Math.abs(geometry[3].top - geometry[1].top - 2 * geometry[1].height)).toBeLessThan(1);
+  await page.keyboard.press('Control+a'); await page.keyboard.press('Control+c');
+  await page.evaluate(() => {
+    const probe = document.createElement('textarea'); probe.id = 'enter-clipboard';
+    probe.addEventListener('paste', event => { event.preventDefault(); probe.value = JSON.stringify(Object.fromEntries(Array.from(event.clipboardData!.types, type => [type, event.clipboardData!.getData(type)]))); }, { once: true });
+    document.body.appendChild(probe); probe.focus();
+  });
+  await page.keyboard.press('Control+v');
+  const clipboard = JSON.parse(await page.locator('#enter-clipboard').inputValue());
+  fs.mkdirSync('../_smoke/paragraph-enter', { recursive: true });
+  fs.writeFileSync('../_smoke/paragraph-enter/app-clipboard.json', JSON.stringify(clipboard));
+  await page.locator('#enter-clipboard').evaluate(probe => probe.remove());
+  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
+  await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
+  await expect.poll(lines).toEqual(geometry);
+  await page.screenshot({ path: info.outputPath('enter-spacing.png') });
 });
 
 test('generated block gaps survive save and copy without spreading to new paragraphs or list items', async ({ page }, info) => {
@@ -90,4 +141,39 @@ test('generated block gaps survive save and copy without spreading to new paragr
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
   await expect.poll(read).toEqual(final);
   await page.screenshot({ path: info.outputPath('generated-spacing.png') });
+});
+
+test('captures both copy paths for minimal and representative Docs round trips', async ({ page }) => {
+  const directory = '../_smoke/editor-reported-bugs';
+  fs.mkdirSync(directory, { recursive: true });
+  const src = `data:image/jpeg;base64,${fs.readFileSync('e2e/fixtures/image-layout.jpg').toString('base64')}`;
+  const corpora = {
+    minimal: '<h1>Verifica editor</h1><p>INIZIO: primo paragrafo.</p><p>FINE: secondo paragrafo.</p>',
+    mixed: fs.readFileSync('e2e/fixtures/editor-parity-mixed.html', 'utf8').replace('__IMAGE_SOURCE__', src),
+  };
+  for (const [name, html] of Object.entries(corpora)) {
+    await paste(page, html);
+    for (const method of ['button', 'keyboard']) {
+      const editor = page.locator('.tiptap-editor');
+      if (method === 'button') {
+        await page.getByRole('button', { name: 'Copia formattata', exact: true }).click();
+        await expect(page.getByRole('button', { name: 'Copia formattata' })).toHaveAttribute('title', 'Copiato!');
+      } else {
+        await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+c');
+      }
+      await page.evaluate(() => {
+        const input = document.createElement('textarea'); input.id = 'clipboard-format-probe';
+        input.addEventListener('paste', event => {
+          event.preventDefault();
+          input.value = JSON.stringify(Object.fromEntries(Array.from(event.clipboardData!.types, type => [type, event.clipboardData!.getData(type)])));
+        }, { once: true });
+        document.body.appendChild(input); input.focus();
+      });
+      await page.keyboard.press('Control+v');
+      const formats = JSON.parse(await page.locator('#clipboard-format-probe').inputValue());
+      await page.locator('#clipboard-format-probe').evaluate(input => input.remove());
+      expect(formats['text/plain']).toContain(name === 'minimal' ? 'FINE: secondo paragrafo.' : 'Fine della lezione sintetica.');
+      fs.writeFileSync(`${directory}/${name}-${method}.json`, JSON.stringify(formats));
+    }
+  }
 });

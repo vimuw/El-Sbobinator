@@ -271,7 +271,9 @@ test('list second Enter on an empty parent exits one level and retains descendan
     const exited = await getDocument();
     const after = await geometry();
     const blankIndex = (nested ? 1 : 0) + (offset ? 1 : 0);
-    expect(after).toEqual(before.map((p, i) => i === blankIndex ? { ...p, left: p.left - 48 } : p));
+    expect(after.map(p => ({ text: p.text, left: p.left }))).toEqual(before.map((p, i) => ({ text: p.text, left: p.left - (i === blankIndex ? 48 : 0) })));
+    const gap = nested ? 0 : await editor.locator('p').nth(blankIndex).evaluate(p => parseFloat(getComputedStyle(p).marginBottom));
+    after.forEach((p, i) => expect(Math.abs(p.top - before[i].top - (i > blankIndex ? gap : 0))).toBeLessThan(0.1));
     expect(await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.state.selection.$from.parentOffset)).toBe(0);
     await page.keyboard.type('X');
     expect((await geometry())[blankIndex].text).toBe('X');
@@ -1230,7 +1232,7 @@ test('document defaults and direct colors agree with clipboard and all clear for
   const html = '<h2>Titolo predefinito</h2><p><span style="color:#123abc"><mark data-color="#ffee00" style="background-color:#ffee00">Blu evidenziato</mark></span></p><h4>Quarto livello</h4><h2 style="font-family:Georgia;font-size:24px;font-weight:700;color:#bc321a;line-height:2;margin:30pt 0 12pt">Esplicito</h2><p>Fine</p>';
   await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, html);
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
-  await expect(editor.locator('h2').first()).toHaveCSS('font-weight', '400');
+  await expect(editor.locator('h2').first()).toHaveCSS('font-weight', '700');
   await expect(editor.locator('h2').first()).toHaveCSS('letter-spacing', 'normal');
   await expect(editor.locator('h4')).toHaveCSS('font-size', '16px');
   await expect(editor.locator('p').first()).toHaveCSS('margin-top', '0px');

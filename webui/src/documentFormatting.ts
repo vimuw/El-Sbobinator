@@ -41,6 +41,8 @@ export const editorFormattingVariables = (): string => {
     'font-size': `${formatting.fontSizePt}pt`,
     'line-height': formatting.lineHeight,
     'paragraph-gap': `${formatting.paragraphGapPt}pt`,
+    'table-font-size': `${formatting.table.fontSizeEm}em`,
+    'table-line-height': formatting.table.lineHeight,
   };
   formatting.headings.forEach((style, i) => {
     variables[`h${i + 1}-size`] = `${style.fontSizePt}pt`;
@@ -68,8 +70,9 @@ export function paragraphSpacing(root: HTMLElement): Map<HTMLElement, ParagraphS
     if (element.closest('[data-editor-image]')) continue;
     const heading = headingStyle(element);
     const fontSize = pointSize(element.style.fontSize, heading?.fontSizePt ?? formatting.fontSizePt);
-    const top = pointSize(element.style.marginTop, heading?.beforePt ?? formatting.paragraphGapPt, fontSize);
-    const bottom = pointSize(element.style.marginBottom, heading?.afterPt ?? formatting.paragraphGapPt, fontSize);
+    const compact = Boolean(element.closest('li,td,th')) || element.matches('pre,[data-math-block]');
+    const top = pointSize(element.style.marginTop, heading?.beforePt ?? 0, fontSize);
+    const bottom = pointSize(element.style.marginBottom, heading?.afterPt ?? (compact ? 0 : formatting.paragraphGapPt), fontSize);
     const owner = element.closest('td,th') ?? root;
     if (!groups.has(owner)) groups.set(owner, []);
     groups.get(owner)!.push({ element, top, bottom });
@@ -107,11 +110,12 @@ export function formatPortableHtml(root: HTMLElement): void {
     if (element.matches('script,style')) { element.remove(); return; }
     applyEmptyTextMarks(element);
     const heading = headingStyle(element);
-    const size = pointSize(element.style.fontSize, heading?.fontSizePt ?? fontSizePt, fontSizePt);
+    const inheritedSize = element.matches('table') ? fontSizePt * formatting.table.fontSizeEm : fontSizePt;
+    const size = pointSize(element.style.fontSize, heading?.fontSizePt ?? inheritedSize, fontSizePt);
     const explicitFont = element.style.fontFamily;
     const font = explicitFont || (element.matches('code,pre') ? 'Courier New' : family);
     const explicitLeading = element.style.lineHeight;
-    const leading = explicitLeading || String(heading?.lineHeight ?? lineHeight);
+    const leading = explicitLeading || String(heading?.lineHeight ?? (element.matches('table') ? formatting.table.lineHeight : lineHeight));
     const align = element.style.textAlign || alignment;
     // Rendered KaTeX and image surfaces have their own geometry; keep it intact.
     if (element.closest('[data-editor-image],.katex')) return;
@@ -122,7 +126,12 @@ export function formatPortableHtml(root: HTMLElement): void {
       if (!explicitLeading && leading === String(formatting.lineHeight)) element.setAttribute('data-document-line-spacing', String(formatting.nativeLineHeight));
       if (align) element.style.textAlign ||= align;
     }
-    if (!element.style.color) element.style.color = heading?.color ?? (element.matches('a') ? '#1155cc' : 'inherit');
+    if (!element.style.color) {
+      element.style.color = heading?.color ?? (element.matches('a') ? '#1155cc' : 'inherit');
+      // The portable heading ink is a document default, not an authored color.
+      // Internal paste must let that default adapt to the editor's reading theme.
+      if (heading) element.setAttribute('data-editor-default-heading-color', element.style.color);
+    }
     if (heading) element.style.fontWeight ||= String(heading.fontWeight);
     if (element.matches('strong,b,th')) element.style.fontWeight ||= '700';
     if (element.matches('em,i')) element.style.fontStyle ||= 'italic';

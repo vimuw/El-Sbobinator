@@ -1,6 +1,7 @@
 import { normalizeImageAspectRatio, normalizeImageAlignment, normalizeImageLayout, normalizeImagePosition, normalizeImageOffsetY } from './imageLayout';
 import { clipboardPlainText, DOCUMENT_FORMATTING, EDITOR_CONTENT_WIDTH_PX, formatPortableHtml, headingStyle, orderedListStyle, paragraphSpacing, pointSize } from './documentFormatting';
 import { createClipboardEquation, type ClipboardEquation } from './clipboardEquations';
+import { nativeLineSpacingReader, prepareHtmlLineSpacing } from './editorLineSpacing';
 
 // Docs ignores CSS floats on HTML paste. Its native clipboard slice carries the
 // positioned entities. Keep this adapter separate from saved editor HTML.
@@ -82,36 +83,7 @@ export function createNativeClipboardFormats(html: string, sourceRoot?: HTMLElem
   }
   formatPortableHtml(body);
   const spacing = paragraphSpacing(body);
-  const normalLines = new Map<string, number>();
-  const lineSpacing = (element: HTMLElement): number => {
-    const profileSpacing = Number(element.getAttribute('data-document-line-spacing'));
-    if (profileSpacing > 0 && profileSpacing <= 10) return profileSpacing;
-    const fontPt = pointSize(element.style.fontSize, DOCUMENT_FORMATTING.fontSizePt);
-    const leading = element.style.lineHeight || String(DOCUMENT_FORMATTING.lineHeight);
-    if (leading === 'normal') return 1;
-    const unitless = /^\d*\.?\d+$/.test(leading);
-    const desiredPt = unitless ? Number(leading) * fontPt : pointSize(leading, fontPt, fontPt);
-    const key = `${element.style.fontFamily}:${element.style.fontWeight}`;
-    let normalEm = normalLines.get(key);
-    if (normalEm === undefined) {
-      const probe = document.createElement('div');
-      probe.textContent = 'M';
-      probe.style.cssText = 'all:initial;position:fixed;left:-10000px;top:0;display:block;width:max-content;height:auto;padding:0;border:0;margin:0;line-height:normal;visibility:hidden;';
-      probe.style.fontFamily = element.style.fontFamily || DOCUMENT_FORMATTING.fontFamily;
-      // Measure at a large em size: at 11pt the browser rounds the normal line
-      // to whole pixels, which would amplify rounding into native line spacing.
-      const measurementFontPt = 1000;
-      probe.style.fontSize = `${measurementFontPt}pt`;
-      probe.style.fontWeight = element.style.fontWeight || '400';
-      document.body.appendChild(probe);
-      normalEm = probe.getBoundingClientRect().height * 0.75 / measurementFontPt;
-      probe.remove();
-      normalLines.set(key, normalEm);
-    }
-    // DOM-only environments have no font layout. Preserve the requested ratio
-    // there; the browser path measures the actual font rather than fixing 1.
-    return normalEm > 0 ? desiredPt / (normalEm * fontPt) : desiredPt / fontPt;
-  };
+  const lineSpacing = nativeLineSpacingReader();
 
   let spacers = '';
   let serial = 0;
@@ -453,7 +425,7 @@ export async function writeEditorClipboard(html: string, plainText: string, sour
   const formats = createNativeClipboardFormats(html, sourceRoot);
   if (!formats) {
     await navigator.clipboard.write([new ClipboardItem({
-      'text/html': new Blob([html], { type: 'text/html' }),
+      'text/html': new Blob([prepareHtmlLineSpacing(html)], { type: 'text/html' }),
       'text/plain': new Blob([plainText], { type: 'text/plain' }),
     })]);
     return;

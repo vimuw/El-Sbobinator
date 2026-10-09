@@ -1,5 +1,5 @@
 export const EDITOR_IMAGE_ALLOWED_DATA_ATTRS = new Set(['data-editor-image', 'data-layout', 'data-align', 'data-width', 'data-position', 'data-offset-y', 'data-offset-x', 'data-aspect-ratio', 'data-caption']);
-export const ALLOWED_STYLE_PROPS = new Set(['font-size', 'color', 'font-family', 'background-color', 'text-align', 'font-weight', 'font-style', 'text-decoration', 'line-height', 'margin-top', 'margin-bottom', 'margin-left', 'margin-right', 'margin', 'width']);
+export const ALLOWED_STYLE_PROPS = new Set(['font-size', 'color', 'font-family', 'background-color', 'text-align', 'font-weight', 'font-style', 'text-decoration', 'line-height', 'margin-top', 'margin-bottom', 'margin-left', 'margin-right', 'margin', 'width', 'white-space']);
 
 export const normalizePreviewHtmlContent = (content: string) => {
   const parsed = new DOMParser().parseFromString(`<body>${content || ''}</body>`, 'text/html');
@@ -20,10 +20,14 @@ export const normalizePreviewHtmlContent = (content: string) => {
       const htmlEl = element as HTMLElement;
       const allowedStyles = Array.from(htmlEl.style ?? [])
         .filter(prop => ALLOWED_STYLE_PROPS.has(prop) || (tag === 'li' && prop === 'list-style-type' && htmlEl.style.listStyleType === 'none'))
-        .map(prop => `${prop}: ${htmlEl.style.getPropertyValue(prop)}`)
-        .join('; ');
-      if (allowedStyles) {
-        element.setAttribute('style', allowedStyles);
+        .map(prop => `${prop}: ${htmlEl.style.getPropertyValue(prop)}`);
+      // Chromium enumerates white-space as its longhands, whereas jsdom
+      // enumerates the shorthand. Read it explicitly before filtering styles.
+      if (htmlEl.style?.whiteSpace === 'pre-wrap' && !Array.from(htmlEl.style).includes('white-space')) {
+        allowedStyles.push('white-space: pre-wrap');
+      }
+      if (allowedStyles.length) {
+        element.setAttribute('style', allowedStyles.join('; '));
       } else {
         element.removeAttribute('style');
       }

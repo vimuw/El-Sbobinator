@@ -2,7 +2,8 @@ import React from 'react';
 import katex from 'katex';
 import { Extension, Node, mergeAttributes, textInputRule, type Editor as TiptapEditor, type JSONContent } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
-import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { Fragment, type Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { EMPTY_PARAGRAPH_ATTRIBUTE } from './editorLineSpacing';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 
@@ -258,7 +259,27 @@ export const FontSize = Extension.create({
   },
 });
 
+// HTML's default whitespace rules would collapse authored spaces and tabs on
+// reopen. Mark only blocks that need preservation; ordinary imported HTML
+// continues to use the normal parser rules.
+function authoredWhitespaceAttributes(node: ProseMirrorNode) {
+  return /^\s|\s$|[ \t]{2}|\t|\n/.test(node.textContent) ? { style: 'white-space:pre-wrap' } : {};
+}
+
 export const CustomHeading = HeadingExtension.extend({
+  parseHTML() {
+    return [
+      ...this.options.levels.map(level => ({
+        tag: `h${level}[style]`,
+        getAttrs: (element: HTMLElement) => element.style.whiteSpace === 'pre-wrap' ? { level } : false,
+        preserveWhitespace: 'full' as const,
+      })),
+      ...(this.parent?.() ?? []),
+    ];
+  },
+  renderHTML({ node, HTMLAttributes }) {
+    return this.parent!({ node, HTMLAttributes: mergeAttributes(HTMLAttributes, authoredWhitespaceAttributes(node)) });
+  },
   addCommands() {
     return {
       ...this.parent?.(),
@@ -279,6 +300,22 @@ export const CustomHeading = HeadingExtension.extend({
 });
 
 export const CustomParagraph = ParagraphExtension.extend({
+  parseHTML() {
+    return [{
+      tag: `div[${EMPTY_PARAGRAPH_ATTRIBUTE}="true"]`,
+      // Only our exact empty transport shell is a paragraph. Never discard
+      // text or objects pasted inside a malformed/foreign marked container.
+      getAttrs: element => element.childNodes.length === 1 && element.firstElementChild?.tagName === 'BR' ? {} : false,
+      getContent: () => Fragment.empty,
+    }, {
+      tag: 'p[style]',
+      getAttrs: element => element.style.whiteSpace === 'pre-wrap' ? null : false,
+      preserveWhitespace: 'full',
+    }, ...this.parent?.() ?? []];
+  },
+  renderHTML({ node, HTMLAttributes }) {
+    return this.parent!({ node, HTMLAttributes: mergeAttributes(HTMLAttributes, authoredWhitespaceAttributes(node)) });
+  },
   addCommands() {
     return {
       ...this.parent?.(),

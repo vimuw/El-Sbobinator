@@ -6,14 +6,14 @@
   "paragraphGapPt": 0,
   "contentWidthPx": 634,
   "headings": [
-    { "fontSizePt": 20, "lineHeight": 1.38, "beforePt": 20, "afterPt": 6, "fontWeight": 400, "color": "#000000" },
-    { "fontSizePt": 16, "lineHeight": 1.38, "beforePt": 18, "afterPt": 6, "fontWeight": 400, "color": "#000000" },
-    { "fontSizePt": 14, "lineHeight": 1.38, "beforePt": 16, "afterPt": 4, "fontWeight": 400, "color": "#434343" },
-    { "fontSizePt": 12, "lineHeight": 1.38, "beforePt": 14, "afterPt": 4, "fontWeight": 400, "color": "#666666" },
-    { "fontSizePt": 11, "lineHeight": 1.38, "beforePt": 12, "afterPt": 4, "fontWeight": 400, "color": "#666666" },
+    { "fontSizePt": 20, "lineHeight": 1.38, "beforePt": 20, "afterPt": 6, "fontWeight": 700, "color": "#000000" },
+    { "fontSizePt": 16, "lineHeight": 1.38, "beforePt": 18, "afterPt": 6, "fontWeight": 700, "color": "#000000" },
+    { "fontSizePt": 14, "lineHeight": 1.38, "beforePt": 16, "afterPt": 4, "fontWeight": 700, "color": "#000000" },
+    { "fontSizePt": 12, "lineHeight": 1.38, "beforePt": 14, "afterPt": 4, "fontWeight": 700, "color": "#000000" },
+    { "fontSizePt": 11, "lineHeight": 1.38, "beforePt": 12, "afterPt": 4, "fontWeight": 700, "color": "#000000" },
     { "fontSizePt": 10, "lineHeight": 1.4, "beforePt": 7.2, "afterPt": 3.6, "fontWeight": 700, "color": "#000000" }
   ],
   "suppressMarginAfterHeadingLevels": [],
   "caption": { "fontSizePt": 9, "lineHeight": 1.4, "beforePt": 6 },
-  "table": { "paddingVerticalPt": 6, "paddingHorizontalPt": 9 }
+  "table": { "fontSizeEm": 0.875, "lineHeight": 1.7142857, "paddingVerticalPt": 6, "paddingHorizontalPt": 9 }
 }

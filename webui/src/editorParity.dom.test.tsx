@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { Editor, JSONContent } from '@tiptap/core';
+import { Editor, type JSONContent } from '@tiptap/core';
 import { RichTextEditor } from './components/RichTextEditor';
 import { getSearchMatches } from './editorExtensions';
 import { NATIVE_SLICE_MIME } from './editorClipboard';
@@ -27,6 +27,26 @@ function transfer(element: HTMLElement, type: 'copy' | 'cut') {
 }
 
 describe('Editor parity: clipboard and logical text', () => {
+  it('preserves authored whitespace in paragraphs and headings after saving and reopening', async () => {
+    const { editor } = await openEditor('<h2>Titolo</h2><p>Prima</p><p></p>');
+    act(() => {
+      editor.commands.setTextSelection(1);
+      editor.commands.insertContent('  Inizio\t');
+      editor.commands.setTextSelection(editor.state.doc.content.size - 1);
+      editor.commands.insertContent(' Spazio  interno\tfinale ');
+    });
+    const original = editor.getJSON();
+    const saved = normalizePreviewHtmlContent(editor.getHTML());
+    act(() => { editor.commands.setContent(saved); });
+    expect(editor.getJSON()).toEqual(original);
+    const reopened = new Editor({ extensions: editor.options.extensions, content: saved });
+    try {
+      expect(reopened.getJSON()).toEqual(original);
+    } finally {
+      reopened.destroy();
+    }
+  });
+
   it('keeps generated gaps through reload and native copy but does not inherit them on Enter', async () => {
     const source = '<p>A</p><p data-generated-space-before="15.18" style="margin-top:15.18pt">B</p><ul><li><p data-generated-space-before="15.18" style="margin-top:15.18pt">Uno</p></li><li><p>Due</p></li></ul><p data-generated-space-before="15.18" style="margin-top:15.18pt">Fine</p>';
     const { editor, element } = await openEditor(source);

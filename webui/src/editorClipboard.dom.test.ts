@@ -75,12 +75,13 @@ describe('Editor native image clipboard', () => {
     for (const paragraph of ['Primo grassetto', 'Secondo paragrafo', 'Prima voce']) {
       expect(style(doc, 'paragraph', text.indexOf(paragraph) + paragraph.length)).toMatchObject({ ps_ls: 1.15, ps_sb: 0, ps_sa: 0 });
     }
-    expect(style(doc, 'paragraph', text.indexOf('Cella') + 'Cella'.length)).toMatchObject({ ps_ls: 1.15, ps_sb: 0, ps_sa: 0 });
+    // JSDOM has no font layout; custom CSS leading uses the fallback ratio.
+    expect(style(doc, 'paragraph', text.indexOf('Cella') + 'Cella'.length)).toMatchObject({ ps_ls: 1.7142857, ps_sb: 0, ps_sa: 0 });
     expect(style(doc, 'text', text.indexOf('grassetto'))).toMatchObject({ ts_bd: true, ts_ff: 'Arial', ts_fs: 11 });
     expect(style(doc, 'paragraph', text.indexOf('Prima voce') + 'Prima voce'.length)?.ps_il).toBe(36);
     expect(style(doc, 'list', text.indexOf('Prima voce') + 'Prima voce'.length)).toMatchObject({ ls_nest: 0 });
     for (const label of ['Prima voce', 'Seconda voce']) expect(style(doc, 'paragraph', text.indexOf(label) + label.length)).toMatchObject({ ps_sm: 1 });
-    expect(style(doc, 'text', 0)).toMatchObject({ ts_bd: false, ts_fs: 20 });
+    expect(style(doc, 'text', 0)).toMatchObject({ ts_bd: true, ts_fs: 20 });
     expect(style(doc, 'paragraph', text.indexOf('Titolo') + 'Titolo'.length)).toMatchObject({ ps_hd: 1, ps_ls: 1.15, ps_sb: 20, ps_sa: 0 });
     expect(style(doc, 'paragraph', text.indexOf('Introduzione') + 'Introduzione'.length)).toMatchObject({ ps_hd: 2, ps_ls: 1.15, ps_sb: 18, ps_sa: 6 });
     if (media.includes('data-math-block')) {
@@ -127,11 +128,11 @@ describe('Editor native image clipboard', () => {
     expect(Object.values(broken.resolved.dsl_entitymap)[0].pe_lo).toBeUndefined();
   });
   it('preserves UTF-16 text offsets, headings, inline marks, font, colors and alignment', () => {
-    const doc = model(`<h2>Titolo 😀</h2>${figure()}<p style="text-align:right"><b>B</b><i>I</i><u>U</u><s>S</s><sup>A</sup><sub>P</sub><a href="https://example.com">L</a><span style="font-size:16pt;font-family:Georgia;color:#123abc;background-color:#ffff00">C</span>N</p>`);
-    expect(doc.resolved.dsl_spacers).toBe('Titolo 😀\nBIUSAPLCN\n');
+    const doc = model(`<h2>Titolo \u{1F600}</h2>${figure()}<p style="text-align:right"><b>B</b><i>I</i><u>U</u><s>S</s><sup>A</sup><sub>P</sub><a href="https://example.com">L</a><span style="font-size:16pt;font-family:Georgia;color:#123abc;background-color:#ffff00">C</span>N</p>`);
+    expect(doc.resolved.dsl_spacers).toBe('Titolo \u{1F600}\nBIUSAPLCN\n');
     const body = doc.resolved.dsl_spacers.indexOf('B');
     expect(style(doc, 'paragraph', body - 1)).toMatchObject({ ps_hd: 2 });
-    expect(style(doc, 'text', 0)).toMatchObject({ ts_fs: 16, ts_bd: false });
+    expect(style(doc, 'text', 0)).toMatchObject({ ts_fs: 16, ts_bd: true });
     for (const [offset, property] of [[0, 'ts_bd'], [1, 'ts_it'], [2, 'ts_un'], [3, 'ts_st']] as const) expect(style(doc, 'text', body + offset)?.[property]).toBe(true);
     expect(style(doc, 'text', body + 4)?.ts_va).toBe('sup');
     expect(style(doc, 'text', body + 5)?.ts_va).toBe('sub');
@@ -222,7 +223,7 @@ describe('Editor native image clipboard', () => {
     expect(doc.formats['text/plain']).not.toContain('rendered HTML');
   });
   it('retains native function offsets and surrounding styles across inline and block operator limits', () => {
-    const doc = model('<h2>Titolo</h2><p><span style="color:#123abc">Prima 😀</span> <span data-math="\\sin x+\\lim_{t\\to0}t">render</span> dopo</p><div data-math-block="\\lim_{t\\to0}t">render</div><ol start="4"><li><p>Quarta</p></li></ol>');
+    const doc = model('<h2>Titolo</h2><p><span style="color:#123abc">Prima \u{1F600}</span> <span data-math="\\sin x+\\lim_{t\\to0}t">render</span> dopo</p><div data-math-block="\\lim_{t\\to0}t">render</div><ol start="4"><li><p>Quarta</p></li></ol>');
     const text = doc.resolved.dsl_spacers;
     const functions = doc.resolved.dsl_styleslices.find(slice => slice.stsl_type === 'equation_function')!.stsl_styles;
     expect(functions.filter(Boolean)).toEqual([{ eqfs_c: '\\sin' }, { eqfs_c: '\\lima' }, { eqfs_c: '\\lima' }]);
