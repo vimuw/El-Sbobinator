@@ -10,8 +10,7 @@ import Highlight from '@tiptap/extension-highlight';
 import TextAlign from '@tiptap/extension-text-align';
 import FontFamily from '@tiptap/extension-font-family';
 import Link from '@tiptap/extension-link';
-import Subscript from '@tiptap/extension-subscript';
-import Superscript from '@tiptap/extension-superscript';
+import { EditorSubscript, EditorSuperscript, EditorScriptCaret } from '../editorScripts';
 import { Menu, X } from 'lucide-react';
 import { FloatingImage } from './FloatingImage';
 import { type Heading, SearchHighlight, FontSize, CustomHeading, CustomParagraph, CustomHardBreak, MathInline, MathBlock, SmartArrows, extractHeadings } from '../editorExtensions';
@@ -134,8 +133,9 @@ export function RichTextEditor({
     Highlight.configure({ multicolor: true }),
     TextAlign.configure({ types: ['heading', 'paragraph'] }),
     Link.configure({ openOnClick: false, markdownLinks: true }),
-    Subscript,
-    Superscript,
+    EditorSubscript,
+    EditorSuperscript,
+    EditorScriptCaret,
     SearchHighlight,
     Youtube.configure({
       controls: true,

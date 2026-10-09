@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import {
   Bold, Italic, List, ListOrdered, Quote, Redo,
-  RemoveFormatting, Search, Strikethrough,
+  RemoveFormatting, Search, Strikethrough, Superscript, Subscript,
   Underline as UnderlineIcon, Undo,
 } from 'lucide-react';
 import {
@@ -133,6 +133,14 @@ export const MenuBar = ({
       <button type="button" onClick={() => editor.chain().focus().toggleStrike().run()} className={btn(editor.isActive('strike'))} title="Barrato">
         <Strikethrough className="h-4 w-4" />
       </button>
+      <div className="editor-script-controls" role="group" aria-label="Apice e pedice">
+        <button type="button" onClick={() => editor.chain().focus().toggleSuperscript().run()} className={btn(editor.isActive('superscript'))} title="Apice (Ctrl+.)" aria-label="Apice (Ctrl+.)" aria-pressed={editor.isActive('superscript')}>
+          <Superscript className="h-4 w-4" />
+        </button>
+        <button type="button" onClick={() => editor.chain().focus().toggleSubscript().run()} className={btn(editor.isActive('subscript'))} title="Pedice (Ctrl+,)" aria-label="Pedice (Ctrl+,)" aria-pressed={editor.isActive('subscript')}>
+          <Subscript className="h-4 w-4" />
+        </button>
+      </div>
       <ColorPickerButton editor={editor} />
       <HighlightPickerButton editor={editor} />
       <button

@@ -1638,6 +1638,14 @@ button {
   align-items: center;
 }
 
+.editor-script-controls {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 0.15rem;
+  padding-inline: 0.3rem;
+  border-inline: 1px solid var(--border-subtle);
+}
+
 .editor-select {
   appearance: none;
   -webkit-appearance: none;
@@ -2634,6 +2642,40 @@ button {
   content: "";
   display: block;
   clear: both;
+}
+
+.tiptap-editor[data-editor-script-caret]:focus:not([data-editor-script-composing]) {
+  caret-color: transparent;
+}
+
+.editor-script-caret {
+  position: relative;
+  pointer-events: none;
+}
+
+.editor-script-caret::before { content: "\200b"; }
+
+.editor-script-caret::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-left: 1px solid currentColor;
+  visibility: hidden;
+}
+
+.tiptap-editor:focus:not([data-editor-script-composing]) .editor-script-caret::after {
+  visibility: visible;
+  animation: editor-script-caret-blink 1s step-end infinite;
+}
+
+@keyframes editor-script-caret-blink {
+  50% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tiptap-editor:focus:not([data-editor-script-composing]) .editor-script-caret::after { animation: none; }
 }
 
 .tiptap-editor h1,
