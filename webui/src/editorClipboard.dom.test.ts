@@ -20,6 +20,22 @@ const style = (doc: Model, type: string, index: number) => doc.resolved.dsl_styl
 afterEach(() => { vi.restoreAllMocks(); document.getSelection()?.removeAllRanges(); document.body.innerHTML = ''; });
 
 describe('Editor native image clipboard', () => {
+  it('preserves the HTML source and resamples only the native image derivative', () => {
+    const root = document.createElement('div');
+    root.innerHTML = `<img src="${jpeg}">`;
+    const source = root.querySelector('img')!;
+    Object.defineProperties(source, { complete: { value: true }, naturalWidth: { value: 1600 }, naturalHeight: { value: 1000 } });
+    const create = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation(tag => tag === 'canvas' ? {
+      width: 0, height: 0, getContext: () => ({ fillRect: vi.fn(), drawImage: vi.fn() }),
+      toDataURL: () => 'data:image/jpeg;base64,native-derivative',
+    } as unknown as HTMLCanvasElement : create(tag));
+    const formats = createNativeClipboardFormats(figure(), root)!;
+    const images = JSON.parse(JSON.parse(formats[NATIVE_IMAGES_MIME]).data).image_urls;
+    expect(Object.values(images)).toEqual(['data:image/jpeg;base64,native-derivative']);
+    expect(new DOMParser().parseFromString(formats['text/html'], 'text/html').querySelector('img')!.getAttribute('src')).toBe(jpeg);
+    expect(source.getAttribute('src')).toBe(jpeg);
+  });
   it.each([['a', 5], ['A', 4], ['i', 7], ['I', 6], ['1', 3]])('preserves ordered marker type %s and start in native and HTML copies', (type, glyph) => {
     const doc = model(`<ol type="${type}" start="3"><li><p>Prima</p><ol type="I" start="7"><li><p>Annidata</p></li></ol></li><li><p>Seconda</p></li></ol><p>Fuori</p>`);
     const after = (label: string) => style(doc, 'list', doc.resolved.dsl_spacers.indexOf(label) + label.length)!;

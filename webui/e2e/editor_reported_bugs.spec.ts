@@ -44,6 +44,55 @@ test('internal fallback copy keeps default headings readable in dark mode and pr
   await page.screenshot({ path: info.outputPath('heading-colors-reopened.png') });
 });
 
+test('internal image copies retain pixels, alpha, size changes and saved sources', async ({ page }, info) => {
+  const src = await page.evaluate(() => {
+    const canvas = document.createElement('canvas'); canvas.width = 1600; canvas.height = 1000;
+    const ctx = canvas.getContext('2d')!; ctx.fillStyle = '#00aa66'; ctx.fillRect(400, 200, 800, 600);
+    return canvas.toDataURL('image/png');
+  });
+  await paste(page, `<p><span data-editor-image data-layout="inline" data-width="20"><img src="${src}" alt="Originale"></span>Prima</p><p>Destinazione</p>`);
+  const editor = page.locator('.tiptap-editor');
+  await expect(editor.locator('img.editor-image-asset')).toHaveCount(1);
+  await editor.getByAltText('Originale').click(); await page.keyboard.press('Control+c');
+  const copyImageCount = await page.evaluate(async () => {
+    const items = await navigator.clipboard.read();
+    const item = items.find(item => item.types.includes('text/html'))!;
+    const html = await (await item.getType('text/html')).text();
+    return { count: new DOMParser().parseFromString(html, 'text/html').querySelectorAll('img').length, html };
+  });
+  expect(copyImageCount.count).toBe(1);
+  fs.writeFileSync(info.outputPath('copied.html'), copyImageCount.html);
+  await editor.evaluate(root => {
+    const instance = (root as HTMLElement & { editor: import('@tiptap/core').Editor }).editor;
+    instance.commands.setTextSelection(instance.state.doc.content.size - 1);
+  });
+  await page.keyboard.press('Control+v');
+  fs.writeFileSync(info.outputPath('after-paste.json'), JSON.stringify(await editor.evaluate(root => (root as HTMLElement & { editor: import('@tiptap/core').Editor }).editor.getJSON())));
+  await expect(editor.locator('img.editor-image-asset')).toHaveCount(2);
+  await editor.locator('img.editor-image-asset').last().click();
+  await editor.evaluate(root => {
+    const instance = (root as HTMLElement & { editor: import('@tiptap/core').Editor }).editor;
+    instance.commands.updateAttributes('floatingImage', { width: 90 });
+  });
+  await page.keyboard.press('Control+c');
+  // Start the next paste after ProseMirror's 500ms history grouping interval.
+  await page.waitForTimeout(600);
+  await editor.evaluate(root => {
+    const instance = (root as HTMLElement & { editor: import('@tiptap/core').Editor }).editor;
+    instance.commands.setTextSelection(instance.state.doc.content.size - 1);
+  });
+  await page.keyboard.press('Control+v');
+  await expect(editor.locator('img.editor-image-asset')).toHaveCount(3);
+  const read = () => editor.locator('img.editor-image-asset').evaluateAll(images => images.map(img => ({ src: img.getAttribute('src'), width: (img as HTMLImageElement).naturalWidth, height: (img as HTMLImageElement).naturalHeight })));
+  await expect.poll(read).toEqual(Array(3).fill({ src, width: 1600, height: 1000 }));
+  await page.keyboard.press('Control+z'); await expect(editor.locator('img.editor-image-asset')).toHaveCount(2);
+  await page.keyboard.press('Control+Shift+z'); await expect(editor.locator('img.editor-image-asset')).toHaveCount(3);
+  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
+  await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
+  await expect.poll(read).toEqual(Array(3).fill({ src, width: 1600, height: 1000 }));
+});
+
 test('repeated list Tab retains editor focus while the audio bar is present', async ({ page }) => {
   await paste(page, '<ol><li><p>Prima</p></li><li><p>Seconda</p></li></ol>');
   const editor = page.locator('.tiptap-editor');

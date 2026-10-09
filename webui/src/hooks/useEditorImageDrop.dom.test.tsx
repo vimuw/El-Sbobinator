@@ -170,6 +170,64 @@ describe('useEditorImageDrop Hook', () => {
     expect(fakeEvent.preventDefault).toHaveBeenCalled();
   });
 
+  it.each([
+    '<img src="https://example.test/unavailable.svg" alt="Respiratory burst - Wikipedia">',
+    '<!--StartFragment--><a href="https://example.test"><img src="https://example.test/unavailable.png"></a><!--EndFragment-->',
+    '<div><span> <img src="blob:https://example.test/expired"> </span></div>',
+  ])('embeds the image file from browser Copy image despite its HTML reference: %s', async html => {
+    const editor = new Editor({ extensions: [StarterKit, FloatingImage], content: '<p>Prima</p>' });
+    editor.commands.setTextSelection(6);
+    const before = editor.getJSON();
+    const { result } = renderHook(() => useEditorImageDrop({ editorRef: { current: editor } }));
+    const src = 'data:image/png;base64,embedded';
+    const optimizeSpy = vi.spyOn(utils, 'readAndOptimizeImageAsDataUrl').mockResolvedValue(src);
+    const file = new File(['image pixels'], 'image.png', { type: 'image/png' });
+    const event = {
+      clipboardData: { files: [file], getData: (type: string) => type === 'text/html' ? html : '' },
+      preventDefault: vi.fn(),
+    } as unknown as ClipboardEvent;
+    try {
+      expect(result.current.handlePaste(editor.view, event)).toBe(true);
+      expect(event.preventDefault).toHaveBeenCalled();
+      await waitFor(() => expect(editor.getHTML()).toContain(src));
+      expect(optimizeSpy).toHaveBeenCalledWith(file);
+      expect(editor.getHTML()).not.toContain('example.test');
+      expect(editor.getText()).toBe('Prima');
+      const pasted = editor.getJSON();
+      const reopened = new Editor({ extensions: [StarterKit, FloatingImage], content: editor.getHTML() });
+      expect(reopened.getHTML()).toEqual(editor.getHTML());
+      expect(reopened.getText()).toBe('Prima');
+      reopened.destroy();
+      editor.commands.undo();
+      expect(editor.getJSON()).toEqual(before);
+      editor.commands.redo();
+      expect(editor.getJSON()).toEqual(pasted);
+    } finally {
+      optimizeSpy.mockRestore();
+      editor.destroy();
+    }
+  });
+
+  it.each([
+    '<p>Testo <img src="https://example.test/image.png"></p>',
+    '<table><tr><td><img src="https://example.test/image.png"></td></tr></table>',
+    '<ul><li><img src="https://example.test/image.png"></li></ul>',
+    '<img src="one.png"><img src="two.png">',
+    '<p><img src="one.png"></p><p></p>',
+    '<span data-editor-image data-layout="wrap" data-width="35"><img src="one.png"></span>',
+  ])('keeps formatted HTML when it carries document content or editor image layout: %s', html => {
+    const { result } = renderHook(() => useEditorImageDrop({ editorRef: { current: null } }));
+    const event = {
+      clipboardData: {
+        files: [new File(['pixels'], 'image.png', { type: 'image/png' })],
+        getData: (type: string) => type === 'text/html' ? html : '',
+      },
+      preventDefault: vi.fn(),
+    } as unknown as ClipboardEvent;
+    expect(result.current.handlePaste({} as EditorView, event)).toBe(false);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+  });
+
   it('handleDrop handles file drops directly', () => {
     const editorRef = { current: null };
     const { result } = renderHook(() => useEditorImageDrop({ editorRef }));

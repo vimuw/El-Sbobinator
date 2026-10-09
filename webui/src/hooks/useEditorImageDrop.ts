@@ -14,6 +14,18 @@ interface UseEditorImageDropOptions {
   editorRef: React.MutableRefObject<TiptapEditor | null>;
 }
 
+function isSingleImageClipboardHtml(html: string): boolean {
+  const body = new DOMParser().parseFromString(html, 'text/html').body;
+  const images = body.querySelectorAll('img');
+  if (images.length !== 1 || body.textContent?.trim() || body.querySelector('[data-editor-image]')) return false;
+  const image = images[0];
+  // Browser Copy image may wrap its IMG in a link or an otherwise empty block.
+  // Extra blocks, lists, tables and editor layout metadata belong to rich paste.
+  return Array.from(body.querySelectorAll('*')).every(element =>
+    element === image || (/^(A|DIV|P|SPAN)$/.test(element.tagName) && element.contains(image))
+  );
+}
+
 export function useEditorImageDrop({ editorRef }: UseEditorImageDropOptions) {
   const draggedImageRef = useRef<{ pos: number; size: number; node: ProsemirrorNode } | null>(null);
   const dragCleanupRef = useRef<(() => void) | null>(null);
@@ -63,9 +75,11 @@ export function useEditorImageDrop({ editorRef }: UseEditorImageDropOptions) {
   const handlePaste = useCallback((_view: EditorView, event: ClipboardEvent): boolean => {
     const files = Array.from(event.clipboardData?.files || []).filter(f => f.type.startsWith('image/'));
     if (!files.length) return false;
-    // Rich clipboard content can expose the same image as a file as well as HTML.
-    // Let the schema parse the HTML so the surrounding text and structure survive.
-    if (event.clipboardData?.getData?.('text/html').trim()) return false;
+    const html = event.clipboardData?.getData?.('text/html').trim();
+    // Copy image exposes pixels AND an HTML reference, which can be inaccessible
+    // in the desktop WebView. Embed the pixels for this single-image case while
+    // keeping rich documents and our own image layout on the HTML parser route.
+    if (html && (files.length !== 1 || !isSingleImageClipboardHtml(html))) return false;
     event.preventDefault();
     void insertImageFiles(files);
     return true;

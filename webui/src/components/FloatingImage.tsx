@@ -5,7 +5,6 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react';
 import { NodeSelection, Plugin, PluginKey } from '@tiptap/pm/state';
 import { closeHistory } from '@tiptap/pm/history';
-import { optimizeDataUrlImage } from '../utils';
 import { imageWrapperStyle, imageWrapperCss, imageAssetCss, normalizeImageAspectRatio, normalizeImageAlignment, normalizeImageLayout, normalizeImagePosition, normalizeImageOffsetY, normalizeImageWidth } from '../imageLayout';
 import { createImageWrapPlugin } from '../imageWrap';
 import { startImageDrag } from '../imageDrag';
@@ -72,7 +71,7 @@ function ImageLayoutIcon({ wrap = false }: { wrap?: boolean }) {
   );
 }
 
-function FloatingImageView({ node, updateAttributes, selected, getPos, editor }: NodeViewProps) {
+function FloatingImageView({ node, selected, getPos, editor }: NodeViewProps) {
   const anchorRef = useRef<HTMLSpanElement | null>(null);
   const resizeCleanupRef = useRef<(() => void) | null>(null);
   const dragCleanupRef = useRef<(() => void) | null>(null);
@@ -83,26 +82,6 @@ function FloatingImageView({ node, updateAttributes, selected, getPos, editor }:
   const position = normalizeImagePosition(node.attrs.position, align);
   const aspectRatio = normalizeImageAspectRatio(node.attrs.aspectRatio);
   const caption: string = String(node.attrs.caption || '');
-  const src = String(node.attrs.src || '');
-
-  useEffect(() => {
-    if (
-      src.startsWith('data:image/') &&
-      !src.startsWith('data:image/svg+xml') &&
-      !src.startsWith('data:image/gif') &&
-      (src.startsWith('data:image/webp') || !src.startsWith('data:image/jpeg') || src.length > 500_000)
-    ) {
-      let isMounted = true;
-      void optimizeDataUrlImage(src, { format: 'image/jpeg' }).then(optimizedSrc => {
-        if (isMounted && optimizedSrc && optimizedSrc !== src) {
-          updateAttributes({ src: optimizedSrc });
-        }
-      });
-      return () => {
-        isMounted = false;
-      };
-    }
-  }, [src, updateAttributes]);
 
   const selectImageNode = (e: React.SyntheticEvent) => {
     if ((e.target as HTMLElement)?.closest('.editor-image-resize-handle, .editor-image-toolbar')) return;
