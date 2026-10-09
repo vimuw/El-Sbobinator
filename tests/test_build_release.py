@@ -189,6 +189,72 @@ class BuildReleaseTests(unittest.TestCase):
 
             mock_run.assert_called_once()
 
+    def test_macos_postbuild_checks_packaged_versions_before_smoke(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            contents = root / "dist" / f"{build_release.APP_NAME}.app" / "Contents"
+            frameworks = contents / "Frameworks"
+            frontend = frameworks / "webui" / "dist"
+            frontend.mkdir(parents=True)
+            (root / "build").mkdir()
+            generated = root / "build" / "diagnostic_build.json"
+            generated.write_text('{"version":"2.7.3"}')
+            metadata = frameworks / "diagnostic_build.json"
+            manifest = frontend / "desktop-build.json"
+            manifest.write_text('{"version":"2.7.3"}')
+            with (
+                patch.object(build_release, "ROOT", root),
+                patch.object(build_release, "run") as run,
+            ):
+                for content in (None, "invalid json", '{"version":"unknown"}'):
+                    if content is not None:
+                        metadata.write_text(content)
+                    with self.subTest(metadata=content):
+                        with self.assertRaisesRegex(RuntimeError, "Metadati"):
+                            build_release.run_postbuild_smoke("macos")
+                        run.assert_not_called()
+                metadata.write_text('{"version":"2.7.2"}')
+                with self.assertRaisesRegex(RuntimeError, "incoerenti"):
+                    build_release.run_postbuild_smoke("macos")
+                metadata.write_text('{"version":"2.7.3"}')
+                manifest.write_text('{"version":"2.7.2"}')
+                with self.assertRaisesRegex(RuntimeError, "incoerenti"):
+                    build_release.run_postbuild_smoke("macos")
+                manifest.write_text('{"version":"2.7.3"}')
+                generated.write_text('{"version":"2.7.4"}')
+                with self.assertRaisesRegex(RuntimeError, "incoerenti"):
+                    build_release.run_postbuild_smoke("macos")
+                run.assert_not_called()
+                generated.write_text('{"version":"2.7.3"}')
+                build_release.run_postbuild_smoke("macos")
+                run.assert_called_once()
+
+    def test_macos_postbuild_reads_real_pyinstaller_links(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            artifact = root / "dist" / f"{build_release.APP_NAME}.app"
+            contents = artifact / "Contents"
+            frameworks = contents / "Frameworks"
+            resources = contents / "Resources"
+            frameworks.mkdir(parents=True)
+            (resources / "webui" / "dist").mkdir(parents=True)
+            (root / "build").mkdir()
+            content = '{"version":"2.7.3"}'
+            (root / "build" / "diagnostic_build.json").write_text(content)
+            (resources / "diagnostic_build.json").write_text(content)
+            (resources / "webui" / "dist" / "desktop-build.json").write_text(content)
+            try:
+                (frameworks / "diagnostic_build.json").symlink_to(
+                    Path("..") / "Resources" / "diagnostic_build.json"
+                )
+                (frameworks / "webui").symlink_to(
+                    Path("..") / "Resources" / "webui", target_is_directory=True
+                )
+            except OSError as exc:
+                self.skipTest(f"Symlinks unavailable: {exc}")
+            with patch.object(build_release, "ROOT", root):
+                build_release.verify_macos_build_metadata(artifact)
+
 
 class Webview2BuildNoticeTests(unittest.TestCase):
     def registry(self):
