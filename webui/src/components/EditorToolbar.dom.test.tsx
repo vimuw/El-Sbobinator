@@ -44,7 +44,7 @@ describe('EditorToolbar MenuBar', () => {
     const { container } = render(
       <MenuBar
         editor={editor as unknown as TiptapEditor}
-        onOpenImagePicker={vi.fn()}
+        onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
         showFindReplace={false}
         onToggleFindReplace={vi.fn()}
         zoomLevel={100}
@@ -76,7 +76,7 @@ describe('EditorToolbar MenuBar', () => {
     render(
       <MenuBar
         editor={editor as unknown as TiptapEditor}
-        onOpenImagePicker={vi.fn()}
+        onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
         showFindReplace={false}
         onToggleFindReplace={vi.fn()}
         zoomLevel={100}
@@ -112,7 +112,7 @@ describe('EditorToolbar MenuBar', () => {
       render(
         <MenuBar
           editor={editorWithoutUndo as unknown as TiptapEditor}
-          onOpenImagePicker={vi.fn()}
+          onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
           showFindReplace={false}
           onToggleFindReplace={vi.fn()}
         />

@@ -25,6 +25,7 @@ import { FindReplacePanel } from './EditorFindReplace';
 import { useEditorImageDrop } from '../hooks/useEditorImageDrop';
 import { useTocScrollSpy } from '../hooks/useTocScrollSpy';
 import { EditorContextMenu } from './EditorContextMenu';
+import { EditorMathComposer } from './EditorMathComposer';
 import { handleEditorClipboardEvent } from '../editorSelectionClipboard';
 import { editorFormattingVariables } from '../documentFormatting';
 import { EditorDocumentStyle } from '../editorDocumentStyle';
@@ -64,6 +65,8 @@ export function RichTextEditor({
   onZoomChange,
 }: RichTextEditorProps) {
   const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number } | null>(null);
+  const [isMathOpen, setIsMathOpen] = useState(false);
+  const closeMathComposer = React.useCallback(() => setIsMathOpen(false), []);
   const [findMode, setFindMode] = useState<null | 'find' | 'replace'>(initialSearchTerm ? 'find' : null);
   const [findFocusTrigger, setFindFocusTrigger] = useState(0);
   const findModeRef = useRef<null | 'find' | 'replace'>(null);
@@ -242,6 +245,14 @@ export function RichTextEditor({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'm'
+        && (e.target as HTMLElement | null)?.closest('.editor-shell')
+        && !(e.target as HTMLElement).closest('input, textarea, select')) {
+        if (!editorRef.current || editorRef.current.isDestroyed) return;
+        e.preventDefault();
+        setContextMenu(null);
+        setIsMathOpen(true);
+      }
       if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
         e.preventDefault();
         if (findModeRef.current) {
@@ -385,6 +396,7 @@ export function RichTextEditor({
       <MenuBar
         editor={editor}
         onOpenImagePicker={() => imageInputRef.current?.click()}
+        onOpenMath={() => setIsMathOpen(true)}
         showFindReplace={findMode !== null}
         onToggleFindReplace={() => setFindMode(p => p ? null : 'find')}
         zoomLevel={zoomLevel}
@@ -457,7 +469,11 @@ export function RichTextEditor({
         editor={editor}
         onOpenImagePicker={() => imageInputRef.current?.click()}
         onOpenFind={() => setFindMode('find')}
+        onOpenMath={() => setIsMathOpen(true)}
       />
+      {isMathOpen && editor && !editor.isDestroyed && (
+        <EditorMathComposer editor={editor} onClose={closeMathComposer} />
+      )}
 
       <input
         ref={imageInputRef}

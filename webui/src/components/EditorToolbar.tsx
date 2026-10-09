@@ -43,6 +43,7 @@ const menuBarStateKey = (editor: TiptapEditor): string => [
 export const MenuBar = ({
   editor,
   onOpenImagePicker,
+  onOpenMath,
   showFindReplace,
   onToggleFindReplace,
   zoomLevel,
@@ -50,6 +51,7 @@ export const MenuBar = ({
 }: {
   editor: TiptapEditor | null;
   onOpenImagePicker: () => void;
+  onOpenMath: () => void;
   showFindReplace: boolean;
   onToggleFindReplace: () => void;
   zoomLevel?: number;
@@ -144,7 +146,7 @@ export const MenuBar = ({
       <div className="editor-separator" />
       <InsertImageButton onOpenImagePicker={onOpenImagePicker} />
       <InsertYoutubeButton editor={editor} />
-      <InsertMathButton editor={editor} />
+      <InsertMathButton onOpenMath={onOpenMath} />
       <LinkButton editor={editor} />
       <div className="editor-separator" />
       <AlignDropdownButton editor={editor} />

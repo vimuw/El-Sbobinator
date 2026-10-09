@@ -15,18 +15,11 @@ export const InsertImageButton = ({ onOpenImagePicker }: { onOpenImagePicker: ()
   );
 };
 
-export const InsertMathButton = ({ editor }: { editor: TiptapEditor }) => {
-  const handleInsert = () => {
-    const latex = window.prompt('Inserisci formula LaTeX (es. E=mc^2, \\frac{a}{b}):', 'E=mc^2');
-    if (latex && latex.trim()) {
-      editor.chain().focus().insertContent({ type: 'mathInline', attrs: { latex: latex.trim() } }).run();
-    }
-  };
-
+export const InsertMathButton = ({ onOpenMath }: { onOpenMath: () => void }) => {
   return (
     <button
       type="button"
-      onClick={handleInsert}
+      onClick={onOpenMath}
       className="editor-button"
       title="Inserisci formula matematica (LaTeX)"
     >

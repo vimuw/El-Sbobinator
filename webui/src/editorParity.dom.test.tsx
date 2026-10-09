@@ -257,7 +257,7 @@ describe('Editor parity: clipboard and logical text', () => {
     await act(async () => { editor.commands.focus(); editor.commands.selectAll(); });
     const original = editor.getJSON();
     if (path === 'context') {
-      render(<EditorContextMenu contextMenu={{ x: 20, y: 20 }} onClose={() => {}} editor={editor} onOpenImagePicker={() => {}} onOpenFind={() => {}} />);
+      render(<EditorContextMenu contextMenu={{ x: 20, y: 20 }} onClose={() => {}} editor={editor} onOpenMath={() => {}} onOpenImagePicker={() => {}} onOpenFind={() => {}} />);
       fireEvent.click(Array.from(document.querySelectorAll<HTMLButtonElement>('.editor-context-menu-item')).find(button => button.textContent?.includes('Rimuovi formattazione'))!);
     } else if (path === 'keyboard') fireEvent.keyDown(element, { key: '\\', code: 'Backslash', ctrlKey: true });
     else fireEvent.click(document.querySelector<HTMLButtonElement>('.editor-toolbar [title="Rimuovi formattazione"]')!);
