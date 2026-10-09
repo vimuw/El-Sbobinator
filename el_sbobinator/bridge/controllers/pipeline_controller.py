@@ -702,7 +702,7 @@ class PipelineControllerMixin:
             usage = get_daily_usage(
                 primary_key=cfg.get("api_key"),
                 fallback_keys=cfg.get("fallback_keys", []),
-                primary_model=cfg.get("preferred_model", "gemini-2.5-flash"),
+                primary_model=cfg.get("preferred_model", DEFAULT_MODEL),
                 fallback_models=cfg.get("fallback_models", []),
             )
             self._adapter.emit("apiUsageUpdated", usage, batched=False)

@@ -26,7 +26,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from typing import Any, Literal, TypedDict
 from zoneinfo import ZoneInfo
 
-from el_sbobinator.core.model_registry import SUPPORTED_MODELS
+from el_sbobinator.core.model_registry import DEFAULT_MODEL, SUPPORTED_MODELS
 from el_sbobinator.services.config_service import get_config_dir
 
 # ---------------------------------------------------------------------------
@@ -345,7 +345,7 @@ def _empty_work_stats_dict() -> dict[str, Any]:
 
 
 def _create_model_limit_entry(model_name: str) -> dict[str, Any]:
-    cleaned = str(model_name or "gemini-2.5-flash").strip()
+    cleaned = str(model_name or DEFAULT_MODEL).strip()
     rpd = get_limit_for_model(cleaned)
     rpm = get_rpm_limit_for_model(cleaned)
     tpm = DEFAULT_FLASH_LITE_TPM if "lite" in cleaned.lower() else DEFAULT_FLASH_TPM
@@ -569,7 +569,7 @@ def _get_or_create_credential_unlocked(
 def _get_or_create_project_limit_unlocked(
     data: dict[str, Any], model_name: str
 ) -> dict[str, Any]:
-    cleaned = str(model_name or "gemini-2.5-flash").strip()
+    cleaned = str(model_name or DEFAULT_MODEL).strip()
     limits = data.setdefault("project_limits", {})
     if cleaned not in limits:
         limits[cleaned] = _create_model_limit_entry(cleaned)
@@ -584,7 +584,7 @@ def _get_or_create_project_limit_unlocked(
 def record_request_attempt(api_key: str, model_name: str) -> None:
     """Records an API request attempt emitted by generation_service."""
     cleaned_key = str(api_key or "").strip()
-    cleaned_model = str(model_name or "gemini-2.5-flash").strip()
+    cleaned_model = str(model_name or DEFAULT_MODEL).strip()
     now_iso = get_current_authoritative_utc().isoformat()
 
     with _interprocess_lock():
@@ -610,7 +610,7 @@ def record_request_attempt(api_key: str, model_name: str) -> None:
 def record_request_success(api_key: str, model_name: str) -> None:
     """Records a successful response returned normally by the Google GenAI SDK."""
     cleaned_key = str(api_key or "").strip()
-    cleaned_model = str(model_name or "gemini-2.5-flash").strip()
+    cleaned_model = str(model_name or DEFAULT_MODEL).strip()
     now_iso = get_current_authoritative_utc().isoformat()
 
     global _RUNTIME_RETRY_AFTER_EXPIRY_UTC, _RUNTIME_RETRY_AFTER_SECONDS
@@ -699,7 +699,7 @@ def record_work_completed(
 
 def mark_quota_exhausted(model_name: str, api_key: str | None = None) -> None:
     """Marks daily quota (RPD) as exhausted for a specific model and optionally key."""
-    cleaned_model = str(model_name or "gemini-2.5-flash").strip()
+    cleaned_model = str(model_name or DEFAULT_MODEL).strip()
     cleaned_key = str(api_key or "").strip()
     now_iso = get_current_authoritative_utc().isoformat()
 
@@ -736,7 +736,7 @@ def mark_rate_limited(
     model_name: str, retry_after_seconds: float | None = None
 ) -> None:
     """Marks project as rate-limited (RPM/TPM) and sets temporary retry-after window."""
-    cleaned_model = str(model_name or "gemini-2.5-flash").strip()
+    cleaned_model = str(model_name or DEFAULT_MODEL).strip()
     now_iso = get_current_authoritative_utc().isoformat()
 
     global _RUNTIME_RETRY_AFTER_EXPIRY_UTC, _RUNTIME_RETRY_AFTER_SECONDS
@@ -1004,7 +1004,7 @@ def _handle_force_refresh_unlocked(
 def get_daily_usage(
     primary_key: str | None = None,
     fallback_keys: list[str] | None = None,
-    primary_model: str = "gemini-2.5-flash",
+    primary_model: str = DEFAULT_MODEL,
     fallback_models: list[str] | None = None,
     force_refresh: bool = False,
 ) -> dict[str, Any]:
@@ -1023,7 +1023,7 @@ def get_daily_usage(
             seen_keys.add(clean_fk)
             all_keys.append((clean_fk, False, f"Chiave Riserva {idx + 1}"))
 
-    clean_primary_model = str(primary_model or "gemini-2.5-flash").strip()
+    clean_primary_model = str(primary_model or DEFAULT_MODEL).strip()
     relevant_models: list[str] = [clean_primary_model]
     for fm in fallback_models or []:
         cfm = str(fm or "").strip()

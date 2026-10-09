@@ -914,16 +914,17 @@ describe('SettingsModal — session folder and cleanup', () => {
 });
 
 describe('SettingsModal — model section', () => {
-  it('renders primary model select and default badge without summary description', async () => {
+  it('shows the 3.5 Flash default badge and the 2.5 Flash access tooltip', async () => {
     const models = [
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: '', default_chunk_minutes: 12 },
+      { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', summary: '', default_chunk_minutes: 15 },
       { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15 },
     ];
-    render(
+    const { rerender } = render(
       <SettingsModal
         {...makeProps({
           availableModels: models,
-          preferredModel: 'gemini-2.5-flash',
+          preferredModel: 'gemini-3.5-flash',
         })}
       />,
     );
@@ -931,7 +932,19 @@ describe('SettingsModal — model section', () => {
       fireEvent.click(screen.getAllByText('Generale')[0].closest('button')!);
     });
     expect(screen.getByText('Modello di trascrizione')).toBeTruthy();
-    expect(screen.getAllByText('Default').length).toBeGreaterThan(0);
+    const trigger = screen.getByRole('button', { name: /Gemini 3.5 Flash.*Default/i });
+    fireEvent.click(trigger);
+    const defaultOption = screen.getByRole('option', { name: /Gemini 3.5 Flash.*Default/i });
+    expect(defaultOption.getAttribute('aria-selected')).toBe('true');
+    const legacyOption = screen.getByRole('option', { name: /Gemini 2.5 Flash/i });
+    expect(legacyOption.textContent).not.toContain('Default');
+    const accessNote = 'Google consente l’uso solo a chi ha già usato questo modello. Se è la prima volta che lo usi, potrebbe non funzionare.';
+    expect(legacyOption.querySelector('[title]')?.getAttribute('title')).toBe(accessNote);
+    expect(screen.queryByText(accessNote)).toBeNull();
+    fireEvent.click(trigger);
+    rerender(<SettingsModal {...makeProps({ availableModels: models, preferredModel: 'gemini-2.5-flash' })} />);
+    const legacyTrigger = screen.getByRole('button', { name: /Gemini 2.5 Flash/i });
+    expect(legacyTrigger.querySelector('[title]')?.getAttribute('title')).toBe(accessNote);
     expect(screen.queryByText('Fast and capable')).toBeNull();
   });
 

@@ -21,7 +21,7 @@ import {
 import { ConfirmActionModal } from '../ConfirmActionModal';
 import { QuotasSection } from './QuotasSection';
 import { KebabMenu, type KebabMenuItem } from '../../KebabMenu';
-import { GEMINI_KEY_PATTERN, getModelDisplayName } from '../../../utils';
+import { DEFAULT_MODEL, GEMINI_KEY_PATTERN, getModelDisplayName } from '../../../utils';
 import type { ApiUsageResult, CredentialProfile, CredentialStorage } from '../../../bridge';
 
 import { credentialStorageWarning } from '../../../credentialStorage';
@@ -336,7 +336,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     setNotice(null);
   };
 
-  const effectivePreferredModel = preferredModel || 'gemini-2.5-flash';
+  const effectivePreferredModel = preferredModel || DEFAULT_MODEL;
 
   const isCredWorkingForModel = useCallback(
     (c?: CredentialProfile) => {

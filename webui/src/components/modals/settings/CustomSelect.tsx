@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
-import { ChevronDown, Check } from 'lucide-react';
+import { ChevronDown, Check, Info } from 'lucide-react';
 
 export interface CustomSelectOption {
   value: string;
   label: string;
   sublabel?: string;
+  tooltip?: string;
   badge?: string;
   disabled?: boolean;
 }
@@ -138,6 +139,16 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
           {selectedOption ? (
             <>
               <span className="truncate">{selectedOption.label}</span>
+              {selectedOption.tooltip && (
+                <span
+                  role="img"
+                  aria-label={selectedOption.tooltip}
+                  title={selectedOption.tooltip}
+                  className="inline-flex shrink-0 cursor-help text-[var(--text-secondary)]"
+                >
+                  <Info className="w-3.5 h-3.5" aria-hidden="true" />
+                </span>
+              )}
               {selectedOption.badge && (
                 <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)] leading-normal shrink-0">
                   {selectedOption.badge}
@@ -193,6 +204,16 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
               >
                 <div className="flex items-center gap-2 truncate pr-2">
                   <span className="truncate">{opt.label}</span>
+                  {opt.tooltip && (
+                    <span
+                      role="img"
+                      aria-label={opt.tooltip}
+                      title={opt.tooltip}
+                      className="inline-flex shrink-0 cursor-help text-[var(--text-secondary)]"
+                    >
+                      <Info className="w-3.5 h-3.5" aria-hidden="true" />
+                    </span>
+                  )}
                   {opt.badge && (
                     <span
                       className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border leading-normal shrink-0 ${
