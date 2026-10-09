@@ -131,7 +131,8 @@ class DesktopStartupServer:
                 return False
             kind = data.get("kind")
             identity_matches = (
-                data.get("build_id") == self.build_id
+                self.version != "unknown"
+                and data.get("build_id") == self.build_id
                 and data.get("version") == self.version
             )
             if self.state == "ready":
@@ -168,6 +169,8 @@ class DesktopStartupServer:
             elif kind in {"mismatch", "error"}:
                 self.failure = "L'interfaccia non è stata caricata correttamente."
                 self.failed.set()
+            if self.failed.is_set() and self.version == "unknown":
+                self.failure = "Impossibile leggere la versione dell'app installata."
             self._record("bridge_ready" if self.ready.is_set() else "loading")
             return True
 

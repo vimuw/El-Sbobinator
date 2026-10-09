@@ -122,15 +122,50 @@ def list_sessions(root: str) -> list[dict]:
     return sorted(candidates, key=lambda item: item["updated_at"], reverse=True)[:100]
 
 
+def read_build_metadata(data_dir: Path, *, macos_bundle: bool = False) -> dict:
+    """Read packaged metadata, allowing only links within its installation root."""
+    try:
+        # PyInstaller places macOS data in Resources and links it from Frameworks.
+        root = (
+            data_dir.parent
+            if macos_bundle
+            and data_dir.name == "Frameworks"
+            and data_dir.parent.name == "Contents"
+            else data_dir
+        ).resolve(strict=True)
+        base = data_dir.resolve(strict=True)
+        if not base.is_relative_to(root):
+            return {}
+        metadata = (base / "diagnostic_build.json").resolve(strict=True)
+        if not metadata.is_relative_to(root):
+            return {}
+        data = read_json(metadata)
+    except (OSError, RuntimeError):
+        return {}
+    version = data.get("version")
+    if not isinstance(version, str) or not re.fullmatch(
+        r"v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?",
+        version.strip(),
+    ):
+        return {}
+    data["version"] = version.strip().lstrip("v")
+    return data
+
+
 def build_info() -> dict:
     base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
-    data = read_json(base / "diagnostic_build.json")
+    frozen = bool(getattr(sys, "frozen", False))
+    data = read_build_metadata(base, macos_bundle=frozen and sys.platform == "darwin")
     if not data:
         data = {
-            "version": read_json(base / "webui" / "package.json").get(
-                "version", "unknown"
+            "version": (
+                "unknown"
+                if frozen
+                else read_json(base / "webui" / "package.json").get(
+                    "version", "unknown"
+                )
             ),
-            "mode": "source" if not getattr(sys, "frozen", False) else "packaged",
+            "mode": "packaged" if frozen else "source",
         }
     return data
 
