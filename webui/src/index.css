@@ -3029,6 +3029,8 @@ button {
 :root[data-theme="dark"] .editor-context-menu-item:hover,
 .dark .editor-context-menu-item:hover {
   background-color: rgba(255, 255, 255, 0.08);
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
   color: var(--text-primary);
 }
 

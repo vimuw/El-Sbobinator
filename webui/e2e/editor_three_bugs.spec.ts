@@ -18,6 +18,28 @@ async function openEditor(page: Page, info: TestInfo) {
 
 test.beforeEach(async ({ page }, info) => openEditor(page, info));
 
+test('context menu stays inside the viewport and its final action is reachable with and without a selection', async ({ page }) => {
+  for (const height of [720, 400]) for (const selected of [false, true]) {
+    await page.setViewportSize({ width: 1280, height });
+    await page.locator('.tiptap-editor').evaluate((root, selected) => {
+      const editor = (root as HTMLElement & { editor: Editor }).editor;
+      editor.commands.setTextSelection(selected ? { from: 1, to: 4 } : 1);
+    }, selected);
+    const bounds = await page.locator('.editor-page-container').boundingBox();
+    await page.mouse.click(bounds!.x + bounds!.width - 8, bounds!.y + bounds!.height - 8, { button: 'right' });
+    const menu = page.locator('.editor-context-menu');
+    await expect(menu).toBeVisible();
+    const geometry = await menu.evaluate(el => ({ rect: el.getBoundingClientRect().toJSON(), scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }));
+    expect(geometry.rect.top).toBeGreaterThanOrEqual(12);
+    expect(geometry.rect.bottom).toBeLessThanOrEqual(height - 12);
+    expect(geometry.rect.right).toBeLessThanOrEqual(1280 - 12);
+    if (height === 400) expect(geometry.scrollHeight).toBeGreaterThan(geometry.clientHeight);
+    await menu.getByRole('button', { name: /Trova e sostituisci/ }).click();
+    await expect(menu).toHaveCount(0);
+    await page.getByTitle('Chiudi (Esc)').click();
+  }
+});
+
 test('wrap typing after the figure reuses gaps while edits beside it measure a bounded region and preserve history and reopen', async ({ page }, info) => {
   const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
   const editor = page.locator('.tiptap-editor');

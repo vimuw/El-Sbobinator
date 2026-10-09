@@ -54,12 +54,26 @@ export function EditorContextMenu({
   onOpenImagePicker,
   onOpenFind,
 }: EditorContextMenuProps) {
-  if (!contextMenu || !editor) return null;
+  const menuRef = React.useRef<HTMLDivElement>(null);
+  React.useLayoutEffect(() => {
+    const menu = menuRef.current;
+    if (!menu || !contextMenu) return;
+    const place = () => {
+      const { width, height } = menu.getBoundingClientRect();
+      menu.style.left = `${Math.max(12, Math.min(contextMenu.x, window.innerWidth - width - 12))}px`;
+      menu.style.top = `${Math.max(12, Math.min(contextMenu.y, window.innerHeight - height - 12))}px`;
+    };
+    place();
+    window.addEventListener('resize', place);
+    return () => window.removeEventListener('resize', place);
+  }, [contextMenu, editor]);
+  if (!contextMenu || !editor || editor.isDestroyed) return null;
 
   return createPortal(
     <div
       className="editor-context-menu fixed z-50 py-1 text-xs select-none"
       style={{ left: contextMenu.x, top: contextMenu.y }}
+      ref={menuRef}
       onClick={e => {
         e.stopPropagation();
         onClose();
