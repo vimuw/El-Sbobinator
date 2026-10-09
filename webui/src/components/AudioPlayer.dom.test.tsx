@@ -43,18 +43,9 @@ describe('AudioPlayer', () => {
     expect(screen.getByText('0:00 / 0:00')).toBeTruthy();
   });
 
-  it('shows shortcuts panel when keyboard button is clicked', () => {
+  it('leaves the shared shortcuts button to the editor header', () => {
     render(<AudioPlayer src="/audio/test.mp3" />);
-    fireEvent.click(screen.getByLabelText('Scorciatoie da tastiera'));
-    expect(screen.getByText('Scorciatoie da tastiera', { selector: 'div' })).toBeTruthy();
-    expect(screen.getByText('Pausa / Riprendi')).toBeTruthy();
-  });
-
-  it('hides shortcuts panel when keyboard button is clicked again', () => {
-    render(<AudioPlayer src="/audio/test.mp3" />);
-    fireEvent.click(screen.getByLabelText('Scorciatoie da tastiera'));
-    fireEvent.click(screen.getByLabelText('Scorciatoie da tastiera'));
-    expect(screen.queryByText('Pausa / Riprendi')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Scorciatoie da tastiera' })).toBeNull();
   });
 
   it('changes playback rate when speed select changes', () => {
@@ -263,13 +254,6 @@ describe('AudioPlayer', () => {
     const audio = container.querySelector('audio') as HTMLAudioElement;
     fireEvent.ended(audio);
     expect(screen.getByLabelText('Avvia riproduzione')).toBeTruthy();
-  });
-
-  it('closes shortcuts panel when clicking outside', () => {
-    render(<AudioPlayer src="/audio/test.mp3" />);
-    fireEvent.click(screen.getByLabelText('Scorciatoie da tastiera'));
-    expect(screen.getByText('Pausa / Riprendi')).toBeTruthy();
-    fireEvent.pointerDown(document.body);
   });
 
   it('calls onRelink when relink button is clicked', async () => {

@@ -72,6 +72,14 @@ afterEach(() => {
 });
 
 describe('EditorFullPage autosave', () => {
+  it.each([null, '/audio/test.mp3'])('keeps one shortcuts button in the header with audio %s', async audioSrc => {
+    render(<EditorFullPage {...baseProps} audioSrc={audioSrc} />);
+    await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
+    const buttons = screen.getAllByRole('button', { name: 'Scorciatoie da tastiera' });
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].closest('.editor-fullpage-actions')).toBeTruthy();
+  });
+
   it('does not close when final autosave is skipped by the backend', async () => {
     const onClose = vi.fn();
     const saveHtmlContent = vi.fn().mockResolvedValue({ ok: false, saved: false, error: 'stale' });

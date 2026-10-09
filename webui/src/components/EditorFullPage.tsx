@@ -11,6 +11,7 @@ import { useTheme } from '../hooks/useTheme';
 import { useEditorAutosave, type EditorSaveController } from '../hooks/useEditorAutosave';
 import { STORAGE_KEYS } from '../storageKeys';
 import { getHostCapabilities } from '../browserHost';
+import { EditorShortcuts } from './EditorShortcuts';
 
 const LazyAudioPlayer = React.lazy(() =>
   import('./AudioPlayer').then(m => ({ default: m.AudioPlayer }))
@@ -267,6 +268,7 @@ export function EditorFullPage({
             </div>
 
             <div className="editor-fullpage-actions">
+              <EditorShortcuts audioAvailable={Boolean(audioSrc)} />
               <button
                 onClick={() => void handleCopy()}
                 className="icon-button"
