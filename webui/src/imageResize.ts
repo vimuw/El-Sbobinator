@@ -29,9 +29,8 @@ export function startImageResize(view: EditorView, pos: number, anchor: HTMLElem
   const fromTop = handle.startsWith('t');
   const startRight = start.left + start.width;
   const startBottom = start.top + start.height;
-  // The opposite corner/edge is the anchor, regardless of text alignment.
-  const maxWidth = Math.max(start.width, fromLeft ? startRight - bounds.left : bounds.left + contentWidth * scale - start.left);
-  const maxHeight = fromTop ? Math.max(start.height, startBottom - rootRect.top) : Infinity;
+  // Page edges do not constrain the gesture. The opposite corner/edge stays
+  // fixed even when the dragged handle crosses a margin or leaves the page.
   let width = startWidth;
   let visualWidth = start.width;
   let visualHeight = start.height;
@@ -48,17 +47,16 @@ export function startImageResize(view: EditorView, pos: number, anchor: HTMLElem
     if (corner) {
       // Either axis can drive a corner gesture, including a purely vertical drag.
       const delta = Math.abs(dx) >= Math.abs(dy * aspectRatio) ? dx : dy * aspectRatio;
-      const limit = Math.min(maxWidth, maxHeight * aspectRatio);
-      visualWidth = Math.min(limit, Math.max(Math.min(contentWidth * scale * 0.2, limit), 24 * scale * aspectRatio, start.width + delta));
+      visualWidth = Math.max(contentWidth * scale * 0.2, 24 * scale * aspectRatio, start.width + delta);
       visualHeight = visualWidth / aspectRatio;
     } else if (horizontal) {
-      visualWidth = Math.min(maxWidth, Math.max(Math.min(contentWidth * scale * 0.2, maxWidth), start.width + dx));
+      visualWidth = Math.max(contentWidth * scale * 0.2, start.width + dx);
     } else {
-      visualHeight = Math.min(maxHeight, Math.max(24 * scale, start.height + dy));
+      visualHeight = Math.max(24 * scale, start.height + dy);
     }
     width = normalizeImageWidth(visualWidth / (contentWidth * scale) * 100);
     left = fromLeft ? startRight - visualWidth : start.left;
-    top = fromTop ? startBottom - visualHeight : start.top;
+    top = fromTop && handle !== 'tc' ? startBottom - visualHeight : start.top;
     if (visualWidth === start.width && visualHeight === start.height && !ghost) return;
     ghost ??= createImageGhost(surface, start.width);
     ghost.classList.add('editor-image-resize-preview');
@@ -105,7 +103,9 @@ export function startImageResize(view: EditorView, pos: number, anchor: HTMLElem
       const attrs = {
         ...node.attrs, width, aspectRatio: visualWidth / visualHeight,
         ...(layout === 'wrap' ? { position, align: position === 0 ? 'left' : position === 100 ? 'right' : 'center' } : {}),
-        offsetX: normalizeImageOffsetY(Number(node.attrs.offsetX) + (layout === 'inline' ? (left - start.left) / scale : 0)),
+        offsetX: normalizeImageOffsetY(layout === 'wrap'
+          ? (left - bounds.left - Math.max(0, freeWidth) * position / 100) / scale
+          : Number(node.attrs.offsetX) + (left - start.left) / scale),
         offsetY: normalizeImageOffsetY(Number(node.attrs.offsetY) + (top - start.top) / scale),
       };
       if (layout === 'inline') {

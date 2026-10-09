@@ -38,6 +38,15 @@ function setup(handle: ImageResizeHandle = 'mr', layout = 'wrap', scale = 1) {
 }
 
 describe('image resize preview', () => {
+  it.each(['inline', 'wrap'].flatMap(layout => [0.75, 1, 1.5].map(scale => ({ layout, scale }))))('keeps the top fixed while shrinking with tc in $layout at $scale', ({ layout, scale }) => {
+    const { editor, send } = setup('tc', layout, scale);
+    send('pointermove', 0, 30 * scale);
+    const ghost = document.querySelector<HTMLElement>('.editor-image-resize-preview')!;
+    expect(ghost.style.transform).toBe('translate3d(100px, 200px, 0)');
+    expect(Number.parseFloat(ghost.querySelector('img')!.style.height)).toBeCloseTo(118 * scale);
+    send('pointerup', 0, 30 * scale);
+    expect(editor.state.doc.nodeAt(1)!.attrs.offsetY).toBe(0);
+  });
   it.each(['tl', 'tc', 'tr', 'ml', 'mr', 'bl', 'bc', 'br'] as const)('previews handle %s without transactions and commits one undoable change', handle => {
     const { editor, original, anchor, dispatch, send } = setup(handle);
     const dx = handle.endsWith('l') ? -20 : 20;
@@ -104,7 +113,7 @@ describe('image resize preview', () => {
       expect(width).toBe(222);
       expect(height).toBe(178);
       expect(left).toBe(100);
-      expect(handle === 'tc' ? top + height : top).toBe(handle === 'tc' ? 348 : 200);
+      expect(top).toBe(200);
     } else {
       expect(width).toBe(252);
       expect(height).toBe(148);
@@ -115,18 +124,39 @@ describe('image resize preview', () => {
     expect(editor.state.doc.nodeAt(1)!.attrs.aspectRatio).toBeCloseTo(width / height);
   });
 
-  it('clamps growth at the page bounds without displacing the fixed corner', () => {
-    const { send } = setup('tl');
-    send('pointermove', -2000, -2000);
+  it.each(['inline', 'wrap'].flatMap(layout => [0.75, 1, 1.5].map(scale => ({ layout, scale }))))('grows beyond the page with the opposite corner fixed in $layout at $scale', ({ layout, scale }) => {
+    const { editor, original, dispatch, send } = setup('tl', layout, scale);
+    send('pointermove', -600 * scale, -400 * scale);
     const ghost = document.querySelector<HTMLElement>('.editor-image-resize-preview')!;
     const [left, top] = ghost.style.transform.match(/-?[\d.]+(?=px)/g)!.map(Number);
     const width = Number.parseFloat(ghost.style.width);
     const height = Number.parseFloat(ghost.querySelector('img')!.style.height);
-    expect(left).toBe(0);
-    expect(top).toBeGreaterThanOrEqual(0);
-    expect(left + width).toBe(322);
-    expect(top + height).toBe(348);
-    send('pointerup', -2000, -2000);
+    expect(left).toBeLessThan(0);
+    expect(top).toBeLessThan(0);
+    expect(width).toBeCloseTo(822 * scale);
+    expect(height).toBeCloseTo(548 * scale);
+    expect(left + width).toBeCloseTo(100 + 222 * scale);
+    expect(top + height).toBeCloseTo(200 + 148 * scale);
+    expect(editor.getJSON()).toEqual(original);
+    expect(dispatch).not.toHaveBeenCalled();
+    send('pointerup', -600 * scale, -400 * scale);
+    expect(editor.state.doc.nodeAt(1)!.attrs.width).toBeCloseTo(129.59, 1);
+    expect(editor.state.doc.nodeAt(1)!.attrs.aspectRatio).toBeCloseTo(1.5);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    editor.commands.undo();
+    expect(editor.getJSON()).toEqual(original);
+  });
+
+  it.each(['ml', 'mr', 'tc', 'tr'] as const)('continues resizing across the page edge with handle %s', handle => {
+    const { editor, send } = setup(handle);
+    const dx = handle.endsWith('l') ? -600 : handle === 'tc' ? 0 : 600;
+    const dy = handle.startsWith('t') ? -400 : 0;
+    send('pointermove', dx, dy);
+    const ghost = document.querySelector<HTMLElement>('.editor-image-resize-preview')!;
+    expect(Number.parseFloat(ghost.style.width)).toBeCloseTo(handle === 'tc' ? 222 : 822);
+    expect(Number.parseFloat(ghost.querySelector('img')!.style.height)).toBeCloseTo(handle === 'tc' ? 548 : handle === 'tr' ? 548 : 148);
+    send('pointerup', dx, dy);
+    expect(editor.state.doc.nodeAt(1)!.attrs.width).toBeCloseTo(handle === 'tc' ? 35 : 129.59, 1);
   });
 
   it.each([0.75, 1, 1.5])('uses screen scale %s for inline dimensions', scale => {

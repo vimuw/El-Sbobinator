@@ -53,9 +53,9 @@ describe('FloatingImage selection and resize handles', () => {
 
   it('clamps invalid imported position and width before rendering and serializing', async () => {
     let getHtml: (() => string) | undefined;
-    render(<RichTextEditor initialContent={'<div data-editor-image data-layout="unknown" data-align="unknown" data-position="900" data-width="900"><img src="invalid.png" alt="invalid layout"></div>'} onEditorReady={fn => { getHtml = fn; }} />);
+    render(<RichTextEditor initialContent={'<div data-editor-image data-layout="unknown" data-align="unknown" data-position="900" data-width="-900"><img src="invalid.png" alt="invalid layout"></div>'} onEditorReady={fn => { getHtml = fn; }} />);
     const image = await screen.findByAltText('invalid layout');
-    expect(image.closest('.editor-image-node')?.getAttribute('data-width')).toBe('100');
+    expect(image.closest('.editor-image-node')?.getAttribute('data-width')).toBe('20');
     expect(getHtml!()).toContain('data-position="100"');
     expect(getHtml!()).toContain('data-layout="inline"');
   });
@@ -77,6 +77,27 @@ describe('FloatingImage selection and resize handles', () => {
     expect(Number.parseFloat(reopened.style.aspectRatio)).toBe(2.5);
     expect((reopened.closest('.editor-image-node') as HTMLElement).style.top).toBe('-30px');
     expect((reopened.closest('.editor-image-node') as HTMLElement).style.marginLeft).toBe('-25px');
+  });
+  it.each(['inline', 'wrap'])('preserves oversized %s images through saved HTML, copy and reopening', async layout => {
+    let getHtml: (() => string) | undefined;
+    const { unmount } = render(<RichTextEditor initialContent={`<p><span data-editor-image data-layout="${layout}" data-width="125.5" data-aspect-ratio="2" data-offset-x="-180"><img src="oversized.png" alt="Oversized"></span> Dopo</p>`} onEditorReady={fn => { getHtml = fn; }} />);
+    const anchor = (await screen.findByAltText('Oversized')).closest('.editor-image-node') as HTMLElement;
+    expect(anchor.dataset.width).toBe('125.5');
+    expect(anchor.style.maxWidth).toBe('none');
+    const saved = getHtml!();
+    expect(saved).toContain('data-width="125.5"');
+    const html = normalizePreviewHtmlContent(await prepareHtmlForClipboard(saved));
+    const parsed = new DOMParser().parseFromString(html, 'text/html');
+    expect(parsed.querySelector('img')!.getAttribute('width')).toBe('796');
+    expect(parsed.querySelector('img')!.getAttribute('height')).toBe('398');
+    const previewWithoutWidth = normalizePreviewHtmlContent(saved.replace(/ width="\d+"/, ''));
+    expect(new DOMParser().parseFromString(previewWithoutWidth, 'text/html').querySelector('img')!.getAttribute('width')).toBe('796');
+    unmount();
+    render(<RichTextEditor initialContent={html} />);
+    const reopened = (await screen.findByAltText('Oversized')).closest('.editor-image-node') as HTMLElement;
+    expect(reopened.dataset.width).toBe('125.5');
+    expect(reopened.dataset.offsetX).toBe('-180');
+    expect(reopened.dataset.aspectRatio).toBe('2');
   });
   it.each([
     '<div data-editor-image="true" data-width="56"><img src="caption.png" alt="caption test"><figcaption class="editor-image-caption">Figura 1: schema &amp; formula</figcaption></div>',

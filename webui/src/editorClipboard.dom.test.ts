@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { clipboardImageSize, createNativeClipboardFormats, NATIVE_IMAGES_MIME, NATIVE_SLICE_MIME, setClipboardFormats, writeEditorClipboard } from './editorClipboard';
+import { prepareHtmlForClipboardSync } from './utils';
 
 const jpeg = `data:image/jpeg;base64,${fs.readFileSync('e2e/fixtures/image-layout.jpg').toString('base64')}`;
 const figure = (attributes = '', src = jpeg) => `<div data-editor-image="true" data-width="35" data-layout="wrap" data-align="right" data-position="100" ${attributes}><img src="${src}" alt="Figura"></div>`;
@@ -12,14 +13,34 @@ type Model = {
     dsl_entitypositionmap: { positioned: Array<string[] | null> };
   };
 };
-const model = (html: string) => {
-  const formats = createNativeClipboardFormats(html)!;
+const model = (html: string, sourceRoot?: HTMLElement, sourceFigures?: readonly HTMLElement[]) => {
+  const formats = createNativeClipboardFormats(html, sourceRoot, false, sourceFigures)!;
   return { formats, ...JSON.parse(JSON.parse(formats[NATIVE_SLICE_MIME]).data) as Model };
 };
 const style = (doc: Model, type: string, index: number) => doc.resolved.dsl_styleslices.find(s => s.stsl_type === type)!.stsl_styles[index];
 afterEach(() => { vi.restoreAllMocks(); document.getSelection()?.removeAllRanges(); document.body.innerHTML = ''; });
 
 describe('Editor native image clipboard', () => {
+  it.each([0.75, 1, 1.5])('exports the compensated paragraph-relative wrap offset at scale %s without changing saved HTML', scale => {
+    const root = document.createElement('div');
+    root.innerHTML = `<p><span class="editor-image-node" data-layout="wrap"><span class="editor-image-surface"><img src="${jpeg}"></span></span>Prima</p><p><span class="editor-image-node" data-layout="wrap"><span class="editor-image-surface"><img src="${jpeg}"></span></span>Seconda</p>`;
+    Object.defineProperty(root, 'offsetWidth', { value: 634 });
+    vi.spyOn(root, 'getBoundingClientRect').mockReturnValue({ width: 634 * scale } as DOMRect);
+    const figures = Array.from(root.querySelectorAll<HTMLElement>('.editor-image-node'));
+    figures.forEach((figure, i) => {
+      vi.spyOn(figure.closest('p')!, 'getBoundingClientRect').mockReturnValue({ top: (100 + i * 400) * scale } as DOMRect);
+      vi.spyOn(figure.querySelector('.editor-image-surface')!, 'getBoundingClientRect').mockReturnValue({ top: (132 + i * 405) * scale, width: 222 * scale, height: 150 * scale } as DOMRect);
+    });
+    const html = `<p>${figure('data-offset-y="32"')}Prima</p><p>${figure('data-offset-y="240.63"')}Seconda</p>`;
+    const doc = model(html, root);
+    const images = Object.values(doc.resolved.dsl_entitymap);
+    expect(images.map(entity => entity.pe_to! + entity.ee_eo!.eo_mt)).toEqual([24, 27.75]);
+    expect(doc.formats['text/html']).toContain('data-offset-y="240.63"');
+    const selected = model(`<p>${figure('data-offset-y="240.63"')}Seconda</p>`, root, [figures[1]]);
+    const image = Object.values(selected.resolved.dsl_entitymap)[0];
+    expect(image.pe_to! + image.ee_eo!.eo_mt).toBe(27.75);
+    expect(root.querySelectorAll('.editor-image-node')).toHaveLength(2);
+  });
   it('preserves the HTML source and resamples only the native image derivative', () => {
     const root = document.createElement('div');
     root.innerHTML = `<img src="${jpeg}">`;
@@ -35,6 +56,14 @@ describe('Editor native image clipboard', () => {
     expect(Object.values(images)).toEqual(['data:image/jpeg;base64,native-derivative']);
     expect(new DOMParser().parseFromString(formats['text/html'], 'text/html').querySelector('img')!.getAttribute('src')).toBe(jpeg);
     expect(source.getAttribute('src')).toBe(jpeg);
+  });
+  it('exports signed offsets outside the page and retains them in the HTML fallback', () => {
+    const doc = model(figure('data-offset-x="-600" data-offset-y="-80"'));
+    const image = Object.values(doc.resolved.dsl_entitymap)[0];
+    expect(image.pe_lo! + image.ee_eo!.eo_ml).toBeCloseTo((634 - 222 - 600) * 0.75);
+    expect(image.pe_to! + image.ee_eo!.eo_mt).toBeCloseTo(-60);
+    expect(doc.formats['text/html']).toContain('data-offset-x="-600"');
+    expect(doc.formats['text/html']).toContain('data-offset-y="-80"');
   });
   it.each([['a', 5], ['A', 4], ['i', 7], ['I', 6], ['1', 3]])('preserves ordered marker type %s and start in native and HTML copies', (type, glyph) => {
     const doc = model(`<ol type="${type}" start="3"><li><p>Prima</p><ol type="I" start="7"><li><p>Annidata</p></li></ol></li><li><p>Seconda</p></li></ol><p>Fuori</p>`);
@@ -74,6 +103,12 @@ describe('Editor native image clipboard', () => {
   it('copies the resized aspect ratio instead of reverting to the intrinsic image dimensions', () => {
     const doc = model(figure('data-aspect-ratio="3"'));
     expect(Object.values(doc.resolved.dsl_entitymap)[0].ee_eo).toMatchObject({ i_wth: 166.5, i_ht: 55.5 });
+  });
+  it.each(['inline', 'wrap'])('copies %s images wider than the text area without reducing their native or HTML dimensions', layout => {
+    const doc = model(prepareHtmlForClipboardSync(figure('data-aspect-ratio="2"').replace('data-width="35"', 'data-width="125.5"').replace('data-layout="wrap"', `data-layout="${layout}"`)));
+    expect(Object.values(doc.resolved.dsl_entitymap)[0].ee_eo).toMatchObject({ i_wth: 597, i_ht: 298.5 });
+    expect(doc.formats['text/html']).toContain('data-width="125.5"');
+    expect(new DOMParser().parseFromString(doc.formats['text/html'], 'text/html').querySelector('img')!.getAttribute('width')).toBe('796');
   });
   it.each([[0, -20], [40, 0], [100, 18], [0, 120]])('preserves the image rectangle at position %s and vertical offset %s, accounting for wrapping margins', (position, offsetY) => {
     const doc = model(figure(`data-offset-y="${offsetY}"`).replace('data-position="100"', `data-position="${position}"`));
@@ -308,5 +343,37 @@ describe('Editor native image clipboard', () => {
     Object.defineProperty(document, 'execCommand', { configurable: true, value: vi.fn(() => false) });
     await expect(writeEditorClipboard(figure(), '')).rejects.toThrow('Impossibile copiare');
     expect(document.querySelector('textarea')).toBeNull();
+  });
+  it.each([true, false])('writes the HTML fallback with prepared formats = %s', async prepared => {
+    const html = prepared ? '<p>Seconda figura</p>' : '<p>Seconda figura</p><video src="movie.mp4"></video>';
+    const formats = { 'text/html': '<p style="line-height:1.75">Selezione preparata</p>', 'text/plain': 'Selezione preparata' };
+    const write = vi.fn().mockResolvedValue(undefined);
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    class TestClipboardItem {
+      constructor(public data: Record<string, Blob>) {}
+    }
+    vi.stubGlobal('ClipboardItem', TestClipboardItem);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write } });
+    const exec = vi.fn();
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: exec });
+    const readBlob = (blob: Blob) => new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(blob);
+    });
+    try {
+      await writeEditorClipboard(html, 'Seconda figura', undefined, prepared ? formats : undefined);
+      expect(exec).not.toHaveBeenCalled();
+      const item = write.mock.calls[0][0][0] as TestClipboardItem;
+      expect(Object.keys(item.data)).toEqual(['text/html', 'text/plain']);
+      expect(await readBlob(item.data['text/plain'])).toBe(prepared ? formats['text/plain'] : 'Seconda figura');
+      if (prepared) expect(await readBlob(item.data['text/html'])).toBe(formats['text/html']);
+      else expect(await readBlob(item.data['text/html'])).toContain('<video src="movie.mp4"></video>');
+    } finally {
+      vi.unstubAllGlobals();
+      if (clipboardDescriptor) Object.defineProperty(navigator, 'clipboard', clipboardDescriptor);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+    }
   });
 });
