@@ -2696,8 +2696,13 @@ button {
 }
 
 .tiptap-editor p {
-  margin-top: var(--document-paragraph-gap);
+  margin-top: 0;
   margin-bottom: var(--document-paragraph-gap);
+}
+
+.tiptap-editor :is(li, td, th) p {
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
 /* Match the native Docs text indent; explicit imported marker types take
@@ -4366,6 +4371,8 @@ input::-webkit-contacts-auto-fill-button {
 
 /* TipTap Table Styles */
 .ProseMirror table {
+  font-size: var(--document-table-font-size);
+  line-height: var(--document-table-line-height);
   border-collapse: collapse;
   table-layout: auto;
   width: 100%;

@@ -29,7 +29,7 @@ class NormalizeInlineStarListsTests(unittest.TestCase):
         self.assertIn(
             "h3 { font-size: 14pt; line-height: 1.38; margin: 16pt 0 4pt;", exported
         )
-        self.assertIn("p { margin: 0pt 0; }", exported)
+        self.assertIn("p { margin: 0 0 0pt; }", exported)
         self.assertIn("body > p:first-child { margin-top: 0; }", exported)
         self.assertIn("<h3>Sezione</h3><p>Testo</p>", exported)
 
@@ -212,8 +212,8 @@ class BuildHtmlDocumentTests(unittest.TestCase):
             "Profilo", '<h2 style="font-size:24pt;color:#123abc">Scelto</h2>'
         )
         self.assertIn("line-height: 1.38", result)
-        self.assertIn("font-weight: 400; color: #666666", result)
-        self.assertIn("p { margin: 0pt 0; }", result)
+        self.assertIn("font-weight: 700; color: #000000", result)
+        self.assertIn("p { margin: 0 0 0pt; }", result)
         self.assertIn('style="font-size:24pt;color:#123abc"', result)
         self.assertNotIn("body > p:first-child,  {", result)
 

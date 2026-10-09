@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { Editor } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
+import { EditorDocumentStyle } from './editorDocumentStyle';
 import { clipboardPlainText, DOCUMENT_FORMATTING, editorFormattingVariables, formatPortableHtml, pointSize } from './documentFormatting';
 import { createNativeClipboardFormats, NATIVE_SLICE_MIME } from './editorClipboard';
 import { prepareHtmlForClipboardSync } from './utils';
@@ -8,6 +11,61 @@ const native = (html: string) => JSON.parse(JSON.parse(createNativeClipboardForm
 const styles = (model: ReturnType<typeof native>, type: string) => model.dsl_styleslices.find((slice: { stsl_type: string }) => slice.stsl_type === type).stsl_styles;
 
 describe('Shared document formatting', () => {
+  it('restores default heading ink on internal paste while keeping authored black and blue', () => {
+    const source = Array.from({ length: 6 }, (_, i) => `<h${i + 1}>Default ${i + 1}</h${i + 1}>`).join('') + '<h2 style="color:#000000">Black</h2><h3 style="color:#123abc">Blue</h3>';
+    const portable = prepareHtmlForClipboardSync(source);
+    expect(prepareHtmlForClipboardSync(portable)).toBe(portable);
+    expect(body(portable).querySelectorAll('[data-editor-default-heading-color]')).toHaveLength(6);
+    const editor = new Editor({ extensions: [StarterKit, EditorDocumentStyle], content: portable });
+    try {
+      const blocks = editor.getJSON().content!;
+      expect(blocks.slice(0, 6).map(node => node.attrs!.documentStyle.color)).toEqual(Array(6).fill(undefined));
+      expect(blocks.slice(6).map(node => node.attrs!.documentStyle.color)).toEqual(['rgb(0, 0, 0)', 'rgb(18, 58, 188)']);
+      expect(editor.getHTML()).not.toContain('data-editor-default-heading-color');
+      const model = native(portable);
+      expect(styles(model, 'text')[model.dsl_spacers.indexOf('Default')].ts_fgc2).toMatchObject({ hclr_color: '#000000' });
+      expect(styles(model, 'text')[model.dsl_spacers.indexOf('Blue')].ts_fgc2).toMatchObject({ hclr_color: '#123abc' });
+      editor.commands.setContent(portable.replace('data-editor-default-heading-color="rgb(0, 0, 0)"', 'data-editor-default-heading-color="rgb(1, 2, 3)"'));
+      expect(editor.getJSON().content![0].attrs!.documentStyle.color).toBe('rgb(0, 0, 0)');
+    } finally { editor.destroy(); }
+  });
+  it('keeps inherited table leading separate from body and explicit cell leading', () => {
+    const portable = prepareHtmlForClipboardSync('<p>Fuori</p><table><tr><td><p>Cella</p><p style="font-size:14pt">Esplicita</p></td><th><p>Testata <span style="font-size:150%">Grande</span></p></th><td><p style="line-height:1.8">Scelta</p><h2>Titolo</h2></td></tr></table>');
+    const root = body(portable);
+    expect(Array.from(root.querySelectorAll('p,h2')).map(p => (p as HTMLElement).style.lineHeight)).toEqual(['1.38', '1.7142857', '1.7142857', '1.7142857', '1.8', '1.38']);
+    expect(root.querySelector('td p')!.hasAttribute('data-document-line-spacing')).toBe(false);
+    expect(root.querySelector('h2')!.getAttribute('data-document-line-spacing')).toBe('1.15');
+    expect(prepareHtmlForClipboardSync(portable)).toBe(portable);
+    const model = native(portable);
+    expect(styles(model, 'paragraph')[model.dsl_spacers.indexOf('\n', model.dsl_spacers.indexOf('Esplicita'))].ps_ls).toBe(1.7142857);
+  });
+  it('preserves inherited table typography, explicit cell fonts and repeated preparation', () => {
+    const portable = prepareHtmlForClipboardSync('<p>Fuori</p><table><tr><td><p>Cella</p></td><td><p style="font-size:14pt">Esplicita</p></td><th><p>Testata</p></th></tr></table>');
+    const root = body(portable);
+    expect(Array.from(root.querySelectorAll('p')).map(p => p.style.fontSize)).toEqual(['11pt', '9.625pt', '14pt', '9.625pt']);
+    expect(prepareHtmlForClipboardSync(portable)).toBe(portable);
+    const model = native(portable);
+    expect(styles(model, 'text')[model.dsl_spacers.indexOf('Cella')].ts_fs).toBe(9.625);
+  });
+  it('adds no automatic gap to body paragraphs and keeps headings, lists and cells specific', () => {
+    const root = body('<h3>Titolo</h3><p>Prima</p><p>Seconda</p><ul><li><p>Voce</p></li></ul><table><tr><td><p>Cella</p></td></tr></table>');
+    formatPortableHtml(root);
+    expect(root.querySelector('h3')!.style.fontWeight).toBe('700');
+    expect(root.querySelector('h3')!.style.color).toBe('rgb(0, 0, 0)');
+    expect(Array.from(root.querySelectorAll('p')).map(p => p.style.marginBottom)).toEqual(['0pt', '0pt', '0pt', '0pt']);
+    expect(root.querySelectorAll('p')).toHaveLength(4);
+    const model = native('<p>A</p><p>B</p>');
+    expect(styles(model, 'paragraph').filter(Boolean)).toMatchObject([{ ps_sa: 0, ps_sb: 0 }, { ps_sa: 0, ps_sb: 0 }]);
+  });
+  it('preserves the blank paragraph from a second Enter without adding paragraph spacing', () => {
+    const html = '<p>Prima</p><p>Seconda</p><p></p><p>Terza<br>Continua</p>';
+    const portable = body(prepareHtmlForClipboardSync(html));
+    expect(Array.from(portable.querySelectorAll('p')).map(p => p.textContent)).toEqual(['Prima', 'Seconda', '', 'TerzaContinua']);
+    expect(clipboardPlainText(portable)).toBe('Prima\nSeconda\n\nTerza\nContinua\n');
+    expect(styles(native(html), 'paragraph').filter(Boolean)).toHaveLength(4);
+    for (const paragraph of styles(native(html), 'paragraph').filter(Boolean)) expect(paragraph).toMatchObject({ ps_sa: 0, ps_sb: 0 });
+    expect(prepareHtmlForClipboardSync(portable.innerHTML)).toBe(portable.innerHTML);
+  });
   it.each([
     '<s><u>X</u></s>', '<u><s>X</s></u>',
     '<span style="text-decoration:line-through"><u>X</u></span>',

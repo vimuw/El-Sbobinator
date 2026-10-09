@@ -356,7 +356,8 @@ def build_html_document_from_body(
       padding: 48px 22px;
     }}
     {heading_css}
-    p {{ margin: {formatting["paragraphGapPt"]}pt 0; }}
+    p {{ margin: 0 0 {formatting["paragraphGapPt"]}pt; }}
+    li p, td p, th p {{ margin: 0; }}
     body > p:first-child{", " + suppress_heading_css if suppress_heading_css else ""} {{ margin-top: 0; }}
     body > p:last-child {{ margin-bottom: 0; }}
     li {{ margin: 0; }}

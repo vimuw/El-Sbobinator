@@ -2,6 +2,7 @@ import { Extension } from '@tiptap/core';
 import { closeHistory } from '@tiptap/pm/history';
 import { DOCUMENT_FORMATTING, pointSize } from './documentFormatting';
 import { EditorEmptyTextMarks } from './editorEmptyTextMarks';
+import { clipboardCssLineHeight } from './editorLineSpacing';
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -26,6 +27,10 @@ export const EditorDocumentStyle = Extension.create({
             const style = (element as HTMLElement).style;
             const generated = Number(element.getAttribute('data-generated-space-before'));
             const values = Object.fromEntries(properties.map(property => [property, style.getPropertyValue(property)]).filter(([property, value]) => value && !(property === 'margin-top' && generated > 0 && pointSize(value, -1) === generated)));
+            if (/^H[1-6]$/.test(element.tagName) && element.closest('[data-document-format="1"]')
+              && element.getAttribute('data-editor-default-heading-color') === style.color) delete values.color;
+            const clipboardLeading = clipboardCssLineHeight(element as HTMLElement);
+            if (clipboardLeading) values['line-height'] = clipboardLeading;
             return Object.keys(values).length ? values : null;
           },
           renderHTML: attributes => {

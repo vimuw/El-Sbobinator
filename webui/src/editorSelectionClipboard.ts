@@ -1,10 +1,11 @@
 import { DOMSerializer, Fragment, type Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { EditorView } from '@tiptap/pm/view';
 import { closeHistory } from '@tiptap/pm/history';
-import { clipboardPlainText } from './documentFormatting';
+import { clipboardPlainText, DOCUMENT_FORMATTING, pointSize } from './documentFormatting';
 import { createNativeClipboardFormats, setClipboardFormats } from './editorClipboard';
 import { prepareHtmlForClipboardSync } from './utils';
 import { reportClientError } from './diagnostics';
+import { prepareHtmlLineSpacing } from './editorLineSpacing';
 
 export function prepareSelectionClipboard(view: EditorView) {
   if (view.state.selection.empty) return null;
@@ -39,6 +40,25 @@ export function prepareSelectionClipboard(view: EditorView) {
   }
   const fragment = document.createElement('div');
   fragment.appendChild(DOMSerializer.fromSchema(view.state.schema).serializeFragment(content));
+  // A slice can omit the table shell, including for a word inside a cell.
+  // Materialize the selected blocks' actual sizes before portable defaults.
+  const blocks = Array.from(fragment.querySelectorAll<HTMLElement>('p,h1,h2,h3,h4,h5,h6,pre'));
+  let blockIndex = 0;
+  doc.descendants((node, pos) => {
+    if (!selection.ranges.some(range => pos + node.nodeSize - 1 > range.$from.pos && pos + 1 < range.$to.pos)) return false;
+    if (!node.isTextblock) return;
+    const block = blocks[blockIndex++];
+    const source = view.nodeDOM(pos);
+    if (block && !block.closest('table') && source instanceof HTMLElement && source.closest('td,th')) {
+      const size = pointSize(getComputedStyle(source).fontSize, 0);
+      // Computed px values round to four decimals; avoid baking that noise
+      // into line-height and paragraph sizes after an internal paste.
+      if (size > 0) block.style.fontSize = `${Number(size.toFixed(4))}pt`;
+      // Paragraphs inherit the table profile; headings and explicit leading
+      // already carry their own value. Keep unitless CSS for relative spans.
+      if (node.type.name === 'paragraph') block.style.lineHeight ||= String(DOCUMENT_FORMATTING.table.lineHeight);
+    }
+  });
   let html = prepareHtmlForClipboardSync(fragment.innerHTML, view.dom);
   fragment.innerHTML = html;
   if (inlineSelection && !fragment.querySelector('[data-editor-image],[data-math-block],iframe,video')) {
@@ -56,7 +76,9 @@ export function prepareSelectionClipboard(view: EditorView) {
     html = fragment.innerHTML;
   }
   const plainText = clipboardPlainText(fragment);
-  const formats = createNativeClipboardFormats(html, view.dom, inlineSelection) ?? { 'text/html': html, 'text/plain': plainText };
+  const nativeFormats = createNativeClipboardFormats(html, view.dom, inlineSelection);
+  if (!nativeFormats) html = prepareHtmlLineSpacing(html);
+  const formats = nativeFormats ?? { 'text/html': html, 'text/plain': plainText };
   return { html, plainText, formats };
 }
 

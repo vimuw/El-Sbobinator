@@ -107,7 +107,8 @@ export const FindReplacePanel = ({
     if (isMatch) {
       const tr = editor.state.tr;
       if (replaceText) {
-        editor.view.dispatch(tr.replaceWith(from, to, editor.schema.text(replaceText)));
+        const marks = tr.doc.resolve(from).nodeAfter?.marks;
+        editor.view.dispatch(tr.replaceWith(from, to, editor.schema.text(replaceText, marks)));
       } else {
         editor.view.dispatch(tr.delete(from, to));
       }
@@ -126,7 +127,10 @@ export const FindReplacePanel = ({
     const tr = editor.state.tr;
     for (const m of sortedMatches) {
       if (replaceText) {
-        tr.replaceWith(m.from, m.to, editor.schema.text(replaceText));
+        // Each replacement inherits its first matched character, including
+        // links and explicit styles at the start of a formatting boundary.
+        const marks = tr.doc.resolve(m.from).nodeAfter?.marks;
+        tr.replaceWith(m.from, m.to, editor.schema.text(replaceText, marks));
       } else {
         tr.delete(m.from, m.to);
       }
