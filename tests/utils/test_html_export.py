@@ -169,6 +169,44 @@ class NormalizeHeadingLevelsTests(unittest.TestCase):
 
 
 class BuildHtmlDocumentTests(unittest.TestCase):
+    def test_generated_prose_and_list_boundaries_are_spaced_but_items_are_not(self):
+        from bs4 import BeautifulSoup
+
+        result = build_html_document(
+            "Lezione", "Prima\n\nSeconda\n\n- Uno\n- Due\n\nDopo elenco"
+        )
+        body = BeautifulSoup(result, "html.parser").body
+        assert body is not None
+        spaced = body.select("[data-generated-space-before]")
+        self.assertEqual(
+            [p.get_text() for p in spaced], ["Seconda", "Uno", "Dopo elenco"]
+        )
+        self.assertTrue(
+            all(p["data-generated-space-before"] == "15.18" for p in spaced)
+        )
+        self.assertTrue(all("margin-top:15.18pt" in str(p["style"]) for p in spaced))
+        self.assertEqual(len(body.find_all("li")), 2)
+        self.assertFalse(any(not p.get_text().strip() for p in body.find_all("p")))
+        self.assertNotIn(
+            "data-generated-space-before",
+            build_html_document_from_body("Import", "<p>A</p><p>B</p>"),
+        )
+
+    def test_generated_spacing_preserves_direct_styles_and_nested_list_structure(self):
+        from bs4 import BeautifulSoup
+
+        from el_sbobinator.utils.html_export import space_generated_blocks
+
+        source = '<p>A</p><p style="margin-top:8pt">B</p><ul><li>Uno<ul><li>Figlio</li></ul></li><li>Due</li></ul><p>C</p><table><tr><td><p>D</p><p>E</p></td></tr></table><blockquote><p>F</p><p>G</p></blockquote>'
+        body = BeautifulSoup(space_generated_blocks(source), "html.parser")
+        self.assertEqual(
+            [p.get_text() for p in body.select("[data-generated-space-before]")],
+            ["Uno", "C", "G"],
+        )
+        self.assertEqual(body.find_all("p")[1]["style"], "margin-top:8pt")
+        self.assertEqual(body.select("ul ul li")[0].get_text(), "Figlio")
+        self.assertFalse(body.select("td [data-generated-space-before]"))
+
     def test_defaults_match_docs_without_overriding_direct_block_styles(self):
         result = build_html_document_from_body(
             "Profilo", '<h2 style="font-size:24pt;color:#123abc">Scelto</h2>'

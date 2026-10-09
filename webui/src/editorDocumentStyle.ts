@@ -24,7 +24,8 @@ export const EditorDocumentStyle = Extension.create({
           default: null,
           parseHTML: element => {
             const style = (element as HTMLElement).style;
-            const values = Object.fromEntries(properties.map(property => [property, style.getPropertyValue(property)]).filter(([, value]) => value));
+            const generated = Number(element.getAttribute('data-generated-space-before'));
+            const values = Object.fromEntries(properties.map(property => [property, style.getPropertyValue(property)]).filter(([property, value]) => value && !(property === 'margin-top' && generated > 0 && pointSize(value, -1) === generated)));
             return Object.keys(values).length ? values : null;
           },
           renderHTML: attributes => {
@@ -39,6 +40,18 @@ export const EditorDocumentStyle = Extension.create({
             return value > 0 && value <= 10 ? value : null;
           },
           renderHTML: attributes => attributes.nativeLineSpacing ? { 'data-document-line-spacing': attributes.nativeLineSpacing } : {},
+        },
+        generatedSpaceBefore: {
+          default: null,
+          keepOnSplit: false,
+          parseHTML: element => {
+            const value = Number(element.getAttribute('data-generated-space-before'));
+            return Number.isFinite(value) && value > 0 && value <= 1000 ? value : null;
+          },
+          renderHTML: attributes => attributes.generatedSpaceBefore ? {
+            'data-generated-space-before': attributes.generatedSpaceBefore,
+            style: `margin-top:${attributes.documentStyle?.['margin-top'] ?? `${attributes.generatedSpaceBefore}pt`}`,
+          } : {},
         },
       },
     }];
@@ -88,6 +101,7 @@ export const EditorDocumentStyle = Extension.create({
               textAlign: wholeBlock ? null : node.attrs.textAlign,
               documentStyle: wholeBlock || !Object.keys(layout).length ? null : layout,
               nativeLineSpacing: wholeBlock ? null : node.attrs.nativeLineSpacing,
+              generatedSpaceBefore: wholeBlock ? null : node.attrs.generatedSpaceBefore,
             });
           }
         });

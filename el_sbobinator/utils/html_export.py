@@ -9,6 +9,7 @@ from __future__ import annotations
 import html as _html
 import json
 import re
+from itertools import pairwise
 from pathlib import Path
 
 _DOCUMENT_FORMATTING = json.loads(
@@ -61,7 +62,7 @@ _ALLOWED_TAGS: frozenset[str] = frozenset(
 
 _ALLOWED_ATTRS: dict[str, set[str]] = {
     **{
-        tag: {"data-editor-empty-marks"}
+        tag: {"data-editor-empty-marks", "data-generated-space-before"}
         for tag in ("p", "h1", "h2", "h3", "h4", "h5", "h6")
     },
     "*": {
@@ -244,7 +245,54 @@ def build_html_document(title: str, markdown_text: str) -> str:
     html_body = markdown.markdown(
         normalized_markdown, extensions=["extra", "sane_lists"], output_format="html"
     )
-    return build_html_document_from_body(title, html_body)
+    return build_html_document_from_body(title, space_generated_blocks(html_body))
+
+
+def space_generated_blocks(html_body: str) -> str:
+    """Separate generated prose/list blocks without changing the editor defaults."""
+    from bs4 import BeautifulSoup, Tag  # type: ignore[import-untyped]
+
+    soup = BeautifulSoup(html_body, "html.parser")
+    gap = round(
+        _DOCUMENT_FORMATTING["fontSizePt"] * _DOCUMENT_FORMATTING["lineHeight"], 2
+    )
+    # List items, nested lists and table cells keep their own compact layout.
+    for container in [soup, *soup.find_all("blockquote")]:
+        blocks = [child for child in container.children if isinstance(child, Tag)]
+        for previous, current in pairwise(blocks):
+            if previous.name not in {"p", "ul", "ol"} or current.name not in {
+                "p",
+                "ul",
+                "ol",
+            }:
+                continue
+            anchor = current
+            if current.name in {"ul", "ol"}:
+                item = current.find("li", recursive=False)
+                if item is None:
+                    continue
+                anchor = item.find("p", recursive=False)
+                if anchor is None:
+                    anchor = soup.new_tag("p")
+                    # Tight Markdown lists have bare inline content in each li.
+                    # Wrap the first item's text, leaving its child list intact.
+                    for child in list(item.contents):
+                        if isinstance(child, Tag) and child.name in {
+                            "ul",
+                            "ol",
+                            "pre",
+                            "table",
+                            "blockquote",
+                        }:
+                            break
+                        anchor.append(child.extract())
+                    item.insert(0, anchor)
+            style = str(anchor.get("style", ""))
+            if re.search(r"(?:^|;)\s*margin(?:-top)?\s*:", style):
+                continue
+            anchor["data-generated-space-before"] = str(gap)
+            anchor["style"] = f"{style.rstrip(';')};margin-top:{gap}pt".lstrip(";")
+    return str(soup)
 
 
 def normalize_imported_html(title: str, html: str) -> str:
