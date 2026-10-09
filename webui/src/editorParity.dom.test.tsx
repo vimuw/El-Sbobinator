@@ -27,6 +27,28 @@ function transfer(element: HTMLElement, type: 'copy' | 'cut') {
 }
 
 describe('Editor parity: clipboard and logical text', () => {
+  it('keeps generated gaps through reload and native copy but does not inherit them on Enter', async () => {
+    const source = '<p>A</p><p data-generated-space-before="15.18" style="margin-top:15.18pt">B</p><ul><li><p data-generated-space-before="15.18" style="margin-top:15.18pt">Uno</p></li><li><p>Due</p></li></ul><p data-generated-space-before="15.18" style="margin-top:15.18pt">Fine</p>';
+    const { editor, element } = await openEditor(source);
+    const original = editor.getJSON();
+    act(() => { editor.commands.setContent(normalizePreviewHtmlContent(editor.getHTML())); });
+    expect(editor.getJSON()).toEqual(original);
+    act(() => { editor.commands.selectAll(); });
+    const formats = transfer(element, 'copy').formats;
+    const native = JSON.parse(JSON.parse(formats[NATIVE_SLICE_MIME]).data).resolved;
+    expect(native.dsl_styleslices.find((slice: { stsl_type: string }) => slice.stsl_type === 'paragraph').stsl_styles.filter(Boolean).map((style: { ps_sb: number }) => style.ps_sb)).toEqual([0, 15.18, 15.18, 0, 15.18]);
+    const goToEnd = (text: string) => editor.state.doc.descendants((node, pos) => { if (node.isText && node.text === text) editor.commands.setTextSelection(pos + node.nodeSize); });
+    act(() => { goToEnd('B'); editor.commands.splitBlock(); editor.commands.insertContent('Nuovo'); });
+    expect(editor.getJSON().content![2].attrs?.generatedSpaceBefore).toBeNull();
+    act(() => { goToEnd('Uno'); editor.commands.splitListItem('listItem'); editor.commands.insertContent('Inserito'); });
+    const list = (editor.getJSON() as JSONContent).content!.find(node => node.type === 'bulletList')!;
+    expect(list.content![0].content![0].attrs?.generatedSpaceBefore).toBe(15.18);
+    expect(list.content![1].content![0].attrs?.generatedSpaceBefore).toBeNull();
+    act(() => { editor.commands.selectAll(); editor.commands.clearDocumentFormatting(); });
+    expect(editor.getHTML()).not.toContain('data-generated-space-before');
+    act(() => { editor.commands.undo(); });
+    expect((editor.getHTML().match(/data-generated-space-before=/g) ?? []).length).toBe(3);
+  });
   it('reopens normalized saved HTML with editable equations and explicit paragraph layout', async () => {
     const source = '<h2 style="line-height:1.6;margin-top:8pt;margin-bottom:10pt" data-document-line-spacing="1.6">Risultati</h2><p>Prima <span data-math="\\frac{x^2}{y}">formula</span> dopo.</p><div data-math-block="\\sum_{i=0}^{n}i">formula</div>';
     const { editor, element } = await openEditor(source);

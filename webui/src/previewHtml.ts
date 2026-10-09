@@ -29,7 +29,7 @@ export const normalizePreviewHtmlContent = (content: string) => {
       }
       Array.from(element.attributes)
         .filter(attribute => attribute.name.startsWith('data-')
-          && !(['data-editor-empty-marks', 'data-document-line-spacing'].includes(attribute.name) && /^(p|h[1-6])$/.test(tag))
+          && !(['data-editor-empty-marks', 'data-document-line-spacing', 'data-generated-space-before'].includes(attribute.name) && /^(p|h[1-6])$/.test(tag))
           && !(attribute.name === 'data-math' && tag === 'span')
           && !(attribute.name === 'data-math-block' && tag === 'div'))
         .forEach(attribute => element.removeAttribute(attribute.name));
