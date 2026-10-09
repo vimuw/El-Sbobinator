@@ -29,6 +29,8 @@ export function useEditorAutosave({
   const [autosaveStatus, setAutosaveStatus] = useState<AutosaveStatus>('idle');
   const isDirtyRef = useRef(false);
   const lastPersistedRef = useRef(previewContent ?? '');
+  // A submitted write can change disk even if its acknowledgement becomes stale.
+  const diskStateConfirmedRef = useRef(true);
   const autosaveTimerRef = useRef<number | null>(null);
   const [autosaveGenSeed] = useState(() => seedHtmlAutosaveGeneration(htmlPath));
   const autosaveGenRef = useRef(autosaveGenSeed);
@@ -42,10 +44,11 @@ export function useEditorAutosave({
 
   useEffect(() => {
     lastPersistedRef.current = previewContent ?? '';
+    diskStateConfirmedRef.current = true;
     isDirtyRef.current = false;
     saveErrorOnCloseRef.current = false;
     setAutosaveStatus('idle');
-  }, [previewContent]);
+  }, [htmlPath, previewContent]);
 
   useEffect(() => {
     const autosaveGenRefAtCleanup = autosaveGenRef;
@@ -55,9 +58,10 @@ export function useEditorAutosave({
       if (!isDirtyRef.current || saveErrorOnCloseRef.current) return;
       const path = htmlPathRef.current;
       const snap = getHtmlAtCleanup.current?.() ?? '';
-      if (path && snap && snap !== lastPersistedRef.current) {
+      if (path && snap && (!diskStateConfirmedRef.current || snap !== lastPersistedRef.current)) {
         const gen = nextHtmlAutosaveGeneration(path);
         autosaveGenRefAtCleanup.current = gen;
+        diskStateConfirmedRef.current = false;
         void window.pywebview?.api?.save_html_content(path, snap, gen);
       }
     };
@@ -68,7 +72,7 @@ export function useEditorAutosave({
     const path = htmlPathRef.current;
     if (!path) return null;
     const snap = getHtmlRef.current?.() ?? '';
-    if (snap === lastPersistedRef.current) return null;
+    if (diskStateConfirmedRef.current && snap === lastPersistedRef.current) return null;
     return { path, content: snap };
   }, [getHtmlRef]);
 
@@ -82,34 +86,45 @@ export function useEditorAutosave({
 
   const flushPendingAutosave = useCallback(async (): Promise<boolean> => {
     if (!isDirtyRef.current) return true;
-    if (saveErrorOnCloseRef.current) return false;
     if (autosaveTimerRef.current) {
       window.clearTimeout(autosaveTimerRef.current);
       autosaveTimerRef.current = null;
     }
     const path = htmlPathRef.current;
     const snap = getHtmlRef.current?.() ?? '';
-    if (!path) return true;
-    if (snap && snap !== lastPersistedRef.current && window.pywebview?.api?.save_html_content) {
+    if (diskStateConfirmedRef.current && snap === lastPersistedRef.current) {
+      isDirtyRef.current = false;
+      return true;
+    }
+    if (snap && window.pywebview?.api?.save_html_content) {
+      if (!path) return false;
       const gen = nextHtmlAutosaveGeneration(path);
       autosaveGenRef.current = gen;
+      diskStateConfirmedRef.current = false;
+      setAutosaveStatus('saving');
       try {
         const res = await window.pywebview.api.save_html_content(path, snap, gen);
+        if (htmlPathRef.current !== path || gen !== autosaveGenRef.current) return false;
         if (isSaveCommitted(res)) {
           lastPersistedRef.current = snap;
-          if (gen === autosaveGenRef.current) isDirtyRef.current = false;
+          diskStateConfirmedRef.current = true;
+          isDirtyRef.current = false;
+          saveErrorOnCloseRef.current = false;
+          setAutosaveStatus('saved');
           return true;
         }
         saveErrorOnCloseRef.current = true;
         setAutosaveStatus('error');
         return false;
       } catch (_) {
+        if (htmlPathRef.current !== path || gen !== autosaveGenRef.current) return false;
         saveErrorOnCloseRef.current = true;
         setAutosaveStatus('error');
         return false;
       }
     }
-    return true;
+    setAutosaveStatus('error');
+    return false;
   }, [getHtmlRef]);
 
   useEffect(() => {
@@ -152,11 +167,12 @@ export function useEditorAutosave({
     autosaveTimerRef.current = window.setTimeout(async () => {
       if (!isDirtyRef.current || !window.pywebview?.api?.save_html_content) return;
       const snap = getHtmlRef.current?.() ?? '';
-      if (snap === lastPersistedRef.current) {
+      if (diskStateConfirmedRef.current && snap === lastPersistedRef.current) {
         isDirtyRef.current = false;
         return;
       }
 
+      diskStateConfirmedRef.current = false;
       setAutosaveStatus('saving');
       try {
         const res = await window.pywebview.api.save_html_content(savedForPath, snap, gen);
@@ -164,12 +180,14 @@ export function useEditorAutosave({
         if (gen !== autosaveGenRef.current) return;
         if (isSaveCommitted(res)) {
           lastPersistedRef.current = snap;
+          diskStateConfirmedRef.current = true;
           isDirtyRef.current = false;
           setAutosaveStatus('saved');
         } else {
           setAutosaveStatus('error');
         }
       } catch {
+        if (htmlPathRef.current !== savedForPath || gen !== autosaveGenRef.current) return;
         setAutosaveStatus('error');
       }
     }, 700);

@@ -121,6 +121,57 @@ class ConsoleTeeTests(unittest.TestCase):
 
 
 class CloseHandlerTests(unittest.TestCase):
+    def test_native_close_waits_for_editor_save_without_blocking_ui(self):
+        api = MagicMock()
+        api.is_busy.return_value = False
+        api._force_close = False
+        window = MagicMock()
+        stop_event = MagicMock()
+        handler = build_close_handler(api, window, stop_event)
+        window.evaluate_js.side_effect = lambda script, callback: callback(False)
+        with patch("el_sbobinator.webview_entry.threading.Thread") as worker:
+            self.assertIs(handler(), False)
+            stop_event.set.assert_not_called()
+            window.destroy.assert_not_called()
+            worker.call_args.kwargs["target"]()
+            self.assertIn(
+                "__elSbobinatorFlushPendingAutosave",
+                window.evaluate_js.call_args.args[0],
+            )
+            window.destroy.assert_not_called()
+            window.evaluate_js.side_effect = lambda script, callback: callback(True)
+            self.assertIs(handler(), False)
+            worker.call_args.kwargs["target"]()
+            window.destroy.assert_called_once()
+            with patch("el_sbobinator.webview_entry.LocalMediaServer.shutdown_all"):
+                self.assertIsNone(handler())
+                stop_event.set.assert_called_once()
+
+    def test_repeated_native_close_does_not_start_overlapping_flushes(self):
+        api = MagicMock()
+        api.is_busy.return_value = False
+        api._force_close = False
+        window = MagicMock()
+        handler = build_close_handler(api, window)
+        with patch("el_sbobinator.webview_entry.threading.Thread") as worker:
+            self.assertIs(handler(), False)
+            self.assertIs(handler(), False)
+            worker.assert_called_once()
+
+    def test_native_close_keeps_window_when_bridge_evaluation_fails(self):
+        api = MagicMock()
+        api.is_busy.return_value = False
+        api._force_close = False
+        window = MagicMock()
+        window.evaluate_js.side_effect = RuntimeError("Bridge unavailable")
+        handler = build_close_handler(api, window)
+        with patch("el_sbobinator.webview_entry.threading.Thread") as worker:
+            self.assertIs(handler(), False)
+            worker.call_args.kwargs["target"]()
+            window.destroy.assert_not_called()
+            self.assertIs(handler(), False)
+            self.assertEqual(worker.call_count, 2)
+
     def test_close_when_not_busy(self):
         api = MagicMock()
         api.is_busy.return_value = False
@@ -130,11 +181,17 @@ class CloseHandlerTests(unittest.TestCase):
 
         handler = build_close_handler(api, window, stop_event)
 
-        with patch(
-            "el_sbobinator.webview_entry.LocalMediaServer.shutdown_all"
-        ) as mock_shutdown:
+        with (
+            patch("el_sbobinator.webview_entry.threading.Thread") as worker,
+            patch(
+                "el_sbobinator.webview_entry.LocalMediaServer.shutdown_all"
+            ) as mock_shutdown,
+        ):
             result = handler()
-            self.assertIsNone(result)
+            self.assertIs(result, False)
+            window.evaluate_js.side_effect = lambda script, callback: callback(True)
+            worker.call_args.kwargs["target"]()
+            self.assertIsNone(handler())
             window.create_confirmation_dialog.assert_not_called()
             stop_event.set.assert_called_once()
             mock_shutdown.assert_called_once()
@@ -148,11 +205,17 @@ class CloseHandlerTests(unittest.TestCase):
 
         handler = build_close_handler(api, window, stop_event)
 
-        with patch(
-            "el_sbobinator.webview_entry.LocalMediaServer.shutdown_all"
-        ) as mock_shutdown:
+        with (
+            patch("el_sbobinator.webview_entry.threading.Thread") as worker,
+            patch(
+                "el_sbobinator.webview_entry.LocalMediaServer.shutdown_all"
+            ) as mock_shutdown,
+        ):
             result = handler()
-            self.assertIsNone(result)
+            self.assertIs(result, False)
+            window.evaluate_js.side_effect = lambda script, callback: callback(True)
+            worker.call_args.kwargs["target"]()
+            self.assertIsNone(handler())
             window.create_confirmation_dialog.assert_not_called()
             stop_event.set.assert_called_once()
             mock_shutdown.assert_called_once()
@@ -213,11 +276,17 @@ class CloseHandlerTests(unittest.TestCase):
 
         handler = build_close_handler(api, window, stop_event)
 
-        with patch(
-            "el_sbobinator.webview_entry.LocalMediaServer.shutdown_all"
-        ) as mock_shutdown:
+        with (
+            patch("el_sbobinator.webview_entry.threading.Thread") as worker,
+            patch(
+                "el_sbobinator.webview_entry.LocalMediaServer.shutdown_all"
+            ) as mock_shutdown,
+        ):
             result = handler()
-            self.assertIsNone(result)
+            self.assertIs(result, False)
+            window.evaluate_js.side_effect = lambda script, callback: callback(True)
+            worker.call_args.kwargs["target"]()
+            self.assertIsNone(handler())
             window.create_confirmation_dialog.assert_called_once()
             api.request_shutdown.assert_called_once_with(timeout=1.5)
             stop_event.set.assert_called_once()
@@ -234,11 +303,17 @@ class CloseHandlerTests(unittest.TestCase):
 
         handler = build_close_handler(api, window, stop_event)
 
-        with patch(
-            "el_sbobinator.webview_entry.LocalMediaServer.shutdown_all"
-        ) as mock_shutdown:
+        with (
+            patch("el_sbobinator.webview_entry.threading.Thread") as worker,
+            patch(
+                "el_sbobinator.webview_entry.LocalMediaServer.shutdown_all"
+            ) as mock_shutdown,
+        ):
             result = handler()
-            self.assertIsNone(result)
+            self.assertIs(result, False)
+            window.evaluate_js.side_effect = lambda script, callback: callback(True)
+            worker.call_args.kwargs["target"]()
+            self.assertIsNone(handler())
             api.request_shutdown.assert_called_once_with(timeout=1.5)
             stop_event.set.assert_called_once()
             mock_shutdown.assert_called_once()
