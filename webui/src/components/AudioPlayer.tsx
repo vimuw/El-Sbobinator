@@ -1,7 +1,7 @@
 import { reportClientError } from '../diagnostics';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Keyboard, Link, Pause, Play, RefreshCw, RotateCcw, SkipBack, SkipForward, Unlink, Volume2 } from 'lucide-react';
+import { ChevronDown, Link, Pause, Play, RefreshCw, RotateCcw, SkipBack, SkipForward, Unlink, Volume2 } from 'lucide-react';
 import { ConfirmActionModal } from './modals/ConfirmActionModal';
 
 interface AudioPlayerProps {
@@ -38,7 +38,6 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(initialPlaybackRate ?? 1);
   const [volume, setVolume] = useState(initialVolume ?? 1);
-  const [showShortcuts, setShowShortcuts] = useState(false);
   const [isSpeedOpen, setIsSpeedOpen] = useState(false);
   const [speedPanelPos, setSpeedPanelPos] = useState({ bottom: 0, left: 0 });
   const speedBtnRef = useRef<HTMLButtonElement>(null);
@@ -47,7 +46,6 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
   const [showAudioMenu, setShowAudioMenu] = useState(false);
   const [showConfirmRemove, setShowConfirmRemove] = useState(false);
   const audioMenuRef = useRef<HTMLDivElement>(null);
-  const shortcutsRef = useRef<HTMLDivElement>(null);
   const pendingInitialTimeRef = useRef<number | null>(initialTime ?? null);
   const playbackRateRef = useRef(initialPlaybackRate ?? 1);
   const volumeRef = useRef(initialVolume ?? 1);
@@ -157,17 +155,6 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
   }, []);
-
-  useEffect(() => {
-    if (!showShortcuts) return;
-    const handler = (e: PointerEvent) => {
-      if (shortcutsRef.current && !shortcutsRef.current.contains(e.target as Node)) {
-        setShowShortcuts(false);
-      }
-    };
-    document.addEventListener('pointerdown', handler);
-    return () => document.removeEventListener('pointerdown', handler);
-  }, [showShortcuts]);
 
   useEffect(() => {
     if (!showAudioMenu) return;
@@ -461,41 +448,6 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
         <button type="button" onClick={() => skip(-duration)} className="player-control group/rewind" aria-label="Torna all'inizio">
           <RotateCcw className="h-4 w-4 transition-transform duration-300 ease-out group-hover/rewind:-rotate-45 group-hover/rewind:scale-105" />
         </button>
-        <div className="relative" ref={shortcutsRef}>
-          <button
-            type="button"
-            className={`player-control ${showShortcuts ? 'is-active' : ''}`}
-            aria-label="Scorciatoie da tastiera"
-            onClick={() => setShowShortcuts(v => !v)}
-          >
-            <Keyboard className="h-3.5 w-3.5" />
-          </button>
-          {showShortcuts && (
-            <div
-              className="absolute bottom-full right-0 mb-2 z-50 rounded-lg border p-3 text-xs"
-              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--text-muted)', minWidth: '230px', boxShadow: 'var(--shadow-strong)' }}
-            >
-              <div className="mb-2 font-semibold text-[11px]" style={{ color: 'var(--text-primary)' }}>Scorciatoie da tastiera</div>
-              {([
-                ['Spazio', 'Pausa / Riprendi'],
-                ['F4', 'Pausa / Riprendi (in editor)'],
-                ['\u2190 \u2192', 'Salta \u00b110 secondi'],
-                ['\u2191 \u2193', 'Volume \u00b15%'],
-              ] as [string, string][]).map(([key, desc]) => (
-                <div key={key} className="flex items-center justify-between gap-4 py-0.5">
-                  <kbd
-                    className="rounded px-1.5 py-0.5 text-[10px] font-mono font-medium shrink-0"
-                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}
-                  >{key}</kbd>
-                  <span className="text-right">{desc}</span>
-                </div>
-              ))}
-              <div className="mt-2 pt-2 text-[10px] leading-snug" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                Le scorciatoie freccia e Spazio sono attive solo quando il focus non è su un elemento interattivo (editor, pulsanti, ecc.)
-              </div>
-            </div>
-          )}
-        </div>
         {(onRelink || onRemoveAudio) && (
           <div className="relative" ref={audioMenuRef}>
             <button
