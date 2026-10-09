@@ -96,15 +96,15 @@ test('mixed equation clipboard routes preserve editable source through HTML past
   await page.keyboard.press('Control+Shift+z'); expect((await read()).equations).toEqual(pasted.equations);
   // Modify actual LaTeX inputs after re-pasting the real fallback bytes.
   await editor.locator('.math-node-wrapper .math-rendered').first().click();
-  await editor.locator('.math-inline-edit input').fill('\\frac{x^2}{z}');
-  await editor.locator('.math-inline-edit input').press('Enter');
+  await editor.locator('.math-node-wrapper').getByRole('textbox', { name: 'Formula LaTeX' }).fill('\\frac{x^2}{z}');
+  await editor.locator('.math-node-wrapper').getByRole('textbox', { name: 'Formula LaTeX' }).press('Enter');
   expect((await read()).equations[0].latex).toBe('\\frac{x^2}{z}');
   await editor.focus(); await page.keyboard.press('Control+z');
   expect((await read()).equations[0].latex).toBe(original.equations[0].latex);
   await page.keyboard.press('Control+Shift+z');
   await editor.locator('.math-block-wrapper .math-rendered').last().click();
-  await editor.locator('.math-block-wrapper textarea').fill('\\begin{pmatrix}a&b\\\\c&e\\end{pmatrix}');
-  await editor.getByRole('button', { name: 'Salva (Ctrl+Enter)', exact: true }).click();
+  await editor.locator('.math-block-wrapper').getByRole('textbox', { name: 'Formula LaTeX' }).fill('\\begin{pmatrix}a&b\\\\c&e\\end{pmatrix}');
+  await editor.getByRole('button', { name: 'Conferma formula', exact: true }).click();
   const edited = await read();
   expect(edited.equations[3].latex).toBe('\\begin{pmatrix}a&b\\\\c&e\\end{pmatrix}');
   await editor.focus(); await page.keyboard.press('Control+z');

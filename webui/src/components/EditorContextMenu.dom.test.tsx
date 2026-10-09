@@ -15,7 +15,7 @@ describe('EditorContextMenu', () => {
         contextMenu={null}
         onClose={vi.fn()}
         editor={null}
-        onOpenImagePicker={vi.fn()}
+        onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
         onOpenFind={vi.fn()}
       />,
     );
@@ -40,7 +40,7 @@ describe('EditorContextMenu', () => {
         contextMenu={{ x: 100, y: 100 }}
         onClose={onClose}
         editor={mockEditor}
-        onOpenImagePicker={vi.fn()}
+        onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
         onOpenFind={onOpenFind}
       />,
     );
@@ -83,7 +83,7 @@ describe('EditorContextMenu', () => {
         contextMenu={{ x: 50, y: 50 }}
         onClose={vi.fn()}
         editor={mockEditor}
-        onOpenImagePicker={vi.fn()}
+        onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
         onOpenFind={vi.fn()}
       />,
     );
@@ -100,7 +100,7 @@ describe('EditorContextMenu', () => {
     editor.commands.selectAll();
     const original = editor.getJSON();
     try {
-      render(<EditorContextMenu contextMenu={{ x: 50, y: 50 }} onClose={vi.fn()} editor={editor} onOpenImagePicker={vi.fn()} onOpenFind={vi.fn()} />);
+      render(<EditorContextMenu contextMenu={{ x: 50, y: 50 }} onClose={vi.fn()} editor={editor} onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()} onOpenFind={vi.fn()} />);
       fireEvent.click(screen.getByRole('button', { name: /Taglia/ }));
       await waitFor(() => expect(write).toHaveBeenCalledOnce());
       expect(editor.getJSON()).toEqual(original);
@@ -117,7 +117,7 @@ describe('EditorContextMenu', () => {
     editor.commands.setTextSelection({ from: 1, to: 6 });
     const original = editor.getJSON();
     try {
-      render(<EditorContextMenu contextMenu={{ x: 50, y: 50 }} onClose={vi.fn()} editor={editor} onOpenImagePicker={vi.fn()} onOpenFind={vi.fn()} />);
+      render(<EditorContextMenu contextMenu={{ x: 50, y: 50 }} onClose={vi.fn()} editor={editor} onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()} onOpenFind={vi.fn()} />);
       fireEvent.click(screen.getByRole('button', { name: /Taglia/ }));
       expect(write.mock.calls[0][1]).toContain('Prima');
       editor.commands.setTextSelection({ from: 7, to: 11 });
@@ -135,7 +135,7 @@ describe('EditorContextMenu', () => {
       readText: vi.fn().mockResolvedValue('a < b e <testo>'),
     } });
     try {
-      render(<EditorContextMenu contextMenu={{ x: 50, y: 50 }} onClose={vi.fn()} editor={editor} onOpenImagePicker={vi.fn()} onOpenFind={vi.fn()} />);
+      render(<EditorContextMenu contextMenu={{ x: 50, y: 50 }} onClose={vi.fn()} editor={editor} onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()} onOpenFind={vi.fn()} />);
       fireEvent.click(screen.getByRole('button', { name: /^Incolla\s*Ctrl/ }));
       await waitFor(() => expect(editor.getHTML()).toContain('rgb(18, 58, 188)'));
       expect(editor.getHTML()).toContain('<strong>Colorato</strong>');

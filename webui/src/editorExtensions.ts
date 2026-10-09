@@ -4,7 +4,9 @@ import { Extension, Node, mergeAttributes, textInputRule, type Editor as TiptapE
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { Fragment, type Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { EMPTY_PARAGRAPH_ATTRIBUTE } from './editorLineSpacing';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
+import { closeHistory } from '@tiptap/pm/history';
+import { MathEditorField } from './components/MathEditorField';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 
 import HeadingExtension from '@tiptap/extension-heading';
@@ -348,51 +350,43 @@ function renderedMathContent(latex: string, displayMode: boolean): HTMLElement {
   return rendered;
 }
 
-function MathNodeView({ node, updateAttributes, selected }: NodeViewProps) {
+function MathNodeView({ node, selected, editor, getPos }: NodeViewProps) {
   const [isEditing, setIsEditing] = React.useState(false);
-  const [latex, setLatex] = React.useState(node.attrs.latex || '');
-
-  React.useEffect(() => {
-    setLatex(node.attrs.latex || '');
-  }, [node.attrs.latex]);
-
+  const displayMode = node.type.name === 'mathBlock';
   const html = React.useMemo(() => {
-    const raw = node.attrs.latex || 'E=mc^2';
+    const raw = node.attrs.latex || '';
     try {
-      return katex.renderToString(raw, { displayMode: false, throwOnError: false });
+      return katex.renderToString(raw, { displayMode, throwOnError: false, trust: false });
     } catch {
-      return `<span class="katex-error text-red-500 font-mono text-xs">${escapeHtml(raw)}</span>`;
+      return `<span class="katex-error">${escapeHtml(raw)}</span>`;
     }
-  }, [node.attrs.latex]);
+  }, [node.attrs.latex, displayMode]);
 
-  if (isEditing) {
-    return React.createElement(
-      NodeViewWrapper,
-      { as: 'span', className: `math-node-wrapper ${selected ? 'is-selected' : ''}` },
-      React.createElement(
-        'span',
-        { className: 'math-inline-edit inline-flex items-center gap-1.5 bg-[var(--bg-elevated)] p-1 rounded-lg border border-[var(--accent-text)]' },
-        React.createElement('span', { className: 'text-xs font-mono font-semibold text-[var(--accent-text)]' }, 'TeX:'),
-        React.createElement('input', {
-          type: 'text',
-          value: latex,
-          onChange: (e: React.ChangeEvent<HTMLInputElement>) => setLatex(e.target.value),
-          onBlur: () => { updateAttributes({ latex }); setIsEditing(false); },
-          onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
-            if (e.key === 'Enter') { updateAttributes({ latex }); setIsEditing(false); }
-          },
-          autoFocus: true,
-          className: 'app-input font-mono text-xs px-2 py-0.5 min-w-[120px]',
-        })
-      )
-    );
-  }
+  const finish = (returnFocus: boolean, latex?: string) => {
+    if (editor.isDestroyed) return;
+    const pos = getPos();
+    // A node view can disappear while an external transaction is applied.
+    if (typeof pos !== 'number' || editor.state.doc.nodeAt(pos)?.type !== node.type) return;
+    let tr = editor.state.tr;
+    if (latex !== undefined && latex !== node.attrs.latex) {
+      tr = closeHistory(tr).setNodeMarkup(pos, undefined, { ...node.attrs, latex });
+    }
+    if (returnFocus) tr.setSelection(TextSelection.near(tr.doc.resolve(pos + node.nodeSize))).scrollIntoView();
+    editor.view.dispatch(tr);
+    if (latex !== undefined) editor.view.dispatch(closeHistory(editor.state.tr));
+    setIsEditing(false);
+    if (returnFocus) editor.view.focus();
+  };
 
   return React.createElement(
     NodeViewWrapper,
-    { as: 'span', className: `math-node-wrapper ${selected ? 'is-selected' : ''}` },
-    React.createElement('span', {
-      className: 'math-rendered cursor-pointer inline-block px-1.5 py-0.5 rounded transition-all hover:bg-[var(--accent-subtle)] hover:ring-1 hover:ring-[var(--accent-ring)]',
+    { as: displayMode ? 'div' : 'span', className: `${displayMode ? 'math-block-wrapper' : 'math-node-wrapper'}${selected ? ' is-selected' : ''}` },
+    isEditing ? React.createElement(MathEditorField, {
+      key: node.attrs.latex, initialLatex: node.attrs.latex || '', displayMode,
+      onCommit: (latex: string, returnFocus: boolean) => finish(returnFocus, latex),
+      onCancel: (returnFocus: boolean) => finish(returnFocus),
+    }) : React.createElement('span', {
+      className: 'math-rendered',
       onClick: () => setIsEditing(true),
       title: 'Clicca per modificare la formula LaTeX',
       dangerouslySetInnerHTML: { __html: html },
@@ -450,67 +444,6 @@ export const SmartArrows = Extension.create({
   },
 });
 
-function MathBlockNodeView({ node, updateAttributes, selected }: NodeViewProps) {
-  const [isEditing, setIsEditing] = React.useState(false);
-  const [latex, setLatex] = React.useState(node.attrs.latex || '');
-
-  React.useEffect(() => {
-    setLatex(node.attrs.latex || '');
-  }, [node.attrs.latex]);
-
-  const html = React.useMemo(() => {
-    const raw = node.attrs.latex || 'E=mc^2';
-    try {
-      return katex.renderToString(raw, { displayMode: true, throwOnError: false });
-    } catch {
-      return `<span class="katex-error text-red-500 font-mono text-xs">${escapeHtml(raw)}</span>`;
-    }
-  }, [node.attrs.latex]);
-
-  if (isEditing) {
-    return React.createElement(
-      NodeViewWrapper,
-      { as: 'div', className: `math-block-wrapper my-2 p-2 rounded border border-[var(--accent-text)] bg-[var(--bg-elevated)] ${selected ? 'is-selected' : ''}` },
-      React.createElement(
-        'div',
-        { className: 'flex flex-col gap-2' },
-        React.createElement('span', { className: 'text-xs font-mono font-semibold text-[var(--accent-text)]' }, 'Formula LaTeX (Block):'),
-        React.createElement('textarea', {
-          value: latex,
-          onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => setLatex(e.target.value),
-          onBlur: () => { updateAttributes({ latex }); setIsEditing(false); },
-          onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { updateAttributes({ latex }); setIsEditing(false); }
-          },
-          autoFocus: true,
-          className: 'app-input font-mono text-xs p-2 w-full min-h-[60px]',
-          placeholder: 'Inserisci formula LaTeX...'
-        }),
-        React.createElement(
-          'button',
-          {
-            type: 'button',
-            onClick: () => { updateAttributes({ latex }); setIsEditing(false); },
-            className: 'self-end px-3 py-1 bg-[var(--btn-primary-bg)] hover:bg-[var(--btn-primary-hover)] text-[var(--btn-primary-text)] text-xs rounded font-semibold transition-colors'
-          },
-          'Salva (Ctrl+Enter)'
-        )
-      )
-    );
-  }
-
-  return React.createElement(
-    NodeViewWrapper,
-    { as: 'div', className: `math-block-wrapper my-2 text-center ${selected ? 'is-selected' : ''}` },
-    React.createElement('div', {
-      className: 'math-rendered cursor-pointer inline-block p-2 rounded transition-all hover:bg-[var(--accent-subtle)] hover:ring-1 hover:ring-[var(--accent-ring)]',
-      onClick: () => setIsEditing(true),
-      title: 'Clicca per modificare la formula LaTeX',
-      dangerouslySetInnerHTML: { __html: html },
-    })
-  );
-}
-
 export const MathBlock = Node.create({
   name: 'mathBlock',
   group: 'block',
@@ -544,6 +477,6 @@ export const MathBlock = Node.create({
   },
 
   addNodeView() {
-    return ReactNodeViewRenderer(MathBlockNodeView);
+    return ReactNodeViewRenderer(MathNodeView);
   },
 });

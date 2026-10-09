@@ -40,6 +40,129 @@ test('context menu stays inside the viewport and its final action is reachable w
   }
 });
 
+test('toolbar, context menu and Ctrl+M insert user formulas directly in the page and persist through history and reopen', async ({ page }) => {
+  const editor = page.locator('.tiptap-editor');
+  let nativeDialogs = 0;
+  page.on('dialog', async dialog => { nativeDialogs++; await dialog.dismiss(); });
+  await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.commands.setContent('<p>Prima dopo</p>'));
+  const read = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
+  const original = await read();
+  for (const [index, route] of ['toolbar', 'context', 'shortcut'].entries()) {
+    await editor.evaluate(root => {
+      const editor = (root as HTMLElement & { editor: Editor }).editor;
+      editor.commands.focus(); editor.commands.setTextSelection(editor.state.doc.content.size - 1);
+    });
+    if (route === 'toolbar') await page.getByTitle('Inserisci formula matematica (LaTeX)', { exact: true }).click();
+    if (route === 'context') {
+      const bounds = await page.locator('.editor-page-container').boundingBox();
+      await page.mouse.click(bounds!.x + bounds!.width - 20, bounds!.y + bounds!.height - 10, { button: 'right' });
+      await page.getByRole('button', { name: /Inserisci formula LaTeX/ }).click();
+    }
+    if (route === 'shortcut') await page.keyboard.press('Control+m');
+    const dialog = editor.locator('.math-editor-field');
+    await expect(page.getByRole('dialog', { name: 'Inserisci formula LaTeX' })).toHaveCount(0);
+    const input = dialog.getByLabel('Formula LaTeX');
+    await expect(input).toBeFocused(); await expect(input).toHaveValue('');
+    await input.fill('\\unknown{x}');
+    await expect(dialog.getByRole('button', { name: 'Conferma formula', exact: true })).toBeDisabled();
+    await input.fill(`\\frac{a_${index}}{b}`);
+    await expect(dialog.locator('.katex')).toHaveCount(1);
+    await input.press('Enter');
+    await expect(dialog).toHaveCount(0);
+  }
+  expect(nativeDialogs).toBe(0);
+  await expect(editor.locator('.math-rendered .katex')).toHaveCount(3);
+  const final = await read();
+  for (let i = 0; i < 3; i++) await page.keyboard.press('Control+z');
+  expect(await read()).toEqual(original);
+  for (let i = 0; i < 3; i++) await page.keyboard.press('Control+Shift+z');
+  expect(await read()).toEqual(final);
+  await page.keyboard.press('Control+m');
+  await page.getByRole('textbox', { name: 'Formula LaTeX', exact: true }).fill('x^2');
+  await page.keyboard.press('Escape');
+  expect(await read()).toEqual(final);
+  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
+  await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
+  expect(await read()).toEqual(final);
+});
+
+test('compact inline and block formula editing preserves cancel, typing, history and saved source', async ({ page }, info) => {
+  const editor = page.locator('.tiptap-editor');
+  await editor.evaluate(root => {
+    const instance = (root as HTMLElement & { editor: Editor }).editor;
+    instance.commands.setContent('<p>Formula: <span data-math="x^2"></span> dopo.</p><div data-math-block="\\frac{a}{b}"></div><p>Continua qui.</p>');
+  });
+  const read = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
+  for (const selector of ['.math-node-wrapper', '.math-block-wrapper']) {
+    const formula = editor.locator(selector);
+    const original = await read();
+    await formula.locator('.math-rendered').click();
+    let input = formula.getByRole('textbox', { name: 'Formula LaTeX' });
+    await expect(input).toBeFocused();
+    await input.fill('y^3');
+    await expect(formula.locator('.math-editor-preview .katex')).toHaveCount(1);
+    expect(await read()).toEqual(original);
+    const controls = await formula.locator('.math-editor-source').boundingBox();
+    expect(controls!.height).toBeLessThanOrEqual(32);
+    await page.screenshot({ path: info.outputPath(selector.includes('block') ? 'formula-block.png' : 'formula-inline.png') });
+    await input.press('Escape');
+    expect(await read()).toEqual(original);
+    await formula.locator('.math-rendered').click();
+    input = formula.getByRole('textbox', { name: 'Formula LaTeX' });
+    await input.fill('\\frac{x_i^2}{y}');
+    await input.press('Enter');
+    await expect(formula.locator('.math-editor-field')).toHaveCount(0);
+    const changed = await read();
+    await page.keyboard.type('TESTO');
+    await expect(editor).toContainText('TESTO');
+    await page.keyboard.press('Control+z');
+    expect(await read()).toEqual(changed);
+    await page.keyboard.press('Control+z');
+    expect(await read()).toEqual(original);
+    await page.keyboard.press('Control+Shift+z');
+    expect(await read()).toEqual(changed);
+  }
+  const final = await read();
+  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
+  await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
+  expect(await read()).toEqual(final);
+  expect(await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getHTML())).not.toContain('math-editor');
+});
+
+test('inline formula drafts preserve selected text until confirmation and return the caret to the document', async ({ page }) => {
+  const editor = page.locator('.tiptap-editor');
+  await editor.evaluate(root => {
+    const instance = (root as HTMLElement & { editor: Editor }).editor;
+    instance.commands.setContent('<p>Prima dopo</p>');
+    instance.commands.setTextSelection({ from: 1, to: 6 });
+  });
+  const read = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
+  const original = await read();
+  await page.getByTitle('Inserisci formula matematica (LaTeX)', { exact: true }).click();
+  let input = editor.getByRole('textbox', { name: 'Formula LaTeX' });
+  await expect(input).toBeFocused();
+  await input.press('Enter');
+  expect(await read()).toEqual(original);
+  await input.fill('\\unknown{x}');
+  await input.press('Enter');
+  await expect(input).toBeFocused();
+  expect(await read()).toEqual(original);
+  await input.press('Escape');
+  expect(await read()).toEqual(original);
+  await page.keyboard.press('Control+m');
+  input = editor.getByRole('textbox', { name: 'Formula LaTeX' });
+  await input.fill('E=mc^2');
+  await input.press('Enter');
+  await page.keyboard.type('TESTO');
+  await expect(editor).toContainText('TESTO dopo');
+  await expect(editor).not.toContainText('Prima');
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Control+z');
+  expect(await read()).toEqual(original);
+});
+
 test('wrap typing after the figure reuses gaps while edits beside it measure a bounded region and preserve history and reopen', async ({ page }, info) => {
   const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
   const editor = page.locator('.tiptap-editor');

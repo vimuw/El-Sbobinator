@@ -12,27 +12,15 @@ describe('InsertButtons', () => {
     expect(onOpen).toHaveBeenCalledOnce();
   });
 
-  it('InsertMathButton prompts and inserts LaTeX content', () => {
-    const insertContentMock = vi.fn().mockReturnThis();
-    const runMock = vi.fn().mockReturnValue(true);
-    const editor = {
-      chain: vi.fn().mockReturnValue({
-        focus: vi.fn().mockReturnThis(),
-        insertContent: insertContentMock,
-        run: runMock,
-      }),
-    };
-
-    vi.spyOn(window, 'prompt').mockReturnValue('E=mc^2');
-    render(<InsertMathButton editor={editor as unknown as TiptapEditor} />);
+  it('InsertMathButton opens the inline composer without a native prompt', () => {
+    const onOpenMath = vi.fn();
+    const prompt = vi.spyOn(window, 'prompt');
+    render(<InsertMathButton onOpenMath={onOpenMath} />);
     const btn = screen.getByTitle('Inserisci formula matematica (LaTeX)');
     fireEvent.click(btn);
 
-    expect(insertContentMock).toHaveBeenCalledWith({
-      type: 'mathInline',
-      attrs: { latex: 'E=mc^2' },
-    });
-    expect(runMock).toHaveBeenCalled();
+    expect(onOpenMath).toHaveBeenCalledOnce();
+    expect(prompt).not.toHaveBeenCalled();
   });
 
   it('InsertYoutubeButton prompts and sets YouTube video', () => {

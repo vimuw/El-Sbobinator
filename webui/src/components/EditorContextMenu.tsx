@@ -28,6 +28,7 @@ interface EditorContextMenuProps {
   editor: TiptapEditor | null;
   onOpenImagePicker: () => void;
   onOpenFind: () => void;
+  onOpenMath: () => void;
 }
 
 async function copySelectionToClipboard(editor: TiptapEditor, cut = false) {
@@ -53,6 +54,7 @@ export function EditorContextMenu({
   editor,
   onOpenImagePicker,
   onOpenFind,
+  onOpenMath,
 }: EditorContextMenuProps) {
   const menuRef = React.useRef<HTMLDivElement>(null);
   React.useLayoutEffect(() => {
@@ -71,9 +73,9 @@ export function EditorContextMenu({
 
   return createPortal(
     <div
+      ref={menuRef}
       className="editor-context-menu fixed z-50 py-1 text-xs select-none"
       style={{ left: contextMenu.x, top: contextMenu.y }}
-      ref={menuRef}
       onClick={e => {
         e.stopPropagation();
         onClose();
@@ -257,9 +259,7 @@ export function EditorContextMenu({
       <button
         type="button"
         className="editor-context-menu-item"
-        onClick={() => {
-          editor.chain().focus().insertContent({ type: 'mathInline', attrs: { latex: 'E=mc^2' } }).run();
-        }}
+        onClick={onOpenMath}
       >
         <span className="flex items-center gap-2.5 font-medium">
           <Calculator className="h-4 w-4 shrink-0" />
