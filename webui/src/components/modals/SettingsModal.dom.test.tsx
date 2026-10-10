@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   SettingsModal,
@@ -975,6 +975,73 @@ describe('SettingsModal — model section', () => {
 });
 
 describe('SettingsModal — version status display', () => {
+  it('lets the user install a manually found update beside the check button while keeping the top notice', () => {
+    const checkForUpdates = vi.fn();
+    const onInstallUpdate = vi.fn().mockResolvedValue(undefined);
+    const props = makeProps({ hasChecked: false, checkForUpdates, onInstallUpdate });
+    const { rerender } = render(<SettingsModal {...props} />);
+    const content = screen.getByRole('heading', { name: 'Generale' }).closest('.app-scroll')!;
+    content.scrollTop = 500;
+    const statusScrollIntoView = vi.fn();
+    const section = screen.getByRole('region', { name: 'Versione e aggiornamenti' });
+    within(section).getByRole('status').scrollIntoView = statusScrollIntoView;
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cerca aggiornamenti' }));
+    expect(checkForUpdates).toHaveBeenCalledWith(true);
+    rerender(<SettingsModal {...props} updater={{ ...props.updater, isCheckingUpdate: true }} />);
+    expect(screen.getByText('Controllo in corso…')).toBeTruthy();
+    expect(screen.queryByText(/È disponibile la versione/)).toBeNull();
+    expect(statusScrollIntoView).not.toHaveBeenCalled();
+
+    rerender(<SettingsModal {...props} updater={{ ...props.updater, latestVersion: 'v9.9.9', hasChecked: true }} />);
+    expect(screen.getByText('È disponibile la versione v9.9.9.').closest('[role="status"]')).toBeTruthy();
+    expect(content.scrollTop).toBe(500);
+    expect(statusScrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+    const notice = screen.getByRole('region', { name: 'Aggiornamento applicazione' });
+    expect(notice.compareDocumentPosition(screen.getByText('Modello di trascrizione')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Installa aggiornamento' })).toHaveLength(2);
+    expect(within(section).getByRole('link', { name: 'Note di rilascio ↗' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Mostra aggiornamento' })).toBeNull();
+
+    const scrollIntoView = vi.fn();
+    notice.scrollIntoView = scrollIntoView;
+    expect(onInstallUpdate).not.toHaveBeenCalled();
+    fireEvent.click(within(section).getByRole('button', { name: 'Installa aggiornamento' }));
+    expect(onInstallUpdate).toHaveBeenCalledWith('v9.9.9');
+    expect(onInstallUpdate).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(content.scrollTop).toBe(500);
+  });
+
+  it.each([
+    ['downloading', 'Download aggiornamento…'],
+    ['verifying', 'Verifica integrità aggiornamento…'],
+    ['installing', 'Installazione aggiornamento…'],
+    ['done', 'Installer avviato. Segui le istruzioni a schermo.'],
+    ['error', 'Errore download di prova.'],
+  ] as const)('shows shared %s feedback in the top banner and lower section', (status, message) => {
+    render(<SettingsModal {...makeProps({
+      latestVersion: 'v9.9.9',
+      onInstallUpdate: vi.fn().mockResolvedValue(undefined),
+      updateInstallState: { status, bytesDone: 5242880, bytesTotal: 10485760, error: 'Errore download di prova.' },
+    })} />);
+    const section = screen.getByRole('region', { name: 'Versione e aggiornamenti' });
+    const notice = screen.getByRole('region', { name: 'Aggiornamento applicazione' });
+    expect(within(section).getByText(message)).toBeTruthy();
+    expect(within(notice).getByText(message)).toBeTruthy();
+    expect(screen.queryByText(/Sei aggiornato/)).toBeNull();
+    if (status === 'downloading') {
+      expect(within(section).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50');
+      expect(within(notice).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50');
+    }
+    if (status !== 'error') {
+      expect(screen.queryByRole('button', { name: 'Installa aggiornamento' })).toBeNull();
+    }
+    if (status === 'downloading' || status === 'verifying' || status === 'installing') {
+      expect((within(section).getByRole('button', { name: 'Cerca aggiornamenti' }) as HTMLButtonElement).disabled).toBe(true);
+    }
+  });
+
   it('checkFailed=true: shows network-error message, hides "✓ Sei aggiornato"', () => {
     render(<SettingsModal {...makeProps({ checkFailed: true, latestVersion: null, hasChecked: true, isCheckingUpdate: false })} />);
     expect(screen.queryByText(/Sei aggiornato/)).toBeNull();
@@ -1009,7 +1076,7 @@ describe('SettingsModal — version status display', () => {
       />,
     );
 
-    expect(screen.getByText(/Verifica integrità fallita/i)).toBeTruthy();
+    expect(screen.getAllByText(/Verifica integrità fallita/i)).toHaveLength(2);
   });
 
   it('shows shared async install success state', () => {
@@ -1028,7 +1095,7 @@ describe('SettingsModal — version status display', () => {
       />,
     );
 
-    expect(screen.getByText(/Installer avviato/i)).toBeTruthy();
+    expect(screen.getAllByText(/Installer avviato/i)).toHaveLength(2);
   });
 });
 

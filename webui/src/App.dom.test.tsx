@@ -148,6 +148,14 @@ afterEach(() => {
 });
 
 describe('App', () => {
+  function expectUpdateInstallFeedback(message: RegExp) {
+    expect(within(screen.getByRole('region', { name: 'Aggiornamento applicazione' })).getByText(message)).toBeTruthy();
+    expect(within(screen.getByRole('region', { name: 'Versione e aggiornamenti' })).getByText(message)).toBeTruthy();
+    const notifications = within(screen.getByRole('dialog', { name: 'Notifiche' }));
+    expect(notifications.getAllByRole('heading', { name: 'Installazione aggiornamento' })).toHaveLength(1);
+    expect(notifications.getByText(message)).toBeTruthy();
+  }
+
   it('renders the app header with logo', async () => {
     await act(async () => { render(<App />); });
     const sidebar = screen.getByRole('navigation');
@@ -268,12 +276,15 @@ describe('App', () => {
     await act(async () => {
       fireEvent.click(screen.getByLabelText(/Apri impostazioni/));
     });
+    const updateSection = await screen.findByRole('region', { name: 'Versione e aggiornamenti' });
+    within(updateSection).getByRole('status').scrollIntoView = vi.fn();
     await act(async () => {
-      fireEvent.click(screen.getByLabelText('Installa aggiornamento'));
+      fireEvent.click(within(updateSection).getByRole('button', { name: 'Installa aggiornamento' }));
     });
 
     expect(downloadUpdate).toHaveBeenCalledWith('v2.0.0');
-    expect(await screen.findAllByText(/Download aggiornamento/i)).toHaveLength(2);
+    expect(downloadUpdate).toHaveBeenCalledTimes(1);
+    expectUpdateInstallFeedback(/Download aggiornamento/i);
     const bridgeOptions = vi.mocked(useBridgeCallbacks).mock.calls.at(-1)?.[0];
     expect(bridgeOptions).toBeTruthy();
     await act(async () => {
@@ -285,10 +296,9 @@ describe('App', () => {
       });
     });
 
-    expect(await screen.findAllByText(/Verifica integrità fallita/i)).toHaveLength(2);
-    expect(screen.getAllByText('Apri GitHub').length).toBeGreaterThan(0);
+    expectUpdateInstallFeedback(/Verifica integrità fallita/i);
     await act(async () => {
-      fireEvent.click(screen.getAllByText('Apri GitHub')[0]);
+      fireEvent.click(within(screen.getByRole('dialog', { name: 'Notifiche' })).getByRole('button', { name: 'Apri GitHub' }));
     });
     expect(openUrl).toHaveBeenCalledWith('https://github.com/vimuw/El-Sbobinator/releases/latest');
   });
@@ -324,12 +334,14 @@ describe('App', () => {
     await act(async () => {
       fireEvent.click(screen.getByLabelText(/Apri impostazioni/));
     });
+    const updateNotice = await screen.findByRole('region', { name: 'Aggiornamento applicazione' });
     await act(async () => {
-      fireEvent.click(screen.getByLabelText('Installa aggiornamento'));
+      fireEvent.click(within(updateNotice).getByRole('button', { name: 'Installa aggiornamento' }));
     });
 
     expect(downloadUpdate).toHaveBeenCalledWith('v2.0.0');
-    expect(await screen.findAllByText(/Download aggiornamento/i)).toHaveLength(2);
+    expect(downloadUpdate).toHaveBeenCalledTimes(1);
+    expectUpdateInstallFeedback(/Download aggiornamento/i);
   });
 
   it('recreates update install toast after GitHub fallback action dismisses it', async () => {
@@ -357,8 +369,9 @@ describe('App', () => {
     await act(async () => {
       fireEvent.click(screen.getByLabelText(/Apri impostazioni/));
     });
+    const updateNotice = await screen.findByRole('region', { name: 'Aggiornamento applicazione' });
     await act(async () => {
-      fireEvent.click(screen.getByLabelText('Installa aggiornamento'));
+      fireEvent.click(within(updateNotice).getByRole('button', { name: 'Installa aggiornamento' }));
     });
 
     const bridgeOptions = vi.mocked(useBridgeCallbacks).mock.calls.at(-1)?.[0];
@@ -371,21 +384,24 @@ describe('App', () => {
         error: 'Verifica integrità fallita: il file scaricato non corrisponde al checksum atteso.',
       });
     });
-    expect(await screen.findAllByText(/Verifica integrità fallita/i)).toHaveLength(2);
+    expectUpdateInstallFeedback(/Verifica integrità fallita/i);
 
-    const githubActions = screen.getAllByText('Apri GitHub');
+    const notifications = within(screen.getByRole('dialog', { name: 'Notifiche' }));
     await act(async () => {
-      fireEvent.click(githubActions[githubActions.length - 1]);
+      fireEvent.click(notifications.getByRole('button', { name: 'Apri GitHub' }));
     });
     expect(openUrl).toHaveBeenCalledWith('https://github.com/vimuw/El-Sbobinator/releases/latest');
-    expect(screen.getAllByText(/Verifica integrità fallita/i)).toHaveLength(1);
+    expect(notifications.queryByRole('heading', { name: 'Installazione aggiornamento' })).toBeNull();
+    expect(notifications.queryByText(/Verifica integrità fallita/i)).toBeNull();
+    expect(within(updateNotice).getByText(/Verifica integrità fallita/i)).toBeTruthy();
+    expect(within(screen.getByRole('region', { name: 'Versione e aggiornamenti' })).getByText(/Verifica integrità fallita/i)).toBeTruthy();
 
     await act(async () => {
-      fireEvent.click(screen.getByLabelText('Installa aggiornamento'));
+      fireEvent.click(within(updateNotice).getByRole('button', { name: 'Installa aggiornamento' }));
     });
 
     expect(downloadUpdate).toHaveBeenCalledTimes(2);
-    expect(await screen.findAllByText(/Download aggiornamento/i)).toHaveLength(2);
+    expectUpdateInstallFeedback(/Download aggiornamento/i);
   });
 
   it('Settings install success resolves and shows installer-started state', async () => {
@@ -411,18 +427,20 @@ describe('App', () => {
     await act(async () => {
       fireEvent.click(screen.getByLabelText(/Apri impostazioni/));
     });
+    const updateNotice = await screen.findByRole('region', { name: 'Aggiornamento applicazione' });
     await act(async () => {
-      fireEvent.click(screen.getByLabelText('Installa aggiornamento'));
+      fireEvent.click(within(updateNotice).getByRole('button', { name: 'Installa aggiornamento' }));
     });
 
-    expect(await screen.findAllByText(/Download aggiornamento/i)).toHaveLength(2);
+    expect(downloadUpdate).toHaveBeenCalledTimes(1);
+    expectUpdateInstallFeedback(/Download aggiornamento/i);
     const bridgeOptions = vi.mocked(useBridgeCallbacks).mock.calls.at(-1)?.[0];
     expect(bridgeOptions).toBeTruthy();
     await act(async () => {
       bridgeOptions?.onDownloadProgress?.({ status: 'done', bytes_done: 10, bytes_total: 10 });
     });
 
-    expect(await screen.findAllByText(/Installer avviato/i)).toHaveLength(2);
+    expectUpdateInstallFeedback(/Installer avviato/i);
   });
 
   it('Settings install UAC denied leaves app open and explains the cancellation', async () => {
@@ -448,18 +466,20 @@ describe('App', () => {
     await act(async () => {
       fireEvent.click(screen.getByLabelText(/Apri impostazioni/));
     });
+    const updateNotice = await screen.findByRole('region', { name: 'Aggiornamento applicazione' });
     await act(async () => {
-      fireEvent.click(screen.getByLabelText('Installa aggiornamento'));
+      fireEvent.click(within(updateNotice).getByRole('button', { name: 'Installa aggiornamento' }));
     });
 
-    expect(await screen.findAllByText(/Download aggiornamento/i)).toHaveLength(2);
+    expect(downloadUpdate).toHaveBeenCalledTimes(1);
+    expectUpdateInstallFeedback(/Download aggiornamento/i);
     const bridgeOptions = vi.mocked(useBridgeCallbacks).mock.calls.at(-1)?.[0];
     expect(bridgeOptions).toBeTruthy();
     await act(async () => {
       bridgeOptions?.onDownloadProgress?.({ status: 'error', bytes_done: 0, bytes_total: 0, error: 'uac_denied' });
     });
 
-    expect(await screen.findAllByText(/richiesta UAC è stata rifiutata/i)).toHaveLength(2);
+    expectUpdateInstallFeedback(/richiesta UAC è stata rifiutata/i);
     expect(screen.getByRole('heading', { name: /Impostazioni/ })).toBeTruthy();
   });
 });
