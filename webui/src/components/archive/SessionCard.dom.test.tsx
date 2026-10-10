@@ -196,6 +196,43 @@ describe('SessionCard components selection styling', () => {
       expect(onRemoveFromFolder).toHaveBeenCalledTimes(1);
     });
 
+    it.each([true, false])('offers direct removal with Sposta in only for assigned lessons (assigned=%s)', (assigned) => {
+      const onRemoveFromFolder = vi.fn();
+      const onMove = vi.fn();
+      const onPreview = vi.fn();
+      const onDeleteSession = vi.fn();
+      render(
+        <DraggableSessionCard
+          session={mockSession}
+          allFolders={mockFolders}
+          currentFolder={assigned ? mockFolders[0] : undefined}
+          onAssignToFolder={vi.fn()}
+          onRemoveFromFolder={onRemoveFromFolder}
+          onMove={onMove}
+          onPreview={onPreview}
+          onOpenFile={vi.fn()}
+          onDeleteSession={onDeleteSession}
+        />,
+      );
+
+      fireEvent.click(screen.getByLabelText('Altre opzioni'));
+      expect(screen.getByRole('button', { name: 'Sposta in…' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Elimina' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Raccolta' })).toBeNull();
+      const remove = screen.queryByRole('button', { name: 'Rimuovi dalla raccolta' });
+      if (assigned) {
+        expect(remove).toBeTruthy();
+        fireEvent.click(remove!);
+        expect(onRemoveFromFolder).toHaveBeenCalledTimes(1);
+      } else {
+        expect(remove).toBeNull();
+        expect(onRemoveFromFolder).not.toHaveBeenCalled();
+      }
+      expect(onMove).not.toHaveBeenCalled();
+      expect(onDeleteSession).not.toHaveBeenCalled();
+      expect(onPreview).not.toHaveBeenCalled();
+    });
+
     it('does not display Raccolta item when allFolders is empty and no currentFolder is set', () => {
       render(
         <DraggableSessionCard

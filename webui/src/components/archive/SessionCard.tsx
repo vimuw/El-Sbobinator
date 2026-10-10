@@ -102,6 +102,14 @@ export function DraggableSessionCard({
         children: folderChildren,
       } as KebabMenuItem,
     ] : []),
+    ...(onMove && currentFolder ? [
+      { separator: true } as KebabMenuItem,
+      {
+        label: 'Rimuovi dalla raccolta',
+        icon: <X className="w-3.5 h-3.5" />,
+        onClick: onRemoveFromFolder,
+      } as KebabMenuItem,
+    ] : []),
     { separator: true },
     {
       label: 'Elimina',

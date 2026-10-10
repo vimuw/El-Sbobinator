@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { ChevronRight, FolderPlus, X } from 'lucide-react';
-import type { ArchiveFolder } from '../../bridge';
+import type { ArchiveFolder, ArchiveSession } from '../../bridge';
 import { getFolderChildren, getFolderColor, getFolderSubtreeIds } from '../../archiveFolders';
 import { FolderBreadcrumbs } from './FolderBreadcrumbs';
 
-export function MoveToFolderModal({ folders, movingFolderId, initialParentId = null, onClose, onConfirm }: {
+export function MoveToFolderModal({ folders, movingFolderId, movingSessions = [], initialParentId = null, onClose, onConfirm }: {
   folders: ArchiveFolder[];
   movingFolderId?: string;
+  movingSessions?: Pick<ArchiveSession, 'session_dir' | 'name'>[];
   initialParentId?: string | null;
   onClose: () => void;
   onConfirm: (targetId: string | null, createdFolders: ArchiveFolder[]) => void;
@@ -16,6 +17,7 @@ export function MoveToFolderModal({ folders, movingFolderId, initialParentId = n
   const [created, setCreated] = useState<ArchiveFolder[]>([]);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
+  const [showTitles, setShowTitles] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
   const onCloseRef = useRef(onClose);
   const allFolders = [...folders, ...created];
@@ -34,7 +36,7 @@ export function MoveToFolderModal({ folders, movingFolderId, initialParentId = n
       if (event.key === '/') event.stopPropagation();
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onCloseRef.current(); }
       if (event.key !== 'Tab') return;
-      const controls = Array.from(closeRef.current?.closest('[role="dialog"]')?.querySelectorAll<HTMLElement>('button:not(:disabled), input') ?? []);
+      const controls = Array.from(closeRef.current?.closest('[role="dialog"]')?.querySelectorAll<HTMLElement>('button:not(:disabled), input, [tabindex="0"]') ?? []);
       const first = controls[0]; const last = controls.at(-1);
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
@@ -48,11 +50,33 @@ export function MoveToFolderModal({ folders, movingFolderId, initialParentId = n
       <div className="modal-overlay absolute inset-0" />
       <div role="dialog" aria-modal="true" aria-labelledby="move-folder-title" className="modal-card relative w-full max-w-md max-h-[86vh] overflow-hidden flex flex-col">
         <div className="modal-header">
-          <h2 id="move-folder-title" className="text-lg font-semibold">Sposta in…</h2>
-          <button ref={closeRef} type="button" onClick={onClose} className="icon-button modal-icon-button" aria-label="Chiudi finestra"><X className="w-4 h-4" /></button>
+          <div className="min-w-0 flex-1">
+            <h2 id="move-folder-title" className="text-lg font-semibold">Sposta in…</h2>
+            {(movingFolder || movingSessions.length > 0) && (
+              <div className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                {movingFolder ? (
+                  <p className="max-h-[24vh] overflow-y-auto app-scroll [overflow-wrap:anywhere]" tabIndex={0}>Raccolta: {movingFolder.name}</p>
+                ) : movingSessions.length === 1 ? (
+                  <p className="max-h-[24vh] overflow-y-auto app-scroll [overflow-wrap:anywhere]" tabIndex={0}>{movingSessions[0].name}</p>
+                ) : (
+                  <>
+                    <p>{movingSessions.length} sbobine selezionate</p>
+                    <button type="button" aria-expanded={showTitles} aria-controls="move-session-titles" onClick={() => setShowTitles(!showTitles)}
+                      className="text-xs py-1 hover:underline cursor-pointer" style={{ color: 'var(--accent-text)' }}>
+                      {showTitles ? 'Nascondi titoli' : 'Mostra titoli'}
+                    </button>
+                    {showTitles && <ul id="move-session-titles" aria-label="Sbobine selezionate" tabIndex={0} className="max-h-[18vh] overflow-y-auto app-scroll space-y-1 pr-1">
+                      {movingSessions.map(session => <li key={session.session_dir} className="[overflow-wrap:anywhere]">{session.name}</li>)}
+                    </ul>}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+          <button ref={closeRef} type="button" onClick={onClose} className="icon-button modal-icon-button shrink-0 self-start" aria-label="Chiudi finestra"><X className="w-4 h-4" /></button>
         </div>
         <div className="modal-body overflow-y-auto app-scroll space-y-3">
-          <FolderBreadcrumbs folder={current} folders={allFolders} onNavigate={id => { setParentId(id); setCreating(false); }} />
+          <FolderBreadcrumbs folder={current} folders={allFolders} emphasizeCurrent onNavigate={id => { setParentId(id); setCreating(false); }} />
           <div className="flex flex-col gap-1">
             {children.map(folder => (
               <button key={folder.id} type="button" onClick={() => { setParentId(folder.id); setCreating(false); }} className="flex items-center gap-3 w-full text-left rounded-lg px-3 py-3 hover:bg-[var(--bg-hover)] cursor-pointer">
@@ -74,7 +98,6 @@ export function MoveToFolderModal({ folders, movingFolderId, initialParentId = n
               <button type="button" onClick={() => setCreating(false)} className="modal-action-button">Annulla</button>
             </form>
           ) : <button type="button" onClick={() => setCreating(true)} className="flex items-center gap-2 text-sm py-2 cursor-pointer" style={{ color: 'var(--accent-text)' }}><FolderPlus className="w-4 h-4" />Nuova raccolta…</button>}
-          <p className="text-xs [overflow-wrap:anywhere]" style={{ color: 'var(--text-muted)' }}>Destinazione: {current?.name ?? 'Archivio (senza raccolta)'}</p>
         </div>
         <div className="modal-footer">
           <button type="button" onClick={onClose} className="modal-action-button flex-1">Annulla</button>
