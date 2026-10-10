@@ -62,6 +62,27 @@ jobs:
           python scripts/build_release.py check --with-coverage --skip-npm-install
           python scripts/build_release.py validate
 
+      - name: Build frontend
+        working-directory: webui
+        run: npm run build
+
+      - name: Install Chromium for browser smoke tests
+        working-directory: webui
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser smoke tests
+        working-directory: webui
+        run: npm run test:e2e:smoke
+
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-smoke-failures
+          path: webui/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload Coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
