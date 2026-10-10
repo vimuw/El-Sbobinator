@@ -121,6 +121,27 @@ class ConsoleTeeTests(unittest.TestCase):
 
 
 class CloseHandlerTests(unittest.TestCase):
+    def test_runtime_recovery_closes_without_javascript_and_stops_monitor(self):
+        api = MagicMock()
+        window = MagicMock()
+        window.evaluate_js.side_effect = RuntimeError("MSHTML cannot run async JS")
+        stop_event = MagicMock()
+        handler = build_close_handler(
+            api, window, stop_event, require_editor_save=False
+        )
+        with (
+            patch("el_sbobinator.webview_entry.threading.Thread") as worker,
+            patch(
+                "el_sbobinator.webview_entry.LocalMediaServer.shutdown_all"
+            ) as shutdown,
+        ):
+            self.assertIsNone(handler())
+            stop_event.set.assert_called_once()
+            shutdown.assert_called_once()
+            worker.assert_not_called()
+            window.evaluate_js.assert_not_called()
+            api.is_busy.assert_not_called()
+
     def test_native_close_waits_for_editor_save_without_blocking_ui(self):
         api = MagicMock()
         api.is_busy.return_value = False
