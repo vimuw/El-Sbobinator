@@ -38,11 +38,26 @@ pre-commit install
 # Verify all tooling and dependencies are present
 python scripts/build_release.py deps --ui webui --dev
 
-# Run linter (ruff) + full test suite (pytest + Vitest) — skips npm install if already done
-python scripts/build_release.py check --skip-npm-install
+# Run lint, type checks and the Python/frontend test suites with coverage
+python scripts/build_release.py check --with-coverage --skip-npm-install
+
+# Verify the production frontend bundle
+npm --prefix webui run build
+
+# Install Chromium once, then run the three critical browser cases
+npx --prefix webui playwright install chromium
+npm --prefix webui run test:e2e:smoke
 ```
 
-Run both before opening a PR. The GitHub Actions CI workflow runs these exact commands.
+Run these checks before opening a PR. GitHub Actions also installs Chromium's Linux
+dependencies with `playwright install --with-deps chromium`. The browser smoke
+selection uses the `@ci-smoke` tag on existing tests: undo with a delayed save
+acknowledgement through explicit flush and debounced autosave, plus image dragging
+with a zoom change, undo/redo and saved reopen. The browser host uses isolated
+temporary sessions and deterministic processing without Gemini requests.
+
+For the complete browser suite, run `npm --prefix webui run test:e2e`. Browser
+checks do not replace native WebView2 or final installer acceptance.
 
 ## Build Commands
 
@@ -68,7 +83,7 @@ python scripts/build_release.py build --target macos --ui webui --install-deps -
 
 ## Pull Request Guidelines
 
-- All automated checks must pass: `python scripts/build_release.py check --skip-npm-install` exits 0.
+- The coverage gate, production frontend build and browser smoke tests above must pass.
 - Keep commits focused: one logical change per PR. Follow Conventional Commits format (`feat:`, `fix:`, `refactor:`, `chore:`).
 - When adding new features or fixing bugs, add corresponding unit or DOM tests.
 - Do not weaken or delete existing tests without justification.
