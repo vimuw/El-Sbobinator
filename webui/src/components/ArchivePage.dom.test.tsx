@@ -95,6 +95,7 @@ describe('ArchivePage', () => {
     fireEvent.click(within(screen.getByRole('region', { name: 'Raccolte' })).getByText('3° anno'));
     fireEvent.click(screen.getByLabelText('Seleziona Lezione s2'));
     fireEvent.click(screen.getByTitle('Sposta le sbobine selezionate in una raccolta'));
+    expect(within(screen.getByRole('dialog')).getByText('Lezione s2')).toBeTruthy();
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Annulla' }));
     expect(screen.getByLabelText('Deseleziona Lezione s2')).toBeTruthy();
     fireEvent.click(screen.getByTitle('Sposta le sbobine selezionate in una raccolta'));
@@ -128,6 +129,28 @@ describe('ArchivePage', () => {
     };
     renderArchive({ folders: [folder] });
     expect(screen.getAllByTitle('Raccolta: Corso A').length).toBeGreaterThan(0);
+  });
+
+  it('removes only the lesson membership directly from its archive menu without selecting it', () => {
+    const folders: ArchiveFolder[] = [
+      { id: 'f1', name: 'Corso A', color: '', session_dirs: ['/sessions/s1', '/sessions/s2'] },
+      { id: 'f2', name: 'Corso B', color: '', session_dirs: ['/sessions/s3'] },
+    ];
+    const onFoldersChange = vi.fn();
+    const sessions = [makeSession('s1'), makeSession('s2'), makeSession('s3')];
+    renderArchive({ sessions, folders, onFoldersChange });
+    const select = screen.getByRole('button', { name: 'Seleziona Lezione s1' });
+    const lesson = select.closest('.archive-session-card') as HTMLElement;
+    fireEvent.click(within(lesson).getByRole('button', { name: 'Altre opzioni' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Rimuovi dalla raccolta' }));
+
+    expect(onFoldersChange).toHaveBeenCalledTimes(1);
+    expect(onFoldersChange).toHaveBeenCalledWith([
+      { ...folders[0], session_dirs: ['/sessions/s2'] },
+      folders[1],
+    ]);
+    expect(screen.getAllByText('Lezione s1').length).toBeGreaterThan(0);
+    expect(within(lesson).getByRole('button', { name: 'Seleziona Lezione s1' })).toBeTruthy();
   });
 
   it('renders all sessions in a single list without pagination controls', () => {
@@ -232,6 +255,14 @@ describe('ArchivePage', () => {
 
     // Click Aggiungi
     fireEvent.click(screen.getByTitle('Sposta le sbobine selezionate in una raccolta'));
+
+    const moveDialog = within(screen.getByRole('dialog'));
+    expect(moveDialog.getByText('2 sbobine selezionate')).toBeTruthy();
+    fireEvent.click(moveDialog.getByRole('button', { name: 'Mostra titoli' }));
+    const titles = within(moveDialog.getByRole('list', { name: 'Sbobine selezionate' }));
+    expect(titles.getByText('Lezione 3')).toBeTruthy();
+    expect(titles.getByText('Lezione 2')).toBeTruthy();
+    expect(titles.queryByText('Lezione 1')).toBeNull();
 
     // Click the folder in the dropdown
     const folderMenuItems = screen.getAllByText('Corso Biologia');
