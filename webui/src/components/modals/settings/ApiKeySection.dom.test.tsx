@@ -519,13 +519,13 @@ describe('ApiKeySection component', () => {
           masked_key: 'AIzaSy...2345',
           is_primary: true,
           operational_status: 'temporarily_failing',
-          exhausted_models: ['gemini-3.5-flash'],
+          exhausted_models: ['gemini-3.6-flash'],
         },
         {
           masked_key: 'AIzaSy...ABCD',
           is_primary: false,
           operational_status: 'active',
-          exhausted_models: ['gemini-3.5-flash'],
+          exhausted_models: ['gemini-3.6-flash'],
         },
       ],
     } as unknown as ApiUsageResult;
@@ -534,7 +534,7 @@ describe('ApiKeySection component', () => {
       <ApiKeySection
         {...defaultProps}
         fallbackKeys={['AIzaSyBackupKey11111111111111ABCD']}
-        preferredModel="gemini-3.5-flash"
+        preferredModel="gemini-3.6-flash"
         apiUsage={mockUsage}
       />
     );
@@ -542,7 +542,7 @@ describe('ApiKeySection component', () => {
     // Neither key should be marked as "In uso (riserva)"
     expect(screen.queryByText('In uso (riserva)')).toBeNull();
     // Both should show uniform quota exhausted for Gemini 3.5 Flash
-    const badges = screen.getAllByText('Quota esaurita per Gemini 3.5 Flash');
+    const badges = screen.getAllByText('Quota esaurita per Gemini 3.6 Flash');
     expect(badges).toHaveLength(2);
   });
 
@@ -553,13 +553,13 @@ describe('ApiKeySection component', () => {
           masked_key: 'AIzaSy...2345',
           is_primary: true,
           operational_status: 'temporarily_failing',
-          exhausted_models: ['gemini-3.5-flash'],
+          exhausted_models: ['gemini-3.6-flash'],
         },
         {
           masked_key: 'AIzaSy...ABCD',
           is_primary: false,
           operational_status: 'active',
-          exhausted_models: ['gemini-3.5-flash'],
+          exhausted_models: ['gemini-3.6-flash'],
         },
         {
           masked_key: 'AIzaSy...WXYZ',
@@ -577,14 +577,14 @@ describe('ApiKeySection component', () => {
           'AIzaSyBackupKey11111111111111ABCD',
           'AIzaSyBackupKey22222222222222WXYZ',
         ]}
-        preferredModel="gemini-3.5-flash"
+        preferredModel="gemini-3.6-flash"
         apiUsage={mockUsage}
       />
     );
 
     // Second reserve (WXYZ) should be in use, not first (ABCD)
     expect(screen.getByText('In uso (riserva)')).toBeTruthy();
-    const exhaustedBadges = screen.getAllByText('Quota esaurita per Gemini 3.5 Flash');
+    const exhaustedBadges = screen.getAllByText('Quota esaurita per Gemini 3.6 Flash');
     expect(exhaustedBadges).toHaveLength(2);
   });
 
@@ -619,7 +619,7 @@ describe('ApiKeySection component', () => {
           'AIzaSyBackupKey11111111111111ABCD',
           'AIzaSyBackupKey22222222222222WXYZ',
         ]}
-        preferredModel="gemini-3.5-flash"
+        preferredModel="gemini-3.6-flash"
         apiUsage={mockUsage}
       />
     );

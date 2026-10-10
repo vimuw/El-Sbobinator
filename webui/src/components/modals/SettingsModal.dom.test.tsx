@@ -130,7 +130,7 @@ describe('SettingsModal — model parameters chunk display', () => {
   it('does not display technical chunk duration or temperature parameters in UI', async () => {
     const models = [
       { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15 },
-      { id: 'gemini-3.7-flash', label: 'Gemini 3.7 Flash', summary: '', default_chunk_minutes: 15 },
+      { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', summary: '', default_chunk_minutes: 15 },
     ];
     render(
       <SettingsModal {...makeProps({ availableModels: models, preferredModel: 'gemini-3.6-flash' })} />,
@@ -914,17 +914,17 @@ describe('SettingsModal — session folder and cleanup', () => {
 });
 
 describe('SettingsModal — model section', () => {
-  it('shows the 3.5 Flash default badge and the 2.5 Flash access tooltip', async () => {
+  it('shows the 3.6 Flash default badge and the 2.5 Flash access tooltip', async () => {
     const models = [
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: '', default_chunk_minutes: 12 },
-      { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', summary: '', default_chunk_minutes: 15 },
       { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15 },
+      { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', summary: '', default_chunk_minutes: 15 },
     ];
     const { rerender } = render(
       <SettingsModal
         {...makeProps({
           availableModels: models,
-          preferredModel: 'gemini-3.5-flash',
+          preferredModel: 'gemini-3.6-flash',
         })}
       />,
     );
@@ -932,10 +932,12 @@ describe('SettingsModal — model section', () => {
       fireEvent.click(screen.getAllByText('Generale')[0].closest('button')!);
     });
     expect(screen.getByText('Modello di trascrizione')).toBeTruthy();
-    const trigger = screen.getByRole('button', { name: /Gemini 3.5 Flash.*Default/i });
+    const trigger = screen.getByRole('button', { name: /Gemini 3.6 Flash.*Default/i });
     fireEvent.click(trigger);
-    const defaultOption = screen.getByRole('option', { name: /Gemini 3.5 Flash.*Default/i });
+    const defaultOption = screen.getByRole('option', { name: /Gemini 3.6 Flash.*Default/i });
     expect(defaultOption.getAttribute('aria-selected')).toBe('true');
+    expect(screen.getAllByRole('option')).toHaveLength(3);
+    expect(screen.queryByRole('option', { name: /Gemini 3\.5 Flash|Gemini 3\.7 Flash/i })).toBeNull();
     const legacyOption = screen.getByRole('option', { name: /Gemini 2.5 Flash/i });
     expect(legacyOption.textContent).not.toContain('Default');
     const accessNote = 'Google consente l’uso solo a chi ha già usato questo modello. Se è la prima volta che lo usi, potrebbe non funzionare.';
@@ -1136,7 +1138,7 @@ describe('SettingsModal — validate environment', () => {
   it('resets validation result when preferredModel changes', async () => {
     const models = [
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast', default_chunk_minutes: 12 },
-      { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', summary: 'New', default_chunk_minutes: 15 },
+      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: 'New', default_chunk_minutes: 15 },
     ];
     const validateFn = vi.fn().mockResolvedValue({
       ok: true,
@@ -1164,7 +1166,7 @@ describe('SettingsModal — validate environment', () => {
     await vi.waitFor(() => expect(screen.getByText('Ambiente OK')).toBeTruthy());
 
     // Change preferredModel
-    rerender(<SettingsModal {...props} models={{ ...props.models, preferredModel: 'gemini-3.5-flash' }} />);
+    rerender(<SettingsModal {...props} models={{ ...props.models, preferredModel: 'gemini-3.6-flash' }} />);
 
     // Expect 'Ambiente OK' to be cleared (since validationResult is set to null)
     expect(screen.queryByText('Ambiente OK')).toBeNull();
@@ -1241,7 +1243,7 @@ describe('SettingsModal — validate environment', () => {
   it('keeps save and cancel in diagnostics when general settings have pending changes', async () => {
     const props = makeProps();
     const { rerender } = render(<SettingsModal {...props} />);
-    rerender(<SettingsModal {...props} models={{ ...props.models, preferredModel: 'gemini-3.5-flash' }} />);
+    rerender(<SettingsModal {...props} models={{ ...props.models, preferredModel: 'gemini-3.6-flash' }} />);
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' }));
     });
