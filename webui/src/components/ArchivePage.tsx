@@ -257,6 +257,7 @@ export function ArchivePage({
     <>
       <AnimatePresence>
         {moveTarget && <MoveToFolderModal folders={folders} movingFolderId={moveTarget.folderId} initialParentId={moveTarget.parentId}
+          movingSessions={moveTarget.dirs?.map(dir => ({ session_dir: dir, name: sessionsByDir.get(normalizeSessionPath(dir))?.name ?? 'Sbobina non disponibile' }))}
           onClose={() => setMoveTarget(null)} onConfirm={(targetId, created) => {
             const updated = [...folders, ...created];
             onFoldersChange(moveTarget.folderId ? moveFolder(updated, moveTarget.folderId, targetId) : moveSessionsToFolder(updated, moveTarget.dirs ?? [], targetId));

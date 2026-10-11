@@ -136,7 +136,7 @@ class SettingsControllerMixin:
         try:
             if self._window is None:
                 return bridge_error("Finestra non disponibile")
-            result = self._window.create_file_dialog(webview.FOLDER_DIALOG)
+            result = self._window.create_file_dialog(webview.FileDialog.FOLDER)
             if not result:
                 return bridge_error("Operazione annullata.", cancelled=True)
             path = str(result[0]) if isinstance(result, list | tuple) else str(result)

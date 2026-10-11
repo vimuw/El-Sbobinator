@@ -228,7 +228,7 @@ describe('SetupPage', () => {
     });
   });
 
-  it('automatically falls back to gemini-3.5-flash if primary model returns 404', async () => {
+  it('automatically falls back to gemini-3.6-flash if primary model returns 404', async () => {
     const onSaved = vi.fn();
     const mockValidate = vi.fn().mockImplementation((_k, _v, model) => {
       if (model === 'gemini-2.5-flash') {
@@ -255,8 +255,8 @@ describe('SetupPage', () => {
             {
               id: 'api_key',
               status: 'ok',
-              message: 'Accesso disponibile per gemini-3.5-flash.',
-              details: 'gemini-3.5-flash',
+              message: 'Accesso disponibile per gemini-3.6-flash.',
+              details: 'gemini-3.6-flash',
             },
           ],
         },
@@ -281,12 +281,12 @@ describe('SetupPage', () => {
       expect(mockSave).toHaveBeenCalledWith(
         'AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345',
         [],
-        'gemini-3.5-flash',
+        'gemini-3.6-flash',
         [],
       );
       expect(onSaved).toHaveBeenCalledWith(
         'AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345',
-        'gemini-3.5-flash',
+        'gemini-3.6-flash',
       );
     });
   });

@@ -21,3 +21,10 @@ updates:
         patterns:
           - "vitest*"
           - "@vitest/*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies

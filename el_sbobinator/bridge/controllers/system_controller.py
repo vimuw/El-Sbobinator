@@ -164,7 +164,7 @@ class SystemControllerMixin:
             if not window:
                 return bridge_error("Esportazione disponibile nell'app desktop.")
             selected = window.create_file_dialog(
-                webview.SAVE_DIALOG,
+                webview.FileDialog.SAVE,
                 save_filename="El-Sbobinator-diagnostica.zip",
                 file_types=("Diagnostica (*.zip)",),
             )

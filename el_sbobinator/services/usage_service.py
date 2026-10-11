@@ -53,16 +53,12 @@ MODEL_RPD_LIMITS: dict[str, int] = {
     "gemini-2.5-flash": 20,
     "gemini-3.6-flash": 20,
     "gemini-3.8-flash": 20,
-    "gemini-3.7-flash": 20,
-    "gemini-3.5-flash": 20,
 }
 
 MODEL_RPM_LIMITS: dict[str, int] = {
     "gemini-2.5-flash": 5,
     "gemini-3.6-flash": 5,
     "gemini-3.8-flash": 5,
-    "gemini-3.7-flash": 5,
-    "gemini-3.5-flash": 5,
 }
 
 AVG_CHUNKS_PER_SBOBINA: int = 12

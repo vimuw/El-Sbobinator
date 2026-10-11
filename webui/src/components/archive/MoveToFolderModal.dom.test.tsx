@@ -49,8 +49,32 @@ describe('move destination dialog', () => {
   });
   it('excludes the moving folder and its descendants from destinations', () => {
     render(<MoveToFolderModal folders={folders} movingFolderId="course" onClose={vi.fn()} onConfirm={vi.fn()} />);
+    expect(screen.getByText('Raccolta: Microbiologia')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Microbiologia' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Modulo 1' })).toBeNull();
+  });
+  it('keeps selected titles available while navigating and includes their scroll area in the focus trap', () => {
+    const onConfirm = vi.fn();
+    render(<MoveToFolderModal folders={folders} movingSessions={[
+      { session_dir: '/sessions/1', name: 'Introduzione alla microbiologia' },
+      { session_dir: '/sessions/2', name: 'Batteri e antibiotici' },
+    ]} onClose={vi.fn()} onConfirm={onConfirm} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Mostra titoli' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Microbiologia' }));
+    const titles = screen.getByRole('list', { name: 'Sbobine selezionate' });
+    expect(within(titles).getByText('Batteri e antibiotici')).toBeTruthy();
+    expect(screen.queryByText(/^Destinazione:/)).toBeNull();
+    expect(onConfirm).not.toHaveBeenCalled();
+    const confirm = screen.getByRole('button', { name: 'Sposta qui' });
+    confirm.focus();
+    fireEvent.keyDown(window, { key: 'Tab' });
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Nascondi titoli' }));
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(confirm);
+    fireEvent.click(screen.getByRole('button', { name: 'Nascondi titoli' }));
+    expect(screen.queryByRole('list', { name: 'Sbobine selezionate' })).toBeNull();
+    fireEvent.click(confirm);
+    expect(onConfirm).toHaveBeenCalledWith('course', []);
   });
   it('closes on Escape and traps keyboard focus inside the dialog', () => {
     const onClose = vi.fn();

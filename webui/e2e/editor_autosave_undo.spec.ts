@@ -19,7 +19,9 @@ for (const scenario of [
   { route: 'debounce', delay: 'acknowledgement', release: 'after' },
   { route: 'flush', delay: 'submission', release: 'after' },
 ] as const) {
-  test(`undo survives reopen via ${scenario.route}, old ${scenario.delay} released ${scenario.release}`, async ({ page }, testInfo) => {
+  test(`undo survives reopen via ${scenario.route}, old ${scenario.delay} released ${scenario.release}`, {
+    tag: scenario.delay === 'acknowledgement' && scenario.release === 'after' ? '@ci-smoke' : [],
+  }, async ({ page }, testInfo) => {
     const audio = testInfo.outputPath('autosave-undo.wav');
     fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
     await page.goto('/');
