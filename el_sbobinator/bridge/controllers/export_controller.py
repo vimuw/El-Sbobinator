@@ -53,7 +53,7 @@ class ExportControllerMixin:
 
                 try:
                     file_paths = self._window.create_file_dialog(
-                        webview.SAVE_DIALOG,
+                        webview.FileDialog.SAVE,
                         save_filename=default_name,
                         file_types=(
                             "Pacchetto Sbobina (*.sbobina)",
@@ -62,7 +62,7 @@ class ExportControllerMixin:
                     )
                 except Exception:
                     file_paths = self._window.create_file_dialog(
-                        webview.SAVE_DIALOG,
+                        webview.FileDialog.SAVE,
                         save_filename=default_name,
                     )
                 if not file_paths:
@@ -91,7 +91,7 @@ class ExportControllerMixin:
             if not package_path and self._window:
                 try:
                     file_paths = self._window.create_file_dialog(
-                        webview.OPEN_DIALOG,
+                        webview.FileDialog.OPEN,
                         allow_multiple=False,
                         file_types=(
                             "Pacchetto Sbobina (*.sbobina;*.zip)",
@@ -100,7 +100,7 @@ class ExportControllerMixin:
                     )
                 except Exception:
                     file_paths = self._window.create_file_dialog(
-                        webview.OPEN_DIALOG,
+                        webview.FileDialog.OPEN,
                         allow_multiple=False,
                     )
                 if not file_paths:
