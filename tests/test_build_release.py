@@ -16,6 +16,19 @@ _SPEC.loader.exec_module(build_release)
 
 
 class BuildReleaseTests(unittest.TestCase):
+    def test_dependency_installation_uses_the_dependabot_runtime_manifest(self):
+        manifest = _MODULE_PATH.parents[1] / "requirements" / "requirements.txt"
+        # A legacy lock left by an older checkout must not override this manifest.
+        with (
+            patch.object(build_release.Path, "exists", return_value=True),
+            patch.object(build_release, "run") as run,
+        ):
+            build_release.install_python_dependencies()
+        self.assertEqual(
+            run.call_args.args[0],
+            [build_release.sys.executable, "-m", "pip", "install", "-r", str(manifest)],
+        )
+
     def test_command_build_refreshes_manifest_before_packaging(self):
         for target in ("windows", "macos"):
             for existing in (False, True):
