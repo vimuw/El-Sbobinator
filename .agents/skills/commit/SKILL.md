@@ -22,7 +22,20 @@ Use [verification guidance](../check/references/verification.md). For applicatio
 5. After hook or source changes, repeat affected verification. Confirm `git diff --cached --check` (use `git -c core.safecrlf=false diff --cached --check` if needed for Windows line-ending noise) and inspect the final staged diff before committing.
 6. Create the local commit and inspect its actual contents. If the commit-time hook changes content or fails, repeat the staging and verification steps instead of committing blindly.
 
-Use an imperative, lowercase Conventional Commit subject under 72 characters: `fix(editor): preserve confirmed saves before closing`. Choose `feat`, `fix`, `perf`, `refactor`, `style`, `test`, `chore`, or `docs` by intent; add a body only when it explains a meaningful constraint or tradeoff.
+## Classify the behavior
+
+Choose the type from the final diff and the behavior before and after it, not from the request's wording, the amount of new code or a new component. Inspect the previous implementation and relevant regression evidence when the distinction is unclear. For each group, be able to explain what the user could do before, what failed or was missing, and what changes now.
+
+- `fix`: correct a demonstrated defect or restore an existing behavior or contract. Preserving formatting, clipboard content or confirmed saves, keeping controls reachable, and repairing an existing formula editor are fixes even when they require new components.
+- `feat`: add or deliberately extend a user capability. State the capability that was absent, such as nested collections where only flat collections existed. A new dialog, button or implementation file alone does not establish a feature; a deliberate new interaction can qualify when it extends what users can do rather than repairing a failure.
+- `perf`: improve measured performance while preserving intended behavior.
+- `refactor`: restructure implementation without changing observable behavior.
+- `style`: change code formatting only. Do not use it automatically for visual UI changes; classify those by their behavior and purpose.
+- `test`, `docs`, `chore`: use for tests, documentation or maintenance/configuration without an application feature or defect correction. For model/default changes, distinguish routine configuration updates from repairs to an existing selection or migration contract.
+
+Keep a repair and the implementation needed for it together. Split an independently useful feature from a fix when their dependencies allow it; for an inseparable group, use the primary behavior and explain the secondary effect in the body. Do not invent a bug to obtain a `fix` label or exaggerate a repair into a feature. Honor a bug-fix-only scope without adding optional capabilities.
+
+Use an imperative, lowercase Conventional Commit subject under 72 characters: `fix(editor): preserve confirmed saves before closing`. Describe the final behavior accurately; add a body when the defect, capability or meaningful tradeoff needs context. The [changelog generator](../../../scripts/generate_changelog.py) maps commit types directly into release categories, so verify that the subject and type support the category they will produce. Existing commits and published tags must not be amended or rewritten merely to correct their labels without separate authorization.
 
 ## Finish
 
