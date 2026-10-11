@@ -76,6 +76,9 @@ non-strict checking policy; TypeScript 7 currently conflicts with typescript-esl
 peer range. Node types stay on the supported Node 24 line. Typography's parser override
 uses a declared dependency monitored by Dependabot until upstream releases a safe pin.
 
+`npm run build` also verifies the installed npm graph before compiling, so a stale
+`node_modules` cannot produce a bundle labeled with a newer lock.
+
 ```bash
 # Verify all tooling and dependencies are present
 python scripts/build_release.py deps --ui webui --dev

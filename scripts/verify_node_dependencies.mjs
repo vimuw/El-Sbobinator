@@ -6,6 +6,10 @@ import { spawnSync } from 'node:child_process';
 const webui = fileURLToPath(new URL('../webui/', import.meta.url));
 const lock = JSON.parse(readFileSync(resolve(webui, 'package-lock.json'), 'utf8'));
 const issues = [];
+const engine = JSON.parse(readFileSync(resolve(webui, 'package.json'), 'utf8')).engines.node;
+if (Number(process.versions.node.split('.')[0]) !== Number(engine.split('.')[0])) {
+  issues.push(`Node.js ${engine} richiesto; rilevato ${process.versions.node}`);
+}
 for (const [location, info] of Object.entries(lock.packages)) {
   if (!location) continue;
   const manifest = resolve(webui, location, 'package.json');
