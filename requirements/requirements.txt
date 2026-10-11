@@ -4,7 +4,7 @@
 
 beautifulsoup4==4.15.0
 certifi==2026.7.22
-google-genai==2.24.0
+google-genai==2.29.0
 imageio-ffmpeg==0.6.0
 markdown==3.11
 keyring==25.7.0
