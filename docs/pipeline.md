@@ -124,15 +124,16 @@ Side effects are routed through callbacks so phases can react:
 
 ## Model registry
 
-Source: `el_sbobinator/model_registry.py`.
+Source: `el_sbobinator/core/model_registry.py`.
 
 | Model id | Default chunk min | Default macro char limit | Phase-1 temperature |
 |---|---|---|---|
 | `gemini-3.8-flash` | 15 | 22 000 | 0.35 |
-| `gemini-3.7-flash` | 15 | 22 000 | 0.35 |
-| `gemini-3.6-flash` | 15 | 22 000 | 0.35 |
-| `gemini-3.5-flash` | 15 | 22 000 | 0.35 |
-| `gemini-2.5-flash` (default primary) | 15 | 22 000 | 0.35 |
+| `gemini-3.6-flash` (default primary) | 15 | 22 000 | 0.35 |
+| `gemini-2.5-flash` | 15 | 22 000 | 0.35 |
+
+Saved `gemini-3.5-flash` choices resolve to `gemini-3.6-flash`, and
+`gemini-3.7-flash` choices resolve to `gemini-3.8-flash`, including fallback models.
 
 The `ModelState` dataclass tracks the ordered chain and the currently active model. `build_model_state(primary, fallbacks)` always resets `current` to the primary on resume — the previous run's `effective_model` is persisted for observability only.
 New sessions start with no fallback models unless the user explicitly adds them in settings.

@@ -244,7 +244,7 @@ class ValidationServiceTests(unittest.TestCase):
             api_key="fake",
             validate_api_key=True,
             preferred_model="gemini-2.5-flash",
-            fallback_models=["gemini-3.6-flash", "gemini-3.7-flash"],
+            fallback_models=["gemini-3.6-flash", "gemini-3.8-flash"],
         )
 
         self.assertFalse(result["ok"])
@@ -265,7 +265,7 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertNotIn("AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345", middle_details)
         self.assertIn("[API_KEY_REDACTED]", middle_details)
         self.assertEqual(last_check["status"], "ok")
-        self.assertEqual(last_details, "gemini-3.7-flash")
+        self.assertEqual(last_details, "gemini-3.8-flash")
 
     @patch(
         "el_sbobinator.services.validation_service.resolve_ffmpeg",

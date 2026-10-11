@@ -1700,7 +1700,9 @@ test('wrap drag keeps the destination table cell through history and saved reope
 });
 
 for (const zoom of [{ key: 'Control+=', value: '1.1' }, { key: 'Control+-', value: '0.9' }]) {
-  test(`wrap drag survives zoom to ${zoom.value} through release, history and saved reopen`, async ({ page, context }, testInfo) => {
+  test(`wrap drag survives zoom to ${zoom.value} through release, history and saved reopen`, {
+    tag: zoom.value === '1.1' ? '@ci-smoke' : [],
+  }, async ({ page, context }, testInfo) => {
     await page.setViewportSize({ width: 1400, height: 1000 });
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     const audio = testInfo.outputPath('drag_zoom.wav');

@@ -35,6 +35,63 @@ class TestLoadConfigCache(unittest.TestCase):
     def tearDown(self) -> None:
         _reset_cache()
 
+    def test_model_migration_survives_save_and_reload(self) -> None:
+        for stored, expected in (
+            ("gemini-3.5-flash", "gemini-3.6-flash"),
+            ("gemini-3.7-flash", "gemini-3.8-flash"),
+            ("gemini-2.5-flash", "gemini-2.5-flash"),
+            ("gemini-3.6-flash", "gemini-3.6-flash"),
+            ("gemini-3.8-flash", "gemini-3.8-flash"),
+        ):
+            with self.subTest(model=stored), tempfile.TemporaryDirectory() as tmp:
+                _reset_cache()
+                path = os.path.join(tmp, "config.json")
+                with open(path, "w", encoding="utf-8") as fh:
+                    json.dump(
+                        {
+                            "preferred_model": stored,
+                            "fallback_models": [
+                                stored,
+                                "gemini-3.7-flash",
+                                "gemini-3.8-flash",
+                            ],
+                            "session_root": os.path.join(tmp, "sessions"),
+                        },
+                        fh,
+                    )
+                with (
+                    patch.object(cs, "CONFIG_FILE", path),
+                    patch.object(cs, "LEGACY_CONFIG_FILE", path + ".legacy"),
+                ):
+                    expected_fallbacks = (
+                        [] if expected == "gemini-3.8-flash" else ["gemini-3.8-flash"]
+                    )
+                    loaded = cs.load_config()
+                    self.assertEqual(loaded["preferred_model"], expected)
+                    self.assertEqual(loaded["fallback_models"], expected_fallbacks)
+                    cs.save_config(None)
+                    with open(path, encoding="utf-8") as fh:
+                        saved = json.load(fh)
+                    self.assertEqual(saved["preferred_model"], expected)
+                    self.assertEqual(saved["fallback_models"], expected_fallbacks)
+                    self.assertEqual(
+                        saved["session_root"], os.path.join(tmp, "sessions")
+                    )
+                    _reset_cache()
+                    reloaded = cs.load_config()
+                    self.assertEqual(reloaded["preferred_model"], expected)
+                    self.assertEqual(reloaded["fallback_models"], expected_fallbacks)
+
+    def test_new_configuration_defaults_to_36_without_fallbacks(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(cs, "CONFIG_FILE", os.path.join(tmp, "config.json")),
+            patch.object(cs, "LEGACY_CONFIG_FILE", os.path.join(tmp, "legacy.json")),
+        ):
+            loaded = cs.load_config()
+            self.assertEqual(loaded["preferred_model"], "gemini-3.6-flash")
+            self.assertEqual(loaded["fallback_models"], [])
+
     # ------------------------------------------------------------------
     # Cache hit
     # ------------------------------------------------------------------
@@ -755,7 +812,7 @@ class TestSaveConfigToDisk(unittest.TestCase):
                 data = json.load(fh)
 
         self.assertEqual(data.get("api_key"), "PLAINTEXT_KEY_123")
-        self.assertEqual(data.get("preferred_model"), "gemini-3.5-flash")
+        self.assertEqual(data.get("preferred_model"), "gemini-3.6-flash")
 
     def test_save_config_writes_legacy_file_when_env_set(self) -> None:
         """When EL_SBOBINATOR_WRITE_LEGACY_CONFIG=1, the legacy file is also written."""

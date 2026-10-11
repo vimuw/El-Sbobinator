@@ -196,9 +196,9 @@ class SharedPipelineDefaultsTests(unittest.TestCase):
             return_value=5,
         ):
             settings = build_default_pipeline_settings(
-                {"preferred_model": "gemini-3.5-flash", "fallback_models": []}
+                {"preferred_model": "gemini-3.6-flash", "fallback_models": []}
             )
-            self.assertEqual(settings["model"], "gemini-3.5-flash")
+            self.assertEqual(settings["model"], "gemini-3.6-flash")
             self.assertEqual(settings["chunk_minutes"], 5)
 
     def test_build_default_pipeline_settings_keeps_15_minutes_for_other_models(self):
@@ -213,9 +213,9 @@ class SharedPipelineDefaultsTests(unittest.TestCase):
     ):
         session = {
             "settings": {
-                "model": "gemini-3.5-flash",
+                "model": "gemini-3.6-flash",
                 "fallback_models": [],
-                "effective_model": "gemini-3.5-flash",
+                "effective_model": "gemini-3.6-flash",
                 "audio": {"bitrate": "48k"},
             }
         }
@@ -235,9 +235,9 @@ class SharedPipelineDefaultsTests(unittest.TestCase):
     ):
         session = {
             "settings": {
-                "model": "gemini-3.5-flash",
+                "model": "gemini-3.6-flash",
                 "fallback_models": [],
-                "effective_model": "gemini-3.5-flash",
+                "effective_model": "gemini-3.6-flash",
                 "chunk_minutes": 15,
                 "overlap_seconds": 30,
                 "macro_char_limit": 15000,

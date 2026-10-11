@@ -4,6 +4,7 @@ WebView2 runtime detection, fallback recovery page, and lifecycle monitor.
 
 from __future__ import annotations
 
+import importlib
 import os
 import sys
 import threading
@@ -48,6 +49,11 @@ def _check_webview2_native(*, activate_renderer: bool = True) -> bool:
         from webview.platforms import edgechromium as Chromium
 
         environment = getattr(Chromium, "CoreWebView2Environment", None)
+        if environment is None:
+            # pywebview 6 no longer re-exports this type. Import it from the
+            # assembly loaded by the renderer, keeping the native loader probe.
+            core = importlib.import_module("Microsoft.Web.WebView2.Core")
+            environment = getattr(core, "CoreWebView2Environment", None)
         if environment is not None:
             version = environment.GetAvailableBrowserVersionString(None)
             available = bool(version and str(version).strip())

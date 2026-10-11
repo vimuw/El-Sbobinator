@@ -145,7 +145,7 @@ Called on every resume. Ensures `session["settings"]` is a dict and:
 - Validates `model` / `fallback_models` against `SUPPORTED_MODELS`; unknown entries are dropped.
 - Recomputes `effective_model`: keeps the stored value only if it belongs to the current `{model} ∪ fallback_models` set; otherwise resets to `model`.
 - Ensures `audio.bitrate` is a non-empty string (defaults to `"48k"`).
-- **Legacy model migration**: removed model identifiers are sanitized to the current default model, while unsupported fallback entries are discarded. Explicit chunk and macro limits remain preserved unless they match a known obsolete default.
+- **Legacy model migration**: `gemini-3.5-flash` resolves to `gemini-3.6-flash` and `gemini-3.7-flash` resolves to `gemini-3.8-flash` in primary, fallback and effective model fields. Fallbacks are deduplicated after migration. Other removed model identifiers are sanitized to the current default model, while unsupported fallback entries are discarded. Explicit chunk and macro limits remain preserved unless they match a known obsolete default.
 
 The function also returns a `changed` flag so `initialize_session_context` can save the sanitized values back to disk idempotently.
 

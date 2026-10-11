@@ -2348,8 +2348,11 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
         ):
             api.download_and_install_update("v1.0.0")
 
-        self.assertEqual(len(registered), 1)
-        args = registered[0]
+        # certifi may lazily register its own certificate cleanup with atexit.
+        # Require exactly one installer cleanup, regardless of library handlers.
+        installer_handlers = [args for args in registered if args[0] is _try_unlink]
+        self.assertEqual(len(installer_handlers), 1)
+        args = installer_handlers[0]
         self.assertIs(args[0], _try_unlink)
         self.assertEqual(args[1], "/tmp/fake_setup.exe")
 
