@@ -16,6 +16,22 @@ _SPEC.loader.exec_module(build_release)
 
 
 class BuildReleaseTests(unittest.TestCase):
+    def test_pyright_checks_the_same_interpreter_used_by_the_build_helper(self):
+        with (
+            patch.object(build_release.sys, "executable", "verified-venv/python"),
+            patch.object(build_release, "run") as run,
+        ):
+            build_release.run_pyright()
+        run.assert_called_once_with(
+            [
+                "verified-venv/python",
+                "-m",
+                "pyright",
+                "--pythonpath",
+                "verified-venv/python",
+            ]
+        )
+
     def test_dependency_installation_uses_the_dependabot_runtime_manifest(self):
         manifest = _MODULE_PATH.parents[1] / "requirements" / "requirements.txt"
         # A legacy lock left by an older checkout must not override this manifest.
