@@ -34,8 +34,7 @@ WEBVIEW_ENTRYPOINT = LAUNCHERS_DIR / "El_Sbobinator_WebUI.pyw"
 PROFILE_IMPORTS_SCRIPT = TOOLS_DIR / "profile_imports.py"
 APP_NAME = "El Sbobinator"
 REQUIRED_NODE_MAJOR = 24
-BASE_REQUIREMENTS = REQUIREMENTS_DIR / "requirements.lock"
-FALLBACK_REQUIREMENTS = REQUIREMENTS_DIR / "requirements.txt"
+BASE_REQUIREMENTS = REQUIREMENTS_DIR / "requirements.txt"
 DEV_REQUIREMENTS = REQUIREMENTS_DIR / "requirements-dev.txt"
 PYTHON_CHECK_TARGETS = [
     "el_sbobinator",
@@ -132,13 +131,9 @@ def print_windows_webview2_notice(target: str, ui: str) -> None:
     print()
 
 
-def _requirements_file() -> Path:
-    return BASE_REQUIREMENTS if BASE_REQUIREMENTS.exists() else FALLBACK_REQUIREMENTS
-
-
 def install_python_dependencies(include_dev: bool = False) -> None:
     run([sys.executable, "-m", "pip", "install", "--upgrade", "pip"])
-    run([sys.executable, "-m", "pip", "install", "-r", str(_requirements_file())])
+    run([sys.executable, "-m", "pip", "install", "-r", str(BASE_REQUIREMENTS)])
     if include_dev and DEV_REQUIREMENTS.exists():
         run([sys.executable, "-m", "pip", "install", "-r", str(DEV_REQUIREMENTS)])
 
@@ -158,7 +153,7 @@ def install_node_dependencies(skip_npm_install: bool) -> None:
 
 
 def run_pyright() -> None:
-    run([sys.executable, "-m", "pyright"])
+    run([sys.executable, "-m", "pyright", "--pythonpath", sys.executable])
 
 
 def run_python_checks(with_coverage: bool = False) -> None:
