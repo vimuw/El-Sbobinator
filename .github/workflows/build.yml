@@ -84,7 +84,7 @@ jobs:
           retention-days: 7
 
       - name: Upload Coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage-python.xml,webui/coverage/lcov.info
