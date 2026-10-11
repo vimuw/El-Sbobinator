@@ -219,7 +219,7 @@ class MediaControllerMixin:
             return []
         try:
             file_paths = self._window.create_file_dialog(
-                webview.OPEN_DIALOG,
+                webview.FileDialog.OPEN,
                 allow_multiple=True,
                 file_types=(
                     "Audio (*.mp3;*.m4a;*.wav;*.ogg;*.flac;*.aac;*.opus)",
@@ -229,7 +229,7 @@ class MediaControllerMixin:
             )
         except Exception:
             file_paths = self._window.create_file_dialog(
-                webview.OPEN_DIALOG,
+                webview.FileDialog.OPEN,
                 allow_multiple=True,
             )
         if not file_paths:
@@ -252,7 +252,7 @@ class MediaControllerMixin:
             return None
         try:
             file_paths = self._window.create_file_dialog(
-                webview.OPEN_DIALOG,
+                webview.FileDialog.OPEN,
                 allow_multiple=False,
                 file_types=(
                     "Audio (*.mp3;*.m4a;*.wav;*.ogg;*.flac;*.aac;*.opus)",
@@ -262,7 +262,7 @@ class MediaControllerMixin:
             )
         except Exception:
             file_paths = self._window.create_file_dialog(
-                webview.OPEN_DIALOG,
+                webview.FileDialog.OPEN,
                 allow_multiple=False,
             )
         if not file_paths:
