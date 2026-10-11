@@ -257,6 +257,12 @@ def main():
             maximized=True,
         )
 
+    if window is None:
+        if startup_server is not None:
+            startup_server.close()
+        raise RuntimeError("Impossibile creare la finestra di El Sbobinator.")
+
+    if not webview2_available:
         stop_event = threading.Event()
         _start_webview2_monitor(window, stop_event)
 

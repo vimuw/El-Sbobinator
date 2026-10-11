@@ -60,6 +60,54 @@ class WindowlessStartupLoggingTests(unittest.TestCase):
                     handler.close()
 
 
+class StartupWindowTests(unittest.TestCase):
+    def test_missing_window_stops_startup_and_closes_any_startup_server(self):
+        for runtime_available in (True, False):
+            with self.subTest(runtime_available=runtime_available):
+                api = MagicMock()
+                server = MagicMock()
+                monitor = MagicMock()
+                with (
+                    patch.multiple(
+                        "el_sbobinator.webview_entry",
+                        prepare_startup=MagicMock(),
+                        configure_logging=MagicMock(),
+                        get_dist_path=MagicMock(return_value="dist"),
+                        has_webview2_runtime=MagicMock(return_value=runtime_available),
+                        _clear_webview2_cache=MagicMock(),
+                        _get_window_position=MagicMock(return_value={}),
+                        _boot_bg_color=MagicMock(return_value="#191919"),
+                        build_missing_webview2_html=MagicMock(return_value="recovery"),
+                        DesktopStartupServer=MagicMock(return_value=server),
+                        _start_webview2_monitor=monitor,
+                    ),
+                    patch(
+                        "el_sbobinator.app_webview.ElSbobinatorApi", return_value=api
+                    ),
+                    patch("sys.stdout", io.StringIO()),
+                    patch("sys.stderr", io.StringIO()),
+                    patch("sys.__stdout__", io.StringIO()),
+                    patch("sys.__stderr__", io.StringIO()),
+                    patch("el_sbobinator.webview_entry.os.makedirs"),
+                    patch(
+                        "el_sbobinator.webview_entry.webview.create_window",
+                        return_value=None,
+                    ),
+                    patch("el_sbobinator.webview_entry.webview.start") as start,
+                ):
+                    with self.assertRaisesRegex(
+                        RuntimeError, "Impossibile creare la finestra"
+                    ):
+                        main()
+                api.set_window.assert_not_called()
+                start.assert_not_called()
+                monitor.assert_not_called()
+                if runtime_available:
+                    server.close.assert_called_once()
+                else:
+                    server.close.assert_not_called()
+
+
 class ConsoleTeeTests(unittest.TestCase):
     def test_console_tee_writes_to_original(self):
         original = io.StringIO()
