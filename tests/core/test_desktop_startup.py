@@ -309,7 +309,10 @@ def test_recovery_is_bounded_and_late_old_attempt_cannot_unlock(server):
         "load_settings": False,
         "save_settings": False,
     }
-    server.monitor(window, timeout=0.01)
+    # This window mock implements the synchronous renderer; Cocoa has separate
+    # asynchronous evaluator tests below, also executed on macOS CI.
+    with patch("el_sbobinator.core.desktop_startup.sys.platform", "win32"):
+        server.monitor(window, timeout=0.01)
     assert window.load_url.call_count == 2
     assert "attempt=1" in window.load_url.call_args_list[0].args[0]
     assert window.load_url.call_args.args[0].endswith("/failure")
@@ -331,7 +334,8 @@ def test_successful_settings_handshake_does_not_reload(server):
     server.receive_event(
         {"kind": "ready", "attempt": 0, "build_id": server.build_id, "version": "2.7.3"}
     )
-    server.monitor(window, timeout=0.01)
+    with patch("el_sbobinator.core.desktop_startup.sys.platform", "win32"):
+        server.monitor(window, timeout=0.01)
     window.load_url.assert_not_called()
     assert server.test_record.call_args.kwargs["page"]["version"] == "2.7.3"
 
@@ -631,6 +635,7 @@ def test_cocoa_probe_is_async_and_preserves_pywebview_evaluator(server):
     with (
         patch("el_sbobinator.core.desktop_startup.sys.platform", "darwin"),
         patch.dict("sys.modules", {"webview.platforms.cocoa": cocoa}),
+        patch("webview.platforms.cocoa", cocoa, create=True),
     ):
         server.observe_page()
         assert len(callbacks) == 1
@@ -674,6 +679,7 @@ def test_cocoa_probe_records_its_own_failure_without_failing_bootstrap(
     with (
         patch("el_sbobinator.core.desktop_startup.sys.platform", "darwin"),
         patch.dict("sys.modules", {"webview.platforms.cocoa": cocoa}),
+        patch("webview.platforms.cocoa", cocoa, create=True),
         patch("el_sbobinator.core.desktop_startup.record_incident") as incident,
     ):
         server.observe_page()
@@ -688,6 +694,7 @@ def test_cocoa_probe_tolerates_a_missing_native_view(server):
     with (
         patch("el_sbobinator.core.desktop_startup.sys.platform", "darwin"),
         patch.dict("sys.modules", {"webview.platforms.cocoa": cocoa}),
+        patch("webview.platforms.cocoa", cocoa, create=True),
     ):
         server.observe_page()
     assert not server.snapshot

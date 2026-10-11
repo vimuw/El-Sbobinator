@@ -307,6 +307,33 @@ class TestFoldersService(unittest.TestCase):
         self.assertEqual(reconciled[0]["session_dirs"], [expected_dir])
         self.assertEqual(get_folders()[0]["session_dirs"], [expected_dir])
 
+    def test_case_alias_uses_filesystem_identity_without_merging_distinct_roots(self):
+        from el_sbobinator.services.folders_service import _path_under_root
+
+        root = os.path.join(self.tmp_dir, "Sessions")
+        alias = os.path.join(self.tmp_dir, "sessions")
+        saved = os.path.join(alias, "sess_1")
+        # Model POSIX normalization on a case-insensitive volume, regardless of
+        # the host OS. An unrelated existing root must retain its identity.
+        with (
+            patch("os.path.normcase", side_effect=lambda value: value),
+            patch("os.path.realpath", side_effect=lambda value: value),
+            patch(
+                "os.path.samefile",
+                side_effect=lambda path, target: str(path) == alias and target == root,
+            ),
+        ):
+            self.assertTrue(_path_under_root(saved, root))
+            self.assertFalse(
+                _path_under_root(os.path.join(self.tmp_dir, "other", "sess_1"), root)
+            )
+        with (
+            patch("os.path.normcase", side_effect=lambda value: value),
+            patch("os.path.realpath", side_effect=lambda value: value),
+            patch("os.path.samefile", return_value=False),
+        ):
+            self.assertFalse(_path_under_root(saved, root))
+
 
 if __name__ == "__main__":
     unittest.main()

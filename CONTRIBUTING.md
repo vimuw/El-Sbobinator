@@ -60,6 +60,7 @@ CI/build also reject missing, obsolete or unexpected Python/npm packages, includ
 when packaging uses `--skip-checks`, and record the full Python graph and lock hashes.
 
 Dependabot checks uv, bootstrap pip packages, npm, pre-commit and GitHub Actions daily.
+Actions use immutable commit references with release comments, also updated by Dependabot.
 Its PRs can auto-merge only after the required `Dependency gate` passes Linux, Windows,
 macOS, complete audits, frontend build and Chromium smoke tests. The metadata-only
 auto-merge workflow never executes PR code with write permissions. Daily CI also audits
