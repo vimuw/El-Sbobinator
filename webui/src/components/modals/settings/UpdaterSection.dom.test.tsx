@@ -15,7 +15,7 @@ describe('UpdaterSection component', () => {
 
   it('renders installed application version', () => {
     render(<UpdaterSection {...defaultProps} />);
-    expect(screen.getByText('Versione applicazione')).toBeTruthy();
+    expect(screen.getByText('Versione e aggiornamenti')).toBeTruthy();
     expect(screen.getByText(/Installata:/)).toBeTruthy();
   });
 

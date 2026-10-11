@@ -11,7 +11,7 @@ El Sbobinator is a Windows/macOS desktop application that turns audio lectures i
 | `launchers/` | PyInstaller entrypoint (`El_Sbobinator_WebUI.pyw`) |
 | `packaging/` | Inno Setup script (Windows), `create-dmg` wrapper (macOS), double-click build scripts |
 | `scripts/` | `build_release.py` (single source of truth for deps/check/build), `smoke_test.py` |
-| `requirements/` | Pinned (`requirements.lock`), runtime (`requirements.txt`), dev (`requirements-dev.txt`) |
+| `requirements/` | Pinned runtime/build dependencies (`requirements.txt`), dev (`requirements-dev.txt`) |
 | `tests/` | `unittest` suite for the Python package |
 | `tools/` | Dev utilities (e.g. `profile_imports.py`) |
 | `docs/` | Developer documentation (this file, `pipeline.md`, `session_model.md`, `bridge_protocol.md`) |

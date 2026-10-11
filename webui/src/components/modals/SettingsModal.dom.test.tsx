@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   SettingsModal,
@@ -130,7 +130,7 @@ describe('SettingsModal — model parameters chunk display', () => {
   it('does not display technical chunk duration or temperature parameters in UI', async () => {
     const models = [
       { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15 },
-      { id: 'gemini-3.7-flash', label: 'Gemini 3.7 Flash', summary: '', default_chunk_minutes: 15 },
+      { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', summary: '', default_chunk_minutes: 15 },
     ];
     render(
       <SettingsModal {...makeProps({ availableModels: models, preferredModel: 'gemini-3.6-flash' })} />,
@@ -914,17 +914,17 @@ describe('SettingsModal — session folder and cleanup', () => {
 });
 
 describe('SettingsModal — model section', () => {
-  it('shows the 3.5 Flash default badge and the 2.5 Flash access tooltip', async () => {
+  it('shows the 3.6 Flash default badge and the 2.5 Flash access tooltip', async () => {
     const models = [
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: '', default_chunk_minutes: 12 },
-      { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', summary: '', default_chunk_minutes: 15 },
       { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15 },
+      { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', summary: '', default_chunk_minutes: 15 },
     ];
     const { rerender } = render(
       <SettingsModal
         {...makeProps({
           availableModels: models,
-          preferredModel: 'gemini-3.5-flash',
+          preferredModel: 'gemini-3.6-flash',
         })}
       />,
     );
@@ -932,10 +932,12 @@ describe('SettingsModal — model section', () => {
       fireEvent.click(screen.getAllByText('Generale')[0].closest('button')!);
     });
     expect(screen.getByText('Modello di trascrizione')).toBeTruthy();
-    const trigger = screen.getByRole('button', { name: /Gemini 3.5 Flash.*Default/i });
+    const trigger = screen.getByRole('button', { name: /Gemini 3.6 Flash.*Default/i });
     fireEvent.click(trigger);
-    const defaultOption = screen.getByRole('option', { name: /Gemini 3.5 Flash.*Default/i });
+    const defaultOption = screen.getByRole('option', { name: /Gemini 3.6 Flash.*Default/i });
     expect(defaultOption.getAttribute('aria-selected')).toBe('true');
+    expect(screen.getAllByRole('option')).toHaveLength(3);
+    expect(screen.queryByRole('option', { name: /Gemini 3\.5 Flash|Gemini 3\.7 Flash/i })).toBeNull();
     const legacyOption = screen.getByRole('option', { name: /Gemini 2.5 Flash/i });
     expect(legacyOption.textContent).not.toContain('Default');
     const accessNote = 'Google consente l’uso solo a chi ha già usato questo modello. Se è la prima volta che lo usi, potrebbe non funzionare.';
@@ -975,6 +977,73 @@ describe('SettingsModal — model section', () => {
 });
 
 describe('SettingsModal — version status display', () => {
+  it('lets the user install a manually found update beside the check button while keeping the top notice', () => {
+    const checkForUpdates = vi.fn();
+    const onInstallUpdate = vi.fn().mockResolvedValue(undefined);
+    const props = makeProps({ hasChecked: false, checkForUpdates, onInstallUpdate });
+    const { rerender } = render(<SettingsModal {...props} />);
+    const content = screen.getByRole('heading', { name: 'Generale' }).closest('.app-scroll')!;
+    content.scrollTop = 500;
+    const statusScrollIntoView = vi.fn();
+    const section = screen.getByRole('region', { name: 'Versione e aggiornamenti' });
+    within(section).getByRole('status').scrollIntoView = statusScrollIntoView;
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cerca aggiornamenti' }));
+    expect(checkForUpdates).toHaveBeenCalledWith(true);
+    rerender(<SettingsModal {...props} updater={{ ...props.updater, isCheckingUpdate: true }} />);
+    expect(screen.getByText('Controllo in corso…')).toBeTruthy();
+    expect(screen.queryByText(/È disponibile la versione/)).toBeNull();
+    expect(statusScrollIntoView).not.toHaveBeenCalled();
+
+    rerender(<SettingsModal {...props} updater={{ ...props.updater, latestVersion: 'v9.9.9', hasChecked: true }} />);
+    expect(screen.getByText('È disponibile la versione v9.9.9.').closest('[role="status"]')).toBeTruthy();
+    expect(content.scrollTop).toBe(500);
+    expect(statusScrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+    const notice = screen.getByRole('region', { name: 'Aggiornamento applicazione' });
+    expect(notice.compareDocumentPosition(screen.getByText('Modello di trascrizione')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Installa aggiornamento' })).toHaveLength(2);
+    expect(within(section).getByRole('link', { name: 'Note di rilascio ↗' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Mostra aggiornamento' })).toBeNull();
+
+    const scrollIntoView = vi.fn();
+    notice.scrollIntoView = scrollIntoView;
+    expect(onInstallUpdate).not.toHaveBeenCalled();
+    fireEvent.click(within(section).getByRole('button', { name: 'Installa aggiornamento' }));
+    expect(onInstallUpdate).toHaveBeenCalledWith('v9.9.9');
+    expect(onInstallUpdate).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(content.scrollTop).toBe(500);
+  });
+
+  it.each([
+    ['downloading', 'Download aggiornamento…'],
+    ['verifying', 'Verifica integrità aggiornamento…'],
+    ['installing', 'Installazione aggiornamento…'],
+    ['done', 'Installer avviato. Segui le istruzioni a schermo.'],
+    ['error', 'Errore download di prova.'],
+  ] as const)('shows shared %s feedback in the top banner and lower section', (status, message) => {
+    render(<SettingsModal {...makeProps({
+      latestVersion: 'v9.9.9',
+      onInstallUpdate: vi.fn().mockResolvedValue(undefined),
+      updateInstallState: { status, bytesDone: 5242880, bytesTotal: 10485760, error: 'Errore download di prova.' },
+    })} />);
+    const section = screen.getByRole('region', { name: 'Versione e aggiornamenti' });
+    const notice = screen.getByRole('region', { name: 'Aggiornamento applicazione' });
+    expect(within(section).getByText(message)).toBeTruthy();
+    expect(within(notice).getByText(message)).toBeTruthy();
+    expect(screen.queryByText(/Sei aggiornato/)).toBeNull();
+    if (status === 'downloading') {
+      expect(within(section).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50');
+      expect(within(notice).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50');
+    }
+    if (status !== 'error') {
+      expect(screen.queryByRole('button', { name: 'Installa aggiornamento' })).toBeNull();
+    }
+    if (status === 'downloading' || status === 'verifying' || status === 'installing') {
+      expect((within(section).getByRole('button', { name: 'Cerca aggiornamenti' }) as HTMLButtonElement).disabled).toBe(true);
+    }
+  });
+
   it('checkFailed=true: shows network-error message, hides "✓ Sei aggiornato"', () => {
     render(<SettingsModal {...makeProps({ checkFailed: true, latestVersion: null, hasChecked: true, isCheckingUpdate: false })} />);
     expect(screen.queryByText(/Sei aggiornato/)).toBeNull();
@@ -1009,7 +1078,7 @@ describe('SettingsModal — version status display', () => {
       />,
     );
 
-    expect(screen.getByText(/Verifica integrità fallita/i)).toBeTruthy();
+    expect(screen.getAllByText(/Verifica integrità fallita/i)).toHaveLength(2);
   });
 
   it('shows shared async install success state', () => {
@@ -1028,7 +1097,7 @@ describe('SettingsModal — version status display', () => {
       />,
     );
 
-    expect(screen.getByText(/Installer avviato/i)).toBeTruthy();
+    expect(screen.getAllByText(/Installer avviato/i)).toHaveLength(2);
   });
 });
 
@@ -1069,7 +1138,7 @@ describe('SettingsModal — validate environment', () => {
   it('resets validation result when preferredModel changes', async () => {
     const models = [
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast', default_chunk_minutes: 12 },
-      { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', summary: 'New', default_chunk_minutes: 15 },
+      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: 'New', default_chunk_minutes: 15 },
     ];
     const validateFn = vi.fn().mockResolvedValue({
       ok: true,
@@ -1097,7 +1166,7 @@ describe('SettingsModal — validate environment', () => {
     await vi.waitFor(() => expect(screen.getByText('Ambiente OK')).toBeTruthy());
 
     // Change preferredModel
-    rerender(<SettingsModal {...props} models={{ ...props.models, preferredModel: 'gemini-3.5-flash' }} />);
+    rerender(<SettingsModal {...props} models={{ ...props.models, preferredModel: 'gemini-3.6-flash' }} />);
 
     // Expect 'Ambiente OK' to be cleared (since validationResult is set to null)
     expect(screen.queryByText('Ambiente OK')).toBeNull();
@@ -1174,7 +1243,7 @@ describe('SettingsModal — validate environment', () => {
   it('keeps save and cancel in diagnostics when general settings have pending changes', async () => {
     const props = makeProps();
     const { rerender } = render(<SettingsModal {...props} />);
-    rerender(<SettingsModal {...props} models={{ ...props.models, preferredModel: 'gemini-3.5-flash' }} />);
+    rerender(<SettingsModal {...props} models={{ ...props.models, preferredModel: 'gemini-3.6-flash' }} />);
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' }));
     });

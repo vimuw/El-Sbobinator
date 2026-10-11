@@ -94,8 +94,10 @@ def build_close_handler(
     api: Any,
     window: webview.Window,
     stop_event: threading.Event | None = None,
+    *,
+    require_editor_save: bool = True,
 ) -> Callable[[], bool | None]:
-    """Confirm ongoing work and flush the editor before destroying the window."""
+    """Flush the editor on close; runtime recovery has no editor to save."""
     close_ready = threading.Event()
     close_lock = threading.Lock()
     close_pending = False
@@ -147,7 +149,7 @@ def build_close_handler(
         return False
 
     def _on_closing() -> bool | None:
-        if close_ready.is_set():
+        if not require_editor_save or close_ready.is_set():
             if stop_event is not None:
                 stop_event.set()
             LocalMediaServer.shutdown_all()
@@ -255,6 +257,12 @@ def main():
             maximized=True,
         )
 
+    if window is None:
+        if startup_server is not None:
+            startup_server.close()
+        raise RuntimeError("Impossibile creare la finestra di El Sbobinator.")
+
+    if not webview2_available:
         stop_event = threading.Event()
         _start_webview2_monitor(window, stop_event)
 
@@ -269,7 +277,9 @@ def main():
 
     window.events.shown += _on_shown
 
-    window.events.closing += build_close_handler(api, window, stop_event)
+    window.events.closing += build_close_handler(
+        api, window, stop_event, require_editor_save=webview2_available
+    )
 
     try:
         from webview.dom import _dnd_state

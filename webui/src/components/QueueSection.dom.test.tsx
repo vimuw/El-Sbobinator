@@ -120,7 +120,7 @@ describe('QueueSection', () => {
         {...makeProps({
           pendingFiles: [makeFile({ status: 'processing' })],
           appState: 'processing',
-          preferredModel: 'gemini-3.5-flash',
+          preferredModel: 'gemini-3.6-flash',
           currentModel: 'gemini-2.5-flash',
         })}
       />,

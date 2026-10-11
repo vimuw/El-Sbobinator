@@ -23,7 +23,7 @@ export default defineConfig({
   ],
   webServer: {
     command: 'python ../scripts/run_browser_dev.py --scenario success --port 8000 --vite-port 3000',
-    url: 'http://localhost:3000',
+    url: 'http://localhost:3000/api/bootstrap',
     reuseExistingServer: false,
     timeout: 30000,
   },

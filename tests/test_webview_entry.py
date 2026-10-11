@@ -60,6 +60,54 @@ class WindowlessStartupLoggingTests(unittest.TestCase):
                     handler.close()
 
 
+class StartupWindowTests(unittest.TestCase):
+    def test_missing_window_stops_startup_and_closes_any_startup_server(self):
+        for runtime_available in (True, False):
+            with self.subTest(runtime_available=runtime_available):
+                api = MagicMock()
+                server = MagicMock()
+                monitor = MagicMock()
+                with (
+                    patch.multiple(
+                        "el_sbobinator.webview_entry",
+                        prepare_startup=MagicMock(),
+                        configure_logging=MagicMock(),
+                        get_dist_path=MagicMock(return_value="dist"),
+                        has_webview2_runtime=MagicMock(return_value=runtime_available),
+                        _clear_webview2_cache=MagicMock(),
+                        _get_window_position=MagicMock(return_value={}),
+                        _boot_bg_color=MagicMock(return_value="#191919"),
+                        build_missing_webview2_html=MagicMock(return_value="recovery"),
+                        DesktopStartupServer=MagicMock(return_value=server),
+                        _start_webview2_monitor=monitor,
+                    ),
+                    patch(
+                        "el_sbobinator.app_webview.ElSbobinatorApi", return_value=api
+                    ),
+                    patch("sys.stdout", io.StringIO()),
+                    patch("sys.stderr", io.StringIO()),
+                    patch("sys.__stdout__", io.StringIO()),
+                    patch("sys.__stderr__", io.StringIO()),
+                    patch("el_sbobinator.webview_entry.os.makedirs"),
+                    patch(
+                        "el_sbobinator.webview_entry.webview.create_window",
+                        return_value=None,
+                    ),
+                    patch("el_sbobinator.webview_entry.webview.start") as start,
+                ):
+                    with self.assertRaisesRegex(
+                        RuntimeError, "Impossibile creare la finestra"
+                    ):
+                        main()
+                api.set_window.assert_not_called()
+                start.assert_not_called()
+                monitor.assert_not_called()
+                if runtime_available:
+                    server.close.assert_called_once()
+                else:
+                    server.close.assert_not_called()
+
+
 class ConsoleTeeTests(unittest.TestCase):
     def test_console_tee_writes_to_original(self):
         original = io.StringIO()
@@ -121,6 +169,27 @@ class ConsoleTeeTests(unittest.TestCase):
 
 
 class CloseHandlerTests(unittest.TestCase):
+    def test_runtime_recovery_closes_without_javascript_and_stops_monitor(self):
+        api = MagicMock()
+        window = MagicMock()
+        window.evaluate_js.side_effect = RuntimeError("MSHTML cannot run async JS")
+        stop_event = MagicMock()
+        handler = build_close_handler(
+            api, window, stop_event, require_editor_save=False
+        )
+        with (
+            patch("el_sbobinator.webview_entry.threading.Thread") as worker,
+            patch(
+                "el_sbobinator.webview_entry.LocalMediaServer.shutdown_all"
+            ) as shutdown,
+        ):
+            self.assertIsNone(handler())
+            stop_event.set.assert_called_once()
+            shutdown.assert_called_once()
+            worker.assert_not_called()
+            window.evaluate_js.assert_not_called()
+            api.is_busy.assert_not_called()
+
     def test_native_close_waits_for_editor_save_without_blocking_ui(self):
         api = MagicMock()
         api.is_busy.return_value = False

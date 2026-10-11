@@ -128,6 +128,9 @@ export function AddSessionsToFolderModal({
             </div>
           ) : (
             <>
+              <p className="text-sm shrink-0" style={{ color: 'var(--text-secondary)' }}>
+                Seleziona le lezioni dell’archivio da aggiungere a questa raccolta.
+              </p>
               {/* Search Bar */}
               <div className="search-pill-wrap shrink-0">
                 <Search className="search-pill-icon w-3.5 h-3.5" />

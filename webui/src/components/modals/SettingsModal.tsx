@@ -672,6 +672,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         hasChecked={hasChecked}
                         checkFailed={checkFailed}
                         updateInstallState={updateInstallState}
+                        onInstallUpdate={onInstallUpdate}
                       />
                     </div>
                   )}
