@@ -11,5 +11,5 @@ keyring==25.7.0
 pywebview==6.2.1
 plyer==2.1.0
 nh3==0.3.7
-pyinstaller==6.19.0
+pyinstaller==6.22.3
 tzdata==2026.4; sys_platform == 'win32'
