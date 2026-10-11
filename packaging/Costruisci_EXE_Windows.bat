@@ -23,7 +23,7 @@ if errorlevel 1 (
 set "PYTHON_CMD="
 where py >nul 2>nul
 if not errorlevel 1 (
-    set "PYTHON_CMD=py -3"
+    set "PYTHON_CMD=py -3.11"
 ) else (
     where python >nul 2>nul
     if not errorlevel 1 (

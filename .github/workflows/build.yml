@@ -7,6 +7,8 @@ on:
     tags:
       - 'v*' # Trigger build only when a new version tag (e.g. v1.0.0) is pushed
   pull_request:
+  schedule:
+    - cron: "20 6 * * *"
   workflow_dispatch:
     inputs:
       release_tag:
@@ -38,13 +40,14 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
           cache-dependency-path: |
-            requirements/requirements.txt
-            requirements/requirements-dev.txt
+            uv.lock
+            pyproject.toml
+            requirements/bootstrap.txt
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -99,19 +102,31 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
           cache-dependency-path: |
-            requirements/requirements.txt
-            requirements/requirements-dev.txt
+            uv.lock
+            pyproject.toml
+            requirements/bootstrap.txt
 
       - name: Install Python dependencies
         run: python scripts/build_release.py deps --dev --skip-npm-install
 
       - name: Run Checks
         run: python scripts/build_release.py check --skip-webui
+
+      - name: Audit Windows dependencies
+        run: python scripts/build_release.py audit --skip-webui
+
+      - name: Upload Windows dependency audit
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dependency-audit-windows
+          path: build/dependency-audit/
+          if-no-files-found: ignore
 
   audit:
     name: Security Audit
@@ -121,7 +136,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -131,18 +146,58 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Install pip-audit
-        run: pip install pip-audit
+      - name: Install the same locked environment as local and packaging
+        run: python scripts/build_release.py deps --dev --skip-npm-install
 
-      - name: Audit Python dependencies
-        run: pip-audit -r requirements/requirements.txt
+      - name: Audit all installed Python packages and the complete npm lock
+        run: python scripts/build_release.py audit
 
-      - name: Audit npm dependencies
-        working-directory: webui
-        run: npm audit --audit-level=high --omit=dev --package-lock-only
+      - name: Upload dependency audit
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dependency-audit-linux
+          path: build/dependency-audit/
+          if-no-files-found: ignore
+
+  checks-macos:
+    name: Lint and Test (macOS)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Install the same locked environment
+        run: python scripts/build_release.py deps --dev --skip-npm-install
+      - name: Run Checks
+        run: python scripts/build_release.py check --skip-webui
+      - name: Audit macOS dependencies
+        run: python scripts/build_release.py audit --skip-webui
+      - name: Upload macOS dependency audit
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dependency-audit-macos
+          path: build/dependency-audit/
+          if-no-files-found: ignore
+
+  dependency-gate:
+    name: Dependency gate
+    if: always()
+    needs: [checks, checks-windows, checks-macos, audit]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every platform and audit to pass
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python -c "import json,os; results=json.loads(os.environ['RESULTS']); assert all(job['result']=='success' for job in results.values()), results"
 
   build:
-    needs: [checks, checks-windows, audit]
+    needs: [dependency-gate]
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
@@ -160,13 +215,14 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
           cache-dependency-path: |
-            requirements/requirements.txt
-            requirements/requirements-dev.txt
+            uv.lock
+            pyproject.toml
+            requirements/bootstrap.txt
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -200,6 +256,9 @@ jobs:
           echo "Version set to ${APP_VERSION}"
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
+
+      - name: Verify installed Python versions before packaging
+        run: python scripts/build_release.py verify-deps --webui
 
       - name: Install Inno Setup (Windows)
         if: runner.os == 'Windows'
@@ -275,7 +334,7 @@ jobs:
           RELEASE_TAG: ${{ (startsWith(github.ref, 'refs/tags/') && github.ref_name) || inputs.release_tag }}
 
       - name: Publish Release to GitHub
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ (startsWith(github.ref, 'refs/tags/') && github.ref_name) || inputs.release_tag }}
           files: release_assets/*

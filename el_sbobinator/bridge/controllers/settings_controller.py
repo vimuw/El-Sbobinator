@@ -29,6 +29,7 @@ from el_sbobinator.services.config_service import (
     save_session_root_to_config,
 )
 from el_sbobinator.utils.logging_utils import redact_secrets
+from el_sbobinator.utils.webview_dialogs import file_dialog_type
 
 if TYPE_CHECKING:
     from typing import Any
@@ -136,7 +137,9 @@ class SettingsControllerMixin:
         try:
             if self._window is None:
                 return bridge_error("Finestra non disponibile")
-            result = self._window.create_file_dialog(webview.FileDialog.FOLDER)
+            result = self._window.create_file_dialog(
+                file_dialog_type(webview, "FOLDER")
+            )
             if not result:
                 return bridge_error("Operazione annullata.", cancelled=True)
             path = str(result[0]) if isinstance(result, list | tuple) else str(result)

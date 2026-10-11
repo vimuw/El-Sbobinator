@@ -12,6 +12,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from el_sbobinator.utils.source_bootstrap import prepare_source_environment
+
+prepare_source_environment(ROOT, Path(__file__).resolve())
+
 from el_sbobinator.utils.logging_utils import prepare_startup
 
 prepare_startup()

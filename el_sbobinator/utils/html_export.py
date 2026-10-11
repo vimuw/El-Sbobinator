@@ -105,7 +105,7 @@ def sanitize_html_basic(html: str, *, strip_document_head: bool = False) -> str:
 
     if _nh3 is None:  # pragma: no cover
         raise ImportError(
-            "nh3 is required for HTML sanitization. Install it with: pip install nh3"
+            "nh3 is required for HTML sanitization. Prepare the locked environment with scripts/build_release.py deps"
         )
     return _nh3.clean(
         html or "",

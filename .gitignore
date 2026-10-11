@@ -53,6 +53,7 @@ pyright_full.txt
 
 # Virtual envs
 .venv/
+.dependency-tools/
 venv/
 env/
 .env

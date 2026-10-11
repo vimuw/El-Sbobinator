@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.."
 
 echo "Creazione/attivazione ambiente virtuale (.venv)..."
 if [ ! -f ".venv/bin/python" ]; then
-  python3 -m venv .venv
+  python3.11 -m venv .venv
 fi
 VENV_PYTHON="$(pwd)/.venv/bin/python"
 if [ ! -x "$VENV_PYTHON" ]; then

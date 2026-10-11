@@ -142,7 +142,7 @@ export function useUpdateInstaller({
           error: message,
         });
         upsertUpdateInstallNotification(`Aggiornamento non riuscito: ${message}`, 'warning', 'open_github');
-        throw new Error(message);
+        throw new Error(message, { cause: error });
       }
       if (!result?.ok) {
         const message = formatUpdateInstallError(result?.error);

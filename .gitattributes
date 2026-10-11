@@ -1,0 +1,7 @@
+# Dependency fingerprints and executable shell scripts must not vary by checkout OS.
+uv.lock text eol=lf
+pyproject.toml text eol=lf
+requirements/*.txt text eol=lf
+webui/package-lock.json text eol=lf
+*.command text eol=lf
+*.sh text eol=lf

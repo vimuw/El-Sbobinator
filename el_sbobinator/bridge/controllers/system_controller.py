@@ -20,6 +20,7 @@ from el_sbobinator.core.model_registry import DEFAULT_MODEL
 from el_sbobinator.services import config_service
 from el_sbobinator.utils import file_ops
 from el_sbobinator.utils.logging_utils import redact_secrets
+from el_sbobinator.utils.webview_dialogs import file_dialog_type
 
 if TYPE_CHECKING:
     import logging
@@ -164,7 +165,7 @@ class SystemControllerMixin:
             if not window:
                 return bridge_error("Esportazione disponibile nell'app desktop.")
             selected = window.create_file_dialog(
-                webview.FileDialog.SAVE,
+                file_dialog_type(webview, "SAVE"),
                 save_filename="El-Sbobinator-diagnostica.zip",
                 file_types=("Diagnostica (*.zip)",),
             )
