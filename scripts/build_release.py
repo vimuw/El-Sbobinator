@@ -153,7 +153,7 @@ def install_node_dependencies(skip_npm_install: bool) -> None:
 
 
 def run_pyright() -> None:
-    run([sys.executable, "-m", "pyright"])
+    run([sys.executable, "-m", "pyright", "--pythonpath", sys.executable])
 
 
 def run_python_checks(with_coverage: bool = False) -> None:
