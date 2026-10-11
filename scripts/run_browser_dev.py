@@ -66,6 +66,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    # Playwright/terminal may invoke global Python. Always use the locked project env.
+    if Path(sys.prefix).resolve() != (ROOT / ".venv").resolve():
+        python = (
+            ROOT / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        )
+        if not python.is_file():
+            raise RuntimeError("Prepara .venv con scripts/build_release.py deps.")
+        raise SystemExit(
+            subprocess.call(
+                [str(python), str(Path(__file__).resolve()), *sys.argv[1:]], cwd=ROOT
+            )
+        )
     parser = build_parser()
     args = parser.parse_args()
 

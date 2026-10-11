@@ -1,6 +1,7 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'path';
 import { defineConfig } from 'vite';
 
@@ -12,7 +13,12 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), {
     name: 'desktop-build-version',
     generateBundle() {
-      this.emitFile({ type: 'asset', fileName: 'desktop-build.json', source: JSON.stringify({ version }) });
+      const hash = (url: URL) => createHash('sha256').update(readFileSync(url)).digest('hex');
+      const dependencies = {
+        python_lock_sha256: hash(new URL('../uv.lock', import.meta.url)),
+        npm_lock_sha256: hash(new URL('./package-lock.json', import.meta.url)),
+      };
+      this.emitFile({ type: 'asset', fileName: 'desktop-build.json', source: JSON.stringify({ version, dependencies }) });
     },
   }],
   define: {

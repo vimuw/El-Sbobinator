@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 
 from el_sbobinator.services.config_service import CONFIG_FILE
 
@@ -80,7 +81,18 @@ def _path_under_root(path: str, root: str) -> bool:
         return True
     if not nc_root.endswith(os.sep):
         nc_root += os.sep
-    return nc_path.startswith(nc_root)
+    if nc_path.startswith(nc_root):
+        return True
+    # POSIX normcase preserves case even on a case-insensitive macOS volume.
+    # Compare existing directory identities rather than merging distinct names.
+    candidate = Path(nc_path)
+    for ancestor in (candidate, *candidate.parents):
+        try:
+            if os.path.samefile(ancestor, root):
+                return True
+        except OSError:
+            continue
+    return False
 
 
 def migrate_session_roots(old_root: str, new_root: str) -> list[dict]:

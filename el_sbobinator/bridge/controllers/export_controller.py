@@ -16,6 +16,7 @@ from el_sbobinator.services.sharing_service import (
     unpack_and_import_package,
 )
 from el_sbobinator.utils.logging_utils import redact_secrets
+from el_sbobinator.utils.webview_dialogs import file_dialog_type
 
 if TYPE_CHECKING:
 
@@ -53,7 +54,7 @@ class ExportControllerMixin:
 
                 try:
                     file_paths = self._window.create_file_dialog(
-                        webview.FileDialog.SAVE,
+                        file_dialog_type(webview, "SAVE"),
                         save_filename=default_name,
                         file_types=(
                             "Pacchetto Sbobina (*.sbobina)",
@@ -62,7 +63,7 @@ class ExportControllerMixin:
                     )
                 except Exception:
                     file_paths = self._window.create_file_dialog(
-                        webview.FileDialog.SAVE,
+                        file_dialog_type(webview, "SAVE"),
                         save_filename=default_name,
                     )
                 if not file_paths:
@@ -91,7 +92,7 @@ class ExportControllerMixin:
             if not package_path and self._window:
                 try:
                     file_paths = self._window.create_file_dialog(
-                        webview.FileDialog.OPEN,
+                        file_dialog_type(webview, "OPEN"),
                         allow_multiple=False,
                         file_types=(
                             "Pacchetto Sbobina (*.sbobina;*.zip)",
@@ -100,7 +101,7 @@ class ExportControllerMixin:
                     )
                 except Exception:
                     file_paths = self._window.create_file_dialog(
-                        webview.FileDialog.OPEN,
+                        file_dialog_type(webview, "OPEN"),
                         allow_multiple=False,
                     )
                 if not file_paths:

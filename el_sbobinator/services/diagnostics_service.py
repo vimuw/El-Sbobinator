@@ -190,6 +190,8 @@ def collect_files(
         "os_version": platform.version(),
         "architecture": platform.machine(),
         "python": sys.version.split()[0],
+        "python_executable": sys.executable,
+        "python_prefix": sys.prefix,
         "frozen": bool(getattr(sys, "frozen", False)),
         "dependencies": dependencies,
         "settings": {
@@ -199,6 +201,17 @@ def collect_files(
         "collection": "local; no remote API validation performed",
         "archive_exists": Path(root).is_dir(),
     }
+    if not getattr(sys, "frozen", False):
+        from el_sbobinator.utils.dependency_versions import inspect_dependencies
+
+        try:
+            status = inspect_dependencies(Path(__file__).resolve().parents[2])
+            overview["direct_dependencies"] = {
+                "installed": status.installed,
+                "issues": status.issues,
+            }
+        except (OSError, RuntimeError) as exc:
+            overview["direct_dependencies"] = {"issues": [str(exc)]}
     try:
         overview["disk_free_bytes"] = shutil.disk_usage(
             root if Path(root).exists() else get_config_dir()

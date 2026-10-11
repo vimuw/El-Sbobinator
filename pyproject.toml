@@ -1,3 +1,44 @@
+[project]
+name = "el-sbobinator"
+version = "0.0.0"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "beautifulsoup4==4.15.0",
+  "certifi==2026.7.22",
+  "google-genai==2.29.0",
+  "imageio-ffmpeg==0.6.0",
+  "markdown==3.11",
+  "keyring==25.7.0",
+  "packaging==26.3",
+  "pywebview==6.2.1",
+  "plyer==2.1.0",
+  "nh3==0.3.7",
+  "tzdata==2026.5; sys_platform == 'win32'",
+]
+
+[dependency-groups]
+build = ["pyinstaller==6.22.3", "setuptools==84.0.0"]
+dev = [
+  "ruff==0.17.0",
+  "pre-commit==4.6.2",
+  "pyright==1.1.414",
+  "pytest==9.1.1",
+  "pytest-cov==7.1.0",
+  "pytest-xdist==3.8.0",
+  "pip-audit==2.10.1",
+  "pip==26.2.1",
+  "fastapi>=0.143.0",
+  "uvicorn[standard]>=0.54.0",
+  "python-multipart>=0.0.32",
+  "httpx>=0.28.1",
+  "pydantic>=2.14.1",
+  "Pillow>=12.0.0",
+]
+
+[tool.uv]
+package = false
+default-groups = ["build", "dev"]
+
 [tool.ruff]
 target-version = "py311"
 extend-exclude = [

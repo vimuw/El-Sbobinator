@@ -20,6 +20,7 @@ from el_sbobinator.core.shared import _atomic_write_json, _load_json
 from el_sbobinator.pipeline.pipeline_adapter import _drain_dnd_paths
 from el_sbobinator.services.archive_service import find_candidate_audio_path
 from el_sbobinator.utils.logging_utils import redact_secrets
+from el_sbobinator.utils.webview_dialogs import file_dialog_type
 
 if TYPE_CHECKING:
     from el_sbobinator.pipeline.pipeline_adapter import PipelineAdapter
@@ -219,7 +220,7 @@ class MediaControllerMixin:
             return []
         try:
             file_paths = self._window.create_file_dialog(
-                webview.FileDialog.OPEN,
+                file_dialog_type(webview, "OPEN"),
                 allow_multiple=True,
                 file_types=(
                     "Audio (*.mp3;*.m4a;*.wav;*.ogg;*.flac;*.aac;*.opus)",
@@ -229,7 +230,7 @@ class MediaControllerMixin:
             )
         except Exception:
             file_paths = self._window.create_file_dialog(
-                webview.FileDialog.OPEN,
+                file_dialog_type(webview, "OPEN"),
                 allow_multiple=True,
             )
         if not file_paths:
@@ -252,7 +253,7 @@ class MediaControllerMixin:
             return None
         try:
             file_paths = self._window.create_file_dialog(
-                webview.FileDialog.OPEN,
+                file_dialog_type(webview, "OPEN"),
                 allow_multiple=False,
                 file_types=(
                     "Audio (*.mp3;*.m4a;*.wav;*.ogg;*.flac;*.aac;*.opus)",
@@ -262,7 +263,7 @@ class MediaControllerMixin:
             )
         except Exception:
             file_paths = self._window.create_file_dialog(
-                webview.FileDialog.OPEN,
+                file_dialog_type(webview, "OPEN"),
                 allow_multiple=False,
             )
         if not file_paths:

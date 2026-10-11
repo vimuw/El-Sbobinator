@@ -16,6 +16,24 @@ _SPEC.loader.exec_module(build_release)
 
 
 class BuildReleaseTests(unittest.TestCase):
+    def setUp(self):
+        verification = patch.object(
+            build_release,
+            "verify_python_dependencies",
+            return_value={"pywebview": "6.2.1"},
+        )
+        verification.start()
+        self.addCleanup(verification.stop)
+        hashes = patch(
+            "el_sbobinator.utils.dependency_versions.lock_hashes",
+            return_value={"python_lock_sha256": "a" * 64, "npm_lock_sha256": "b" * 64},
+        )
+        hashes.start()
+        self.addCleanup(hashes.stop)
+        node = patch.object(build_release, "verify_node_dependencies")
+        node.start()
+        self.addCleanup(node.stop)
+
     def test_pyright_checks_the_same_interpreter_used_by_the_build_helper(self):
         with (
             patch.object(build_release.sys, "executable", "verified-venv/python"),
@@ -32,17 +50,20 @@ class BuildReleaseTests(unittest.TestCase):
             ]
         )
 
-    def test_dependency_installation_uses_the_dependabot_runtime_manifest(self):
-        manifest = _MODULE_PATH.parents[1] / "requirements" / "requirements.txt"
-        # A legacy lock left by an older checkout must not override this manifest.
+    def test_dependency_sync_is_exact_and_cannot_rewrite_the_committed_lock(self):
         with (
-            patch.object(build_release.Path, "exists", return_value=True),
+            patch.object(build_release, "ensure_uv", return_value=Path("uv")),
             patch.object(build_release, "run") as run,
         ):
             build_release.install_python_dependencies()
+        command = run.call_args.args[0]
+        self.assertIn("sync", command)
+        self.assertIn("--locked", command)
+        self.assertIn("--all-groups", command)
+        self.assertNotIn("--inexact", command)
         self.assertEqual(
-            run.call_args.args[0],
-            [build_release.sys.executable, "-m", "pip", "install", "-r", str(manifest)],
+            run.call_args.kwargs["env"]["UV_PROJECT_ENVIRONMENT"],
+            str(build_release.ROOT / ".venv"),
         )
 
     def test_command_build_refreshes_manifest_before_packaging(self):
@@ -174,6 +195,8 @@ class BuildReleaseTests(unittest.TestCase):
                 )
                 self.assertEqual(info["version"], "2.1.0")
                 self.assertEqual(info["commit"], "abc123")
+                self.assertEqual(info["python_dependencies"], {"pywebview": "6.2.1"})
+                self.assertEqual(len(info["dependencies"]["python_lock_sha256"]), 64)
                 self.assertTrue(
                     any(
                         "diagnostic_build.json" in item
@@ -283,6 +306,62 @@ class BuildReleaseTests(unittest.TestCase):
                 self.skipTest(f"Symlinks unavailable: {exc}")
             with patch.object(build_release, "ROOT", root):
                 build_release.verify_macos_build_metadata(artifact)
+
+
+class DependencyGateTests(unittest.TestCase):
+    def test_outdated_environment_blocks_packaging_even_with_skip_checks(self):
+        args = build_release.build_parser().parse_args(
+            ["build", "--target", "windows", "--skip-checks"]
+        )
+        with (
+            patch.object(build_release, "print_windows_webview2_notice"),
+            patch.object(
+                build_release,
+                "verify_python_dependencies",
+                side_effect=RuntimeError("outdated"),
+            ),
+            patch.object(build_release, "build_webui") as frontend,
+            patch.object(build_release, "run") as packaging,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "outdated"):
+                build_release.command_build(args)
+        frontend.assert_not_called()
+        packaging.assert_not_called()
+
+    def test_local_update_failure_stops_before_frontend_and_success_message(self):
+        args = argparse.Namespace(dev=False)
+        with (
+            patch.object(
+                build_release.sys, "prefix", str(build_release.ROOT / ".venv")
+            ),
+            patch.object(build_release, "ensure_supported_node_version"),
+            patch.object(build_release, "install_python_dependencies"),
+            patch.object(
+                build_release,
+                "verify_python_dependencies",
+                side_effect=RuntimeError("conflict"),
+            ),
+            patch.object(build_release, "build_webui") as frontend,
+            patch("builtins.print") as output,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "conflict"):
+                build_release.command_update_local(args)
+        frontend.assert_not_called()
+        output.assert_not_called()
+
+    def test_commands_relaunch_in_project_environment_before_checks(self):
+        with (
+            patch.object(
+                build_release.sys, "prefix", str(build_release.ROOT / "global")
+            ),
+            patch.object(build_release.Path, "is_file", return_value=True),
+            patch.object(build_release, "run") as run,
+            patch.object(build_release, "command_check") as checks,
+        ):
+            build_release.main(["check", "--skip-webui"])
+        self.assertEqual(run.call_args.args[0][0], str(build_release.project_python()))
+        self.assertIn("--skip-webui", run.call_args.args[0])
+        checks.assert_not_called()
 
 
 class Webview2BuildNoticeTests(unittest.TestCase):

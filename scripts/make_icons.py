@@ -16,11 +16,10 @@ from pathlib import Path
 
 try:
     from PIL import Image  # type: ignore[import-untyped]
-except ImportError:
-    import subprocess
-
-    subprocess.run([sys.executable, "-m", "pip", "install", "Pillow"], check=True)
-    from PIL import Image  # type: ignore[import-untyped]
+except ImportError as exc:
+    raise SystemExit(
+        "Pillow manca: prepara l'ambiente con scripts/build_release.py deps."
+    ) from exc
 
 
 ROOT = Path(__file__).resolve().parent.parent

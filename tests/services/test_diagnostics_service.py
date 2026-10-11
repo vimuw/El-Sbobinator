@@ -84,6 +84,25 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertIn("OLDER_FAILURE", files["report.md"])
         self.assertNotIn("session_summary.json", files)
 
+    def test_source_report_identifies_interpreter_and_version_mismatch(self):
+        from el_sbobinator.utils.dependency_versions import DependencyStatus
+
+        with (
+            patch.object(ds.sys, "executable", str(self.base / ".venv" / "python.exe")),
+            patch(
+                "el_sbobinator.utils.dependency_versions.inspect_dependencies",
+                return_value=DependencyStatus(
+                    installed={"pywebview": "5.4"},
+                    issues=["pywebview: installato 5.4, richiesto 6.2.1"],
+                ),
+            ),
+        ):
+            files = ds.collect_files(str(self.root))
+        info = json.loads(files["environment.json"])
+        self.assertIn(".venv", info["python_executable"])
+        self.assertEqual(info["direct_dependencies"]["installed"]["pywebview"], "5.4")
+        self.assertIn("richiesto 6.2.1", info["direct_dependencies"]["issues"][0])
+
     def test_session_labels_prefer_title_then_filename_without_extension(self):
         metadata = self.session / "session.json"
         data = json.loads(metadata.read_text(encoding="utf-8"))

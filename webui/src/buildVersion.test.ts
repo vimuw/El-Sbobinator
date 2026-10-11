@@ -23,8 +23,15 @@ describe('desktop build version', () => {
       || typeof plugin.generateBundle !== 'function') throw new Error('Desktop manifest plugin missing');
     const emitFile = vi.fn();
     Reflect.apply(plugin.generateBundle, { emitFile }, [{}, {}, false]);
-    expect(emitFile).toHaveBeenCalledWith({
-      type: 'asset', fileName: 'desktop-build.json', source: JSON.stringify({ version: expected }),
+    expect(emitFile).toHaveBeenCalledOnce();
+    const asset = emitFile.mock.calls[0][0];
+    expect(asset.type).toBe('asset');
+    expect(asset.fileName).toBe('desktop-build.json');
+    const manifest = JSON.parse(asset.source);
+    expect(manifest.version).toBe(expected);
+    expect(manifest.dependencies).toEqual({
+      python_lock_sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      npm_lock_sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
     });
   });
 });

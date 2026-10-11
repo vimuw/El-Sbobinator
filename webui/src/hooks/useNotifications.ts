@@ -92,7 +92,7 @@ export function sanitizePersistedNotifications(list: unknown, currentAppVersion:
 }
 
 function loadNotificationsBootstrap(currentAppVersion?: string): NotificationsBootstrap {
-  let storedList: unknown = [];
+  let storedList: unknown;
   try {
     const stored = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
     storedList = stored ? JSON.parse(stored) : [];
@@ -317,7 +317,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
       if (!n.actionType) return { ...n } as NotificationMessage;
 
       let onAction: () => Promise<void>;
-      let label = '';
+      let label: string;
       let loadingLabel = '';
       let errorSuffix = '';
       const actionData = n.actionData as Record<string, unknown> | undefined;

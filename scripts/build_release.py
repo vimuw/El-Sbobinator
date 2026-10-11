@@ -34,8 +34,8 @@ WEBVIEW_ENTRYPOINT = LAUNCHERS_DIR / "El_Sbobinator_WebUI.pyw"
 PROFILE_IMPORTS_SCRIPT = TOOLS_DIR / "profile_imports.py"
 APP_NAME = "El Sbobinator"
 REQUIRED_NODE_MAJOR = 24
-BASE_REQUIREMENTS = REQUIREMENTS_DIR / "requirements.txt"
-DEV_REQUIREMENTS = REQUIREMENTS_DIR / "requirements-dev.txt"
+BOOTSTRAP_REQUIREMENTS = REQUIREMENTS_DIR / "bootstrap.txt"
+PYTHON_LOCK = ROOT / "uv.lock"
 PYTHON_CHECK_TARGETS = [
     "el_sbobinator",
     "tests",
@@ -132,24 +132,86 @@ def print_windows_webview2_notice(target: str, ui: str) -> None:
 
 
 def install_python_dependencies(include_dev: bool = False) -> None:
-    run([sys.executable, "-m", "pip", "install", "--upgrade", "pip"])
-    run([sys.executable, "-m", "pip", "install", "-r", str(BASE_REQUIREMENTS)])
-    if include_dev and DEV_REQUIREMENTS.exists():
-        run([sys.executable, "-m", "pip", "install", "-r", str(DEV_REQUIREMENTS)])
+    # One exact profile for local development, checks and release packaging.
+    # --locked rejects stale manifests; sync removes obsolete transitive packages.
+    uv = ensure_uv()
+    run(
+        [str(uv), "sync", "--locked", "--all-groups", "--python", sys.executable],
+        env={**os.environ, "UV_PROJECT_ENVIRONMENT": str(ROOT / ".venv")},
+    )
 
 
-def install_packaging_dependencies(ui: str) -> None:
-    packages = ["pyinstaller"]
-    if ui == "webui":
-        packages.extend(["pywebview", "plyer"])
-    run([sys.executable, "-m", "pip", "install", *packages])
+def project_python() -> Path:
+    return ROOT / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+
+
+def ensure_uv() -> Path:
+    if sys.version_info[:2] != (3, 11):
+        raise RuntimeError("Richiesto Python 3.11, come in CI.")
+    tools = ROOT / ".dependency-tools"
+    python = tools / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    uv = tools / ("Scripts/uv.exe" if os.name == "nt" else "bin/uv")
+    pins = dict(
+        line.strip().split("==")
+        for line in BOOTSTRAP_REQUIREMENTS.read_text().splitlines()
+        if line.strip() and not line.startswith("#")
+    )
+    ready = False
+    if python.is_file() and uv.is_file():
+        probe = subprocess.run(
+            [
+                str(python),
+                "-c",
+                "import importlib.metadata,json; print(json.dumps({n:importlib.metadata.version(n) for n in "
+                + repr(list(pins))
+                + "}))",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        ready = probe.returncode == 0 and json.loads(probe.stdout) == pins
+    if not ready:
+        if not python.is_file():
+            run([sys.executable, "-m", "venv", str(tools)])
+        run([str(python), "-m", "pip", "install", "-r", str(BOOTSTRAP_REQUIREMENTS)])
+    return uv
+
+
+def verify_python_dependencies() -> dict[str, str]:
+    uv = ensure_uv()
+    run([str(uv), "lock", "--check"])
+    checked = subprocess.run(
+        [
+            str(project_python()),
+            "-m",
+            "el_sbobinator.utils.dependency_versions",
+            str(ROOT),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    installed = json.loads(checked.stdout)
+    run([str(uv), "pip", "check", "--python", str(project_python())])
+    print(
+        f"[OK] {len(installed)} dipendenze Python allineate a uv.lock ({project_python()})"
+    )
+    return installed
+
+
+def verify_node_dependencies() -> None:
+    ensure_supported_node_version()
+    run(["node", str(ROOT / "scripts" / "verify_node_dependencies.mjs")])
+    run(["node", str(ROOT / "scripts" / "check_node_imports.mjs")])
 
 
 def install_node_dependencies(skip_npm_install: bool) -> None:
     if skip_npm_install:
         return
     ensure_supported_node_version()
-    run(["npm", "install", "--no-audit", "--no-fund"], cwd=WEBUI_DIR)
+    run(["npm", "ci", "--no-audit", "--no-fund"], cwd=WEBUI_DIR)
 
 
 def run_pyright() -> None:
@@ -157,6 +219,8 @@ def run_pyright() -> None:
 
 
 def run_python_checks(with_coverage: bool = False) -> None:
+    run([sys.executable, str(ROOT / "scripts" / "check_dependency_policy.py")])
+    run([sys.executable, "-m", "pre_commit", "validate-config"])
     existing_targets = [
         str(ROOT / target)
         for target in PYTHON_CHECK_TARGETS
@@ -189,6 +253,7 @@ def run_webui_checks(
     with_browser_e2e: bool = False,
 ) -> None:
     install_node_dependencies(skip_npm_install=skip_npm_install)
+    verify_node_dependencies()
     run(["npm", "run", "lint"], cwd=WEBUI_DIR)
     run(["npm", "run", "typecheck"], cwd=WEBUI_DIR)
     if with_coverage:
@@ -201,6 +266,7 @@ def run_webui_checks(
 
 def build_webui(skip_npm_install: bool, version: str) -> None:
     install_node_dependencies(skip_npm_install=skip_npm_install)
+    verify_node_dependencies()
     run(
         ["npm", "run", "build"],
         cwd=WEBUI_DIR,
@@ -401,7 +467,7 @@ def run_create_dmg(version: str) -> None:
 
 def command_deps(args: argparse.Namespace) -> None:
     install_python_dependencies(include_dev=bool(args.dev))
-    install_packaging_dependencies(args.ui)
+    verify_python_dependencies()
     if args.ui == "webui":
         install_node_dependencies(skip_npm_install=bool(args.skip_npm_install))
 
@@ -409,6 +475,7 @@ def command_deps(args: argparse.Namespace) -> None:
 def command_check(args: argparse.Namespace) -> None:
     with_coverage = bool(args.with_coverage)
     if not args.skip_python:
+        verify_python_dependencies()
         run_python_checks(with_coverage=with_coverage)
     if not args.skip_webui:
         run_webui_checks(
@@ -425,7 +492,13 @@ def resolve_build_version(version: str) -> str:
     return version.lstrip("v")
 
 
-def write_build_metadata(version: str) -> None:
+def write_build_metadata(
+    version: str, dependencies: dict[str, str] | None = None
+) -> None:
+    if dependencies is None:
+        dependencies = verify_python_dependencies()
+    from el_sbobinator.utils.dependency_versions import lock_hashes
+
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -447,6 +520,9 @@ def write_build_metadata(version: str) -> None:
                 "commit": commit,
                 "built_at": datetime.now().astimezone().isoformat(),
                 "mode": "packaged",
+                "python_version": sys.version.split()[0],
+                "python_dependencies": dependencies,
+                "dependencies": lock_hashes(ROOT),
             }
         ),
         encoding="utf-8",
@@ -459,7 +535,8 @@ def command_build(args: argparse.Namespace) -> None:
 
     if args.install_deps:
         install_python_dependencies(include_dev=bool(args.dev_deps))
-        install_packaging_dependencies(args.ui)
+
+    dependencies = verify_python_dependencies()
 
     if not args.skip_checks:
         run_python_checks()
@@ -469,7 +546,7 @@ def command_build(args: argparse.Namespace) -> None:
     if args.ui == "webui":
         build_webui(skip_npm_install=bool(args.skip_npm_install), version=version)
 
-    write_build_metadata(version)
+    write_build_metadata(version, dependencies)
     run(pyinstaller_command(args.target, args.ui), cwd=ROOT)
     if not args.skip_postbuild_smoke:
         run_postbuild_smoke(args.target)
@@ -499,6 +576,93 @@ def command_validate(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
 
+def command_verify_deps(args: argparse.Namespace) -> None:
+    verify_python_dependencies()
+    if args.webui:
+        verify_node_dependencies()
+    if args.built:
+        from el_sbobinator.utils.dependency_versions import verify_frontend_build
+
+        verify_frontend_build(ROOT)
+
+
+def command_update_local(args: argparse.Namespace) -> None:
+    # Fail before modifying the environment if Node cannot build this checkout.
+    ensure_supported_node_version()
+    install_python_dependencies(include_dev=bool(args.dev))
+    verify_python_dependencies()
+    build_webui(skip_npm_install=False, version=resolve_build_version("0.0.0"))
+    verify_python_dependencies()
+    from el_sbobinator.utils.dependency_versions import verify_frontend_build
+
+    verify_frontend_build(ROOT)
+    print("[OK] App locale aggiornata: .venv verificato e interfaccia ricostruita.")
+
+
+def command_audit(args: argparse.Namespace) -> None:
+    verify_python_dependencies()
+    # Audit the environment that CI/build actually use, including tools/transitives.
+    report = ROOT / "build" / "dependency-audit"
+    report.mkdir(parents=True, exist_ok=True)
+    python_audit = subprocess.run(
+        [
+            str(project_python()),
+            "-m",
+            "pip_audit",
+            "--local",
+            "--progress-spinner",
+            "off",
+            "--format",
+            "json",
+            "--output",
+            str(report / "python.json"),
+        ],
+        cwd=ROOT,
+    )
+    npm_result = 0
+    if not args.skip_webui:
+        npm_audit = subprocess.run(
+            [
+                "npm.cmd" if os.name == "nt" else "npm",
+                "audit",
+                "--package-lock-only",
+                "--json",
+            ],
+            cwd=WEBUI_DIR,
+            capture_output=True,
+            text=True,
+        )
+        (report / "npm.json").write_text(npm_audit.stdout, encoding="utf-8")
+        npm_result = npm_audit.returncode
+    if python_audit.returncode or npm_result:
+        raise RuntimeError(f"Audit dipendenze fallito: consulta {report}")
+    print("[OK] Audit completo Python/npm: nessun avviso noto.")
+
+
+def command_lint(args: argparse.Namespace) -> None:
+    files = args.files or PYTHON_CHECK_TARGETS
+    run(
+        [
+            sys.executable,
+            "-m",
+            "ruff",
+            "check",
+            *(["--fix"] if args.fix else []),
+            *files,
+        ]
+    )
+    run(
+        [
+            sys.executable,
+            "-m",
+            "ruff",
+            "format",
+            *([] if args.fix else ["--check"]),
+            *files,
+        ]
+    )
+
+
 def command_smoke(args: argparse.Namespace) -> None:
     if args.target:
         run_postbuild_smoke(args.target)
@@ -515,6 +679,31 @@ def build_parser() -> argparse.ArgumentParser:
     deps_parser.add_argument("--dev", action="store_true")
     deps_parser.add_argument("--skip-npm-install", action="store_true")
     deps_parser.set_defaults(func=command_deps)
+
+    verify_parser = subparsers.add_parser(
+        "verify-deps", help="Verify pinned Python dependencies"
+    )
+    verify_parser.set_defaults(func=command_verify_deps)
+    verify_parser.add_argument("--webui", action="store_true")
+    verify_parser.add_argument("--built", action="store_true")
+
+    audit_parser = subparsers.add_parser(
+        "audit", help="Audit the complete installed graph and npm lock"
+    )
+    audit_parser.add_argument("--skip-webui", action="store_true")
+    audit_parser.set_defaults(func=command_audit)
+    lint_parser = subparsers.add_parser(
+        "lint", help="Run the locked Ruff version, including from hooks"
+    )
+    lint_parser.add_argument("--fix", action="store_true")
+    lint_parser.add_argument("files", nargs="*")
+    lint_parser.set_defaults(func=command_lint)
+
+    update_parser = subparsers.add_parser(
+        "update-local", help="Update the source .venv and frontend"
+    )
+    update_parser.add_argument("--dev", action="store_true")
+    update_parser.set_defaults(func=command_update_local)
 
     check_parser = subparsers.add_parser("check", help="Run lint/tests")
     check_parser.add_argument("--skip-python", action="store_true")
@@ -558,6 +747,14 @@ def main(argv: list[str] | None = None) -> None:
 
     parser = build_parser()
     args = parser.parse_args(effective_argv)
+    if (
+        args.command not in {"deps", "update-local"}
+        and Path(sys.prefix).resolve() != (ROOT / ".venv").resolve()
+    ):
+        if not project_python().is_file():
+            raise RuntimeError("Prepara .venv con scripts/build_release.py deps.")
+        run([str(project_python()), str(Path(__file__).resolve()), *effective_argv])
+        return
     args.func(args)
 
 
