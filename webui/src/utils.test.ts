@@ -369,16 +369,12 @@ describe('model sorting and display names', () => {
     const unordered = [
       'gemini-3.8-flash',
       'gemini-2.5-flash',
-      'gemini-3.5-flash',
-      'gemini-3.7-flash',
       'gemini-3.6-flash',
     ];
     const sorted = sortModelsByVersion(unordered);
     expect(sorted).toEqual([
       'gemini-2.5-flash',
-      'gemini-3.5-flash',
       'gemini-3.6-flash',
-      'gemini-3.7-flash',
       'gemini-3.8-flash',
     ]);
   });
@@ -387,12 +383,12 @@ describe('model sorting and display names', () => {
     const objects = [
       { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-      { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
+      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash' },
     ];
     const sorted = sortModelsByVersion(objects);
     expect(sorted.map(m => m.id)).toEqual([
       'gemini-2.5-flash',
-      'gemini-3.5-flash',
+      'gemini-3.6-flash',
       'gemini-3.8-flash',
     ]);
   });
@@ -400,9 +396,7 @@ describe('model sorting and display names', () => {
   it('defines MODEL_ORDER in expected version order', () => {
     expect(MODEL_ORDER).toEqual([
       'gemini-2.5-flash',
-      'gemini-3.5-flash',
       'gemini-3.6-flash',
-      'gemini-3.7-flash',
       'gemini-3.8-flash',
     ]);
   });

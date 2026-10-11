@@ -101,6 +101,37 @@ class Webview2RecoveryTests(unittest.TestCase):
             "FileNotFoundError", self.record_startup.call_args.kwargs["native_error"]
         )
 
+    def test_native_loader_uses_dotnet_type_with_pywebview_6(self):
+        modules, wf, chromium, _ = self.native_modules(selected=False)
+        core: Any = ModuleType("Microsoft.Web.WebView2.Core")
+        core.CoreWebView2Environment = chromium.CoreWebView2Environment
+        del chromium.CoreWebView2Environment
+        modules["Microsoft.Web.WebView2.Core"] = core
+        with patch.dict(sys.modules, modules):
+            self.assertTrue(_check_webview2_native())
+        core.CoreWebView2Environment.GetAvailableBrowserVersionString.assert_called_once_with(
+            None
+        )
+        self.assertTrue(wf.is_chromium)
+        self.assertIs(wf.Chromium, chromium)
+
+    def test_dotnet_native_loader_failure_keeps_recovery_with_pywebview_6(self):
+        modules, wf, chromium, ie = self.native_modules(
+            selected=True, error=FileNotFoundError("runtime removed")
+        )
+        core: Any = ModuleType("Microsoft.Web.WebView2.Core")
+        core.CoreWebView2Environment = chromium.CoreWebView2Environment
+        del chromium.CoreWebView2Environment
+        modules["Microsoft.Web.WebView2.Core"] = core
+        with patch.dict(sys.modules, modules):
+            self.assertFalse(_check_webview2_native())
+        self.assertFalse(wf.is_chromium)
+        self.assertEqual(wf.renderer, "mshtml")
+        ie._set_ie_mode.assert_called_once()
+        self.assertIn(
+            "FileNotFoundError", self.record_startup.call_args.kwargs["native_error"]
+        )
+
     def test_native_loader_confirms_already_selected_chromium(self):
         modules, wf, chromium, _ = self.native_modules(selected=True)
         with patch.dict(sys.modules, modules):

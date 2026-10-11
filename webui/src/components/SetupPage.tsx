@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'motion/react';
 import { AlertCircle, ArrowRight, CheckCircle2, ExternalLink, Eye, EyeOff, Key, Lightbulb, Loader2 } from 'lucide-react';
 import type { CredentialStorage } from '../bridge';
-import { GEMINI_KEY_PATTERN } from '../utils';
+import { DEFAULT_MODEL, GEMINI_KEY_PATTERN } from '../utils';
 
 interface SetupPageProps {
   hasProtectedKey: boolean;
@@ -58,18 +58,18 @@ export function SetupPage({
                 details.includes('not_found') ||
                 details.includes('not found');
 
-              // If the chosen model is not available for this project, try auto-fallback to gemini-3.5-flash
-              if (isNotFound && activeModel !== 'gemini-3.5-flash') {
+              // If the chosen model is unavailable, try the current default.
+              if (isNotFound && activeModel !== DEFAULT_MODEL) {
                 try {
                   const retryVal = await window.pywebview.api.validate_environment(
                     trimmedKey,
                     true,
-                    'gemini-3.5-flash',
+                    DEFAULT_MODEL,
                     fallbackModels,
                   );
                   const retryCheck = retryVal?.result?.checks?.find(c => c.id === 'api_key');
                   if (retryCheck && retryCheck.status === 'ok') {
-                    activeModel = 'gemini-3.5-flash';
+                    activeModel = DEFAULT_MODEL;
                   } else {
                     setSetupKeyError(
                       `I modelli Gemini predefiniti non sono disponibili per questo progetto Google Cloud con la chiave inserita.`

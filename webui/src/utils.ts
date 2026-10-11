@@ -402,13 +402,11 @@ export const readAndOptimizeImageAsDataUrl = async (
   return optimizeDataUrlImage(rawDataUrl, options);
 };
 
-export const DEFAULT_MODEL = 'gemini-3.5-flash';
+export const DEFAULT_MODEL = 'gemini-3.6-flash';
 
 export const MODEL_ORDER: string[] = [
   'gemini-2.5-flash',
-  'gemini-3.5-flash',
   'gemini-3.6-flash',
-  'gemini-3.7-flash',
   'gemini-3.8-flash',
 ];
 

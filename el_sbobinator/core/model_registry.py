@@ -23,14 +23,17 @@ class ModelOption(TypedDict):
 
 SUPPORTED_MODELS: tuple[str, ...] = (
     "gemini-2.5-flash",
-    "gemini-3.5-flash",
     "gemini-3.6-flash",
-    "gemini-3.7-flash",
     "gemini-3.8-flash",
 )
 
-DEFAULT_MODEL = "gemini-3.5-flash"
+DEFAULT_MODEL = "gemini-3.6-flash"
 DEFAULT_FALLBACK_MODELS: tuple[str, ...] = ()
+
+_LEGACY_MODEL_ALIASES = {
+    "gemini-3.5-flash": "gemini-3.6-flash",
+    "gemini-3.7-flash": "gemini-3.8-flash",
+}
 
 MODEL_OPTIONS: tuple[ModelOption, ...] = (
     {
@@ -42,29 +45,13 @@ MODEL_OPTIONS: tuple[ModelOption, ...] = (
         "phase1_temperature": 0.35,
     },
     {
-        "id": "gemini-3.5-flash",
-        "label": "Gemini 3.5 Flash",
-        "summary": "",
-        "default_chunk_minutes": 15,
-        "default_macro_char_limit": 22000,
-        "phase1_temperature": 0.35,
-        "is_default": True,
-    },
-    {
         "id": "gemini-3.6-flash",
         "label": "Gemini 3.6 Flash",
         "summary": "",
         "default_chunk_minutes": 15,
         "default_macro_char_limit": 22000,
         "phase1_temperature": 0.35,
-    },
-    {
-        "id": "gemini-3.7-flash",
-        "label": "Gemini 3.7 Flash",
-        "summary": "",
-        "default_chunk_minutes": 15,
-        "default_macro_char_limit": 22000,
-        "phase1_temperature": 0.35,
+        "is_default": True,
     },
     {
         "id": "gemini-3.8-flash",
@@ -89,9 +76,11 @@ def is_supported_model(model_name: Any) -> bool:
 
 def sanitize_model_name(model_name: Any, default: str = DEFAULT_MODEL) -> str:
     candidate = str(model_name or "").strip()
+    candidate = _LEGACY_MODEL_ALIASES.get(candidate, candidate)
     if candidate in SUPPORTED_MODELS:
         return candidate
-    return str(default or DEFAULT_MODEL)
+    fallback = str(default or DEFAULT_MODEL)
+    return _LEGACY_MODEL_ALIASES.get(fallback, fallback)
 
 
 def sanitize_fallback_models(
@@ -104,10 +93,12 @@ def sanitize_fallback_models(
     else:
         source = list(default_models or [])
 
+    primary_model = sanitize_model_name(primary_model)
     sanitized: list[str] = []
     seen: set[str] = set()
     for item in source:
         model_name = str(item or "").strip()
+        model_name = _LEGACY_MODEL_ALIASES.get(model_name, model_name)
         if not model_name or model_name == primary_model:
             continue
         if model_name not in SUPPORTED_MODELS:
@@ -134,6 +125,7 @@ def build_model_state(
 ) -> ModelState:
     chain = model_chain(primary_model, fallback_models)
     current = str(effective_model or "").strip()
+    current = _LEGACY_MODEL_ALIASES.get(current, current)
     if current not in chain:
         current = chain[0]
     return ModelState(chain=chain, current=current)
