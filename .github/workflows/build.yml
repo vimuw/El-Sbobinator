@@ -47,7 +47,7 @@ jobs:
             requirements/requirements-dev.txt
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: 'npm'
@@ -127,7 +127,7 @@ jobs:
           cache: 'pip'
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
 
@@ -169,7 +169,7 @@ jobs:
             requirements/requirements-dev.txt
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: 'npm'
