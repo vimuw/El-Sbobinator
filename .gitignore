@@ -64,14 +64,8 @@ webui/dist/
 webui/.env.local
 
 # IDE-specific config
-# Share workflow entrypoints; keep other Windsurf settings local.
-/.windsurf/*
-!/.windsurf/workflows/
-/.windsurf/workflows/*
-!/.windsurf/workflows/commit.md
-!/.windsurf/workflows/pull.md
-!/.windsurf/workflows/push.md
-!/.windsurf/workflows/review.md
+# Keep Windsurf settings and workflows private to this checkout.
+/.windsurf/
 .vscode/
 DESIGN.md
 
@@ -96,32 +90,8 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Agent scratchpads and temporary workspace files
-# Share canonical project skills; keep other agent files local.
-/.agents/*
-!/.agents/skills/
-/.agents/skills/**
-!/.agents/skills/check/
-!/.agents/skills/check/SKILL.md
-!/.agents/skills/check/references/
-!/.agents/skills/check/references/verification.md
-!/.agents/skills/commit/
-!/.agents/skills/commit/SKILL.md
-!/.agents/skills/learn-bug/
-!/.agents/skills/learn-bug/SKILL.md
-!/.agents/skills/maintainability/
-!/.agents/skills/maintainability/SKILL.md
-!/.agents/skills/pull/
-!/.agents/skills/pull/SKILL.md
-!/.agents/skills/push/
-!/.agents/skills/push/SKILL.md
-!/.agents/skills/push/references/
-!/.agents/skills/push/references/release.md
-!/.agents/skills/review/
-!/.agents/skills/review/SKILL.md
-!/.agents/skills/review/references/
-!/.agents/skills/review/references/editor.md
-!/.agents/skills/review/references/persistence.md
-!/.agents/skills/review/references/runtime.md
+# Keep project agent skills and other agent files private to this checkout.
+/.agents/
 progress.md
 ORIGINAL_REQUEST.md
 learning_proposal.md
