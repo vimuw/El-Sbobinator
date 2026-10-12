@@ -36,7 +36,19 @@ python scripts/build_release.py deps --ui webui --dev
 ## Testing & Quality Checks
 
 For Windows source use, close the running app,
-then run the single local update command from PowerShell:
+then run the single local update command from either the repository root or the
+`webui` directory on Windows:
+
+```powershell
+npm run aggiorna
+# Synchronize and rebuild the current working copy without pulling:
+npm run aggiorna -- -NoPull
+```
+
+Both directories provide the same `npm run aggiorna` command. The root `package.json`
+only provides this shortcut; frontend dependencies remain declared and locked in `webui`.
+The npm shortcut invokes the existing PowerShell script; it does not require changing
+the machine's execution policy. You can also invoke that script directly:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\Aggiorna_App_Locale.ps1

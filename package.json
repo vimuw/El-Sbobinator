@@ -1,0 +1,7 @@
+{
+  "name": "el-sbobinator-local",
+  "private": true,
+  "scripts": {
+    "aggiorna": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./Aggiorna_App_Locale.ps1"
+  }
+}
