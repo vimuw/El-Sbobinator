@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import posixpath
 import tempfile
 import unittest
+from pathlib import PurePosixPath
 from unittest.mock import patch
 
 
@@ -208,6 +210,54 @@ class TestFoldersService(unittest.TestCase):
 
         migrated = migrate_session_roots(root, root)
         self.assertEqual(migrated, folders)
+
+    def test_migrate_case_alias_persists_paths_inside_new_root(self):
+        from el_sbobinator.services.folders_service import (
+            get_folders,
+            migrate_session_roots,
+            save_folders,
+        )
+
+        old_root = "/Volumes/Archive/Sessions"
+        alias = "/Volumes/Archive/sessions"
+        new_root = "/Volumes/NewArchive"
+        saved_paths = [
+            alias + "/sess_1",
+            alias + "/Modulo A/Sess_2",
+            alias,
+            alias + "-other/sess_3",
+            "/Volumes/Other/sessions/sess_4",
+        ]
+        expected_paths = [
+            os.path.normpath(new_root + "/sess_1"),
+            os.path.normpath(new_root + "/Modulo A/Sess_2"),
+            os.path.normpath(new_root),
+            saved_paths[3],
+            saved_paths[4],
+        ]
+        # On a cross-volume move, the old root still exists during migration,
+        # although the sessions have already moved. POSIX relpath must use the
+        # recognized root spelling; equal-looking distinct roots must stay put.
+        for same_identity in (True, False):
+            with self.subTest(same_identity=same_identity):
+                folders = [{"id": "f1", "session_dirs": saved_paths}]
+                save_folders(folders)
+                with (
+                    patch("os.path.normcase", side_effect=lambda value: value),
+                    patch("os.path.realpath", side_effect=lambda value: value),
+                    patch("os.path.relpath", side_effect=posixpath.relpath),
+                    patch("el_sbobinator.services.folders_service.Path", PurePosixPath),
+                    patch(
+                        "os.path.samefile",
+                        side_effect=lambda path, target, same_identity=same_identity: (
+                            same_identity and str(path) == alias and target == old_root
+                        ),
+                    ),
+                ):
+                    migrated = migrate_session_roots(old_root, new_root)
+                expected = expected_paths if same_identity else saved_paths
+                self.assertEqual(migrated[0]["session_dirs"], expected)
+                self.assertEqual(get_folders()[0]["session_dirs"], expected)
 
     def test_migrate_session_roots_empty_input_noop(self):
         from el_sbobinator.services.folders_service import migrate_session_roots

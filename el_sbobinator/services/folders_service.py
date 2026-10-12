@@ -70,29 +70,35 @@ def save_folders(folders: list[dict]) -> None:
         raise
 
 
-def _path_under_root(path: str, root: str) -> bool:
-    """Return True if *path* equals or is nested under *root*.
-
-    Uses os.path.normcase so the comparison is case-insensitive on Windows.
-    """
-    nc_path = os.path.normcase(os.path.realpath(path))
-    nc_root = os.path.normcase(os.path.realpath(root))
+def _relative_path_under_root(path: str, root: str) -> str | None:
+    """Return the suffix under *root*, respecting directory identity and spelling."""
+    real_path = os.path.realpath(path)
+    real_root = os.path.realpath(root)
+    nc_path = os.path.normcase(real_path)
+    nc_root = os.path.normcase(real_root)
     if nc_path == nc_root:
-        return True
+        return os.curdir
     if not nc_root.endswith(os.sep):
         nc_root += os.sep
     if nc_path.startswith(nc_root):
-        return True
+        return os.path.relpath(real_path, real_root)
     # POSIX normcase preserves case even on a case-insensitive macOS volume.
     # Compare existing directory identities rather than merging distinct names.
-    candidate = Path(nc_path)
+    candidate = Path(real_path)
     for ancestor in (candidate, *candidate.parents):
         try:
             if os.path.samefile(ancestor, root):
-                return True
+                # The caller must use this recognized spelling as the base;
+                # POSIX relpath treats case aliases as different directories.
+                return os.path.relpath(real_path, str(ancestor))
         except OSError:
             continue
-    return False
+    return None
+
+
+def _path_under_root(path: str, root: str) -> bool:
+    """Return True if *path* equals or is nested under *root*."""
+    return _relative_path_under_root(path, root) is not None
 
 
 def migrate_session_roots(old_root: str, new_root: str) -> list[dict]:
@@ -126,9 +132,9 @@ def migrate_session_roots(old_root: str, new_root: str) -> list[dict]:
                 if not isinstance(s_dir, str) or not s_dir.strip():
                     continue
                 s_dir_str = s_dir.strip()
-                if _path_under_root(s_dir_str, old_real):
+                rel = _relative_path_under_root(s_dir_str, old_real)
+                if rel is not None:
                     try:
-                        rel = os.path.relpath(os.path.realpath(s_dir_str), old_real)
                         migrated_path = os.path.normpath(os.path.join(new_clean, rel))
                         if migrated_path != s_dir_str:
                             modified = True
