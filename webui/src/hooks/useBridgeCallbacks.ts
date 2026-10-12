@@ -213,7 +213,7 @@ export function useBridgeCallbacks(options: {
       onFileFailed: data => {
         const currentFile = filesRef.current?.find(file => file.id === data.id);
         const isPaused = data.retry_reason === 'circuit_breaker_paused' || Boolean(data.retryable) || isPausedError(data.error, data.error_detail);
-        const isGoogleServerOverload = !isPaused && (data.error?.includes('indisponibile') || data.error?.includes('unavailable') || data.error === 'phase1_all_models_unavailable');
+        const isGoogleServerOverload = !isPaused && (data.error?.includes('indisponibile') || data.error?.includes('unavailable'));
         const friendlyError = data.retry_reason === 'circuit_breaker_paused'
           ? "Capacità Google Gemini temporaneamente esaurita. L'elaborazione è stata messa in pausa per proteggere il batch. Puoi cliccare 'Riprendi' per forzare un nuovo tentativo."
           : errorLabel(data.error, data.error_detail);

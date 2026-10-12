@@ -95,7 +95,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
         setCopiedToast(true);
         setTimeout(() => setCopiedToast(false), 2500);
       } else if (window.pywebview?.api?.get_diagnostic_report) {
-        const res = await window.pywebview.api.get_diagnostic_report(undefined, undefined, undefined, undefined, sessionDir || undefined, APP_VERSION);
+        const res = await window.pywebview.api.get_diagnostic_report(undefined, undefined, undefined, sessionDir || undefined, APP_VERSION);
         if (res?.ok && res.report) {
           await navigator.clipboard.writeText(res.report);
           setCopiedToast(true);
@@ -274,7 +274,6 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
                 <Copy className="w-4 h-4" />
               )}
             </button>
-
 
             {showOpenLogs && window.pywebview?.api?.export_diagnostics && (
               <button type="button" className="app-button-secondary is-settings-action is-icon" disabled={exporting || isCopying} onClick={handleExport}

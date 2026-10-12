@@ -339,12 +339,12 @@ class TestSettingsController(unittest.TestCase):
                 "primary": "session_only",
                 "fallback": "protected",
             }
-            res = host.save_settings("k", ["k2"], "m1", ["m2"])
+            res = host.save_settings("k", ["k2"], "m1")
             self.assertEqual(res["credential_storage"], mock_save.return_value)
             self.assertTrue(res["api_key_insecure"])
             self.assertTrue(res.get("ok"))
             mock_save.assert_called_once_with(
-                "k", fallback_keys=["k2"], preferred_model="m1", fallback_models=["m2"]
+                "k", fallback_keys=["k2"], preferred_model="m1"
             )
 
     def test_save_theme_preference(self):
@@ -791,7 +791,6 @@ class TestSystemControllerDiagnostics(unittest.TestCase):
             api_key="AIzaSyTestKey1234567890",
             fallback_keys=[],
             preferred_model="gemini-2.5-flash",
-            fallback_models=["gemini-3.6-flash"],
         )
         self.assertTrue(res["ok"])
         self.assertIn("result", res)

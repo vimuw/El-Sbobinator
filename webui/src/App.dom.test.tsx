@@ -49,8 +49,7 @@ const mockApiReadyDefault = {
   configuredFallbackKeyCount: 0,
   preferredModel: 'gemini-2.5-flash',
   setPreferredModel: vi.fn(),
-  fallbackModels: [],
-  setFallbackModels: vi.fn(),
+
   availableModels: [],
   refreshSettings: vi.fn(),
 };
@@ -627,8 +626,8 @@ describe('App ? low disk start warning', () => {
     });
 
     expect(startProcessing).toHaveBeenCalledTimes(2);
-    expect(startProcessing.mock.calls[0][5]).toBe(false);
-    expect(startProcessing.mock.calls[1][5]).toBe(true);
+    expect(startProcessing.mock.calls[0][4]).toBe(false);
+    expect(startProcessing.mock.calls[1][4]).toBe(true);
   });
 });
 
@@ -1303,8 +1302,6 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       await act(async () => {
         fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
       });
-
-
 
       // Click move folder
       await act(async () => {

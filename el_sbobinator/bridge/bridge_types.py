@@ -63,7 +63,6 @@ class FileDonePayload(TypedDict):
     effective_model: str
     completion_status: NotRequired[Literal["completed", "completed_with_warnings"]]
     revision_failed_blocks: NotRequired[list[int]]
-    primary_model: NotRequired[str]
 
 
 class FileFailedPayload(TypedDict):

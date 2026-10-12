@@ -47,9 +47,7 @@ from el_sbobinator.core.credentials import (
     keyring_set_fallback_keys,
 )
 from el_sbobinator.core.model_registry import (
-    DEFAULT_FALLBACK_MODELS,
     DEFAULT_MODEL,
-    sanitize_fallback_models,
     sanitize_model_name,
 )
 from el_sbobinator.utils.file_ops import (
@@ -280,7 +278,6 @@ def _has_legacy_plaintext_credentials() -> bool:
 
 def _clone_config_dict(data: dict) -> dict:
     result = dict(data)
-    result["fallback_models"] = list(data.get("fallback_models") or [])
     result["fallback_keys"] = list(data.get("fallback_keys") or [])
     if isinstance(data.get("credential_storage"), dict):
         result["credential_storage"] = dict(data["credential_storage"])
@@ -519,14 +516,10 @@ def _apply_credential_overrides(data: dict) -> dict:
 
 
 def _sanitize_config_models(data: dict) -> None:
+    # Discard the obsolete field when reading or saving older configurations.
+    data.pop("fallback_models", None)
     preferred_model = sanitize_model_name(data.get("preferred_model"), DEFAULT_MODEL)
-    fallback_models = sanitize_fallback_models(
-        data.get("fallback_models"),
-        preferred_model,
-        DEFAULT_FALLBACK_MODELS,
-    )
     data["preferred_model"] = preferred_model
-    data["fallback_models"] = fallback_models
 
 
 def _build_default_config(corrupt_path: str | None = None) -> dict:
@@ -534,7 +527,6 @@ def _build_default_config(corrupt_path: str | None = None) -> dict:
     default_cfg: dict = {
         "api_key": "",
         "preferred_model": DEFAULT_MODEL,
-        "fallback_models": list(DEFAULT_FALLBACK_MODELS),
     }
     if corrupt_path is not None:
         default_cfg["config_recovered_from"] = corrupt_path
@@ -601,7 +593,6 @@ def save_config(
     api_key: str | None,
     fallback_keys: list | None = None,
     preferred_model: str | None = None,
-    fallback_models: list | None = None,
 ) -> dict:
     global _config_cache, _config_cache_gen
     with _write_lock:
@@ -624,15 +615,7 @@ def save_config(
             else current_cfg.get("preferred_model"),
             DEFAULT_MODEL,
         )
-        fallback_models_norm = sanitize_fallback_models(
-            fallback_models
-            if fallback_models is not None
-            else current_cfg.get("fallback_models"),
-            preferred_model_norm,
-            DEFAULT_FALLBACK_MODELS,
-        )
         data["preferred_model"] = preferred_model_norm
-        data["fallback_models"] = fallback_models_norm
 
         updates: dict[str, object] = {}
         outcomes: dict[str, bool] = {}

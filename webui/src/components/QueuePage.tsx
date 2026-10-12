@@ -47,7 +47,7 @@ export interface QueueAuthProps {
   fallbackKeys: string[];
   preferredModel: string;
   setPreferredModel?: (model: string) => void;
-  fallbackModels: string[];
+
 }
 
 export interface QueueIngestProps {
@@ -138,7 +138,7 @@ export function QueuePage({
     fallbackKeys,
     preferredModel,
     setPreferredModel,
-    fallbackModels,
+
   } = auth;
 
   const {
@@ -298,7 +298,6 @@ export function QueuePage({
               }}
               preferredModel={preferredModel}
               fallbackKeys={fallbackKeys}
-              fallbackModels={fallbackModels}
             />
           </React.Suspense>
         ) : (

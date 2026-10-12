@@ -17,7 +17,6 @@ class SessionStoreTests(unittest.TestCase):
             "el_sbobinator.core.session_store.build_default_pipeline_settings",
             return_value={
                 "model": "gemini-2.5-flash",
-                "fallback_models": ["gemini-3.6-flash"],
                 "effective_model": "gemini-2.5-flash",
                 "chunk_minutes": 15,
                 "overlap_seconds": 30,
@@ -34,7 +33,7 @@ class SessionStoreTests(unittest.TestCase):
         self.assertIn("outputs", session)
         self.assertEqual(session["settings"]["model"], "gemini-2.5-flash")
         self.assertEqual(session["settings"]["effective_model"], "gemini-2.5-flash")
-        self.assertEqual(session["settings"]["fallback_models"], ["gemini-3.6-flash"])
+        self.assertNotIn("fallback_models", session["settings"])
         self.assertEqual(session["settings"]["audio"]["bitrate"], "48k")
 
     def test_clone_session_settings_is_deep_copy(self):

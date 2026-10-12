@@ -79,7 +79,7 @@ export interface UseQueueProcessingOptions {
   apiKey: string;
   hasProtectedKey?: boolean;
   preferredModel: string;
-  fallbackModels: string[];
+
   dispatch: React.Dispatch<ProcessingAction>;
   appendConsole: (msg: string) => void;
   setConfirmAction: (action: ConfirmActionState | null) => void;
@@ -92,7 +92,7 @@ export function useQueueProcessing({
   apiKey,
   hasProtectedKey = false,
   preferredModel,
-  fallbackModels,
+
   dispatch,
   appendConsole,
   setConfirmAction,
@@ -156,7 +156,7 @@ export function useQueueProcessing({
     try {
       const fileDescriptors = await resolveQueuedFilesForProcessing();
       if (!fileDescriptors || fileDescriptors.length === 0) return false;
-      const result = await window.pywebview.api.start_processing?.(fileDescriptors, apiKey.trim(), true, preferredModel, fallbackModels, overrideLowDisk, forceRetry);
+      const result = await window.pywebview.api.start_processing?.(fileDescriptors, apiKey.trim(), true, preferredModel, overrideLowDisk, forceRetry);
       if (!result?.ok) {
         if (result?.low_disk_warning) {
           setConfirmAction({ type: 'low-disk-warning', warning: result.low_disk_warning });
@@ -174,7 +174,7 @@ export function useQueueProcessing({
       appendConsole(`❌ Errore avvio: ${getErrorMessage(e)}`);
       return false;
     }
-  }, [apiKey, appendConsole, appStateRef, dispatch, fallbackModels, filesRef, hasProtectedKey, preferredModel, resolveQueuedFilesForProcessing, setConfirmAction]);
+  }, [apiKey, appendConsole, appStateRef, dispatch, filesRef, hasProtectedKey, preferredModel, resolveQueuedFilesForProcessing, setConfirmAction]);
 
   const onFileContinued = useCallback(() => { setBatchCompleted(prev => prev + 1); }, []);
   const onBatchReset = useCallback(() => { setBatchTotal(0); setBatchCompleted(0); }, []);

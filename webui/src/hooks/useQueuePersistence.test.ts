@@ -75,16 +75,17 @@ describe('useQueuePersistence — serialization contract', () => {
     expect(restored.effectiveModel).toBeUndefined();
   });
 
-  it('primaryModel is preserved through a JSON round-trip', () => {
-    const file = makeFile({ status: 'done', progress: 100, phase: 3, primaryModel: 'gemini-2.5-flash', effectiveModel: 'gemini-3.6-flash' });
-    const restored = roundTrip(file);
-    expect(restored.primaryModel).toBe('gemini-2.5-flash');
+  it('drops old primary metadata while preserving the actual model', () => {
+    const file = { ...makeFile({ status: 'done', progress: 100, phase: 3, effectiveModel: 'gemini-3.6-flash' }), primaryModel: 'gemini-2.5-flash' };
+    const restored = deserializeQueueFile(file, 0);
+    expect(serializeQueueFile(restored)).not.toHaveProperty('primaryModel');
     expect(restored.effectiveModel).toBe('gemini-3.6-flash');
   });
 
-  it('primaryModel missing on legacy entries is restored as undefined', () => {
-    const restored = roundTrip(makeFile({ status: 'done', progress: 100, phase: 3, effectiveModel: 'gemini-2.5-flash' }));
-    expect(restored.primaryModel).toBeUndefined();
+  it('migrates a legacy entry containing only primary metadata to the single model field', () => {
+    const legacy = { ...makeFile({ status: 'done', progress: 100, phase: 3 }), primaryModel: 'gemini-2.5-flash' };
+    const restored = deserializeQueueFile(legacy, 0);
+    expect(serializeQueueFile(restored)).not.toHaveProperty('primaryModel');
     expect(restored.effectiveModel).toBe('gemini-2.5-flash');
   });
 

@@ -29,10 +29,6 @@ class DegenerateOutputError(RuntimeError):
         self.rejected_text: str = (rejected_text or "")[:500]
 
 
-class AllModelsUnavailableError(RuntimeError):
-    """Raised when all models in the fallback chain are 503-unavailable."""
-
-
 class CircuitBreakerExhaustedError(RuntimeError):
     """Raised when the adaptive circuit breaker retry budget is exhausted and the batch is suspended."""
 

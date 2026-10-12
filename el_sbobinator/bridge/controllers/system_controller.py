@@ -57,7 +57,6 @@ class SystemControllerMixin:
         api_key: str | None = None,
         check_api_key: bool = False,
         preferred_model: str | None = None,
-        fallback_models: list[str] | None = None,
     ) -> dict:
         """Run an explicit environment validation without starting a full transcription."""
         try:
@@ -69,7 +68,6 @@ class SystemControllerMixin:
                 api_key=api_key,
                 validate_api_key=bool(check_api_key),
                 preferred_model=preferred_model,
-                fallback_models=fallback_models,
             )
             from el_sbobinator.services.diagnostics_service import (
                 save_validation_snapshot,
@@ -86,7 +84,6 @@ class SystemControllerMixin:
         api_key: str | None = None,
         fallback_keys: list[str] | None = None,
         preferred_model: str | None = None,
-        fallback_models: list[str] | None = None,
         force_refresh: bool = False,
     ) -> dict:
         """Get daily Gemini API request usage and quota stats per key and per model."""
@@ -102,17 +99,11 @@ class SystemControllerMixin:
                 else cfg.get("fallback_keys", [])
             )
             pref_model = preferred_model or cfg.get("preferred_model", DEFAULT_MODEL)
-            fb_models = (
-                fallback_models
-                if fallback_models is not None
-                else cfg.get("fallback_models", [])
-            )
 
             usage = get_daily_usage(
                 primary_key=key_val,
                 fallback_keys=fb_keys,
                 primary_model=pref_model,
-                fallback_models=fb_models,
                 force_refresh=force_refresh,
             )
             return bridge_ok(result=usage)
@@ -125,7 +116,6 @@ class SystemControllerMixin:
         api_key: str | None = None,
         fallback_keys: list[str] | None = None,
         preferred_model: str | None = None,
-        fallback_models: list[str] | None = None,
         session_dir: str | None = None,
         frontend_version: str | None = None,
     ) -> dict:

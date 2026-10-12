@@ -15,7 +15,7 @@ from el_sbobinator.bridge.bridge_utils import (
     bridge_error,
     bridge_ok,
 )
-from el_sbobinator.core.model_registry import DEFAULT_FALLBACK_MODELS, MODEL_OPTIONS
+from el_sbobinator.core.model_registry import MODEL_OPTIONS
 from el_sbobinator.core.shared import (
     DEFAULT_MODEL,
     get_session_root,
@@ -56,7 +56,6 @@ class SettingsControllerMixin:
                 "api_key": cfg.get("api_key", ""),
                 "fallback_keys": cfg.get("fallback_keys", []),
                 "preferred_model": cfg.get("preferred_model", DEFAULT_MODEL),
-                "fallback_models": cfg.get("fallback_models", []),
                 "available_models": list(MODEL_OPTIONS),
                 "has_protected_key": bool(cfg.get("has_protected_key")),
                 "api_key_insecure": bool(cfg.get("api_key_insecure")),
@@ -75,7 +74,6 @@ class SettingsControllerMixin:
                 "api_key": "",
                 "fallback_keys": [],
                 "preferred_model": DEFAULT_MODEL,
-                "fallback_models": list(DEFAULT_FALLBACK_MODELS),
                 "available_models": list(MODEL_OPTIONS),
                 "has_protected_key": False,
                 "api_key_insecure": False,
@@ -88,7 +86,6 @@ class SettingsControllerMixin:
         api_key: str | None,
         fallback_keys: list[str] | None,
         preferred_model: str,
-        fallback_models: list[str],
     ) -> dict:
         """Save config to disk."""
         try:
@@ -96,7 +93,6 @@ class SettingsControllerMixin:
                 api_key,
                 fallback_keys=fallback_keys,
                 preferred_model=preferred_model,
-                fallback_models=fallback_models,
             )
             cfg = load_config()
             return bridge_ok(

@@ -54,9 +54,9 @@ The Python backend is organized into five modular subpackages under `el_sbobinat
 
 | Module | Responsibility | Key symbols |
 |---|---|---|
-| `services/generation_service.py` | Gemini transport: `retry_with_quota`, fallback model rotation, automatic fallback key rotation on exhaustion, and degenerate output guardrail. | `retry_with_quota`, `try_rotate_key`, `detect_degenerate_output` |
-| `services/gemini_errors.py` | Domain error hierarchy distinguishing transient rate limits, daily quota exhaustion, model unavailability, and unrecoverable errors. | `DegenerateOutputError`, `QuotaDailyLimitError`, `AllModelsUnavailableError`, `PermanentError` |
-| `services/phase1_service.py` | Chunked transcription loop with background FFmpeg prefetching and model chain fallback. | `process_phase1_transcription` |
+| `services/generation_service.py` | Gemini transport: `retry_with_quota`, automatic fallback key rotation on exhaustion, and degenerate output guardrail. | `retry_with_quota`, `try_rotate_key`, `detect_degenerate_output` |
+| `services/gemini_errors.py` | Domain error hierarchy distinguishing transient rate limits, daily quota exhaustion, model unavailability, and unrecoverable errors. | `DegenerateOutputError`, `QuotaDailyLimitError`, `CircuitBreakerExhaustedError`, `PermanentError` |
+| `services/phase1_service.py` | Chunked transcription loop with background FFmpeg prefetching and bounded recovery on the selected model. | `process_phase1_transcription` |
 | `services/revision_service.py` | Phase 2 macro-revision with two-pass retry via `.raw.md`, and phase 3 boundary stitching. | `build_macro_blocks`, `process_macro_revision_phase`, `process_boundary_revision_phase` |
 | `services/audio_service.py` | Audio processing facade over FFmpeg (`probe_media_duration`, `preconvert_media_to_mp3`, `cut_audio_chunk_to_mp3`). | `probe_media_duration`, `resolve_ffmpeg` |
 | `services/export_service.py` | Assembles revised markdown blocks into the final titled document and coordinates HTML output. | `export_final_html_document`, `resolve_output_html_path` |
@@ -77,7 +77,7 @@ The Python backend is organized into five modular subpackages under `el_sbobinat
 | `core/session_store.py` | On-disk session layout: `SessionPaths`, `new_session`, `load_session`, `save_session`. | `SessionPaths`, `load_session`, `save_session` |
 | `core/session_storage.py` | Storage metrics computation with cached sizing calculations. | `get_session_storage_info`, `invalidate_session_storage_cache` |
 | `core/session_cleanup.py` | Automatic purge of orphan chunks, incomplete sessions, and legacy data roots. | `cleanup_orphan_temp_chunks`, `cleanup_orphan_sessions` |
-| `core/model_registry.py` | Supported Gemini models, per-model chunk defaults, fallback chains. | `MODEL_OPTIONS`, `ModelState`, `build_model_state` |
+| `core/model_registry.py` | Supported Gemini models, per-model chunk defaults and saved-model migration. | `MODEL_OPTIONS`, `sanitize_model_name` |
 | `core/credentials.py` | Secure API key storage using Windows DPAPI or macOS Keychain / Secret Service. | `store_credential`, `retrieve_credential` |
 | `core/prompts.py` | Prompt templates for transcription, macro-revision, and boundary stitching. | `PROMPT_SISTEMA`, `PROMPT_REVISIONE`, `PROMPT_REVISIONE_CONFINE` |
 | `core/media_server.py` | Local streaming HTTP server with Range request support for audio playback in the editor. | `LocalMediaServer` |
@@ -185,6 +185,6 @@ All pipeline → UI updates go through `PipelineRuntime` (`el_sbobinator/pipelin
 
 ## Further reading
 
-- [`pipeline.md`](./pipeline.md) — phase-by-phase walk-through, error classes, `last_error` values, model fallback.
+- [`pipeline.md`](./pipeline.md) — phase-by-phase walk-through, error classes, `last_error` values and model selection.
 - [`session_model.md`](./session_model.md) — on-disk session layout and `session.json` schema.
 - [`bridge_protocol.md`](./bridge_protocol.md) — Python ↔ JS event and API contracts.

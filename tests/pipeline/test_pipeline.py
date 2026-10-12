@@ -53,7 +53,6 @@ class _FakeSessionContext:
         }
         self.settings = SimpleNamespace(
             model="gemini-test",
-            fallback_models=["gemini-3.6-flash"],
             effective_model="gemini-test",
             chunk_minutes=15,
             chunk_seconds=60,
@@ -160,8 +159,9 @@ class PipelinePausedCleanupTests(unittest.TestCase):
 
 
 class PipelineCancellationTests(unittest.TestCase):
-    def test_regenerate_rebinds_model_state_from_reset_session_settings(self):
+    def test_regenerate_uses_selected_model_from_reset_session_settings(self):
         app = _PromptBlockingApp()
+        adapter = PipelineAdapter(None, app.cancel_event)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = os.path.join(tmpdir, "input.mp3")
@@ -176,9 +176,8 @@ class PipelineCancellationTests(unittest.TestCase):
                 "outputs": {},
             }
             session_ctx.settings = SimpleNamespace(
-                model="gemini-2.5-flash",
-                fallback_models=["gemini-3.6-flash"],
-                effective_model="gemini-2.5-flash",
+                model="gemini-3.6-flash",
+                effective_model="gemini-3.6-flash",
                 chunk_minutes=15,
                 chunk_seconds=60,
                 step_seconds=60,
@@ -192,8 +191,8 @@ class PipelineCancellationTests(unittest.TestCase):
             seen = {}
 
             def fake_phase1(**kwargs):
-                seen["current_model"] = kwargs["model_state"].current
-                seen["chain"] = kwargs["model_state"].chain
+                seen["current_model"] = kwargs["model_name"]
+
                 return kwargs["client"], None, ""
 
             def fake_reset(context):
@@ -205,7 +204,6 @@ class PipelineCancellationTests(unittest.TestCase):
                 }
                 context.settings = SimpleNamespace(
                     model="gemini-2.5-flash",
-                    fallback_models=["gemini-3.6-flash"],
                     effective_model="gemini-3.6-flash",
                     chunk_minutes=10,
                     chunk_seconds=60,
@@ -218,6 +216,7 @@ class PipelineCancellationTests(unittest.TestCase):
                 )
 
             with (
+                patch.object(app, "update_model", adapter.update_model, create=True),
                 patch("google.genai.Client", _FakeClient),
                 patch(
                     "el_sbobinator.pipeline.pipeline.initialize_session_context",
@@ -283,7 +282,7 @@ class PipelineCancellationTests(unittest.TestCase):
                 thread.join(timeout=2)
 
         self.assertEqual(seen.get("current_model"), "gemini-2.5-flash")
-        self.assertIn("gemini-3.6-flash", seen.get("chain", ()))
+        self.assertEqual(adapter.last_effective_model, "gemini-2.5-flash")
 
     def test_api_key_prompt_timeout_saves_quota_detail(self):
         from el_sbobinator.services.generation_service import QuotaDailyLimitError
@@ -373,7 +372,7 @@ class PipelineCancellationTests(unittest.TestCase):
         self.assertEqual(app.last_run_error_detail, "api_key_prompt_timeout")
 
     def test_resume_always_starts_from_primary_ignoring_stale_effective_model(self):
-        """On resume, model_state.current must be the primary model, even when the session
+        """On resume, the selected model is used even when the session
         recorded a different effective_model from a previous fallback switch.
         effective_model is kept for observability but must not drive the resume start."""
         app = _PromptBlockingApp()
@@ -386,7 +385,6 @@ class PipelineCancellationTests(unittest.TestCase):
             session_ctx = _FakeSessionContext(os.path.join(tmpdir, "session"))
             session_ctx.settings = SimpleNamespace(
                 model="gemini-2.5-flash",
-                fallback_models=["gemini-3.6-flash"],
                 effective_model="gemini-3.6-flash",
                 chunk_minutes=15,
                 chunk_seconds=60,
@@ -401,8 +399,8 @@ class PipelineCancellationTests(unittest.TestCase):
             seen = {}
 
             def fake_phase1(**kwargs):
-                seen["current_model"] = kwargs["model_state"].current
-                seen["chain"] = kwargs["model_state"].chain
+                seen["current_model"] = kwargs["model_name"]
+
                 return kwargs["client"], None, ""
 
             with (
@@ -457,7 +455,6 @@ class PipelineCancellationTests(unittest.TestCase):
                 esegui_sbobinatura(input_path, "fake-key", app, resume_session=True)
 
         self.assertEqual(seen.get("current_model"), "gemini-2.5-flash")
-        self.assertIn("gemini-3.6-flash", seen.get("chain", ()))
 
     def test_cancel_during_regenerate_prompt_exits_prompt_wait_immediately(self):
         app = _PromptBlockingApp()
@@ -873,7 +870,6 @@ class PipelineCleanupCacheTests(unittest.TestCase):
         ctx = _FakeSessionContext(session_dir)
         ctx.settings = SimpleNamespace(
             model="gemini-test",
-            fallback_models=[],
             effective_model="gemini-test",
             chunk_minutes=15,
             chunk_seconds=60,

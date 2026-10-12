@@ -214,7 +214,6 @@ class SharedPipelineDefaultsTests(unittest.TestCase):
         session = {
             "settings": {
                 "model": "gemini-3.6-flash",
-                "fallback_models": [],
                 "effective_model": "gemini-3.6-flash",
                 "audio": {"bitrate": "48k"},
             }
@@ -236,7 +235,6 @@ class SharedPipelineDefaultsTests(unittest.TestCase):
         session = {
             "settings": {
                 "model": "gemini-3.6-flash",
-                "fallback_models": [],
                 "effective_model": "gemini-3.6-flash",
                 "chunk_minutes": 15,
                 "overlap_seconds": 30,

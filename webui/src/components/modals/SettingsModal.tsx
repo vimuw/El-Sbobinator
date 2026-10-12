@@ -26,7 +26,6 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-
 export interface SettingsAuthProps {
   apiKey: string;
   setApiKey: (key: string) => void;
@@ -39,8 +38,7 @@ export interface SettingsAuthProps {
 export interface SettingsModelsProps {
   preferredModel: string;
   setPreferredModel: (model: string) => void;
-  fallbackModels: string[];
-  setFallbackModels: React.Dispatch<React.SetStateAction<string[]>>;
+
   availableModels: ModelOption[];
 }
 
@@ -75,7 +73,7 @@ interface SettingsSnapshot {
   apiKey: string;
   fallbackKeys: string[];
   preferredModel: string;
-  fallbackModels: string[];
+
   notificationsEnabled: boolean;
 }
 
@@ -100,8 +98,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const {
     preferredModel,
     setPreferredModel,
-    fallbackModels,
-    setFallbackModels,
+
     availableModels,
   } = models;
   const { latestVersion, checkForUpdates, isCheckingUpdate, hasChecked, checkFailed, updateInstallState, onInstallUpdate } = updater;
@@ -169,15 +166,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onSessionRootMoved,
   });
 
-
   const prevSettingsKeyRef = useRef<string>('');
   useEffect(() => {
-    const key = `${apiKey}|${preferredModel}|${fallbackModels.join(',')}`;
+    const key = `${apiKey}|${preferredModel}`;
     if (prevSettingsKeyRef.current && prevSettingsKeyRef.current !== key) {
       setValidationResult(null);
     }
     prevSettingsKeyRef.current = key;
-  }, [apiKey, preferredModel, fallbackModels]);
+  }, [apiKey, preferredModel]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -192,26 +188,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         apiKey,
         fallbackKeys: [...fallbackKeys],
         preferredModel,
-        fallbackModels: [...fallbackModels],
+
         notificationsEnabled: localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED) !== 'false',
       };
     } else if (!isOpen) {
       settingsSnapshotRef.current = null;
     }
     wasOpenRef.current = isOpen;
-  }, [apiKey, fallbackKeys, fallbackModels, isOpen, preferredModel]);
+  }, [apiKey, fallbackKeys, isOpen, preferredModel]);
 
   const snapshot = settingsSnapshotRef.current;
   const hasPendingChanges = Boolean(snapshot && (
     apiKey !== snapshot.apiKey ||
     preferredModel !== snapshot.preferredModel ||
     JSON.stringify(fallbackKeys) !== JSON.stringify(snapshot.fallbackKeys) ||
-    JSON.stringify(fallbackModels) !== JSON.stringify(snapshot.fallbackModels) ||
     notificationsEnabled !== snapshot.notificationsEnabled ||
     clearProtectedPrimary
   ));
   const showCloseOnly = activeTab === 'diagnostics' && !hasPendingChanges;
-
 
   const usageRequestInFlightRef = useRef(false);
   const usageRequestIdRef = useRef(0);
@@ -230,7 +224,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             : apiKey.trim(),
         fallbackKeys,
         preferredModel,
-        fallbackModels,
+
         forceRefresh,
       );
       if (isMountedRef.current && requestId === usageRequestIdRef.current) {
@@ -246,7 +240,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         if (!background && isMountedRef.current) setIsLoadingUsage(false);
       }
     }
-  }, [apiKey, clearProtectedPrimary, fallbackKeys, fallbackModels, hasProtectedKey, preferredModel]);
+  }, [apiKey, clearProtectedPrimary, fallbackKeys, hasProtectedKey, preferredModel]);
 
   const handleRefreshUsage = useCallback(() => {
     void fetchApiUsage(true);
@@ -310,7 +304,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         apiKey.trim(),
         true,
         preferredModel,
-        fallbackModels,
+
       );
       if (!isMountedRef.current) return;
       if (!response?.ok || !response.result) {
@@ -334,7 +328,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleCopyReport = async (sessionDir?: string) => {
     if (!window.pywebview?.api?.get_diagnostic_report) return;
     const res = await window.pywebview.api.get_diagnostic_report(
-      undefined, undefined, undefined, undefined, sessionDir, APP_VERSION,
+      undefined, undefined, undefined, sessionDir, APP_VERSION,
     );
     if (res?.ok && res.report) {
       await navigator.clipboard.writeText(res.report);
@@ -449,7 +443,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           apiKeyPayload,
           fallbackKeysPayload,
           preferredModel,
-          fallbackModels,
+
         );
       } catch (e: unknown) {
         const err = `Errore salvataggio impostazioni: ${getErrorMessage(e)}`;
@@ -464,7 +458,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         appendConsole(`❌ ${err}`);
         return;
       }
-      settingsSnapshotRef.current = { apiKey, fallbackKeys: [...fallbackKeys], preferredModel, fallbackModels: [...fallbackModels], notificationsEnabled };
+      settingsSnapshotRef.current = { apiKey, fallbackKeys: [...fallbackKeys], preferredModel, notificationsEnabled };
       setCredentialStorage(result.credential_storage);
       setApiKeyInsecure(Boolean(result.api_key_insecure));
       setApiKeyInsecureReason(result.api_key_insecure_reason || null);
@@ -493,11 +487,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setApiKey(snapshot.apiKey);
       setFallbackKeys([...snapshot.fallbackKeys]);
       setPreferredModel(snapshot.preferredModel);
-      setFallbackModels([...snapshot.fallbackModels]);
+
       setClearProtectedPrimary(false);
     }
     onClose();
-  }, [onClose, setApiKey, setFallbackKeys, setFallbackModels, setPreferredModel]);
+  }, [onClose, setApiKey, setFallbackKeys, setPreferredModel]);
 
   const handleConfirmDeleteKey = useCallback(() => {
     if (!keyDeleteTarget) return;

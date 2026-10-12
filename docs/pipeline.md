@@ -49,12 +49,11 @@ For each chunk in `range(start_sec, total_duration_sec, step_seconds)`:
 |---|---|
 | 400 / INVALID_ARGUMENT | `PermanentError` → `last_error = "bad_request_phase1"`, abort. |
 | Inline audio rejected (size/400) | Automatic fallback to upload, no quota consumed. |
-| `DegenerateOutputError` | One retry on the next model in the chain. If the chain is already exhausted: **chain-exhaustion recovery** resets to the primary model for one extra pass. If that also fails → `last_error = "phase1_degenerate_output"`. |
-| `AllModelsUnavailableError` (503 on every model) | Same chain-exhaustion recovery as above. On second failure → `last_error = "phase1_all_models_unavailable"`. |
+| `DegenerateOutputError` | One extra pass on the same selected model. If that also fails → `last_error = "phase1_degenerate_output"`. |
 | `QuotaDailyLimitError` | `last_error = "quota_daily_limit_phase1"`, abort. If the replacement-key popup times out, also set `last_error_detail = "api_key_prompt_timeout"`. |
 | Other exceptions after `_MAX_RETRY_ATTEMPTS` | `last_error = f"phase1_chunk_failed_{N}"`, `last_error_detail` captures the final exception summary, abort. |
 
-The `chain_exhaustion_recovery_used` flag (per chunk) ensures the extra primary-model pass can only happen once, so we never loop forever.
+The `chunk_recovery_used` flag (per chunk) allows one extra pass on the selected model after invalid output.
 
 ## Phase 2 — Macro-block revision
 
@@ -106,8 +105,8 @@ All Gemini calls in every phase go through `retry_with_quota(callable_fn, ...)`,
 | HTTP 429 rate limit (`rate_limit_exceeded`) | Minute/token-scoped quota: extracts `Retry-After` or uses 65 s, then makes one probe. A failed probe exhausts the circuit breaker and pauses the batch. |
 | HTTP 429 daily quota (`quota_exceeded`) | Day-scoped (RPD) exhaustion on Google project: marks model quota state as `rpd_exhausted`, automatically rotates to the next available fallback key via `try_rotate_key(fallback_keys)`, and prompts the UI via `request_new_api_key` only if all fallback keys are exhausted. If prompt times out or cancelled, aborts with quota error. |
 | HTTP 429 unknown | Defaults to minute-scoped rate limit backoff (65 s) before escalating to daily quota exhaustion if repeated. |
-| HTTP 404 model-not-found | Switch model; if no fallback left, re-raise. |
-| `DegenerateOutputError` | Switch model; if no fallback left, re-raise. |
+| HTTP 404 model-not-found | Report the error for the selected model. |
+| `DegenerateOutputError` | Re-raise; phase 1 can retry the chunk once on the same model. |
 | `PermanentError` | Re-raise immediately (no retry). |
 | Any other exception | Sleep `retry_sleep_seconds`, retry up to `_MAX_RETRY_ATTEMPTS`. |
 
@@ -115,7 +114,6 @@ All Gemini calls in every phase go through `retry_with_quota(callable_fn, ...)`,
 Side effects are routed through callbacks so phases can react:
 
 - `on_key_rotated(new_client)` — phase 1 uses this to refresh the uploaded file reference after key rotation.
-- `on_model_switched(prev, new)` — pipeline persists `settings.effective_model` and updates the UI model badge.
 - `resume_phase_text` — brought back after any sleep so the UI doesn't stay stuck on "Rate limit: attesa 65s…".
 
 ### Temperature
@@ -129,14 +127,13 @@ Source: `el_sbobinator/core/model_registry.py`.
 | Model id | Default chunk min | Default macro char limit | Phase-1 temperature |
 |---|---|---|---|
 | `gemini-3.8-flash` | 15 | 22 000 | 0.35 |
-| `gemini-3.6-flash` (default primary) | 15 | 22 000 | 0.35 |
+| `gemini-3.6-flash` (default) | 15 | 22 000 | 0.35 |
 | `gemini-2.5-flash` | 15 | 22 000 | 0.35 |
 
 Saved `gemini-3.5-flash` choices resolve to `gemini-3.6-flash`, and
-`gemini-3.7-flash` choices resolve to `gemini-3.8-flash`, including fallback models.
+`gemini-3.7-flash` choices resolve to `gemini-3.8-flash`, for saved model choices.
 
-The `ModelState` dataclass tracks the ordered chain and the currently active model. `build_model_state(primary, fallbacks)` always resets `current` to the primary on resume — the previous run's `effective_model` is persisted for observability only.
-New sessions start with no fallback models unless the user explicitly adds them in settings.
+Transcription, revision and API retries receive a single `model_name`. It stays fixed during a run. Regeneration reads the current model selection and updates completion metadata. Old model-reserve fields are removed when configurations and sessions are normalized. API-key rotation is independent of model selection.
 
 ## `last_error` reference
 
@@ -147,8 +144,7 @@ All failure modes write a machine-readable string to `session["last_error"]` bef
 | `api_key_mancante` | API key absent at job start | "API key mancante o non valida." |
 | `quota_daily_limit_phase1` | Daily quota exhausted during transcription | "Quota giornaliera API esaurita durante la trascrizione." With `last_error_detail = "api_key_prompt_timeout"`: "Attesa chiave API scaduta. Sessione salvata — riprendi quando vuoi." |
 | `bad_request_phase1` | HTTP 400 while transcribing a chunk | "Richiesta non valida durante la trascrizione (errore 400)." |
-| `phase1_degenerate_output` | Degenerate output even after chain-exhaustion recovery | "Trascrizione interrotta: testo non valido anche dopo il retry automatico." |
-| `phase1_all_models_unavailable` | Every model 503-unavailable; recovery also failed | Falls through to the raw string. |
+| `phase1_degenerate_output` | Degenerate output even after one extra pass on the selected model | "Trascrizione interrotta: testo non valido anche dopo il retry automatico." |
 | `regenerate_prompt_timeout` | The regenerate/resume prompt was left unanswered for 120 seconds | "Nessuna scelta ricevuta sulla ripresa entro 120 secondi. Sessione salvata: clicca Riprendi per continuare." |
 | `session_collision` | A fresh/regenerate path tried to overwrite a completed session with existing HTML without explicit confirmation | "Questo file sembra corrispondere a una sbobina gia completata ma con contenuto diverso. Apri Impostazioni -> Sessioni per risolvere." |
 | `phase1_chunk_failed_<N>` | Non-quota exception after all retries on chunk `N`; detail stores the final exception summary | "Errore al blocco `<N>` dopo 4 tentativi. Dettaglio: `<last_error_detail>`. Clicca Riprendi per continuare dal blocco `<N>`." |
@@ -171,6 +167,5 @@ Source: `el_sbobinator/generation_service.py`.
 | `QuotaDailyLimitError(Exception)` | Daily quota exhausted on the active key with no fallback available. Stops the current phase; progress is saved. |
 | `PermanentError(Exception)` | HTTP 400 / INVALID_ARGUMENT — never retried. |
 | `DegenerateOutputError(RuntimeError)` | Model produced repetitive / runaway text. Carries `rejected_text` (capped at 500 chars) for diagnostics. |
-| `AllModelsUnavailableError(RuntimeError)` | Every model in the fallback chain returned 503 after all back-offs. Triggers phase-1 chain-exhaustion recovery. |
 
 See [`session_model.md`](./session_model.md) for how these interact with the resume contract.

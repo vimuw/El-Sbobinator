@@ -17,7 +17,6 @@ export function serializeQueueFile(file: FileItem): Record<string, unknown> {
     errorText: file.errorText,
     errorDetail: file.errorDetail,
     completedAt: file.completedAt,
-    primaryModel: file.primaryModel,
     effectiveModel: file.effectiveModel,
     completionStatus: file.completionStatus,
     revisionFailedBlocks: file.revisionFailedBlocks,
@@ -27,6 +26,8 @@ export function serializeQueueFile(file: FileItem): Record<string, unknown> {
 }
 
 export function deserializeQueueFile(file: Partial<FileItem>, index: number): FileItem {
+  // Read the old metadata once; new queue entries persist only the actual model.
+  const storedModel = file.effectiveModel || (file as Record<string, unknown>).primaryModel;
   return {
     id: String(file.id || `restored-${index}`),
     name: String(file.name || `file-${index}`),
@@ -41,8 +42,7 @@ export function deserializeQueueFile(file: Partial<FileItem>, index: number): Fi
     errorText: file.errorText ? String(file.errorText) : undefined,
     errorDetail: file.errorDetail ? String(file.errorDetail) : undefined,
     completedAt: file.completedAt ? Number(file.completedAt) : undefined,
-    primaryModel: file.primaryModel ? String(file.primaryModel) : undefined,
-    effectiveModel: file.effectiveModel ? String(file.effectiveModel) : undefined,
+    effectiveModel: storedModel ? String(storedModel) : undefined,
     completionStatus: file.completionStatus === 'completed_with_warnings' ? 'completed_with_warnings' : 'completed',
     revisionFailedBlocks: Array.isArray(file.revisionFailedBlocks)
       ? file.revisionFailedBlocks.map(Number).filter(n => Number.isFinite(n) && n > 0)

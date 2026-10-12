@@ -25,14 +25,12 @@ const _ERROR_MAP: Record<string, string> = {
   html_export_missing: 'File di output non trovato dopo il salvataggio.',
   processing_failed: 'Elaborazione non completata.',
   api_key_mancante: 'API key mancante o non valida.',
-  phase1_all_models_unavailable: 'Tutti i modelli AI temporaneamente non disponibili.',
   revision_failed_blocks: 'Alcuni blocchi sono stati inclusi non revisionati.',
 };
 
 const _RESUMABLE_ERRORS = new Set([
   'quota_daily_limit_phase1',
   'quota_daily_limit_phase2',
-  'phase1_all_models_unavailable',
   'regenerate_prompt_timeout',
 ]);
 

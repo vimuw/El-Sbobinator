@@ -51,7 +51,7 @@ Source: `_BridgeDispatcher` + `PipelineAdapter` in `el_sbobinator/app_webview.py
 | `updateWorkDone` | yes | `{kind: "chunks"\|"macro", done: int, total: int\|null}` | `PipelineAdapter.update_work_done` | Incremental counters per phase. |
 | `registerStepTime` (Deprecated/Unused) | yes | `{kind, seconds, done?, total?}` | `PipelineAdapter.register_step_time` | [DEPRECATED/UNUSED] Formerly used to track elapsed time for a single step to drive the EMA-based ETA. |
 | `setCurrentFile` | no | `{index: int, id: string, total: int}` | Inside `ElSbobinatorApi.start_processing._run` | New file in the batch has started. |
-| `fileDone` | no | `{index, id, output_html, output_dir, primary_model?, effective_model?}` | `ElSbobinatorApi.start_processing._run` | File completed successfully. |
+| `fileDone` | no | `{index, id, output_html, output_dir, effective_model?}` | `ElSbobinatorApi.start_processing._run` | File completed successfully. |
 | `fileFailed` | no | `{index, id, error, error_detail?, retryable?, retry_reason?, recommended_retry_at?}` | `ElSbobinatorApi.start_processing._run` | File failed or paused. Circuit-breaker pauses use `retryable=true` and `retry_reason="circuit_breaker_paused"`. |
 | `retryStateChanged` | no | `{state, reason?, model?, attempt?, max_attempts?, next_retry_at?, seconds_remaining?}` | `generation_service` / `pipeline.py` | Circuit states are `idle`, `cooling_down`, `probing`, `exhausted`, and `paused`; `next_retry_at` is ISO UTC. |
 | `processDone` | no | `{cancelled: bool, completed: int, failed: int, paused?: int, total: int, quota_exhausted?}` | `ElSbobinatorApi.start_processing._run` (finally) | Batch has finished, paused, or was cancelled. A paused file stops the batch and leaves later files queued. |
@@ -74,13 +74,13 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
 
 | Method | Arguments | Returns | Notes |
 |---|---|---|---|
-| `load_settings()` | — | `{api_key, fallback_keys, preferred_model, fallback_models, available_models, has_protected_key, api_key_insecure, api_key_insecure_reason}` | `available_models` mirrors `MODEL_OPTIONS`; `api_key_insecure` warns when Windows DPAPI was unavailable and the key is plaintext on disk. |
-| `save_settings(api_key, fallback_keys, preferred_model, fallback_models)` | API key (nullable), list of strings, model id, list of ids | `{ok, error?}` | Writes via `config_service.save_config`. |
+| `load_settings()` | — | `{api_key, fallback_keys, preferred_model, available_models, has_protected_key, api_key_insecure, api_key_insecure_reason}` | `available_models` mirrors `MODEL_OPTIONS`; `api_key_insecure` warns when Windows DPAPI was unavailable and the key is plaintext on disk. |
+| `save_settings(api_key, fallback_keys, preferred_model)` | API key (nullable), list of strings, model id | `{ok, error?}` | Writes via `config_service.save_config`. |
 | `save_theme_preference(theme)` | theme string (`"light"` \| `"dark"`) | `None` | Persists theme preference to disk. |
-| `validate_environment(api_key?, check_api_key?, preferred_model?, fallback_models?)` | `{ok, result?: ValidationResult, error?}` | Cached environment check. | |
-| `get_api_usage(api_key?, fallback_keys?, preferred_model?, fallback_models?)` | API keys and models | `{ok, result?: ApiUsageResult, error?}` | Aggregated Gemini state-first operational status, project limits, single-authority telemetry, work stats, and credential profiles. |
+| `validate_environment(api_key?, check_api_key?, preferred_model?)` | `{ok, result?: ValidationResult, error?}` | Cached environment check. | |
+| `get_api_usage(api_key?, fallback_keys?, preferred_model?, force_refresh?)` | API keys and chosen model | `{ok, result?: ApiUsageResult, error?}` | Aggregated Gemini state-first operational status, project limits, single-authority telemetry, work stats, and credential profiles. |
 
-| `get_diagnostic_report(api_key?, fallback_keys?, preferred_model?, fallback_models?, session_dir?, frontend_version?)` | Legacy credential arguments ignored; optional archive session and frontend version | `{ok, report?: string, error?}` | Local Markdown support report; no remote API validation. |
+| `get_diagnostic_report(api_key?, fallback_keys?, preferred_model?, session_dir?, frontend_version?)` | Legacy credential arguments ignored; optional archive session and frontend version | `{ok, report?: string, error?}` | Local Markdown support report; no remote API validation. |
 | `list_diagnostic_sessions()` | none | `{ok, sessions?: [{path, label, updated_at}], error?}` | Up to 100 recent archive sessions for optional selection. |
 | `export_diagnostics(session_dir?, frontend_version?)` | Optional archive session and frontend version | `{ok, target_path?, cancelled?, error?}` | Desktop native save dialog and atomic ZIP export of the same report data. Cancellation returns `ok=true, cancelled=true`. Browser host returns unavailable. |
 | `record_frontend_event(kind, message?, stack?)` | `ready`, `error`, `unhandledrejection`, `react`; bounded strings | `{ok, error?}` | Local bounded incidents or current boot readiness; browser host acknowledges without persisting. |
@@ -114,7 +114,7 @@ Source: `ElSbobinatorApi` in `el_sbobinator/app_webview.py`. Consumer: `Pywebvie
 
 | Method | Arguments | Returns | Notes |
 |---|---|---|---|
-| `start_processing(files, api_key, resume_session, preferred_model?, fallback_models?, override_low_disk?, force_retry?)` | `BridgeFileItem[]`, key, bool, optional strings/flags | `{ok, error?}` | Persists config, then launches the pipeline worker thread. `force_retry` is reserved for an explicit manual resume after a circuit pause. |
+| `start_processing(files, api_key, resume_session, preferred_model?, override_low_disk?, force_retry?)` | `BridgeFileItem[]`, key, bool, optional strings/flags | `{ok, error?}` | Persists config, then launches the pipeline worker thread. `force_retry` is reserved for an explicit manual resume after a circuit pause. |
 | `stop_processing()` | — | `{ok}` | Sets the cancel event; pipeline exits at the next check. Also cancels any pending `ask_*` prompts. |
 | `answer_regenerate(regenerate)` | `true \| false \| null` | `{ok}` | `null` treats the prompt as cancelled. |
 | `answer_new_key(key)` | new API key string | `{ok}` | Empty string = refuse and abort. |
@@ -161,7 +161,7 @@ File: `el_sbobinator/pipeline_hooks.py`. The pipeline never touches `PipelineAda
 |---|---|---|
 | `progress(value)` | `aggiorna_progresso(value)` | `pipeline.py`, `phase1_service.py`, `revision_service.py` |
 | `phase(text)` | `aggiorna_fase(text)` | everywhere |
-| `update_model(model)` | `update_model(model)` | `pipeline.py` (model fallback) |
+| `update_model(model)` | `update_model(model)` | `pipeline.py` (selected model and regeneration) |
 | `set_work_totals(chunks_total=None, macro_total=None)` | `set_work_totals(...)` | `phase1_service.py`, `revision_service.py` |
 | `update_work_done(kind, done, total=None)` | `update_work_done(...)` | `phase1_service.py`, `revision_service.py` |
 | `register_step_time(kind, seconds, done=None, total=None)` (Deprecated/Unused) | `register_step_time(...)` | `phase1_service.py`, `revision_service.py` (calculations removed) |

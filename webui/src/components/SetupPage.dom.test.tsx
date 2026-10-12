@@ -7,7 +7,7 @@ const baseProps = {
   onSaved: vi.fn(),
   preferredModel: 'gemini-2.5-flash',
   fallbackKeys: [],
-  fallbackModels: [],
+
 };
 
 function setPywebview(api: Record<string, unknown> | undefined) {
@@ -228,7 +228,7 @@ describe('SetupPage', () => {
     });
   });
 
-  it('automatically falls back to gemini-3.6-flash if primary model returns 404', async () => {
+  it('reports a 404 for the selected model without validating or saving a different model', async () => {
     const onSaved = vi.fn();
     const mockValidate = vi.fn().mockImplementation((_k, _v, model) => {
       if (model === 'gemini-2.5-flash') {
@@ -240,7 +240,7 @@ describe('SetupPage', () => {
               {
                 id: 'api_key',
                 status: 'error',
-                message: 'Modello primario non accessibile.',
+                message: 'Modello selezionato non accessibile.',
                 details: 'gemini-2.5-flash: 404 NOT_FOUND',
               },
             ],
@@ -277,17 +277,10 @@ describe('SetupPage', () => {
     });
 
     await vi.waitFor(() => {
-      expect(mockValidate).toHaveBeenCalledTimes(2);
-      expect(mockSave).toHaveBeenCalledWith(
-        'AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345',
-        [],
-        'gemini-3.6-flash',
-        [],
-      );
-      expect(onSaved).toHaveBeenCalledWith(
-        'AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345',
-        'gemini-3.6-flash',
-      );
+      expect(mockValidate).toHaveBeenCalledExactlyOnceWith('AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345', true, 'gemini-2.5-flash');
+      expect(mockSave).not.toHaveBeenCalled();
+      expect(onSaved).not.toHaveBeenCalled();
+      expect(screen.getByText('Modello selezionato non accessibile.')).toBeTruthy();
     });
   });
 });

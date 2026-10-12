@@ -1001,7 +1001,6 @@ def get_daily_usage(
     primary_key: str | None = None,
     fallback_keys: list[str] | None = None,
     primary_model: str = DEFAULT_MODEL,
-    fallback_models: list[str] | None = None,
     force_refresh: bool = False,
 ) -> dict[str, Any]:
     """Retrieves aggregated state, primary status, project limits, telemetry, and credentials."""
@@ -1020,11 +1019,6 @@ def get_daily_usage(
             all_keys.append((clean_fk, False, f"Chiave Riserva {idx + 1}"))
 
     clean_primary_model = str(primary_model or DEFAULT_MODEL).strip()
-    relevant_models: list[str] = [clean_primary_model]
-    for fm in fallback_models or []:
-        cfm = str(fm or "").strip()
-        if cfm and cfm not in relevant_models:
-            relevant_models.append(cfm)
 
     probe_result = (
         _probe_primary_credential(clean_primary, clean_primary_model)

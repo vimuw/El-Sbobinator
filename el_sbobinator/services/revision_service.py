@@ -13,7 +13,6 @@ from typing import Any
 
 from google.genai import types
 
-from el_sbobinator.core.model_registry import ModelState
 from el_sbobinator.core.session_store import _update_session
 from el_sbobinator.core.shared import _atomic_write_text
 from el_sbobinator.pipeline.pipeline_session import record_step_metric
@@ -21,7 +20,6 @@ from el_sbobinator.services import usage_service
 from el_sbobinator.services.generation_service import (
     QuotaDailyLimitError,
     create_gemini_client,
-    current_model_name,
     extract_response_text,
     retry_with_quota,
     sleep_with_cancel,
@@ -94,12 +92,10 @@ def _revise_single_macro_block(
     block_text: str,
     prompt_revisione: str,
     model_name: str,
-    model_state: ModelState | None,
     fallback_keys: list[str],
     request_fallback_key: Callable[[], str | None],
     runtime,
     cancelled: Callable[[], bool],
-    on_model_switched=None,
     logger=None,
     resume_phase_text: str,
 ) -> tuple[object, str | None]:
@@ -107,7 +103,7 @@ def _revise_single_macro_block(
 
     def _call(current_client):
         response = current_client.models.generate_content(
-            model=current_model_name(model_state, model_name),
+            model=model_name,
             contents=[block_text],
             config=types.GenerateContentConfig(
                 system_instruction=prompt_revisione,
@@ -124,12 +120,10 @@ def _revise_single_macro_block(
         client=client,
         fallback_keys=fallback_keys,
         model_name=model_name,
-        model_state=model_state,
         cancelled=cancelled,
         runtime=runtime,
         request_fallback_key=request_fallback_key,
         retry_sleep_seconds=20.0,
-        on_model_switched=on_model_switched,
         logger=logger,
         resume_phase_text=resume_phase_text,
     )
@@ -149,8 +143,6 @@ def _run_macro_retry_pass(
     request_fallback_key: Callable[[], str | None],
     prompt_revisione: str,
     model_name: str,
-    model_state: ModelState | None,
-    on_model_switched=None,
     logger=None,
 ) -> tuple[object, list[int], int, bool]:
     """Run second-attempt revision on provisionally failed macro blocks."""
@@ -212,18 +204,17 @@ def _run_macro_retry_pass(
                 block_text=block_for_ai_retry,
                 prompt_revisione=prompt_revisione,
                 model_name=model_name,
-                model_state=model_state,
                 fallback_keys=fallback_keys,
                 request_fallback_key=request_fallback_key,
                 runtime=runtime,
                 cancelled=cancelled,
-                on_model_switched=on_model_switched,
                 logger=logger,
                 resume_phase_text=f"Fase 2/3: retry revisione (blocco {index}/{macro_total})",
             )
             if current_text is None:
                 return client, failed_blocks, revised_done, True
             _atomic_write_text(rev_path, current_text + "\n")
+            session.setdefault("settings", {})["effective_model"] = model_name
             try:
                 os.remove(raw_path)
             except Exception:
@@ -308,7 +299,6 @@ def _process_macro_block_item(
     phase2_revised_dir: str,
     client,
     model_name: str,
-    model_state: ModelState | None,
     prompt_revisione: str,
     fallback_keys: list[str],
     request_fallback_key: Callable[[], str | None],
@@ -316,7 +306,6 @@ def _process_macro_block_item(
     save_session: Callable[[], bool],
     runtime,
     cancelled: Callable[[], bool],
-    on_model_switched=None,
     logger=None,
 ) -> MacroBlockProcessResult:
     """Process a single macro block in Phase 2."""
@@ -379,12 +368,10 @@ def _process_macro_block_item(
             block_text=block_for_ai,
             prompt_revisione=prompt_revisione,
             model_name=model_name,
-            model_state=model_state,
             fallback_keys=fallback_keys,
             request_fallback_key=request_fallback_key,
             runtime=runtime,
             cancelled=cancelled,
-            on_model_switched=on_model_switched,
             logger=logger,
             resume_phase_text=f"Fase 2/3: revisione ({index}/{macro_total})",
         )
@@ -397,6 +384,7 @@ def _process_macro_block_item(
             )
 
         _atomic_write_text(rev_path, current_text + "\n")
+        session.setdefault("settings", {})["effective_model"] = model_name
         print(f"   [autosave] Revisione salvata: {os.path.basename(rev_path)}")
 
         new_revised_done = revised_done + 1
@@ -476,7 +464,6 @@ def process_macro_revision_phase(
     *,
     client,
     model_name: str,
-    model_state: ModelState | None = None,
     macro_blocks: list[str],
     phase2_revised_dir: str,
     session: dict,
@@ -486,7 +473,6 @@ def process_macro_revision_phase(
     fallback_keys: list[str],
     request_fallback_key: Callable[[], str | None],
     prompt_revisione: str,
-    on_model_switched=None,
     logger=None,
 ) -> tuple[object, str]:
     log = logger or get_logger("el_sbobinator.revision", stage="phase2")
@@ -521,7 +507,6 @@ def process_macro_revision_phase(
             phase2_revised_dir=phase2_revised_dir,
             client=client,
             model_name=model_name,
-            model_state=model_state,
             prompt_revisione=prompt_revisione,
             fallback_keys=fallback_keys,
             request_fallback_key=request_fallback_key,
@@ -529,7 +514,6 @@ def process_macro_revision_phase(
             save_session=save_session,
             runtime=runtime,
             cancelled=cancelled,
-            on_model_switched=on_model_switched,
             logger=log,
         )
         client = res.client
@@ -559,8 +543,6 @@ def process_macro_revision_phase(
         request_fallback_key=request_fallback_key,
         prompt_revisione=prompt_revisione,
         model_name=model_name,
-        model_state=model_state,
-        on_model_switched=on_model_switched,
         logger=log,
     )
     if aborted:
@@ -604,7 +586,6 @@ def retry_failed_revision_blocks(
     *,
     client,
     model_name: str,
-    model_state: ModelState | None = None,
     phase2_revised_dir: str,
     session: dict,
     save_session: Callable[[], bool],
@@ -613,7 +594,6 @@ def retry_failed_revision_blocks(
     fallback_keys: list[str],
     request_fallback_key: Callable[[], str | None],
     prompt_revisione: str,
-    on_model_switched=None,
     logger=None,
 ) -> tuple[object, dict]:
     """Retry only blocks previously shipped as unrevised raw markdown.
@@ -694,12 +674,10 @@ def retry_failed_revision_blocks(
                 block_text=block_for_ai_retry,
                 prompt_revisione=prompt_revisione,
                 model_name=model_name,
-                model_state=model_state,
                 fallback_keys=fallback_keys,
                 request_fallback_key=request_fallback_key,
                 runtime=runtime,
                 cancelled=cancelled,
-                on_model_switched=on_model_switched,
                 logger=log,
                 resume_phase_text=f"Fase 2/3: retry blocchi mancanti ({position}/{len(failed_blocks)})",
             )
@@ -788,7 +766,7 @@ def execute_failed_blocks_retry_workflow(
     """Orchestrate the end-to-end failed revision blocks retry workflow."""
     from google import genai
 
-    from el_sbobinator.core.model_registry import build_model_state
+    from el_sbobinator.core.model_registry import sanitize_model_name
     from el_sbobinator.core.prompts import PROMPT_REVISIONE
     from el_sbobinator.core.session_store import (
         mark_html_exported,
@@ -807,11 +785,9 @@ def execute_failed_blocks_retry_workflow(
 
     cfg = load_config()
     settings = session.get("settings", {}) if isinstance(session, dict) else {}
-    primary_model = str(
-        settings.get("model") or cfg.get("preferred_model") or DEFAULT_MODEL
-    ).strip()
-    fallback_models = settings.get("fallback_models") or cfg.get("fallback_models", [])
-    model_state = build_model_state(primary_model, fallback_models)
+    model_name = sanitize_model_name(
+        settings.get("model") or cfg.get("preferred_model"), DEFAULT_MODEL
+    )
     client = generation_service.create_gemini_client(api_key)
     fallback_keys = generation_service.load_fallback_keys()
 
@@ -828,16 +804,10 @@ def execute_failed_blocks_retry_workflow(
             retry_cancel_event.set()
         return key
 
-    def _on_model_switched(_old: str, new: str) -> None:
-        session.setdefault("settings", {})
-        session["settings"]["effective_model"] = new
-        _save_session()
-
     phase2_revised_dir = os.path.join(session_dir, "phase2_revised")
     client, retry_result = retry_failed_revision_blocks(
         client=client,
-        model_name=primary_model,
-        model_state=model_state,
+        model_name=model_name,
         phase2_revised_dir=phase2_revised_dir,
         session=session,
         save_session=_save_session,
@@ -846,7 +816,6 @@ def execute_failed_blocks_retry_workflow(
         fallback_keys=fallback_keys,
         request_fallback_key=_request_fallback_key,
         prompt_revisione=PROMPT_REVISIONE,
-        on_model_switched=_on_model_switched,
     )
 
     retried_blocks = list(retry_result.get("retried_blocks", []))
@@ -881,7 +850,7 @@ def execute_failed_blocks_retry_workflow(
     session.setdefault("outputs", {})
     session["outputs"]["html"] = html_path
     session.setdefault("settings", {})
-    session["settings"]["effective_model"] = model_state.current
+    session["settings"]["effective_model"] = model_name
     mark_html_exported(session)
     _save_session()
     invalidate_session_storage_cache()
@@ -897,7 +866,7 @@ def execute_failed_blocks_retry_workflow(
         "completion_status": "completed_with_warnings" if remaining else "completed",
         "html_path": html_path,
         "session_dir": session_dir,
-        "effective_model": model_state.current,
+        "effective_model": model_name,
         "cancelled": cancelled,
         "quota_exhausted": quota_exhausted,
     }

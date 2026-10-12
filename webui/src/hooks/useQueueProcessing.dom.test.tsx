@@ -51,7 +51,7 @@ describe('useQueueProcessing', () => {
         appStateRef,
         apiKey: 'AIzaSyTestKey_123456789012345678901',
         preferredModel: 'gemini-2.5-flash',
-        fallbackModels: [],
+
         dispatch,
         appendConsole,
         setConfirmAction,
@@ -95,7 +95,7 @@ describe('useQueueProcessing', () => {
         apiKey: '',
         hasProtectedKey: true,
         preferredModel: 'gemini-2.5-flash',
-        fallbackModels: [],
+
         dispatch,
         appendConsole,
         setConfirmAction,
@@ -145,7 +145,7 @@ describe('useQueueProcessing', () => {
         appStateRef,
         apiKey: 'AIzaSyTestKey_123456789012345678901',
         preferredModel: 'gemini-2.5-flash',
-        fallbackModels: [],
+
         dispatch,
         appendConsole,
         setConfirmAction,
@@ -179,7 +179,7 @@ describe('useQueueProcessing', () => {
         appStateRef: { current: 'idle' as const },
         apiKey: 'AIzaSyTestKey_123456789012345678901',
         preferredModel: 'gemini-2.5-flash',
-        fallbackModels: [],
+
         dispatch: vi.fn(),
         appendConsole: vi.fn(),
         setConfirmAction: vi.fn(),
@@ -215,7 +215,7 @@ describe('useQueueProcessing', () => {
         appStateRef,
         apiKey: 'AIzaSyTestKey_123456789012345678901',
         preferredModel: 'gemini-2.5-flash',
-        fallbackModels: [],
+
         dispatch,
         appendConsole,
         setConfirmAction,

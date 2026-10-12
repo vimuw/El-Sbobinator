@@ -196,7 +196,7 @@ def collect_files(
         "dependencies": dependencies,
         "settings": {
             key: settings.get(key)
-            for key in ("preferred_model", "fallback_models", "notifications_enabled")
+            for key in ("preferred_model", "notifications_enabled")
         },
         "collection": "local; no remote API validation performed",
         "archive_exists": Path(root).is_dir(),

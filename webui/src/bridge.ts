@@ -113,9 +113,6 @@ export interface ApiUsageResult {
   estimated_sbobine_remaining?: number;
 }
 
-
-
-
 export interface ModelOption {
   id: string;
   label: string;
@@ -135,7 +132,7 @@ export interface SettingsPayload {
   api_key?: string;
   fallback_keys?: string[];
   preferred_model?: string;
-  fallback_models?: string[];
+
   available_models?: ModelOption[];
   has_protected_key?: boolean;
   api_key_insecure?: boolean;
@@ -259,7 +256,7 @@ export interface PywebviewApi {
     apiKey: string | null,
     fallbackKeys: string[] | null,
     preferredModel: string,
-    fallbackModels: string[],
+
   ) => Promise<{ ok: boolean; error?: string; credential_storage?: CredentialStorage; api_key_insecure?: boolean; api_key_insecure_reason?: string }>;
   ask_files?: () => Promise<FileDescriptor[]>;
   ask_media_file?: () => Promise<FileDescriptor | null>;
@@ -270,7 +267,7 @@ export interface PywebviewApi {
     apiKey: string,
     resumeSession: boolean,
     preferredModel: string,
-    fallbackModels: string[],
+
     overrideLowDisk?: boolean,
     forceRetry?: boolean,
   ) => Promise<StartProcessingResult>;
@@ -290,7 +287,7 @@ export interface PywebviewApi {
     apiKey?: string,
     checkApiKey?: boolean,
     preferredModel?: string,
-    fallbackModels?: string[],
+
   ) => Promise<{ ok: boolean; result?: ValidationResult; error?: string }>;
   get_session_storage_info?: () => Promise<{ ok: boolean; total_bytes?: number; total_sessions?: number; session_root?: string; error?: string }>;
   cleanup_old_sessions?: (maxAgeDays?: number, dryRun?: boolean) => Promise<{ ok: boolean; removed?: number; freed_bytes?: number; errors?: number; candidates?: number; preserved_completed?: number; missing_completed_html?: number; error?: string }>;
@@ -350,14 +347,14 @@ export interface PywebviewApi {
     apiKey?: string,
     fallbackKeys?: string[],
     preferredModel?: string,
-    fallbackModels?: string[],
+
     forceRefresh?: boolean,
   ) => Promise<{ ok: boolean; result?: ApiUsageResult; error?: string }>;
   get_diagnostic_report?: (
     apiKey?: string,
     fallbackKeys?: string[],
     preferredModel?: string,
-    fallbackModels?: string[],
+
     sessionDir?: string,
     frontendVersion?: string,
   ) => Promise<{ ok: boolean; report?: string; error?: string }>;
@@ -368,7 +365,6 @@ export interface PywebviewApi {
   upload_browser_files?: (files: File[]) => Promise<FileDescriptor[]>;
   set_browser_scenario?: (scenario: string) => Promise<{ ok: boolean; scenario?: string; error?: string }>;
 }
-
 
 declare global {
   interface Window {

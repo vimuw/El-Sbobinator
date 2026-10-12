@@ -190,19 +190,19 @@ export function createBrowserPywebviewApi(): PywebviewApi {
 
   return {
     load_settings: () => callRpc('load_settings'),
-    save_settings: (apiKey, fallbackKeys, preferredModel, fallbackModels) =>
-      callRpc('save_settings', apiKey, fallbackKeys, preferredModel, fallbackModels),
+    save_settings: (apiKey, fallbackKeys, preferredModel) =>
+      callRpc('save_settings', apiKey, fallbackKeys, preferredModel),
     check_path_exists: (path) => callRpc('check_path_exists', path),
-    start_processing: (files, apiKey, resumeSession, preferredModel, fallbackModels, overrideLowDisk, forceRetry) =>
-      callRpc('start_processing', files, apiKey, resumeSession, preferredModel, fallbackModels, overrideLowDisk, forceRetry),
+    start_processing: (files, apiKey, resumeSession, preferredModel, overrideLowDisk, forceRetry) =>
+      callRpc('start_processing', files, apiKey, resumeSession, preferredModel, overrideLowDisk, forceRetry),
     stop_processing: () => callRpc('stop_processing'),
     is_processing_active: () => callRpc('is_processing_active'),
     answer_regenerate: (regenerate) => callRpc('answer_regenerate', regenerate),
     answer_new_key: (key) => callRpc('answer_new_key', key),
     read_html_content: (path) => callRpc('read_html_content', path),
     save_html_content: (path, content, generation) => callRpc('save_html_content', path, content, generation),
-    validate_environment: (apiKey, checkApiKey, preferredModel, fallbackModels) =>
-      callRpc('validate_environment', apiKey, checkApiKey, preferredModel, fallbackModels),
+    validate_environment: (apiKey, checkApiKey, preferredModel) =>
+      callRpc('validate_environment', apiKey, checkApiKey, preferredModel),
     get_session_storage_info: () => callRpc('get_session_storage_info'),
     cleanup_old_sessions: (maxAgeDays, dryRun) => callRpc('cleanup_old_sessions', maxAgeDays, dryRun),
     cleanup_completed_sessions: (maxAgeDays, dryRun) => callRpc('cleanup_completed_sessions', maxAgeDays, dryRun),
@@ -215,10 +215,10 @@ export function createBrowserPywebviewApi(): PywebviewApi {
     save_archive_folders: (folders) => callRpc('save_archive_folders', folders),
     search_sessions: (query, limit) => callRpc('search_sessions', query, limit),
     retry_failed_revision_blocks: (sessionDir) => callRpc('retry_failed_revision_blocks', sessionDir),
-    get_api_usage: (apiKey, fallbackKeys, preferredModel, fallbackModels, forceRefresh) =>
-      callRpc('get_api_usage', apiKey, fallbackKeys, preferredModel, fallbackModels, forceRefresh),
-    get_diagnostic_report: (apiKey, fallbackKeys, preferredModel, fallbackModels) =>
-      callRpc('get_diagnostic_report', apiKey, fallbackKeys, preferredModel, fallbackModels),
+    get_api_usage: (apiKey, fallbackKeys, preferredModel, forceRefresh) =>
+      callRpc('get_api_usage', apiKey, fallbackKeys, preferredModel, forceRefresh),
+    get_diagnostic_report: (apiKey, fallbackKeys, preferredModel) =>
+      callRpc('get_diagnostic_report', apiKey, fallbackKeys, preferredModel),
     save_theme_preference: (theme) => callRpc('save_theme_preference', theme),
     set_browser_scenario: (scenario) => callRpc('set_browser_scenario', scenario),
 

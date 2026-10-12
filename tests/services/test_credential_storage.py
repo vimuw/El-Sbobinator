@@ -210,7 +210,6 @@ def test_failed_replacement_still_warns_about_old_plaintext_on_disk(store, monke
     assert "chiaro" in loaded["api_key_insecure_reason"]
     assert disk() == raw | {
         "preferred_model": cs.DEFAULT_MODEL,
-        "fallback_models": list(cs.DEFAULT_FALLBACK_MODELS),
     }
 
 
@@ -402,7 +401,7 @@ def test_bridge_reports_plaintext_when_legacy_scrub_fails(store, monkeypatch):
     monkeypatch.setattr(settings_controller, "save_config", cs.save_config)
     monkeypatch.setattr(settings_controller, "load_config", cs.load_config)
     host = DummySettingsHost()
-    saved = host.save_settings("replacement", [], cs.DEFAULT_MODEL, [])
+    saved = host.save_settings("replacement", [], cs.DEFAULT_MODEL)
     assert saved["ok"]
     assert saved["credential_storage"]["primary"] == "protected"
     assert saved["api_key_insecure"]

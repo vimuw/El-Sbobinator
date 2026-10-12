@@ -2,35 +2,14 @@ import unittest
 from unittest.mock import patch
 
 from el_sbobinator.core.model_registry import (
-    DEFAULT_FALLBACK_MODELS,
     DEFAULT_MODEL,
     MODEL_OPTIONS,
     SUPPORTED_MODELS,
-    build_model_state,
     default_chunk_minutes_for_model,
     default_macro_char_limit_for_model,
-    sanitize_fallback_models,
     sanitize_model_name,
 )
 from el_sbobinator.pipeline.pipeline_settings import load_and_sanitize_settings
-
-
-class ResumeModelStateTests(unittest.TestCase):
-    def test_resume_without_effective_starts_from_primary(self):
-        """Resume with no effective_model → current = primary."""
-        ms = build_model_state("gemini-2.5-flash", ["gemini-3.6-flash"])
-        self.assertEqual(ms.current, "gemini-2.5-flash")
-
-    def test_resume_ignores_stale_effective_model(self):
-        """Pipeline no longer passes effective_model at resume; chain and primary are correct."""
-        ms = build_model_state("gemini-2.5-flash", ["gemini-3.6-flash"])
-        self.assertEqual(ms.current, "gemini-2.5-flash")
-        self.assertEqual(ms.chain, ("gemini-2.5-flash", "gemini-3.6-flash"))
-
-    def test_chain_preserved_for_fallback_on_503(self):
-        """Fallback chain is still intact so retry_with_quota can degrade if needed."""
-        ms = build_model_state("gemini-2.5-flash", ["gemini-3.6-flash"])
-        self.assertIn("gemini-3.6-flash", ms.chain)
 
 
 class SupportedModelsTests(unittest.TestCase):
@@ -72,26 +51,6 @@ class SupportedModelsTests(unittest.TestCase):
     def test_gemini_15_flash_not_in_supported_models(self):
         self.assertNotIn("gemini-1.5-flash", SUPPORTED_MODELS)
 
-    def test_no_default_fallback_models(self):
-        self.assertEqual(DEFAULT_FALLBACK_MODELS, ())
-
-    def test_current_fallbacks_accepted_by_sanitize_fallback_models(self):
-        result = sanitize_fallback_models(
-            ["gemini-3.6-flash", "gemini-3.8-flash"],
-            primary_model="gemini-2.5-flash",
-        )
-        self.assertEqual(
-            result,
-            ["gemini-3.6-flash", "gemini-3.8-flash"],
-        )
-
-    def test_removed_models_filtered_by_sanitize_fallback_models(self):
-        result = sanitize_fallback_models(
-            ["gemini-2.0-flash", "gemini-3.6-flash", "gemini-2.5-pro"],
-            primary_model="gemini-2.5-flash",
-        )
-        self.assertEqual(result, ["gemini-3.6-flash"])
-
     def test_removed_models_migrate_to_default_and_are_dropped_from_fallbacks(self):
         removed_models = (
             "gemini-2.5-flash-lite",
@@ -115,27 +74,6 @@ class SupportedModelsTests(unittest.TestCase):
                 self.assertTrue(changed)
                 self.assertEqual(settings.model, DEFAULT_MODEL)
                 self.assertEqual(settings.effective_model, DEFAULT_MODEL)
-                self.assertEqual(settings.fallback_models, [])
-
-    def test_chain_with_current_default_fallbacks(self):
-        ms = build_model_state(
-            "gemini-2.5-flash",
-            ["gemini-3.6-flash", "gemini-3.8-flash"],
-        )
-        self.assertEqual(
-            ms.chain,
-            (
-                "gemini-2.5-flash",
-                "gemini-3.6-flash",
-                "gemini-3.8-flash",
-            ),
-        )
-        self.assertEqual(ms.current, "gemini-2.5-flash")
-
-    def test_unsupported_primary_falls_back_to_default(self):
-        ms = build_model_state("gemini-2.5-pro", ["gemini-2.5-flash"])
-        self.assertEqual(ms.current, DEFAULT_MODEL)
-        self.assertIn("gemini-2.5-flash", ms.chain)
 
 
 class LegacyModelMigrationTests(unittest.TestCase):
@@ -148,29 +86,6 @@ class LegacyModelMigrationTests(unittest.TestCase):
         for model in SUPPORTED_MODELS:
             with self.subTest(model=model):
                 self.assertEqual(sanitize_model_name(model), model)
-
-    def test_fallback_migration_deduplicates_and_excludes_primary(self):
-        self.assertEqual(
-            sanitize_fallback_models(
-                [
-                    "gemini-3.5-flash",
-                    "gemini-3.6-flash",
-                    "gemini-3.7-flash",
-                    "gemini-3.8-flash",
-                    "gemini-2.5-flash",
-                    "unknown",
-                ],
-                primary_model="gemini-3.5-flash",
-            ),
-            ["gemini-3.8-flash", "gemini-2.5-flash"],
-        )
-
-    def test_effective_legacy_fallback_resolves_in_model_state(self):
-        state = build_model_state(
-            "gemini-2.5-flash", ["gemini-3.7-flash"], "gemini-3.7-flash"
-        )
-        self.assertEqual(state.chain, ("gemini-2.5-flash", "gemini-3.8-flash"))
-        self.assertEqual(state.current, "gemini-3.8-flash")
 
     def test_session_migration_preserves_parameters_and_is_idempotent(self):
         for legacy, successor in (
@@ -196,15 +111,9 @@ class LegacyModelMigrationTests(unittest.TestCase):
                 settings, changed = load_and_sanitize_settings(session)
                 self.assertTrue(changed)
                 self.assertEqual(settings.model, successor)
-                self.assertEqual(settings.effective_model, "gemini-3.8-flash")
-                self.assertEqual(
-                    settings.fallback_models,
-                    ["gemini-3.8-flash"] if successor != "gemini-3.8-flash" else [],
-                )
+                self.assertEqual(settings.effective_model, successor)
                 self.assertEqual(session["settings"]["model"], successor)
-                self.assertEqual(
-                    session["settings"]["effective_model"], "gemini-3.8-flash"
-                )
+                self.assertEqual(session["settings"]["effective_model"], successor)
                 self.assertEqual(settings.chunk_minutes, 7)
                 self.assertEqual(settings.overlap_seconds, 45)
                 self.assertEqual(settings.macro_char_limit, 10000)
@@ -263,7 +172,6 @@ class DefaultMacroCharLimitTests(unittest.TestCase):
         session = {
             "settings": {
                 "model": "gemini-3.6-flash",
-                "fallback_models": [],
                 "effective_model": "gemini-3.6-flash",
                 "audio": {"bitrate": "48k"},
             }
@@ -283,7 +191,6 @@ class DefaultMacroCharLimitTests(unittest.TestCase):
         session = {
             "settings": {
                 "model": "gemini-3.6-flash",
-                "fallback_models": [],
                 "effective_model": "gemini-3.6-flash",
                 "chunk_minutes": 5,
                 "overlap_seconds": 30,
@@ -304,7 +211,6 @@ class DefaultMacroCharLimitTests(unittest.TestCase):
         session = {
             "settings": {
                 "model": "gemini-3.6-flash",
-                "fallback_models": [],
                 "effective_model": "gemini-3.6-flash",
                 "chunk_minutes": 5,
                 "overlap_seconds": 30,

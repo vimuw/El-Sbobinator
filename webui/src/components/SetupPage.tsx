@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { motion } from 'motion/react';
 import { AlertCircle, ArrowRight, CheckCircle2, ExternalLink, Eye, EyeOff, Key, Lightbulb, Loader2 } from 'lucide-react';
 import type { CredentialStorage } from '../bridge';
-import { DEFAULT_MODEL, GEMINI_KEY_PATTERN } from '../utils';
+import { GEMINI_KEY_PATTERN } from '../utils';
 
 interface SetupPageProps {
   hasProtectedKey: boolean;
   onSaved: (key: string, model?: string, storage?: CredentialStorage, legacyPlaintext?: boolean) => void;
   preferredModel: string;
   fallbackKeys: string[];
-  fallbackModels: string[];
+
 }
 
 export function SetupPage({
@@ -17,7 +17,7 @@ export function SetupPage({
   onSaved,
   preferredModel,
   fallbackKeys,
-  fallbackModels,
+
 }: SetupPageProps) {
   const [setupKeyInput, setSetupKeyInput] = useState('');
   const [setupKeyShowRaw, setSetupKeyShowRaw] = useState(false);
@@ -38,54 +38,20 @@ export function SetupPage({
         return;
       }
 
-      let activeModel = preferredModel;
-
       // 1. Live key and model validation if validate_environment is available
       if (window.pywebview?.api?.validate_environment) {
         try {
           const valRes = await window.pywebview.api.validate_environment(
             trimmedKey,
             true,
-            activeModel,
-            fallbackModels,
+            preferredModel,
+
           );
           if (valRes?.result?.checks) {
             const apiCheck = valRes.result.checks.find(c => c.id === 'api_key');
             if (apiCheck && apiCheck.status === 'error') {
-              const details = (apiCheck.details || '').toLowerCase();
-              const isNotFound =
-                details.includes('404') ||
-                details.includes('not_found') ||
-                details.includes('not found');
-
-              // If the chosen model is unavailable, try the current default.
-              if (isNotFound && activeModel !== DEFAULT_MODEL) {
-                try {
-                  const retryVal = await window.pywebview.api.validate_environment(
-                    trimmedKey,
-                    true,
-                    DEFAULT_MODEL,
-                    fallbackModels,
-                  );
-                  const retryCheck = retryVal?.result?.checks?.find(c => c.id === 'api_key');
-                  if (retryCheck && retryCheck.status === 'ok') {
-                    activeModel = DEFAULT_MODEL;
-                  } else {
-                    setSetupKeyError(
-                      `I modelli Gemini predefiniti non sono disponibili per questo progetto Google Cloud con la chiave inserita.`
-                    );
-                    return;
-                  }
-                } catch {
-                  setSetupKeyError(
-                    `Il modello ${activeModel} non è disponibile per questo progetto Google Cloud.`
-                  );
-                  return;
-                }
-              } else {
-                setSetupKeyError(apiCheck.message || 'Chiave API non valida o non attiva.');
-                return;
-              }
+              setSetupKeyError(apiCheck.message || 'Il modello selezionato non è accessibile con questa chiave API.');
+              return;
             }
           }
         } catch (valErr: unknown) {
@@ -98,8 +64,8 @@ export function SetupPage({
         result = await window.pywebview.api.save_settings(
           trimmedKey,
           fallbackKeys,
-          activeModel,
-          fallbackModels,
+          preferredModel,
+
         );
       } catch (e: unknown) {
         setSetupKeyError(`Errore salvataggio: ${e instanceof Error ? e.message : String(e)}`);
@@ -110,11 +76,11 @@ export function SetupPage({
         return;
       }
       if (result.api_key_insecure !== undefined) {
-        onSaved(trimmedKey, activeModel, result.credential_storage, result.api_key_insecure);
+        onSaved(trimmedKey, preferredModel, result.credential_storage, result.api_key_insecure);
       } else if (result.credential_storage) {
-        onSaved(trimmedKey, activeModel, result.credential_storage);
+        onSaved(trimmedKey, preferredModel, result.credential_storage);
       } else {
-        onSaved(trimmedKey, activeModel);
+        onSaved(trimmedKey, preferredModel);
       }
     } finally {
       setSetupKeySaving(false);

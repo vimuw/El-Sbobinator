@@ -60,8 +60,7 @@ interface MakePropsOverrides {
   setFallbackKeys?: React.Dispatch<React.SetStateAction<string[]>>;
   preferredModel?: string;
   setPreferredModel?: (model: string) => void;
-  fallbackModels?: string[];
-  setFallbackModels?: React.Dispatch<React.SetStateAction<string[]>>;
+
   availableModels?: ModelOption[];
   latestVersion?: string | null;
   checkForUpdates?: (force?: boolean) => void;
@@ -89,8 +88,7 @@ const makeProps = (overrides: MakePropsOverrides = {}): SettingsModalProps => ({
   models: {
     preferredModel: overrides.preferredModel ?? overrides.models?.preferredModel ?? 'gemini-2.5-flash',
     setPreferredModel: overrides.setPreferredModel ?? overrides.models?.setPreferredModel ?? vi.fn(),
-    fallbackModels: overrides.fallbackModels ?? overrides.models?.fallbackModels ?? [],
-    setFallbackModels: overrides.setFallbackModels ?? overrides.models?.setFallbackModels ?? vi.fn(),
+
     availableModels: overrides.availableModels ?? overrides.models?.availableModels ?? [],
   },
   updater: {
@@ -164,7 +162,7 @@ describe('SettingsModal — diagnostics environment pending checks', () => {
         getUsage.mockResolvedValue(usage(9));
         await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Generale' })); });
         await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Verifica connessione' })); });
-        expect(getUsage.mock.lastCall?.[4]).toBe(true);
+        expect(getUsage.mock.lastCall?.[3]).toBe(true);
         await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' })); });
         expect(screen.getByText('9')).toBeTruthy();
         await act(async () => {
@@ -227,7 +225,7 @@ describe('SettingsModal — diagnostics environment pending checks', () => {
       getUsage.mockClear();
       await act(async () => { vi.advanceTimersByTime(10_000); });
       expect(getUsage).toHaveBeenCalledTimes(1);
-      expect(getUsage.mock.calls[0][4]).toBe(false);
+      expect(getUsage.mock.calls[0][3]).toBe(false);
       expect(screen.getByText('8')).toBeTruthy();
       expect(screen.queryByText('Aggiornamento attività…')).toBeNull();
       await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Archiviazione' })); });
@@ -256,7 +254,7 @@ describe('SettingsModal — diagnostics environment pending checks', () => {
     getUsage.mockClear();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Riprova' })); });
     expect(getUsage).toHaveBeenCalledTimes(1);
-    expect(getUsage.mock.calls[0][4]).toBe(false);
+    expect(getUsage.mock.calls[0][3]).toBe(false);
     expect(screen.getByText('9')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Riprova' })).toBeNull();
   });
@@ -273,7 +271,6 @@ describe('SettingsModal — diagnostics environment pending checks', () => {
     await act(async () => {
       fireEvent.click(screen.getByText('Diagnostica').closest('button')!);
     });
-
 
     expect(screen.getByText('API Key Gemini')).toBeDefined();
     expect(screen.getByText('FFmpeg')).toBeDefined();
@@ -301,7 +298,6 @@ describe('SettingsModal — save behavior', () => {
       const [apiKey, setApiKey] = React.useState(primaryKey);
       const [fallbackKeys, setFallbackKeys] = React.useState([originalFallback]);
       const [preferredModel, setPreferredModel] = React.useState('gemini-primary');
-      const [fallbackModels, setFallbackModels] = React.useState(['gemini-alternate']);
 
       return (
         <>
@@ -316,8 +312,7 @@ describe('SettingsModal — save behavior', () => {
               setFallbackKeys,
               preferredModel,
               setPreferredModel,
-              fallbackModels,
-              setFallbackModels,
+
               availableModels,
             })}
           />
@@ -445,7 +440,7 @@ describe('SettingsModal — save behavior', () => {
       fireEvent.click(screen.getByText('Salva e Chiudi'));
     });
 
-    expect(mockSave).toHaveBeenCalledWith('', [], 'gemini-2.5-flash', []);
+    expect(mockSave).toHaveBeenCalledWith('', [], 'gemini-2.5-flash');
   });
 
   it('preserves configured fallback keys when masked values were not edited', async () => {
@@ -466,7 +461,6 @@ describe('SettingsModal — save behavior', () => {
       'AIzaSyTest123456',
       null,
       'gemini-2.5-flash',
-      [],
     );
   });
 
@@ -564,8 +558,6 @@ describe('SettingsModal — session info race condition', () => {
     await act(async () => {
       fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
     });
-
-
 
     await act(async () => { resolveFirst({ ok: true, total_bytes: 999999, total_sessions: 7777 }); });
 
@@ -888,7 +880,6 @@ describe('SettingsModal — session folder and cleanup', () => {
     await act(async () => {
       fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
     });
-
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Cambia cartella' }));

@@ -88,7 +88,6 @@ A second helper, `_session_dir_for_file(path)`, joins `SESSION_ROOT` with the fi
   },
   "settings": {
     "model": "gemini-2.5-flash",
-    "fallback_models": [],
     "effective_model": "gemini-2.5-flash",
     "chunk_minutes": 15,
     "overlap_seconds": 30,
@@ -129,7 +128,7 @@ Notes:
 
 - `"stage"` is one of `"phase1"`, `"phase2"`, or `"done"` for sessions created by the current pipeline. Sessions written by older versions may contain `"boundary"`, which is accepted by `normalize_stage` and promoted to `"done"` when export completes — it is never written by the current pipeline.
 - `input.path` is captured once at creation. Since identity is derived from size + mtime + partial hash (not from the path), the stored value is informational — moving the file does not break resume.
-- `settings.effective_model` records the model that was active when the previous run last persisted. On resume the pipeline always resets `ModelState.current` back to `settings.model` (the primary) and lets the fallback chain re-degrade if needed.
+- `settings.effective_model` records the model used for the run. Resume uses `settings.model`; regeneration starts a new session with the currently selected model. The model remains fixed during each run.
 - `metrics.*` entries are maintained by `pipeline_session.record_step_metric(session, kind, seconds, done, total)`. `avg_seconds` is recomputed as `elapsed_seconds / count`; the UI uses a 40/60 EMA of `last_seconds` for live ETA.
 - `last_error` and `last_error_detail` are cleared (`null`) whenever a phase completes cleanly. `last_error_detail` is optional diagnostic context, currently used for replacement-key prompt timeouts and Phase 1 chunk-failure details. See [`pipeline.md`](./pipeline.md) for the full list of possible values.
 - `revision_pending_blocks` / `revision_failed_blocks` are populated by `revision_service.process_macro_revision_phase` and consumed only for observability.
@@ -142,10 +141,10 @@ Called on every resume. Ensures `session["settings"]` is a dict and:
 - Clamps `overlap_seconds` into `[0, chunk_seconds - 1]`.
 - Clamps `macro_char_limit` into `[6 000, 90 000]`.
 - Clamps `inline_audio_max_mb` into `[0, 25]`.
-- Validates `model` / `fallback_models` against `SUPPORTED_MODELS`; unknown entries are dropped.
-- Recomputes `effective_model`: keeps the stored value only if it belongs to the current `{model} ∪ fallback_models` set; otherwise resets to `model`.
+- Validates `model` against `SUPPORTED_MODELS` and removes the obsolete model-reserve field from older sessions.
+- Recomputes `effective_model` from the selected `model`.
 - Ensures `audio.bitrate` is a non-empty string (defaults to `"48k"`).
-- **Legacy model migration**: `gemini-3.5-flash` resolves to `gemini-3.6-flash` and `gemini-3.7-flash` resolves to `gemini-3.8-flash` in primary, fallback and effective model fields. Fallbacks are deduplicated after migration. Other removed model identifiers are sanitized to the current default model, while unsupported fallback entries are discarded. Explicit chunk and macro limits remain preserved unless they match a known obsolete default.
+- **Legacy model migration**: `gemini-3.5-flash` resolves to `gemini-3.6-flash` and `gemini-3.7-flash` resolves to `gemini-3.8-flash` in selected and effective model fields. Other removed model identifiers are sanitized to the current default model. Explicit chunk and macro limits remain preserved unless they match a known obsolete default.
 
 The function also returns a `changed` flag so `initialize_session_context` can save the sanitized values back to disk idempotently.
 

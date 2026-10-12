@@ -351,14 +351,16 @@ describe('CompletedFileCard', () => {
     expect(onOpenFile).toHaveBeenCalledWith('/out/file.html');
   });
 
-  it('shows fallback badge when primary and effective models differ', () => {
+  it('shows the effective model for a regenerated legacy queue entry without a fallback badge', () => {
     render(
       <CompletedFileCard
-        file={makeFile({ status: 'done', primaryModel: 'gemini-flash', effectiveModel: 'gemini-flash-lite' })}
+        file={makeFile({ status: 'done', effectiveModel: 'gemini-2.5-flash' })}
         isNewest={false}
         onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
       />,
     );
-    expect(screen.getByText('fallback')).toBeTruthy();
+    expect(screen.getByText('2.5-flash')).toBeTruthy();
+    expect(screen.queryByText('3.6-flash')).toBeNull();
+    expect(screen.queryByText(/fallback/i)).toBeNull();
   });
 });

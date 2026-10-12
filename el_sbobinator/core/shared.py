@@ -18,7 +18,6 @@ import platform
 import sys
 
 from el_sbobinator.core.model_registry import (
-    DEFAULT_FALLBACK_MODELS,
     DEFAULT_MODEL,
 )
 from el_sbobinator.core.session_store import (
@@ -84,7 +83,6 @@ from el_sbobinator.utils.file_ops import (
 )
 
 __all__ = [
-    "DEFAULT_FALLBACK_MODELS",
     "DEFAULT_MODEL",
     "PRECONVERTED_AUDIO_FINAL",
     "PRECONVERTED_AUDIO_PARTIAL",

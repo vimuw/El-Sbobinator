@@ -34,7 +34,7 @@ describe('QueuePage Component', () => {
       setApiKeyInsecureReason: vi.fn(),
       fallbackKeys: [],
       preferredModel: 'gemini-2.5-flash',
-      fallbackModels: [],
+
     },
     ingest: {
       isDragging: false,

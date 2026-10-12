@@ -16,7 +16,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
   const [fallbackKeys, setFallbackKeys] = useState<string[]>([]);
   const [configuredFallbackKeyCount, setConfiguredFallbackKeyCount] = useState(0);
   const [preferredModel, setPreferredModel] = useState(DEFAULT_MODEL);
-  const [fallbackModels, setFallbackModels] = useState<string[]>([]);
+
   const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
   const initDoneRef = useRef(false);
   const inFlightRef = useRef(false);
@@ -44,7 +44,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
     setFallbackKeys(Array.isArray(cfg?.fallback_keys) ? cfg.fallback_keys : []);
     setConfiguredFallbackKeyCount(Number(cfg?.configuredFallbackKeyCount ?? 0));
     setPreferredModel(cfg?.preferred_model || DEFAULT_MODEL);
-    setFallbackModels(Array.isArray(cfg?.fallback_models) ? cfg.fallback_models : []);
+
     setAvailableModels(Array.isArray(cfg?.available_models) ? cfg.available_models : []);
   }, []);
 
@@ -139,8 +139,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
     configuredFallbackKeyCount,
     preferredModel,
     setPreferredModel,
-    fallbackModels,
-    setFallbackModels,
+
     availableModels,
     refreshSettings,
   };
