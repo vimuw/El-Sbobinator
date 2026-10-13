@@ -102,9 +102,9 @@ tools/resize_icon.py
 # Temporary changelog generated during build/release
 /release_changelog.md
 
-# Generated quick-guide document
-/docs/Guida_rapida_El_Sbobinator.docx
-/docs/Guida_rapida_El_Sbobinator.pdf
+# Keep developer documentation private to this checkout.
+/docs/
+/CONTRIBUTING.md
 
 # Browser E2E artifacts
 /test-results/

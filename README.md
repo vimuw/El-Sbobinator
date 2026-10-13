@@ -111,15 +111,6 @@ Per i termini completi, le condizioni vincolanti e l'esclusione di responsabilit
 
 ---
 
-## Per Sviluppatori
-
-Per eseguire il progetto in locale, eseguire i test o contribuire:
-- [CONTRIBUTING.md](CONTRIBUTING.md) — Setup ambiente locale, linter (`ruff`, `eslint`) e suite di test (`pytest`, `vitest`).
-- [docs/architecture.md](docs/architecture.md) — Architettura interna moduli Python e interfaccia React.
-- [docs/pipeline.md](docs/pipeline.md) — Pipeline di chunking audio, interazione con Gemini e rate limiting.
-
----
-
 ## Licenza
 
 Distribuito con licenza **MIT**. Per i dettagli completi, consultare il file [`LICENSE`](LICENSE).
