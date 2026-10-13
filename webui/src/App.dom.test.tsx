@@ -11,6 +11,9 @@ import type { FileDonePayload, ProcessingAction } from './appState';
 import type { PywebviewApi } from './bridge';
 
 const motionCache = new Map<string, React.ForwardRefExoticComponent<React.PropsWithoutRef<Record<string, unknown>> & React.RefAttributes<unknown>>>();
+const { logoAnimationControls } = vi.hoisted(() => ({
+  logoAnimationControls: { start: vi.fn(), stop: vi.fn(), set: vi.fn() },
+}));
 vi.mock('motion/react', () => ({
   motion: new Proxy({}, {
     get: (_: unknown, tag: string) => {
@@ -28,6 +31,7 @@ vi.mock('motion/react', () => ({
   }),
   AnimatePresence: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
   useAnimation: () => ({ start: vi.fn(), stop: vi.fn() }),
+  useAnimationControls: () => logoAnimationControls,
   useMotionValue: (v: unknown) => ({ get: () => v, set: vi.fn() }),
 }));
 

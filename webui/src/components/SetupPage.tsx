@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { AlertCircle, ArrowRight, CheckCircle2, ExternalLink, Eye, EyeOff, Key, Lightbulb, Loader2 } from 'lucide-react';
 import type { CredentialStorage } from '../bridge';
 import { GEMINI_KEY_PATTERN } from '../utils';
+import { BrandLogo } from './BrandLogo';
 
 interface SetupPageProps {
   hasProtectedKey: boolean;
@@ -96,12 +97,7 @@ export function SetupPage({
     >
       {/* Document Header */}
       <div className="space-y-3 text-left">
-        <img
-          src="./icon.png"
-          alt="El Sbobinator"
-          className="w-11 h-11 object-contain select-none pointer-events-none"
-          draggable={false}
-        />
+        <BrandLogo size={52} welcome={!hasProtectedKey} />
         <div className="space-y-1.5">
           <h1 className="text-[1.75rem] font-semibold tracking-tight leading-tight text-[var(--text-primary)] font-display">
             {hasProtectedKey ? 'Chiave API non accessibile' : 'Configura la tua API Key'}
