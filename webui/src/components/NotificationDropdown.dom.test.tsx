@@ -279,67 +279,24 @@ describe('NotificationDropdown component', () => {
     expect(handleClearAll).toHaveBeenCalledTimes(1);
   });
 
-  describe('Caret dynamic gradient and neutral color', () => {
-    it('uses neutral background when no notification overlaps caret', () => {
-      const { container } = render(
-        <NotificationDropdown
-          isOpen={true}
-          onClose={vi.fn()}
-          notifications={[mockNotifications[0]]}
-          onMarkAsRead={vi.fn()}
-          onMarkAllAsRead={vi.fn()}
-          onDelete={vi.fn()}
-          align="left"
-          valign="bottom"
-        />
-      );
+  it('shows the decorative pointer only for a sidebar-aligned panel', () => {
+    const props = {
+      isOpen: true,
+      onClose: vi.fn(),
+      notifications: mockNotifications,
+      onMarkAsRead: vi.fn(),
+      onMarkAllAsRead: vi.fn(),
+      onDelete: vi.fn(),
+    };
+    const { container, rerender } = render(
+      <NotificationDropdown {...props} align="left" valign="bottom" />
+    );
+    expect(container.querySelector('[aria-hidden="true"] svg polygon')).toBeTruthy();
 
-      const polygon = container.querySelector('svg polygon');
-      expect(polygon?.getAttribute('fill')).toBe('var(--bg-elevated, #ffffff)');
-    });
+    rerender(<NotificationDropdown {...props} align="right" valign="bottom" />);
+    expect(container.querySelector('svg polygon')).toBeNull();
 
-    it('adapts caret fill gradient when a notification overlaps the caret position', () => {
-      const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
-      try {
-        HTMLElement.prototype.getBoundingClientRect = function () {
-          const notifId = this.getAttribute('data-notification-id');
-          if (notifId === 'notif-1') {
-            // notif-1 (success) positioned at top [100, 200]
-            return { top: 100, bottom: 200, height: 100, width: 380, left: 0, right: 380, x: 0, y: 100, toJSON: () => {} };
-          }
-          if (notifId === 'notif-3') {
-            // notif-3 (error) positioned overlapping caret [300, 400]
-            return { top: 300, bottom: 400, height: 100, width: 380, left: 0, right: 380, x: 0, y: 300, toJSON: () => {} };
-          }
-          if (this.classList.contains('overflow-y-auto')) {
-            // scroll container
-            return { top: 100, bottom: 450, height: 350, width: 380, left: 0, right: 380, x: 0, y: 100, toJSON: () => {} };
-          }
-          if (this.parentElement?.classList?.contains('origin-bottom-left') || this.style?.bottom === '48px') {
-            // caret element
-            return { top: 330, bottom: 348, height: 18, width: 9, left: 0, right: 9, x: 0, y: 330, toJSON: () => {} };
-          }
-          return { top: 0, bottom: 0, height: 0, width: 0, left: 0, right: 0, x: 0, y: 0, toJSON: () => {} };
-        };
-
-        const { container } = render(
-          <NotificationDropdown
-            isOpen={true}
-            onClose={vi.fn()}
-            notifications={mockNotifications}
-            onMarkAsRead={vi.fn()}
-            onMarkAllAsRead={vi.fn()}
-            onDelete={vi.fn()}
-            align="left"
-            valign="bottom"
-          />
-        );
-
-        const polygon = container.querySelector('svg polygon');
-        expect(polygon?.getAttribute('fill')).toBe('url(#caret-grad-error)');
-      } finally {
-        HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
-      }
-    });
+    rerender(<NotificationDropdown {...props} align="left" valign="top" />);
+    expect(container.querySelector('svg polygon')).toBeNull();
   });
 });

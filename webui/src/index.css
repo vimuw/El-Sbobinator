@@ -4149,6 +4149,15 @@ input::-webkit-contacts-auto-fill-button {
   box-shadow: var(--shadow-strong) !important;
 }
 
+/* Keep the pointer joined to a neutral frame, independent of scrolling rows. */
+.notification-dropdown-panel.has-caret {
+  padding: 6px;
+}
+
+.notification-dropdown-panel.has-caret .notification-dropdown-content {
+  border-radius: 4px;
+}
+
 .folder-indicator-chip {
   display: inline-flex;
   align-items: center;

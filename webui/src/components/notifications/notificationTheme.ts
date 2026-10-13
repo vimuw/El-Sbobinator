@@ -1,10 +1,5 @@
 import type { NotificationMessage } from '../NotificationDropdown';
 
-export interface CaretStyle {
-  fill: string;
-  stroke: string;
-}
-
 export function getCategoryLabel(category: NotificationMessage['category']) {
   switch (category) {
     case 'processing':
@@ -86,39 +81,5 @@ export function getActionColor(
     case 'success':
     default:
       return 'var(--accent-text)';
-  }
-}
-
-export function getCaretStyle(
-  type?: NotificationMessage['type'],
-  category?: NotificationMessage['category']
-): CaretStyle {
-  if (category === 'update' || type === 'info') {
-    return {
-      fill: 'url(#caret-grad-info)',
-      stroke: 'color-mix(in srgb, var(--accent-bg) 14%, var(--bg-elevated, #ffffff))',
-    };
-  }
-  switch (type) {
-    case 'success':
-      return {
-        fill: 'url(#caret-grad-success)',
-        stroke: 'color-mix(in srgb, var(--success-bg) 14%, var(--bg-elevated, #ffffff))',
-      };
-    case 'warning':
-      return {
-        fill: 'url(#caret-grad-warning)',
-        stroke: 'color-mix(in srgb, var(--warning-bg) 14%, var(--bg-elevated, #ffffff))',
-      };
-    case 'error':
-      return {
-        fill: 'url(#caret-grad-error)',
-        stroke: 'color-mix(in srgb, var(--error-bg) 14%, var(--bg-elevated, #ffffff))',
-      };
-    default:
-      return {
-        fill: 'var(--bg-elevated, #ffffff)',
-        stroke: 'var(--bg-elevated, #ffffff)',
-      };
   }
 }
