@@ -19,11 +19,9 @@ Applicazione desktop per trasformare lezioni audio e video in dispense di studio
 ## Funzioni Principali
 
 - **Trascrizione e Sintesi**: Converte registrazioni audio e video in dispense di studio strutturate, ripulendo il parlato da intercalari e ripetizioni e organizzando i contenuti in capitoli, paragrafi ed elenchi puntati.
-- **Modello BYOK (Bring Your Own Key)**: L'applicazione è un client desktop autonomo e gratuito, senza abbonamenti né server intermediari gestiti dallo sviluppatore. La comunicazione avviene in forma diretta e cifrata tra il computer locale e le API ufficiali di Google Gemini.
+- **Gratuita e con chiave personale**: Nessun abbonamento all'app; utilizzi Google Gemini con la tua API key.
 - **Editor Sincronizzato**: Permette di riascoltare la lezione con il player audio sincronizzato (velocità da 1.0x a 3.0x) mentre si corregge la bozza, con supporto per formule scientifiche (LaTeX) e copia rapida formattata per altri editor di documenti.
 - **Archivio Locale & Ricerca Istantanea**: Conserva lo storico delle lezioni elaborate sul computer in cartelle organizzabili, con ricerca testuale full-text ad alta velocità tra tutte le sbobine salvate.
-
-Per modificare una sbobina insieme ad altre persone, usa **Copia formattata** nell'editor, incolla il contenuto in un editor di documenti condivisi e condividilo con i tuoi compagni.
 
 ---
 
@@ -46,7 +44,7 @@ Scarica la versione per il tuo sistema operativo:
 Inizia a sbobinare in 4 passaggi:
 
 ### 1. Ottieni la tua chiave Google Gemini
-L'applicazione opera in modalità BYOK (*Bring Your Own Key*) e non include chiavi incorporate né server proxy:
+
 1. Accedi a [**aistudio.google.com/apikey**](https://aistudio.google.com/apikey) con il tuo account Google.
 2. Clicca su **"Create API key"** (oppure *"Get API key"*), seleziona o crea un progetto Google Cloud e conferma.
 3. Copia la chiave generata (`AIzaSy...`).
@@ -55,8 +53,7 @@ L'applicazione opera in modalità BYOK (*Bring Your Own Key*) e non include chia
 All'avvio di **El Sbobinator**, incolla la chiave nel campo iniziale e clicca su **Salva e inizia**. La chiave viene memorizzata in modo protetto nel portachiavi sicuro del sistema operativo (Windows DPAPI o macOS Keychain).
 
 > [!NOTE]
-> **Costi, quote e termini Google**: El Sbobinator non include un accesso Gemini centralizzato: ogni utente configura e utilizza la propria API key e il proprio progetto Google. Quote, limiti di traffico, disponibilità dei modelli, condizioni contrattuali ed eventuali costi dipendono dal piano e dal progetto Google dell'utente ([Termini Gemini API](https://ai.google.dev/gemini-api/terms)). I tetti di richieste giornaliere (RPD) e al minuto (RPM) sono associati al **Progetto Google Cloud**. Al raggiungimento del limite di quota del piano attivo, l'elaborazione si arresta fino al ripristino della quota (ore 00:00 Pacific Time, circa le 09:00 italiane).
-
+> **Costi, quote e termini Google**: L'app è gratuita; disponibilità dei modelli, condizioni d'uso, eventuali costi e limiti di richieste giornaliere (RPD) e al minuto (RPM) dipendono dal piano e dal **Progetto Google Cloud** dell'utente ([Termini Gemini API](https://ai.google.dev/gemini-api/terms)). Al raggiungimento del limite di quota del piano attivo, l'elaborazione si arresta fino al ripristino della quota (ore 00:00 Pacific Time, circa le 09:00 italiane).
 
 ### 3. Trascina la registrazione e avvia
 Trascina il file audio o video direttamente nella finestra dell'applicazione (è possibile inserire più registrazioni in coda) e clicca su **Avvia Sbobinatura**.
@@ -64,15 +61,16 @@ Trascina il file audio o video direttamente nella finestra dell'applicazione (è
 - **Formati video supportati**: `.mp4`, `.mkv`, `.webm`, `.mov`, `.3gp`.
 
 ### 4. Rivedi ed esporta
-Al termine dell'elaborazione, la lezione viene aperta nell'editor integrato dell'applicazione, dove è possibile riascoltare l'audio e correggere il testo. L'esportazione della sbobina avviene tramite copia e incolla: clicca su **Copia formattata** per copiare la sbobina con la formattazione preservata e incollarla in un altro editor di documenti.
+Al termine dell'elaborazione, la lezione viene aperta nell'editor integrato dell'applicazione, dove è possibile riascoltare l'audio e correggere il testo. L'esportazione della sbobina avviene tramite copia e incolla: clicca su **Copia documento** per copiare la sbobina con la formattazione preservata e incollarla in un altro editor di documenti.
+
+Per lavorare con i tuoi compagni, incolla la sbobina in un documento condiviso.
 
 ---
 
 ## Privacy e Architettura dei Dati
 
-- **Client Desktop Locale**: L'applicazione viene eseguita sul computer dell'utente e non utilizza un backend gestito dallo sviluppatore. I file e le bozze vengono conservati localmente; i contenuti necessari all'elaborazione AI vengono trasmessi direttamente agli endpoint ufficiali di Google Gemini (`generativelanguage.googleapis.com`) tramite la credenziale dell'utente.
-- **Nessun Backend Proprietario**: L'applicazione non dispone di un backend proprietario e non invia file audio, trascrizioni o API key a infrastrutture gestite dallo sviluppatore.
-- **Condizioni e Policy Esterne**: Il trattamento dei contenuti trasmessi a Gemini dipende dal servizio, dal piano e dalle condizioni applicabili al progetto dell'utente. Per le condizioni sul trattamento dei dati da parte di Google, consultare i [Termini Aggiuntivi Gemini API](https://ai.google.dev/gemini-api/terms) e il documento [**DISCLAIMER.md**](DISCLAIMER.md).
+- **Client Desktop Locale**: L'applicazione viene eseguita sul computer dell'utente e conserva file e bozze localmente. I contenuti necessari all'elaborazione AI vengono trasmessi direttamente e in forma cifrata agli endpoint ufficiali di Google Gemini (`generativelanguage.googleapis.com`) tramite la credenziale dell'utente. File audio, trascrizioni e API key non vengono inviati a infrastrutture gestite dallo sviluppatore.
+- **Condizioni e Policy Esterne**: Il trattamento dei contenuti trasmessi a Gemini dipende dal servizio, dal piano e dalle condizioni applicabili al progetto dell'utente. Consultare i [Termini Aggiuntivi Gemini API](https://ai.google.dev/gemini-api/terms).
 
 ---
 
