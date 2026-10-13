@@ -31,7 +31,7 @@ test('HTML fallback preserves right caption image geometry, pixels, history and 
       geometry: { width: image.width, height: image.height, x: image.left - bounds.left, yFromText: image.top - following.top } };
   });
   const capture = async (button = false) => {
-    if (button) await page.getByRole('button', { name: 'Copia formattata', exact: true }).click();
+    if (button) await page.getByRole('button', { name: 'Copia documento', exact: true }).click();
     else { await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+c'); }
     await page.evaluate(() => {
       const probe = document.createElement('textarea'); probe.id = 'html-images-probe';

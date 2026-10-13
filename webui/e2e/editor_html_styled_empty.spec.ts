@@ -47,7 +47,7 @@ test('styled empty paragraphs retain separate typography and typing marks throug
   expect(original.empty).toHaveLength(2);
   expect(original.emptyMarks).toEqual([[{ type: 'bold' }], [{ type: 'italic' }]]);
   const capture = async (route: 'native' | 'fallback' | 'button') => {
-    if (route === 'button') await page.getByRole('button', { name: 'Copia formattata', exact: true }).click();
+    if (route === 'button') await page.getByRole('button', { name: 'Copia documento', exact: true }).click();
     else {
       await editor.focus();
       if (route === 'fallback') await page.keyboard.press('Control+a');

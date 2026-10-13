@@ -40,7 +40,7 @@ test('two empty paragraphs between a list and table survive fallback copy, editi
   const original = await read();
   expect(original.empty).toHaveLength(2);
   const capture = async (route: 'fallback' | 'button') => {
-    if (route === 'button') await page.getByRole('button', { name: 'Copia formattata', exact: true }).click();
+    if (route === 'button') await page.getByRole('button', { name: 'Copia documento', exact: true }).click();
     else { await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+c'); }
     await page.evaluate(() => {
       const probe = document.createElement('textarea'); probe.id = 'html-empty-probe';

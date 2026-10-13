@@ -3775,7 +3775,7 @@ input::-webkit-contacts-auto-fill-button {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 12px;
+  padding: 0 20px 0 12px;
   flex-shrink: 0;
   background: var(--bg-base);
   border-bottom: 1px solid var(--border-subtle);
@@ -3902,6 +3902,35 @@ input::-webkit-contacts-auto-fill-button {
 .editor-fullpage-actions .icon-button:not(.modal-icon-button) {
   width: 32px;
   height: 32px;
+}
+
+.editor-fullpage-actions .icon-button.editor-fullpage-copy {
+  width: auto;
+  min-width: 32px;
+  gap: 7px;
+  padding: 0 10px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.editor-fullpage-copy-label {
+  min-width: 96px;
+  text-align: center;
+}
+
+.editor-fullpage-utilities {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border-subtle);
+}
+
+@media (max-width: 720px) {
+  .editor-fullpage-copy-label { display: none; }
+  .editor-fullpage-actions .icon-button.editor-fullpage-copy { width: 32px; padding: 0; }
 }
 
 .editor-fullpage-actions .icon-button.icon-button--active {
