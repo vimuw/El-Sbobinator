@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { AlertCircle, ArrowRight, CheckCircle2, ExternalLink, Eye, EyeOff, Key, Lightbulb, Loader2 } from 'lucide-react';
-import type { CredentialStorage } from '../bridge';
+import type { CredentialStorage, ValidationCheck } from '../bridge';
 import { GEMINI_KEY_PATTERN } from '../utils';
 import { BrandLogo } from './BrandLogo';
+import { SetupErrorNotice } from './SetupErrorNotice';
 
 interface SetupPageProps {
   hasProtectedKey: boolean;
@@ -23,7 +24,8 @@ export function SetupPage({
   const [setupKeyInput, setSetupKeyInput] = useState('');
   const [setupKeyShowRaw, setSetupKeyShowRaw] = useState(false);
   const [setupKeySaving, setSetupKeySaving] = useState(false);
-  const [setupKeyError, setSetupKeyError] = useState<string | null>(null);
+  const [setupKeyError, setSetupKeyError] = useState<ValidationCheck | null>(null);
+  const setLocalError = (message: string) => setSetupKeyError({ id: 'setup', label: 'Configurazione', status: 'error', message });
 
   const trimmedKey = setupKeyInput.trim();
   const isValidFormat = GEMINI_KEY_PATTERN.test(trimmedKey);
@@ -35,29 +37,8 @@ export function SetupPage({
     setSetupKeyError(null);
     try {
       if (!window.pywebview?.api?.save_settings) {
-        setSetupKeyError('Bridge Python non disponibile — impostazioni non salvate.');
+        setLocalError('Bridge Python non disponibile — impostazioni non salvate.');
         return;
-      }
-
-      // 1. Live key and model validation if validate_environment is available
-      if (window.pywebview?.api?.validate_environment) {
-        try {
-          const valRes = await window.pywebview.api.validate_environment(
-            trimmedKey,
-            true,
-            preferredModel,
-
-          );
-          if (valRes?.result?.checks) {
-            const apiCheck = valRes.result.checks.find(c => c.id === 'api_key');
-            if (apiCheck && apiCheck.status === 'error') {
-              setSetupKeyError(apiCheck.message || 'Il modello selezionato non è accessibile con questa chiave API.');
-              return;
-            }
-          }
-        } catch (valErr: unknown) {
-          console.warn('Live API validation skipped or failed:', valErr);
-        }
       }
 
       let result;
@@ -69,11 +50,11 @@ export function SetupPage({
 
         );
       } catch (e: unknown) {
-        setSetupKeyError(`Errore salvataggio: ${e instanceof Error ? e.message : String(e)}`);
+        setLocalError(`Errore salvataggio: ${e instanceof Error ? e.message : String(e)}`);
         return;
       }
       if (!result?.ok) {
-        setSetupKeyError(`Errore salvataggio: ${result?.error || 'errore sconosciuto'}`);
+        setLocalError(`Errore salvataggio: ${result?.error || 'errore sconosciuto'}`);
         return;
       }
       if (result.api_key_insecure !== undefined) {
@@ -128,7 +109,11 @@ export function SetupPage({
                 type="text"
                 data-masked={!setupKeyShowRaw ? 'true' : 'false'}
                 value={setupKeyInput}
-                onChange={e => setSetupKeyInput(e.target.value)}
+                disabled={setupKeySaving}
+                onChange={e => {
+                  setSetupKeyInput(e.target.value);
+                  setSetupKeyError(null);
+                }}
                 onKeyDown={async e => {
                   if (e.key !== 'Enter') return;
                   if (!GEMINI_KEY_PATTERN.test(setupKeyInput.trim())) return;
@@ -179,12 +164,12 @@ export function SetupPage({
               ) : (
                 <ArrowRight className={`w-4 h-4 shrink-0 transition-transform ${canSave ? 'translate-x-0.5' : ''}`} />
               )}
-              <span>{setupKeySaving ? 'Verifica e salvataggio…' : 'Salva e inizia'}</span>
+              <span>{setupKeySaving ? 'Salvataggio…' : 'Salva e inizia'}</span>
             </button>
           </div>
         </div>
 
-        {trimmedKey ? (
+        {trimmedKey && !setupKeyError ? (
           <div
             className={`flex items-center gap-1.5 text-xs font-medium transition-opacity ${
               isValidFormat ? 'text-[var(--success-text)]' : 'text-[var(--warning-text)]'
@@ -204,10 +189,7 @@ export function SetupPage({
         ) : null}
 
         {setupKeyError && (
-          <div className="alert-card is-error text-xs flex items-center gap-2 py-2 px-3 mt-1.5">
-            <AlertCircle className="w-4 h-4 shrink-0 text-[var(--error-text)]" />
-            <span className="text-[var(--error-text)] leading-snug">{setupKeyError}</span>
-          </div>
+          <SetupErrorNotice check={setupKeyError} apiKey={trimmedKey} />
         )}
       </div>
 
