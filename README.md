@@ -1,7 +1,5 @@
 # El Sbobinator
 
-Applicazione desktop per trasformare lezioni audio e video in dispense di studio tramite Google Gemini.
-
 <p align="center">
   <a href="https://github.com/vimuw/El-Sbobinator/releases/latest"><img src="https://img.shields.io/github/v/release/vimuw/El-Sbobinator?style=flat-square&color=blue&label=Versione" alt="Ultima Versione" /></a>
   <a href="https://github.com/vimuw/El-Sbobinator/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/vimuw/El-Sbobinator/build.yml?branch=main&style=flat-square&label=CI" alt="Build Status" /></a>
@@ -9,6 +7,8 @@ Applicazione desktop per trasformare lezioni audio e video in dispense di studio
   <a href="https://github.com/vimuw/El-Sbobinator/releases"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-informational?style=flat-square" alt="Platform" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License: MIT" /></a>
 </p>
+
+Applicazione desktop per trasformare lezioni audio e video in dispense di studio tramite Google Gemini.
 
 <p align="center">
   <img width="100%" alt="Panoramica di El Sbobinator" src="assets/screenshots/preview.png" />
@@ -92,9 +92,11 @@ macOS può bloccare un'app se non ne riconosce lo sviluppatore o se manca la not
 
 ---
 
-## 🐛 Hai trovato un bug?
+## Hai trovato un bug?
 
-> [**Segnala un problema →**](https://docs.google.com/forms/d/e/1FAIpQLSdzfLau1SrSZuJgQ2J3lERgtXcz9EjE_vP63nHkiVYCsRqMzA/viewform)
+Se qualcosa non funziona come previsto, puoi segnalarlo tramite il modulo qui sotto. Descrivi cosa è successo, cosa ti aspettavi e i passaggi per riprodurre il problema. Indica anche la versione dell'app, il sistema operativo ed eventuali messaggi di errore: questi dettagli aiutano a individuare la causa.
+
+> [**Segnala un problema**](https://docs.google.com/forms/d/e/1FAIpQLSdzfLau1SrSZuJgQ2J3lERgtXcz9EjE_vP63nHkiVYCsRqMzA/viewform)
 
 ---
 
