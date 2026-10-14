@@ -72,7 +72,6 @@ class InlineMaxBytesTests(unittest.TestCase):
     def _make_settings(self, inline_audio_max_mb):
         return PipelineSettings(
             model="gemini-2.5-flash",
-            fallback_models=[],
             effective_model="gemini-2.5-flash",
             chunk_minutes=15,
             overlap_seconds=30,
@@ -108,7 +107,6 @@ class LoadAndSanitizeSettingsTests(unittest.TestCase):
     def _base_session(self, **overrides):
         s = {
             "model": "gemini-2.5-flash",
-            "fallback_models": [],
             "effective_model": "gemini-2.5-flash",
             "chunk_minutes": 15,
             "overlap_seconds": 30,
@@ -176,20 +174,18 @@ class LoadAndSanitizeSettingsTests(unittest.TestCase):
     def test_effective_model_reset_when_not_in_fallbacks(self):
         session = self._base_session(
             model="gemini-2.5-flash",
-            fallback_models=[],
             effective_model="gemini-3.6-flash",
         )
         settings, _ = load_and_sanitize_settings(session)
         self.assertEqual(settings.effective_model, "gemini-2.5-flash")
 
-    def test_effective_model_kept_when_in_fallbacks(self):
+    def test_legacy_fallback_cannot_override_session_model(self):
         session = self._base_session(
             model="gemini-2.5-flash",
-            fallback_models=["gemini-3.6-flash"],
             effective_model="gemini-3.6-flash",
         )
         settings, _ = load_and_sanitize_settings(session)
-        self.assertEqual(settings.effective_model, "gemini-3.6-flash")
+        self.assertEqual(settings.effective_model, "gemini-2.5-flash")
 
     def test_macro_22000_clamped_down_for_flash_lite_preview(self):
         session = self._base_session(
@@ -221,7 +217,6 @@ class LoadAndSanitizeSettingsTests(unittest.TestCase):
         session = {
             "settings": {
                 "model": model,
-                "fallback_models": [],
                 "effective_model": model,
                 "chunk_minutes": default_chunk_minutes_for_model(model),
                 "overlap_seconds": 30,
@@ -243,25 +238,23 @@ class BuildDefaultPipelineSettingsTests(unittest.TestCase):
         )
         for key in (
             "model",
-            "fallback_models",
             "effective_model",
             "chunk_minutes",
             "audio",
         ):
             self.assertIn(key, result)
 
-    def test_fallback_models_default_to_empty_when_not_configured(self):
+    def test_defaults_exclude_obsolete_model_reserve_field(self):
         result = build_default_pipeline_settings(
             {"preferred_model": "gemini-2.5-flash"}
         )
-        self.assertEqual(result["fallback_models"], [])
+        self.assertNotIn("fallback_models", result)
 
     def test_inline_max_bytes_invalid_value(self):
         from el_sbobinator.pipeline.pipeline_settings import PipelineSettings
 
         settings = PipelineSettings(
             model="gemini-2.5-flash",
-            fallback_models=[],
             effective_model="gemini-2.5-flash",
             chunk_minutes=10,
             overlap_seconds=30,

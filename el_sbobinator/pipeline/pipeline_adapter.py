@@ -74,7 +74,6 @@ class PipelineAdapter:
         # Output info (set by pipeline)
         self.last_output_html: str | None = None
         self.last_output_dir: str | None = None
-        self.last_primary_model: str | None = None
         self.last_effective_model: str | None = None
         self.last_revision_failed_blocks: list[int] = []
         self.last_run_status: str = "idle"
@@ -132,8 +131,7 @@ class PipelineAdapter:
 
     def update_model(self, model: str):
         m = str(model or "").strip() or None
-        if self.last_primary_model is None:
-            self.last_primary_model = m
+        # Regeneration can replace the old session's model with the current choice.
         self.last_effective_model = m
         self._emit_js("updateModel", m or "", batched=True)
 
@@ -154,7 +152,6 @@ class PipelineAdapter:
     def reset_run_state(self, api_key: str | None = None):
         self.last_output_html = None
         self.last_output_dir = None
-        self.last_primary_model = None
         self.last_effective_model = None
         self.last_revision_failed_blocks = []
         self.last_run_status = "failed"

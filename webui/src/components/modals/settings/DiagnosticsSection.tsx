@@ -15,6 +15,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { APP_VERSION } from '../../../branding';
+import { ReportProblemLink } from '../../ReportProblemLink';
 import { CustomSelect } from './CustomSelect';
 import type { ValidationResult, ApiUsageResult } from '../../../bridge';
 
@@ -95,7 +96,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
         setCopiedToast(true);
         setTimeout(() => setCopiedToast(false), 2500);
       } else if (window.pywebview?.api?.get_diagnostic_report) {
-        const res = await window.pywebview.api.get_diagnostic_report(undefined, undefined, undefined, undefined, sessionDir || undefined, APP_VERSION);
+        const res = await window.pywebview.api.get_diagnostic_report(undefined, undefined, undefined, sessionDir || undefined, APP_VERSION);
         if (res?.ok && res.report) {
           await navigator.clipboard.writeText(res.report);
           setCopiedToast(true);
@@ -258,6 +259,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
             Report per assistenza
           </h3>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <ReportProblemLink className="app-button-secondary is-settings-action" />
             <button
               type="button"
               onClick={handleCopyReport}
@@ -274,7 +276,6 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
                 <Copy className="w-4 h-4" />
               )}
             </button>
-
 
             {showOpenLogs && window.pywebview?.api?.export_diagnostics && (
               <button type="button" className="app-button-secondary is-settings-action is-icon" disabled={exporting || isCopying} onClick={handleExport}
@@ -295,6 +296,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
             )}
           </div>
         </div>
+        <p className="text-xs text-[var(--text-secondary)]">Hai trovato un bug? Descrivilo nel modulo; puoi aggiungere il report diagnostico.</p>
         {showOpenLogs && window.pywebview?.api?.export_diagnostics && (
           <div className="flex flex-col gap-2">
             <label htmlFor="diagnostic-session" className="text-xs text-[var(--text-secondary)]">Sbobina con il problema (facoltativa)</label>

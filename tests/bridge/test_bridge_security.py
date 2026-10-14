@@ -91,6 +91,11 @@ class SystemControllerSecurityTests(unittest.TestCase):
             "https://malicious-site.com/exploit",
             "about:blank",
             "vbscript:msgbox(1)",
+            "https://docs.google.com/forms/d/e/another-form/viewform?usp=pp_url",
+            "https://docs.google.com/forms/d/e/"
+            "1FAIpQLSdzfLau1SrSZuJgQ2J3lERgtXcz9EjE_vP63nHkiVYCsRqMzA/edit",
+            "https://docs.google.com/forms/d/e/"
+            "1FAIpQLSdzfLau1SrSZuJgQ2J3lERgtXcz9EjE_vP63nHkiVYCsRqMzA/viewform-other",
         ]
         for url in evil_urls:
             with self.subTest(url=url):
@@ -102,6 +107,9 @@ class SystemControllerSecurityTests(unittest.TestCase):
         allowed_urls = [
             "https://github.com/vimuw/El-Sbobinator",
             "https://aistudio.google.com/app/apikey",
+            "https://docs.google.com/forms/d/e/"
+            "1FAIpQLSdzfLau1SrSZuJgQ2J3lERgtXcz9EjE_vP63nHkiVYCsRqMzA/"
+            "viewform?usp=pp_url&entry.1877160526=2.7.4",
         ]
         with patch(
             "el_sbobinator.utils.file_ops.open_path_with_default_app"

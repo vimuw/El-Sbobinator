@@ -70,7 +70,6 @@ def _browser_settings(app: FastAPI) -> dict[str, Any]:
         "fallback_keys": [],
         "configuredFallbackKeyCount": state["configured_fallback_key_count"],
         "preferred_model": state["preferred_model"],
-        "fallback_models": list(state["fallback_models"]),
         "available_models": list(MODEL_OPTIONS),
         "has_protected_key": state["has_primary_key"],
         "api_key_insecure": False,
@@ -140,7 +139,6 @@ def _handle_browser_runtime_rpc(
         api_key = body.args[0] if len(body.args) > 0 else None
         fallback_keys = body.args[1] if len(body.args) > 1 else None
         preferred_model = body.args[2] if len(body.args) > 2 else DEFAULT_MODEL
-        fallback_models = body.args[3] if len(body.args) > 3 else []
         if api_key is not None:
             state["has_primary_key"] = bool(str(api_key).strip())
         if fallback_keys is not None:
@@ -150,9 +148,6 @@ def _handle_browser_runtime_rpc(
                 [item for item in fallback_keys if str(item or "").strip()]
             )
         state["preferred_model"] = str(preferred_model or DEFAULT_MODEL)
-        state["fallback_models"] = [
-            str(item) for item in fallback_models if str(item or "").strip()
-        ]
         return {"ok": True}
     if method == "get_api_usage":
         return {
@@ -606,7 +601,6 @@ def create_browser_app(
         "has_primary_key": True,
         "configured_fallback_key_count": 0,
         "preferred_model": DEFAULT_MODEL,
-        "fallback_models": [],
     }
     app.state.archive_folders = []
     app.state.scenario_threads = set()

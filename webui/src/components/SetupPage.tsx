@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { AlertCircle, ArrowRight, CheckCircle2, ExternalLink, Eye, EyeOff, Key, Lightbulb, Loader2 } from 'lucide-react';
-import type { CredentialStorage } from '../bridge';
-import { DEFAULT_MODEL, GEMINI_KEY_PATTERN } from '../utils';
+import type { CredentialStorage, ValidationCheck } from '../bridge';
+import { GEMINI_KEY_PATTERN } from '../utils';
+import { BrandLogo } from './BrandLogo';
+import { SetupErrorNotice } from './SetupErrorNotice';
 
 interface SetupPageProps {
   hasProtectedKey: boolean;
   onSaved: (key: string, model?: string, storage?: CredentialStorage, legacyPlaintext?: boolean) => void;
   preferredModel: string;
   fallbackKeys: string[];
-  fallbackModels: string[];
+
 }
 
 export function SetupPage({
@@ -17,12 +19,13 @@ export function SetupPage({
   onSaved,
   preferredModel,
   fallbackKeys,
-  fallbackModels,
+
 }: SetupPageProps) {
   const [setupKeyInput, setSetupKeyInput] = useState('');
   const [setupKeyShowRaw, setSetupKeyShowRaw] = useState(false);
   const [setupKeySaving, setSetupKeySaving] = useState(false);
-  const [setupKeyError, setSetupKeyError] = useState<string | null>(null);
+  const [setupKeyError, setSetupKeyError] = useState<ValidationCheck | null>(null);
+  const setLocalError = (message: string) => setSetupKeyError({ id: 'setup', label: 'Configurazione', status: 'error', message });
 
   const trimmedKey = setupKeyInput.trim();
   const isValidFormat = GEMINI_KEY_PATTERN.test(trimmedKey);
@@ -34,63 +37,8 @@ export function SetupPage({
     setSetupKeyError(null);
     try {
       if (!window.pywebview?.api?.save_settings) {
-        setSetupKeyError('Bridge Python non disponibile — impostazioni non salvate.');
+        setLocalError('Bridge Python non disponibile — impostazioni non salvate.');
         return;
-      }
-
-      let activeModel = preferredModel;
-
-      // 1. Live key and model validation if validate_environment is available
-      if (window.pywebview?.api?.validate_environment) {
-        try {
-          const valRes = await window.pywebview.api.validate_environment(
-            trimmedKey,
-            true,
-            activeModel,
-            fallbackModels,
-          );
-          if (valRes?.result?.checks) {
-            const apiCheck = valRes.result.checks.find(c => c.id === 'api_key');
-            if (apiCheck && apiCheck.status === 'error') {
-              const details = (apiCheck.details || '').toLowerCase();
-              const isNotFound =
-                details.includes('404') ||
-                details.includes('not_found') ||
-                details.includes('not found');
-
-              // If the chosen model is unavailable, try the current default.
-              if (isNotFound && activeModel !== DEFAULT_MODEL) {
-                try {
-                  const retryVal = await window.pywebview.api.validate_environment(
-                    trimmedKey,
-                    true,
-                    DEFAULT_MODEL,
-                    fallbackModels,
-                  );
-                  const retryCheck = retryVal?.result?.checks?.find(c => c.id === 'api_key');
-                  if (retryCheck && retryCheck.status === 'ok') {
-                    activeModel = DEFAULT_MODEL;
-                  } else {
-                    setSetupKeyError(
-                      `I modelli Gemini predefiniti non sono disponibili per questo progetto Google Cloud con la chiave inserita.`
-                    );
-                    return;
-                  }
-                } catch {
-                  setSetupKeyError(
-                    `Il modello ${activeModel} non è disponibile per questo progetto Google Cloud.`
-                  );
-                  return;
-                }
-              } else {
-                setSetupKeyError(apiCheck.message || 'Chiave API non valida o non attiva.');
-                return;
-              }
-            }
-          }
-        } catch (valErr: unknown) {
-          console.warn('Live API validation skipped or failed:', valErr);
-        }
       }
 
       let result;
@@ -98,23 +46,23 @@ export function SetupPage({
         result = await window.pywebview.api.save_settings(
           trimmedKey,
           fallbackKeys,
-          activeModel,
-          fallbackModels,
+          preferredModel,
+
         );
       } catch (e: unknown) {
-        setSetupKeyError(`Errore salvataggio: ${e instanceof Error ? e.message : String(e)}`);
+        setLocalError(`Errore salvataggio: ${e instanceof Error ? e.message : String(e)}`);
         return;
       }
       if (!result?.ok) {
-        setSetupKeyError(`Errore salvataggio: ${result?.error || 'errore sconosciuto'}`);
+        setLocalError(`Errore salvataggio: ${result?.error || 'errore sconosciuto'}`);
         return;
       }
       if (result.api_key_insecure !== undefined) {
-        onSaved(trimmedKey, activeModel, result.credential_storage, result.api_key_insecure);
+        onSaved(trimmedKey, preferredModel, result.credential_storage, result.api_key_insecure);
       } else if (result.credential_storage) {
-        onSaved(trimmedKey, activeModel, result.credential_storage);
+        onSaved(trimmedKey, preferredModel, result.credential_storage);
       } else {
-        onSaved(trimmedKey, activeModel);
+        onSaved(trimmedKey, preferredModel);
       }
     } finally {
       setSetupKeySaving(false);
@@ -130,12 +78,7 @@ export function SetupPage({
     >
       {/* Document Header */}
       <div className="space-y-3 text-left">
-        <img
-          src="./icon.png"
-          alt="El Sbobinator"
-          className="w-11 h-11 object-contain select-none pointer-events-none"
-          draggable={false}
-        />
+        <BrandLogo size={52} welcome={!hasProtectedKey} />
         <div className="space-y-1.5">
           <h1 className="text-[1.75rem] font-semibold tracking-tight leading-tight text-[var(--text-primary)] font-display">
             {hasProtectedKey ? 'Chiave API non accessibile' : 'Configura la tua API Key'}
@@ -166,7 +109,11 @@ export function SetupPage({
                 type="text"
                 data-masked={!setupKeyShowRaw ? 'true' : 'false'}
                 value={setupKeyInput}
-                onChange={e => setSetupKeyInput(e.target.value)}
+                disabled={setupKeySaving}
+                onChange={e => {
+                  setSetupKeyInput(e.target.value);
+                  setSetupKeyError(null);
+                }}
                 onKeyDown={async e => {
                   if (e.key !== 'Enter') return;
                   if (!GEMINI_KEY_PATTERN.test(setupKeyInput.trim())) return;
@@ -217,12 +164,12 @@ export function SetupPage({
               ) : (
                 <ArrowRight className={`w-4 h-4 shrink-0 transition-transform ${canSave ? 'translate-x-0.5' : ''}`} />
               )}
-              <span>{setupKeySaving ? 'Verifica e salvataggio…' : 'Salva e inizia'}</span>
+              <span>{setupKeySaving ? 'Salvataggio…' : 'Salva e inizia'}</span>
             </button>
           </div>
         </div>
 
-        {trimmedKey ? (
+        {trimmedKey && !setupKeyError ? (
           <div
             className={`flex items-center gap-1.5 text-xs font-medium transition-opacity ${
               isValidFormat ? 'text-[var(--success-text)]' : 'text-[var(--warning-text)]'
@@ -242,10 +189,7 @@ export function SetupPage({
         ) : null}
 
         {setupKeyError && (
-          <div className="alert-card is-error text-xs flex items-center gap-2 py-2 px-3 mt-1.5">
-            <AlertCircle className="w-4 h-4 shrink-0 text-[var(--error-text)]" />
-            <span className="text-[var(--error-text)] leading-snug">{setupKeyError}</span>
-          </div>
+          <SetupErrorNotice check={setupKeyError} apiKey={trimmedKey} />
         )}
       </div>
 

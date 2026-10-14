@@ -38,9 +38,9 @@ describe('AudioPlayer', () => {
     expect(sliders.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('shows time display 0:00 / 0:00 initially', () => {
+  it('shows time display 00:00:00 / 00:00:00 initially', () => {
     render(<AudioPlayer src="/audio/test.mp3" />);
-    expect(screen.getByText('0:00 / 0:00')).toBeTruthy();
+    expect(screen.getByText('00:00:00 / 00:00:00')).toBeTruthy();
   });
 
   it('leaves the shared shortcuts button to the editor header', () => {
@@ -197,9 +197,10 @@ describe('AudioPlayer', () => {
   it('timeupdate with positive duration updates duration display', () => {
     const { container } = render(<AudioPlayer src="/audio/test.mp3" />);
     const audio = container.querySelector('audio') as HTMLAudioElement;
-    Object.defineProperty(audio, 'duration', { value: 90, writable: true, configurable: true });
-    Object.defineProperty(audio, 'currentTime', { value: 0, writable: true });
+    Object.defineProperty(audio, 'duration', { value: 11634, writable: true, configurable: true });
+    Object.defineProperty(audio, 'currentTime', { value: 3729.8, writable: true });
     fireEvent.timeUpdate(audio);
+    expect(screen.getByText('01:02:09 / 03:13:54')).toBeTruthy();
   });
 
   it('loadedmetadata with initialTime sets currentTime', () => {
@@ -209,6 +210,7 @@ describe('AudioPlayer', () => {
     Object.defineProperty(audio, 'currentTime', { value: 0, writable: true });
     fireEvent.loadedMetadata(audio);
     expect(audio.currentTime).toBe(30);
+    expect(screen.getByText('00:00:30 / 00:02:00')).toBeTruthy();
   });
 
   it('loadedmetadata restores playbackRate and volume to the audio element', () => {

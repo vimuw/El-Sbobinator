@@ -468,10 +468,10 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
 
     showNotification.mockClear();
 
-    // Test phase1_all_models_unavailable error
+    // Test a model-unavailable message
     act(() => {
       window.elSbobinatorBridge?.fileFailed({
-        id: 'file-1', index: 0, error: 'phase1_all_models_unavailable'
+        id: 'file-1', index: 0, error: 'modello temporaneamente indisponibile'
       });
     });
     expect(showNotification).toHaveBeenCalledWith(

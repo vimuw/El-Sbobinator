@@ -17,8 +17,6 @@ from typing import Any
 from google import genai
 
 from el_sbobinator.core.model_registry import (
-    ModelState,
-    build_model_state,
     default_macro_char_limit_for_model,
 )
 from el_sbobinator.core.prompts import PROMPT_REVISIONE, PROMPT_SISTEMA
@@ -246,6 +244,7 @@ def _handle_regeneration_flow(
             print(
                 "[*] File gia' completato, l'utente ha scelto di usare la versione pronta."
             )
+            runtime.update_model(session_ctx.settings.effective_model)
             runtime.output_html(str(existing_html))
             runtime.set_revision_failed_blocks(
                 session.get("revision_failed_blocks") or []
@@ -266,7 +265,6 @@ def _run_phase1_transcription(
     session: dict,
     save_session,
     settings,
-    model_state: ModelState,
     input_path: str,
     preconv_used_path: str | None,
     ffmpeg_exe: str,
@@ -276,7 +274,6 @@ def _run_phase1_transcription(
     total_duration_sec: float,
     fallback_keys: list[str],
     request_fallback_key,
-    on_model_switched,
     logger,
     initial_full_transcript: str,
     initial_prev_memory: str,
@@ -290,7 +287,6 @@ def _run_phase1_transcription(
     client, full_transcript, _ = process_phase1_transcription(
         client=client,
         model_name=settings.model,
-        model_state=model_state,
         input_path=input_path,
         preconv_used_path=preconv_used_path,
         ffmpeg_exe=ffmpeg_exe,
@@ -312,7 +308,6 @@ def _run_phase1_transcription(
         request_fallback_key=request_fallback_key,
         system_prompt=PROMPT_SISTEMA,
         runtime=runtime,
-        on_model_switched=on_model_switched,
         logger=logger,
     )
     if full_transcript is not None:
@@ -327,7 +322,6 @@ def _run_phase1_transcription(
 def _run_phase2_revision(
     client,
     model_name: str,
-    model_state: ModelState,
     full_transcript: str,
     macro_path: str,
     phase2_revised_dir: str,
@@ -336,7 +330,6 @@ def _run_phase2_revision(
     runtime: PipelineRuntime,
     fallback_keys: list[str],
     request_fallback_key,
-    on_model_switched,
     logger,
     settings,
 ) -> tuple[Any, str, bool]:
@@ -383,7 +376,6 @@ def _run_phase2_revision(
         client, revised_text = process_macro_revision_phase(
             client=client,
             model_name=model_name,
-            model_state=model_state,
             macro_blocks=macro_blocks,
             phase2_revised_dir=phase2_revised_dir,
             session=session,
@@ -393,7 +385,6 @@ def _run_phase2_revision(
             fallback_keys=fallback_keys,
             request_fallback_key=request_fallback_key,
             prompt_revisione=PROMPT_REVISIONE,
-            on_model_switched=on_model_switched,
             logger=logger,
         )
         if (
@@ -480,6 +471,10 @@ def _export_html_and_finish(
         pass
 
     try:
+        runtime.update_model(
+            session.get("settings", {}).get("effective_model")
+            or session_ctx.settings.model
+        )
         runtime.output_html(html_path)
     except Exception:
         pass
@@ -689,17 +684,9 @@ def _esegui_sbobinatura_impl(
             runtime, session, save_session
         )
 
-        def on_model_switched(previous_model: str, new_model: str):
-            assert session is not None
-            session.setdefault("settings", {})
-            session["settings"]["effective_model"] = new_model
-            save_session()
-            runtime.update_model(new_model)
-            print(f"   [OK] Cambio modello automatico: {previous_model} -> {new_model}")
-
         settings = session_ctx.settings
-        model_state = build_model_state(settings.model, settings.fallback_models)
-        runtime.update_model(model_state.current)
+        model_name = settings.model
+        runtime.update_model(model_name)
 
         total_duration_sec, ffmpeg_exe = _probe_input_media(input_path, runtime, logger)
         if total_duration_sec is None or ffmpeg_exe is None:
@@ -743,10 +730,8 @@ def _esegui_sbobinatura_impl(
             if status == "regenerated":
                 session = session_ctx.session
                 settings = session_ctx.settings
-                model_state = build_model_state(
-                    settings.model, settings.fallback_models
-                )
-                runtime.update_model(model_state.current)
+                model_name = settings.model
+                runtime.update_model(model_name)
 
         if runtime.cancelled():
             return
@@ -777,7 +762,6 @@ def _esegui_sbobinatura_impl(
                 session=session,
                 save_session=save_session,
                 settings=settings,
-                model_state=model_state,
                 input_path=input_path,
                 preconv_used_path=preconv_used_path,
                 ffmpeg_exe=ffmpeg_exe,
@@ -787,7 +771,6 @@ def _esegui_sbobinatura_impl(
                 total_duration_sec=total_duration_sec,
                 fallback_keys=fallback_keys,
                 request_fallback_key=request_fallback_key,
-                on_model_switched=on_model_switched,
                 logger=logger,
                 initial_full_transcript=full_transcript,
                 initial_prev_memory=restored_phase1.prev_memory,
@@ -798,7 +781,6 @@ def _esegui_sbobinatura_impl(
         client, revised_text, should_exit = _run_phase2_revision(
             client=client,
             model_name=settings.model,
-            model_state=model_state,
             full_transcript=full_transcript,
             macro_path=session_ctx.macro_path,
             phase2_revised_dir=session_ctx.phase2_revised_dir,
@@ -807,7 +789,6 @@ def _esegui_sbobinatura_impl(
             runtime=runtime,
             fallback_keys=fallback_keys,
             request_fallback_key=request_fallback_key,
-            on_model_switched=on_model_switched,
             logger=logger,
             settings=settings,
         )

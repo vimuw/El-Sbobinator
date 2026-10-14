@@ -74,8 +74,7 @@ export default function App() {
     configuredFallbackKeyCount,
     preferredModel,
     setPreferredModel,
-    fallbackModels,
-    setFallbackModels,
+
     availableModels,
     refreshSettings,
   } = useApiReady(appendConsole);
@@ -270,7 +269,7 @@ export default function App() {
     apiKey,
     hasProtectedKey,
     preferredModel,
-    fallbackModels,
+
     dispatch,
     appendConsole,
     setConfirmAction,
@@ -542,7 +541,7 @@ export default function App() {
                 fallbackKeys,
                 preferredModel,
                 setPreferredModel,
-                fallbackModels,
+
               }}
               ingest={{
                 isDragging,
@@ -669,8 +668,7 @@ export default function App() {
             models={{
               preferredModel,
               setPreferredModel,
-              fallbackModels,
-              setFallbackModels,
+
               availableModels,
             }}
             updater={{

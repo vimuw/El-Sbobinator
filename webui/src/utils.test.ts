@@ -15,7 +15,7 @@ describe('isQuotaError', () => {
   });
 
   it('returns false for non-quota errors', () => {
-    expect(isQuotaError('phase1_all_models_unavailable')).toBe(false);
+    expect(isQuotaError('api_server_paused')).toBe(false);
     expect(isQuotaError('html_export_failed')).toBe(false);
   });
 });
@@ -37,8 +37,8 @@ describe('isResumableError', () => {
     expect(isResumableError('quota_daily_limit_phase2')).toBe(true);
   });
 
-  it('returns true for phase1_all_models_unavailable', () => {
-    expect(isResumableError('phase1_all_models_unavailable')).toBe(true);
+  it('returns false for unrecognized error codes', () => {
+    expect(isResumableError('unknown_error')).toBe(false);
   });
 
   it('returns true for regenerate_prompt_timeout', () => {

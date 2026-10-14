@@ -129,14 +129,12 @@ class AppWebviewTests(unittest.TestCase):
     def test_update_model_first_call_sets_primary_model(self):
         adapter = PipelineAdapter(None, cancel_event=__import__("threading").Event())
         adapter.update_model("gemini-2.5-flash")
-        self.assertEqual(adapter.last_primary_model, "gemini-2.5-flash")
         self.assertEqual(adapter.last_effective_model, "gemini-2.5-flash")
 
-    def test_update_model_subsequent_call_does_not_change_primary_model(self):
+    def test_update_model_subsequent_call_replaces_primary_model(self):
         adapter = PipelineAdapter(None, cancel_event=__import__("threading").Event())
         adapter.update_model("gemini-2.5-flash")
         adapter.update_model("gemini-3.6-flash")
-        self.assertEqual(adapter.last_primary_model, "gemini-2.5-flash")
         self.assertEqual(adapter.last_effective_model, "gemini-3.6-flash")
 
     def test_reset_run_state_clears_primary_model(self):
@@ -144,7 +142,6 @@ class AppWebviewTests(unittest.TestCase):
         adapter.update_model("gemini-2.5-flash")
         adapter.update_model("gemini-3.6-flash")
         adapter.reset_run_state()
-        self.assertIsNone(adapter.last_primary_model)
         self.assertIsNone(adapter.last_effective_model)
 
     def test_primary_model_reset_allows_new_run_to_capture_new_primary(self):
@@ -153,7 +150,6 @@ class AppWebviewTests(unittest.TestCase):
         adapter.update_model("gemini-3.6-flash")
         adapter.reset_run_state()
         adapter.update_model("gemini-3.6-flash")
-        self.assertEqual(adapter.last_primary_model, "gemini-3.6-flash")
         self.assertEqual(adapter.last_effective_model, "gemini-3.6-flash")
 
     def test_load_settings_exposes_insecure_api_key_flag(self):
@@ -164,7 +160,6 @@ class AppWebviewTests(unittest.TestCase):
                 "api_key": "plain-key",
                 "fallback_keys": [],
                 "preferred_model": "gemini-2.5-flash",
-                "fallback_models": [],
                 "api_key_insecure": True,
                 "api_key_insecure_reason": "DPAPI non disponibile",
             },
@@ -323,7 +318,6 @@ class AppWebviewTests(unittest.TestCase):
             api_key="fake",
             validate_api_key=True,
             preferred_model=None,
-            fallback_models=None,
         )
 
     @patch(
@@ -4038,7 +4032,6 @@ class TestRetryFailedRevisionBlocksBridge(unittest.TestCase):
                     return_value={
                         "api_key": "key",
                         "preferred_model": "gemini-test",
-                        "fallback_models": [],
                     },
                 ),
                 patch("google.genai.Client", return_value=object()),
@@ -4180,6 +4173,10 @@ class TestOpenUrlAllowlistCoverage(unittest.TestCase):
                 r"export const (\w+)(?::[^=]+)?\s*=\s*`([^`]+)`", text
             ):
                 name, tmpl = m.group(1), m.group(2)
+                # The version changes only the query, not the destination URL.
+                tmpl = tmpl.replace(
+                    "${encodeURIComponent(APP_VERSION)}", "test-version"
+                )
                 val = re.sub(
                     r"\$\{(\w+)\}",
                     lambda mm: resolved.get(mm.group(1), mm.group(0)),

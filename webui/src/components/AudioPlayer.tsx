@@ -272,10 +272,12 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
   };
 
   const formatTime = (time: number) => {
-    if (isNaN(time) || !isFinite(time)) return '0:00';
-    const min = Math.floor(time / 60);
-    const sec = Math.floor(time % 60);
-    return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+    if (!Number.isFinite(time)) return '00:00:00';
+    const totalSeconds = Math.max(0, Math.floor(time));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return [hours, minutes, seconds].map(value => String(value).padStart(2, '0')).join(':');
   };
 
   const handleRelink = async () => {

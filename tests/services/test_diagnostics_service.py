@@ -357,6 +357,8 @@ class DiagnosticsTests(unittest.TestCase):
                     {
                         "id": "api_key",
                         "message": "api_key=" + self.secret,
+                        "model": "gemini-3.6-flash",
+                        "error_code": "403",
                         "private": "NO_EXPORT",
                     }
                 ],
@@ -366,6 +368,8 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertNotIn(self.secret, content)
         self.assertNotIn("NO_EXPORT", content)
         self.assertEqual(json.loads(content)["checks"][0]["id"], "api_key")
+        self.assertEqual(json.loads(content)["checks"][0]["model"], "gemini-3.6-flash")
+        self.assertEqual(json.loads(content)["checks"][0]["error_code"], "403")
 
     def test_multibyte_incidents_stay_readable_and_keep_latest_failure(self):
         for index in range(30):

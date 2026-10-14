@@ -50,6 +50,15 @@ class BuildReleaseTests(unittest.TestCase):
             ]
         )
 
+    def test_missing_inno_setup_fails_instead_of_publishing_without_windows(self):
+        with (
+            patch.object(build_release, "_find_iscc", return_value=None),
+            patch.object(build_release, "run") as run,
+        ):
+            with self.assertRaisesRegex(FileNotFoundError, "Inno Setup"):
+                build_release.run_inno_setup("2.8.0")
+        run.assert_not_called()
+
     def test_dependency_sync_is_exact_and_cannot_rewrite_the_committed_lock(self):
         with (
             patch.object(build_release, "ensure_uv", return_value=Path("uv")),

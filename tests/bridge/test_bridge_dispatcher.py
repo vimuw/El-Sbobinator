@@ -90,7 +90,6 @@ class BridgeDispatcherTests(unittest.TestCase):
                 "id": "f1",
                 "output_html": "/x.html",
                 "output_dir": "/",
-                "primary_model": "",
                 "effective_model": "",
             },
             batched=False,

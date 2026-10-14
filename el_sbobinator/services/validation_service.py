@@ -19,11 +19,10 @@ from google import genai
 
 from el_sbobinator.bridge.bridge_types import ValidationCheck, ValidationResult
 from el_sbobinator.core.model_registry import (
-    DEFAULT_FALLBACK_MODELS,
-    sanitize_fallback_models,
     sanitize_model_name,
 )
 from el_sbobinator.core.shared import DEFAULT_MODEL, get_session_root
+from el_sbobinator.services.api_validation_error import api_validation_error
 from el_sbobinator.services.audio_service import resolve_ffmpeg
 from el_sbobinator.services.config_service import CONFIG_FILE, get_config_dir
 from el_sbobinator.services.generation_service import create_gemini_client
@@ -123,7 +122,6 @@ def validate_environment(
     api_key: str | None = None,
     validate_api_key: bool = False,
     preferred_model: str | None = None,
-    fallback_models: list[str] | None = None,
 ) -> ValidationResult:
     checks: list[ValidationCheck] = []
 
@@ -131,11 +129,6 @@ def validate_environment(
     if validate_api_key:
         cleaned = str(api_key or "").strip()
         primary_model = sanitize_model_name(preferred_model, DEFAULT_MODEL)
-        sanitized_fallbacks = sanitize_fallback_models(
-            fallback_models,
-            primary_model,
-            DEFAULT_FALLBACK_MODELS,
-        )
         if not cleaned:
             checks.append(
                 {
@@ -150,55 +143,28 @@ def validate_environment(
             try:
                 client = create_gemini_client(cleaned)
             except Exception as exc:
-                checks.append(
-                    {
-                        "id": "api_key",
-                        "label": "API Key Gemini",
-                        "status": "error",
-                        "message": "API key non valida o formato non corretto.",
-                        "details": redact_secrets(exc),
-                    }
-                )
+                checks.append(api_validation_error(exc, primary_model, cleaned))
             else:
-                model_chain = [primary_model, *sanitized_fallbacks]
-                for idx, model_name in enumerate(model_chain):
-                    check_id = "api_key" if idx == 0 else f"api_model_{idx}"
-                    check_label = (
-                        "API Key Gemini" if idx == 0 else f"Fallback modello {idx}"
+                try:
+                    model_info = client.models.get(model=primary_model)
+                    capabilities = _get_model_capabilities(model_info)
+                    if capabilities is not None and "generatecontent" not in {
+                        str(item or "").strip().lower() for item in capabilities
+                    }:
+                        raise RuntimeError(
+                            f"{primary_model} non supporta generateContent"
+                        )
+                    checks.append(
+                        {
+                            "id": "api_key",
+                            "label": "API Key Gemini",
+                            "status": "ok",
+                            "message": f"Accesso disponibile per {primary_model}.",
+                            "details": primary_model,
+                        }
                     )
-                    try:
-                        model_info = client.models.get(model=model_name)
-                        capabilities = _get_model_capabilities(model_info)
-
-                        if capabilities is not None and "generatecontent" not in {
-                            str(item or "").strip().lower() for item in capabilities
-                        }:
-                            raise RuntimeError(
-                                f"{model_name} non supporta generateContent"
-                            )
-                        checks.append(
-                            {
-                                "id": check_id,
-                                "label": check_label,
-                                "status": "ok",
-                                "message": f"Accesso disponibile per {model_name}.",
-                                "details": model_name,
-                            }
-                        )
-                    except Exception as exc:
-                        checks.append(
-                            {
-                                "id": check_id,
-                                "label": check_label,
-                                "status": "error",
-                                "message": (
-                                    "Modello primario non accessibile."
-                                    if idx == 0
-                                    else f"Modello fallback {idx} non accessibile con questa chiave."
-                                ),
-                                "details": redact_secrets(f"{model_name}: {exc}"),
-                            }
-                        )
+                except Exception as exc:
+                    checks.append(api_validation_error(exc, primary_model, cleaned))
 
     # 2. FFmpeg Functional Check
     try:
@@ -343,7 +309,6 @@ def generate_diagnostic_report(
     api_key: str | None = None,
     fallback_keys: list[str] | None = None,
     preferred_model: str | None = None,
-    fallback_models: list[str] | None = None,
     session_dir: str | None = None,
     frontend_version: str | None = None,
 ) -> str:

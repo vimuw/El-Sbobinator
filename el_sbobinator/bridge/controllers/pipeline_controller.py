@@ -113,7 +113,6 @@ def _handle_file_completed(
             "output_dir": adapter.last_output_dir or "",
             "completion_status": completion_status,
             "revision_failed_blocks": revision_failed_blocks,
-            "primary_model": adapter.last_primary_model or "",
             "effective_model": adapter.last_effective_model or "",
         }
         adapter.emit("fileDone", fd_payload, batched=False)
@@ -446,15 +445,11 @@ class PipelineControllerMixin:
         self,
         api_key: str,
         preferred_model: str | None,
-        fallback_models: list[str] | None,
     ) -> None:
         try:
             save_config(
                 api_key,
                 preferred_model=preferred_model or None,
-                fallback_models=fallback_models
-                if isinstance(fallback_models, list)
-                else None,
             )
         except OSError as e:
             self._push_console(
@@ -482,7 +477,6 @@ class PipelineControllerMixin:
         files: list[BridgeFileItem],
         api_key: str,
         preferred_model: str | None,
-        fallback_models: list[str] | None,
         override_low_disk: bool,
     ) -> dict | None:
         guard_error = self._start_processing_guard()
@@ -496,7 +490,7 @@ class PipelineControllerMixin:
             return bridge_error(
                 "Nessuna connessione a Internet rilevata. Verifica la tua connessione di rete prima di avviare la sbobinatura."
             )
-        self._persist_processing_config(api_key, preferred_model, fallback_models)
+        self._persist_processing_config(api_key, preferred_model)
         low_disk_response = self._low_disk_start_response(files, override_low_disk)
         if low_disk_response is not None:
             return low_disk_response
@@ -508,7 +502,6 @@ class PipelineControllerMixin:
         api_key: str,
         resume_session: bool = True,
         preferred_model: str | None = None,
-        fallback_models: list[str] | None = None,
         override_low_disk: bool = False,
         force_retry: bool = False,
     ) -> dict:
@@ -521,7 +514,6 @@ class PipelineControllerMixin:
             files,
             api_key,
             preferred_model,
-            fallback_models,
             override_low_disk,
         )
         if start_error is not None:
@@ -703,7 +695,6 @@ class PipelineControllerMixin:
                 primary_key=cfg.get("api_key"),
                 fallback_keys=cfg.get("fallback_keys", []),
                 primary_model=cfg.get("preferred_model", DEFAULT_MODEL),
-                fallback_models=cfg.get("fallback_models", []),
             )
             self._adapter.emit("apiUsageUpdated", usage, batched=False)
         except Exception:

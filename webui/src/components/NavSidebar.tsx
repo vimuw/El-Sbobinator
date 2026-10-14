@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Archive, Bell, Layers, Moon, Settings, Sun, Terminal } from 'lucide-react';
 import type { AppStatus } from '../appState';
 import { STORAGE_KEYS } from '../storageKeys';
+import { BrandLogo } from './BrandLogo';
 export type ActivePage = 'queue' | 'archive';
 
 const SIDEBAR_COLLAPSED_W = 54;
@@ -78,7 +79,7 @@ export const NavSidebar = memo(function NavSidebar({
     >
       {/* Logo */}
       <div className="flex justify-center pt-3 pb-1">
-        <img src="./icon.png" alt="El Sbobinator" style={{ width: 30, height: 30, borderRadius: 8 }} />
+        <BrandLogo size={36} />
       </div>
 
       {/* Navigation items */}

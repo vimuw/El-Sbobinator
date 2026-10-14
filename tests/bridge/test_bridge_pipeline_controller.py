@@ -23,13 +23,10 @@ class TestPipelineControllerConfigPersistence(unittest.TestCase):
         with patch(
             "el_sbobinator.bridge.controllers.pipeline_controller.save_config"
         ) as mock_save:
-            ctrl._persist_processing_config(
-                "key123", "gemini-2.5-flash", ["gemini-2.5-pro"]
-            )
+            ctrl._persist_processing_config("key123", "gemini-2.5-flash")
             mock_save.assert_called_once_with(
                 "key123",
                 preferred_model="gemini-2.5-flash",
-                fallback_models=["gemini-2.5-pro"],
             )
             self.assertEqual(ctrl.console_messages, [])
 
@@ -39,7 +36,7 @@ class TestPipelineControllerConfigPersistence(unittest.TestCase):
             "el_sbobinator.bridge.controllers.pipeline_controller.save_config",
             side_effect=OSError("Permission denied"),
         ):
-            ctrl._persist_processing_config("key123", None, None)
+            ctrl._persist_processing_config("key123", None)
             self.assertEqual(len(ctrl.console_messages), 1)
             self.assertIn("Impossibile salvare", ctrl.console_messages[0])
             self.assertIn("Permission denied", ctrl.console_messages[0])
@@ -50,7 +47,7 @@ class TestPipelineControllerConfigPersistence(unittest.TestCase):
             "el_sbobinator.bridge.controllers.pipeline_controller.save_config",
             side_effect=RuntimeError("Disk corrupted"),
         ):
-            ctrl._persist_processing_config("key123", None, None)
+            ctrl._persist_processing_config("key123", None)
             self.assertEqual(len(ctrl.console_messages), 1)
             self.assertIn("Errore imprevisto", ctrl.console_messages[0])
             self.assertIn("Disk corrupted", ctrl.console_messages[0])

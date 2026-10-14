@@ -7,7 +7,7 @@ const baseProps = {
   onSaved: vi.fn(),
   preferredModel: 'gemini-2.5-flash',
   fallbackKeys: [],
-  fallbackModels: [],
+
 };
 
 function setPywebview(api: Record<string, unknown> | undefined) {
@@ -191,103 +191,35 @@ describe('SetupPage', () => {
     );
   });
 
-  it('validates environment before save and displays error if API key check fails', async () => {
-    const mockValidate = vi.fn().mockResolvedValue({
-      ok: true,
-      result: {
-        ok: false,
-        checks: [
-          {
-            id: 'api_key',
-            label: 'API Key Gemini',
-            status: 'error',
-            message: 'API key non valida o non attiva.',
-            details: '400 API_KEY_INVALID',
-          },
-        ],
-      },
-    });
-    const mockSave = vi.fn().mockResolvedValue({ ok: true });
-    setPywebview({ validate_environment: mockValidate, save_settings: mockSave });
-
-    render(<SetupPage {...baseProps} />);
-    fireEvent.change(screen.getByPlaceholderText(/Incolla qui la tua API Key/), {
-      target: { value: 'AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345' },
-    });
-    const saveBtn = screen.getAllByText('Salva e inizia').find(
-      el => el.closest('button') !== null,
-    )?.closest('button') as HTMLButtonElement;
-    await act(async () => {
-      fireEvent.click(saveBtn);
-    });
-
-    await vi.waitFor(() => {
-      expect(mockValidate).toHaveBeenCalledTimes(1);
-      expect(mockSave).not.toHaveBeenCalled();
-      expect(screen.getByText('API key non valida o non attiva.')).toBeTruthy();
-    });
+  it('finishes setup without remote verification even when the selected model is inaccessible', async () => {
+    const onSaved = vi.fn();
+    const save = vi.fn().mockResolvedValue({ ok: true });
+    const verify = vi.fn().mockRejectedValue(new Error('404 NOT_FOUND'));
+    const validate = vi.fn().mockResolvedValue({ ok: true, result: { ok: false, checks: [] } });
+    setPywebview({ save_settings: save, verify_model_access: verify, validate_environment: validate });
+    render(<SetupPage {...baseProps} onSaved={onSaved} />);
+    fireEvent.change(screen.getByLabelText('Chiave API Gemini'), { target: { value: 'AQ.abcdefghijklmnopqrstuvwxyz012345' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Salva e inizia' })); });
+    expect(save).toHaveBeenCalledExactlyOnceWith('AQ.abcdefghijklmnopqrstuvwxyz012345', [], 'gemini-2.5-flash');
+    expect(onSaved).toHaveBeenCalledExactlyOnceWith('AQ.abcdefghijklmnopqrstuvwxyz012345', 'gemini-2.5-flash');
+    expect(verify).not.toHaveBeenCalled();
+    expect(validate).not.toHaveBeenCalled();
+    expect(screen.queryByRole('region', { name: 'Accesso ai modelli' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Continua' })).toBeNull();
   });
 
-  it('automatically falls back to gemini-3.6-flash if primary model returns 404', async () => {
+  it('keeps a failed save in setup and clears the compact error when the key is edited', async () => {
     const onSaved = vi.fn();
-    const mockValidate = vi.fn().mockImplementation((_k, _v, model) => {
-      if (model === 'gemini-2.5-flash') {
-        return Promise.resolve({
-          ok: true,
-          result: {
-            ok: false,
-            checks: [
-              {
-                id: 'api_key',
-                status: 'error',
-                message: 'Modello primario non accessibile.',
-                details: 'gemini-2.5-flash: 404 NOT_FOUND',
-              },
-            ],
-          },
-        });
-      }
-      return Promise.resolve({
-        ok: true,
-        result: {
-          ok: true,
-          checks: [
-            {
-              id: 'api_key',
-              status: 'ok',
-              message: 'Accesso disponibile per gemini-3.6-flash.',
-              details: 'gemini-3.6-flash',
-            },
-          ],
-        },
-      });
-    });
-    const mockSave = vi.fn().mockResolvedValue({ ok: true });
-    setPywebview({ validate_environment: mockValidate, save_settings: mockSave });
-
-    render(<SetupPage {...baseProps} preferredModel="gemini-2.5-flash" onSaved={onSaved} />);
-    fireEvent.change(screen.getByPlaceholderText(/Incolla qui la tua API Key/), {
-      target: { value: 'AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345' },
-    });
-    const saveBtn = screen.getAllByText('Salva e inizia').find(
-      el => el.closest('button') !== null,
-    )?.closest('button') as HTMLButtonElement;
-    await act(async () => {
-      fireEvent.click(saveBtn);
-    });
-
-    await vi.waitFor(() => {
-      expect(mockValidate).toHaveBeenCalledTimes(2);
-      expect(mockSave).toHaveBeenCalledWith(
-        'AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345',
-        [],
-        'gemini-3.6-flash',
-        [],
-      );
-      expect(onSaved).toHaveBeenCalledWith(
-        'AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345',
-        'gemini-3.6-flash',
-      );
-    });
+    setPywebview({ save_settings: vi.fn().mockResolvedValue({ ok: false, error: 'Disco non disponibile' }) });
+    render(<SetupPage {...baseProps} onSaved={onSaved} />);
+    const input = screen.getByLabelText('Chiave API Gemini');
+    fireEvent.change(input, { target: { value: 'AQ.abcdefghijklmnopqrstuvwxyz012345' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Salva e inizia' })); });
+    expect(screen.getByRole('alert').textContent).toContain('Disco non disponibile');
+    expect(screen.queryByText(/Formato valido/)).toBeNull();
+    expect(onSaved).not.toHaveBeenCalled();
+    fireEvent.change(input, { target: { value: 'AQ.abcdefghijklmnopqrstuvwxyz012346' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByText(/Formato valido/)).toBeTruthy();
   });
 });

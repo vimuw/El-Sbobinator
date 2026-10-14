@@ -179,7 +179,7 @@ from el_sbobinator.bridge.bridge_utils import (
     _safe_relpath,
 )
 from el_sbobinator.core.media_server import LocalMediaServer
-from el_sbobinator.core.model_registry import DEFAULT_FALLBACK_MODELS, MODEL_OPTIONS
+from el_sbobinator.core.model_registry import MODEL_OPTIONS
 from el_sbobinator.core.session_store import (
     mark_html_exported,
     resolve_session_paths,

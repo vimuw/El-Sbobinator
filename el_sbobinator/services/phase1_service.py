@@ -17,7 +17,6 @@ from typing import Any
 
 from google.genai import types
 
-from el_sbobinator.core.model_registry import ModelState
 from el_sbobinator.core.session_store import _update_session
 from el_sbobinator.core.shared import _atomic_write_text
 from el_sbobinator.pipeline.pipeline_session import record_step_metric
@@ -26,11 +25,9 @@ from el_sbobinator.services.audio_service import cut_audio_chunk_to_mp3
 from el_sbobinator.services.config_service import debug_log
 from el_sbobinator.services.gemini_errors import CircuitBreakerExhaustedError
 from el_sbobinator.services.generation_service import (
-    AllModelsUnavailableError,
     DegenerateOutputError,
     PermanentError,
     QuotaDailyLimitError,
-    current_model_name,
     detect_degenerate_output,
     extract_response_text,
     retry_with_quota,
@@ -90,7 +87,6 @@ def process_phase1_transcription(
     *,
     client,
     model_name: str,
-    model_state: ModelState | None = None,
     input_path: str,
     preconv_used_path: str | None,
     ffmpeg_exe: str,
@@ -112,7 +108,6 @@ def process_phase1_transcription(
     request_fallback_key: Callable[[], str | None],
     system_prompt: str,
     runtime,
-    on_model_switched=None,
     logger=None,
 ) -> tuple[object, str | None, str]:
     temp_run_dir = _phase1_temp_run_dir(phase1_chunks_dir)
@@ -120,7 +115,6 @@ def process_phase1_transcription(
         return _process_phase1_transcription_impl(
             client=client,
             model_name=model_name,
-            model_state=model_state,
             input_path=input_path,
             preconv_used_path=preconv_used_path,
             ffmpeg_exe=ffmpeg_exe,
@@ -142,7 +136,6 @@ def process_phase1_transcription(
             request_fallback_key=request_fallback_key,
             system_prompt=system_prompt,
             runtime=runtime,
-            on_model_switched=on_model_switched,
             logger=logger,
             temp_run_dir=temp_run_dir,
         )
@@ -227,7 +220,6 @@ def _generate_chunk_content_with_fallback(
     *,
     current_client,
     model_name: str,
-    model_state: ModelState | None,
     system_prompt: str,
     chunk_prompt: str,
     audio_inline,
@@ -244,7 +236,7 @@ def _generate_chunk_content_with_fallback(
                 if audio_input is None:
                     return None
             print("   -> (3/3) Generazione sbobina in corso...")
-            _active_model = current_model_name(model_state, model_name)
+            _active_model = model_name
             response = current_client.models.generate_content(
                 model=_active_model,
                 contents=[chunk_prompt, audio_input],
@@ -305,13 +297,11 @@ def _call_chunk_transcription_api(
     prev_memory: str,
     system_prompt: str,
     model_name: str,
-    model_state: ModelState | None,
     inline_max_bytes,
     runtime,
     cancelled: Callable[[], bool],
     fallback_keys: list,
     request_fallback_key: Callable[[], str | None],
-    on_model_switched=None,
     logger=None,
 ) -> tuple[object, str | None]:
     """Call Gemini to transcribe a single audio chunk with automatic inline/upload fallback."""
@@ -378,7 +368,6 @@ def _call_chunk_transcription_api(
         return _generate_chunk_content_with_fallback(
             current_client=current_client,
             model_name=model_name,
-            model_state=model_state,
             system_prompt=system_prompt,
             chunk_prompt=chunk_prompt,
             audio_inline=audio_inline,
@@ -391,13 +380,11 @@ def _call_chunk_transcription_api(
             client=client,
             fallback_keys=fallback_keys,
             model_name=model_name,
-            model_state=model_state,
             runtime=runtime,
             cancelled=cancelled,
             request_fallback_key=request_fallback_key,
             retry_sleep_seconds=30.0,
             on_key_rotated=_on_key_rotated,
-            on_model_switched=on_model_switched,
             logger=logger,
             resume_phase_text=f"Fase 1/3: trascrizione (chunk {chunk_idx}/{total_chunks})",
         )
@@ -470,10 +457,8 @@ def _record_chunk_success(
 def _handle_phase1_chunk_recovery(
     exc: Exception,
     *,
-    chain_exhaustion_recovery_used: bool,
-    model_state: ModelState | None,
+    chunk_recovery_used: bool,
     model_name: str,
-    on_model_switched,
     chunk_idx: int,
     session: dict,
     save_session: Callable[[], bool],
@@ -495,14 +480,9 @@ def _handle_phase1_chunk_recovery(
         return False, True
 
     if isinstance(exc, DegenerateOutputError):
-        if not chain_exhaustion_recovery_used:
-            if model_state is not None:
-                old_model = model_state.current
-                model_state.current = model_state.chain[0]
-                if on_model_switched is not None and old_model != model_state.current:
-                    on_model_switched(old_model, model_state.current)
+        if not chunk_recovery_used:
             print(
-                f"   [Recovery automatica] chunk={chunk_idx}: catena modelli esaurita ({exc}) - un ulteriore pass dal modello primario ({model_state.current if model_state is not None else model_name})..."
+                f"   [Recovery automatica] chunk={chunk_idx}: output non valido ({exc}) - riprovo lo stesso modello ({model_name})..."
             )
             return True, False
         _excerpt = getattr(exc, "rejected_text", "")
@@ -511,22 +491,6 @@ def _handle_phase1_chunk_recovery(
             f'   [!] Output degenerato nel blocco {chunk_idx}: anche il pass di recovery ha fallito reason="{exc}"{_excerpt_log}'
         )
         session["last_error"] = "phase1_degenerate_output"
-        session["last_error_detail"] = None
-        save_session()
-        return False, True
-
-    if isinstance(exc, AllModelsUnavailableError):
-        if not chain_exhaustion_recovery_used:
-            if model_state is not None:
-                old_model = model_state.current
-                model_state.current = model_state.chain[0]
-                if on_model_switched is not None and old_model != model_state.current:
-                    on_model_switched(old_model, model_state.current)
-            print(
-                f"   [Recovery automatica] chunk={chunk_idx}: tutti i modelli indisponibili ({exc}) - un ulteriore pass dal modello primario ({model_state.current if model_state is not None else model_name})..."
-            )
-            return True, False
-        session["last_error"] = "phase1_all_models_unavailable"
         session["last_error_detail"] = None
         save_session()
         return False, True
@@ -556,18 +520,16 @@ def _process_single_phase1_chunk_iteration(
     prev_memory: str,
     system_prompt: str,
     model_name: str,
-    model_state: ModelState | None,
     inline_max_bytes,
     runtime,
     fallback_keys: list,
     request_fallback_key: Callable[[], str | None],
-    on_model_switched,
     logger,
     phase1_chunks_dir: str,
     full_transcript: str,
     session: dict,
     save_session: Callable[[], bool],
-    chain_exhaustion_recovery_used: bool,
+    chunk_recovery_used: bool,
     start_prefetch_fn: Callable[[int, int, float, str], dict | None],
 ) -> Phase1ChunkIterationResult:
     """Execute one attempt of a Phase 1 chunk transcription."""
@@ -638,13 +600,11 @@ def _process_single_phase1_chunk_iteration(
                 prev_memory=prev_memory,
                 system_prompt=system_prompt,
                 model_name=model_name,
-                model_state=model_state,
                 inline_max_bytes=inline_max_bytes,
                 runtime=runtime,
                 cancelled=cancelled,
                 fallback_keys=fallback_keys,
                 request_fallback_key=request_fallback_key,
-                on_model_switched=on_model_switched,
                 logger=logger,
             )
             if generated_text is not None:
@@ -673,14 +633,11 @@ def _process_single_phase1_chunk_iteration(
             QuotaDailyLimitError,
             PermanentError,
             DegenerateOutputError,
-            AllModelsUnavailableError,
         ) as recovery_err:
             should_retry, should_abort = _handle_phase1_chunk_recovery(
                 recovery_err,
-                chain_exhaustion_recovery_used=chain_exhaustion_recovery_used,
-                model_state=model_state,
+                chunk_recovery_used=chunk_recovery_used,
                 model_name=model_name,
-                on_model_switched=on_model_switched,
                 chunk_idx=chunk_idx,
                 session=session,
                 save_session=save_session,
@@ -780,7 +737,6 @@ def _process_phase1_transcription_impl(
     temp_run_dir: str,
     client,
     model_name: str,
-    model_state: ModelState | None = None,
     input_path: str,
     preconv_used_path: str | None,
     ffmpeg_exe: str,
@@ -802,7 +758,6 @@ def _process_phase1_transcription_impl(
     request_fallback_key: Callable[[], str | None],
     system_prompt: str,
     runtime,
-    on_model_switched=None,
     logger=None,
 ) -> tuple[object, str | None, str]:
     """Run the Phase 1 chunk transcription loop."""
@@ -882,7 +837,7 @@ def _process_phase1_transcription_impl(
             print("   [*] Operazione annullata dall'utente.")
             return _finish((client, None, prev_memory))
 
-        chain_exhaustion_recovery_used = False
+        chunk_recovery_used = False
 
         while True:
             chunk_res = _process_single_phase1_chunk_iteration(
@@ -906,18 +861,16 @@ def _process_phase1_transcription_impl(
                 prev_memory=prev_memory,
                 system_prompt=system_prompt,
                 model_name=model_name,
-                model_state=model_state,
                 inline_max_bytes=inline_max_bytes,
                 runtime=runtime,
                 fallback_keys=fallback_keys,
                 request_fallback_key=request_fallback_key,
-                on_model_switched=on_model_switched,
                 logger=log,
                 phase1_chunks_dir=phase1_chunks_dir,
                 full_transcript=full_transcript,
                 session=session,
                 save_session=save_session,
-                chain_exhaustion_recovery_used=chain_exhaustion_recovery_used,
+                chunk_recovery_used=chunk_recovery_used,
                 start_prefetch_fn=_start_prefetch,
             )
             client = chunk_res.client
@@ -927,7 +880,7 @@ def _process_phase1_transcription_impl(
             if chunk_res.should_abort:
                 return _finish((client, None, prev_memory))
             if chunk_res.should_retry:
-                chain_exhaustion_recovery_used = True
+                chunk_recovery_used = True
                 continue
             if chunk_res.success:
                 break

@@ -282,8 +282,8 @@ test('captures both copy paths for minimal and representative Docs round trips',
     for (const method of ['button', 'keyboard']) {
       const editor = page.locator('.tiptap-editor');
       if (method === 'button') {
-        await page.getByRole('button', { name: 'Copia formattata', exact: true }).click();
-        await expect(page.getByRole('button', { name: 'Copia formattata' })).toHaveAttribute('title', 'Copiato!');
+        await page.getByRole('button', { name: 'Copia documento', exact: true }).click();
+        await expect(page.getByRole('button', { name: 'Copia documento' })).toHaveAttribute('title', 'Copiato!');
       } else {
         await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+c');
       }

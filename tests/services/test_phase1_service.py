@@ -7,11 +7,9 @@ import unittest
 from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
-from el_sbobinator.core.model_registry import build_model_state
 from el_sbobinator.pipeline.pipeline_hooks import PipelineRuntime
 from el_sbobinator.services.gemini_errors import CircuitBreakerExhaustedError
 from el_sbobinator.services.generation_service import (
-    AllModelsUnavailableError,
     DegenerateOutputError,
     QuotaDailyLimitError,
 )
@@ -490,7 +488,7 @@ class Phase1SessionErrorKeyTests(unittest.TestCase):
             self.assertEqual(session.get("last_error"), "phase1_degenerate_output")
             self.assertEqual(os.listdir(chunks_dir), [])
 
-    def test_degenerate_output_chain_exhaustion_sets_specific_last_error(self):
+    def test_degenerate_output_after_recovery_sets_specific_last_error(self):
         session = {"stage": "phase1", "phase1": {}}
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -512,7 +510,7 @@ class Phase1SessionErrorKeyTests(unittest.TestCase):
                         "el_sbobinator.services.generation_service",
                         fromlist=["DegenerateOutputError"],
                     ).DegenerateOutputError(
-                        "Tutti i modelli della chain hanno prodotto output degenerato o non valido."
+                        "Il modello selezionato ha prodotto output non valido."
                     ),
                 ),
             ):
@@ -545,7 +543,7 @@ class Phase1SessionErrorKeyTests(unittest.TestCase):
             self.assertEqual(os.listdir(chunks_dir), [])
 
 
-class ChainExhaustionRecoveryTests(unittest.TestCase):
+class ChunkRecoveryTests(unittest.TestCase):
     _COMMON_KWARGS: ClassVar[dict] = dict(
         input_path="fake.mp3",
         preconv_used_path=None,
@@ -564,9 +562,7 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
         request_fallback_key=lambda: None,
     )
 
-    def _run(
-        self, session, chunks_dir, retry_side_effect, model_state=None, switched=None
-    ):
+    def _run(self, session, chunks_dir, retry_side_effect):
         call_count = [0]
         effects = list(retry_side_effect) if not callable(retry_side_effect) else None
 
@@ -579,12 +575,6 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
             if isinstance(effect, BaseException):
                 raise effect
             return kwargs["client"], effect
-
-        on_switched = (
-            (lambda old, new: switched.append((old, new)))
-            if switched is not None
-            else None
-        )
 
         with (
             patch(
@@ -607,26 +597,17 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
             return process_phase1_transcription(  # type: ignore[arg-type]
                 client=object(),
                 model_name="gemini-2.5-flash",
-                model_state=model_state,
                 phase1_chunks_dir=chunks_dir,
                 session=session,
                 save_session=lambda: True,
                 runtime=_FakeRuntime(),
-                on_model_switched=on_switched,
                 **self._COMMON_KWARGS,  # type: ignore[arg-type]
             ), call_count[0]
 
     def test_recovery_succeeds_on_extra_pass(self):
-        """retry_with_quota exhausts the full model chain (DegenerateOutputError). Outer
-        recovery resets model_state to primary and retries the chunk one more time.
-        Extra pass returns valid output: one chunk saved, last_error absent."""
+        """An extra pass on the chosen model saves valid output without switching."""
         session = {"stage": "phase1", "phase1": {}}
-        switched = []
-        model_state = build_model_state(
-            "gemini-2.5-flash",
-            ["gemini-3.6-flash"],
-            "gemini-3.6-flash",
-        )
+        selected_model = "gemini-2.5-flash"
 
         with tempfile.TemporaryDirectory() as tmpdir:
             chunks_dir = os.path.join(tmpdir, "chunks")
@@ -636,22 +617,19 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
                 session,
                 chunks_dir,
                 retry_side_effect=[
-                    DegenerateOutputError("chain esaurita"),
+                    DegenerateOutputError("output non valido"),
                     "testo valido trascritto",
                 ],
-                model_state=model_state,
-                switched=switched,
             )
 
             self.assertIsNotNone(transcript)
             self.assertIsNone(session.get("last_error"))
             self.assertEqual(len(os.listdir(chunks_dir)), 1)
             self.assertEqual(calls, 2)
-            self.assertEqual(model_state.current, "gemini-2.5-flash")
-            self.assertIn(("gemini-3.6-flash", "gemini-2.5-flash"), switched)
+            self.assertEqual(selected_model, "gemini-2.5-flash")
 
     def test_recovery_extra_pass_also_exhausted_stops_job(self):
-        """retry_with_quota exhausts the chain twice: once in the initial call and once
+        """retry_with_quota rejects invalid output twice: once in the initial call and once
         in the outer recovery pass. No chunk saved, last_error='phase1_degenerate_output'."""
         session = {"stage": "phase1", "phase1": {}}
 
@@ -663,8 +641,8 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
                 session,
                 chunks_dir,
                 retry_side_effect=[
-                    DegenerateOutputError("chain esaurita prima volta"),
-                    DegenerateOutputError("chain esaurita seconda volta"),
+                    DegenerateOutputError("output non valido prima volta"),
+                    DegenerateOutputError("output non valido seconda volta"),
                 ],
             )
 
@@ -673,62 +651,38 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
             self.assertEqual(os.listdir(chunks_dir), [])
             self.assertEqual(calls, 2)
 
-    def test_recovery_no_model_switch_callback_when_already_primary(self):
-        """If model_state.current is already the primary when the chain is exhausted,
-        the outer recovery resets the model but does NOT fire on_model_switched."""
+    def test_recovery_saves_output_on_extra_pass(self):
+        """Recovery retries the chunk using its selected model."""
         session = {"stage": "phase1", "phase1": {}}
-        switched = []
-        model_state = build_model_state("gemini-2.5-flash", [], "gemini-2.5-flash")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             chunks_dir = os.path.join(tmpdir, "chunks")
             os.makedirs(chunks_dir)
-
-            self._run(
+            (_, transcript, _), calls = self._run(
                 session,
                 chunks_dir,
                 retry_side_effect=[
-                    DegenerateOutputError("chain esaurita"),
-                    "testo valido trascritto",
+                    DegenerateOutputError("output non valido"),
+                    "testo valido",
                 ],
-                model_state=model_state,
-                switched=switched,
             )
+            self.assertEqual(calls, 2)
+            self.assertIn("testo valido", transcript or "")
+            self.assertEqual(len(os.listdir(chunks_dir)), 1)
 
-            self.assertEqual(switched, [])
-
-    def test_recovery_extra_pass_503_switches_to_fallback_then_success(self):
-        """Chain exhausted (fallback was active) → outer recovery resets to primary.
-        Extra pass: primary gets 503 and retry_with_quota internally switches to fallback,
-        returning valid output. Chunk saved, last_error absent."""
+    def test_recovery_extra_pass_keeps_selected_model_then_succeeds(self):
+        """The recovery pass retains the selected model and saves valid output."""
         session = {"stage": "phase1", "phase1": {}}
-        switched = []
-        # Start with fallback already active (prior 503 moved the model during this session)
-        model_state = build_model_state(
-            "gemini-2.5-flash",
-            ["gemini-3.6-flash"],
-            "gemini-3.6-flash",
-        )
+        # Old saved fallback metadata cannot select a different model.
+        selected_model = "gemini-2.5-flash"
 
         call_count = [0]
 
         def fake_retry(fn, **kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
-                # First attempt: degenerate output exhausted the whole chain
-                raise DegenerateOutputError(
-                    "tutti i modelli hanno prodotto output degenerato"
-                )
-            # Second attempt (after recovery reset to primary):
-            # simulate primary 503 → retry_with_quota switches to fallback internally
-            ms = kwargs.get("model_state")
-            if ms is not None:
-                old = ms.current
-                ms.current = "gemini-3.6-flash"
-                on_sw = kwargs.get("on_model_switched")
-                if on_sw is not None and old != "gemini-3.6-flash":
-                    on_sw(old, "gemini-3.6-flash")
-            return kwargs["client"], "testo valido trascritto via fallback"
+                raise DegenerateOutputError("output non valido")
+            return kwargs["client"], "testo valido trascritto"
 
         saved_chunks = []
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -756,12 +710,10 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
                 _client, transcript, _prev = process_phase1_transcription(  # type: ignore[arg-type]
                     client=object(),
                     model_name="gemini-2.5-flash",
-                    model_state=model_state,
                     phase1_chunks_dir=chunks_dir,
                     session=session,
                     save_session=lambda: True,
                     runtime=_FakeRuntime(),
-                    on_model_switched=lambda old, new: switched.append((old, new)),
                     **self._COMMON_KWARGS,  # type: ignore[arg-type]
                 )
 
@@ -772,14 +724,11 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
         self.assertIsNone(session.get("last_error_detail"))
         self.assertEqual(len(saved_chunks), 1)
         self.assertEqual(call_count[0], 2)
-        self.assertEqual(model_state.current, "gemini-3.6-flash")
-        # recovery: lite→flash; then 503 fallback: flash→lite
-        self.assertIn(("gemini-3.6-flash", "gemini-2.5-flash"), switched)
-        self.assertIn(("gemini-2.5-flash", "gemini-3.6-flash"), switched)
+        self.assertEqual(selected_model, "gemini-2.5-flash")
 
     def test_recovery_rebuilds_chunk_audio_for_each_pass(self):
         """cut_audio_chunk_to_mp3 and make_inline_audio_part must each be called once
-        per outer-loop pass — twice total when the chain-exhaustion recovery fires —
+        per outer-loop pass — twice total when the chunk recovery fires —
         proving the chunk audio context is fully reconstructed before the extra pass."""
         from unittest.mock import MagicMock
 
@@ -791,7 +740,7 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
         def fake_retry(fn, **kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
-                raise DegenerateOutputError("chain esaurita")
+                raise DegenerateOutputError("output non valido")
             return kwargs["client"], "testo valido trascritto"
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -834,63 +783,6 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
             2,
             "inline audio part must be rebuilt on each attempt",
         )
-
-    def test_all_models_unavailable_triggers_recovery_then_succeeds(self):
-        """Compound failure: AllModelsUnavailableError (all 503) triggers the same
-        chain-exhaustion recovery as DegenerateOutputError.  Second attempt succeeds:
-        one chunk saved, last_error absent."""
-        session = {"stage": "phase1", "phase1": {}}
-        switched = []
-        model_state = build_model_state(
-            "gemini-2.5-flash",
-            ["gemini-3.6-flash"],
-            "gemini-3.6-flash",
-        )
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            chunks_dir = os.path.join(tmpdir, "chunks")
-            os.makedirs(chunks_dir)
-
-            (_, transcript, _), calls = self._run(
-                session,
-                chunks_dir,
-                retry_side_effect=[
-                    AllModelsUnavailableError("tutti i modelli 503"),
-                    "testo valido trascritto",
-                ],
-                model_state=model_state,
-                switched=switched,
-            )
-
-            self.assertIsNotNone(transcript)
-            self.assertIsNone(session.get("last_error"))
-            self.assertEqual(len(os.listdir(chunks_dir)), 1)
-            self.assertEqual(calls, 2)
-            self.assertEqual(model_state.current, "gemini-2.5-flash")
-            self.assertIn(("gemini-3.6-flash", "gemini-2.5-flash"), switched)
-
-    def test_all_models_unavailable_twice_sets_specific_error(self):
-        """AllModelsUnavailableError on both the initial attempt and the recovery pass:
-        transcript is None, last_error='phase1_all_models_unavailable'."""
-        session = {"stage": "phase1", "phase1": {}}
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            chunks_dir = os.path.join(tmpdir, "chunks")
-            os.makedirs(chunks_dir)
-
-            (_, transcript, _), calls = self._run(
-                session,
-                chunks_dir,
-                retry_side_effect=[
-                    AllModelsUnavailableError("tutti i modelli 503 - prima volta"),
-                    AllModelsUnavailableError("tutti i modelli 503 - seconda volta"),
-                ],
-            )
-
-            self.assertIsNone(transcript)
-            self.assertEqual(session.get("last_error"), "phase1_all_models_unavailable")
-            self.assertEqual(os.listdir(chunks_dir), [])
-            self.assertEqual(calls, 2)
 
 
 class Phase1UploadModeTests(unittest.TestCase):
@@ -1087,7 +979,6 @@ class TestPhase1EdgeCases(unittest.TestCase):
     # Common kwargs for single-chunk runs (60s file, 60s step/chunk = 1 chunk)
     _COMMON_KWARGS: ClassVar[dict] = {
         "model_name": "test-model",
-        "model_state": None,
         "ffmpeg_exe": "ffmpeg",
         "cancel_event": threading.Event(),
         "cancelled": lambda: False,
@@ -1104,7 +995,6 @@ class TestPhase1EdgeCases(unittest.TestCase):
         "request_fallback_key": lambda: None,
         "system_prompt": "Transcribe.",
         "runtime": _FakeRuntime(),
-        "on_model_switched": None,
         "logger": None,
     }
 
@@ -1489,21 +1379,15 @@ class TestPhase1EdgeCases(unittest.TestCase):
         self.assertIsNone(transcript)
         self.assertEqual(session.get("last_error"), "bad_request_phase1")
 
-    # ── chain exhaustion recovery ───────────────────────────────────────────────
+    # ── chunk recovery ───────────────────────────────────────────────
 
     def test_degenerate_output_triggers_recovery_and_succeeds(self):
-        """First retry_with_quota raises DegenerateOutputError → model reset → second call succeeds."""
-        from el_sbobinator.core.model_registry import ModelState
+        """Degenerate output gets one extra pass without changing the model."""
 
-        model_state = ModelState(
-            chain=("flash-1.5", "flash-1.5-8b"), current="flash-1.5-8b"
-        )
-        switched = []
+        selected_model = "flash-1.5-8b"
 
         session = {"stage": "phase1", "phase1": {}}
         kwargs = self._COMMON_KWARGS.copy()
-        kwargs["model_state"] = model_state
-        kwargs["on_model_switched"] = lambda old, new: switched.append((old, new))
 
         with (
             patch(
@@ -1523,18 +1407,13 @@ class TestPhase1EdgeCases(unittest.TestCase):
         self.assertIsNotNone(transcript)
         assert transcript is not None
         self.assertIn("Testo ripreso.", transcript)
-        self.assertEqual(switched, [("flash-1.5-8b", "flash-1.5")])
+        self.assertEqual(selected_model, "flash-1.5-8b")
 
     def test_degenerate_output_recovery_also_fails_sets_error(self):
         """Both calls raise DegenerateOutputError → last_error = phase1_degenerate_output."""
-        from el_sbobinator.core.model_registry import ModelState
 
-        model_state = ModelState(
-            chain=("flash-1.5", "flash-1.5-8b"), current="flash-1.5-8b"
-        )
         session = {"stage": "phase1", "phase1": {}}
         kwargs = self._COMMON_KWARGS.copy()
-        kwargs["model_state"] = model_state
 
         with (
             patch(
@@ -1553,68 +1432,6 @@ class TestPhase1EdgeCases(unittest.TestCase):
 
         self.assertIsNone(transcript)
         self.assertEqual(session.get("last_error"), "phase1_degenerate_output")
-
-    def test_all_models_unavailable_triggers_recovery_and_succeeds(self):
-        """AllModelsUnavailableError → model reset → second call succeeds."""
-        from el_sbobinator.core.model_registry import ModelState
-
-        model_state = ModelState(
-            chain=("flash-1.5", "flash-1.5-8b"), current="flash-1.5-8b"
-        )
-        switched = []
-        session = {"stage": "phase1", "phase1": {}}
-        kwargs = self._COMMON_KWARGS.copy()
-        kwargs["model_state"] = model_state
-        kwargs["on_model_switched"] = lambda old, new: switched.append((old, new))
-
-        with (
-            patch(
-                "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
-                return_value=(True, None),
-            ),
-            patch(
-                "el_sbobinator.services.phase1_service.retry_with_quota",
-                side_effect=[
-                    AllModelsUnavailableError("all down"),
-                    (object(), "Testo ripreso."),
-                ],
-            ),
-        ):
-            _, transcript, _ = self._run(session, **kwargs)
-
-        self.assertIsNotNone(transcript)
-        assert transcript is not None
-        self.assertIn("Testo ripreso.", transcript)
-        self.assertEqual(switched, [("flash-1.5-8b", "flash-1.5")])
-
-    def test_all_models_unavailable_recovery_also_fails_sets_error(self):
-        """Both calls raise AllModelsUnavailableError → last_error = phase1_all_models_unavailable."""
-        from el_sbobinator.core.model_registry import ModelState
-
-        model_state = ModelState(
-            chain=("flash-1.5", "flash-1.5-8b"), current="flash-1.5-8b"
-        )
-        session = {"stage": "phase1", "phase1": {}}
-        kwargs = self._COMMON_KWARGS.copy()
-        kwargs["model_state"] = model_state
-
-        with (
-            patch(
-                "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
-                return_value=(True, None),
-            ),
-            patch(
-                "el_sbobinator.services.phase1_service.retry_with_quota",
-                side_effect=[
-                    AllModelsUnavailableError("all down"),
-                    AllModelsUnavailableError("still down"),
-                ],
-            ),
-        ):
-            _, transcript, _ = self._run(session, **kwargs)
-
-        self.assertIsNone(transcript)
-        self.assertEqual(session.get("last_error"), "phase1_all_models_unavailable")
 
     # ── autosave / cleanup ─────────────────────────────────────────────────────
 
@@ -1725,7 +1542,6 @@ class TestChunkFileSaveFailure(unittest.TestCase):
 
     _COMMON_KWARGS: ClassVar[dict] = dict(
         model_name="test-model",
-        model_state=None,
         input_path="fake.mp3",
         preconv_used_path=None,
         ffmpeg_exe="ffmpeg",
@@ -1743,7 +1559,6 @@ class TestChunkFileSaveFailure(unittest.TestCase):
         fallback_keys=[],
         request_fallback_key=lambda: None,
         system_prompt="test",
-        on_model_switched=None,
         logger=None,
     )
 

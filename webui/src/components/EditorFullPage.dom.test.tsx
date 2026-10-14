@@ -154,27 +154,27 @@ describe('EditorFullPage autosave', () => {
     expect(secondGeneration).toBeGreaterThan(firstGeneration);
   });
 
-  it('renders top actions in order: copy html, open html, theme toggle', async () => {
+  it('renders formatted copy before shortcuts and the theme toggle without an open HTML action', async () => {
     const setThemeMode = vi.fn();
     render(<EditorFullPage {...baseProps} themeMode="dark" setThemeMode={setThemeMode} />);
 
-    const copyBtn = screen.getByTitle('Copia formattata');
-    const openBtn = screen.getByTitle('Apri file HTML');
+    const copyBtn = screen.getByRole('button', { name: 'Copia documento' });
+    const shortcutsBtn = screen.getByRole('button', { name: 'Scorciatoie da tastiera' });
     const themeBtn = screen.getByTitle('Tema chiaro');
 
     expect(copyBtn).toBeTruthy();
-    expect(openBtn).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Apri file HTML' })).toBeNull();
     expect(themeBtn).toBeTruthy();
 
-    // Verify order: copyBtn -> openBtn -> themeBtn
+    // Verify order: copyBtn -> shortcutsBtn -> themeBtn
     const buttons = screen.getAllByRole('button');
     const copyIndex = buttons.indexOf(copyBtn);
-    const openIndex = buttons.indexOf(openBtn);
+    const shortcutsIndex = buttons.indexOf(shortcutsBtn);
     const themeIndex = buttons.indexOf(themeBtn);
 
     expect(copyIndex).toBeGreaterThan(-1);
-    expect(openIndex).toBeGreaterThan(copyIndex);
-    expect(themeIndex).toBeGreaterThan(openIndex);
+    expect(shortcutsIndex).toBeGreaterThan(copyIndex);
+    expect(themeIndex).toBeGreaterThan(shortcutsIndex);
 
     // Toggling theme calls setThemeMode
     fireEvent.click(themeBtn);
@@ -201,7 +201,7 @@ describe('EditorFullPage autosave', () => {
       editorMockState.html = '<h2>Appunti corretti</h2><p>Testo <strong>importante</strong></p>';
       render(<EditorFullPage {...baseProps} />);
       await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
-      fireEvent.click(screen.getByTitle('Copia formattata'));
+      fireEvent.click(screen.getByRole('button', { name: 'Copia documento' }));
       await waitFor(() => expect(formats['text/html']).toBeTruthy());
       const copied = new DOMParser().parseFromString(formats['text/html'], 'text/html');
       expect(copied.querySelector('strong')?.textContent).toBe('importante');

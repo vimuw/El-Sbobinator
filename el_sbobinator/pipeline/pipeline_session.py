@@ -240,9 +240,6 @@ def initialize_session_context(
             chunks_done = int(phase1_state.get("chunks_done", 0) or 0)
             if is_phase1 and chunks_done == 0:
                 session["settings"]["model"] = current_defaults["model"]
-                session["settings"]["fallback_models"] = current_defaults[
-                    "fallback_models"
-                ]
                 session["settings"]["effective_model"] = current_defaults[
                     "effective_model"
                 ]
@@ -257,10 +254,6 @@ def initialize_session_context(
                     or not session["settings"]["model"]
                 ):
                     session["settings"]["model"] = current_defaults["model"]
-                if "fallback_models" not in session["settings"]:
-                    session["settings"]["fallback_models"] = current_defaults[
-                        "fallback_models"
-                    ]
                 if (
                     "effective_model" not in session["settings"]
                     or not session["settings"]["effective_model"]

@@ -10,7 +10,6 @@ import { errorLabel, formatDuration, formatRelativeTime, formatSize, isPausedErr
 import { KebabMenu, type KebabMenuItem } from './KebabMenu';
 import { FolderIndicatorChip } from './FolderChip';
 
-
 interface QueueFileCardProps {
   file: FileItem;
   appState: AppStatus;
@@ -22,7 +21,6 @@ interface QueueFileCardProps {
   onOpenSettings?: () => void;
   showDragHandle?: boolean;
 }
-
 
 function QueueFileCardInner({
   file, appState, currentPhase: _currentPhase,
@@ -266,20 +264,12 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
                   <span className="shrink-0">{formatDuration(file.duration)}</span>
                 </>
               )}
-              {(file.primaryModel || file.effectiveModel) && (
+              {file.effectiveModel && (
                 <>
                   <span className="w-1 h-1 rounded-full bg-[var(--border-default)] shrink-0" />
-                  <span className="shrink-0" title={file.primaryModel || file.effectiveModel}>
-                    {shortModelName(file.primaryModel || file.effectiveModel!)}
+                  <span className="shrink-0" title={file.effectiveModel}>
+                    {shortModelName(file.effectiveModel)}
                   </span>
-                  {file.primaryModel && file.effectiveModel && file.primaryModel !== file.effectiveModel && (
-                    <span
-                      className="text-[10px] leading-none font-semibold uppercase tracking-wider px-1.5 py-[2px] h-4 box-border rounded-full badge-warning shrink-0"
-                      title={`Fallback usato: ${shortModelName(file.effectiveModel)}`}
-                    >
-                      fallback
-                    </span>
-                  )}
                 </>
               )}
               <span className="w-1 h-1 rounded-full bg-[var(--border-default)] shrink-0" />

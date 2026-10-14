@@ -39,7 +39,6 @@ class _DummyPreconvContext:
         self.session_dir = session_dir
         self.settings = PipelineSettings(
             model="gemini-2.5-flash",
-            fallback_models=["gemini-3.6-flash"],
             effective_model="gemini-2.5-flash",
             chunk_minutes=15,
             overlap_seconds=30,
@@ -69,7 +68,6 @@ class _DummyRegenContext:
         }
         self.settings = PipelineSettings(
             model="gemini-2.5-flash",
-            fallback_models=["gemini-3.6-flash"],
             effective_model="gemini-2.5-flash",
             chunk_minutes=15,
             overlap_seconds=30,
@@ -97,7 +95,6 @@ class PipelineSessionHelpersTests(unittest.TestCase):
             context = _DummyRegenContext(input_path, os.path.join(tmpdir, "session"))
             fresh_settings = {
                 "model": "gemini-3.6-flash",
-                "fallback_models": [],
                 "effective_model": "gemini-3.6-flash",
                 "chunk_minutes": 15,
                 "overlap_seconds": 30,
@@ -451,7 +448,6 @@ class InitializeSessionContextTests(unittest.TestCase):
                 "input": {"path": input_path, "size": 4, "mtime": 0.0},
                 "settings": {
                     "model": "gemini-2.5-flash",
-                    "fallback_models": [],
                     "effective_model": "gemini-2.5-flash",
                     "chunk_minutes": 15,
                     "overlap_seconds": 30,
@@ -479,7 +475,6 @@ class InitializeSessionContextTests(unittest.TestCase):
                     "el_sbobinator.pipeline.pipeline_session.load_config",
                     return_value={
                         "preferred_model": "gemini-3.6-flash",
-                        "fallback_models": [],
                     },
                 ),
                 patch(
@@ -514,7 +509,6 @@ class InitializeSessionContextTests(unittest.TestCase):
                 "input": {"path": input_path, "size": 4, "mtime": 0.0},
                 "settings": {
                     "model": "gemini-2.5-flash",
-                    "fallback_models": [],
                     "effective_model": "gemini-2.5-flash",
                     "chunk_minutes": 15,
                     "overlap_seconds": 30,
@@ -552,8 +546,7 @@ class InitializeSessionContextTests(unittest.TestCase):
             ):
                 ctx = initialize_session_context(input_path, resume_session=True)
 
-            self.assertEqual(ctx.settings.fallback_models, [])
-            self.assertEqual(ctx.session["settings"]["fallback_models"], [])
+            self.assertNotIn("fallback_models", ctx.session["settings"])
 
     def _make_session_file(self, tmpdir, model, chunk_minutes, chunks_done):
         import json
@@ -573,7 +566,6 @@ class InitializeSessionContextTests(unittest.TestCase):
             "input": {"path": input_path, "size": 4, "mtime": 0.0},
             "settings": {
                 "model": model,
-                "fallback_models": [],
                 "effective_model": model,
                 "chunk_minutes": chunk_minutes,
                 "overlap_seconds": 30,
@@ -607,7 +599,6 @@ class InitializeSessionContextTests(unittest.TestCase):
             )
             new_defaults = {
                 "model": "gemini-2.5-flash",
-                "fallback_models": [],
                 "effective_model": "gemini-2.5-flash",
                 "chunk_minutes": 15,
                 "overlap_seconds": 30,
@@ -622,7 +613,6 @@ class InitializeSessionContextTests(unittest.TestCase):
                     "el_sbobinator.pipeline.pipeline_session.load_config",
                     return_value={
                         "preferred_model": "gemini-2.5-flash",
-                        "fallback_models": [],
                     },
                 ),
                 patch(
@@ -649,7 +639,6 @@ class InitializeSessionContextTests(unittest.TestCase):
             )
             new_defaults = {
                 "model": "gemini-2.5-flash",
-                "fallback_models": [],
                 "effective_model": "gemini-2.5-flash",
                 "chunk_minutes": 15,
                 "overlap_seconds": 30,
@@ -664,7 +653,6 @@ class InitializeSessionContextTests(unittest.TestCase):
                     "el_sbobinator.pipeline.pipeline_session.load_config",
                     return_value={
                         "preferred_model": "gemini-2.5-flash",
-                        "fallback_models": [],
                     },
                 ),
                 patch(
@@ -687,7 +675,6 @@ class TestCheckDiskSpace(unittest.TestCase):
     def _settings(**kw) -> PipelineSettings:
         defaults: dict = dict(
             model="gemini-2.5-flash",
-            fallback_models=[],
             effective_model="gemini-2.5-flash",
             chunk_minutes=15,
             overlap_seconds=30,
@@ -911,7 +898,6 @@ class TestPipelineSessionEdgeCases(unittest.TestCase):
     def _make_settings(**kw) -> PipelineSettings:
         defaults: dict = dict(
             model="gemini-2.5-flash",
-            fallback_models=[],
             effective_model="gemini-2.5-flash",
             chunk_minutes=15,
             overlap_seconds=30,
@@ -939,7 +925,6 @@ class TestPipelineSessionEdgeCases(unittest.TestCase):
 
             defaults = {
                 "model": "gemini-2.5-flash",
-                "fallback_models": [],
                 "effective_model": "gemini-2.5-flash",
                 "chunk_minutes": 15,
                 "overlap_seconds": 30,
@@ -999,7 +984,6 @@ class TestPipelineSessionEdgeCases(unittest.TestCase):
                 "input": {"path": input_path, "size": 4, "mtime": 0.0},
                 "settings": {
                     "model": "gemini-2.5-flash",
-                    "fallback_models": [],
                     "effective_model": "gemini-2.5-flash",
                     "chunk_minutes": 15,
                     "overlap_seconds": 30,
@@ -1027,7 +1011,6 @@ class TestPipelineSessionEdgeCases(unittest.TestCase):
                     "el_sbobinator.pipeline.pipeline_session.load_config",
                     return_value={
                         "preferred_model": "gemini-2.5-flash",
-                        "fallback_models": [],
                     },
                 ),
                 patch(
@@ -1057,14 +1040,12 @@ class TestPipelineSessionEdgeCases(unittest.TestCase):
                     "el_sbobinator.pipeline.pipeline_session.load_config",
                     return_value={
                         "preferred_model": "gemini-2.5-flash",
-                        "fallback_models": [],
                     },
                 ),
                 patch(
                     "el_sbobinator.pipeline.pipeline_session.build_default_pipeline_settings",
                     return_value={
                         "model": "gemini-2.5-flash",
-                        "fallback_models": [],
                         "effective_model": "gemini-2.5-flash",
                         "chunk_minutes": 15,
                         "overlap_seconds": 30,
@@ -1324,7 +1305,6 @@ class TestPipelineSessionEdgeCases(unittest.TestCase):
             # Old session has model gemini-2.5-flash; new config will use flash-lite
             fresh_settings = {
                 "model": "gemini-3.6-flash",
-                "fallback_models": [],
                 "effective_model": "gemini-3.6-flash",
                 "chunk_minutes": 15,
                 "overlap_seconds": 30,
@@ -1641,7 +1621,6 @@ class TestSessionCollisionGuard(unittest.TestCase):
                     "el_sbobinator.pipeline.pipeline_session.build_default_pipeline_settings",
                     return_value={
                         "model": "gemini-2.5-flash",
-                        "fallback_models": [],
                         "effective_model": "gemini-2.5-flash",
                         "chunk_minutes": 15,
                         "overlap_seconds": 30,

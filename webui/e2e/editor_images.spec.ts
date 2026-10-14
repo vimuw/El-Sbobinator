@@ -1088,8 +1088,8 @@ test('representative mixed document preserves edits, merged table widths, image 
   const reopenedClipboard = await readClipboardFormats(page);
   expect(native(reopenedClipboard).dsl_spacers).toBe(resolved.dsl_spacers);
   expect(native(reopenedClipboard).dsl_styleslices).toEqual(resolved.dsl_styleslices);
-  await page.getByRole('button', { name: 'Copia formattata', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Copia formattata' })).toHaveAttribute('title', 'Copiato!');
+  await page.getByRole('button', { name: 'Copia documento', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Copia documento' })).toHaveAttribute('title', 'Copiato!');
   const button = await readClipboardFormats(page);
   expect(native(button).dsl_spacers).toBe(resolved.dsl_spacers);
   expect(native(button).dsl_styleslices).toEqual(resolved.dsl_styleslices);
@@ -1167,8 +1167,8 @@ test('mixed wrap images and captions preserve surrounding content through histor
       ? JSON.parse(JSON.parse(formats[nativeMime]).data).resolved.dsl_styleslices
       : formats['text/html'].replaceAll('rgb(255, 238, 0)', '#ffee00').replaceAll('noopener noreferrer nofollow', 'noopener noreferrer').replace(/<\/?(?:html|body)>|<head><\/head>/g, '');
     expect(comparable(reopenedClipboard)).toEqual(comparable(copied));
-    await page.getByRole('button', { name: 'Copia formattata', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Copia formattata' })).toHaveAttribute('title', 'Copiato!');
+    await page.getByRole('button', { name: 'Copia documento', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Copia documento' })).toHaveAttribute('title', 'Copiato!');
     const button = await readClipboardFormats(page);
     expect(Boolean(button[nativeMime])).toBe(variant.native);
     fs.writeFileSync(testInfo.outputPath(`${variant.name}-copy-comparison.json`), JSON.stringify({ keyboard: reopenedClipboard, button }));
@@ -1852,8 +1852,8 @@ for (const native of [true, false]) {
       const nativeImages = JSON.parse(JSON.parse(keyboardFormats['application/x-vnd.google-docs-image-clip+wrapped']).data).image_urls;
       expect(await dimensions(`<img width="127" src="${Object.values(nativeImages)[0]}">`)).toEqual({ declaredWidth: '127', width: 127, height: 79 });
     }
-    await page.getByRole('button', { name: 'Copia formattata', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Copia formattata' })).toHaveAttribute('title', 'Copiato!');
+    await page.getByRole('button', { name: 'Copia documento', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Copia documento' })).toHaveAttribute('title', 'Copiato!');
     const buttonFormats = await readClipboardFormats(page);
     expect(await dimensions(buttonFormats['text/html'])).toEqual(await dimensions(keyboardFormats['text/html']));
     expect(Boolean(buttonFormats[sliceMime])).toBe(native);
@@ -1881,8 +1881,8 @@ test('text-only copy exports standalone styles through keyboard, button and brow
   const keyboardFormats = await readClipboardFormats(page);
   const sliceMime = 'application/x-vnd.google-docs-document-slice-clip+wrapped';
   expect(keyboardFormats[sliceMime]).toBeTruthy();
-  await page.getByRole('button', { name: 'Copia formattata', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Copia formattata' })).toHaveAttribute('title', 'Copiato!');
+  await page.getByRole('button', { name: 'Copia documento', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Copia documento' })).toHaveAttribute('title', 'Copiato!');
   const buttonFormats = await readClipboardFormats(page);
   expect(buttonFormats['text/html']).toBe(keyboardFormats['text/html']);
   const resolved = (formats: Record<string, string>) => JSON.parse(JSON.parse(formats[sliceMime]).data).resolved;
@@ -1955,8 +1955,8 @@ test('native copy preserves paragraph and list gaps with converted line spacing'
   for (const paragraph of paragraphs.slice(3, 5)) expect(paragraph).toMatchObject({ ps_sm: 1 });
   expect(paragraphs.at(-1)).toMatchObject({ ps_ls: expect.any(Number), ps_sb: 0, ps_sa: 0 });
   fs.writeFileSync(testInfo.outputPath('paragraph-spacing-clipboard.json'), JSON.stringify(Object.entries(formats).map(([mimeType, text]) => ({ mimeType, text }))));
-  await page.getByRole('button', { name: 'Copia formattata', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Copia formattata' })).toHaveAttribute('title', 'Copiato!');
+  await page.getByRole('button', { name: 'Copia documento', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Copia documento' })).toHaveAttribute('title', 'Copiato!');
   const buttonFormats = await readClipboardFormats(page);
   const buttonModel = JSON.parse(JSON.parse(buttonFormats['application/x-vnd.google-docs-document-slice-clip+wrapped']).data).resolved;
   expect(buttonModel.dsl_spacers).toBe(model.dsl_spacers);
@@ -2079,8 +2079,8 @@ test('inline and arbitrary image wrap preserve text, editing, undo and native cl
   const inlineSlice = JSON.parse(JSON.parse(inlineCopy['application/x-vnd.google-docs-document-slice-clip+wrapped']).data).resolved;
   expect(Object.values(inlineSlice.dsl_entitymap)).toEqual([expect.not.objectContaining({ pe_l: expect.anything() })]);
   expect(inlineSlice.dsl_spacers).toContain('*');
-  await page.getByRole('button', { name: 'Copia formattata', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Copia formattata' })).toHaveAttribute('title', 'Copiato!');
+  await page.getByRole('button', { name: 'Copia documento', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Copia documento' })).toHaveAttribute('title', 'Copiato!');
   const buttonSlice = JSON.parse(JSON.parse((await readClipboardFormats(page))['application/x-vnd.google-docs-document-slice-clip+wrapped']).data).resolved;
   const buttonParagraphs = buttonSlice.dsl_styleslices.find((slice: { stsl_type: string }) => slice.stsl_type === 'paragraph').stsl_styles.filter(Boolean);
   expect(buttonParagraphs.length).toBeGreaterThan(0);
@@ -2104,8 +2104,8 @@ test('inline and arbitrary image wrap preserve text, editing, undo and native cl
   expect(editableSlice.dsl_entitytypemap).toEqual({ 'kix.sbobinator1': 'inline' });
   expect(editableCopy['text/plain']).toContain('x_i^2+\\sqrt{y}');
   fs.writeFileSync(testInfo.outputPath('native-editable-clipboard.json'), JSON.stringify(Object.entries(editableCopy).map(([mimeType, text]) => ({ mimeType, text }))));
-  await page.getByRole('button', { name: 'Copia formattata', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Copia formattata' })).toHaveAttribute('title', 'Copiato!');
+  await page.getByRole('button', { name: 'Copia documento', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Copia documento' })).toHaveAttribute('title', 'Copiato!');
   const editableButton = await readClipboardFormats(page);
   expect(editableButton['application/x-vnd.google-docs-document-slice-clip+wrapped']).toBeTruthy();
   const buttonModel = JSON.parse(JSON.parse(editableButton['application/x-vnd.google-docs-document-slice-clip+wrapped']).data).resolved;

@@ -48,7 +48,7 @@ test('native clipboard exports the displayed positions of consecutive wrap image
     }
     expect(await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON())).toEqual(saved);
     expect(formats['text/html']).toContain('data-offset-y="240.63"');
-    await page.getByRole('button', { name: 'Copia formattata', exact: true }).click();
+    await page.getByRole('button', { name: 'Copia documento', exact: true }).click();
     const buttonFormats = await readClipboardFormats(page);
     expect(JSON.parse(JSON.parse(buttonFormats['application/x-vnd.google-docs-document-slice-clip+wrapped']).data).resolved).toEqual(model);
     if (zoom === 100) fs.writeFileSync(info.outputPath('clipboard.json'), JSON.stringify(formats));

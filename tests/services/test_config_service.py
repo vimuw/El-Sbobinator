@@ -17,7 +17,6 @@ import el_sbobinator.services.config_service as cs
 _FAKE_CFG: dict = {
     "api_key": "key-test",
     "preferred_model": "gemini-2.0-flash-lite",
-    "fallback_models": ["gemini-2.0-flash"],
 }
 
 
@@ -63,24 +62,21 @@ class TestLoadConfigCache(unittest.TestCase):
                     patch.object(cs, "CONFIG_FILE", path),
                     patch.object(cs, "LEGACY_CONFIG_FILE", path + ".legacy"),
                 ):
-                    expected_fallbacks = (
-                        [] if expected == "gemini-3.8-flash" else ["gemini-3.8-flash"]
-                    )
                     loaded = cs.load_config()
                     self.assertEqual(loaded["preferred_model"], expected)
-                    self.assertEqual(loaded["fallback_models"], expected_fallbacks)
+                    self.assertNotIn("fallback_models", loaded)
                     cs.save_config(None)
                     with open(path, encoding="utf-8") as fh:
                         saved = json.load(fh)
                     self.assertEqual(saved["preferred_model"], expected)
-                    self.assertEqual(saved["fallback_models"], expected_fallbacks)
+                    self.assertNotIn("fallback_models", saved)
                     self.assertEqual(
                         saved["session_root"], os.path.join(tmp, "sessions")
                     )
                     _reset_cache()
                     reloaded = cs.load_config()
                     self.assertEqual(reloaded["preferred_model"], expected)
-                    self.assertEqual(reloaded["fallback_models"], expected_fallbacks)
+                    self.assertNotIn("fallback_models", reloaded)
 
     def test_new_configuration_defaults_to_36_without_fallbacks(self) -> None:
         with (
@@ -90,7 +86,7 @@ class TestLoadConfigCache(unittest.TestCase):
         ):
             loaded = cs.load_config()
             self.assertEqual(loaded["preferred_model"], "gemini-3.6-flash")
-            self.assertEqual(loaded["fallback_models"], [])
+            self.assertNotIn("fallback_models", loaded)
 
     # ------------------------------------------------------------------
     # Cache hit
@@ -117,17 +113,6 @@ class TestLoadConfigCache(unittest.TestCase):
         result["api_key"] = "mutated"
 
         self.assertEqual(cs._config_cache["api_key"], "key-test")
-
-    def test_hit_fallback_models_list_is_isolated(self) -> None:
-        """Appending to returned fallback_models must not mutate the cache list."""
-        cs._config_cache = dict(_FAKE_CFG)
-        cs._config_cache["fallback_models"] = ["gemini-2.0-flash"]
-        cs._config_cache_ts = time.monotonic()
-
-        result = cs.load_config()
-        result["fallback_models"].append("injected-model")
-
-        self.assertEqual(cs._config_cache["fallback_models"], ["gemini-2.0-flash"])
 
     def test_hit_fallback_keys_list_is_isolated(self) -> None:
         """Appending to returned fallback_keys must not mutate the cache list."""
@@ -420,7 +405,6 @@ class TestLoadConfigFromRealFile(unittest.TestCase):
             payload = {
                 "api_key": "real-key-xyz",
                 "preferred_model": "gemini-2.5-flash",
-                "fallback_models": [],
             }
             with open(cfg_path, "w", encoding="utf-8") as fh:
                 json.dump(payload, fh)
@@ -1509,7 +1493,7 @@ class TestSaveConfigPropagatesError(unittest.TestCase):
             ),
             patch("builtins.open", side_effect=OSError("disk full")),
         ):
-            result = api.save_settings("my-key", [], "gemini-2.0-flash-lite", [])
+            result = api.save_settings("my-key", [], "gemini-2.0-flash-lite")
 
         self.assertFalse(result["ok"])
         self.assertIn("disk full", result.get("error", ""))

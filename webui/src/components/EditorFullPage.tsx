@@ -1,6 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Check, Copy, ExternalLink, FileText, Headphones, Loader2, Moon, Plus, Sun } from 'lucide-react';
+import { ArrowLeft, Check, Copy, FileText, Headphones, Loader2, Moon, Plus, Sun } from 'lucide-react';
 import type { Heading } from './RichTextEditor';
 import { prepareHtmlForClipboard } from '../utils';
 import { writeEditorClipboard } from '../editorClipboard';
@@ -10,7 +10,6 @@ import { ConfirmActionModal } from './modals/ConfirmActionModal';
 import { useTheme } from '../hooks/useTheme';
 import { useEditorAutosave, type EditorSaveController } from '../hooks/useEditorAutosave';
 import { STORAGE_KEYS } from '../storageKeys';
-import { getHostCapabilities } from '../browserHost';
 import { EditorShortcuts } from './EditorShortcuts';
 
 const LazyAudioPlayer = React.lazy(() =>
@@ -268,34 +267,27 @@ export function EditorFullPage({
             </div>
 
             <div className="editor-fullpage-actions">
-              <EditorShortcuts audioAvailable={Boolean(audioSrc)} />
               <button
                 onClick={() => void handleCopy()}
-                className="icon-button"
+                className="icon-button editor-fullpage-copy"
                 style={isCopied ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : {}}
-                title={isCopied ? 'Copiato!' : 'Copia formattata'}
-                aria-label="Copia formattata"
+                title={isCopied ? 'Copiato!' : 'Copia tutto il documento mantenendo la formattazione, pronto da incollare in Google Docs o Word.'}
+                aria-label="Copia documento"
               >
                 {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                <span className="editor-fullpage-copy-label">{isCopied ? 'Copiato!' : 'Copia documento'}</span>
               </button>
-              {htmlPath && getHostCapabilities().openLocalPath && (
+              <div className="editor-fullpage-utilities">
+                <EditorShortcuts audioAvailable={Boolean(audioSrc)} />
                 <button
-                  onClick={() => window.pywebview?.api?.open_file?.(htmlPath)}
-                  className="icon-button"
-                  title="Apri file HTML"
-                  aria-label="Apri file HTML"
+                  onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
+                  className="icon-button theme-toggle-btn"
+                  aria-label={themeMode === 'dark' ? 'Attiva tema chiaro' : 'Attiva tema scuro'}
+                  title={themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro'}
                 >
-                  <ExternalLink className="w-4 h-4" />
+                  {themeMode === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                 </button>
-              )}
-              <button
-                onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
-                className="icon-button theme-toggle-btn"
-                aria-label={themeMode === 'dark' ? 'Attiva tema chiaro' : 'Attiva tema scuro'}
-                title={themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro'}
-              >
-                {themeMode === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              </button>
+              </div>
             </div>
           </div>
 

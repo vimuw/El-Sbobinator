@@ -11,11 +11,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from el_sbobinator.core.model_registry import (
-    DEFAULT_FALLBACK_MODELS,
     DEFAULT_MODEL,
     default_chunk_minutes_for_model,
     default_macro_char_limit_for_model,
-    sanitize_fallback_models,
     sanitize_model_name,
 )
 from el_sbobinator.services.config_service import load_config
@@ -24,7 +22,6 @@ from el_sbobinator.services.config_service import load_config
 @dataclass(frozen=True)
 class PipelineSettings:
     model: str
-    fallback_models: list[str]
     effective_model: str
     chunk_minutes: int
     overlap_seconds: int
@@ -96,16 +93,20 @@ def load_and_sanitize_settings(
         session["settings"] = {}
         changed = True
     s = session["settings"]
+    if "fallback_models" in s:
+        s.pop("fallback_models")
+        changed = True
 
     # Defaults
     model = sanitize_model_name(s.get("model"), DEFAULT_MODEL)
-    fallback_models = sanitize_fallback_models(
-        s.get("fallback_models"),
-        model,
-        (),
-    )
     effective_model = sanitize_model_name(s.get("effective_model"), model)
-    if effective_model != model and effective_model not in fallback_models:
+    # Saved revisions may come from a different legacy model. Reusing them
+    # preserves that history; a successful new revision records its own model.
+    if str(session.get("stage", "")).strip().lower() not in (
+        "phase2",
+        "boundary",
+        "done",
+    ):
         effective_model = model
     default_chunk_minutes = default_chunk_minutes_for_model(model)
     chunk_minutes = _as_int(
@@ -171,7 +172,6 @@ def load_and_sanitize_settings(
             changed = True
 
     _set_if_diff("model", model)
-    _set_if_diff("fallback_models", list(fallback_models))
     _set_if_diff("effective_model", effective_model)
     _set_if_diff("chunk_minutes", int(chunk_minutes))
     _set_if_diff("overlap_seconds", int(overlap_seconds))
@@ -186,7 +186,6 @@ def load_and_sanitize_settings(
 
     settings = PipelineSettings(
         model=model,
-        fallback_models=list(fallback_models),
         effective_model=effective_model,
         chunk_minutes=int(chunk_minutes),
         overlap_seconds=int(overlap_seconds),
@@ -202,14 +201,8 @@ def load_and_sanitize_settings(
 def build_default_pipeline_settings(config: dict | None = None) -> dict:
     cfg = config if isinstance(config, dict) else load_config()
     preferred_model = sanitize_model_name(cfg.get("preferred_model"), DEFAULT_MODEL)
-    fallback_models = sanitize_fallback_models(
-        cfg.get("fallback_models"),
-        preferred_model,
-        DEFAULT_FALLBACK_MODELS,
-    )
     return {
         "model": preferred_model,
-        "fallback_models": fallback_models,
         "effective_model": preferred_model,
         "chunk_minutes": default_chunk_minutes_for_model(preferred_model),
         "overlap_seconds": 60,

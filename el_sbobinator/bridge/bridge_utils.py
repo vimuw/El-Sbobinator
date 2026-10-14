@@ -185,4 +185,6 @@ def _retry_no_failed_blocks_response(
 _ALLOWED_URL_PREFIXES: tuple[str, ...] = (
     "https://github.com/",
     "https://aistudio.google.com/",
+    "https://docs.google.com/forms/d/e/"
+    "1FAIpQLSdzfLau1SrSZuJgQ2J3lERgtXcz9EjE_vP63nHkiVYCsRqMzA/viewform?",
 )

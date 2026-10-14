@@ -5,6 +5,7 @@ import { type DragEndEvent, type SensorDescriptor, type SensorOptions } from '@d
 import { AlertTriangle, Loader2, Settings } from 'lucide-react';
 import { GithubIcon } from './icons/GithubIcon';
 import { GITHUB_URL } from '../branding';
+import { ReportProblemLink } from './ReportProblemLink';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { type AppStatus, type FileItem, getDoneFiles, getPendingFiles } from '../appState';
 import { GEMINI_KEY_PATTERN } from '../utils';
@@ -47,7 +48,7 @@ export interface QueueAuthProps {
   fallbackKeys: string[];
   preferredModel: string;
   setPreferredModel?: (model: string) => void;
-  fallbackModels: string[];
+
 }
 
 export interface QueueIngestProps {
@@ -138,7 +139,7 @@ export function QueuePage({
     fallbackKeys,
     preferredModel,
     setPreferredModel,
-    fallbackModels,
+
   } = auth;
 
   const {
@@ -298,7 +299,6 @@ export function QueuePage({
               }}
               preferredModel={preferredModel}
               fallbackKeys={fallbackKeys}
-              fallbackModels={fallbackModels}
             />
           </React.Suspense>
         ) : (
@@ -406,10 +406,11 @@ export function QueuePage({
           />
         )}
       </div>
-      <footer className="app-footer">
+      <footer className="app-footer app-footer-links">
         <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link">
           <GithubIcon className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
         </a>
+        <ReportProblemLink />
       </footer>
     </motion.main>
   );

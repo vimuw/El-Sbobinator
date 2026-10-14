@@ -24,13 +24,10 @@ from google.genai import types
 
 from el_sbobinator.core.model_registry import (
     MODEL_OPTIONS,
-    ModelState,
-    next_model_in_chain,
 )
 from el_sbobinator.services import network_service, usage_service
 from el_sbobinator.services.config_service import load_config
 from el_sbobinator.services.gemini_errors import (
-    AllModelsUnavailableError,
     CircuitBreakerExhaustedError,
     DegenerateOutputError,
     PermanentError,
@@ -239,13 +236,6 @@ def reset_global_governor() -> None:
     _GLOBAL_GOVERNOR.reset()
 
 
-def current_model_name(model_state: ModelState | None, default_model: str) -> str:
-    if model_state is None:
-        return str(default_model or "").strip()
-    current = str(getattr(model_state, "current", "") or "").strip()
-    return current or str(default_model or "").strip()
-
-
 def extract_client_api_key(client_obj) -> str | None:
     try:
         direct = getattr(client_obj, "api_key", None) or getattr(
@@ -444,28 +434,6 @@ def request_new_api_key(
     return result["new_key"]
 
 
-def _switch_to_next_model(
-    model_state: ModelState,
-    *,
-    on_model_switched,
-    error_message: str,
-    cause: Exception,
-    exc_type: type[Exception] = RuntimeError,
-) -> None:
-    next_model = next_model_in_chain(model_state)
-    if next_model:
-        old_model = model_state.current
-        model_state.current = next_model
-        print(f"      [Fallback modello] {old_model} -> {next_model}")
-        if on_model_switched is not None:
-            on_model_switched(old_model, next_model)
-        return
-    tried = ", ".join(model_state.chain)
-    raise exc_type(
-        f"{error_message} Ho provato tutti i fallback configurati: {tried}."
-    ) from cause
-
-
 def _phase1_temperature(model_name: str) -> float:
     for opt in MODEL_OPTIONS:
         if opt["id"] == model_name:
@@ -476,18 +444,16 @@ def _phase1_temperature(model_name: str) -> float:
 def _retry_on_model_unavailable(
     callable_fn,
     client,
-    model_state: ModelState | None,
     current_model: str,
     cancelled,
     runtime,
     restore_phase,
     model_unavailable_retry_delays: tuple[float, ...],
-    on_model_switched,
     governor: AdaptiveGovernor | None = None,
-) -> tuple[bool, Any, Any, Exception | None]:
+) -> tuple[Any, Any, Exception | None]:
     """Execute circuit breaker retry loop for transient 503 / capacity errors without switching model.
 
-    Returns (switched=False, client, result, last_exc).
+    Returns (client, result, last_exc).
     """
     gov = governor or _GLOBAL_GOVERNOR
     total_retries = len(model_unavailable_retry_delays)
@@ -512,23 +478,23 @@ def _retry_on_model_unavailable(
                 runtime.retry_state(gov.get_state_payload())
         if not sleep_with_cancel(cancelled, wait):
             print("   [*] Operazione annullata dall'utente.")
-            return False, client, None, None
+            return client, None, None
         restore_phase()
         gov.state = "probing"
         if runtime is not None and hasattr(runtime, "retry_state"):
             runtime.retry_state(gov.get_state_payload())
         try:
-            _record_attempt_usage(client, current_model, model_state)
+            _record_attempt_usage(client, current_model)
             result = callable_fn(client)
             gov.on_success()
-            _record_success_usage(client, current_model, model_state)
+            _record_success_usage(client, current_model)
             if runtime is not None and hasattr(runtime, "retry_state"):
                 runtime.retry_state(gov.get_state_payload())
-            return False, client, result, None
+            return client, result, None
         except Exception as retry_exc:
             if cancelled():
                 print("   [*] Operazione annullata dall'utente.")
-                return False, client, None, None
+                return client, None, None
             retry_error = _error_text(retry_exc)
             retry_code = _error_code(retry_exc)
             if _is_model_unavailable(
@@ -538,10 +504,10 @@ def _retry_on_model_unavailable(
             ):
                 if retry_idx == total_retries:
                     gov.state = "exhausted"
-                    return False, client, None, retry_exc
+                    return client, None, retry_exc
             else:
-                return False, client, None, retry_exc
-    return False, client, None, None
+                return client, None, retry_exc
+    return client, None, None
 
 
 def _retry_on_quota(
@@ -550,12 +516,10 @@ def _retry_on_quota(
     client,
     fallback_keys: list,
     current_model: str,
-    model_state: ModelState | None,
     cancelled,
     runtime,
     request_fallback_key,
     on_key_rotated,
-    on_model_switched,
     attempts: int,
     max_attempts: int,
     rate_limit_sleep_seconds: float,
@@ -682,25 +646,23 @@ def _retry_on_quota(
 
 
 def _record_attempt_usage(
-    client, model_name: str, model_state: ModelState | None
+    client,
+    model_name: str,
 ) -> None:
     cur_key = extract_client_api_key(client) or ""
     try:
-        usage_service.record_request_attempt(
-            cur_key, current_model_name(model_state, model_name)
-        )
+        usage_service.record_request_attempt(cur_key, model_name)
     except Exception:
         pass
 
 
 def _record_success_usage(
-    client, model_name: str, model_state: ModelState | None
+    client,
+    model_name: str,
 ) -> None:
     cur_key = extract_client_api_key(client) or ""
     try:
-        usage_service.record_request_success(
-            cur_key, current_model_name(model_state, model_name)
-        )
+        usage_service.record_request_success(cur_key, model_name)
     except Exception:
         pass
 
@@ -722,41 +684,9 @@ def _handle_credential_error_recording(
     return cred_status
 
 
-def _handle_model_error(
-    exc: Exception,
-    error: str,
-    error_code: int | None,
-    current_model: str,
-    model_state: ModelState | None,
-    on_model_switched: Any,
-) -> bool:
-    if model_state is None:
-        return False
-    if isinstance(exc, DegenerateOutputError):
-        _rejected_len = len(getattr(exc, "rejected_text", ""))
-        print(
-            f'      [Output degenerato] model={current_model} reason="{exc}" ({_rejected_len} chars) - provo fallback...'
-        )
-        _switch_to_next_model(
-            model_state,
-            on_model_switched=on_model_switched,
-            error_message="Tutti i modelli della chain hanno prodotto output degenerato o non valido.",
-            cause=exc,
-            exc_type=DegenerateOutputError,
-        )
-        return True
-    if _is_model_not_found(error, error_code):
-        print(
-            f"      [Modello {current_model} non supportato o non trovato. Provo il fallback successivo...]"
-        )
-        _switch_to_next_model(
-            model_state,
-            on_model_switched=on_model_switched,
-            error_message="Modello Gemini non supportato o non trovato.",
-            cause=exc,
-        )
-        return True
-    return False
+def _raise_model_error(exc: Exception, error: str, error_code: int | None) -> None:
+    if isinstance(exc, DegenerateOutputError) or _is_model_not_found(error, error_code):
+        raise exc
 
 
 def _handle_offline_network(
@@ -807,13 +737,11 @@ def _check_deterministic_client_error(
 def _handle_transient_capacity(
     callable_fn,
     client,
-    model_state,
     current_model: str,
     cancelled,
     runtime,
     restore_phase,
     delays: tuple[float, ...],
-    on_model_switched,
     gov: AdaptiveGovernor,
     cur_key: str,
     exc: Exception,
@@ -823,16 +751,14 @@ def _handle_transient_capacity(
 
     Returns (done, client, result, other_exc).
     """
-    _switched, client, result, other_exc = _retry_on_model_unavailable(
+    client, result, other_exc = _retry_on_model_unavailable(
         callable_fn,
         client,
-        model_state,
         current_model,
         cancelled,
         runtime,
         restore_phase,
         delays,
-        on_model_switched,
         governor=gov,
     )
     if result is not None or other_exc is None:
@@ -863,29 +789,19 @@ def _handle_transient_capacity(
     ) from (other_exc or exc)
 
 
-def _process_transient_capacity_fallback(
+def _process_transient_capacity_error(
     other_exc: Exception,
     cur_key: str,
     current_model: str,
-    model_state: ModelState | None,
-    on_model_switched,
-) -> tuple[bool, Exception, str, int | None, bool]:
-    """Returns (model_switched, exc, error, error_code, is_quota_related)."""
+) -> tuple[Exception, str, int | None, bool]:
+    """Classify an error encountered during a retry on the selected model."""
     error = _error_text(other_exc)
     error_code = _error_code(other_exc)
     is_quota_related = _is_quota_related(error, error_code)
     cred_status = _handle_credential_error_recording(
         other_exc, cur_key, current_model, error_code
     )
-    if _handle_model_error(
-        other_exc,
-        error,
-        error_code,
-        current_model,
-        model_state,
-        on_model_switched,
-    ):
-        return True, other_exc, error, error_code, is_quota_related
+    _raise_model_error(other_exc, error, error_code)
     _check_deterministic_client_error(
         other_exc,
         error,
@@ -895,7 +811,7 @@ def _process_transient_capacity_fallback(
         current_model,
         is_quota_related,
     )
-    return False, other_exc, error, error_code, is_quota_related
+    return other_exc, error, error_code, is_quota_related
 
 
 def _handle_generic_transient_retry(
@@ -936,7 +852,6 @@ def retry_with_quota(
     client,
     fallback_keys: list,
     model_name: str,
-    model_state: ModelState | None = None,
     cancelled,
     runtime,
     request_fallback_key,
@@ -945,7 +860,6 @@ def retry_with_quota(
     model_unavailable_retry_delays: tuple[float, ...] = _MODEL_UNAVAILABLE_RETRY_DELAYS,
     rate_limit_sleep_seconds: float = _RATE_LIMIT_SLEEP_SECONDS,
     on_key_rotated=None,
-    on_model_switched=None,
     logger=None,
     resume_phase_text: str | None = None,
     governor: AdaptiveGovernor | None = None,
@@ -972,14 +886,14 @@ def retry_with_quota(
             print("   [*] Operazione annullata dall'utente.")
             return client, None
 
-        current_model = current_model_name(model_state, model_name)
+        current_model = model_name
         cur_key = extract_client_api_key(client) or ""
 
         try:
-            _record_attempt_usage(client, current_model, model_state)
+            _record_attempt_usage(client, current_model)
             result = callable_fn(client)
             gov.on_success()
-            _record_success_usage(client, current_model, model_state)
+            _record_success_usage(client, current_model)
             if runtime is not None and hasattr(runtime, "retry_state"):
                 runtime.retry_state(gov.get_state_payload())
             return client, result
@@ -996,16 +910,7 @@ def retry_with_quota(
             )
 
             # 1. Deterministic model issues (404 Not Found, Degenerate runaway text)
-            if _handle_model_error(
-                exc,
-                error,
-                error_code,
-                current_model,
-                model_state,
-                on_model_switched,
-            ):
-                attempts = 0
-                continue
+            _raise_model_error(exc, error, error_code)
 
             # 2. Deterministic client errors (400, 401, 403, PermanentError) -> Fail immediately
             _check_deterministic_client_error(
@@ -1032,13 +937,11 @@ def retry_with_quota(
                 done, client, result, other_exc = _handle_transient_capacity(
                     callable_fn,
                     client,
-                    model_state,
                     current_model,
                     cancelled,
                     runtime,
                     _restore_phase,
                     model_unavailable_retry_delays,
-                    on_model_switched,
                     gov,
                     cur_key,
                     exc,
@@ -1047,18 +950,13 @@ def retry_with_quota(
                 if done:
                     return client, result
                 if other_exc is not None:
-                    switched, exc, error, error_code, is_quota_related = (
-                        _process_transient_capacity_fallback(
+                    exc, error, error_code, is_quota_related = (
+                        _process_transient_capacity_error(
                             other_exc,
                             cur_key,
                             current_model,
-                            model_state,
-                            on_model_switched,
                         )
                     )
-                    if switched:
-                        attempts = 0
-                        continue
 
             # 5. 429 Quota & Rate Limit handling
             if is_quota_related:
@@ -1067,12 +965,10 @@ def retry_with_quota(
                     client=client,
                     fallback_keys=fallback_keys,
                     current_model=current_model,
-                    model_state=model_state,
                     cancelled=cancelled,
                     runtime=runtime,
                     request_fallback_key=request_fallback_key,
                     on_key_rotated=on_key_rotated,
-                    on_model_switched=on_model_switched,
                     attempts=attempts,
                     max_attempts=max_attempts,
                     rate_limit_sleep_seconds=rate_limit_sleep_seconds,

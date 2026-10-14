@@ -51,7 +51,6 @@ class UsageServiceV2Tests(unittest.TestCase):
         data = usage_service.get_daily_usage(
             primary_key=key,
             primary_model="gemini-2.5-flash",
-            fallback_models=["gemini-3.6-flash"],
         )
 
         # 429/RPD never changes model automatically: a configured model fallback

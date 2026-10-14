@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "aggiorna": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../Aggiorna_App_Locale.ps1",
     "dev": "vite --port=3000 --host=0.0.0.0",
     "prebuild": "node ../scripts/verify_node_dependencies.mjs",
     "build": "vite build",

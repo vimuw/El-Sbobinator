@@ -100,10 +100,12 @@ class ValidationServiceTests(unittest.TestCase):
             api_key="fake",
             validate_api_key=True,
             preferred_model="gemini-2.5-flash",
-            fallback_models=["gemini-3.6-flash"],
         )
         self.assertTrue(result["ok"])
-        self.assertGreaterEqual(len(result["checks"]), 5)
+        expected_ids = {"api_key", "ffmpeg", "output", "config"}
+        if sys.platform != "win32":
+            expected_ids.add("keyring")
+        self.assertEqual({c["id"] for c in result["checks"]}, expected_ids)
         api_check = next(
             check for check in result["checks"] if check["id"] == "api_key"
         )
@@ -113,7 +115,7 @@ class ValidationServiceTests(unittest.TestCase):
             for check in result["checks"]
             if str(check.get("id", "")).startswith("api")
         ]
-        self.assertIn("gemini-3.6-flash", details)
+        self.assertEqual(details, ["gemini-2.5-flash"])
 
     @patch(
         "el_sbobinator.services.validation_service.resolve_ffmpeg",
@@ -123,27 +125,20 @@ class ValidationServiceTests(unittest.TestCase):
         "el_sbobinator.services.validation_service.get_session_root", return_value="."
     )
     @patch("google.genai.Client", _FallbackFailClient)
-    def test_validate_environment_keeps_primary_ok_when_fallback_fails(self, *_mocks):
+    def test_validate_environment_ignores_inaccessible_legacy_fallback(self, *_mocks):
         result = validate_environment(
             api_key="fake",
             validate_api_key=True,
             preferred_model="gemini-2.5-flash",
-            fallback_models=["gemini-3.6-flash"],
         )
 
-        self.assertFalse(result["ok"])
+        self.assertTrue(result["ok"])
         api_check = next(
             check for check in result["checks"] if check["id"] == "api_key"
         )
-        fallback_check = next(
-            check for check in result["checks"] if check["id"] == "api_model_1"
-        )
         self.assertEqual(api_check["status"], "ok")
-        self.assertEqual(fallback_check["status"], "error")
-        self.assertIn("gemini-3.6-flash", fallback_check["details"])  # type: ignore[typeddict-item]
-        self.assertEqual(
-            fallback_check["message"],
-            "Modello fallback 1 non accessibile con questa chiave.",
+        self.assertFalse(
+            any(c["id"].startswith("api_model_") for c in result["checks"])
         )
 
     @patch(
@@ -161,7 +156,6 @@ class ValidationServiceTests(unittest.TestCase):
             api_key="fake",
             validate_api_key=True,
             preferred_model="gemini-2.5-flash",
-            fallback_models=["gemini-3.6-flash"],
         )
 
         self.assertFalse(result["ok"])
@@ -172,10 +166,10 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertEqual(api_check["label"], "API Key Gemini")
         self.assertEqual(
             api_check["message"],
-            "Modello primario non accessibile.",
+            "Verifica della chiave non riuscita.",
         )
         self.assertNotIn("fallback", api_check["message"].lower())
-        self.assertIn("gemini-2.5-flash", api_check["details"])  # type: ignore[typeddict-item]
+        self.assertEqual(api_check.get("model"), "gemini-2.5-flash")
 
     @patch(
         "el_sbobinator.services.validation_service.resolve_ffmpeg",
@@ -192,7 +186,6 @@ class ValidationServiceTests(unittest.TestCase):
             api_key="fake",
             validate_api_key=True,
             preferred_model="gemini-2.5-flash",
-            fallback_models=["gemini-3.6-flash"],
         )
 
         self.assertFalse(result["ok"])
@@ -219,7 +212,6 @@ class ValidationServiceTests(unittest.TestCase):
             api_key="fake",
             validate_api_key=True,
             preferred_model="gemini-2.5-flash",
-            fallback_models=[],
         )
 
         self.assertFalse(result["ok"])
@@ -237,35 +229,22 @@ class ValidationServiceTests(unittest.TestCase):
         "el_sbobinator.services.validation_service.get_session_root", return_value="."
     )
     @patch("google.genai.Client", _MiddleFailClient)
-    def test_validate_environment_continues_after_middle_fallback_failure(
-        self, *_mocks
-    ):
+    def test_validate_environment_does_not_probe_legacy_fallback_models(self, *_mocks):
         result = validate_environment(
             api_key="fake",
             validate_api_key=True,
             preferred_model="gemini-2.5-flash",
-            fallback_models=["gemini-3.6-flash", "gemini-3.8-flash"],
         )
 
-        self.assertFalse(result["ok"])
+        self.assertTrue(result["ok"])
         check_ids = [check["id"] for check in result["checks"]]
         self.assertIn("api_key", check_ids)
-        self.assertIn("api_model_1", check_ids)
-        self.assertIn("api_model_2", check_ids)
+        self.assertNotIn("api_model_1", check_ids)
+        self.assertNotIn("api_model_2", check_ids)
 
         api_check = next(c for c in result["checks"] if c["id"] == "api_key")
-        middle_check = next(c for c in result["checks"] if c["id"] == "api_model_1")
-        last_check = next(c for c in result["checks"] if c["id"] == "api_model_2")
-
         self.assertEqual(api_check["status"], "ok")
-        self.assertEqual(middle_check["status"], "error")
-        middle_details = middle_check.get("details", "")
-        last_details = last_check.get("details")
-        self.assertIn("gemini-3.6-flash", middle_details)
-        self.assertNotIn("AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345", middle_details)
-        self.assertIn("[API_KEY_REDACTED]", middle_details)
-        self.assertEqual(last_check["status"], "ok")
-        self.assertEqual(last_details, "gemini-3.8-flash")
+        self.assertEqual(api_check.get("details"), "gemini-2.5-flash")
 
     @patch(
         "el_sbobinator.services.validation_service.resolve_ffmpeg",
@@ -570,7 +549,6 @@ class TestValidationKeyringCheck(unittest.TestCase):
             api_key="fake",
             validate_api_key=True,
             preferred_model="gemini-2.5-flash",
-            fallback_models=[],
         )
         self.assertTrue(result["ok"])
         self.assertFalse(result.get("has_warnings"))
@@ -599,7 +577,6 @@ class TestValidationKeyringCheck(unittest.TestCase):
                 api_key="fake",
                 validate_api_key=True,
                 preferred_model="gemini-2.5-flash",
-                fallback_models=[],
             )
             self.assertTrue(result["ok"])
             self.assertFalse(result.get("has_warnings"))

@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
 
 test('selected lesson titles remain accessible above a scrolling destination list', async ({ page }, testInfo) => {
@@ -68,12 +67,16 @@ test('Enter opens collection options without navigating and still opens a focuse
 });
 
 test('organizes archive lessons in nested collections and persists moves across reloads', async ({ page }, testInfo) => {
-  const fixturePath = testInfo.outputPath('Microbiologia - Lezione 11 - Meccanismi di resistenza agli antibiotici e risposta immunitaria.wav');
-  fs.writeFileSync(fixturePath, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  // Preserve the long display name without a Windows MAX_PATH-sensitive file path.
+  const fixture = {
+    name: 'Microbiologia - Lezione 11 - Meccanismi di resistenza agli antibiotici e risposta immunitaria.wav',
+    mimeType: 'audio/wav',
+    buffer: Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'),
+  };
   await page.goto('/');
   const chooserPromise = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
-  await (await chooserPromise).setFiles(fixturePath);
+  await (await chooserPromise).setFiles(fixture);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
   await expect(page.getByText('Sbobine completate')).toBeVisible({ timeout: 15_000 });
   await page.getByRole('button', { name: 'Pulisci tutto' }).click();

@@ -20,7 +20,6 @@ export type FileItem = {
   outputDir?: string;
   completedAt?: number;
   startedAt?: number;
-  primaryModel?: string;
   effectiveModel?: string;
   resumeSession?: boolean;
   allowCompletedDestroy?: boolean;
@@ -28,8 +27,6 @@ export type FileItem = {
   revisionFailedBlocks?: number[];
   isRetryingBlocks?: boolean;
 };
-
-
 
 export function getPendingFiles(files: FileItem[]): FileItem[] {
   return files.filter(f => f.status !== 'done');
@@ -82,7 +79,6 @@ export type FileDonePayload = {
   output_dir?: string;
   html_path?: string;
   session_dir?: string;
-  primary_model?: string;
   effective_model?: string;
   completion_status?: 'completed' | 'completed_with_warnings';
   revision_failed_blocks?: number[];
@@ -108,7 +104,6 @@ export type WorkDonePayload = {
   done: number;
   total?: number | null;
 };
-
 
 export type ProcessingState = {
   files: FileItem[];
@@ -411,7 +406,6 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
                 errorText: undefined,
                 errorDetail: undefined,
                 completedAt: Date.now(),
-                primaryModel: action.data.primary_model || undefined,
                 effectiveModel: action.data.effective_model || undefined,
                 completionStatus: action.data.completion_status || (Array.isArray(action.data.revision_failed_blocks) && action.data.revision_failed_blocks.length > 0 ? 'completed_with_warnings' : 'completed'),
                 revisionFailedBlocks: Array.isArray(action.data.revision_failed_blocks) ? action.data.revision_failed_blocks : [],
