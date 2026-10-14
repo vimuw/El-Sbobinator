@@ -16,6 +16,10 @@ export interface ValidationCheck {
   status: 'ok' | 'warning' | 'error';
   message: string;
   details?: string;
+  hint?: string;
+  model?: string;
+  error_code?: string;
+  help_action?: 'ai_studio';
 }
 
 export interface ValidationResult {

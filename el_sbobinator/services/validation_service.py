@@ -22,6 +22,7 @@ from el_sbobinator.core.model_registry import (
     sanitize_model_name,
 )
 from el_sbobinator.core.shared import DEFAULT_MODEL, get_session_root
+from el_sbobinator.services.api_validation_error import api_validation_error
 from el_sbobinator.services.audio_service import resolve_ffmpeg
 from el_sbobinator.services.config_service import CONFIG_FILE, get_config_dir
 from el_sbobinator.services.generation_service import create_gemini_client
@@ -142,15 +143,7 @@ def validate_environment(
             try:
                 client = create_gemini_client(cleaned)
             except Exception as exc:
-                checks.append(
-                    {
-                        "id": "api_key",
-                        "label": "API Key Gemini",
-                        "status": "error",
-                        "message": "API key non valida o formato non corretto.",
-                        "details": redact_secrets(exc),
-                    }
-                )
+                checks.append(api_validation_error(exc, primary_model, cleaned))
             else:
                 try:
                     model_info = client.models.get(model=primary_model)
@@ -171,15 +164,7 @@ def validate_environment(
                         }
                     )
                 except Exception as exc:
-                    checks.append(
-                        {
-                            "id": "api_key",
-                            "label": "API Key Gemini",
-                            "status": "error",
-                            "message": "Modello selezionato non accessibile.",
-                            "details": redact_secrets(f"{primary_model}: {exc}"),
-                        }
-                    )
+                    checks.append(api_validation_error(exc, primary_model, cleaned))
 
     # 2. FFmpeg Functional Check
     try:

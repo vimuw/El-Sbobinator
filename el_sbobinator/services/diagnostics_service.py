@@ -325,7 +325,16 @@ def save_validation_snapshot(result: Mapping[str, Any]) -> None:
             "checks": [
                 {
                     key: redact_secrets(check.get(key), max_len=2000)
-                    for key in ("id", "status", "label", "message", "details")
+                    for key in (
+                        "id",
+                        "status",
+                        "label",
+                        "message",
+                        "details",
+                        "hint",
+                        "model",
+                        "error_code",
+                    )
                 }
                 for check in checks[:30]
                 if isinstance(check, dict)

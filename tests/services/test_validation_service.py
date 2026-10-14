@@ -166,10 +166,10 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertEqual(api_check["label"], "API Key Gemini")
         self.assertEqual(
             api_check["message"],
-            "Modello selezionato non accessibile.",
+            "Verifica della chiave non riuscita.",
         )
         self.assertNotIn("fallback", api_check["message"].lower())
-        self.assertIn("gemini-2.5-flash", api_check["details"])  # type: ignore[typeddict-item]
+        self.assertEqual(api_check.get("model"), "gemini-2.5-flash")
 
     @patch(
         "el_sbobinator.services.validation_service.resolve_ffmpeg",

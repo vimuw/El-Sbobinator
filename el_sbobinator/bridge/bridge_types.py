@@ -92,6 +92,10 @@ class ValidationCheck(TypedDict):
     status: Literal["ok", "warning", "error"]
     message: str
     details: NotRequired[str]
+    hint: NotRequired[str]
+    model: NotRequired[str]
+    error_code: NotRequired[str]
+    help_action: NotRequired[Literal["ai_studio"]]
 
 
 class ValidationResult(TypedDict):
