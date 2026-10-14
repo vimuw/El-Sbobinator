@@ -32,8 +32,72 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
+  change-scope:
+    name: Detect documentation-only changes
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.scope.outputs.docs_only }}
+    steps:
+      - name: Checkout history for the complete change range
+        if: github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/'))
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Classify the complete change range
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          CURRENT_SHA: ${{ github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          from pathlib import PurePosixPath
+
+          event = os.environ['EVENT_NAME']
+          revision_range = None
+          if event == 'pull_request':
+              base = os.environ['PR_BASE_SHA']
+              head = os.environ['PR_HEAD_SHA']
+              if base and head:
+                  revision_range = f'{base}...{head}'
+          elif event == 'push' and os.environ['EVENT_REF'].startswith('refs/heads/'):
+              before = os.environ['BEFORE_SHA']
+              head = os.environ['CURRENT_SHA']
+              if before and before != '0' * 40 and head:
+                  revision_range = f'{before}..{head}'
+
+          docs_only = False
+          if revision_range:
+              try:
+                  changed = subprocess.check_output(
+                      ['git', 'diff', '--no-renames', '--name-only', '-z', revision_range, '--']
+                  ).split(b'\0')
+                  paths = [PurePosixPath(os.fsdecode(path)) for path in changed if path]
+                  # Keep code, dependency files and workflow changes outside the exemption.
+                  docs_only = bool(paths) and all(
+                      str(path) in {'README.md', 'DISCLAIMER.md'}
+                      or (path.parts[0] == 'docs' and path.suffix in {'.md', '.rst', '.txt'})
+                      for path in paths
+                  )
+              except subprocess.CalledProcessError:
+                  print('Change range unavailable; running all checks.')
+
+          value = str(docs_only).lower()
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'docs_only={value}\n')
+          print(f'Documentation-only exemption: {value}')
+          PY
+
   checks:
     name: Lint and Test
+    needs: [change-scope]
+    if: needs.change-scope.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -96,6 +160,8 @@ jobs:
 
   checks-windows:
     name: Lint and Test (Windows)
+    needs: [change-scope]
+    if: needs.change-scope.outputs.docs_only != 'true'
     runs-on: windows-latest
     steps:
       - name: Checkout Code
@@ -130,6 +196,8 @@ jobs:
 
   audit:
     name: Security Audit
+    needs: [change-scope]
+    if: needs.change-scope.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -162,6 +230,8 @@ jobs:
 
   checks-macos:
     name: Lint and Test (macOS)
+    needs: [change-scope]
+    if: needs.change-scope.outputs.docs_only != 'true'
     runs-on: macos-latest
     steps:
       - name: Checkout Code
@@ -187,14 +257,37 @@ jobs:
   dependency-gate:
     name: Dependency gate
     if: always()
-    needs: [checks, checks-windows, checks-macos, audit]
+    needs: [change-scope, checks, checks-windows, checks-macos, audit]
     runs-on: ubuntu-latest
     steps:
-      - name: Require every platform and audit to pass
+      - name: Require successful checks or the documentation-only exemption
         env:
           RESULTS: ${{ toJSON(needs) }}
         run: |
-          python -c "import json,os; results=json.loads(os.environ['RESULTS']); assert all(job['result']=='success' for job in results.values()), results"
+          python - <<'PY'
+          import json
+          import os
+
+          results = json.loads(os.environ['RESULTS'])
+          scope = results['change-scope']
+          if scope['result'] != 'success':
+              raise SystemExit('Change detection did not succeed.')
+          docs_only = scope['outputs'].get('docs_only')
+          if docs_only not in {'true', 'false'}:
+              raise SystemExit('Change detection did not return a valid scope.')
+
+          expected = 'skipped' if docs_only == 'true' else 'success'
+          check_jobs = ['checks', 'checks-windows', 'checks-macos', 'audit']
+          unexpected = {
+              name: results[name]['result']
+              for name in check_jobs
+              if results[name]['result'] != expected
+          }
+          if unexpected:
+              raise SystemExit(f'Expected {expected} checks; got {unexpected}')
+          print('Documentation-only exemption verified.' if docs_only == 'true'
+                else 'Every platform and audit passed.')
+          PY
 
   build:
     needs: [dependency-gate]
