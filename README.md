@@ -92,6 +92,12 @@ macOS può bloccare un'app se non ne riconosce lo sviluppatore o se manca la not
 
 ---
 
+## 🐛 Hai trovato un bug?
+
+> [**Segnala un problema →**](https://docs.google.com/forms/d/e/1FAIpQLSdzfLau1SrSZuJgQ2J3lERgtXcz9EjE_vP63nHkiVYCsRqMzA/viewform)
+
+---
+
 ## Privacy e Architettura dei Dati
 
 - **Client Desktop Locale**: L'applicazione viene eseguita sul computer dell'utente e conserva file e bozze localmente. I contenuti necessari all'elaborazione AI vengono trasmessi direttamente e in forma cifrata agli endpoint ufficiali di Google Gemini (`generativelanguage.googleapis.com`) tramite la credenziale dell'utente. File audio, trascrizioni e API key non vengono inviati a infrastrutture gestite dallo sviluppatore.

@@ -15,6 +15,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { APP_VERSION } from '../../../branding';
+import { ReportProblemLink } from '../../ReportProblemLink';
 import { CustomSelect } from './CustomSelect';
 import type { ValidationResult, ApiUsageResult } from '../../../bridge';
 
@@ -258,6 +259,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
             Report per assistenza
           </h3>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <ReportProblemLink className="app-button-secondary is-settings-action" />
             <button
               type="button"
               onClick={handleCopyReport}
@@ -294,6 +296,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
             )}
           </div>
         </div>
+        <p className="text-xs text-[var(--text-secondary)]">Hai trovato un bug? Descrivilo nel modulo; puoi aggiungere il report diagnostico.</p>
         {showOpenLogs && window.pywebview?.api?.export_diagnostics && (
           <div className="flex flex-col gap-2">
             <label htmlFor="diagnostic-session" className="text-xs text-[var(--text-secondary)]">Sbobina con il problema (facoltativa)</label>

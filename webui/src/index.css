@@ -4513,12 +4513,30 @@ input::-webkit-contacts-auto-fill-button {
   padding-bottom: 16px;
   text-align: center;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 16px;
   color: var(--text-muted) !important;
   font-size: 13px;
   flex-shrink: 0;
+}
+
+.app-footer-links {
+  padding-inline: 16px;
+  /* Leave room between links for their 1.05 hover scale. */
+  column-gap: 20px;
+}
+
+.app-footer-links .footer-link {
+  white-space: nowrap;
+}
+
+@media (max-width: 540px) {
+  .app-footer-links {
+    flex-direction: column;
+    gap: 12px;
+  }
 }
 
 /* YouTube Iframe Embed */

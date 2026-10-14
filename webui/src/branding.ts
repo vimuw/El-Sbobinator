@@ -6,7 +6,11 @@ export const GITHUB_REPO = 'vimuw/El-Sbobinator';
 export const GITHUB_URL = `https://github.com/${GITHUB_REPO}`;
 export const GITHUB_RELEASES_URL = `${GITHUB_URL}/releases/latest`;
 export const GITHUB_API_RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+export const BUG_REPORT_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSdzfLau1SrSZuJgQ2J3lERgtXcz9EjE_vP63nHkiVYCsRqMzA/viewform';
 
 // Injected at build time by Vite from package.json — do not hardcode here.
 declare const __APP_VERSION__: string;
 export const APP_VERSION: string = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'v0.0.0';
+
+// Google Forms field for "Versione dell’app (facoltativa)".
+export const BUG_REPORT_URL = `${BUG_REPORT_FORM_URL}?usp=pp_url&entry.1877160526=${encodeURIComponent(APP_VERSION)}`;

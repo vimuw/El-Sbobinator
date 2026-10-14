@@ -4173,6 +4173,10 @@ class TestOpenUrlAllowlistCoverage(unittest.TestCase):
                 r"export const (\w+)(?::[^=]+)?\s*=\s*`([^`]+)`", text
             ):
                 name, tmpl = m.group(1), m.group(2)
+                # The version changes only the query, not the destination URL.
+                tmpl = tmpl.replace(
+                    "${encodeURIComponent(APP_VERSION)}", "test-version"
+                )
                 val = re.sub(
                     r"\$\{(\w+)\}",
                     lambda mm: resolved.get(mm.group(1), mm.group(0)),

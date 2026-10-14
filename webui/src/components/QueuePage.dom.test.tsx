@@ -4,7 +4,8 @@ import React from 'react';
 import { QueuePage, type QueuePageProps } from './QueuePage';
 import { credentialStorageWarning } from '../credentialStorage';
 
-vi.mock('../branding', () => ({
+vi.mock('../branding', async importOriginal => ({
+  ...await importOriginal<typeof import('../branding')>(),
   GITHUB_URL: 'https://github.com/test',
 }));
 
