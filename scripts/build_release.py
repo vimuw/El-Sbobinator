@@ -425,10 +425,9 @@ def run_inno_setup(version: str) -> None:
     iss_script = PACKAGING_DIR / "windows" / "installer.iss"
     iscc = _find_iscc()
     if iscc is None:
-        print(
-            "WARNING: Inno Setup (ISCC.exe) not found. Skipping installer generation."
+        raise FileNotFoundError(
+            "Inno Setup (ISCC.exe) non trovato: installer non generato."
         )
-        return
     run([iscc, f"/DAppVersion={version}", str(iss_script)], cwd=ROOT)
     installer = ROOT / "dist" / f"El-Sbobinator-Setup-v{version}.exe"
     if not installer.exists() or installer.stat().st_size <= 0:
