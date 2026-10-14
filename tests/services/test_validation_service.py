@@ -102,10 +102,10 @@ class ValidationServiceTests(unittest.TestCase):
             preferred_model="gemini-2.5-flash",
         )
         self.assertTrue(result["ok"])
-        self.assertEqual(
-            {c["id"] for c in result["checks"]},
-            {"api_key", "ffmpeg", "output", "config"},
-        )
+        expected_ids = {"api_key", "ffmpeg", "output", "config"}
+        if sys.platform != "win32":
+            expected_ids.add("keyring")
+        self.assertEqual({c["id"] for c in result["checks"]}, expected_ids)
         api_check = next(
             check for check in result["checks"] if check["id"] == "api_key"
         )
