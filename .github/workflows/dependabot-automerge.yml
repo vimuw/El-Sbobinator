@@ -45,12 +45,15 @@ jobs:
       cancel-in-progress: false
     permissions:
       contents: read
-      pull-requests: write
+      pull-requests: read
     steps:
       - name: Ask Dependabot to refresh one stale auto-merging PR
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          # Fine-grained PAT from a user with push access, restricted to this
+          # repository with Pull requests: write. Store as an Actions secret.
+          DEPENDABOT_REFRESH_TOKEN: ${{ secrets.DEPENDABOT_REFRESH_TOKEN }}
         # Let Dependabot create the new revision: updating it with GITHUB_TOKEN
         # would leave the resulting pull_request checks awaiting human approval.
         # Recreate also covers grouped PRs whose recorded base is already current
@@ -64,8 +67,9 @@ jobs:
           repo = os.environ['GH_REPO']
           root = f'repos/{repo}'
 
-          def api(path, *, pages=False, body=None):
-              command = ['gh', 'api', f'{root}/{path}']
+          def api(path, *, pages=False, body=None, token=None):
+              endpoint = path if path.startswith('/') else f'{root}/{path}'
+              command = ['gh', 'api', endpoint]
               if pages:
                   command.extend(['--paginate', '--slurp'])
               if body is not None:
@@ -73,6 +77,7 @@ jobs:
               result = subprocess.run(
                   command, input=json.dumps(body) if body is not None else None,
                   capture_output=True, text=True, encoding='utf-8', check=True,
+                  env={**os.environ, 'GH_TOKEN': token} if token else None,
               )
               data = json.loads(result.stdout)
               return [item for page in data for item in page] if pages else data
@@ -120,12 +125,37 @@ jobs:
                       print(f'::warning::PR #{number} has manual or unverified commits; leaving it unchanged.')
                       continue
 
+                  dry_run = os.environ.get('REFRESH_DRY_RUN') == 'true'
+                  token = os.environ.get('DEPENDABOT_REFRESH_TOKEN')
+                  if not token and not dry_run:
+                      raise SystemExit(
+                          '::error::Configure the Actions secret DEPENDABOT_REFRESH_TOKEN '
+                          'with a user PAT that can comment on this repository. '
+                          'Dependabot rejects recreate commands from github-actions[bot].'
+                      )
+                  actor = None
+                  if token:
+                      user = api('/user', token=token)
+                      if user.get('type') != 'User':
+                          raise SystemExit('::error::DEPENDABOT_REFRESH_TOKEN must belong to a user with push access.')
+                      actor = user['login']
+
                   marker = f'<!-- dependabot-refresh:{base}:{head} -->'
                   comments = api(f'issues/{number}/comments?per_page=100', pages=True)
-                  if any(
-                      comment['user']['login'] == 'github-actions[bot]'
-                      and marker in comment['body'] for comment in comments
-                  ):
+                  requests = [index for index, comment in enumerate(comments) if
+                      comment['user']['login'] == actor
+                      and marker in comment['body']
+                  ]
+                  if requests:
+                      if any(
+                          comment['user']['login'] == 'dependabot[bot]'
+                          and 'only users with push access can use that command' in comment['body']
+                          for comment in comments[requests[-1] + 1:]
+                      ):
+                          raise SystemExit(
+                              '::error::Dependabot rejected the refresh command. '
+                              'The user owning DEPENDABOT_REFRESH_TOKEN needs push access.'
+                          )
                       print(f'PR #{number}: refresh already requested for this revision.')
                       continue
 
@@ -137,14 +167,14 @@ jobs:
                   if api('git/ref/heads/main')['object']['sha'] != base:
                       print('main advanced during the scan; retrying on the next run.')
                       return
-                  if os.environ.get('REFRESH_DRY_RUN') == 'true':
+                  if dry_run:
                       print(f'Would request Dependabot to refresh PR #{number}.')
                       return
-                  api(f'issues/{number}/comments', body={
+                  api(f'issues/{number}/comments', token=token, body={
                       'body': f'@dependabot recreate\n\n{marker}\n'
                               'Refresh against main so the required checks run again.',
                   })
-                  print(f'Requested Dependabot to refresh PR #{number}.')
+                  print(f'Requested Dependabot to refresh PR #{number} as {actor}.')
                   return
               print('No new Dependabot refresh request needed.')
 

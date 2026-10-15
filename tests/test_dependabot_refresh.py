@@ -15,6 +15,7 @@ WORKFLOW = (
 REPO = "vimuw/El-Sbobinator"
 BASE = "a" * 40
 HEAD = "b" * 40
+REFRESH_TOKEN = "fixture-user-token"
 
 
 @pytest.fixture
@@ -50,6 +51,7 @@ def github(monkeypatch):
         latest=None,
         latest_base=BASE,
         fail=False,
+        actor_type="User",
     )
     reads = 0
     base_reads = 0
@@ -66,8 +68,14 @@ def github(monkeypatch):
         if input is not None:
             assert command[3:] == ["--method", "POST", "--input", "-"]
             assert path == "issues/150/comments"
+            # Dependabot rejects commands posted as github-actions[bot], even
+            # when GITHUB_TOKEN is allowed to create the comment itself.
+            assert kwargs.get("env", {}).get("GH_TOKEN") == REFRESH_TOKEN
             state.posts.append(json.loads(input))
             data = {"id": 1}
+        elif path == "/user":
+            assert kwargs.get("env", {}).get("GH_TOKEN") == REFRESH_TOKEN
+            data = {"login": "vimuw", "type": state.actor_type}
         elif path == "git/ref/heads/main":
             base_reads += 1
             data = {"object": {"sha": BASE if base_reads == 1 else state.latest_base}}
@@ -95,6 +103,7 @@ def github(monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setenv("GH_REPO", REPO)
+    monkeypatch.setenv("DEPENDABOT_REFRESH_TOKEN", REFRESH_TOKEN)
     monkeypatch.delenv("REFRESH_DRY_RUN", raising=False)
     return state
 
@@ -162,7 +171,7 @@ def test_duplicate_requests_are_suppressed_per_base_and_head(github, same_revisi
     base = BASE if same_revision else "c" * 40
     github.comments = [
         {
-            "user": {"login": "github-actions[bot]"},
+            "user": {"login": "vimuw"},
             "body": f"<!-- dependabot-refresh:{base}:{HEAD} -->",
         }
     ]
@@ -203,4 +212,58 @@ def test_api_failure_is_reported_instead_of_claiming_success(github):
     github.fail = True
     with pytest.raises(subprocess.CalledProcessError):
         run_refresh()
+    assert github.posts == []
+
+
+def test_missing_user_token_fails_without_posting_an_ineffective_command(
+    github, monkeypatch
+):
+    monkeypatch.delenv("DEPENDABOT_REFRESH_TOKEN")
+    with pytest.raises(SystemExit, match="DEPENDABOT_REFRESH_TOKEN"):
+        run_refresh()
+    assert github.posts == []
+
+
+def test_bot_token_is_rejected_before_posting(github):
+    github.actor_type = "Bot"
+    with pytest.raises(SystemExit, match="user"):
+        run_refresh()
+    assert github.posts == []
+
+
+def test_previous_rejected_bot_command_does_not_suppress_user_retry(github):
+    github.comments = [
+        {
+            "user": {"login": "github-actions[bot]"},
+            "body": f"@dependabot recreate\n<!-- dependabot-refresh:{BASE}:{HEAD} -->",
+        },
+        {
+            "user": {"login": "dependabot[bot]"},
+            "body": "Sorry, only users with push access can use that command.",
+        },
+    ]
+    run_refresh()
+    assert len(github.posts) == 1
+
+
+def test_rejected_user_command_is_reported_instead_of_claiming_it_is_pending(github):
+    github.comments = [
+        {
+            "user": {"login": "vimuw"},
+            "body": f"@dependabot recreate\n<!-- dependabot-refresh:{BASE}:{HEAD} -->",
+        },
+        {
+            "user": {"login": "dependabot[bot]"},
+            "body": "Sorry, only users with push access can use that command.",
+        },
+    ]
+    with pytest.raises(SystemExit, match="needs push access"):
+        run_refresh()
+    assert github.posts == []
+
+
+def test_dry_run_can_diagnose_missing_token_without_writes(github, monkeypatch):
+    monkeypatch.delenv("DEPENDABOT_REFRESH_TOKEN")
+    monkeypatch.setenv("REFRESH_DRY_RUN", "true")
+    run_refresh()
     assert github.posts == []
