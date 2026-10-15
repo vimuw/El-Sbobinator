@@ -3,10 +3,11 @@ import { closeHistory } from '@tiptap/pm/history';
 import { DOCUMENT_FORMATTING, pointSize } from './documentFormatting';
 import { EditorEmptyTextMarks } from './editorEmptyTextMarks';
 import { clipboardCssLineHeight } from './editorLineSpacing';
+import { readMarks } from './emptyTextMarks';
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
-    documentStyle: { clearDocumentFormatting: () => ReturnType };
+    documentStyle: { clearDocumentFormatting: () => ReturnType; clearDocumentColor: () => ReturnType };
   }
 }
 
@@ -63,6 +64,64 @@ export const EditorDocumentStyle = Extension.create({
   },
   addCommands() {
     return {
+      clearDocumentColor: () => ({ tr, state, dispatch }) => {
+        if (!dispatch) return true;
+        const textStyle = state.schema.marks.textStyle;
+        if (!textStyle) return false;
+        const { ranges, empty } = state.selection;
+        const typingMarks = state.storedMarks ?? state.selection.$from.marks();
+        closeHistory(tr);
+        // Cell selections have a separate range for each selected cell.
+        for (const { $from, $to } of ranges) {
+          const from = $from.pos, to = $to.pos;
+          tr.doc.nodesBetween(from, to, (node, pos) => {
+            if (!['paragraph', 'heading'].includes(node.type.name)) return;
+            // Empty blocks restore their saved typing marks when revisited.
+            // Clear their ink too, retaining all other saved character styles.
+            if (!empty && !node.content.size) {
+              const marks = readMarks(node.attrs.emptyTextMarks);
+              if (marks?.some(mark => mark.type === 'textStyle' && mark.attrs?.color)) {
+                tr.setNodeAttribute(pos, 'emptyTextMarks', readMarks(marks.flatMap(mark => {
+                  if (mark.type !== 'textStyle') return [mark];
+                  const attrs = { ...mark.attrs, color: null };
+                  return Object.values(attrs).some(Boolean) ? [{ ...mark, attrs }] : [];
+                })));
+              }
+            }
+            const inherited = node.attrs.documentStyle?.color;
+            node.forEach((child, offset) => {
+              if (!child.isInline) return;
+              const start = pos + 1 + offset;
+              const end = start + child.nodeSize;
+              const original = child.marks.find(mark => mark.type === textStyle)?.attrs ?? {};
+              const apply = (left: number, right: number, color: string | null) => {
+                if (left >= right) return;
+                const attrs = { ...original, color };
+                tr.removeMark(left, right, textStyle);
+                if (Object.values(attrs).some(Boolean)) tr.addMark(left, right, textStyle.create(attrs));
+              };
+              // Move only inherited ink out of the block, preserving each
+              // character's other marks and all text outside the selection.
+              if (inherited && (!original.color || original.color === 'inherit') && !child.marks.some(mark => mark.type.name === 'link')) {
+                apply(start, Math.min(end, from), inherited);
+                apply(Math.max(start, to), end, inherited);
+              }
+              if (!empty) apply(Math.max(start, from), Math.min(end, to), null);
+            });
+            if (inherited) {
+              const style = { ...node.attrs.documentStyle };
+              delete style.color;
+              tr.setNodeAttribute(pos, 'documentStyle', Object.keys(style).length ? style : null);
+            }
+          });
+        }
+        if (empty) tr.setStoredMarks(typingMarks.flatMap(mark => {
+          if (mark.type !== textStyle) return [mark];
+          const attrs = { ...mark.attrs, color: null };
+          return Object.values(attrs).some(Boolean) ? [textStyle.create(attrs)] : [];
+        }));
+        return true;
+      },
       clearDocumentFormatting: () => ({ tr, state, dispatch }) => {
         if (!dispatch) return true;
         closeHistory(tr);

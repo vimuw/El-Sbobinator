@@ -18,7 +18,8 @@ export const ColorPickerButton = ({ editor }: { editor: TiptapEditor }) => {
   const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
-  const currentColor: string | undefined = editor.getAttributes('textStyle').color;
+  const currentColor: string | undefined = editor.getAttributes('textStyle').color
+    ?? editor.getAttributes(editor.isActive('heading') ? 'heading' : 'paragraph').documentStyle?.color;
 
   const toggleOpen = () => {
     if (!isOpen && buttonRef.current) {
@@ -89,7 +90,7 @@ export const ColorPickerButton = ({ editor }: { editor: TiptapEditor }) => {
           <div className="color-footer">
             <button
               type="button"
-              onPointerDown={e => { e.preventDefault(); editor.chain().focus().unsetColor().run(); setIsOpen(false); }}
+              onPointerDown={e => { e.preventDefault(); editor.chain().focus().clearDocumentColor().run(); setIsOpen(false); }}
               className="color-reset"
             >
               ✕ Rimuovi colore
