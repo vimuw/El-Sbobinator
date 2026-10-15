@@ -8,6 +8,18 @@ import sys
 from pathlib import Path
 
 
+def ensure_supported_python() -> None:
+    # Keep this bootstrap check standard-library-only: it also runs before uv
+    # and application dependencies are installed. Tests align it with pyproject.
+    version = sys.version_info[:3]
+    if not (3, 11, 5) <= version < (3, 12, 0):
+        detected = ".".join(map(str, version))
+        raise RuntimeError(
+            f"Python {detected} non supportato: richiesto Python >=3.11.5,<3.12. "
+            "Usa un interprete compatibile e ricrea il .venv del progetto."
+        )
+
+
 def show_startup_error(message: str) -> None:
     if sys.stderr is not None:
         print(message, file=sys.stderr)
@@ -18,7 +30,10 @@ def show_startup_error(message: str) -> None:
 
 
 def prepare_source_environment(root: Path, launcher: Path) -> None:
-    if getattr(sys, "frozen", False) or sys.platform != "win32":
+    if getattr(sys, "frozen", False):
+        return
+    if sys.platform != "win32":
+        ensure_supported_python()
         return
     update = root / "Aggiorna_App_Locale.ps1"
     try:
@@ -43,6 +58,7 @@ def prepare_source_environment(root: Path, launcher: Path) -> None:
                 subprocess.Popen(command, cwd=str(root), env=child_env)
                 raise SystemExit(0)
             raise SystemExit(subprocess.call(command, cwd=str(root), env=child_env))
+        ensure_supported_python()
         from el_sbobinator.utils.dependency_versions import (
             verify_dependencies,
             verify_frontend_build,

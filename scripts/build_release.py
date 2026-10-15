@@ -146,8 +146,9 @@ def project_python() -> Path:
 
 
 def ensure_uv() -> Path:
-    if sys.version_info[:2] != (3, 11):
-        raise RuntimeError("Richiesto Python 3.11, come in CI.")
+    from el_sbobinator.utils.source_bootstrap import ensure_supported_python
+
+    ensure_supported_python()
     tools = ROOT / ".dependency-tools"
     python = tools / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     uv = tools / ("Scripts/uv.exe" if os.name == "nt" else "bin/uv")

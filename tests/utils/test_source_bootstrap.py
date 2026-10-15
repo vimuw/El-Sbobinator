@@ -1,9 +1,54 @@
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from el_sbobinator.utils import source_bootstrap
+
+
+class PythonVersionTests(unittest.TestCase):
+    def test_supported_versions_match_the_project_manifest(self):
+        from packaging.specifiers import SpecifierSet
+
+        root = Path(__file__).resolve().parents[2]
+        manifest = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+        requirement = SpecifierSet(manifest["project"]["requires-python"])
+        cases = (
+            ((3, 10, 16), False),
+            ((3, 11, 0), False),
+            ((3, 11, 4), False),
+            ((3, 11, 5), True),
+            ((3, 11, 8), True),
+            ((3, 11, 15), True),
+            ((3, 12, 0), False),
+            ((4, 0, 0), False),
+        )
+        for version, supported in cases:
+            with self.subTest(version=version):
+                self.assertEqual(
+                    requirement.contains(".".join(map(str, version))), supported
+                )
+                with patch.object(source_bootstrap.sys, "version_info", version):
+                    if supported:
+                        source_bootstrap.ensure_supported_python()
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "3.11.5.*3.12"):
+                            source_bootstrap.ensure_supported_python()
+
+    def test_non_windows_source_startup_enforces_the_same_minimum(self):
+        for platform in ("darwin", "linux"):
+            for version, supported in (((3, 11, 4), False), ((3, 11, 5), True)):
+                with (
+                    self.subTest(platform=platform, version=version),
+                    patch.object(source_bootstrap.sys, "platform", platform),
+                    patch.object(source_bootstrap.sys, "version_info", version),
+                ):
+                    if supported:
+                        source_bootstrap.prepare_source_environment(Path(), Path())
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "3.11.5.*3.12"):
+                            source_bootstrap.prepare_source_environment(Path(), Path())
 
 
 class SourceBootstrapTests(unittest.TestCase):
@@ -70,6 +115,23 @@ class SourceBootstrapTests(unittest.TestCase):
             source_bootstrap.prepare_source_environment(self.root, self.launcher)
         verify.assert_called_once_with(self.root)
         child.assert_not_called()
+
+    def test_old_venv_stops_before_importing_application_dependencies(self):
+        with (
+            patch.object(source_bootstrap.sys, "prefix", str(self.environment)),
+            patch.object(source_bootstrap.sys, "version_info", (3, 11, 4)),
+            patch(
+                "el_sbobinator.utils.dependency_versions.verify_dependencies"
+            ) as verify,
+            patch.object(source_bootstrap, "show_startup_error") as message,
+        ):
+            with self.assertRaises(SystemExit) as failure:
+                source_bootstrap.prepare_source_environment(self.root, self.launcher)
+        self.assertEqual(failure.exception.code, 1)
+        self.assertIn("Python 3.11.4", message.call_args.args[0])
+        self.assertIn("3.11.5", message.call_args.args[0])
+        self.assertIn("Aggiorna_App_Locale.ps1", message.call_args.args[0])
+        verify.assert_not_called()
 
     def test_missing_venv_and_outdated_pins_show_actionable_error(self):
         for missing in (False, True):
