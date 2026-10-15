@@ -2817,6 +2817,18 @@ button {
 :root[data-theme="dark"] .tiptap-editor,
 :root[data-theme="dark"] .tiptap-editor :is(h1, h2, h3, h4, h5, h6) { color: var(--text-primary); }
 
+/* These classes belong to view decorations, never serialized document styles.
+   Cover nested marks regardless of their DOM order (color/strong/highlight). */
+:root[data-theme="dark"] .tiptap-editor .editor-reading-neutral,
+:root[data-theme="dark"] .tiptap-editor .editor-reading-neutral * {
+  color: var(--text-primary) !important;
+}
+
+.tiptap-editor .editor-reading-highlight,
+.tiptap-editor .editor-reading-highlight * {
+  color: var(--editor-highlight-ink) !important;
+}
+
 .search-highlight {
   background-color: rgba(255, 214, 0, 0.45);
   border-radius: 2px;

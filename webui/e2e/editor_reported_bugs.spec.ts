@@ -31,10 +31,11 @@ test('internal fallback copy keeps default headings readable in dark mode and pr
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await paste(page, '<h1>Predefinito</h1><h2 style="color:#000000">Nero scelto</h2><h3 style="color:#123abc">Blu scelto</h3><div data-math-block="\\begin{matrix}a&amp;b\\end{matrix}">Matrice</div>');
   const editor = page.locator('.tiptap-editor');
-  const colors = () => editor.locator('h1,h2,h3').evaluateAll(headings => headings.map(h => getComputedStyle(h).color));
+  const colors = () => editor.locator('h1,h2,h3').evaluateAll(headings => headings.map(h => getComputedStyle(h.querySelector('.editor-reading-neutral') ?? h).color));
   const original = await colors();
   expect(original[0]).not.toBe('rgb(0, 0, 0)');
-  expect(original.slice(1)).toEqual(['rgb(0, 0, 0)', 'rgb(18, 58, 188)']);
+  expect(original.slice(1)).toEqual([original[0], 'rgb(18, 58, 188)']);
+  expect(await editor.locator('h2').getAttribute('style')).toContain('color: rgb(0, 0, 0)');
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+c'); await page.keyboard.press('Control+v');
   await expect.poll(colors).toEqual(original);
   await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
