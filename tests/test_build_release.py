@@ -75,6 +75,19 @@ class BuildReleaseTests(unittest.TestCase):
             str(build_release.ROOT / ".venv"),
         )
 
+    def test_unsupported_python_cannot_install_dependencies_or_bootstrap_uv(self):
+        for version in ((3, 11, 4), (3, 12, 0)):
+            with (
+                self.subTest(version=version),
+                patch.object(build_release.sys, "version_info", version),
+                patch.object(build_release, "run") as run,
+                patch.object(build_release.subprocess, "run") as probe,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "3.11.5.*3.12"):
+                    build_release.install_python_dependencies()
+                run.assert_not_called()
+                probe.assert_not_called()
+
     def test_command_build_refreshes_manifest_before_packaging(self):
         for target in ("windows", "macos"):
             for existing in (False, True):
