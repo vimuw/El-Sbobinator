@@ -180,3 +180,56 @@ jobs:
 
           refresh()
           PY
+
+  finish:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Complete auto-merge after the current revision passes CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TESTED_HEAD: ${{ github.event.workflow_run.head_sha }}
+        # Revisit the merge after CI, including when an existing native
+        # auto-merge request remains pending after Dependabot rewrites the head.
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          fields = 'number,author,headRefOid,baseRefName,isDraft,isCrossRepository,autoMergeRequest,mergeStateStatus'
+          tested_head = os.environ['TESTED_HEAD']
+
+          def read(*args):
+              result = subprocess.run(
+                  ['gh', 'pr', *args, '--json', fields],
+                  capture_output=True, text=True, encoding='utf-8', check=True,
+              )
+              return json.loads(result.stdout)
+
+          def ready(pr):
+              return (
+                  pr['author']['login'] in {'app/dependabot', 'dependabot[bot]'}
+                  and pr['baseRefName'] == 'main'
+                  and not pr['isDraft'] and not pr['isCrossRepository']
+                  and pr['autoMergeRequest'] is not None
+                  and pr['mergeStateStatus'] == 'CLEAN'
+                  and pr['headRefOid'] == tested_head
+              )
+
+          for listed in read('list', '--state', 'open', '--base', 'main', '--limit', '100'):
+              if not ready(listed):
+                  continue
+              pr = read('view', str(listed['number']))
+              if ready(pr):
+                  subprocess.run(
+                      ['gh', 'pr', 'merge', str(pr['number']), '--auto', '--squash',
+                       '--match-head-commit', tested_head], check=True,
+                  )
+          PY
