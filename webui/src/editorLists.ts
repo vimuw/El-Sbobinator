@@ -107,15 +107,22 @@ export const EditorOrderedList = OrderedList.extend({
               this.editor.view.dispatch(closeHistory(this.editor.state.tr));
               return true;
             }
-            if (item.attrs.markerHidden || !children || !['orderedList', 'bulletList'].includes(children.type.name)
+            const generatedGap = $from.parent.attrs.generatedSpaceBefore;
+            if (item.attrs.markerHidden || (!generatedGap && (!children || !['orderedList', 'bulletList'].includes(children.type.name)
               || !textParagraph($from.parent)
               || !Array.from({ length: children.childCount }, (_, i) => children.child(i)).every(child =>
-                Array.from({ length: child.childCount }, (_, i) => child.child(i)).every(textParagraph))) return false;
+                Array.from({ length: child.childCount }, (_, i) => child.child(i)).every(textParagraph))))) return false;
             // The standard split keeps the subtree with the new item. Docs
             // gives the split and immediately following typing separate undo.
             const marks = this.editor.state.storedMarks ?? $from.marks();
             const split = this.editor.chain().command(({ tr }) => { closeHistory(tr); return true; }).splitListItem(itemName)
               .command(({ tr }) => {
+                // A split at the start/middle copies paragraph attributes in
+                // TipTap, bypassing keepOnSplit. The boundary belongs only to
+                // the leading paragraph, including when that paragraph is empty.
+                if (generatedGap && tr.selection.$from.parent.attrs.generatedSpaceBefore) {
+                  tr.setNodeAttribute(tr.selection.$from.before(), 'generatedSpaceBefore', null);
+                }
                 if ($from.parentOffset === 0 || $from.parentOffset === $from.parent.content.size) {
                   const pos = $from.parentOffset ? tr.selection.$from.before() : tr.mapping.map($from.before(), -1);
                   const empty = tr.doc.nodeAt(pos);

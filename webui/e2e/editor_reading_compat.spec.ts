@@ -104,3 +104,17 @@ test('Docs HTML keeps editable span highlights and original ink when pasted into
   expect(html).toContain('color: rgb(0, 0, 0)'); expect(html).toContain('background-color: rgb(254, 240, 138)');
   expect(html).not.toContain('editor-reading');
 });
+
+test('Enter before the first list item keeps one generated boundary and no gap between items', async ({ page }) => {
+  for (const tag of ['ul', 'ol']) {
+    await setContent(page, `<p>Intro</p><${tag}><li><p data-generated-space-before="15.18" style="margin-top:15.18pt"><strong>Prima</strong></p></li><li><p>Seconda</p></li></${tag}><p>Fine</p>`);
+    await select(page, 'Prima', 0); await page.keyboard.press('Enter');
+    await select(page, 'Prima', 0); await page.keyboard.press('ArrowUp'); await page.keyboard.type('Nuovo punto');
+    const result = await page.locator('.tiptap-editor').evaluate(root => {
+      const blocks = [...root.querySelectorAll('li>p')];
+      return { gaps: blocks.slice(1).map((p, i) => p.getBoundingClientRect().top - blocks[i].getBoundingClientRect().bottom), generated: root.querySelectorAll('[data-generated-space-before]').length };
+    });
+    expect(result.generated).toBe(1);
+    expect(result.gaps.every(gap => Math.abs(gap) < 0.1)).toBe(true);
+  }
+});
