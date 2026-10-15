@@ -27,6 +27,56 @@ function transfer(element: HTMLElement, type: 'copy' | 'cut') {
 }
 
 describe('Editor parity: clipboard and logical text', () => {
+  it('imports Docs span highlights as editable marks while retaining black and custom foreground colors', async () => {
+    const { editor } = await openEditor('<p></p>');
+    act(() => { editor.view.pasteHTML('<b id="docs-internal-guid-test"><p><span style="color:#000000;background-color:#fef08a;font-size:11pt">Giallo nero</span> <span style="background-color:#fef08a"><span style="color:#123abc">Giallo blu</span></span><span style="background-color:transparent">Normale</span></p></b>', new Event('paste') as ClipboardEvent); });
+    const text = (label: string) => (editor.getJSON() as JSONContent).content![0].content!.find(node => node.text === label)!;
+    expect(text('Giallo nero').marks).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'highlight', attrs: { color: 'rgb(254, 240, 138)' } }), expect.objectContaining({ type: 'textStyle', attrs: expect.objectContaining({ color: 'rgb(0, 0, 0)', fontSize: '11pt' }) })]));
+    expect(text('Giallo blu').marks).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'highlight' }), expect.objectContaining({ type: 'textStyle', attrs: expect.objectContaining({ color: '#123abc' }) })]));
+    expect(text('Normale').marks?.some(mark => mark.type === 'highlight')).toBeFalsy();
+    const saved = editor.getHTML(); act(() => { editor.commands.setContent(normalizePreviewHtmlContent(saved)); });
+    expect(editor.getHTML()).toContain('<mark');
+  });
+
+  it.each([1, 2, 3, 4, 5, 6].flatMap(level => [false, true].map(reverse => ({ level, reverse }))))('pastes a complete H$level as a heading only when replacing a normal paragraph (reverse=$reverse)', async ({ level, reverse }) => {
+    const { editor, element } = await openEditor(`<h${level}>Titolo</h${level}><p></p>`);
+    act(() => { editor.commands.setTextSelection(reverse ? { from: 7, to: 1 } : { from: 1, to: 7 }); });
+    const formats = transfer(element, 'copy').formats;
+    expect(formats['text/html']).toContain(`data-editor-selection-heading="1"`);
+    const native = JSON.parse(JSON.parse(formats[NATIVE_SLICE_MIME]).data).resolved;
+    expect(native.dsl_styleslices.find((slice: { stsl_type: string }) => slice.stsl_type === 'paragraph').stsl_styles.filter(Boolean)).toEqual(expect.arrayContaining([expect.objectContaining({ ps_hd: level })]));
+    for (const target of ['<p></p>', '<p>Vecchio</p>', '<p>Prima dopo</p>', '<ul><li><p></p></li></ul>']) {
+      act(() => {
+        editor.commands.setContent(target);
+        editor.commands.setTextSelection(target.includes('Vecchio') ? { from: 1, to: 8 } : target.includes('Prima') ? 7 : target.includes('<ul>') ? 3 : 1);
+        editor.view.pasteHTML(formats['text/html'], new Event('paste') as ClipboardEvent);
+      });
+      const root = (editor.getJSON() as JSONContent).content!;
+      if (target.includes('Prima')) {
+        expect(root).toHaveLength(1); expect(root[0].type).toBe('paragraph'); expect(editor.getText()).toBe('Prima Titolodopo');
+      } else if (target.includes('<ul>')) {
+        expect(root[0].type).toBe('bulletList'); expect(root[0].content![0].content![0].type).toBe('paragraph');
+      } else expect(root[0]).toMatchObject({ type: 'heading', attrs: { level } });
+      expect(editor.getHTML()).not.toMatch(/data-editor-(selection-heading|default-heading-color)/);
+      expect(editor.getHTML()).not.toContain('color: rgb(0, 0, 0)');
+      const saved = editor.getJSON();
+      act(() => { editor.commands.setContent(normalizePreviewHtmlContent(editor.getHTML())); });
+      expect(editor.getJSON()).toEqual(saved);
+    }
+  });
+
+  it('keeps a partial default heading inline without turning its default ink into authored black', async () => {
+    const { editor, element } = await openEditor('<h2>Prima scelta dopo</h2>');
+    act(() => { editor.commands.setTextSelection({ from: 7, to: 13 }); });
+    const formats = transfer(element, 'copy').formats;
+    expect(formats['text/html']).toContain('data-editor-default-heading-color');
+    act(() => { editor.commands.setContent('<p></p>'); editor.commands.setTextSelection(1); editor.view.pasteHTML(formats['text/html'], new Event('paste') as ClipboardEvent); });
+    expect(editor.getJSON().content![0].type).toBe('paragraph');
+    expect(editor.getText()).toBe('scelta');
+    expect(editor.getHTML()).not.toContain('color: rgb(0, 0, 0)');
+    expect(editor.getHTML()).toContain('font-size: 16pt');
+  });
+
   it('preserves authored whitespace in paragraphs and headings after saving and reopening', async () => {
     const { editor } = await openEditor('<h2>Titolo</h2><p>Prima</p><p></p>');
     act(() => {

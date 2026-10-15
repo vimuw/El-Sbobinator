@@ -8,6 +8,19 @@ async function setContent(page: Page, html: string) {
   await page.evaluate(value => (document.querySelector('.tiptap-editor') as EditorRoot).editor.commands.setContent(value), html);
 }
 
+async function select(page: Page, label: string, offset?: number) {
+  await page.evaluate(({ label, offset }) => {
+    const editor = (document.querySelector('.tiptap-editor') as EditorRoot).editor;
+    editor.state.doc.descendants((node, pos) => {
+      if (!node.isTextblock || !node.textContent.includes(label)) return;
+      const start = pos + 1 + node.textContent.indexOf(label);
+      editor.commands.setTextSelection(offset === undefined ? { from: start, to: start + label.length } : start + offset);
+      return false;
+    });
+    editor.view.focus();
+  }, { label, offset });
+}
+
 async function ink(page: Page, label: string) {
   return page.locator('.tiptap-editor').evaluate((root, label) => {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -63,4 +76,31 @@ test('reading colors and highlight contrast change only the view, across themes 
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
   await expect(page.locator('.tiptap-editor')).toBeVisible();
   await expect.poll(snapshot).toEqual(original);
+});
+
+test('keyboard copy preserves complete headings in empty paragraphs and stays inline inside text', async ({ page }) => {
+  await setContent(page, '<h2>Titolo intero</h2><p>Vecchio</p><p>Prima dopo</p>');
+  await select(page, 'Titolo intero'); await page.keyboard.press('Control+c');
+  await select(page, 'Vecchio'); await page.keyboard.press('Control+v');
+  await expect(page.locator('.tiptap-editor h2')).toHaveCount(2);
+  await select(page, 'Prima dopo', 6); await page.keyboard.press('Control+v');
+  await expect(page.locator('.tiptap-editor p').filter({ hasText: 'Prima Titolo interodopo' })).toHaveCount(1);
+  await expect(page.locator('.tiptap-editor h2')).toHaveCount(2);
+  const saved = await page.evaluate(() => (document.querySelector('.tiptap-editor') as EditorRoot).editor.getHTML());
+  expect(saved).not.toMatch(/data-editor-(selection-heading|default-heading-color)/);
+});
+
+test('Docs HTML keeps editable span highlights and original ink when pasted into the dark editor', async ({ page }) => {
+  await setContent(page, '<p></p>');
+  await page.evaluate(async () => {
+    document.documentElement.dataset.theme = 'dark';
+    await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob(['<p><span style="color:#000000;background-color:#fef08a;font-size:11pt">Giallo nero</span> <span style="color:#123abc;background-color:#fef08a">Giallo blu</span></p>'], { type: 'text/html' }) })]);
+  });
+  await page.locator('.tiptap-editor').focus(); await page.keyboard.press('Control+v');
+  await expect(page.locator('.tiptap-editor mark')).toHaveCount(2);
+  expect(await ink(page, 'Giallo nero')).toBe('rgb(0, 0, 0)');
+  expect(await ink(page, 'Giallo blu')).toBe('rgb(18, 58, 188)');
+  const html = await page.evaluate(() => (document.querySelector('.tiptap-editor') as EditorRoot).editor.getHTML());
+  expect(html).toContain('color: rgb(0, 0, 0)'); expect(html).toContain('background-color: rgb(254, 240, 138)');
+  expect(html).not.toContain('editor-reading');
 });
