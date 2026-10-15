@@ -108,10 +108,16 @@ def github(monkeypatch):
     return state
 
 
+def workflow_python(step):
+    # Extract only this step's heredoc before dedenting other YAML jobs.
+    text = WORKFLOW.read_text(encoding="utf-8").split(f"- name: {step}", 1)[1]
+    lines = text.split("python - <<'PY'\n", 1)[1].splitlines()
+    end = next(index for index, line in enumerate(lines) if line.strip() == "PY")
+    return textwrap.dedent("\n".join(lines[:end]))
+
+
 def run_refresh():
-    # Execute the same Python block as Actions, without a YAML package dependency.
-    block = WORKFLOW.read_text(encoding="utf-8").split("python - <<'PY'\n", 1)[1]
-    source = textwrap.dedent(block).rsplit("\nPY", 1)[0]
+    source = workflow_python("Ask Dependabot to refresh one stale auto-merging PR")
     exec(compile(source, str(WORKFLOW), "exec"), {})
 
 
@@ -267,3 +273,61 @@ def test_dry_run_can_diagnose_missing_token_without_writes(github, monkeypatch):
     monkeypatch.setenv("REFRESH_DRY_RUN", "true")
     run_refresh()
     assert github.posts == []
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {},
+        {"author": {"login": "human"}},
+        {"baseRefName": "other"},
+        {"isDraft": True},
+        {"isCrossRepository": True},
+        {"autoMergeRequest": None},
+        {"mergeStateStatus": "BLOCKED"},
+        {"headRefOid": "c" * 40},
+    ],
+)
+def test_finish_only_merges_the_ready_dependabot_revision_tested_by_ci(
+    monkeypatch, change
+):
+    pr = {
+        "number": 150,
+        "author": {"login": "app/dependabot"},
+        "baseRefName": "main",
+        "isDraft": False,
+        "isCrossRepository": False,
+        "autoMergeRequest": {"mergeMethod": "SQUASH"},
+        "mergeStateStatus": "CLEAN",
+        "headRefOid": HEAD,
+    }
+    pr.update(change)
+    merges = []
+
+    def run(command, **kwargs):
+        assert kwargs["check"]
+        if command[:3] == ["gh", "pr", "merge"]:
+            merges.append(command)
+            return SimpleNamespace(stdout="")
+        return SimpleNamespace(stdout=json.dumps([pr] if command[2] == "list" else pr))
+
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setenv("TESTED_HEAD", HEAD)
+    source = workflow_python("Complete auto-merge after the current revision passes CI")
+    exec(compile(source, str(WORKFLOW), "exec"), {})
+    assert merges == (
+        []
+        if change
+        else [
+            [
+                "gh",
+                "pr",
+                "merge",
+                "150",
+                "--auto",
+                "--squash",
+                "--match-head-commit",
+                HEAD,
+            ]
+        ]
+    )
