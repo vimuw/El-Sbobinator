@@ -446,7 +446,7 @@ def test_media_stream_and_scenario_server_endpoints():
     assert unsupported.status_code == 404
 
     resolved = client.get(
-        f"/api/media/resolve?path={media_file}&session_dir={temp_dir}",
+        f"/api/media/resolve?path={media_file}",
         headers=headers,
     ).json()
     assert resolved["ok"] is True

@@ -699,6 +699,8 @@ export default function App() {
             audio={{
               src: preview.audioSrc,
               relinkNeeded: preview.audioRelinkNeeded,
+              loading: preview.audioLoading,
+              warning: preview.audioWarning,
               onRelink: relinkPreviewAudio,
               onRemoveAudio: removePreviewAudio,
               init: preview.initAudio,

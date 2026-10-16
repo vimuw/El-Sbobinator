@@ -185,6 +185,7 @@ class CloseHandlerTests(unittest.TestCase):
         ):
             self.assertIsNone(handler())
             stop_event.set.assert_called_once()
+            api._audio_cancel_event.set.assert_called_once()
             shutdown.assert_called_once()
             worker.assert_not_called()
             window.evaluate_js.assert_not_called()
@@ -208,6 +209,7 @@ class CloseHandlerTests(unittest.TestCase):
                 window.evaluate_js.call_args.args[0],
             )
             window.destroy.assert_not_called()
+            api._audio_cancel_event.set.assert_not_called()
             window.evaluate_js.side_effect = lambda script, callback: callback(True)
             self.assertIs(handler(), False)
             worker.call_args.kwargs["target"]()

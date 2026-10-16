@@ -61,6 +61,11 @@ from el_sbobinator.services.revision_service import (
     build_macro_blocks,
     process_macro_revision_phase,
 )
+from el_sbobinator.services.session_audio_service import (
+    attach_playback_audio,
+    create_playback_audio,
+    playback_audio_path,
+)
 from el_sbobinator.utils.logging_utils import (
     attach_file_handler,
     detach_file_handler,
@@ -456,6 +461,10 @@ def _export_html_and_finish(
         save_session()
         return False
 
+    _retain_playback_audio(
+        session_ctx, session, input_path, stop_event=runtime.cancel_event
+    )
+
     try:
         _update_session(
             session,
@@ -500,6 +509,35 @@ def _export_html_and_finish(
     return True
 
 
+def _retain_playback_audio(
+    session_ctx: PipelineSessionContext,
+    session: dict,
+    input_path: str,
+    *,
+    stop_event=None,
+) -> None:
+    if playback_audio_path(session, session_ctx.session_dir):
+        return
+    try:
+        path = create_playback_audio(
+            session_ctx.session_dir,
+            input_path,
+            preconverted_path=os.path.join(
+                session_ctx.session_dir, PRECONVERTED_AUDIO_FINAL
+            ),
+            stop_event=stop_event,
+        )
+        attach_playback_audio(session, session_ctx.session_dir, path)
+        if not session_ctx.save():
+            raise OSError("Impossibile salvare il collegamento alla copia audio.")
+        invalidate_session_storage_cache()
+    except Exception as error:
+        print(
+            "[!] Copia audio interna non salvata. Conserva il file originale "
+            f"e riapri la sbobina per riprovare: {error}"
+        )
+
+
 def _pipeline_finally_cleanup(
     session_ctx: PipelineSessionContext | None,
     session: dict | None,
@@ -517,13 +555,12 @@ def _pipeline_finally_cleanup(
                 .strip()
                 .lower()
             )
-            if _final_stage == "done":
+            if _final_stage == "done" and isinstance(session, dict):
                 _preconv = os.path.join(
                     session_ctx.session_dir, PRECONVERTED_AUDIO_FINAL
                 )
                 if os.path.exists(_preconv):
-                    os.remove(_preconv)
-                    invalidate_session_storage_cache()
+                    _retain_playback_audio(session_ctx, session, "")
         except Exception:
             pass
 

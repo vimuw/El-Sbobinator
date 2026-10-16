@@ -291,7 +291,7 @@ export function createBrowserPywebviewApi(): PywebviewApi {
         return { ok: false, has_audio: false, error: `Streaming non disponibile (HTTP ${res.status})` };
       }
       const data = await res.json();
-      return data as { ok: boolean; url?: string; has_audio?: boolean; error?: string };
+      return data as { ok: boolean; url?: string; has_audio?: boolean; error?: string; warning?: string };
     },
 
     // Browser fallbacks for desktop-only features

@@ -408,7 +408,7 @@ describe('AudioPlayer', () => {
     });
 
     expect(screen.getByText("Rimuovere l'audio collegato?")).toBeTruthy();
-    expect(screen.getByText(/L'audio verrà scollegato da questa sbobina/)).toBeTruthy();
+    expect(screen.getByText(/La copia audio interna verrà eliminata dalla sbobina/)).toBeTruthy();
 
     const modal = screen.getByText("Rimuovere l'audio collegato?").closest('.modal-card') as HTMLElement;
     const confirmBtn = within(modal).getByRole('button', { name: 'Rimuovi audio' });

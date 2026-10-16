@@ -17,6 +17,7 @@ from el_sbobinator.bridge.bridge_utils import (
 from el_sbobinator.core.session_store import save_session
 from el_sbobinator.core.shared import _atomic_write_json, _load_json
 from el_sbobinator.services import config_service
+from el_sbobinator.services.session_audio_service import session_metadata_lock
 from el_sbobinator.utils import file_ops
 from el_sbobinator.utils.logging_utils import redact_secrets
 
@@ -213,11 +214,14 @@ class HtmlControllerMixin:
             session_path = os.path.join(os.path.dirname(real_path), "session.json")
             if not os.path.isfile(session_path):
                 return
-            session = _load_json(session_path)
-            if not isinstance(session, dict) or bool(session.get("user_edited", False)):
-                return
-            session["user_edited"] = True
-            save_session(session_path, session)
+            with session_metadata_lock(os.path.dirname(session_path)):
+                session = _load_json(session_path)
+                if not isinstance(session, dict) or bool(
+                    session.get("user_edited", False)
+                ):
+                    return
+                session["user_edited"] = True
+                save_session(session_path, session)
             with self._sessions_cache_lock:
                 self._sessions_cache = None
                 self._sessions_cache_gen += 1

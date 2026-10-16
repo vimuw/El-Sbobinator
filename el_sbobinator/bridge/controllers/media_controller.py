@@ -16,9 +16,18 @@ from el_sbobinator.bridge.bridge_utils import (
     bridge_ok,
 )
 from el_sbobinator.core.media_server import LocalMediaServer
+from el_sbobinator.core.session_storage import invalidate_session_storage_cache
 from el_sbobinator.core.shared import _atomic_write_json, _load_json
 from el_sbobinator.pipeline.pipeline_adapter import _drain_dnd_paths
 from el_sbobinator.services.archive_service import find_candidate_audio_path
+from el_sbobinator.services.session_audio_service import (
+    attach_playback_audio,
+    create_playback_audio,
+    discard_playback_audio,
+    playback_audio_path,
+    session_audio_lock,
+    session_metadata_lock,
+)
 from el_sbobinator.utils.logging_utils import redact_secrets
 from el_sbobinator.utils.webview_dialogs import file_dialog_type
 
@@ -304,29 +313,73 @@ class MediaControllerMixin:
         """Resolve and validate media using the same rules for desktop and browser."""
         resolved_file_path = str(file_path or "").strip()
         has_audio = bool(resolved_file_path)
-        if session_dir and (
-            not resolved_file_path or not os.path.isfile(resolved_file_path)
-        ):
+        warning = None
+        if session_dir:
             try:
                 abs_dir, session_path = self._resolve_retry_session(str(session_dir))
-                data = _load_json(session_path)
-                if isinstance(data, dict):
+                with session_audio_lock(abs_dir):
+                    data = _load_json(session_path)
+                    if not isinstance(data, dict):
+                        raise ValueError("session.json non valido")
+                    if data.get("audio_removed"):
+                        return None, False, "Nessun audio collegato alla sbobina."
                     input_data = data.get("input", {})
-                    if isinstance(input_data, dict):
-                        input_p = str(input_data.get("path") or "").strip()
-                        input_n = str(input_data.get("name") or "").strip()
-                        input_rel = str(
-                            input_data.get("path_rel_to_session") or ""
-                        ).strip()
-                        if input_p or input_n or input_rel:
-                            has_audio = True
-                    fallback = self._resolve_completed_session_audio_path(
+                    has_audio = bool(data.get("playback_audio")) or (
+                        isinstance(input_data, dict)
+                        and any(
+                            input_data.get(key)
+                            for key in (
+                                "path",
+                                "name",
+                                "path_rel_to_session",
+                                "path_rel_to_html",
+                            )
+                        )
+                    )
+                    session_audio_path = self._resolve_completed_session_audio_path(
                         data, abs_dir, session_path
                     )
-                    if fallback:
-                        resolved_file_path = fallback
-            except Exception:
-                pass
+                    if not session_audio_path and resolved_file_path:
+                        # The queue may know the source's new location before
+                        # a legacy session has its own retained audio.
+                        valid, _error, _duration = self._validate_media_path(
+                            resolved_file_path, require_duration=True
+                        )
+                        if valid:
+                            session_audio_path = resolved_file_path
+                    resolved_file_path = session_audio_path or ""
+                    if (
+                        resolved_file_path
+                        and data.get("stage") == "done"
+                        and not playback_audio_path(data, abs_dir)
+                    ):
+                        try:
+                            created = create_playback_audio(
+                                abs_dir,
+                                resolved_file_path,
+                                stop_event=getattr(self, "_audio_cancel_event", None),
+                            )
+                            try:
+                                # Conversion can take time: retain concurrent title/open-state edits.
+                                with session_metadata_lock(abs_dir):
+                                    latest = _load_json(session_path)
+                                    attach_playback_audio(latest, abs_dir, created)
+                                    _atomic_write_json(session_path, latest)
+                                    invalidate_session_storage_cache()
+                            except Exception:
+                                discard_playback_audio(created)
+                                raise
+                            resolved_file_path = created
+                        except Exception as error:
+                            self._push_console(
+                                f"Copia audio interna non salvata: {redact_secrets(error)}"
+                            )
+                            warning = (
+                                "Copia audio interna non salvata. Il player usa il file "
+                                "originale: non spostarlo e riapri la sbobina per riprovare."
+                            )
+            except Exception as error:
+                return None, has_audio, str(redact_secrets(error))
             if not resolved_file_path or not os.path.isfile(resolved_file_path):
                 return (
                     None,
@@ -348,7 +401,7 @@ class MediaControllerMixin:
             )
             if not ok:
                 return None, has_audio, "Tipo di file non supportato per lo streaming."
-        return resolved_file_path, True, None
+        return resolved_file_path, True, warning
 
     def stream_media_file(self, file_path: str, session_dir: str | None = None) -> dict:
         """Avvia o riavvia un micro-server HTTP per inviare l'audio nativo a React via streaming byte-range."""
@@ -363,6 +416,7 @@ class MediaControllerMixin:
             return bridge_ok(
                 url=LocalMediaServer.stream_url_for_file(resolved_file_path),
                 has_audio=True,
+                **({"warning": error} if error else {}),
             )
         except Exception as e:
             return bridge_error(e)

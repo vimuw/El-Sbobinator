@@ -50,6 +50,24 @@ const baseProps = {
   onScrollTopChange: vi.fn(),
 };
 
+it('shows preparation instead of offering to add or relink audio during conversion', async () => {
+  render(<EditorFullPage {...baseProps} audio={{
+    src: null, relinkNeeded: false, loading: true,
+    onRelink: vi.fn(), init: {}, onStateChange: vi.fn(),
+  }} />);
+  expect(await screen.findByText('Preparazione audio della sbobina...')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /Aggiungi audio|Ricollega audio/ })).toBeNull();
+});
+
+it('keeps an original-file dependency warning visible above the player', async () => {
+  render(<EditorFullPage {...baseProps} audio={{
+    src: '/original.wav', relinkNeeded: false, warning: 'Conserva il file originale.',
+    onRelink: vi.fn(), init: {}, onStateChange: vi.fn(),
+  }} />);
+  expect(await screen.findByTestId('audio-player')).toBeTruthy();
+  expect(screen.getByText('Conserva il file originale.')).toBeTruthy();
+});
+
 function setPywebview(api: Record<string, unknown> | undefined) {
   Object.defineProperty(window, 'pywebview', {
     value: api === undefined ? undefined : { api },
@@ -299,7 +317,7 @@ describe('EditorFullPage autosave', () => {
     );
 
     expect(screen.getByText('Nessun audio collegato')).toBeTruthy();
-    expect(screen.getByText('Collega un file audio per sincronizzarlo con la sbobina.')).toBeTruthy();
+    expect(screen.getByText('Aggiungi un file audio: una copia verrà conservata nella sbobina.')).toBeTruthy();
     const addBtn = screen.getByRole('button', { name: /Aggiungi audio/i });
     expect(addBtn).toBeTruthy();
 

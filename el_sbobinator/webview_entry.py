@@ -90,6 +90,12 @@ def get_dist_path() -> str:
     )
 
 
+def _cancel_audio_preparation(api: Any) -> None:
+    audio_cancel = getattr(api, "_audio_cancel_event", None)
+    if audio_cancel is not None:
+        audio_cancel.set()
+
+
 def build_close_handler(
     api: Any,
     window: webview.Window,
@@ -150,6 +156,7 @@ def build_close_handler(
 
     def _on_closing() -> bool | None:
         if not require_editor_save or close_ready.is_set():
+            _cancel_audio_preparation(api)
             if stop_event is not None:
                 stop_event.set()
             LocalMediaServer.shutdown_all()

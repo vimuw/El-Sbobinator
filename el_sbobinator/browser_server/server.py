@@ -30,6 +30,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -450,8 +451,8 @@ def _register_media_routes(app: FastAPI) -> None:
         session_dir: Annotated[str | None, Query()] = None,
         _: None = Depends(_verify_auth),
     ):
-        resolved, has_audio, error = app.state.api._resolve_stream_media_path(
-            path, session_dir
+        resolved, has_audio, error = await run_in_threadpool(
+            app.state.api._resolve_stream_media_path, path, session_dir
         )
         if not resolved:
             raise HTTPException(
@@ -471,8 +472,8 @@ def _register_media_routes(app: FastAPI) -> None:
         session_dir: Annotated[str | None, Query()] = None,
         _: None = Depends(_verify_auth),
     ):
-        resolved, has_audio, error = app.state.api._resolve_stream_media_path(
-            path, session_dir
+        resolved, has_audio, error = await run_in_threadpool(
+            app.state.api._resolve_stream_media_path, path, session_dir
         )
         if not resolved:
             return {"ok": False, "has_audio": has_audio, "error": error}
@@ -499,6 +500,7 @@ def _register_media_routes(app: FastAPI) -> None:
             "ok": True,
             "has_audio": True,
             "url": f"/api/media/stream?{query}",
+            **({"warning": error} if error else {}),
         }
 
     @app.get("/api/preview/html")
@@ -574,6 +576,7 @@ def create_browser_app(
             yield
         finally:
             api._cancel_event.set()
+            api._audio_cancel_event.set()
             with app.state.scenario_threads_lock:
                 scenario_threads = list(app.state.scenario_threads)
             for scenario_thread in scenario_threads:

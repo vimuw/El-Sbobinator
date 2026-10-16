@@ -30,6 +30,8 @@ export interface EditorDocumentProps {
 export interface EditorAudioProps {
   src: string | null;
   relinkNeeded: boolean;
+  loading?: boolean;
+  warning?: string;
   onRelink: () => Promise<boolean | undefined>;
   onRemoveAudio?: () => Promise<boolean | undefined> | void;
   init: { time?: number; playbackRate?: number; volume?: number };
@@ -94,6 +96,7 @@ export function EditorFullPage({
 
   const audioSrc = audioProp?.src !== undefined ? audioProp.src : (flatAudioSrc ?? null);
   const audioRelinkNeeded = audioProp?.relinkNeeded ?? flatAudioRelinkNeeded ?? false;
+  const audioLoading = audioProp?.loading ?? false;
   const onRelink = audioProp?.onRelink ?? flatOnRelink ?? (() => Promise.resolve(undefined));
   const onRemoveAudio = audioProp?.onRemoveAudio ?? flatOnRemoveAudio;
   const previewInitAudio = audioProp?.init ?? flatPreviewInitAudio ?? {};
@@ -312,7 +315,15 @@ export function EditorFullPage({
             </Suspense>
 
             <div className="editor-fullpage-footer shrink-0 border-t px-4 sm:px-5" style={{ background: 'var(--editor-chrome-bg)', borderColor: 'var(--border-subtle)' }}>
-              {audioSrc ? (
+              {audioProp?.warning && (
+                <p role="status" className="pt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>{audioProp.warning}</p>
+              )}
+              {audioLoading ? (
+                <div role="status" className="flex items-center gap-2 py-3.5 text-sm" style={{ color: 'var(--text-muted)' }}>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Preparazione audio della sbobina...
+                </div>
+              ) : audioSrc ? (
                 <Suspense fallback={<div className="p-4 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento player...</div>}>
                   <LazyAudioPlayer
                     src={audioSrc}
@@ -329,7 +340,7 @@ export function EditorFullPage({
                   <div className="min-w-0">
                     <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Audio non trovato</p>
                     <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      Il file originale è stato spostato. Selezionalo di nuovo per riattivare il player.
+                      Seleziona di nuovo il file per conservarne una copia nella sbobina.
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -378,7 +389,7 @@ export function EditorFullPage({
                     <div className="min-w-0">
                       <p className="text-sm font-medium leading-none mb-1" style={{ color: 'var(--text-primary)' }}>Nessun audio collegato</p>
                       <p className="text-xs leading-none" style={{ color: 'var(--text-muted)' }}>
-                        Collega un file audio per sincronizzarlo con la sbobina.
+                        Aggiungi un file audio: una copia verrà conservata nella sbobina.
                       </p>
                     </div>
                   </div>
@@ -423,7 +434,7 @@ export function EditorFullPage({
           <ConfirmActionModal
             isOpen={showConfirmRemove}
             title="Rimuovere l'audio mancante?"
-            description="Il riferimento al file audio verrà rimosso dalla sbobina. Il file sul tuo computer non verrà toccato e potrai aggiungere un nuovo audio in qualsiasi momento."
+            description="La copia audio interna verrà eliminata dalla sbobina, liberando spazio. Il file originale sul tuo computer non verrà cancellato. Potrai aggiungere un nuovo audio in qualsiasi momento."
             confirmLabel={isRemovingAudio ? 'Rimozione...' : 'Rimuovi audio'}
             cancelLabel="Annulla"
             onClose={() => setShowConfirmRemove(false)}

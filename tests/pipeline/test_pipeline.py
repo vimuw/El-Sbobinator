@@ -953,7 +953,7 @@ class PipelineCleanupCacheTests(unittest.TestCase):
             ),
         ]
 
-    def test_cleanup_path_invalidates_cache_and_bytes_drop_immediately(self):
+    def test_completion_retains_preconverted_bytes_for_playback(self):
         from el_sbobinator.core import shared as _shared
         from el_sbobinator.core.shared import PRECONVERTED_AUDIO_FINAL
 
@@ -996,18 +996,22 @@ class PipelineCleanupCacheTests(unittest.TestCase):
                     esegui_sbobinatura(input_path, "fake-key", app)
 
                 mock_invalidate.assert_called_once()
-                self.assertFalse(
-                    os.path.exists(preconv_path),
-                    "preconv file must be deleted by pipeline cleanup",
+                from el_sbobinator.services.session_audio_service import (
+                    playback_audio_path,
                 )
+
+                retained = playback_audio_path(session_ctx.session, session_dir)
+                assert retained is not None
+                self.assertEqual(os.path.getsize(retained), preconv_size)
+                self.assertFalse(os.path.exists(preconv_path))
                 info_after = _shared.get_session_storage_info()
                 self.assertEqual(
                     info_after["total_bytes"],
-                    info_before["total_bytes"] - preconv_size,
-                    "storage must reflect deletion immediately without manual invalidation",
+                    info_before["total_bytes"],
+                    "the preconverted bytes remain in the archive as playback audio",
                 )
 
-    def test_cleanup_failed_removal_does_not_invalidate_cache(self):
+    def test_completion_does_not_delete_retained_audio(self):
         from el_sbobinator.core.shared import PRECONVERTED_AUDIO_FINAL
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1046,10 +1050,11 @@ class PipelineCleanupCacheTests(unittest.TestCase):
                 stack.enter_context(remove_fail)
                 esegui_sbobinatura(input_path, "fake-key", app)
 
-            mock_invalidate.assert_not_called()
+            self.assertTrue(session_ctx.session.get("playback_audio"))
+            mock_invalidate.assert_called_once()
 
     def test_cleanup_runs_on_done_early_return(self):
-        """finally-block safety net deletes the preconverted audio on the
+        """finally-block safety net retains the preconverted audio on the
         'done early return' path (stage==done, HTML present, user keeps old result)."""
         from el_sbobinator.core.shared import PRECONVERTED_AUDIO_FINAL
 
@@ -1140,8 +1145,11 @@ class PipelineCleanupCacheTests(unittest.TestCase):
 
             self.assertFalse(
                 os.path.exists(preconv_path),
-                "preconv file must be deleted by finally-block safety net on done early return",
+                "preconv file must be moved to the playback asset on done early return",
             )
+            from el_sbobinator.services.session_audio_service import playback_audio_path
+
+            self.assertIsNotNone(playback_audio_path(session_ctx.session, session_dir))
             self.assertEqual(app.last_run_status, "completed")
 
     def test_cleanup_skipped_when_stage_not_done(self):

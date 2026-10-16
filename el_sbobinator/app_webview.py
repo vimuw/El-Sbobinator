@@ -69,6 +69,7 @@ class ElSbobinatorApi(
             set_session_root(os.path.abspath(session_root_override))
         self._window: webview.Window | None = None
         self._cancel_event = threading.Event()
+        self._audio_cancel_event = threading.Event()
         self._adapter = PipelineAdapter(
             None, self._cancel_event, dispatcher=event_dispatcher
         )

@@ -2861,6 +2861,18 @@ class TestSearchSessions(unittest.TestCase):
 class TestUpdateSessionInputPath(unittest.TestCase):
     """Tests for ElSbobinatorApi.update_session_input_path."""
 
+    def setUp(self):
+        # These tests isolate metadata/title behavior; actual FFmpeg, moves and
+        # failure recovery are exercised in test_session_audio_service.py.
+        self.copy_patch = patch(
+            "el_sbobinator.bridge.controllers.session_controller.create_playback_audio",
+            side_effect=lambda session_dir, _source, **_kwargs: os.path.join(
+                session_dir, "audio", "playback-test.mp3"
+            ),
+        )
+        self.copy_patch.start()
+        self.addCleanup(self.copy_patch.stop)
+
     def test_rejects_session_dir_outside_session_root(self):
         import os
 
@@ -3557,14 +3569,30 @@ class TestGetCompletedSessions(unittest.TestCase):
                     },
                     fh,
                 )
-            with patch.object(api, "_get_session_root", return_value=old_session_root):
+
+            def fake_copy(session_dir, _source, **_kwargs):
+                target = _os.path.join(session_dir, "audio", "playback-test.mp3")
+                _os.makedirs(_os.path.dirname(target), exist_ok=True)
+                with open(target, "wb") as fh:
+                    fh.write(b"audio")
+                return target
+
+            with (
+                patch.object(api, "_get_session_root", return_value=old_session_root),
+                patch(
+                    "el_sbobinator.bridge.controllers.session_controller.create_playback_audio",
+                    side_effect=fake_copy,
+                ),
+            ):
                 relink_result = api.update_session_input_path(session_dir, audio_path)
             self.assertTrue(relink_result["ok"])
 
             _os.rename(old_parent, new_parent)
             new_session_root = _os.path.join(new_parent, "sessions")
             new_session_dir = _os.path.join(new_session_root, "sess1")
-            new_audio_path = _os.path.join(new_parent, "audio", "lecture.mp3")
+            new_audio_path = _os.path.join(
+                new_session_dir, "audio", "playback-test.mp3"
+            )
             self._clear_cache(api)
             with patch.object(api, "_get_session_root", return_value=new_session_root):
                 result = api.get_completed_sessions(limit=0)
@@ -3575,12 +3603,15 @@ class TestGetCompletedSessions(unittest.TestCase):
                 updated = _json.load(fh)
 
             self.assertTrue(result["ok"])
-            self.assertEqual(
-                result["sessions"][0]["input_path"], _os.path.realpath(new_audio_path)
-            )
-            self.assertEqual(
-                updated["input"]["path"], _os.path.realpath(new_audio_path)
-            )
+            self.assertEqual(result["sessions"][0]["input_path"], audio_path)
+            with patch.object(api, "_get_session_root", return_value=new_session_root):
+                played, has_audio, error = api._resolve_stream_media_path(
+                    result["sessions"][0]["input_path"], new_session_dir
+                )
+            self.assertTrue(has_audio)
+            self.assertIsNone(error)
+            self.assertEqual(played, _os.path.realpath(new_audio_path))
+            self.assertEqual(updated["input"]["path"], audio_path)
 
     def test_touch_session_opened(self):
         """test_touch_session_opened updates last_opened_at in session.json and get_completed_sessions."""

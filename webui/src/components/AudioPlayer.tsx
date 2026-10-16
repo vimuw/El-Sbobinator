@@ -300,9 +300,15 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
     try {
       if (audioRef.current) {
         audioRef.current.pause();
+        audioRef.current.removeAttribute('src');
+        audioRef.current.load();
         setIsPlaying(false);
       }
-      await onRemoveAudio?.();
+      const removed = await onRemoveAudio?.();
+      if (removed === false && audioRef.current) {
+        audioRef.current.src = src;
+        audioRef.current.load();
+      }
     } catch (e) {
       reportClientError('Failed to remove audio:', e);
     } finally {
@@ -509,7 +515,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
       <ConfirmActionModal
         isOpen={showConfirmRemove}
         title="Rimuovere l'audio collegato?"
-        description="L'audio verrà scollegato da questa sbobina. Il file originale sul tuo computer non verrà cancellato."
+        description="La copia audio interna verrà eliminata dalla sbobina, liberando spazio. Il file originale sul tuo computer non verrà cancellato."
         confirmLabel={isRemovingAudio ? 'Rimozione...' : 'Rimuovi audio'}
         cancelLabel="Annulla"
         onClose={() => setShowConfirmRemove(false)}
