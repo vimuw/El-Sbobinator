@@ -7,6 +7,7 @@ import { NodeSelection, Plugin, PluginKey } from '@tiptap/pm/state';
 import { closeHistory } from '@tiptap/pm/history';
 import { imageWrapperStyle, imageWrapperCss, imageAssetCss, normalizeImageAspectRatio, normalizeImageAlignment, normalizeImageLayout, normalizeImagePosition, normalizeImageOffsetY, normalizeImageWidth } from '../imageLayout';
 import { createImageWrapPlugin } from '../imageWrap';
+import { createImageCaretPlugin } from '../imageCaret';
 import { startImageDrag } from '../imageDrag';
 import { startImageResize, type ImageResizeHandle } from '../imageResize';
 import './FloatingImage.css';
@@ -327,6 +328,7 @@ export const FloatingImage = Node.create({
   addProseMirrorPlugins() {
     return [
       createImageWrapPlugin(),
+      createImageCaretPlugin(),
       new Plugin({
         key: new PluginKey('floatingImageClick'),
         props: {

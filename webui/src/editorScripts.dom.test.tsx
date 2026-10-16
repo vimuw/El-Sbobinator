@@ -126,3 +126,42 @@ describe('Apice e pedice', () => {
     }
   });
 });
+
+describe('Caret beside inline images', () => {
+  it('uses text typing marks at either edge without changing content, and leaves node/range selections alone', async () => {
+    const { element, editor } = await openEditor('<p><strong><span style="font-size:18pt">A</span></strong><img src="test.png">B</p>');
+    const original = editor.getJSON();
+    const saved = editor.getHTML();
+    for (const pos of [2, 3]) {
+      act(() => { editor.commands.setTextSelection(pos); });
+      expect(element.querySelectorAll('.editor-image-caret-anchor')).toHaveLength(1);
+      expect(element.querySelector('.editor-image-caret-anchor')?.closest('.editor-image-node')).toBeNull();
+      expect(editor.getJSON()).toEqual(original);
+      expect(editor.getHTML()).toBe(saved);
+    }
+    act(() => { editor.commands.setTextSelection(2); });
+    expect(element.querySelector('.editor-image-caret-anchor')?.closest('strong')).toBeTruthy();
+    expect(element.querySelector('.editor-image-caret-anchor')?.parentElement?.closest('[style]')?.getAttribute('style')).toContain('font-size: 18pt');
+    act(() => { editor.commands.setNodeSelection(2); });
+    expect(element.querySelector('.editor-image-caret-anchor')).toBeNull();
+    act(() => { editor.commands.setTextSelection({ from: 1, to: 4 }); });
+    expect(element.hasAttribute('data-editor-script-caret')).toBe(false);
+    const clipboard = prepareSelectionClipboard(editor.view)!;
+    expect(clipboard.html).not.toContain('editor-script-caret');
+    expect(clipboard.html).not.toContain('\u200b');
+    act(() => { editor.commands.setTextSelection(4); });
+    expect(element.querySelector('.editor-image-caret-anchor')).toBeNull();
+  });
+
+  it('keeps the native caret at a wrap anchor and preserves script mode beside an inline image', async () => {
+    const { element, editor } = await openEditor('<p><span data-editor-image="true" data-layout="wrap"><img src="test.png"></span></p><p><img src="test.png"></p>');
+    act(() => { editor.commands.setTextSelection(1); });
+    expect(element.querySelector('.editor-image-caret-anchor')).toBeNull();
+    act(() => {
+      editor.commands.setTextSelection(4);
+      editor.commands.toggleSuperscript();
+    });
+    expect(element.querySelector('.editor-image-caret-anchor')).toBeNull();
+    expect(element.querySelector('.editor-script-caret')?.closest('sup')).toBeTruthy();
+  });
+});

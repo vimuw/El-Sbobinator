@@ -112,3 +112,6 @@
   line-height: 1.4;
   color: var(--text-secondary);
 }
+.editor-image-caret-anchor::before {
+  content: "\200b";
+}
