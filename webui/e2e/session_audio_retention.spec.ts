@@ -38,7 +38,10 @@ test('retains playable audio after moving the original and removes only the inte
   await expect(completed).toBeVisible({ timeout: 15000 });
   const archive = await page.evaluate(async () => window.pywebview!.api.get_completed_sessions!(0));
   expect(archive.ok).toBe(true);
-  const sessionDir = archive.sessions![0].session_dir;
+  // Other specs on the same server can leave newer sessions; the simulated run keeps a fixed old date.
+  const session = archive.sessions!.find(item => item.input_name?.endsWith('Lezione.wav'));
+  expect(session).toBeTruthy();
+  const sessionDir = session!.session_dir;
   const metadataPath = path.join(sessionDir, 'session.json');
   const before = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
   const original = before.input.path as string;
