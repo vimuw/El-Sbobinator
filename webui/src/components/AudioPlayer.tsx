@@ -1,7 +1,7 @@
 import { reportClientError } from '../diagnostics';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Link, Pause, Play, RefreshCw, RotateCcw, SkipBack, SkipForward, Unlink, Volume2 } from 'lucide-react';
+import { ChevronDown, Link, Minus, Pause, Play, Plus, RefreshCw, RotateCcw, RotateCw, Unlink, Volume2 } from 'lucide-react';
 import { ConfirmActionModal } from './modals/ConfirmActionModal';
 
 interface AudioPlayerProps {
@@ -202,6 +202,9 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
     onStateChangeRef.current?.({ currentTime, playbackRate: r, volume: volumeRef.current });
   };
 
+  const slowerPlaybackRate = [...PLAYBACK_RATES].reverse().find(rate => rate < playbackRate);
+  const fasterPlaybackRate = PLAYBACK_RATES.find(rate => rate > playbackRate);
+
   useEffect(() => {
     if (!isSpeedOpen) return;
     const handler = (e: PointerEvent | MouseEvent) => {
@@ -280,6 +283,18 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
     return [hours, minutes, seconds].map(value => String(value).padStart(2, '0')).join(':');
   };
 
+  const formatAccessibleTime = (time: number) => {
+    const totalSeconds = Number.isFinite(time) ? Math.max(0, Math.floor(time)) : 0;
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const parts = [];
+    if (hours > 0) parts.push(`${hours} ${hours === 1 ? 'ora' : 'ore'}`);
+    if (minutes > 0) parts.push(`${minutes} ${minutes === 1 ? 'minuto' : 'minuti'}`);
+    if (seconds > 0 || parts.length === 0) parts.push(`${seconds} ${seconds === 1 ? 'secondo' : 'secondi'}`);
+    return parts.join(', ');
+  };
+
   const handleRelink = async () => {
     if (isRelinking) return;
     setIsRelinking(true);
@@ -339,20 +354,27 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
         <button
           type="button"
           onClick={togglePlay}
-          className={`player-control group ${isPlaying ? 'is-active' : ''}`}
+          className={`player-control player-play-control ${isPlaying ? 'is-active' : ''}`}
           aria-label={isPlaying ? 'Metti in pausa' : 'Avvia riproduzione'}
+          title={isPlaying ? 'Metti in pausa (F4)' : 'Avvia riproduzione (F4)'}
         >
-          {isPlaying ? <Pause className="h-4 w-4 transition-transform duration-150 group-hover:scale-105" strokeWidth={2.2} /> : <Play className="ml-[1px] h-4 w-4 fill-current transition-transform duration-150 group-hover:scale-105" strokeWidth={2.2} />}
+          {isPlaying ? <Pause className="h-4 w-4" strokeWidth={2.2} /> : <Play className="h-4 w-4 fill-current" strokeWidth={2.2} />}
         </button>
-        <button type="button" onClick={() => skip(-10)} className="player-control group" aria-label="Indietro di 10 secondi">
-          <SkipBack className="h-4 w-4 transition-transform duration-150 group-hover:-translate-x-0.5" />
+        <button type="button" onClick={() => skip(-10)} className="player-control" aria-label="Indietro di 10 secondi" title="Indietro di 10 secondi">
+          <span className="relative inline-flex h-5 w-5 items-center justify-center" aria-hidden="true">
+            <RotateCcw className="h-5 w-5" />
+            <span className="absolute mt-0.5 text-[8px] font-bold leading-none">10</span>
+          </span>
         </button>
-        <button type="button" onClick={() => skip(10)} className="player-control group" aria-label="Avanti di 10 secondi">
-          <SkipForward className="h-4 w-4 transition-transform duration-150 group-hover:translate-x-0.5" />
+        <button type="button" onClick={() => skip(10)} className="player-control" aria-label="Avanti di 10 secondi" title="Avanti di 10 secondi">
+          <span className="relative inline-flex h-5 w-5 items-center justify-center" aria-hidden="true">
+            <RotateCw className="h-5 w-5" />
+            <span className="absolute mt-0.5 text-[8px] font-bold leading-none">10</span>
+          </span>
         </button>
       </div>
 
-      <div className="flex min-w-0 flex-1 items-center gap-3">
+      <div className="flex min-w-48 flex-1 items-center gap-3">
         <input
           type="range"
           min={0}
@@ -360,24 +382,36 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
           step={0.1}
           value={currentTime}
           onChange={handleSeek}
+          aria-label="Posizione audio"
+          aria-valuetext={duration > 0
+            ? `${formatAccessibleTime(currentTime)} di ${formatAccessibleTime(duration)}`
+            : `${formatAccessibleTime(currentTime)}; durata non disponibile`}
           className="custom-scrubber min-w-0 flex-1"
           style={{ '--progress': duration ? `${(currentTime / duration) * 100}%` : '0%' } as React.CSSProperties}
         />
-        <span className="shrink-0 pr-0.5 text-[11px] font-semibold tabular-nums" style={{ color: 'var(--text-muted)' }}>
+        <span className="shrink-0 pr-0.5 text-xs font-semibold tabular-nums" style={{ color: 'var(--text-muted)' }}>
           {formatTime(currentTime)} / {formatTime(duration)}
         </span>
+        <button type="button" onClick={() => skip(-duration)} className="player-control mr-2 shrink-0" aria-label="Torna all'inizio" title="Torna all'inizio">
+          <RotateCcw className="h-4 w-4" />
+        </button>
       </div>
 
       <div className="flex items-center gap-2">
         <div className="player-speed-wrap relative" aria-label="Velocita di riproduzione">
+          <button
+            type="button"
+            onClick={() => { if (slowerPlaybackRate !== undefined) handleSpeedSelect(slowerPlaybackRate); }}
+            className="player-control disabled:pointer-events-none disabled:opacity-35"
+            aria-label="Diminuisci velocità di riproduzione"
+            title="Diminuisci velocità di riproduzione"
+            disabled={slowerPlaybackRate === undefined}
+          >
+            <Minus className="h-3.5 w-3.5" />
+          </button>
           <select
             value={playbackRate}
-            onChange={e => {
-              const r = parseFloat(e.target.value);
-              playbackRateRef.current = r;
-              setPlaybackRate(r);
-              onStateChangeRef.current?.({ currentTime, playbackRate: r, volume: volumeRef.current });
-            }}
+            onChange={e => handleSpeedSelect(parseFloat(e.target.value))}
             className="sr-only"
             tabIndex={-1}
             aria-hidden="true"
@@ -439,6 +473,16 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
             </div>,
             document.body
           )}
+          <button
+            type="button"
+            onClick={() => { if (fasterPlaybackRate !== undefined) handleSpeedSelect(fasterPlaybackRate); }}
+            className="player-control disabled:pointer-events-none disabled:opacity-35"
+            aria-label="Aumenta velocità di riproduzione"
+            title="Aumenta velocità di riproduzione"
+            disabled={fasterPlaybackRate === undefined}
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
         </div>
         <div className="flex items-center gap-1.5">
           <Volume2 className="h-3.5 w-3.5" style={{ color: 'var(--text-muted)' }} />
@@ -449,20 +493,19 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
             step={0.05}
             value={volume}
             onChange={handleVolume}
+            aria-label="Volume"
+            aria-valuetext={`${Math.round(volume * 100)}%`}
             className="custom-volume w-16"
             style={{ '--progress': `${volume * 100}%` } as React.CSSProperties}
           />
         </div>
-        <button type="button" onClick={() => skip(-duration)} className="player-control group/rewind" aria-label="Torna all'inizio">
-          <RotateCcw className="h-4 w-4 transition-transform duration-300 ease-out group-hover/rewind:-rotate-45 group-hover/rewind:scale-105" />
-        </button>
         {(onRelink || onRemoveAudio) && (
           <div className="relative" ref={audioMenuRef}>
             <button
               type="button"
               className={`player-control ${showAudioMenu ? 'is-active' : ''}`}
               aria-label="Opzioni audio collegato"
-              title="Opzioni audio"
+              title="Gestisci audio collegato"
               onClick={() => setShowAudioMenu(v => !v)}
             >
               <Link className="h-3.5 w-3.5" />
