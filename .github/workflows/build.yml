@@ -266,11 +266,16 @@ jobs:
           if-no-files-found: ignore
 
   browser-e2e:
-    name: Browser E2E (Chromium, full suite)
+    name: Browser E2E (Chromium, shard ${{ matrix.shard }}/3)
     needs: [change-scope]
     if: needs.change-scope.outputs.full_e2e == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
+    strategy:
+      # Every shard reports its own failures; the gate sees the combined result.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - name: Checkout Code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -299,15 +304,15 @@ jobs:
         working-directory: webui
         run: npx playwright install --with-deps chromium
 
-      - name: Run the complete Chromium browser suite
+      - name: Run this shard of the complete Chromium browser suite
         working-directory: webui
-        run: npm run test:e2e -- --project=chromium
+        run: npm run test:e2e -- --project=chromium --shard=${{ matrix.shard }}/3
 
       - name: Upload browser failure evidence
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: browser-e2e-failures
+          name: browser-e2e-failures-shard-${{ matrix.shard }}
           path: webui/test-results/
           if-no-files-found: ignore
           retention-days: 7
@@ -347,6 +352,7 @@ jobs:
           if full_e2e not in {'true', 'false'}:
               raise SystemExit('Change detection did not return a valid browser scope.')
           browser_expected = 'success' if full_e2e == 'true' else 'skipped'
+          # A matrix job reports one combined result: success only if every shard passed.
           browser = results['browser-e2e']['result']
           if browser != browser_expected:
               raise SystemExit(
