@@ -427,6 +427,41 @@ def test_managed_audio_rejects_external_or_non_audio_paths(tmp_path, relative):
     assert managed_audio_path(str(tmp_path / "session"), relative) is None
 
 
+def test_playback_audio_resolves_through_a_linked_session_root(tmp_path):
+    real_root = tmp_path / "real"
+    (real_root / "session").mkdir(parents=True)
+    # A link at a different depth than its target, like macOS /var -> /private/var.
+    linked_root = tmp_path / "links" / "nested" / "root"
+    linked_root.parent.mkdir(parents=True)
+    try:
+        os.symlink(real_root, linked_root, target_is_directory=True)
+    except OSError:
+        if os.name != "nt":
+            raise
+        import _winapi
+
+        _winapi.CreateJunction(str(real_root), str(linked_root))
+    session = linked_root / "session"
+    source = tmp_path / "source.mp3"
+    source.write_bytes(b"mp3" * 1024)
+
+    def convert(**kwargs):
+        shutil.copyfile(kwargs["input_path"], kwargs["output_path"])
+        return True, None
+
+    with patch(
+        "el_sbobinator.services.session_audio_service.preconvert_media_to_mp3",
+        side_effect=convert,
+    ):
+        path = create_playback_audio(str(session), str(source))
+    data = {}
+    attach_playback_audio(data, str(session), path)
+
+    assert not os.path.isabs(data["playback_audio"])
+    assert playback_audio_path(data, str(session)) == path
+    assert playback_audio_path(data, str(real_root / "session")) == path
+
+
 def test_missing_source_creates_no_asset(tmp_path):
     with pytest.raises(FileNotFoundError):
         create_playback_audio(str(tmp_path / "session"), str(tmp_path / "missing.mp3"))
