@@ -38,6 +38,78 @@ afterEach(() => {
 });
 
 describe('usePreview', () => {
+  it('preserves a custom title ending in an audio extension when removing audio', async () => {
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<h1>Intestazione personale</h1>' }),
+      remove_session_audio: vi.fn().mockResolvedValue({ ok: true, name: 'Titolo personale.mp3' }),
+    });
+    const { result } = renderHook(() => usePreview(makeOptions()));
+    await act(async () => { await result.current.openPreview('/session/Originale_Sbobina.html', 'Titolo personale.mp3', undefined, undefined, '/session'); });
+    await act(async () => { await result.current.removePreviewAudio(); });
+    expect(result.current.preview.title).toBe('Titolo personale.mp3');
+    expect(result.current.preview.content).toContain('Intestazione personale');
+  });
+  it('shows audio preparation and ignores a late audio response after closing the editor', async () => {
+    let finishAudio!: (value: { ok: boolean; url: string }) => void;
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<p>Lezione</p>' }),
+      stream_media_file: vi.fn().mockImplementation(() => new Promise(resolve => { finishAudio = resolve; })),
+    });
+    const { result } = renderHook(() => usePreview(makeOptions()));
+    let opening!: Promise<void>;
+    await act(async () => {
+      opening = result.current.openPreview('/s/doc.html', 'Lezione', '/source.wav', 's', '/s');
+      await Promise.resolve();
+    });
+    expect(result.current.preview.audioLoading).toBe(true);
+    await act(async () => {
+      result.current.closePreview();
+      finishAudio({ ok: true, url: 'http://localhost/old-audio' });
+      await opening;
+    });
+    expect(result.current.preview.content).toBeNull();
+    expect(result.current.preview.audioSrc).toBeNull();
+    expect(result.current.preview.audioLoading).toBe(false);
+  });
+
+  it('keeps the new lesson audio when a previous lesson finishes preparing later', async () => {
+    let finishOld!: (value: { ok: boolean; url: string }) => void;
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<p>Lezione</p>' }),
+      stream_media_file: vi.fn()
+        .mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; }))
+        .mockResolvedValueOnce({ ok: true, url: 'http://localhost/new-audio' }),
+    });
+    const { result } = renderHook(() => usePreview(makeOptions()));
+    let oldOpening!: Promise<void>;
+    await act(async () => {
+      oldOpening = result.current.openPreview('/old/doc.html', 'Old', '/old.wav', 'old', '/old');
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await result.current.openPreview('/new/doc.html', 'New', '/new.wav', 'new', '/new');
+      finishOld({ ok: true, url: 'http://localhost/old-audio' });
+      await oldOpening;
+    });
+    expect(result.current.preview.title).toBe('New');
+    expect(result.current.preview.audioSrc).toBe('http://localhost/new-audio');
+    expect(result.current.preview.audioLoading).toBe(false);
+  });
+
+  it('exposes a warning when playback still depends on the original file', async () => {
+    const options = makeOptions();
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<p>Lezione</p>' }),
+      stream_media_file: vi.fn().mockResolvedValue({ ok: true, url: '/original.wav', warning: 'Conserva il file originale.' }),
+    });
+    const { result } = renderHook(() => usePreview(options));
+    await act(async () => {
+      await result.current.openPreview('/s/doc.html', 'Lezione', '/original.wav', 's', '/s');
+    });
+    expect(result.current.preview.audioWarning).toBe('Conserva il file originale.');
+    expect(options.appendConsole).toHaveBeenCalledWith('⚠️ Conserva il file originale.');
+  });
+
   it('initialises with content null', () => {
     const { result } = renderHook(() => usePreview(makeOptions()));
     expect(result.current.preview.content).toBeNull();

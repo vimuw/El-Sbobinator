@@ -29,6 +29,7 @@ import { handleEditorClipboardEvent } from '../editorSelectionClipboard';
 import { editorFormattingVariables } from '../documentFormatting';
 import { EditorDocumentStyle } from '../editorDocumentStyle';
 import { EditorListItem, EditorOrderedList } from '../editorLists';
+import { EditorReadingColors } from '../editorReadingColors';
 
 export type { Heading };
 
@@ -122,6 +123,7 @@ export function RichTextEditor({
     CustomParagraph,
     CustomHardBreak,
     EditorDocumentStyle,
+    EditorReadingColors,
     EditorOrderedList,
     EditorListItem,
     FloatingImage,

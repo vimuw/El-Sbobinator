@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { Editor, type JSONContent } from '@tiptap/core';
+import { CellSelection } from '@tiptap/pm/tables';
 import { RichTextEditor } from './components/RichTextEditor';
 import { getSearchMatches } from './editorExtensions';
 import { NATIVE_SLICE_MIME } from './editorClipboard';
@@ -27,6 +28,184 @@ function transfer(element: HTMLElement, type: 'copy' | 'cut') {
 }
 
 describe('Editor parity: clipboard and logical text', () => {
+  it('imports Docs span highlights as editable marks while retaining black and custom foreground colors', async () => {
+    const { editor } = await openEditor('<p></p>');
+    act(() => { editor.view.pasteHTML('<b id="docs-internal-guid-test"><p><span style="color:#000000;background-color:#fef08a;font-size:11pt">Giallo nero</span> <span style="background-color:#fef08a"><span style="color:#123abc">Giallo blu</span></span><span style="background-color:transparent">Normale</span></p></b>', new Event('paste') as ClipboardEvent); });
+    const text = (label: string) => (editor.getJSON() as JSONContent).content![0].content!.find(node => node.text === label)!;
+    expect(text('Giallo nero').marks).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'highlight', attrs: { color: 'rgb(254, 240, 138)' } }), expect.objectContaining({ type: 'textStyle', attrs: expect.objectContaining({ color: 'rgb(0, 0, 0)', fontSize: '11pt' }) })]));
+    expect(text('Giallo blu').marks).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'highlight' }), expect.objectContaining({ type: 'textStyle', attrs: expect.objectContaining({ color: '#123abc' }) })]));
+    expect(text('Normale').marks?.some(mark => mark.type === 'highlight')).toBeFalsy();
+    const saved = editor.getHTML(); act(() => { editor.commands.setContent(normalizePreviewHtmlContent(saved)); });
+    expect(editor.getHTML()).toContain('<mark');
+  });
+
+  it.each([1, 2, 3, 4, 5, 6].flatMap(level => [false, true].map(reverse => ({ level, reverse }))))('pastes a complete H$level as a heading only when replacing a normal paragraph (reverse=$reverse)', async ({ level, reverse }) => {
+    const { editor, element } = await openEditor(`<h${level}>Titolo</h${level}><p></p>`);
+    act(() => { editor.commands.setTextSelection(reverse ? { from: 7, to: 1 } : { from: 1, to: 7 }); });
+    const formats = transfer(element, 'copy').formats;
+    expect(formats['text/html']).toContain(`data-editor-selection-heading="1"`);
+    const native = JSON.parse(JSON.parse(formats[NATIVE_SLICE_MIME]).data).resolved;
+    expect(native.dsl_styleslices.find((slice: { stsl_type: string }) => slice.stsl_type === 'paragraph').stsl_styles.filter(Boolean)).toEqual(expect.arrayContaining([expect.objectContaining({ ps_hd: level })]));
+    for (const target of ['<p></p>', '<p>Vecchio</p>', '<p>Prima dopo</p>', '<ul><li><p></p></li></ul>']) {
+      act(() => {
+        editor.commands.setContent(target);
+        editor.commands.setTextSelection(target.includes('Vecchio') ? { from: 1, to: 8 } : target.includes('Prima') ? 7 : target.includes('<ul>') ? 3 : 1);
+        editor.view.pasteHTML(formats['text/html'], new Event('paste') as ClipboardEvent);
+      });
+      const root = (editor.getJSON() as JSONContent).content!;
+      if (target.includes('Prima')) {
+        expect(root).toHaveLength(1); expect(root[0].type).toBe('paragraph'); expect(editor.getText()).toBe('Prima Titolodopo');
+      } else if (target.includes('<ul>')) {
+        expect(root[0].type).toBe('bulletList'); expect(root[0].content![0].content![0].type).toBe('paragraph');
+      } else expect(root[0]).toMatchObject({ type: 'heading', attrs: { level } });
+      expect(editor.getHTML()).not.toMatch(/data-editor-(selection-heading|default-heading-color)/);
+      expect(editor.getHTML()).not.toContain('color: rgb(0, 0, 0)');
+      const saved = editor.getJSON();
+      act(() => { editor.commands.setContent(normalizePreviewHtmlContent(editor.getHTML())); });
+      expect(editor.getJSON()).toEqual(saved);
+    }
+  });
+
+  it('keeps a partial default heading inline without turning its default ink into authored black', async () => {
+    const { editor, element } = await openEditor('<h2>Prima scelta dopo</h2>');
+    act(() => { editor.commands.setTextSelection({ from: 7, to: 13 }); });
+    const formats = transfer(element, 'copy').formats;
+    expect(formats['text/html']).toContain('data-editor-default-heading-color');
+    act(() => { editor.commands.setContent('<p></p>'); editor.commands.setTextSelection(1); editor.view.pasteHTML(formats['text/html'], new Event('paste') as ClipboardEvent); });
+    expect(editor.getJSON().content![0].type).toBe('paragraph');
+    expect(editor.getText()).toBe('scelta');
+    expect(editor.getHTML()).not.toContain('color: rgb(0, 0, 0)');
+    expect(editor.getHTML()).toContain('font-size: 16pt');
+  });
+
+  it.each(['heading', 'paragraph'])('clears inherited and inline ink in a partial $0 selection without changing layout or surrounding colors', async type => {
+    const tag = type === 'heading' ? 'h2' : 'p';
+    const { editor } = await openEditor(`<${tag} style="color:#123abc;font-family:Georgia;margin-top:8pt;line-height:1.8">Prima <span style="color:red;font-size:18pt"><em>scelta</em></span> dopo</${tag}><p></p>`);
+    const original = editor.getJSON();
+    act(() => { editor.commands.setTextSelection({ from: 7, to: 13 }); editor.commands.clearDocumentColor(); });
+    const block = editor.getJSON().content![0] as JSONContent;
+    expect(block.type).toBe(type);
+    expect(block.attrs!.documentStyle).toMatchObject({ 'font-family': 'Georgia', 'margin-top': '8pt', 'line-height': '1.8' });
+    expect(block.attrs!.documentStyle.color).toBeUndefined();
+    for (const text of ['Prima ', ' dopo']) expect(block.content!.find(node => node.text === text)?.marks).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'textStyle', attrs: expect.objectContaining({ color: 'rgb(18, 58, 188)' }) })]));
+    expect(block.content!.find(node => node.text === 'scelta')?.marks).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'textStyle', attrs: expect.objectContaining({ color: null, fontSize: '18pt' }) }), expect.objectContaining({ type: 'italic' })]));
+    act(() => { editor.commands.undo(); }); expect(editor.getJSON()).toEqual(original);
+  });
+
+  it('clears future ink at a caret while preserving existing text, marks, and inherited color', async () => {
+    const { editor } = await openEditor('<h2 style="color:#123abc;margin-top:8pt"><em>Prima dopo</em></h2><p></p>');
+    const original = editor.getJSON();
+    act(() => { editor.commands.setTextSelection(7); editor.commands.clearDocumentColor(); editor.commands.insertContent('X'); });
+    const block = editor.getJSON().content![0] as JSONContent;
+    expect(block.attrs!.documentStyle).toEqual({ 'margin-top': '8pt' });
+    expect(block.content!.find(node => node.text === 'X')?.marks).toEqual([{ type: 'italic' }]);
+    for (const label of ['Prima ', 'dopo']) expect(block.content!.find(node => node.text === label)?.marks).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'textStyle', attrs: expect.objectContaining({ color: 'rgb(18, 58, 188)' }) })]));
+    act(() => { editor.commands.undo(); editor.commands.undo(); }); expect(editor.getJSON()).toEqual(original);
+  });
+
+  it('clears color across blocks without clearing links, highlights or other typography and keeps can() read-only', async () => {
+    const { editor } = await openEditor('<h2 style="color:#123abc;font-family:Georgia">Prima</h2><p style="color:red;margin-top:8pt"><a href="https://example.com"><mark style="background-color:yellow"><em>Seconda</em></mark></a></p>');
+    act(() => { editor.commands.selectAll(); });
+    const original = editor.getJSON();
+    expect(editor.can().clearDocumentColor()).toBe(true); expect(editor.getJSON()).toEqual(original);
+    act(() => { editor.commands.clearDocumentColor(); });
+    expect(editor.getHTML()).not.toMatch(/color: (rgb|red)/);
+    expect(editor.getHTML()).toContain('font-family: Georgia'); expect(editor.getHTML()).toContain('margin-top: 8pt');
+    expect(editor.getHTML()).toContain('href="https://example.com"'); expect(editor.getHTML()).toContain('<mark'); expect(editor.getHTML()).toContain('<em>');
+    act(() => { editor.commands.undo(); }); expect(editor.getJSON()).toEqual(original);
+  });
+
+  it.each([
+    { shape: 'row', last: 2, selected: [0, 1, 2] },
+    { shape: 'column', last: 6, selected: [0, 3, 6] },
+    { shape: 'rectangle', last: 4, selected: [0, 1, 3, 4] },
+  ].flatMap(selection => [false, true].map(reverse => ({ ...selection, reverse }))))('clears all selected table cells in a $shape (reverse=$reverse), preserving excluded cells and undo', async ({ last, selected, reverse }) => {
+    const emptyMarks = JSON.stringify([{ type: 'textStyle', attrs: { color: 'red', fontFamily: 'Georgia' } }, { type: 'italic' }]);
+    const cells = Array.from({ length: 9 }, (_, index) => `<td><p style="color:#123abc;margin-top:8pt;line-height:1.8">${index}<span style="color:red;font-size:18pt"><em>scelta</em></span></p><h2 data-editor-empty-marks='${emptyMarks}'></h2></td>`);
+    const { editor } = await openEditor(`<table><tbody>${[0, 3, 6].map(start => `<tr>${cells.slice(start, start + 3).join('')}</tr>`).join('')}</tbody></table>`);
+    const positions: number[] = [];
+    editor.state.doc.descendants((node, pos) => { if (node.type.name === 'tableCell') positions.push(pos); });
+    act(() => { editor.view.dispatch(editor.state.tr.setSelection(CellSelection.create(editor.state.doc, positions[reverse ? last : 0], positions[reverse ? 0 : last]))); });
+    const original = editor.getJSON();
+    const tableCells = (doc: JSONContent) => doc.content![0].content!.flatMap(row => row.content!);
+    const originalCells = tableCells(original);
+    expect(editor.can().clearDocumentColor()).toBe(true);
+    expect(editor.getJSON()).toEqual(original);
+    act(() => { editor.chain().focus().clearDocumentColor().run(); });
+    const cleared = editor.getJSON();
+    tableCells(cleared).forEach((cell, index) => {
+      if (!selected.includes(index)) {
+        expect(cell).toEqual(originalCells[index]);
+        return;
+      }
+      const [paragraph, emptyHeading] = cell.content!;
+      expect(paragraph.attrs!.documentStyle).toEqual({ 'margin-top': '8pt', 'line-height': '1.8' });
+      expect(paragraph.content![0].marks ?? []).toEqual([]);
+      expect(paragraph.content![1].marks).toEqual(expect.arrayContaining([
+        { type: 'italic' },
+        expect.objectContaining({ type: 'textStyle', attrs: expect.objectContaining({ color: null, fontSize: '18pt' }) }),
+      ]));
+      expect(emptyHeading.attrs!.emptyTextMarks).toEqual([
+        { type: 'textStyle', attrs: { color: null, fontFamily: 'Georgia' } }, { type: 'italic' },
+      ]);
+    });
+    act(() => { editor.commands.undo(); }); expect(editor.getJSON()).toEqual(original);
+    act(() => { editor.commands.redo(); }); expect(editor.getJSON()).toEqual(cleared);
+    const saved = editor.getHTML();
+    act(() => { editor.commands.setContent(normalizePreviewHtmlContent(saved)); });
+    expect(editor.getHTML()).toBe(saved);
+  });
+
+  it.each(['p', 'h2'].flatMap(tag => [false, true].flatMap(styled => [false, true].map(all => ({ tag, styled, all })))))('clears saved typing ink in a selected empty $tag while preserving other styles (styled=$styled, all=$all)', async ({ tag, styled, all }) => {
+    const { editor } = await openEditor(`<p>Prima</p><${tag}></${tag}><p>Dopo</p><p></p>`);
+    const emptyPosition = editor.state.doc.firstChild!.nodeSize + 1;
+    const outsidePosition = editor.state.doc.content.size - 1;
+    act(() => {
+      editor.commands.setTextSelection(outsidePosition);
+      editor.commands.setColor('blue');
+      editor.commands.setTextSelection(emptyPosition);
+      editor.commands.setColor('red');
+      if (styled) editor.chain().setBold().setItalic().setFontFamily('Georgia').setFontSize('18pt').setHighlight({ color: 'yellow' }).run();
+      if (all) editor.commands.selectAll();
+      else editor.commands.setTextSelection({ from: 1, to: emptyPosition + 1 });
+    });
+    const original = editor.getJSON();
+    const savedMarks = original.content![1].attrs!.emptyTextMarks;
+    const expectedMarks = styled ? savedMarks.map((mark: { type: string; attrs?: Record<string, unknown> }) => mark.type === 'textStyle' ? { ...mark, attrs: { ...mark.attrs, color: null } } : mark) : null;
+    expect(editor.can().clearDocumentColor()).toBe(true);
+    expect(editor.getJSON()).toEqual(original);
+    act(() => { editor.commands.clearDocumentColor(); });
+    const cleared = editor.getJSON();
+    expect(cleared.content![1].attrs!.emptyTextMarks).toEqual(expectedMarks);
+    if (all) expect(cleared.content![3].attrs!.emptyTextMarks).toBeNull();
+    else expect(cleared.content![3]).toEqual(original.content![3]);
+    act(() => { editor.commands.undo(); });
+    expect(editor.getJSON()).toEqual(original);
+    act(() => { editor.commands.redo(); });
+    expect(editor.getJSON()).toEqual(cleared);
+    act(() => { editor.commands.setContent(normalizePreviewHtmlContent(editor.getHTML())); });
+    expect(editor.getJSON()).toEqual(cleared);
+    act(() => { editor.commands.setTextSelection(emptyPosition); editor.commands.insertContent('X'); });
+    const typed = (editor.getJSON() as JSONContent).content![1].content![0];
+    expect(typed.text).toBe('X');
+    expect(typed.marks ?? []).not.toEqual(expect.arrayContaining([expect.objectContaining({ type: 'textStyle', attrs: expect.objectContaining({ color: 'red' }) })]));
+    if (styled) expect(typed.marks).toEqual(expect.arrayContaining([
+      { type: 'bold' }, { type: 'italic' }, { type: 'highlight', attrs: { color: 'yellow' } },
+      expect.objectContaining({ type: 'textStyle', attrs: expect.objectContaining({ color: null, fontFamily: 'Georgia', fontSize: '18pt' }) }),
+    ]));
+  });
+
+  it('preserves the default blue of links outside a partial color reset in a colored paragraph', async () => {
+    const { editor } = await openEditor('<p style="color:red"><a href="https://example.com">Link</a> scelta dopo</p>');
+    const original = editor.getJSON();
+    act(() => { editor.commands.setTextSelection({ from: 6, to: 12 }); editor.commands.clearDocumentColor(); });
+    const link = (editor.getJSON() as JSONContent).content![0].content!.find(node => node.text === 'Link')!;
+    expect(link.marks).toEqual(original.content![0].content![0].marks);
+    expect(link.marks?.some(mark => mark.type === 'textStyle' && mark.attrs?.color)).toBeFalsy();
+    expect(editor.getHTML()).not.toContain('style="color: red;"><a');
+    act(() => { editor.commands.undo(); }); expect(editor.getJSON()).toEqual(original);
+  });
+
   it('preserves authored whitespace in paragraphs and headings after saving and reopening', async () => {
     const { editor } = await openEditor('<h2>Titolo</h2><p>Prima</p><p></p>');
     act(() => {

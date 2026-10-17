@@ -306,13 +306,16 @@ export function QueuePage({
             {!(pendingFiles.length > 0 || doneFiles.length > 0 || showProcessingBanner) && (
               <WelcomeDashboard archiveSessions={archiveSessions} isArchiveLoaded={isArchiveLoaded} />
             )}
-            <AnimatePresence>
+            {/* Height animations let the queue below slide instead of jumping when the banner swaps in. */}
+            <AnimatePresence initial={false}>
               {showProcessingBanner ? (
                 <motion.div
                   key="processing-banner"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.15, ease: 'easeOut' }}
+                  data-testid="processing-banner-slot"
+                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  animate={{ opacity: 1, height: 'auto', transitionEnd: { overflow: 'visible' } }}
+                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  transition={{ duration: 0.28, ease: 'easeOut' }}
                 >
                   <ProcessingStatusBanner
                     appState={appState}
@@ -330,9 +333,10 @@ export function QueuePage({
               ) : (
                 <motion.div
                   key="dropzone"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.15, ease: 'easeOut' }}
+                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  animate={{ opacity: 1, height: 'auto', transitionEnd: { overflow: 'visible' } }}
+                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  transition={{ duration: 0.28, ease: 'easeOut' }}
                 >
                   <DropZone
                     compact={pendingFiles.length > 0 || doneFiles.length > 0}

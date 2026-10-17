@@ -31,6 +31,16 @@ function makeFile(overrides: Partial<FileItem> = {}): FileItem {
 }
 
 describe('duplicateDetection', () => {
+  it('recognizes moved audio by its original filename after renaming the archive title', () => {
+    for (const input_name of ['lesson.mp3', undefined]) {
+      const renamed = makeArchiveSession({
+        name: 'Fisiopatologia – seconda lezione', input_name,
+        input_path: 'C:\\old\\lesson.mp3', input_size: 1024, duration_sec: 60,
+      });
+      const matches = getArchiveMatchesForFile(makeFile({ path: 'D:/new/lesson.mp3', size: 1024, duration: 60 }), buildArchiveLookup([renamed]));
+      expect(matches).toEqual([renamed]);
+    }
+  });
   it('filters archive cleanup sessions by exact input path', () => {
     const sessions = [
       makeArchiveSession({

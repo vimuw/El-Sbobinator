@@ -14,7 +14,8 @@ function archiveMetaKey(session: ArchiveSession): string | null {
   const size = Number(session.input_size ?? 0);
   const dur = Math.round(Number(session.duration_sec ?? 0));
   if (size <= 0 || dur <= 0) return null;
-  return `${normalizeKey(session.name)}::${size}::${dur}`;
+  const inputName = session.input_name ?? (session.input_path.split(/[/\\]/).pop() || session.name);
+  return `${normalizeKey(inputName)}::${size}::${dur}`;
 }
 
 export function filterArchiveSessionsByInputPath(

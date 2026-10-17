@@ -24,6 +24,7 @@ import {
 import { SortMenu } from './archive/SortMenu';
 import { FolderCollectionGrid } from './archive/FolderCollectionGrid';
 import { MoveToFolderModal } from './archive/MoveToFolderModal';
+import { RenameSessionModal } from './archive/RenameSessionModal';
 import { deleteFolder, getFolderChildren, getFolderParentId, moveFolder, moveSessionsToFolder } from '../archiveFolders';
 import { DraggableSessionCard } from './archive/SessionCard';
 import { FolderDetailView } from './archive/FolderDetailView';
@@ -53,7 +54,7 @@ export { FullTextResultList } from './archive/FullTextResults';
 export function ArchivePage({
   sessions, total, folders, onFoldersChange,
   onPreview, onOpenFile, onDeleteSession, onDeleteMultipleSessions, onRefresh,
-  onRetryFailedRevisionBlocks, onNotification,
+  onRetryFailedRevisionBlocks, onNotification, onRenameSession,
 }: ArchivePageProps) {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [folderModal, setFolderModal] = useState<FolderModalState | null>(null);
@@ -64,6 +65,7 @@ export function ArchivePage({
   const [moveTarget, setMoveTarget] = useState<{ folderId?: string; dirs?: string[]; parentId: string | null; onComplete?: () => void } | null>(null);
 
   const [sharingSession, setSharingSession] = useState<ArchiveSession | null>(null);
+  const [renamingSession, setRenamingSession] = useState<ArchiveSession | null>(null);
   const [isImporting, setIsImporting] = useState(false);
 
   const handleImportSbobina = useCallback(async () => {
@@ -256,6 +258,9 @@ export function ArchivePage({
   const renderModals = () => (
     <>
       <AnimatePresence>
+        {renamingSession && onRenameSession && <RenameSessionModal session={renamingSession} onSave={onRenameSession} onClose={() => setRenamingSession(null)} />}
+      </AnimatePresence>
+      <AnimatePresence>
         {moveTarget && <MoveToFolderModal folders={folders} movingFolderId={moveTarget.folderId} initialParentId={moveTarget.parentId}
           movingSessions={moveTarget.dirs?.map(dir => ({ session_dir: dir, name: sessionsByDir.get(normalizeSessionPath(dir))?.name ?? 'Sbobina non disponibile' }))}
           onClose={() => setMoveTarget(null)} onConfirm={(targetId, created) => {
@@ -336,6 +341,7 @@ export function ArchivePage({
           onDeleteMultipleSessions={handleOpenDeleteMultiple}
           onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
           onShareSession={setSharingSession}
+          onRenameSession={onRenameSession ? setRenamingSession : undefined}
         />
         {renderModals()}
       </>
@@ -601,6 +607,7 @@ export function ArchivePage({
                     onDeleteSession={onDeleteSession}
                     onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
                     onShareSession={setSharingSession}
+                    onRenameSession={onRenameSession ? setRenamingSession : undefined}
                   />
                 ))}
               </div>

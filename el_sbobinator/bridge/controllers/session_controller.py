@@ -4,6 +4,7 @@ Session management IPC bridge controller.
 
 from __future__ import annotations
 
+import copy
 import os
 import shutil
 import time
@@ -25,6 +26,16 @@ from el_sbobinator.core.shared import (
 from el_sbobinator.services.archive_service import (
     list_completed_sessions,
     search_completed_sessions,
+)
+from el_sbobinator.services.session_audio_service import (
+    attach_playback_audio,
+    create_playback_audio,
+    discard_playback_audio,
+    discard_unlinked_playback_audio,
+    managed_audio_path,
+    playback_audio_path,
+    session_audio_lock,
+    session_metadata_lock,
 )
 from el_sbobinator.utils.file_ops import evict_html_paths_under
 
@@ -124,8 +135,9 @@ class SessionControllerMixin:
                 )
             if not os.path.isdir(abs_dir):
                 return bridge_error("Cartella non trovata")
-            self._evict_deleted_session_caches(abs_dir)
-            shutil.rmtree(abs_dir)
+            with session_audio_lock(abs_dir):
+                self._evict_deleted_session_caches(abs_dir)
+                shutil.rmtree(abs_dir)
             with self._sessions_cache_lock:
                 self._sessions_cache = None
                 self._sessions_cache_gen += 1
@@ -156,6 +168,40 @@ class SessionControllerMixin:
             for key in shell_to_evict:
                 del self._html_shell_cache[key]
 
+    def rename_session(self, session_dir: str, name: str) -> dict:
+        """Change the display title without moving files or changing completion time."""
+        import json
+
+        try:
+            if not isinstance(name, str):
+                return bridge_error("Nome non valido")
+            title = name.strip()
+            if not title or len(title) > 200 or any(ord(c) < 32 for c in title):
+                return bridge_error(
+                    "Inserisci un nome da 1 a 200 caratteri, su una sola riga."
+                )
+            abs_dir = os.path.realpath(session_dir)
+            abs_root = os.path.realpath(self._get_session_root())
+            if abs_dir == abs_root or not _path_under_root(abs_dir, abs_root):
+                return bridge_error("Percorso non valido")
+            session_path = os.path.join(abs_dir, "session.json")
+            if os.path.islink(session_path):
+                return bridge_error("Percorso non valido")
+            with session_metadata_lock(abs_dir):
+                with open(session_path, encoding="utf-8") as handle:
+                    data = json.load(handle)
+                if not isinstance(data, dict) or data.get("stage") != "done":
+                    return bridge_error("Puoi rinominare solo sbobine completate.")
+                data["title"] = title
+                data["title_is_custom"] = True
+                _atomic_write_json(session_path, data)
+            with self._sessions_cache_lock:
+                self._sessions_cache = None
+                self._sessions_cache_gen += 1
+            return bridge_ok(name=title)
+        except Exception as e:
+            return bridge_error(e)
+
     def update_session_input_path(self, session_dir: str, new_path: str) -> dict:
         """Persist a relinked audio path to session.json."""
         import json as _json
@@ -169,62 +215,98 @@ class SessionControllerMixin:
             session_path = os.path.join(abs_dir, "session.json")
             if not os.path.isfile(session_path):
                 return bridge_error("session.json non trovato")
-            with open(session_path, encoding="utf-8") as fh:
-                data = _json.load(fh)
-            if not isinstance(data, dict):
-                return bridge_error("session.json non valido")
-            norm_path = str(new_path or "").strip()
-            if not norm_path:
-                return bridge_error("Percorso vuoto")
+            with session_audio_lock(abs_dir):
+                with open(session_path, encoding="utf-8") as fh:
+                    data = _json.load(fh)
+                if not isinstance(data, dict):
+                    return bridge_error("session.json non valido")
+                norm_path = str(new_path or "").strip()
+                if not norm_path:
+                    return bridge_error("Percorso vuoto")
 
-            # Determine original document title from html_path or previous title
-            html_path = str(data.get("outputs", {}).get("html", "") or "")
-            html_title = ""
-            if html_path:
-                base = os.path.basename(html_path)
-                if base.endswith("_Sbobina.html"):
-                    html_title = base[: -len("_Sbobina.html")]
-                elif base.endswith(".html"):
-                    html_title = base[: -len(".html")]
-                else:
-                    html_title = base
+                old_audio = playback_audio_path(data, abs_dir)
+                created = create_playback_audio(
+                    abs_dir,
+                    norm_path,
+                    stop_event=getattr(self, "_audio_cancel_event", None),
+                )
+                try:
+                    with session_metadata_lock(abs_dir):
+                        # Preserve metadata changed while FFmpeg was preparing the copy.
+                        with open(session_path, encoding="utf-8") as fh:
+                            data = _json.load(fh)
 
-            current_title = str(data.get("title") or "").strip()
-            current_input_name = ""
-            if isinstance(data.get("input"), dict):
-                current_input_name = str(data["input"].get("name") or "").strip()
+                        # Determine original document title from html_path or previous title
+                        html_path = str(data.get("outputs", {}).get("html", "") or "")
+                        html_title = ""
+                        if html_path:
+                            base = os.path.basename(html_path)
+                            if base.endswith("_Sbobina.html"):
+                                html_title = base[: -len("_Sbobina.html")]
+                            elif base.endswith(".html"):
+                                html_title = base[: -len(".html")]
+                            else:
+                                html_title = base
 
-            if html_title and (
-                not current_title or current_title == current_input_name
-            ):
-                data["title"] = html_title
-            elif not current_title:
-                data["title"] = current_input_name or html_title
+                        current_title = str(data.get("title") or "").strip()
+                        current_input_name = ""
+                        if isinstance(data.get("input"), dict):
+                            current_input_name = str(
+                                data["input"].get("name") or ""
+                            ).strip()
 
-            if not isinstance(data.get("input"), dict):
-                data["input"] = {}
-            data["input"]["path"] = norm_path
-            data["input"]["name"] = os.path.basename(norm_path)
-            data["input"].pop("path_rel_to_session", None)
-            data["input"].pop("path_rel_to_html", None)
-            session_rel = _safe_relpath(os.path.realpath(norm_path), abs_dir)
-            if session_rel:
-                data["input"]["path_rel_to_session"] = session_rel
-            html_path = str(data.get("outputs", {}).get("html", "") or "")
-            if html_path:
-                html_dir = os.path.dirname(os.path.realpath(html_path))
-                html_rel = _safe_relpath(os.path.realpath(norm_path), html_dir)
-                if html_rel:
-                    data["input"]["path_rel_to_html"] = html_rel
-            try:
-                data["input"]["size"] = os.path.getsize(norm_path)
-            except Exception:
-                pass
-            _atomic_write_json(session_path, data)
-            with self._sessions_cache_lock:
-                self._sessions_cache = None
-                self._sessions_cache_gen += 1
-            return bridge_ok()
+                        if (
+                            not data.get("title_is_custom")
+                            and html_title
+                            and (
+                                not current_title or current_title == current_input_name
+                            )
+                        ):
+                            data["title"] = html_title
+                        elif not data.get("title_is_custom") and not current_title:
+                            data["title"] = current_input_name or html_title
+
+                        if not isinstance(data.get("input"), dict):
+                            data["input"] = {}
+                        data["input"]["path"] = norm_path
+                        data["input"]["name"] = os.path.basename(norm_path)
+                        data["input"].pop("path_rel_to_session", None)
+                        data["input"].pop("path_rel_to_html", None)
+                        session_rel = _safe_relpath(
+                            os.path.realpath(norm_path), abs_dir
+                        )
+                        if session_rel:
+                            data["input"]["path_rel_to_session"] = session_rel
+                        html_path = str(data.get("outputs", {}).get("html", "") or "")
+                        if html_path:
+                            html_dir = os.path.dirname(os.path.realpath(html_path))
+                            html_rel = _safe_relpath(
+                                os.path.realpath(norm_path), html_dir
+                            )
+                            if html_rel:
+                                data["input"]["path_rel_to_html"] = html_rel
+                        try:
+                            data["input"]["size"] = os.path.getsize(norm_path)
+                        except Exception:
+                            pass
+                        data.pop("audio_removed", None)
+                        attach_playback_audio(data, abs_dir, created)
+                        _atomic_write_json(session_path, data)
+                except Exception:
+                    discard_playback_audio(created)
+                    raise
+                try:
+                    discard_playback_audio(old_audio)
+                except OSError:
+                    # The new association is already durable; an old active stream
+                    # must not make the relink appear to have failed. A later
+                    # open retries the deletion.
+                    pass
+                discard_unlinked_playback_audio(abs_dir, keep=created)
+                with self._sessions_cache_lock:
+                    self._sessions_cache = None
+                    self._sessions_cache_gen += 1
+                return bridge_ok()
         except Exception as e:
             return bridge_error(e)
 
@@ -241,49 +323,62 @@ class SessionControllerMixin:
             session_path = os.path.join(abs_dir, "session.json")
             if not os.path.isfile(session_path):
                 return bridge_error("session.json non trovato")
-            with open(session_path, encoding="utf-8") as fh:
-                data = _json.load(fh)
-            if not isinstance(data, dict):
-                return bridge_error("session.json non valido")
+            with session_audio_lock(abs_dir), session_metadata_lock(abs_dir):
+                with open(session_path, encoding="utf-8") as fh:
+                    data = _json.load(fh)
+                if not isinstance(data, dict):
+                    return bridge_error("session.json non valido")
 
-            # Determine original document title from html_path or previous title
-            html_path = str(data.get("outputs", {}).get("html", "") or "")
-            html_title = ""
-            if html_path:
-                base = os.path.basename(html_path)
-                if base.endswith("_Sbobina.html"):
-                    html_title = base[: -len("_Sbobina.html")]
-                elif base.endswith(".html"):
-                    html_title = base[: -len(".html")]
-                else:
-                    html_title = base
+                previous = copy.deepcopy(data)
+                old_audio = managed_audio_path(abs_dir, data.get("playback_audio"))
 
-            current_title = str(data.get("title") or "").strip()
-            current_input_name = ""
-            if isinstance(data.get("input"), dict):
-                current_input_name = str(data["input"].get("name") or "").strip()
+                # Determine original document title from html_path or previous title
+                html_path = str(data.get("outputs", {}).get("html", "") or "")
+                html_title = ""
+                if html_path:
+                    base = os.path.basename(html_path)
+                    if base.endswith("_Sbobina.html"):
+                        html_title = base[: -len("_Sbobina.html")]
+                    elif base.endswith(".html"):
+                        html_title = base[: -len(".html")]
+                    else:
+                        html_title = base
 
-            # If current title was empty or identical to the audio name being removed, restore html_title
-            if html_title and (
-                not current_title or current_title == current_input_name
-            ):
-                data["title"] = html_title
-            elif not current_title:
-                data["title"] = current_input_name or html_title
+                current_title = str(data.get("title") or "").strip()
+                current_input_name = ""
+                if isinstance(data.get("input"), dict):
+                    current_input_name = str(data["input"].get("name") or "").strip()
 
-            if not isinstance(data.get("input"), dict):
-                data["input"] = {}
-            data["input"]["path"] = ""
-            data["input"]["name"] = ""
-            data["input"].pop("path_rel_to_session", None)
-            data["input"].pop("path_rel_to_html", None)
-            data["input"]["size"] = 0
+                # If current title was empty or identical to the audio name being removed, restore html_title
+                if (
+                    not data.get("title_is_custom")
+                    and html_title
+                    and (not current_title or current_title == current_input_name)
+                ):
+                    data["title"] = html_title
+                elif not data.get("title_is_custom") and not current_title:
+                    data["title"] = current_input_name or html_title
 
-            _atomic_write_json(session_path, data)
-            with self._sessions_cache_lock:
-                self._sessions_cache = None
-                self._sessions_cache_gen += 1
-            return bridge_ok()
+                if not isinstance(data.get("input"), dict):
+                    data["input"] = {}
+                data["input"]["path"] = ""
+                data["input"]["name"] = ""
+                data["input"].pop("path_rel_to_session", None)
+                data["input"].pop("path_rel_to_html", None)
+                data["input"]["size"] = 0
+                data.pop("playback_audio", None)
+                data["audio_removed"] = True
+
+                _atomic_write_json(session_path, data)
+                try:
+                    discard_playback_audio(old_audio)
+                except OSError:
+                    _atomic_write_json(session_path, previous)
+                    raise
+                with self._sessions_cache_lock:
+                    self._sessions_cache = None
+                    self._sessions_cache_gen += 1
+                return bridge_ok(name=data.get("title", ""))
         except Exception as e:
             return bridge_error(e)
 
@@ -301,19 +396,20 @@ class SessionControllerMixin:
             session_path = os.path.join(abs_dir, "session.json")
             if not os.path.isfile(session_path):
                 return bridge_error("session.json non trovato")
-            with open(session_path, encoding="utf-8") as fh:
-                data = _json.load(fh)
-            if not isinstance(data, dict):
-                return bridge_error("session.json non valido")
+            with session_metadata_lock(abs_dir):
+                with open(session_path, encoding="utf-8") as fh:
+                    data = _json.load(fh)
+                if not isinstance(data, dict):
+                    return bridge_error("session.json non valido")
 
-            now_iso = datetime.now(UTC).isoformat()
-            data["last_opened_at"] = now_iso
+                now_iso = datetime.now(UTC).isoformat()
+                data["last_opened_at"] = now_iso
 
-            _atomic_write_json(session_path, data)
-            with self._sessions_cache_lock:
-                self._sessions_cache = None
-                self._sessions_cache_gen += 1
-            return bridge_ok(last_opened_at_iso=now_iso)
+                _atomic_write_json(session_path, data)
+                with self._sessions_cache_lock:
+                    self._sessions_cache = None
+                    self._sessions_cache_gen += 1
+                return bridge_ok(last_opened_at_iso=now_iso)
         except Exception as e:
             return bridge_error(e)
 

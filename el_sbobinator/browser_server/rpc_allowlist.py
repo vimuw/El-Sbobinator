@@ -30,6 +30,7 @@ ALLOWED_RPC_METHODS: frozenset[str] = frozenset(
         "cleanup_completed_sessions",
         "get_completed_sessions",
         "delete_session",
+        "rename_session",
         "update_session_input_path",
         "remove_session_audio",
         "touch_session_opened",

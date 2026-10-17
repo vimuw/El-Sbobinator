@@ -45,6 +45,7 @@ export interface FolderDetailViewProps {
   onDeleteMultipleSessions?: ArchivePageProps['onDeleteMultipleSessions'];
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
   onShareSession?: (session: ArchiveSession) => void;
+  onRenameSession?: (session: ArchiveSession) => void;
   onNavigate?: (id: string | null) => void;
   collectionGrid?: React.ReactNode;
   onMove?: () => void;
@@ -72,6 +73,7 @@ export function FolderDetailView({
   onDeleteMultipleSessions,
   onRetryFailedRevisionBlocks,
   onShareSession,
+  onRenameSession,
   onNavigate,
   collectionGrid,
   onMove,
@@ -113,8 +115,9 @@ export function FolderDetailView({
   const filteredFtResults = useMemo(() => {
     if (!ftResults) return null;
     const inFolder = new Set(scopedDirs.map(normalizeSessionPath));
-    return ftResults.filter(r => inFolder.has(normalizeSessionPath(r.session_dir)));
-  }, [ftResults, scopedDirs]);
+    return ftResults.filter(r => inFolder.has(normalizeSessionPath(r.session_dir)))
+      .map(result => ({ ...result, name: sessionsByDir.get(normalizeSessionPath(result.session_dir))?.name ?? result.name }));
+  }, [ftResults, scopedDirs, sessionsByDir]);
 
   const pageData = folderSessions;
 
@@ -428,6 +431,7 @@ export function FolderDetailView({
                         onDeleteSession={onDeleteSession}
                         onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
                         onShareSession={onShareSession}
+                        onRenameSession={onRenameSession}
                       />
                     ))}
                   </div>

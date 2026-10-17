@@ -11,7 +11,7 @@
 Applicazione desktop per trasformare lezioni audio e video in dispense di studio tramite Google Gemini.
 
 <p align="center">
-  <img width="100%" alt="Panoramica di El Sbobinator" src="assets/screenshots/preview.png" />
+  <img width="100%" alt="Dimostrazione di El Sbobinator: inserimento della chiave Gemini, aggiunta di una registrazione, elaborazione e sbobina finale nell'editor con il player audio" src="assets/screenshots/demo.gif" />
 </p>
 
 ---
@@ -22,6 +22,16 @@ Applicazione desktop per trasformare lezioni audio e video in dispense di studio
 - **Gratuita e con chiave personale**: Nessun abbonamento all'app; utilizzi Google Gemini con la tua API key.
 - **Editor Sincronizzato**: Permette di riascoltare la lezione con il player audio sincronizzato (velocità da 1.0x a 3.0x) mentre si corregge la bozza, con supporto per formule scientifiche (LaTeX) e copia rapida formattata per altri editor di documenti.
 - **Archivio Locale & Ricerca Istantanea**: Conserva lo storico delle lezioni elaborate sul computer in cartelle organizzabili, con ricerca testuale full-text ad alta velocità tra tutte le sbobine salvate.
+
+<table>
+  <tr>
+    <td colspan="2"><img alt="Editor con indice, formula LaTeX e player audio" src="assets/screenshots/editor.png" /><p align="center"><sub>Editor con indice, formule e player audio sincronizzato</sub></p></td>
+  </tr>
+  <tr>
+    <td width="50%"><img alt="Archivio con raccolte colorate" src="assets/screenshots/archive.png" /><p align="center"><sub>Archivio e raccolte</sub></p></td>
+    <td width="50%"><img alt="Ricerca full-text tra le sbobine" src="assets/screenshots/search.png" /><p align="center"><sub>Ricerca nel testo di tutte le sbobine</sub></p></td>
+  </tr>
+</table>
 
 ---
 

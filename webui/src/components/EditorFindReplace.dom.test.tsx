@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { TextStyle, Color } from '@tiptap/extension-text-style';
@@ -59,5 +59,43 @@ describe('FindReplacePanel formatting and history', () => {
     expect(editor.getHTML()).toBe('<p> e <em>testo conservato</em></p>');
     act(() => { editor.commands.undo(); });
     expect(editor.getJSON()).toEqual(baseline);
+  });
+});
+
+describe('FindReplacePanel initial query', () => {
+  const lesson = '<p>La gittata cardiaca dipende dalla gittata sistolica.</p><p>Legge di Frank-Starling e gittata.</p>';
+
+  function createEditor() {
+    const editor = new Editor({ extensions: [StarterKit, SearchHighlight], content: lesson });
+    editors.push(editor);
+    return editor;
+  }
+
+  it('highlights the archive query when useEditor replaces the instance before the first frame', async () => {
+    // StrictMode can make useEditor destroy its first instance after the panel mounts.
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const first = createEditor();
+    const { rerender } = render(<FindReplacePanel editor={first} onClose={vi.fn()} initialMode="find" initialFindText="gittata" />);
+    first.destroy();
+    const second = createEditor();
+    rerender(<FindReplacePanel editor={second} onClose={vi.fn()} initialMode="find" initialFindText="gittata" />);
+
+    await waitFor(() => expect(document.querySelector('.find-bar-count')?.textContent).toBe('1 di 3'));
+    expect((screen.getByPlaceholderText('Trova nel documento...') as HTMLInputElement).value).toBe('gittata');
+    const active = second.view.dom.querySelectorAll('.search-highlight-active');
+    expect(active).toHaveLength(1);
+    expect(active[0].textContent).toBe('gittata');
+    expect(second.view.dom.querySelectorAll('.search-highlight')).toHaveLength(2);
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+  });
+
+  it('keeps match highlights when match case is toggled', () => {
+    const editor = createEditor();
+    render(<FindReplacePanel editor={editor} onClose={vi.fn()} initialMode="replace" />);
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Frank' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Maiuscole/minuscole' }));
+    expect(document.querySelector('.find-replace-dialog-count')?.textContent).toBe('0 di 1');
+    expect(editor.view.dom.querySelectorAll('.search-highlight')).toHaveLength(1);
   });
 });

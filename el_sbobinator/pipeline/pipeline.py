@@ -61,6 +61,12 @@ from el_sbobinator.services.revision_service import (
     build_macro_blocks,
     process_macro_revision_phase,
 )
+from el_sbobinator.services.session_audio_service import (
+    attach_playback_audio,
+    create_playback_audio,
+    discard_playback_audio,
+    playback_audio_path,
+)
 from el_sbobinator.utils.logging_utils import (
     attach_file_handler,
     detach_file_handler,
@@ -456,6 +462,12 @@ def _export_html_and_finish(
         save_session()
         return False
 
+    # The document is complete: Stop no longer interrupts saving its audio
+    # copy, otherwise the transcription cache would be left behind unused.
+    _retain_playback_audio(
+        session_ctx, session, input_path, stop_event=runtime.shutdown_event
+    )
+
     try:
         _update_session(
             session,
@@ -500,6 +512,44 @@ def _export_html_and_finish(
     return True
 
 
+def _retain_playback_audio(
+    session_ctx: PipelineSessionContext,
+    session: dict,
+    input_path: str,
+    *,
+    stop_event=None,
+) -> None:
+    if playback_audio_path(session, session_ctx.session_dir):
+        return
+    try:
+        path = create_playback_audio(
+            session_ctx.session_dir,
+            input_path,
+            preconverted_path=os.path.join(
+                session_ctx.session_dir, PRECONVERTED_AUDIO_FINAL
+            ),
+            stop_event=stop_event,
+        )
+        previous = session.get("playback_audio")
+        try:
+            attach_playback_audio(session, session_ctx.session_dir, path)
+            if not session_ctx.save():
+                raise OSError("Impossibile salvare il collegamento alla copia audio.")
+        except Exception:
+            if previous is None:
+                session.pop("playback_audio", None)
+            else:
+                session["playback_audio"] = previous
+            discard_playback_audio(path)
+            raise
+        invalidate_session_storage_cache()
+    except Exception as error:
+        print(
+            "[!] Copia audio interna non salvata. Conserva il file originale "
+            f"e riapri la sbobina per riprovare: {error}"
+        )
+
+
 def _pipeline_finally_cleanup(
     session_ctx: PipelineSessionContext | None,
     session: dict | None,
@@ -508,6 +558,8 @@ def _pipeline_finally_cleanup(
     runtime: PipelineRuntime,
     log_handler,
     regenerate_prompt_timeout_terminal: bool,
+    *,
+    document_completed: bool = False,
 ):
     """Clean up resources, temp files, and post final session states."""
     if session_ctx is not None:
@@ -517,13 +569,17 @@ def _pipeline_finally_cleanup(
                 .strip()
                 .lower()
             )
-            if _final_stage == "done":
+            if _final_stage == "done" and isinstance(session, dict):
                 _preconv = os.path.join(
                     session_ctx.session_dir, PRECONVERTED_AUDIO_FINAL
                 )
                 if os.path.exists(_preconv):
-                    os.remove(_preconv)
-                    invalidate_session_storage_cache()
+                    _retain_playback_audio(
+                        session_ctx, session, "", stop_event=runtime.shutdown_event
+                    )
+                    if playback_audio_path(session, session_ctx.session_dir):
+                        os.remove(_preconv)
+                        invalidate_session_storage_cache()
         except Exception:
             pass
 
@@ -535,8 +591,11 @@ def _pipeline_finally_cleanup(
     last_run_error = runtime.get_last_run_error()
     last_run_status = runtime.get_last_run_status()
 
+    # Stop pressed after this run exported its document (for example while
+    # saving the playback copy) cannot undo it: report the file as completed.
     if (
         runtime.cancelled()
+        and not document_completed
         and not regenerate_prompt_timeout_terminal
         and last_run_error != _REGENERATE_PROMPT_TIMEOUT_ERROR
     ) or last_run_status == "cancelled":
@@ -642,6 +701,7 @@ def _esegui_sbobinatura_impl(
     session_ctx = None
     client = None
     regenerate_prompt_timeout_terminal = False
+    document_completed = False
     try:
         if not api_key_value or api_key_value.strip() == "":
             runtime.set_run_result("failed", "api_key_mancante")
@@ -808,6 +868,7 @@ def _esegui_sbobinatura_impl(
             start_time=start_time,
         ):
             return
+        document_completed = True
 
     except CircuitBreakerExhaustedError as e:
         _handle_circuit_breaker_paused(
@@ -838,6 +899,7 @@ def _esegui_sbobinatura_impl(
             runtime,
             log_handler,
             regenerate_prompt_timeout_terminal,
+            document_completed=document_completed,
         )
 
 

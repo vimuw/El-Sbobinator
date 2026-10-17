@@ -163,6 +163,7 @@ export default function App() {
     pendingArchiveReplacementsRef,
     normalizeSessionDir,
     refreshArchiveSessions,
+    handleRenameSession,
     handleLoadAll,
     handleOpenFailed,
     handleFoldersChange,
@@ -600,6 +601,7 @@ export default function App() {
                     onDeleteSession={(sessionDir, name) => setConfirmAction({ type: 'delete-archive-session', sessionDir, name })}
                     onDeleteMultipleSessions={(sessionsList) => setConfirmAction({ type: 'delete-multiple-archive-sessions', sessions: sessionsList })}
                     onRefresh={refreshArchiveSessions}
+                    onRenameSession={handleRenameSession}
                     onLoadAll={handleLoadAll}
                     onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
                     onNotification={addNotification}
@@ -699,6 +701,8 @@ export default function App() {
             audio={{
               src: preview.audioSrc,
               relinkNeeded: preview.audioRelinkNeeded,
+              loading: preview.audioLoading,
+              warning: preview.audioWarning,
               onRelink: relinkPreviewAudio,
               onRemoveAudio: removePreviewAudio,
               init: preview.initAudio,

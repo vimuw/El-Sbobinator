@@ -16,8 +16,8 @@ describe('AudioPlayer', () => {
 
   it('renders skip-back and skip-forward buttons', () => {
     render(<AudioPlayer src="/audio/test.mp3" />);
-    expect(screen.getByLabelText('Indietro di 10 secondi')).toBeTruthy();
-    expect(screen.getByLabelText('Avanti di 10 secondi')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Indietro di 10 secondi' }).title).toBe('Indietro di 10 secondi');
+    expect(screen.getByRole('button', { name: 'Avanti di 10 secondi' }).title).toBe('Avanti di 10 secondi');
   });
 
   it('renders restart button', () => {
@@ -32,10 +32,10 @@ describe('AudioPlayer', () => {
     expect(select.value).toBe('1');
   });
 
-  it('renders volume slider', () => {
+  it('names both sliders and announces unknown duration and initial volume', () => {
     render(<AudioPlayer src="/audio/test.mp3" />);
-    const sliders = screen.getAllByRole('slider');
-    expect(sliders.length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByRole('slider', { name: 'Posizione audio' }).getAttribute('aria-valuetext')).toBe('0 secondi; durata non disponibile');
+    expect(screen.getByRole('slider', { name: 'Volume' }).getAttribute('aria-valuetext')).toBe('100%');
   });
 
   it('shows time display 00:00:00 / 00:00:00 initially', () => {
@@ -59,6 +59,57 @@ describe('AudioPlayer', () => {
     render(<AudioPlayer src="/audio/test.mp3" initialPlaybackRate={2} />);
     const select = screen.getByLabelText('Velocita di riproduzione').querySelector('select') as HTMLSelectElement;
     expect(select.value).toBe('2');
+  });
+
+  it('steps playback speed with +/- and keeps the menu, audio and saved state in sync', () => {
+    const onStateChange = vi.fn();
+    const { container } = render(<AudioPlayer src="/audio/test.mp3" initialPlaybackRate={1.5} initialVolume={0.6} onStateChange={onStateChange} />);
+    const audio = container.querySelector('audio') as HTMLAudioElement;
+    audio.currentTime = 42;
+    fireEvent.timeUpdate(audio);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aumenta velocità di riproduzione' }));
+    expect(audio.playbackRate).toBe(1.75);
+    expect(screen.getByTitle('Velocità di riproduzione').textContent).toContain('1.75x');
+    expect(onStateChange).toHaveBeenLastCalledWith({ currentTime: 42, playbackRate: 1.75, volume: 0.6 });
+
+    fireEvent.click(screen.getByTitle('Velocità di riproduzione'));
+    expect(screen.getByRole('option', { name: '1.75x' }).getAttribute('aria-selected')).toBe('true');
+    fireEvent.click(screen.getByRole('option', { name: '2.5x' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Diminuisci velocità di riproduzione' }));
+    expect(audio.playbackRate).toBe(2);
+    expect(screen.getByTitle('Velocità di riproduzione').textContent).toContain('2x');
+    expect(onStateChange).toHaveBeenLastCalledWith({ currentTime: 42, playbackRate: 2, volume: 0.6 });
+    expect(audio.currentTime).toBe(42);
+    expect(audio.volume).toBe(0.6);
+  });
+
+  it('disables speed steps at the limits and visits every available menu speed', () => {
+    const onStateChange = vi.fn();
+    const { container } = render(<AudioPlayer src="/audio/test.mp3" onStateChange={onStateChange} />);
+    const audio = container.querySelector('audio') as HTMLAudioElement;
+    const decrease = screen.getByRole('button', { name: 'Diminuisci velocità di riproduzione' }) as HTMLButtonElement;
+    const increase = screen.getByRole('button', { name: 'Aumenta velocità di riproduzione' }) as HTMLButtonElement;
+    expect(decrease.disabled).toBe(true);
+    fireEvent.click(decrease);
+    expect(onStateChange).not.toHaveBeenCalled();
+
+    for (const rate of [1.25, 1.5, 1.75, 2, 2.5, 3]) {
+      expect(increase.disabled).toBe(false);
+      fireEvent.click(increase);
+      expect(audio.playbackRate).toBe(rate);
+    }
+    expect(increase.disabled).toBe(true);
+    onStateChange.mockClear();
+    fireEvent.click(increase);
+    expect(onStateChange).not.toHaveBeenCalled();
+
+    for (const rate of [2.5, 2, 1.75, 1.5, 1.25, 1]) {
+      expect(decrease.disabled).toBe(false);
+      fireEvent.click(decrease);
+      expect(audio.playbackRate).toBe(rate);
+    }
+    expect(decrease.disabled).toBe(true);
   });
 
   it('renders audio element with correct src', () => {
@@ -171,21 +222,29 @@ describe('AudioPlayer', () => {
   });
 
   it('skip-back button skips back 10s', () => {
-    render(<AudioPlayer src="/audio/test.mp3" />);
+    const { container } = render(<AudioPlayer src="/audio/test.mp3" />);
+    const audio = container.querySelector('audio') as HTMLAudioElement;
+    audio.currentTime = 30;
     fireEvent.click(screen.getByLabelText('Indietro di 10 secondi'));
+    expect(audio.currentTime).toBe(20);
+    expect(screen.getByRole('slider', { name: 'Posizione audio' }).getAttribute('aria-valuetext')).toBe('20 secondi; durata non disponibile');
   });
 
   it('skip-forward button skips forward 10s', () => {
-    render(<AudioPlayer src="/audio/test.mp3" />);
+    const { container } = render(<AudioPlayer src="/audio/test.mp3" />);
+    const audio = container.querySelector('audio') as HTMLAudioElement;
+    audio.currentTime = 30;
     fireEvent.click(screen.getByLabelText('Avanti di 10 secondi'));
+    expect(audio.currentTime).toBe(40);
   });
 
   it('volume slider change updates volume', () => {
-    render(<AudioPlayer src="/audio/test.mp3" />);
-    const sliders = screen.getAllByRole('slider');
-    const volumeSlider = sliders[sliders.length - 1];
+    const { container } = render(<AudioPlayer src="/audio/test.mp3" />);
+    const volumeSlider = screen.getByRole('slider', { name: 'Volume' });
     fireEvent.change(volumeSlider, { target: { value: '0.5' } });
     expect((volumeSlider as HTMLInputElement).value).toBe('0.5');
+    expect(volumeSlider.getAttribute('aria-valuetext')).toBe('50%');
+    expect((container.querySelector('audio') as HTMLAudioElement).volume).toBe(0.5);
   });
 
   it('uses initialVolume prop', () => {
@@ -201,6 +260,7 @@ describe('AudioPlayer', () => {
     Object.defineProperty(audio, 'currentTime', { value: 3729.8, writable: true });
     fireEvent.timeUpdate(audio);
     expect(screen.getByText('01:02:09 / 03:13:54')).toBeTruthy();
+    expect(screen.getByRole('slider', { name: 'Posizione audio' }).getAttribute('aria-valuetext')).toBe('1 ora, 2 minuti, 9 secondi di 3 ore, 13 minuti, 54 secondi');
   });
 
   it('loadedmetadata with initialTime sets currentTime', () => {
@@ -237,11 +297,16 @@ describe('AudioPlayer', () => {
   it('seek slider change calls handleSeek and updates currentTime', () => {
     const { container } = render(<AudioPlayer src="/audio/test.mp3" />);
     const audio = container.querySelector('audio') as HTMLAudioElement;
-    const sliders = screen.getAllByRole('slider');
-    const seekSlider = sliders[0];
+    const seekSlider = screen.getByRole('slider', { name: 'Posizione audio' });
+    Object.defineProperty(audio, 'duration', { value: 4800, configurable: true });
+    fireEvent.loadedMetadata(audio);
     Object.defineProperty(audio, 'currentTime', { value: 0, writable: true });
-    fireEvent.change(seekSlider, { target: { value: '42' } });
-    expect(audio.currentTime).toBe(42);
+    fireEvent.change(seekSlider, { target: { value: '750' } });
+    expect(audio.currentTime).toBe(750);
+    expect(seekSlider.getAttribute('aria-valuetext')).toBe('12 minuti, 30 secondi di 1 ora, 20 minuti');
+    fireEvent.change(seekSlider, { target: { value: '3661' } });
+    expect(audio.currentTime).toBe(3661);
+    expect(seekSlider.getAttribute('aria-valuetext')).toBe('1 ora, 1 minuto, 1 secondo di 1 ora, 20 minuti');
   });
 
   it('durationchange event updates duration display', () => {
@@ -408,7 +473,7 @@ describe('AudioPlayer', () => {
     });
 
     expect(screen.getByText("Rimuovere l'audio collegato?")).toBeTruthy();
-    expect(screen.getByText(/L'audio verrà scollegato da questa sbobina/)).toBeTruthy();
+    expect(screen.getByText(/La copia audio interna verrà eliminata dalla sbobina/)).toBeTruthy();
 
     const modal = screen.getByText("Rimuovere l'audio collegato?").closest('.modal-card') as HTMLElement;
     const confirmBtn = within(modal).getByRole('button', { name: 'Rimuovi audio' });

@@ -158,6 +158,13 @@ def _load_package_metadata(path: str) -> dict:
 
 def find_audio_for_session(session_dir: str, session_data: dict) -> str | None:
     """Locate the source audio file for a session if it exists on disk."""
+    from el_sbobinator.services.session_audio_service import playback_audio_path
+
+    if session_data.get("audio_removed"):
+        return None
+    playback = playback_audio_path(session_data, session_dir)
+    if playback:
+        return playback
     input_data = session_data.get("input", {})
     if isinstance(input_data, dict):
         current_path = str(input_data.get("path", "") or "").strip()
@@ -223,8 +230,9 @@ def create_sbobina_package(
     session_name = session_data.get("input", {}).get("name") or os.path.basename(
         session_dir
     )
-    if audio_file:
+    if audio_file and not session_data.get("playback_audio"):
         session_name = os.path.basename(audio_file)
+    session_name = session_data.get("title") or session_name
 
     manifest = {
         "app": "El Sbobinator",
@@ -374,6 +382,11 @@ def unpack_and_import_package(package_path: str, session_root: str) -> dict:
         session_data["stage"] = "done"
         session_data["updated_at"] = _now_iso()
         session_data["imported_at"] = _now_iso()
+        if not session_data.get("title") and manifest.get("session_name"):
+            session_data["title"] = manifest["session_name"]
+        # Never retain the sender's association when the package omits audio.
+        session_data.pop("playback_audio", None)
+        session_data.pop("audio_removed", None)
 
         if not isinstance(session_data.get("outputs"), dict):
             session_data["outputs"] = {}
@@ -391,11 +404,15 @@ def unpack_and_import_package(package_path: str, session_root: str) -> dict:
             session_data["input"]["path_rel_to_session"] = os.path.relpath(
                 extracted_audio_path, new_session_dir
             )
+            session_data["playback_audio"] = os.path.relpath(
+                extracted_audio_path, new_session_dir
+            )
             try:
                 session_data["input"]["size"] = os.path.getsize(extracted_audio_path)
             except Exception:
                 pass
         else:
+            session_data["audio_removed"] = True
             # Se il pacchetto non contiene audio (es. text_only), azzeriamo i vecchi path del creatore
             if "input" in session_data and isinstance(session_data["input"], dict):
                 session_data["input"]["path"] = None

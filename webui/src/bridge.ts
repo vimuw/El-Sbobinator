@@ -149,6 +149,7 @@ export interface SettingsPayload {
 
 export interface ArchiveSession {
   name: string;
+  input_name?: string;
   completed_at_iso: string;
   last_opened_at_iso?: string;
   html_path: string;
@@ -284,7 +285,7 @@ export interface PywebviewApi {
   open_url?: (url: string) => Promise<{ ok: boolean; error?: string }>;
   read_html_content?: (path: string) => Promise<{ ok: boolean; content?: string; error?: string }>;
   save_html_content?: (path: string, content: string, generation?: number) => Promise<SaveHtmlResult>;
-  stream_media_file?: (path: string, sessionDir?: string) => Promise<{ ok: boolean; url?: string; has_audio?: boolean; error?: string }>;
+  stream_media_file?: (path: string, sessionDir?: string) => Promise<{ ok: boolean; url?: string; has_audio?: boolean; error?: string; warning?: string }>;
   show_notification?: (title: string, message: string) => Promise<void>;
   flash_window?: () => Promise<{ ok: boolean; error?: string }>;
   validate_environment?: (
@@ -298,8 +299,9 @@ export interface PywebviewApi {
   cleanup_completed_sessions?: (maxAgeDays?: number, dryRun?: boolean) => Promise<{ ok: boolean; removed?: number; freed_bytes?: number; errors?: number; candidates?: number; preserved_completed?: number; missing_completed_html?: number; error?: string }>;
   get_completed_sessions?: (limit?: number) => Promise<{ ok: boolean; sessions?: ArchiveSession[]; total?: number; error?: string }>;
   delete_session?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;
+  rename_session?: (sessionDir: string, name: string) => Promise<{ ok: boolean; name?: string; error?: string }>;
   update_session_input_path?: (sessionDir: string, newPath: string) => Promise<{ ok: boolean; error?: string }>;
-  remove_session_audio?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;
+  remove_session_audio?: (sessionDir: string) => Promise<{ ok: boolean; name?: string; error?: string }>;
   touch_session_opened?: (sessionDir: string) => Promise<{ ok: boolean; last_opened_at_iso?: string; error?: string }>;
   open_session_folder?: () => Promise<{ ok: boolean; error?: string }>;
   ask_session_folder?: () => Promise<{ ok: boolean; path?: string; cancelled?: boolean; error?: string }>;

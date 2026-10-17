@@ -14,6 +14,8 @@ export type PreviewState = {
   sourcePath: string;
   sessionDir: string;
   audioRelinkNeeded: boolean;
+  audioLoading: boolean;
+  audioWarning: string;
   initAudio: { time?: number; playbackRate?: number; volume?: number };
   initScrollTop?: number;
   initialSearchTerm?: string;
@@ -28,6 +30,8 @@ export const initialPreviewState: PreviewState = {
   sourcePath: '',
   sessionDir: '',
   audioRelinkNeeded: false,
+  audioLoading: false,
+  audioWarning: '',
   initAudio: {},
   initScrollTop: undefined,
 };
@@ -44,6 +48,8 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
   const [preview, setPreview] = useState<PreviewState>(initialPreviewState);
   const currentEditorSessionRef = useRef<EditorSession>({});
   const currentPreviewSessionKeyRef = useRef<string | null>(null);
+  const audioRequestRef = useRef(0);
+  const previewRequestRef = useRef(0);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -62,21 +68,32 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
   }, []);
 
   const loadPreviewAudio = useCallback(async (sourcePath?: string, sessionDir?: string) => {
+    const request = ++audioRequestRef.current;
     const normalizedSource = String(sourcePath || '').trim();
     const normalizedSessionDir = String(sessionDir || '').trim();
     if ((!normalizedSource && !normalizedSessionDir) || !window.pywebview?.api?.stream_media_file) {
-      setPreview(prev => ({ ...prev, audioSrc: null, audioRelinkNeeded: Boolean(normalizedSource) }));
+      setPreview(prev => ({ ...prev, audioSrc: null, audioRelinkNeeded: Boolean(normalizedSource), audioLoading: false, audioWarning: '' }));
       return false;
     }
-    const streamRes = await window.pywebview.api.stream_media_file(normalizedSource, normalizedSessionDir || undefined);
-    if (streamRes.ok && streamRes.url) {
-      setPreview(prev => ({ ...prev, audioSrc: streamRes.url, audioRelinkNeeded: false }));
-      return true;
+    setPreview(prev => ({ ...prev, audioLoading: true, audioWarning: '' }));
+    try {
+      const streamRes = await window.pywebview.api.stream_media_file(normalizedSource, normalizedSessionDir || undefined);
+      if (request !== audioRequestRef.current) return false;
+      if (streamRes.ok && streamRes.url) {
+        setPreview(prev => ({ ...prev, audioSrc: streamRes.url, audioRelinkNeeded: false, audioLoading: false, audioWarning: streamRes.warning || '' }));
+        if (streamRes.warning) appendConsole(`⚠️ ${streamRes.warning}`);
+        return true;
+      }
+      const relinkNeeded = streamRes.has_audio !== false;
+      setPreview(prev => ({ ...prev, audioSrc: null, audioRelinkNeeded: relinkNeeded, audioLoading: false }));
+      return false;
+    } catch (error) {
+      if (request === audioRequestRef.current) {
+        setPreview(prev => ({ ...prev, audioSrc: null, audioRelinkNeeded: true, audioLoading: false }));
+      }
+      throw error;
     }
-    const relinkNeeded = streamRes.has_audio === false ? false : true;
-    setPreview(prev => ({ ...prev, audioSrc: null, audioRelinkNeeded: relinkNeeded }));
-    return false;
-  }, []);
+  }, [appendConsole]);
 
   const openPreview = useCallback(async (
     htmlPath: string,
@@ -91,14 +108,18 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
       return;
     }
     appendConsole('Caricamento anteprima in corso...');
+    const request = ++previewRequestRef.current;
+    ++audioRequestRef.current;
     try {
       const res = await window.pywebview.api.read_html_content(htmlPath);
+      if (request !== previewRequestRef.current) return;
       if (res.ok) {
         const bodyMatch = res.content.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
         const extractedContent = bodyMatch ? bodyMatch[1] : res.content.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
         const safeContent = normalizePreviewHtmlContent(extractedContent);
         const sessionKey = fileId ?? htmlPath;
         currentPreviewSessionKeyRef.current = sessionKey;
+        ++audioRequestRef.current;
         touchEditorSession(sessionKey);
         if (sessionDir && window.pywebview?.api?.touch_session_opened) {
           void window.pywebview.api.touch_session_opened(sessionDir).catch(() => {});
@@ -114,6 +135,8 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
           sessionDir: sessionDir ?? '',
           audioSrc: null,
           audioRelinkNeeded: false,
+          audioLoading: Boolean(sourcePath || sessionDir),
+          audioWarning: '',
           initAudio: { time: savedSession.audioTime, playbackRate: savedSession.playbackRate, volume: savedSession.volume },
           initScrollTop: savedSession.scrollTop,
           initialSearchTerm: searchTerm || undefined,
@@ -129,6 +152,8 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
   }, [appendConsole, loadPreviewAudio, onOpenFailed]);
 
   const closePreview = useCallback(() => {
+    ++previewRequestRef.current;
+    ++audioRequestRef.current;
     const sessionKey = currentPreviewSessionKeyRef.current;
     if (sessionKey) {
       const session = currentEditorSessionRef.current;
@@ -146,9 +171,11 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
 
   const relinkPreviewAudio = useCallback(async () => {
     if (!window.pywebview?.api?.ask_media_file) return;
+    const sessionKey = currentPreviewSessionKeyRef.current;
     try {
       const selectedFile = await window.pywebview.api.ask_media_file();
       if (!selectedFile?.path) return;
+      if (sessionKey !== currentPreviewSessionKeyRef.current) return false;
       let persistOk = true;
       if (preview.sessionDir) {
         if (!window.pywebview?.api?.update_session_input_path) {
@@ -156,7 +183,9 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
           // a failure so we never update in-memory state without a disk write.
           persistOk = false;
         } else {
+          setPreview(prev => ({ ...prev, audioLoading: true, audioWarning: '' }));
           const saveRes = await window.pywebview.api.update_session_input_path(preview.sessionDir, selectedFile.path);
+          if (sessionKey !== currentPreviewSessionKeyRef.current) return false;
           if (saveRes?.ok) {
             setArchiveSessions(prev => prev.map(s =>
               normalizeSessionPath(s.session_dir) === normalizeSessionPath(preview.sessionDir) ? { ...s, input_path: selectedFile.path } : s,
@@ -168,6 +197,7 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
         }
       }
       if (!persistOk) {
+        setPreview(prev => ({ ...prev, audioLoading: false }));
         appendConsole('❌ Impossibile salvare il nuovo link audio nella sessione.');
         return false;
       }
@@ -176,12 +206,10 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
       }
       setPreview(prev => ({ ...prev, sourcePath: selectedFile.path, audioRelinkNeeded: false }));
       const didLoad = await loadPreviewAudio(selectedFile.path, preview.sessionDir);
-      // NOTE: this log fires regardless of whether loadPreviewAudio returned true
-      // (i.e. the blob URL was actually created). Pre-existing behavior — left
-      // untouched intentionally; fix separately if audio-relink UX is revisited.
-      appendConsole(`Audio ricollegato: ${selectedFile.name}`);
+      if (didLoad) appendConsole(`Audio ricollegato: ${selectedFile.name}`);
       return didLoad;
     } catch (error: unknown) {
+      setPreview(prev => ({ ...prev, audioLoading: false }));
       appendConsole(`❌ Impossibile ricollegare l'audio: ${error instanceof Error ? error.message : String(error)}`);
     }
     return false;
@@ -190,14 +218,16 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
   const removePreviewAudio = useCallback(async () => {
     try {
       let persistOk = true;
+      let persistedTitle: string | undefined;
       if (preview.sessionDir) {
         if (!window.pywebview?.api?.remove_session_audio) {
           persistOk = false;
         } else {
           const res = await window.pywebview.api.remove_session_audio(preview.sessionDir);
           if (res?.ok) {
+            persistedTitle = res.name || undefined;
             setArchiveSessions(prev => prev.map(s =>
-              normalizeSessionPath(s.session_dir) === normalizeSessionPath(preview.sessionDir) ? { ...s, input_path: '' } : s,
+              normalizeSessionPath(s.session_dir) === normalizeSessionPath(preview.sessionDir) ? { ...s, input_path: '', ...(persistedTitle ? { name: persistedTitle } : {}) } : s,
             ));
             await onArchiveRefresh?.();
           } else {
@@ -220,8 +250,8 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
         });
       }
 
-      let nextTitle = preview.title;
-      if (preview.path && /\.(mp3|m4a|wav|ogg|flac|aac|opus|mp4|mkv|webm)$/i.test(nextTitle)) {
+      let nextTitle = persistedTitle ?? preview.title;
+      if (!persistedTitle && preview.path && /\.(mp3|m4a|wav|ogg|flac|aac|opus|mp4|mkv|webm)$/i.test(nextTitle)) {
         const base = preview.path.split(/[/\\]/).pop() || '';
         if (base.endsWith('_Sbobina.html')) {
           nextTitle = base.slice(0, -'_Sbobina.html'.length);
@@ -243,6 +273,8 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
         sourcePath: '',
         audioSrc: null,
         audioRelinkNeeded: false,
+        audioLoading: false,
+        audioWarning: '',
         initAudio: {},
       }));
       appendConsole('Audio rimosso dalla sbobina.');

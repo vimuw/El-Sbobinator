@@ -12,6 +12,10 @@ from el_sbobinator.bridge.bridge_utils import (
     _candidate_from_relative,
     _normalize_revision_failed_blocks,
 )
+from el_sbobinator.services.session_audio_service import (
+    playback_audio_path,
+    session_metadata_lock,
+)
 from el_sbobinator.utils.file_ops import _atomic_write_json
 
 if TYPE_CHECKING:
@@ -28,6 +32,38 @@ def find_candidate_audio_path(
     write_back: bool = True,
 ) -> str | None:
     """Find and optionally repair candidate audio path from relative or absolute links."""
+    if write_back and session_path:
+        # Read again under the same short lock as editor/audio metadata writes:
+        # an archive refresh must not replace a just-created playback association.
+        with session_metadata_lock(session_dir):
+            try:
+                with open(session_path, encoding="utf-8") as handle:
+                    latest = json.load(handle)
+                if isinstance(latest, dict):
+                    data.clear()
+                    data.update(latest)
+            except (OSError, ValueError):
+                pass
+            candidate = find_candidate_audio_path(data, session_dir, write_back=False)
+            input_data = data.get("input", {})
+            if (
+                candidate
+                and isinstance(input_data, dict)
+                and not playback_audio_path(data, session_dir)
+                and input_data.get("path") != candidate
+            ):
+                input_data.update(path=candidate, name=os.path.basename(candidate))
+                try:
+                    input_data["size"] = os.path.getsize(candidate)
+                    _atomic_write_json(session_path, data)
+                except OSError:
+                    pass
+            return candidate
+    if data.get("audio_removed"):
+        return None
+    playback = playback_audio_path(data, session_dir)
+    if playback:
+        return playback
     input_data = data.get("input", {})
     if not isinstance(input_data, dict):
         return None
@@ -112,22 +148,30 @@ def list_completed_sessions(
                 continue
             html_path = session_copy
             try:
-                data["outputs"]["html"] = html_path
-                _atomic_write_json(os.path.join(session_dir, "session.json"), data)
+                with session_metadata_lock(session_dir):
+                    session_path = os.path.join(session_dir, "session.json")
+                    with open(session_path, encoding="utf-8") as handle:
+                        data = json.load(handle)
+                    data["outputs"]["html"] = html_path
+                    _atomic_write_json(session_path, data)
             except Exception:
                 pass
 
+        resolved_audio = effective_find_audio(
+            data, session_dir, os.path.join(session_dir, "session.json")
+        )
+        # input_path also identifies duplicates and archive replacements. Keep
+        # the source identity; the player resolves retained audio by session_dir.
+        source_path = data.get("input", {}).get("path", "") or ""
         input_path = (
-            effective_find_audio(
-                data, session_dir, os.path.join(session_dir, "session.json")
-            )
-            or data.get("input", {}).get("path", "")
-            or ""
+            source_path
+            if playback_audio_path(data, session_dir)
+            else resolved_audio or source_path
         )
 
         input_size = int(data.get("input", {}).get("size", 0) or 0)
         name = str(data.get("title") or "").strip() or (
-            os.path.basename(input_path)
+            str(data.get("input", {}).get("name") or os.path.basename(input_path))
             if input_path
             else os.path.basename(str(html_path))
         )
@@ -146,6 +190,9 @@ def list_completed_sessions(
         sessions.append(
             {
                 "name": name,
+                "input_name": str(
+                    data.get("input", {}).get("name") or os.path.basename(input_path)
+                ),
                 "completed_at_iso": data.get("updated_at", ""),
                 "html_path": str(html_path),
                 "effective_model": effective_model,

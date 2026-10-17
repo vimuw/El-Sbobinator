@@ -9,6 +9,7 @@ import { readAndOptimizeImageAsDataUrl } from '../utils';
 import { normalizeImageLayout } from '../imageLayout';
 import { setInlineImageDragPreview } from '../imageDrag';
 import { startInlineImageAutoScroll } from '../imageAutoScroll';
+import { preparePastedEditorHtml } from '../editorSelectionClipboard';
 
 interface UseEditorImageDropOptions {
   editorRef: React.MutableRefObject<TiptapEditor | null>;
@@ -141,9 +142,8 @@ export function useEditorImageDrop({ editorRef }: UseEditorImageDropOptions) {
   const transformPastedHTML = useCallback((html: string): string => {
     // The schema validates supported styles and discards unsupported markup.
     // Formatted paste must retain explicit colors, highlights and heading sizes.
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    return doc.body.innerHTML;
-  }, []);
+    return preparePastedEditorHtml(html, editorRef.current?.view);
+  }, [editorRef]);
 
   return {
     insertImageFiles,

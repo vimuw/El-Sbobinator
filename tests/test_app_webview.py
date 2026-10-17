@@ -669,6 +669,56 @@ class AppWebviewTests(unittest.TestCase):
         self.assertEqual(done[0]["failed"], 0)
         self.assertEqual(done[0]["total"], 2)
 
+    @patch("threading.Thread", _SyncThread)
+    @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
+    def test_stop_after_completed_document_reports_file_done_and_ends_batch(
+        self, mock_pipeline_run
+    ):
+        api = ElSbobinatorApi()
+        emitted = []
+        processed_paths: list[str] = []
+
+        def fake_emit(fn_name, data, batched=None):
+            emitted.append((fn_name, data, batched))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            html_path = os.path.join(tmpdir, "lesson_Sbobina.html")
+            with open(html_path, "w", encoding="utf-8") as handle:
+                handle.write("<p>Sbobina</p>")
+
+            def fake_pipeline_run(path, _api_key, adapter, **_kwargs):
+                # Stop arrives while the finished document saves its audio copy.
+                processed_paths.append(path)
+                adapter.imposta_output_html(html_path, tmpdir)
+                api._cancel_event.set()
+                adapter.set_run_result("completed")
+
+            mock_pipeline_run.side_effect = fake_pipeline_run
+            api._adapter.emit = fake_emit
+            paths = []
+            for name in ("one.mp3", "two.mp3"):
+                paths.append(os.path.join(tmpdir, name))
+                with open(paths[-1], "wb") as handle:
+                    handle.write(b"fake")
+
+            result = api.start_processing(
+                [
+                    {"id": "file-1", "path": paths[0], "name": "one.mp3"},
+                    {"id": "file-2", "path": paths[1], "name": "two.mp3"},
+                ],
+                api_key="fake-key",
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(processed_paths, [paths[0]])
+        done_files = [data for name, data, _ in emitted if name == "fileDone"]
+        self.assertEqual([data["id"] for data in done_files], ["file-1"])
+        self.assertEqual(done_files[0]["output_html"], html_path)
+        process_done = [data for name, data, _ in emitted if name == "processDone"]
+        self.assertEqual(len(process_done), 1)
+        self.assertTrue(process_done[0]["cancelled"])
+        self.assertEqual(process_done[0]["completed"], 1)
+
     @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
     def test_failed_run_emits_file_failed_even_if_cancel_event_is_set(
         self, mock_pipeline_run
@@ -2861,6 +2911,18 @@ class TestSearchSessions(unittest.TestCase):
 class TestUpdateSessionInputPath(unittest.TestCase):
     """Tests for ElSbobinatorApi.update_session_input_path."""
 
+    def setUp(self):
+        # These tests isolate metadata/title behavior; actual FFmpeg, moves and
+        # failure recovery are exercised in test_session_audio_service.py.
+        self.copy_patch = patch(
+            "el_sbobinator.bridge.controllers.session_controller.create_playback_audio",
+            side_effect=lambda session_dir, _source, **_kwargs: os.path.join(
+                session_dir, "audio", "playback-test.mp3"
+            ),
+        )
+        self.copy_patch.start()
+        self.addCleanup(self.copy_patch.stop)
+
     def test_rejects_session_dir_outside_session_root(self):
         import os
 
@@ -3557,14 +3619,30 @@ class TestGetCompletedSessions(unittest.TestCase):
                     },
                     fh,
                 )
-            with patch.object(api, "_get_session_root", return_value=old_session_root):
+
+            def fake_copy(session_dir, _source, **_kwargs):
+                target = _os.path.join(session_dir, "audio", "playback-test.mp3")
+                _os.makedirs(_os.path.dirname(target), exist_ok=True)
+                with open(target, "wb") as fh:
+                    fh.write(b"audio")
+                return target
+
+            with (
+                patch.object(api, "_get_session_root", return_value=old_session_root),
+                patch(
+                    "el_sbobinator.bridge.controllers.session_controller.create_playback_audio",
+                    side_effect=fake_copy,
+                ),
+            ):
                 relink_result = api.update_session_input_path(session_dir, audio_path)
             self.assertTrue(relink_result["ok"])
 
             _os.rename(old_parent, new_parent)
             new_session_root = _os.path.join(new_parent, "sessions")
             new_session_dir = _os.path.join(new_session_root, "sess1")
-            new_audio_path = _os.path.join(new_parent, "audio", "lecture.mp3")
+            new_audio_path = _os.path.join(
+                new_session_dir, "audio", "playback-test.mp3"
+            )
             self._clear_cache(api)
             with patch.object(api, "_get_session_root", return_value=new_session_root):
                 result = api.get_completed_sessions(limit=0)
@@ -3575,12 +3653,15 @@ class TestGetCompletedSessions(unittest.TestCase):
                 updated = _json.load(fh)
 
             self.assertTrue(result["ok"])
-            self.assertEqual(
-                result["sessions"][0]["input_path"], _os.path.realpath(new_audio_path)
-            )
-            self.assertEqual(
-                updated["input"]["path"], _os.path.realpath(new_audio_path)
-            )
+            self.assertEqual(result["sessions"][0]["input_path"], audio_path)
+            with patch.object(api, "_get_session_root", return_value=new_session_root):
+                played, has_audio, error = api._resolve_stream_media_path(
+                    result["sessions"][0]["input_path"], new_session_dir
+                )
+            self.assertTrue(has_audio)
+            self.assertIsNone(error)
+            self.assertEqual(played, _os.path.realpath(new_audio_path))
+            self.assertEqual(updated["input"]["path"], audio_path)
 
     def test_touch_session_opened(self):
         """test_touch_session_opened updates last_opened_at in session.json and get_completed_sessions."""

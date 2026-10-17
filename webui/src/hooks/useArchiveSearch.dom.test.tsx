@@ -99,4 +99,22 @@ describe('useArchiveSearch', () => {
       vi.useRealTimers();
     }
   });
+
+  it('uses the current display name even when a full-text response predates a rename', async () => {
+    vi.useFakeTimers();
+    try {
+      let finish!: (value: unknown) => void;
+      const search = vi.fn().mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+      setPywebview({ search_sessions: search });
+      const session = makeSession('Originale', '2026-01-01T10:00:00Z', '/dir1');
+      const { result, rerender } = renderHook(({ sessions }) => useArchiveSearch({ sessions, editorSessionsMap: {} }), { initialProps: { sessions: [session] } });
+      act(() => { result.current.setSearch('mitosi'); result.current.setFullTextMode(true); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(450); });
+      rerender({ sessions: [{ ...session, name: 'Nome personalizzato' }] });
+      await act(async () => { finish({ ok: true, results: [{ ...session, snippets: [], match_count: 1 }], total: 1 }); });
+      expect(result.current.ftResults?.[0].name).toBe('Nome personalizzato');
+      expect(result.current.sortedFtResults?.[0].name).toBe('Nome personalizzato');
+      expect(search).toHaveBeenCalledTimes(1);
+    } finally { vi.useRealTimers(); }
+  });
 });

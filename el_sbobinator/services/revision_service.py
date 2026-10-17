@@ -24,6 +24,7 @@ from el_sbobinator.services.generation_service import (
     retry_with_quota,
     sleep_with_cancel,
 )
+from el_sbobinator.services.session_audio_service import session_metadata_lock
 from el_sbobinator.utils.dedup_utils import local_macro_cleanup
 from el_sbobinator.utils.logging_utils import get_logger
 
@@ -769,6 +770,9 @@ def execute_failed_blocks_retry_workflow(
     from el_sbobinator.core.model_registry import sanitize_model_name
     from el_sbobinator.core.prompts import PROMPT_REVISIONE
     from el_sbobinator.core.session_store import (
+        load_session as load_session_file,
+    )
+    from el_sbobinator.core.session_store import (
         mark_html_exported,
     )
     from el_sbobinator.core.session_store import (
@@ -793,7 +797,23 @@ def execute_failed_blocks_retry_workflow(
 
     def _save_session() -> bool:
         try:
-            save_session_file(session_path, session)
+            with session_metadata_lock(session_dir):
+                latest = load_session_file(session_path)
+                persisted = dict(session)
+                # Audio preparation/relink/removal may finish during a retry.
+                # Preserve their current association, including removed fields.
+                for key in (
+                    "input",
+                    "title",
+                    "title_is_custom",
+                    "playback_audio",
+                    "audio_removed",
+                ):
+                    if key in latest:
+                        persisted[key] = latest[key]
+                    else:
+                        persisted.pop(key, None)
+                save_session_file(session_path, persisted)
             return True
         except Exception:
             return False

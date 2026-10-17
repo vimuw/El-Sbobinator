@@ -25,7 +25,7 @@ export const FindReplacePanel = ({
   const matchesRef = useRef<SearchMatch[]>([]);
   const currentMatchRef = useRef(0);
   const findInputRef = useRef<HTMLInputElement>(null);
-  const initializedRef = useRef(false);
+  const pendingInitialFindRef = useRef(initialFindText);
 
   const updateSearch = useCallback((text: string, curIdx = -1, caseFlag = matchCase) => {
     editor.commands.setSearchTerm(text, curIdx, caseFlag);
@@ -37,15 +37,25 @@ export const FindReplacePanel = ({
 
   useEffect(() => {
     findInputRef.current?.focus({ preventScroll: true });
-    if (initialFindText && !initializedRef.current) {
-      initializedRef.current = true;
-      setFindText(initialFindText);
-      requestAnimationFrame(() => {
-        const matches = updateSearch(initialFindText, 0, false);
+    const initialText = pendingInitialFindRef.current;
+    let frame = 0;
+    let scrollFrame = 0;
+    if (initialText) {
+      setFindText(initialText);
+      // useEditor can replace a StrictMode instance before this frame. The
+      // replacement reruns this effect, so the query waits for a live editor.
+      frame = requestAnimationFrame(() => {
+        if (editor.isDestroyed) return;
+        pendingInitialFindRef.current = undefined;
+        editor.commands.setSearchTerm(initialText, 0, false);
+        const matches = getSearchMatches(editor);
+        matchesRef.current = matches;
+        setMatchCount(matches.length);
         if (matches.length > 0) {
           currentMatchRef.current = 1;
           setCurrentMatch(1);
-          requestAnimationFrame(() => {
+          scrollFrame = requestAnimationFrame(() => {
+            if (editor.isDestroyed) return;
             const activeEl = editor.view.dom.querySelector('.search-highlight-active');
             if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
           });
@@ -53,13 +63,15 @@ export const FindReplacePanel = ({
       });
     }
     return () => {
+      cancelAnimationFrame(frame);
+      cancelAnimationFrame(scrollFrame);
       if (editor && !editor.isDestroyed) {
         try {
           editor.commands.setSearchTerm('', -1, false);
         } catch (_) {}
       }
     };
-  }, [editor, updateSearch, initialFindText]);
+  }, [editor]);
 
   useEffect(() => {
     if (focusTrigger !== undefined && focusTrigger > 0) {
@@ -152,6 +164,7 @@ export const FindReplacePanel = ({
   };
 
   const findInputChange = (val: string) => {
+    pendingInitialFindRef.current = undefined;
     setFindText(val);
     currentMatchRef.current = 0;
     setCurrentMatch(0);

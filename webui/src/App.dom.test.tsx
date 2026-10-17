@@ -167,7 +167,8 @@ describe('App', () => {
 
   it('renders in setup mode when no API key is set', async () => {
     await act(async () => { render(<App />); });
-    expect(await screen.findByText('Configura la tua API Key')).toBeTruthy();
+    // The default 1 s wait times out under the parallel coverage run.
+    expect(await screen.findByText('Configura la tua API Key', {}, { timeout: 5000 })).toBeTruthy();
   });
 
   it('renders loading connection screen when API is not ready', async () => {

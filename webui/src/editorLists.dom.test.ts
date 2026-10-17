@@ -23,6 +23,26 @@ function select(editor: Editor, label: string, end?: string) {
 afterEach(() => { editors.splice(0).forEach(editor => editor.destroy()); document.body.innerHTML = ''; });
 
 describe('Ordered list gestures and selected clipboard', () => {
+  it.each(['ul', 'ol'].flatMap(tag => [false, true].flatMap(nested => [0, 2, 5].map(offset => ({ tag, nested, offset })))))('keeps generated spacing once after splitting $tag at $offset (nested=$nested)', ({ tag, nested, offset }) => {
+    const list = `<${tag}><li><p data-generated-space-before="15.18" style="margin-top:15.18pt;margin-left:12pt"><strong>Prima</strong></p>${nested ? '<ul><li><p>Figlia</p></li></ul>' : ''}</li><li><p>Seconda</p></li></${tag}>`;
+    const editor = open(`<p>Intro</p>${list}<p>Fine</p>`);
+    const original = editor.getJSON();
+    select(editor, 'Prima'); editor.commands.setTextSelection(editor.state.selection.from + offset);
+    editor.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    const items = editor.state.doc.child(1);
+    expect(items.childCount).toBe(3);
+    expect(items.child(0).firstChild!.attrs.generatedSpaceBefore).toBe(15.18);
+    expect(items.child(1).firstChild!.attrs.generatedSpaceBefore).toBeNull();
+    expect(items.child(1).firstChild!.attrs.documentStyle['margin-left']).toBe('12pt');
+    if (nested) expect(items.child(1).lastChild!.textContent).toBe('Figlia');
+    const split = editor.getJSON();
+    editor.commands.undo(); expect(editor.getJSON()).toEqual(original);
+    editor.commands.redo(); expect(editor.getJSON()).toEqual(split);
+    editor.commands.setContent(editor.getHTML()); expect(editor.getJSON()).toEqual(split);
+    editor.commands.insertContent('X');
+    expect((editor.getHTML().match(/data-generated-space-before=/g) ?? [])).toHaveLength(1);
+  });
+
   it.each(['ul', 'ol'])('consumes repeated Tab at first-item and nested boundaries of %s', tag => {
     const editor = open(`<${tag}><li><p>Prima</p></li><li><p>Seconda</p></li></${tag}>`);
     const press = (shiftKey = false) => {

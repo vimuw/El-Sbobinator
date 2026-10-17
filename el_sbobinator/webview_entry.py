@@ -90,6 +90,31 @@ def get_dist_path() -> str:
     )
 
 
+def _cancel_audio_preparation(api: Any) -> None:
+    audio_cancel = getattr(api, "_audio_cancel_event", None)
+    if audio_cancel is not None:
+        audio_cancel.set()
+
+
+def _confirm_close_without_saving(window: webview.Window) -> bool:
+    # A save that keeps failing (read-only file, disconnected drive) or an
+    # unresponsive page must not leave the window impossible to close.
+    try:
+        return bool(
+            window.create_confirmation_dialog(
+                "El Sbobinator - Modifiche non salvate",
+                "Non è stato possibile salvare le ultime modifiche della sbobina.\n\n"
+                "Se chiudi ora, le modifiche non salvate andranno perse.\n\n"
+                "Vuoi chiudere comunque?",
+            )
+        )
+    except Exception:
+        get_logger(__name__).exception(
+            "Chiusura annullata: conferma di chiusura senza salvataggio fallita."
+        )
+        return False
+
+
 def build_close_handler(
     api: Any,
     window: webview.Window,
@@ -105,18 +130,14 @@ def build_close_handler(
     def _flush_editor_and_close() -> None:
         nonlocal close_pending
         completed = threading.Event()
+        results: list[Any] = []
 
         def _finish(saved: Any) -> None:
-            nonlocal close_pending
             with close_lock:
                 if completed.is_set():
                     return
+                results.append(saved)
                 completed.set()
-                close_pending = False
-                if saved is True:
-                    close_ready.set()
-            if saved is True:
-                window.destroy()
 
         try:
             # The native closing event runs on the UI thread. Evaluate and save
@@ -131,13 +152,21 @@ def build_close_handler(
             if not completed.wait(10):
                 _finish(False)
                 get_logger(__name__).warning(
-                    "Chiusura annullata: il salvataggio dell'editor non risponde."
+                    "Salvataggio dell'editor non confermato alla chiusura: non risponde."
                 )
         except Exception:
             _finish(False)
             get_logger(__name__).exception(
-                "Chiusura annullata: verifica del salvataggio dell'editor fallita."
+                "Salvataggio dell'editor non confermato alla chiusura."
             )
+        try:
+            # Keep close_pending while the dialog is open: no second flush.
+            if results[0] is True or _confirm_close_without_saving(window):
+                close_ready.set()
+                window.destroy()
+        finally:
+            with close_lock:
+                close_pending = False
 
     def _request_saved_close() -> bool:
         nonlocal close_pending
@@ -150,6 +179,7 @@ def build_close_handler(
 
     def _on_closing() -> bool | None:
         if not require_editor_save or close_ready.is_set():
+            _cancel_audio_preparation(api)
             if stop_event is not None:
                 stop_event.set()
             LocalMediaServer.shutdown_all()

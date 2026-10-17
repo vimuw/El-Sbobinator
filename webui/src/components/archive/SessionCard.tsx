@@ -1,7 +1,7 @@
 import { useState, type MouseEvent } from 'react';
 import {
   AlertTriangle, Check, ChevronLeft, ChevronRight, Download, ExternalLink,
-  Eye, FileText, Folder, FolderOpen, RotateCcw, Trash2, X,
+  Eye, FileText, Folder, FolderOpen, Pencil, RotateCcw, Trash2, X,
 } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -26,6 +26,7 @@ export interface DraggableSessionCardProps {
   onDeleteSession: ArchivePageProps['onDeleteSession'];
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
   onShareSession?: (session: ArchiveSession) => void;
+  onRenameSession?: (session: ArchiveSession) => void;
   onMove?: () => void;
 }
 
@@ -43,6 +44,7 @@ export function DraggableSessionCard({
   onDeleteSession,
   onRetryFailedRevisionBlocks,
   onShareSession,
+  onRenameSession,
   onMove,
 }: DraggableSessionCardProps) {
   const ts = session.completed_at_iso ? new Date(session.completed_at_iso).getTime() : 0;
@@ -79,6 +81,7 @@ export function DraggableSessionCard({
   ];
 
   const kebabItems: KebabMenuItem[] = [
+    ...(onRenameSession ? [{ label: 'Rinomina', icon: <Pencil className="w-3.5 h-3.5" />, onClick: () => onRenameSession(session) }] : []),
     {
       label: 'Apri cartella',
       icon: <FolderOpen className="w-3.5 h-3.5" />,
@@ -270,6 +273,7 @@ export interface SortableSessionCardProps {
   onDeleteSession: ArchivePageProps['onDeleteSession'];
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
   onShareSession?: (session: ArchiveSession) => void;
+  onRenameSession?: (session: ArchiveSession) => void;
   canMoveToPreviousPage?: boolean;
   canMoveToNextPage?: boolean;
   onMoveToPreviousPage?: () => void;
@@ -291,6 +295,7 @@ export function SortableSessionCard({
   onDeleteSession,
   onRetryFailedRevisionBlocks,
   onShareSession,
+  onRenameSession,
   canMoveToPreviousPage,
   canMoveToNextPage,
   onMoveToPreviousPage,
@@ -326,6 +331,7 @@ export function SortableSessionCard({
   };
 
   const kebabItems: KebabMenuItem[] = [
+    ...(onRenameSession ? [{ label: 'Rinomina', icon: <Pencil className="w-3.5 h-3.5" />, onClick: () => onRenameSession(session) }] : []),
     ...(onMove ? [{ label: 'Sposta in…', icon: <Folder className="w-3.5 h-3.5" />, onClick: onMove }] : []),
     {
       label: 'Apri cartella',

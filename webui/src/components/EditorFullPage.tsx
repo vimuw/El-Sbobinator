@@ -11,10 +11,9 @@ import { useTheme } from '../hooks/useTheme';
 import { useEditorAutosave, type EditorSaveController } from '../hooks/useEditorAutosave';
 import { STORAGE_KEYS } from '../storageKeys';
 import { EditorShortcuts } from './EditorShortcuts';
+// Bundled with the editor page: a lazy player flashed "Caricamento player..." on every first open.
+import { AudioPlayer } from './AudioPlayer';
 
-const LazyAudioPlayer = React.lazy(() =>
-  import('./AudioPlayer').then(m => ({ default: m.AudioPlayer }))
-);
 const LazyRichTextEditor = React.lazy(() =>
   import('./RichTextEditor').then(m => ({ default: m.RichTextEditor }))
 );
@@ -30,6 +29,8 @@ export interface EditorDocumentProps {
 export interface EditorAudioProps {
   src: string | null;
   relinkNeeded: boolean;
+  loading?: boolean;
+  warning?: string;
   onRelink: () => Promise<boolean | undefined>;
   onRemoveAudio?: () => Promise<boolean | undefined> | void;
   init: { time?: number; playbackRate?: number; volume?: number };
@@ -94,6 +95,7 @@ export function EditorFullPage({
 
   const audioSrc = audioProp?.src !== undefined ? audioProp.src : (flatAudioSrc ?? null);
   const audioRelinkNeeded = audioProp?.relinkNeeded ?? flatAudioRelinkNeeded ?? false;
+  const audioLoading = audioProp?.loading ?? false;
   const onRelink = audioProp?.onRelink ?? flatOnRelink ?? (() => Promise.resolve(undefined));
   const onRemoveAudio = audioProp?.onRemoveAudio ?? flatOnRemoveAudio;
   const previewInitAudio = audioProp?.init ?? flatPreviewInitAudio ?? {};
@@ -292,7 +294,8 @@ export function EditorFullPage({
           </div>
 
           <div className="editor-fullpage-body">
-            <Suspense fallback={<div className="p-6 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento editor...</div>}>
+            {/* The fallback fills the body so the footer player stays at the bottom while the editor chunk loads. */}
+            <Suspense fallback={<div className="editor-fullpage-loading flex-1 min-h-0 p-6 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento editor...</div>}>
               <LazyRichTextEditor
                 key={htmlPath}
                 initialContent={previewContent}
@@ -312,24 +315,30 @@ export function EditorFullPage({
             </Suspense>
 
             <div className="editor-fullpage-footer shrink-0 border-t px-4 sm:px-5" style={{ background: 'var(--editor-chrome-bg)', borderColor: 'var(--border-subtle)' }}>
-              {audioSrc ? (
-                <Suspense fallback={<div className="p-4 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento player...</div>}>
-                  <LazyAudioPlayer
-                    src={audioSrc}
-                    initialTime={previewInitAudio.time}
-                    initialPlaybackRate={previewInitAudio.playbackRate}
-                    initialVolume={previewInitAudio.volume}
-                    onStateChange={onAudioStateChange}
-                    onRelink={onRelink}
-                    onRemoveAudio={onRemoveAudio}
-                  />
-                </Suspense>
+              {audioProp?.warning && (
+                <p role="status" className="pt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>{audioProp.warning}</p>
+              )}
+              {audioLoading ? (
+                <div role="status" className="flex items-center gap-2 py-3.5 text-sm" style={{ color: 'var(--text-muted)' }}>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Preparazione audio della sbobina...
+                </div>
+              ) : audioSrc ? (
+                <AudioPlayer
+                  src={audioSrc}
+                  initialTime={previewInitAudio.time}
+                  initialPlaybackRate={previewInitAudio.playbackRate}
+                  initialVolume={previewInitAudio.volume}
+                  onStateChange={onAudioStateChange}
+                  onRelink={onRelink}
+                  onRemoveAudio={onRemoveAudio}
+                />
               ) : audioRelinkNeeded ? (
                 <div className="flex items-center justify-between gap-3 py-3.5">
                   <div className="min-w-0">
                     <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Audio non trovato</p>
                     <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      Il file originale è stato spostato. Selezionalo di nuovo per riattivare il player.
+                      Seleziona di nuovo il file per conservarne una copia nella sbobina.
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -378,7 +387,7 @@ export function EditorFullPage({
                     <div className="min-w-0">
                       <p className="text-sm font-medium leading-none mb-1" style={{ color: 'var(--text-primary)' }}>Nessun audio collegato</p>
                       <p className="text-xs leading-none" style={{ color: 'var(--text-muted)' }}>
-                        Collega un file audio per sincronizzarlo con la sbobina.
+                        Aggiungi un file audio: una copia verrà conservata nella sbobina.
                       </p>
                     </div>
                   </div>
@@ -423,7 +432,7 @@ export function EditorFullPage({
           <ConfirmActionModal
             isOpen={showConfirmRemove}
             title="Rimuovere l'audio mancante?"
-            description="Il riferimento al file audio verrà rimosso dalla sbobina. Il file sul tuo computer non verrà toccato e potrai aggiungere un nuovo audio in qualsiasi momento."
+            description="La copia audio interna verrà eliminata dalla sbobina, liberando spazio. Il file originale sul tuo computer non verrà cancellato. Potrai aggiungere un nuovo audio in qualsiasi momento."
             confirmLabel={isRemovingAudio ? 'Rimozione...' : 'Rimuovi audio'}
             cancelLabel="Annulla"
             onClose={() => setShowConfirmRemove(false)}

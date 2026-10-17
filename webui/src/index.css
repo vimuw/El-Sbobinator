@@ -1279,8 +1279,7 @@ button {
   transition:
     background 160ms ease,
     color 160ms ease,
-    border-color 160ms ease,
-    transform 120ms ease;
+    border-color 160ms ease;
 }
 
 .player-control:hover {
@@ -1288,13 +1287,19 @@ button {
   color: var(--accent-text);
 }
 
-.player-control:active {
-  transform: scale(0.96);
-}
-
 .player-control.is-active {
   color: var(--accent-text);
   background: color-mix(in srgb, var(--accent-subtle) 80%, transparent);
+}
+
+.player-control.player-play-control {
+  color: var(--accent-text);
+  background: color-mix(in srgb, var(--accent-subtle) 60%, transparent);
+  border-color: color-mix(in srgb, var(--accent-text) 12%, transparent);
+}
+
+.player-control.player-play-control:hover {
+  background: var(--accent-subtle);
 }
 
 .player-speed-wrap {
@@ -1307,7 +1312,8 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
-  min-width: 52px;
+  width: 64px;
+  flex-shrink: 0;
   height: 32px;
   padding: 0 6px 0 8px;
   border-radius: 8px;
@@ -1316,21 +1322,17 @@ button {
   color: var(--text-secondary);
   font-size: 0.75rem;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
   transition:
     background 160ms ease,
     color 160ms ease,
-    border-color 160ms ease,
-    transform 120ms ease;
+    border-color 160ms ease;
 }
 
 .player-speed-btn:hover {
   background: var(--accent-subtle);
   color: var(--accent-text);
-}
-
-.player-speed-btn:active {
-  transform: scale(0.96);
 }
 
 .player-speed-btn.is-active {
@@ -2816,6 +2818,18 @@ button {
 /* Default ink adapts to the dark reading surface; direct colors keep precedence. */
 :root[data-theme="dark"] .tiptap-editor,
 :root[data-theme="dark"] .tiptap-editor :is(h1, h2, h3, h4, h5, h6) { color: var(--text-primary); }
+
+/* These classes belong to view decorations, never serialized document styles.
+   Cover nested marks regardless of their DOM order (color/strong/highlight). */
+:root[data-theme="dark"] .tiptap-editor .editor-reading-neutral,
+:root[data-theme="dark"] .tiptap-editor .editor-reading-neutral * {
+  color: var(--text-primary) !important;
+}
+
+.tiptap-editor .editor-reading-highlight,
+.tiptap-editor .editor-reading-highlight * {
+  color: var(--editor-highlight-ink) !important;
+}
 
 .search-highlight {
   background-color: rgba(255, 214, 0, 0.45);

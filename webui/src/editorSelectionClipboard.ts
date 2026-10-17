@@ -7,15 +7,69 @@ import { prepareHtmlForClipboardSync } from './utils';
 import { reportClientError } from './diagnostics';
 import { prepareHtmlLineSpacing } from './editorLineSpacing';
 
+const SOURCE_HEADING_ATTRIBUTE = 'data-editor-selection-heading';
+const DEFAULT_HEADING_COLOR_ATTRIBUTE = 'data-editor-default-heading-color';
+
+function inlineClipboardBlock(block: Element): HTMLSpanElement {
+  const span = document.createElement('span');
+  span.setAttribute('style', block.getAttribute('style') ?? '');
+  const defaultColor = block.getAttribute(DEFAULT_HEADING_COLOR_ATTRIBUTE);
+  if (defaultColor) span.setAttribute(DEFAULT_HEADING_COLOR_ATTRIBUTE, defaultColor);
+  // Character selections carry typography, never paragraph layout.
+  ['margin', 'margin-left', 'margin-right', 'margin-top', 'margin-bottom', 'text-align', 'line-height'].forEach(property => span.style.removeProperty(property));
+  while (block.firstChild) span.appendChild(block.firstChild);
+  block.replaceWith(span);
+  return span;
+}
+
+// Chromium copies a web page's white background onto the selected spans. It
+// is the page, not a highlight: as a mark it shows as white bars in dark theme.
+const NO_HIGHLIGHT_BACKGROUNDS = new Set(['transparent', 'rgba(0, 0, 0, 0)', 'white', 'rgb(255, 255, 255)']);
+
+/** Interpret our clipboard hints without persisting them in the document. */
+export function preparePastedEditorHtml(html: string, view?: EditorView): string {
+  const body = new DOMParser().parseFromString(html, 'text/html').body;
+  // Docs exports character highlighting as span background-color, whereas
+  // TipTap's Highlight parser recognizes mark elements. Keep the original
+  // foreground/font on the span and represent its highlight semantically.
+  body.querySelectorAll<HTMLSpanElement>('span[style]').forEach(span => {
+    const background = span.style.backgroundColor;
+    if (!background || NO_HIGHLIGHT_BACKGROUNDS.has(background)
+      || span.closest('[data-editor-image],[data-math],.katex')) return;
+    const mark = document.createElement('mark');
+    mark.style.backgroundColor = background;
+    span.style.removeProperty('background-color');
+    span.replaceWith(mark);
+    mark.appendChild(span);
+  });
+  const selection = view?.state.selection;
+  const cursor = selection?.$from;
+  const canReplaceParagraph = selection && cursor && cursor.sameParent(selection.$to)
+    && cursor.parent.type.name === 'paragraph'
+    && ['doc', 'tableCell', 'tableHeader'].includes(cursor.node(-1).type.name)
+    && (cursor.parent.content.size === 0 || (!selection.empty && cursor.parentOffset === 0 && selection.$to.parentOffset === cursor.parent.content.size));
+  body.querySelectorAll(`h1[${SOURCE_HEADING_ATTRIBUTE}],h2[${SOURCE_HEADING_ATTRIBUTE}],h3[${SOURCE_HEADING_ATTRIBUTE}],h4[${SOURCE_HEADING_ATTRIBUTE}],h5[${SOURCE_HEADING_ATTRIBUTE}],h6[${SOURCE_HEADING_ATTRIBUTE}]`).forEach(block => {
+    if (block.getAttribute(SOURCE_HEADING_ATTRIBUTE) === '1' && block.closest('[data-document-format="1"]') && !canReplaceParagraph) inlineClipboardBlock(block);
+    else block.removeAttribute(SOURCE_HEADING_ATTRIBUTE);
+  });
+  body.querySelectorAll<HTMLSpanElement>(`span[${DEFAULT_HEADING_COLOR_ATTRIBUTE}]`).forEach(span => {
+    if (span.closest('[data-document-format="1"]') && span.getAttribute(DEFAULT_HEADING_COLOR_ATTRIBUTE) === span.style.color) span.style.removeProperty('color');
+    span.removeAttribute(DEFAULT_HEADING_COLOR_ATTRIBUTE);
+  });
+  return body.innerHTML;
+}
+
 export function prepareSelectionClipboard(view: EditorView) {
   if (view.state.selection.empty) return null;
   const { selection, doc } = view.state;
   const { $from, $to, from, to } = selection;
   let content = selection.content().content;
-  const inlineSelection = $from.sameParent($to) && $from.parent.isTextblock && content.size > 0 && !selection.content().content.textBetween(0, content.size, '', '').includes('\n');
+  const textOnlySelection = $from.sameParent($to) && $from.parent.isTextblock && content.size > 0 && !selection.content().content.textBetween(0, content.size, '', '').includes('\n');
+  const wholeHeading = textOnlySelection && $from.parent.type.name === 'heading' && $from.parentOffset === 0 && $to.parentOffset === $from.parent.content.size;
+  const inlineSelection = textOnlySelection && !wholeHeading;
   // Selecting text without a paragraph boundary does not select its marker.
   // Retain the paragraph's direct styles, but omit the enclosing list shells.
-  if (inlineSelection) {
+  if (textOnlySelection) {
     content = Fragment.from($from.parent.copy($from.parent.content.cut($from.parentOffset, $to.parentOffset)));
   } else {
     const starts: number[] = [];
@@ -69,17 +123,15 @@ export function prepareSelectionClipboard(view: EditorView) {
   });
   let html = prepareHtmlForClipboardSync(fragment.innerHTML, view.dom);
   fragment.innerHTML = html;
+  if (wholeHeading) {
+    fragment.querySelector('h1,h2,h3,h4,h5,h6')?.setAttribute(SOURCE_HEADING_ATTRIBUTE, '1');
+    html = fragment.innerHTML;
+  }
   if (inlineSelection && !fragment.querySelector('[data-editor-image],[data-math-block],iframe,video')) {
     // Materialize inherited heading/paragraph typography before dropping the
     // block wrapper. Rich inline paste must not split the target paragraph.
     fragment.querySelectorAll('p,h1,h2,h3,h4,h5,h6,pre').forEach(block => {
-      const span = document.createElement('span');
-      span.setAttribute('style', block.getAttribute('style') ?? '');
-      // A word carries its typography, not the source paragraph's indent.
-      // Inline HTML margins would add an extra gap at the paste destination.
-      span.style.removeProperty('margin-left');
-      while (block.firstChild) span.appendChild(block.firstChild);
-      block.replaceWith(span);
+      inlineClipboardBlock(block);
     });
     html = fragment.innerHTML;
   }

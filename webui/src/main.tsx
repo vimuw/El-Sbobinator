@@ -6,6 +6,7 @@ import './index.css';
 import { installFrontendDiagnostics, reportClientError, reportFrontendReady } from './diagnostics';
 import { APP_VERSION } from './branding';
 import { validateDesktopBuild } from './desktopStartup';
+import { scheduleEditorPreload } from './editorPreload';
 
 installFrontendDiagnostics();
 
@@ -13,6 +14,7 @@ installFrontendDiagnostics();
 // eslint-disable-next-line react-refresh/only-export-components
 function DiagnosedApp() {
   useEffect(() => { reportFrontendReady(); }, []);
+  useEffect(() => scheduleEditorPreload(), []);
   return <App />;
 }
 
