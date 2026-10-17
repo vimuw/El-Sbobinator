@@ -37,6 +37,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       docs_only: ${{ steps.scope.outputs.docs_only }}
+      # Smoke cases cannot catch editor engine regressions; run every browser case
+      # daily and whenever TipTap/ProseMirror versions change.
+      full_e2e: ${{ github.event_name == 'schedule' || steps.editor.outputs.editor_engine == 'true' }}
     steps:
       - name: Checkout history for the complete change range
         if: github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/'))
@@ -93,6 +96,14 @@ jobs:
               output.write(f'docs_only={value}\n')
           print(f'Documentation-only exemption: {value}')
           PY
+
+      - name: Detect editor engine dependency changes
+        id: editor
+        if: github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/'))
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: python scripts/ci_editor_deps.py --base "$BASE_SHA" --head "$HEAD_SHA"
 
   checks:
     name: Lint and Test
@@ -254,10 +265,57 @@ jobs:
           path: build/dependency-audit/
           if-no-files-found: ignore
 
+  browser-e2e:
+    name: Browser E2E (Chromium, full suite)
+    needs: [change-scope]
+    if: needs.change-scope.outputs.full_e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: |
+            uv.lock
+            pyproject.toml
+            requirements/bootstrap.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: webui/package-lock.json
+
+      - name: Install Dependencies
+        run: python scripts/build_release.py deps --ui webui --dev
+
+      - name: Install Chromium for browser tests
+        working-directory: webui
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the complete Chromium browser suite
+        working-directory: webui
+        run: npm run test:e2e -- --project=chromium
+
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-e2e-failures
+          path: webui/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
   dependency-gate:
     name: Dependency gate
     if: always()
-    needs: [change-scope, checks, checks-windows, checks-macos, audit]
+    needs: [change-scope, checks, checks-windows, checks-macos, audit, browser-e2e]
     runs-on: ubuntu-latest
     steps:
       - name: Require successful checks or the documentation-only exemption
@@ -285,8 +343,18 @@ jobs:
           }
           if unexpected:
               raise SystemExit(f'Expected {expected} checks; got {unexpected}')
+          full_e2e = scope['outputs'].get('full_e2e')
+          if full_e2e not in {'true', 'false'}:
+              raise SystemExit('Change detection did not return a valid browser scope.')
+          browser_expected = 'success' if full_e2e == 'true' else 'skipped'
+          browser = results['browser-e2e']['result']
+          if browser != browser_expected:
+              raise SystemExit(
+                  f'Expected {browser_expected} complete browser suite; got {browser}'
+              )
           print('Documentation-only exemption verified.' if docs_only == 'true'
                 else 'Every platform and audit passed.')
+          print(f'Complete browser suite: {browser}.')
           PY
 
   release-context:
