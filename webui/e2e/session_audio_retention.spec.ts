@@ -2,8 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
 
-// The desktop media CSP permits the numeric loopback host.
-test.use({ baseURL: 'http://127.0.0.1:3000' });
+// The desktop media CSP permits the numeric loopback host; keep the configured port.
+test.use({
+  baseURL: async ({ baseURL }, provide) => {
+    const url = new URL(baseURL!);
+    url.hostname = '127.0.0.1';
+    await provide(url.origin);
+  },
+});
 
 test('retains playable audio after moving the original and removes only the internal copy', async ({ page }, testInfo) => {
   // Deterministic transcription; audio retention and FFmpeg playback are real.
