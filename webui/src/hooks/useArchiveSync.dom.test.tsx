@@ -29,6 +29,21 @@ describe('useArchiveSync', () => {
     localStorage.clear();
   });
 
+  it('updates only the display name after successful persistence and retains the old name on failure', async () => {
+    const rename_session = vi.fn().mockResolvedValueOnce({ ok: false, error: 'Disco pieno' }).mockResolvedValueOnce({ ok: true, name: 'Nuovo titolo' });
+    window.pywebview = { api: { rename_session } };
+    const { result } = renderHook(() => useArchiveSync({ files: [], dispatch, activePage: 'queue', setActivePage,
+      appState: 'idle', apiReady: false, appendConsole, addNotification, handleRetryFailedRevisionBlocks }));
+    act(() => result.current.setArchiveSessions([mockSession]));
+    await act(async () => {
+      await expect(result.current.handleRenameSession(mockSession.session_dir, 'Nuovo titolo')).rejects.toThrow('Disco pieno');
+    });
+    expect(result.current.archiveSessions).toEqual([mockSession]);
+    await act(async () => { await result.current.handleRenameSession(mockSession.session_dir, 'Nuovo titolo'); });
+    expect(result.current.archiveSessions).toEqual([{ ...mockSession, name: 'Nuovo titolo' }]);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
   it('saves consecutive hierarchy edits in order and reports failed persistence', async () => {
     let release: (value: { ok: boolean }) => void = () => {};
     const firstSave = new Promise<{ ok: boolean }>(resolve => { release = resolve; });

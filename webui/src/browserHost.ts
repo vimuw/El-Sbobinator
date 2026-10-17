@@ -208,6 +208,7 @@ export function createBrowserPywebviewApi(): PywebviewApi {
     cleanup_completed_sessions: (maxAgeDays, dryRun) => callRpc('cleanup_completed_sessions', maxAgeDays, dryRun),
     get_completed_sessions: (limit) => callRpc('get_completed_sessions', limit),
     delete_session: (sessionDir) => callRpc('delete_session', sessionDir),
+    rename_session: (sessionDir, name) => callRpc('rename_session', sessionDir, name),
     update_session_input_path: (sessionDir, newPath) => callRpc('update_session_input_path', sessionDir, newPath),
     remove_session_audio: (sessionDir) => callRpc('remove_session_audio', sessionDir),
     touch_session_opened: (sessionDir) => callRpc('touch_session_opened', sessionDir),

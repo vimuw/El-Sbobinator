@@ -190,6 +190,9 @@ def list_completed_sessions(
         sessions.append(
             {
                 "name": name,
+                "input_name": str(
+                    data.get("input", {}).get("name") or os.path.basename(input_path)
+                ),
                 "completed_at_iso": data.get("updated_at", ""),
                 "html_path": str(html_path),
                 "effective_model": effective_model,

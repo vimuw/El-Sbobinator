@@ -11,6 +11,7 @@ import webview
 
 from el_sbobinator.bridge.bridge_utils import bridge_error, bridge_ok
 from el_sbobinator.core.shared import _load_json
+from el_sbobinator.services.config_service import safe_output_basename
 from el_sbobinator.services.sharing_service import (
     create_sbobina_package,
     unpack_and_import_package,
@@ -46,10 +47,13 @@ class ExportControllerMixin:
                 session_data = (
                     _load_json(session_path) if os.path.isfile(session_path) else {}
                 )
-                title = session_data.get("input", {}).get("name") or os.path.basename(
-                    session_dir
-                )
-                nome_puro = os.path.splitext(title)[0]
+                title = str(session_data.get("title") or "").strip()
+                if not title:
+                    title = os.path.splitext(
+                        session_data.get("input", {}).get("name")
+                        or os.path.basename(session_dir)
+                    )[0]
+                nome_puro = safe_output_basename(title)
                 default_name = f"{nome_puro}_Sbobina.sbobina"
 
                 try:

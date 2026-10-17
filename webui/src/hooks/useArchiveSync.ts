@@ -100,6 +100,17 @@ export function useArchiveSync({
     }
   }, [archiveSessions, isArchiveLoaded]);
 
+  const handleRenameSession = useCallback(async (sessionDir: string, name: string) => {
+    const api = window.pywebview?.api;
+    if (!api?.rename_session) throw new Error('Rinomina non disponibile in questa versione.');
+    const result = await api.rename_session(sessionDir, name);
+    if (!result?.ok) throw new Error(result?.error || 'Rinomina non riuscita.');
+    const title = result.name ?? name.trim();
+    const key = normalizeSessionDir(sessionDir);
+    setArchiveSessions(prev => prev.map(session => normalizeSessionDir(session.session_dir) === key ? { ...session, name: title } : session));
+    prevSessionDirsRef.current.set(key, title);
+  }, [normalizeSessionDir]);
+
   const handleLoadAll = useCallback(() => {
     archiveLimitRef.current = 0;
     void refreshArchiveSessions(0);
@@ -355,6 +366,7 @@ export function useArchiveSync({
     pendingArchiveReplacementsRef,
     normalizeSessionDir,
     refreshArchiveSessions,
+    handleRenameSession,
     handleLoadAll,
     handleOpenFailed,
     handleFoldersChange,

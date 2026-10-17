@@ -218,14 +218,16 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
   const removePreviewAudio = useCallback(async () => {
     try {
       let persistOk = true;
+      let persistedTitle: string | undefined;
       if (preview.sessionDir) {
         if (!window.pywebview?.api?.remove_session_audio) {
           persistOk = false;
         } else {
           const res = await window.pywebview.api.remove_session_audio(preview.sessionDir);
           if (res?.ok) {
+            persistedTitle = res.name || undefined;
             setArchiveSessions(prev => prev.map(s =>
-              normalizeSessionPath(s.session_dir) === normalizeSessionPath(preview.sessionDir) ? { ...s, input_path: '' } : s,
+              normalizeSessionPath(s.session_dir) === normalizeSessionPath(preview.sessionDir) ? { ...s, input_path: '', ...(persistedTitle ? { name: persistedTitle } : {}) } : s,
             ));
             await onArchiveRefresh?.();
           } else {
@@ -248,8 +250,8 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
         });
       }
 
-      let nextTitle = preview.title;
-      if (preview.path && /\.(mp3|m4a|wav|ogg|flac|aac|opus|mp4|mkv|webm)$/i.test(nextTitle)) {
+      let nextTitle = persistedTitle ?? preview.title;
+      if (!persistedTitle && preview.path && /\.(mp3|m4a|wav|ogg|flac|aac|opus|mp4|mkv|webm)$/i.test(nextTitle)) {
         const base = preview.path.split(/[/\\]/).pop() || '';
         if (base.endsWith('_Sbobina.html')) {
           nextTitle = base.slice(0, -'_Sbobina.html'.length);

@@ -38,6 +38,17 @@ afterEach(() => {
 });
 
 describe('usePreview', () => {
+  it('preserves a custom title ending in an audio extension when removing audio', async () => {
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<h1>Intestazione personale</h1>' }),
+      remove_session_audio: vi.fn().mockResolvedValue({ ok: true, name: 'Titolo personale.mp3' }),
+    });
+    const { result } = renderHook(() => usePreview(makeOptions()));
+    await act(async () => { await result.current.openPreview('/session/Originale_Sbobina.html', 'Titolo personale.mp3', undefined, undefined, '/session'); });
+    await act(async () => { await result.current.removePreviewAudio(); });
+    expect(result.current.preview.title).toBe('Titolo personale.mp3');
+    expect(result.current.preview.content).toContain('Intestazione personale');
+  });
   it('shows audio preparation and ignores a late audio response after closing the editor', async () => {
     let finishAudio!: (value: { ok: boolean; url: string }) => void;
     setPywebview({

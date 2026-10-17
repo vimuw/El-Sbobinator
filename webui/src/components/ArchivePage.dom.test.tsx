@@ -53,6 +53,68 @@ function renderArchive(overrides: Partial<{
 }
 
 describe('ArchivePage', () => {
+  it.each([false, true])('renames a lesson from its menu (inside collection: %s)', async (insideFolder) => {
+    const session = makeSession('s1');
+    const onRenameSession = vi.fn().mockResolvedValue(undefined);
+    const onPreview = vi.fn();
+    render(<ArchivePage sessions={[session]} folders={insideFolder ? [{ id: 'f1', name: 'Anatomia', color: '', session_dirs: [session.session_dir] }] : []}
+      onFoldersChange={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()} onDeleteSession={vi.fn()} onRenameSession={onRenameSession} />);
+    if (insideFolder) fireEvent.click(within(screen.getByRole('region', { name: 'Raccolte' })).getByText('Anatomia'));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Altre opzioni' }).at(-1)!);
+    fireEvent.click(screen.getByRole('button', { name: 'Rinomina' }));
+    const dialog = screen.getByRole('dialog', { name: 'Rinomina sbobina' });
+    const input = within(dialog).getByLabelText('Nome sbobina') as HTMLInputElement;
+    expect(input.value).toBe(session.name);
+    expect(document.activeElement).toBe(input);
+    fireEvent.change(input, { target: { value: '  Apparato locomotore  ' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Salva' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(onRenameSession).toHaveBeenCalledWith(session.session_dir, 'Apparato locomotore');
+    expect(onPreview).not.toHaveBeenCalled();
+  });
+
+  it('keeps the rename dialog and typed name after a failed save, and allows retry', async () => {
+    const onRenameSession = vi.fn().mockRejectedValueOnce(new Error('Disco pieno')).mockResolvedValueOnce(undefined);
+    render(<ArchivePage sessions={[makeSession('s1')]} folders={[]} onFoldersChange={vi.fn()} onPreview={vi.fn()}
+      onOpenFile={vi.fn()} onDeleteSession={vi.fn()} onRenameSession={onRenameSession} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Altre opzioni' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Rinomina' }));
+    fireEvent.change(screen.getByLabelText('Nome sbobina'), { target: { value: 'Nuovo nome' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salva' }));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('Disco pieno'));
+    expect((screen.getByLabelText('Nome sbobina') as HTMLInputElement).value).toBe('Nuovo nome');
+    fireEvent.click(screen.getByRole('button', { name: 'Salva' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(onRenameSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('cancels renaming with Escape, rejects blank names and prevents duplicate pending saves', async () => {
+    let finish!: () => void;
+    const onRenameSession = vi.fn().mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+    render(<ArchivePage sessions={[makeSession('s1')]} folders={[]} onFoldersChange={vi.fn()} onPreview={vi.fn()}
+      onOpenFile={vi.fn()} onDeleteSession={vi.fn()} onRenameSession={onRenameSession} />);
+    const menu = screen.getByRole('button', { name: 'Altre opzioni' });
+    fireEvent.click(menu);
+    fireEvent.click(screen.getByRole('button', { name: 'Rinomina' }));
+    fireEvent.keyDown(screen.getByLabelText('Nome sbobina'), { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(onRenameSession).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(menu);
+    fireEvent.click(menu);
+    fireEvent.click(screen.getByRole('button', { name: 'Rinomina' }));
+    fireEvent.change(screen.getByLabelText('Nome sbobina'), { target: { value: '   ' } });
+    expect((screen.getByRole('button', { name: 'Salva' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Nome sbobina'), { target: { value: 'Nuovo nome' } });
+    const save = screen.getByRole('button', { name: 'Salva' });
+    fireEvent.click(save);
+    fireEvent.click(save);
+    fireEvent.keyDown(screen.getByLabelText('Nome sbobina'), { key: 'Escape' });
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(onRenameSession).toHaveBeenCalledTimes(1);
+    await act(async () => finish());
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   const hierarchy: ArchiveFolder[] = [
     { id: 'year', name: '3° anno', color: '', session_dirs: [] },
     { id: 'course', name: 'Microbiologia', color: '#4D96FF', parent_id: 'year', session_dirs: ['/sessions/s1'] },

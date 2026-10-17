@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ArchiveSession, SearchSessionResult } from '../bridge';
+import { normalizeSessionPath } from '../utils';
 import { getOpenedAtMs, type SortOption } from '../components/archive/types';
 
 export interface UseArchiveSearchOptions {
@@ -18,7 +19,11 @@ export function useArchiveSearch({
 
   const [fullTextMode, setFullTextMode] = useState(false);
   const [ftSort, setFtSort] = useState<SortOption>('relevance');
-  const [ftResults, setFtResults] = useState<SearchSessionResult[] | null>(null);
+  const [rawFtResults, setFtResults] = useState<SearchSessionResult[] | null>(null);
+  const ftResults = useMemo(() => {
+    const names = new Map(sessions.map(session => [normalizeSessionPath(session.session_dir), session.name]));
+    return rawFtResults?.map(result => ({ ...result, name: names.get(normalizeSessionPath(result.session_dir)) ?? result.name })) ?? null;
+  }, [rawFtResults, sessions]);
   const [ftTotal, setFtTotal] = useState<number | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [ftError, setFtError] = useState<string | null>(null);

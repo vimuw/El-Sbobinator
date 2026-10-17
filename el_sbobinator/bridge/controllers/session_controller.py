@@ -168,6 +168,40 @@ class SessionControllerMixin:
             for key in shell_to_evict:
                 del self._html_shell_cache[key]
 
+    def rename_session(self, session_dir: str, name: str) -> dict:
+        """Change the display title without moving files or changing completion time."""
+        import json
+
+        try:
+            if not isinstance(name, str):
+                return bridge_error("Nome non valido")
+            title = name.strip()
+            if not title or len(title) > 200 or any(ord(c) < 32 for c in title):
+                return bridge_error(
+                    "Inserisci un nome da 1 a 200 caratteri, su una sola riga."
+                )
+            abs_dir = os.path.realpath(session_dir)
+            abs_root = os.path.realpath(self._get_session_root())
+            if abs_dir == abs_root or not _path_under_root(abs_dir, abs_root):
+                return bridge_error("Percorso non valido")
+            session_path = os.path.join(abs_dir, "session.json")
+            if os.path.islink(session_path):
+                return bridge_error("Percorso non valido")
+            with session_metadata_lock(abs_dir):
+                with open(session_path, encoding="utf-8") as handle:
+                    data = json.load(handle)
+                if not isinstance(data, dict) or data.get("stage") != "done":
+                    return bridge_error("Puoi rinominare solo sbobine completate.")
+                data["title"] = title
+                data["title_is_custom"] = True
+                _atomic_write_json(session_path, data)
+            with self._sessions_cache_lock:
+                self._sessions_cache = None
+                self._sessions_cache_gen += 1
+            return bridge_ok(name=title)
+        except Exception as e:
+            return bridge_error(e)
+
     def update_session_input_path(self, session_dir: str, new_path: str) -> dict:
         """Persist a relinked audio path to session.json."""
         import json as _json
@@ -221,11 +255,15 @@ class SessionControllerMixin:
                                 data["input"].get("name") or ""
                             ).strip()
 
-                        if html_title and (
-                            not current_title or current_title == current_input_name
+                        if (
+                            not data.get("title_is_custom")
+                            and html_title
+                            and (
+                                not current_title or current_title == current_input_name
+                            )
                         ):
                             data["title"] = html_title
-                        elif not current_title:
+                        elif not data.get("title_is_custom") and not current_title:
                             data["title"] = current_input_name or html_title
 
                         if not isinstance(data.get("input"), dict):
@@ -312,11 +350,13 @@ class SessionControllerMixin:
                     current_input_name = str(data["input"].get("name") or "").strip()
 
                 # If current title was empty or identical to the audio name being removed, restore html_title
-                if html_title and (
-                    not current_title or current_title == current_input_name
+                if (
+                    not data.get("title_is_custom")
+                    and html_title
+                    and (not current_title or current_title == current_input_name)
                 ):
                     data["title"] = html_title
-                elif not current_title:
+                elif not data.get("title_is_custom") and not current_title:
                     data["title"] = current_input_name or html_title
 
                 if not isinstance(data.get("input"), dict):
@@ -338,7 +378,7 @@ class SessionControllerMixin:
                 with self._sessions_cache_lock:
                     self._sessions_cache = None
                     self._sessions_cache_gen += 1
-                return bridge_ok()
+                return bridge_ok(name=data.get("title", ""))
         except Exception as e:
             return bridge_error(e)
 

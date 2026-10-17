@@ -802,7 +802,13 @@ def execute_failed_blocks_retry_workflow(
                 persisted = dict(session)
                 # Audio preparation/relink/removal may finish during a retry.
                 # Preserve their current association, including removed fields.
-                for key in ("input", "title", "playback_audio", "audio_removed"):
+                for key in (
+                    "input",
+                    "title",
+                    "title_is_custom",
+                    "playback_audio",
+                    "audio_removed",
+                ):
                     if key in latest:
                         persisted[key] = latest[key]
                     else:
