@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
 test('native caret beside images keeps text height, blinks, and preserves editing', async ({ page, context }, testInfo) => {
@@ -102,7 +103,7 @@ test('native caret beside images keeps text height, blinks, and preserves editin
     const html = await page.evaluate(async () => (await (await navigator.clipboard.read())[0].getType('text/html')).text());
     expect(html).not.toContain('editor-image-caret-anchor');
     expect(html).not.toContain('\u200b');
-    await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+    await expectAutosaved(page);
     const saved = (await read()).doc;
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
     await completed.getByRole('heading').click();

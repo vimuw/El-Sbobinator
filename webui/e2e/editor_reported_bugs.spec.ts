@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
+import { expectAutosaved } from './autosave';
 
 async function openEditor(page: Page, info: TestInfo) {
   const audio = info.outputPath('reported_bugs.wav');
@@ -38,7 +39,7 @@ test('internal fallback copy keeps default headings readable in dark mode and pr
   expect(await editor.locator('h2').getAttribute('style')).toContain('color: rgb(0, 0, 0)');
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+c'); await page.keyboard.press('Control+v');
   await expect.poll(colors).toEqual(original);
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
   await expect.poll(colors).toEqual(original);
@@ -88,7 +89,7 @@ test('internal image copies retain pixels, alpha, size changes and saved sources
   await expect.poll(read).toEqual(Array(3).fill({ src, width: 1600, height: 1000 }));
   await page.keyboard.press('Control+z'); await expect(editor.locator('img.editor-image-asset')).toHaveCount(2);
   await page.keyboard.press('Control+Shift+z'); await expect(editor.locator('img.editor-image-asset')).toHaveCount(3);
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
   await expect.poll(read).toEqual(Array(3).fill({ src, width: 1600, height: 1000 }));
@@ -136,7 +137,7 @@ test('Enter adds no automatic gap and a second Enter leaves exactly one blank li
   fs.mkdirSync('../_smoke/paragraph-enter', { recursive: true });
   fs.writeFileSync('../_smoke/paragraph-enter/app-clipboard.json', JSON.stringify(clipboard));
   await page.locator('#enter-clipboard').evaluate(probe => probe.remove());
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
   await expect.poll(lines).toEqual(geometry);
@@ -186,7 +187,7 @@ test('generated block gaps survive save and copy without spreading to new paragr
   await page.keyboard.press('Control+v');
   fs.writeFileSync('../_smoke/paragraph-enter/generated-edited-clipboard.json', await page.locator('#generated-clipboard').inputValue());
   await page.locator('#generated-clipboard').evaluate(probe => probe.remove());
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
   await expect.poll(read).toEqual(final);

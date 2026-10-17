@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectAutosaved } from './autosave';
 import type { Page } from '@playwright/test';
 import type { Editor } from '@tiptap/core';
 
@@ -23,7 +24,7 @@ test('native clipboard exports the displayed positions of consecutive wrap image
     (root as HTMLElement & { editor: Editor }).editor.commands.setContent(`<h2>Prima sezione</h2><p>${image(32.25, 'Prima figura')}${'Il testo descrive la prima figura e continua nel paragrafo. '.repeat(12)}</p><h3>Seconda sezione</h3><p>${image(240.63, 'Seconda figura')}${'La seconda figura accompagna questo testo e deve restare nella sua sezione. '.repeat(8)}</p><h2>Sezione successiva</h2><p>${'Questo testo appartiene alla sezione successiva. '.repeat(12)}</p>`);
   }, src);
   await expect(editor.locator('.image-wrap-gap').first()).toBeAttached();
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   const saved = await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
   const geometry = () => editor.evaluate(root => {
     const scale = root.getBoundingClientRect().width / (root as HTMLElement).offsetWidth;
@@ -83,7 +84,7 @@ test('native clipboard exports the displayed positions of consecutive wrap image
       await expect(editor.getByAltText('Seconda figura')).toHaveCount(0);
       await expect(editor.getByAltText('Prima figura')).toHaveCount(1);
       expect(await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getText())).not.toContain('La seconda figura');
-      await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+      await expectAutosaved(page);
       const cut = await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
       await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.commands.undo());
       await expect.poll(() => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON())).toEqual(saved);
@@ -93,7 +94,7 @@ test('native clipboard exports the displayed positions of consecutive wrap image
     }
     await expect.poll(() => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON())).toEqual(saved);
   }
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await completed.getByRole('heading').click();
   await expect.poll(() => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON())).toEqual(saved);

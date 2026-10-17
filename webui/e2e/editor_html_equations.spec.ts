@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
 test('mixed equation clipboard routes preserve editable source through HTML paste and reopen', async ({ page, context }, testInfo) => {
@@ -27,7 +28,7 @@ test('mixed equation clipboard routes preserve editable source through HTML past
     await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })]);
   }, source);
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   const read = () => editor.evaluate(root => {
     const instance = (root as HTMLElement & { editor: Editor }).editor;
     const equations: { type: string; latex: string }[] = [];
@@ -110,7 +111,7 @@ test('mixed equation clipboard routes preserve editable source through HTML past
   await editor.focus(); await page.keyboard.press('Control+z');
   expect((await read()).equations[3].latex).toBe(original.equations[3].latex);
   await page.keyboard.press('Control+Shift+z');
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await completed.getByRole('heading').click();
   const reopened = await read();

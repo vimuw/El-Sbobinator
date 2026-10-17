@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectAutosaved } from './autosave';
 import type { Page } from '@playwright/test';
 import type { Editor } from '@tiptap/core';
 
@@ -54,7 +55,7 @@ test('browser Copy image and screenshot paste embed pixels, support undo and sur
       instance.commands.setContent('<p>Prima</p>');
       instance.commands.setTextSelection(6);
     });
-    await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+    await expectAutosaved(page);
     const before = await readHtml();
     await writeImageClipboard(page, html);
     await editor.focus(); await page.keyboard.press('Control+v');
@@ -69,7 +70,7 @@ test('browser Copy image and screenshot paste embed pixels, support undo and sur
     await expect.poll(readHtml).toBe(before);
     await page.keyboard.press('Control+Shift+z');
     await expect.poll(readHtml).toBe(pasted);
-    await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+    await expectAutosaved(page);
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
     await page.locator('.queue-card.is-completed', { hasText: 'browser_copy_image.wav' }).getByRole('heading').click();
     await expect(editor).toBeVisible();

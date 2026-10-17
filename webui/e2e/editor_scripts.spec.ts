@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
 test('Docs script shortcuts, buttons, clipboard geometry and saved reopen', async ({ page, context }, testInfo) => {
@@ -128,7 +129,7 @@ test('Docs script shortcuts, buttons, clipboard geometry and saved reopen', asyn
   await page.keyboard.press('Control+v');
   verifyGeometry(await geometry());
   const pasted = await read();
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await completed.getByRole('heading').click();
   expect(await read()).toEqual(pasted);

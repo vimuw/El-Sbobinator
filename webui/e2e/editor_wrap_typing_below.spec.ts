@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
 for (const zoom of [1, 1.1, 0.9]) test(`typing below two late wrap figures preserves layout without copying the preceding transcript at zoom ${zoom}`, async ({ page }, info) => {
@@ -80,7 +81,7 @@ for (const zoom of [1, 1.1, 0.9]) test(`typing below two late wrap figures prese
   expect(await read()).toEqual(original);
   await page.keyboard.press('Control+Shift+z');
   expect(await read()).toEqual(final);
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await completed.getByRole('heading').click();
   expect(await read()).toEqual(final);

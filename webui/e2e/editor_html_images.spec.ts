@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
 test('HTML fallback preserves right caption image geometry, pixels, history and saved content', async ({ page, context }, testInfo) => {
@@ -55,7 +56,7 @@ test('HTML fallback preserves right caption image geometry, pixels, history and 
     await page.evaluate(async html => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })]); }, source);
     await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
     await expect.poll(() => editor.getByAltText('Campione sintetico').evaluate(img => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
-    await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+    await expectAutosaved(page);
     const original = await read();
     const formats = await capture();
     expect(formats['application/x-vnd.google-docs-document-slice-clip+wrapped']).toBeUndefined();
@@ -87,7 +88,7 @@ test('HTML fallback preserves right caption image geometry, pixels, history and 
     const edited = await read();
     await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+x');
     await page.keyboard.press('Control+z'); expect((await read()).images).toEqual(edited.images);
-    await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+    await expectAutosaved(page);
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
     await completed.getByRole('heading').click();
     await expect.poll(() => editor.evaluate(root => Boolean((root as HTMLElement & { editor?: Editor }).editor))).toBe(true);
