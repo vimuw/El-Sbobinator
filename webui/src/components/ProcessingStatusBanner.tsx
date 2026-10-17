@@ -391,7 +391,8 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
       />
 
       <div className="relative z-10 flex flex-col items-center gap-5 text-center">
-        <AnimatePresence mode="wait">
+        {/* popLayout crossfades phase titles; "wait" left the header empty between quick phases. */}
+        <AnimatePresence mode="popLayout" initial={false}>
           <motion.div
             key={title}
             initial={{ opacity: 0 }}

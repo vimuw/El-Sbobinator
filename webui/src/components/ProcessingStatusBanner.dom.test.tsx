@@ -198,4 +198,23 @@ describe('ProcessingStatusBanner', () => {
     expect(screen.getByText(/\d+h \d+m/)).toBeTruthy();
   });
 
+  it('shows the next phase title immediately instead of leaving the header empty', () => {
+    const props = {
+      appState: 'processing' as const,
+      currentModel: 'gemini-3.6-flash',
+      activeProgress: 0,
+      workDone: { chunks: 0, macro: 0 },
+      workTotals: { chunks: 6, macro: 5 },
+      currentFileIndex: 0,
+      currentBatchTotal: 1,
+      currentFileName: 'lesson.mp3',
+    };
+    const { rerender } = render(<ProcessingStatusBanner {...props} currentPhase="" />);
+    expect(screen.getByRole('heading', { name: 'Preparazione...' })).toBeTruthy();
+
+    rerender(<ProcessingStatusBanner {...props} activeProgress={2} currentPhase="Fase 0/3: pre-conversione audio" />);
+
+    expect(screen.getByRole('heading', { name: 'Pre-conversione audio' })).toBeTruthy();
+  });
+
 });
