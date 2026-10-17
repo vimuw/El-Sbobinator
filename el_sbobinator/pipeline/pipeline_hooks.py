@@ -30,6 +30,10 @@ class PipelineRuntime:
     def cancel_event(self):
         return getattr(self.target, "cancel_event", None)
 
+    @property
+    def shutdown_event(self):
+        return getattr(self.target, "shutdown_event", None)
+
     def cancelled(self) -> bool:
         cancel_event = self.cancel_event
         return cancel_event is not None and cancel_event.is_set()

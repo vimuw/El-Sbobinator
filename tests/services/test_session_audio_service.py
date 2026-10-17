@@ -3,6 +3,7 @@
 import json
 import os
 import shutil
+import subprocess
 import threading
 import wave
 from concurrent.futures import ThreadPoolExecutor
@@ -15,8 +16,13 @@ import pytest
 from el_sbobinator.app_webview import ElSbobinatorApi
 from el_sbobinator.core.media_server import LocalMediaServer
 from el_sbobinator.core.session_storage import _folder_size
+from el_sbobinator.core.session_store import PRECONVERTED_AUDIO_FINAL
 from el_sbobinator.services.archive_service import find_candidate_audio_path
-from el_sbobinator.services.audio_service import probe_media_duration
+from el_sbobinator.services.audio_service import (
+    preconvert_media_to_mp3,
+    probe_media_duration,
+    resolve_ffmpeg,
+)
 from el_sbobinator.services.export_service import export_final_html_document
 from el_sbobinator.services.revision_service import execute_failed_blocks_retry_workflow
 from el_sbobinator.services.session_audio_service import (
@@ -88,6 +94,7 @@ def test_legacy_open_retains_audio_after_source_move_and_restart(session_audio):
     assert not os.path.isabs(saved["playback_audio"])
     duration, _ = probe_media_duration(played)
     assert duration is not None and duration == pytest.approx(2, abs=0.15)
+    assert_mp3_bitrate(played, 32)
     source.rename(source.with_name("Spostata.wav"))
     assert source.with_name("Spostata.wav").read_bytes() == source_bytes
     restarted = ElSbobinatorApi()
@@ -152,6 +159,25 @@ def test_legacy_open_rejects_invalid_supplied_fallback(session_audio, suffix):
     convert.assert_not_called()
 
 
+def test_interrupted_playback_copy_uses_and_frees_transcription_audio(session_audio):
+    api, session, source, original = session_audio
+    # Closing the app while a run encodes its playback copy leaves this behind.
+    preconverted = session / PRECONVERTED_AUDIO_FINAL
+    ok, error = preconvert_media_to_mp3(str(source), str(preconverted))
+    assert ok, error
+    source.rename(source.with_name("Spostata.wav"))
+
+    result, played = resolve_audio(api, session, source)
+
+    assert result["ok"] and "warning" not in result
+    assert played is not None
+    assert played == playback_audio_path(load_session(session), str(session))
+    assert not preconverted.exists()
+    assert load_session(session)["input"] == original["input"]
+    duration, _ = probe_media_duration(played)
+    assert duration == pytest.approx(2, abs=0.15)
+
+
 def test_relink_then_move_original_and_remove_frees_only_internal_audio(session_audio):
     api, session, source, _ = session_audio
     assert api.update_session_input_path(str(session), str(source))["ok"]
@@ -180,31 +206,52 @@ def test_relink_then_move_original_and_remove_frees_only_internal_audio(session_
     assert not load_session(session).get("audio_removed")
 
 
-def test_preconverted_audio_is_retained_without_reencoding(tmp_path):
-    session = tmp_path / "session"
-    session.mkdir()
+def assert_mp3_bitrate(path, bitrate):
+    decoded = subprocess.run(
+        [resolve_ffmpeg(), "-hide_banner", "-i", str(path), "-f", "null", "-"],
+        capture_output=True,
+        text=True,
+        errors="replace",
+        check=True,
+    )
+    stream = next(line for line in decoded.stderr.splitlines() if "Audio: mp3" in line)
+    assert "16000 Hz, mono" in stream
+    assert f", {bitrate} kb/s" in stream
+
+
+def test_preconverted_transcription_audio_stays_48k_while_playback_is_32k(
+    session_audio,
+):
+    _api, session, source, _data = session_audio
     preconverted = session / "preconverted.mp3"
-    content = b"encoded audio" * 1024
-    preconverted.write_bytes(content)
-    with patch(
-        "el_sbobinator.services.session_audio_service.preconvert_media_to_mp3"
-    ) as convert:
-        path = create_playback_audio(
-            str(session), "missing.wav", preconverted_path=str(preconverted)
-        )
-    assert Path(path).read_bytes() == content
-    assert not preconverted.exists()
-    convert.assert_not_called()
+    ok, error = preconvert_media_to_mp3(str(source), str(preconverted), bitrate="48k")
+    assert ok, error
+    content = preconverted.read_bytes()
+    path = create_playback_audio(
+        str(session), "missing.wav", preconverted_path=str(preconverted)
+    )
+    assert preconverted.read_bytes() == content
+    assert_mp3_bitrate(preconverted, 48)
+    assert_mp3_bitrate(path, 32)
+    assert 0.55 < Path(path).stat().st_size / len(content) < 0.8
+    assert probe_media_duration(path)[0] == pytest.approx(2, abs=0.15)
 
 
 @pytest.mark.parametrize(
     "failure", ["cancelled", "disk full", "empty_output", "promotion"]
 )
-def test_failed_conversion_never_publishes_partial_or_changes_source(tmp_path, failure):
+@pytest.mark.parametrize("use_preconverted", [False, True])
+def test_failed_conversion_never_publishes_partial_or_changes_source(
+    tmp_path, failure, use_preconverted
+):
     session = tmp_path / "session"
     session.mkdir()
     source = tmp_path / "original.wav"
     source.write_bytes(b"original content")
+    preconverted = session / "transcription.mp3"
+    if use_preconverted:
+        preconverted.write_bytes(b"transcription" * 1024)
+    cache = str(preconverted) if use_preconverted else None
 
     def convert(**kwargs):
         Path(kwargs["output_path"]).write_bytes(
@@ -222,12 +269,37 @@ def test_failed_conversion_never_publishes_partial_or_changes_source(tmp_path, f
                 side_effect=OSError("disk full"),
             ):
                 with pytest.raises(OSError):
-                    create_playback_audio(str(session), str(source))
+                    create_playback_audio(
+                        str(session), str(source), preconverted_path=cache
+                    )
         else:
             with pytest.raises(RuntimeError):
-                create_playback_audio(str(session), str(source))
+                create_playback_audio(
+                    str(session), str(source), preconverted_path=cache
+                )
     assert list((session / "audio").iterdir()) == []
     assert source.read_bytes() == b"original content"
+    if use_preconverted:
+        assert preconverted.read_bytes() == b"transcription" * 1024
+
+
+def test_existing_48k_playback_is_not_reencoded_on_open(session_audio):
+    api, session, source, data = session_audio
+    existing = session / "audio" / "old-playback.mp3"
+    existing.parent.mkdir()
+    ok, error = preconvert_media_to_mp3(str(source), str(existing), bitrate="48k")
+    assert ok, error
+    content = existing.read_bytes()
+    attach_playback_audio(data, str(session), str(existing))
+    (session / "session.json").write_text(json.dumps(data), encoding="utf-8")
+    source.unlink()
+    with patch(
+        "el_sbobinator.services.session_audio_service.preconvert_media_to_mp3"
+    ) as convert:
+        result, played = resolve_audio(api, session, source)
+    assert result["ok"] and played == str(existing)
+    assert existing.read_bytes() == content
+    convert.assert_not_called()
 
 
 def test_relink_failure_preserves_previous_association(session_audio):

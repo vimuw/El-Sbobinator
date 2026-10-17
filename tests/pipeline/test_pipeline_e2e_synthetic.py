@@ -164,6 +164,43 @@ class PipelineSyntheticE2ETests(unittest.TestCase):
         # Verify Content Security Policy header exists in generated HTML document
         self.assertIn("Content-Security-Policy", html_content)
 
+    def test_stop_while_saving_playback_audio_reports_completed_document(self):
+        """Stop during the final audio copy cannot undo an exported document."""
+        from el_sbobinator.services import session_audio_service
+
+        create_playback_audio = session_audio_service.create_playback_audio
+
+        def stop_during_copy(*args, **kwargs):
+            self.cancel_event.set()
+            return create_playback_audio(*args, **kwargs)
+
+        with (
+            patch("google.genai.Client", return_value=self._build_mock_client()),
+            patch(
+                "el_sbobinator.pipeline.pipeline.create_playback_audio",
+                side_effect=stop_during_copy,
+            ),
+        ):
+            esegui_sbobinatura(
+                input_path=self.wav_path,
+                api_key_value="test-synthetic-key",
+                app_instance=self.adapter,
+                session_dir_hint=self.session_dir,
+            )
+
+        self.assertTrue(self.cancel_event.is_set())
+        self.assertEqual(self.adapter.last_run_status, "completed")
+        assert self.adapter.last_output_html is not None
+        self.assertTrue(os.path.exists(self.adapter.last_output_html))
+        with open(
+            os.path.join(self.session_dir, "session.json"), encoding="utf-8"
+        ) as handle:
+            session_data = json.load(handle)
+        self.assertEqual(session_data.get("stage"), "done")
+        self.assertTrue(
+            session_audio_service.playback_audio_path(session_data, self.session_dir)
+        )
+
     def test_pipeline_synthetic_audio_resume_from_phase1(self):
         """Verify that a session with completed Phase 1 can be resumed into Phase 2."""
         mock_client = self._build_mock_client()

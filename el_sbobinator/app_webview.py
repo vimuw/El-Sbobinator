@@ -71,7 +71,10 @@ class ElSbobinatorApi(
         self._cancel_event = threading.Event()
         self._audio_cancel_event = threading.Event()
         self._adapter = PipelineAdapter(
-            None, self._cancel_event, dispatcher=event_dispatcher
+            None,
+            self._cancel_event,
+            dispatcher=event_dispatcher,
+            shutdown_event=self._audio_cancel_event,
         )
         self._processing_thread: threading.Thread | None = None
         self._html_shell_cache: dict[str, tuple[str, str]] = {}

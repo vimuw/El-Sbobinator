@@ -602,13 +602,20 @@ class PipelineControllerMixin:
                             active_api_key = self._adapter.effective_api_key
 
                         last_run_status = self._adapter.last_run_status
-                        if (
+                        run_completed = last_run_status in (
+                            "completed",
+                            "completed_with_warnings",
+                        )
+                        stop_requested = (
                             self._cancel_event.is_set()
                             or last_run_status == "cancelled"
-                        ) and last_run_status != "failed":
+                        ) and last_run_status != "failed"
+                        # A document finished before Stop took effect is still
+                        # reported as done; Stop then ends the remaining batch.
+                        if stop_requested and not run_completed:
                             break
 
-                        if last_run_status in ("completed", "completed_with_warnings"):
+                        if run_completed:
                             comp_status, ok = _handle_file_completed(
                                 idx, file_info, self._adapter, last_run_status
                             )

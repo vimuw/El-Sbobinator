@@ -62,9 +62,12 @@ class PipelineAdapter:
         window: webview.Window | None,
         cancel_event: threading.Event,
         dispatcher: EventDispatcher | None = None,
+        shutdown_event: threading.Event | None = None,
     ):
         self.window = window
         self.cancel_event = cancel_event
+        # Set only when the app closes, unlike cancel_event which Stop also sets.
+        self.shutdown_event = shutdown_event
         self._lock = threading.Lock()
         self.file_temporanei: list[str] = []
         self._is_running = False

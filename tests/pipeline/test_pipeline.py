@@ -1,15 +1,18 @@
 import contextlib
 import os
+import shutil
 import tempfile
 import threading
 import time
 import unittest
+import wave
 from collections.abc import Callable
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from el_sbobinator.pipeline.pipeline import (
     _pipeline_finally_cleanup,
+    _retain_playback_audio,
     esegui_sbobinatura,
 )
 from el_sbobinator.pipeline.pipeline_adapter import PipelineAdapter
@@ -156,6 +159,26 @@ class PipelinePausedCleanupTests(unittest.TestCase):
         self.assertEqual(adapter.last_run_status, "paused")
         self.assertEqual(adapter.last_run_error, "circuit breaker exhausted")
         self.assertEqual(adapter.last_run_error_detail, "503 Service Unavailable")
+
+    def test_stop_after_document_export_keeps_completed_result(self):
+        for document_completed, expected in ((True, "completed"), (False, "cancelled")):
+            with self.subTest(document_completed=document_completed):
+                adapter = PipelineAdapter(None, threading.Event())
+                adapter.set_run_result("completed")
+                adapter.cancel_event.set()
+
+                _pipeline_finally_cleanup(
+                    None,
+                    {},
+                    None,
+                    adapter,
+                    PipelineRuntime(adapter),
+                    None,
+                    False,
+                    document_completed=document_completed,
+                )
+
+                self.assertEqual(adapter.last_run_status, expected)
 
 
 class PipelineCancellationTests(unittest.TestCase):
@@ -866,6 +889,98 @@ class PipelineCancellationTests(unittest.TestCase):
 
 
 class PipelineCleanupCacheTests(unittest.TestCase):
+    def _write_preconverted_audio(self, path):
+        from el_sbobinator.services.audio_service import preconvert_media_to_mp3
+
+        with tempfile.TemporaryDirectory(dir=os.path.dirname(path)) as audio_dir:
+            source = os.path.join(audio_dir, "source.wav")
+            with wave.open(source, "wb") as audio:
+                audio.setnchannels(1)
+                audio.setsampwidth(2)
+                audio.setframerate(16000)
+                audio.writeframes(b"\x00\x00" * 32000)
+            ok, error = preconvert_media_to_mp3(source, path, bitrate="48k")
+            self.assertTrue(ok, error)
+
+    def test_playback_save_failure_preserves_transcription_cache_for_retry(self):
+        from el_sbobinator.core.shared import PRECONVERTED_AUDIO_FINAL
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            context = self._make_session_ctx(os.path.join(tmpdir, "session"))
+            preconverted = os.path.join(context.session_dir, PRECONVERTED_AUDIO_FINAL)
+            self._write_preconverted_audio(preconverted)
+            with open(preconverted, "rb") as handle:
+                cache_bytes = handle.read()
+            with patch.object(context, "save", return_value=False):
+                _retain_playback_audio(context, context.session, "missing.mp3")  # type: ignore[arg-type]
+            with open(preconverted, "rb") as handle:
+                self.assertEqual(handle.read(), cache_bytes)
+            self.assertNotIn("playback_audio", context.session)
+            self.assertEqual(os.listdir(os.path.join(context.session_dir, "audio")), [])
+
+    def _cleanup_completed_session(self, cancel=False, shutdown=False):
+        from el_sbobinator.core.shared import PRECONVERTED_AUDIO_FINAL
+        from el_sbobinator.services.session_audio_service import playback_audio_path
+
+        tmpdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmpdir, True)
+        context = self._make_session_ctx(os.path.join(tmpdir, "session"))
+        context.session["stage"] = "done"
+        preconverted = os.path.join(context.session_dir, PRECONVERTED_AUDIO_FINAL)
+        self._write_preconverted_audio(preconverted)
+        adapter = PipelineAdapter(
+            None, threading.Event(), shutdown_event=threading.Event()
+        )
+        if cancel:
+            adapter.cancel_event.set()
+        if shutdown:
+            assert adapter.shutdown_event is not None
+            adapter.shutdown_event.set()
+        from el_sbobinator.services.audio_service import preconvert_media_to_mp3
+
+        def lecture_length_conversion(**kwargs):
+            # A real lecture outlasts ffmpeg's cancellation poll; this short
+            # fixture does not, so honour an already set event explicitly.
+            stop_event = kwargs.get("stop_event")
+            if stop_event is not None and stop_event.is_set():
+                return False, "Conversione annullata."
+            return preconvert_media_to_mp3(**kwargs)
+
+        with patch(
+            "el_sbobinator.services.session_audio_service.preconvert_media_to_mp3",
+            side_effect=lecture_length_conversion,
+        ):
+            _pipeline_finally_cleanup(
+                context,  # type: ignore[arg-type]
+                context.session,
+                None,
+                adapter,
+                PipelineRuntime(adapter),
+                None,
+                False,
+            )
+        return (
+            playback_audio_path(context.session, context.session_dir),
+            os.path.exists(preconverted),
+        )
+
+    def test_stop_after_completion_still_replaces_cache_with_playback_audio(self):
+        playback, cache_left = self._cleanup_completed_session(cancel=True)
+        self.assertIsNotNone(playback)
+        self.assertFalse(cache_left)
+
+    def test_app_shutdown_keeps_cache_without_partial_playback_audio(self):
+        playback, cache_left = self._cleanup_completed_session(shutdown=True)
+        self.assertIsNone(playback)
+        self.assertTrue(cache_left)
+
+    def test_api_pipeline_stops_completion_audio_only_on_app_shutdown(self):
+        from el_sbobinator.app_webview import ElSbobinatorApi
+
+        api = ElSbobinatorApi()
+        self.assertIs(api._adapter.shutdown_event, api._audio_cancel_event)
+        self.assertIsNot(api._adapter.shutdown_event, api._adapter.cancel_event)
+
     def _make_session_ctx(self, session_dir):
         ctx = _FakeSessionContext(session_dir)
         ctx.settings = SimpleNamespace(
@@ -953,7 +1068,7 @@ class PipelineCleanupCacheTests(unittest.TestCase):
             ),
         ]
 
-    def test_completion_retains_preconverted_bytes_for_playback(self):
+    def test_completion_replaces_48k_cache_with_smaller_playback_audio(self):
         from el_sbobinator.core import shared as _shared
         from el_sbobinator.core.shared import PRECONVERTED_AUDIO_FINAL
 
@@ -962,8 +1077,7 @@ class PipelineCleanupCacheTests(unittest.TestCase):
             session_ctx = self._make_session_ctx(session_dir)
 
             preconv_path = os.path.join(session_dir, PRECONVERTED_AUDIO_FINAL)
-            with open(preconv_path, "wb") as fh:
-                fh.write(b"x" * 8192)
+            self._write_preconverted_audio(preconv_path)
             preconv_size = os.path.getsize(preconv_path)
 
             html_path = os.path.join(tmpdir, "output.html")
@@ -995,20 +1109,21 @@ class PipelineCleanupCacheTests(unittest.TestCase):
                     mock_invalidate = stack.enter_context(spy)
                     esegui_sbobinatura(input_path, "fake-key", app)
 
-                mock_invalidate.assert_called_once()
+                mock_invalidate.assert_called()
                 from el_sbobinator.services.session_audio_service import (
                     playback_audio_path,
                 )
 
                 retained = playback_audio_path(session_ctx.session, session_dir)
                 assert retained is not None
-                self.assertEqual(os.path.getsize(retained), preconv_size)
+                retained_size = os.path.getsize(retained)
+                self.assertLess(retained_size, preconv_size)
                 self.assertFalse(os.path.exists(preconv_path))
                 info_after = _shared.get_session_storage_info()
                 self.assertEqual(
                     info_after["total_bytes"],
-                    info_before["total_bytes"],
-                    "the preconverted bytes remain in the archive as playback audio",
+                    info_before["total_bytes"] - preconv_size + retained_size,
+                    "only the smaller playback copy remains in the completed archive",
                 )
 
     def test_completion_does_not_delete_retained_audio(self):
@@ -1019,8 +1134,7 @@ class PipelineCleanupCacheTests(unittest.TestCase):
             session_ctx = self._make_session_ctx(session_dir)
 
             preconv_path = os.path.join(session_dir, PRECONVERTED_AUDIO_FINAL)
-            with open(preconv_path, "wb") as fh:
-                fh.write(b"x" * 8192)
+            self._write_preconverted_audio(preconv_path)
 
             html_path = os.path.join(tmpdir, "output.html")
             input_path = os.path.join(tmpdir, "input.mp3")
@@ -1063,8 +1177,7 @@ class PipelineCleanupCacheTests(unittest.TestCase):
             session_ctx = self._make_session_ctx(session_dir)
 
             preconv_path = os.path.join(session_dir, PRECONVERTED_AUDIO_FINAL)
-            with open(preconv_path, "wb") as fh:
-                fh.write(b"x" * 8192)
+            self._write_preconverted_audio(preconv_path)
 
             html_path = os.path.join(session_dir, "output.html")
             with open(html_path, "w") as fh:
@@ -1145,7 +1258,7 @@ class PipelineCleanupCacheTests(unittest.TestCase):
 
             self.assertFalse(
                 os.path.exists(preconv_path),
-                "preconv file must be moved to the playback asset on done early return",
+                "transcription cache must be removed after playback is saved",
             )
             from el_sbobinator.services.session_audio_service import playback_audio_path
 

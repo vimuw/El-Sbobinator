@@ -13,6 +13,7 @@ from el_sbobinator.services.audio_service import preconvert_media_to_mp3
 # Bound the lock registry while serializing migration, relinking and removal.
 _AUDIO_LOCKS = tuple(threading.RLock() for _ in range(32))
 _METADATA_LOCKS = tuple(threading.RLock() for _ in range(32))
+PLAYBACK_AUDIO_BITRATE = "32k"
 
 
 def session_audio_lock(session_dir: str):
@@ -76,16 +77,20 @@ def create_playback_audio(
     os.makedirs(os.path.dirname(target), exist_ok=True)
     partial = target.removesuffix(".mp3") + ".partial.mp3"
     try:
-        if preconverted_path and os.path.isfile(preconverted_path):
-            if os.path.getsize(preconverted_path) > 1024:
-                os.replace(preconverted_path, target)
-                return target
-        if not source_path or not os.path.isfile(source_path):
+        encoding_source = source_path
+        if (
+            preconverted_path
+            and os.path.isfile(preconverted_path)
+            and os.path.getsize(preconverted_path) > 1024
+        ):
+            # Keep the transcription cache intact until playback is durably linked.
+            encoding_source = preconverted_path
+        if not encoding_source or not os.path.isfile(encoding_source):
             raise FileNotFoundError("File audio non trovato. Ricollega l'audio.")
         ok, error = preconvert_media_to_mp3(
-            input_path=source_path,
+            input_path=encoding_source,
             output_path=partial,
-            bitrate="48k",
+            bitrate=PLAYBACK_AUDIO_BITRATE,
             stop_event=stop_event,
         )
         if not ok or not os.path.isfile(partial) or os.path.getsize(partial) <= 1024:

@@ -17,7 +17,11 @@ from el_sbobinator.bridge.bridge_utils import (
 )
 from el_sbobinator.core.media_server import LocalMediaServer
 from el_sbobinator.core.session_storage import invalidate_session_storage_cache
-from el_sbobinator.core.shared import _atomic_write_json, _load_json
+from el_sbobinator.core.shared import (
+    PRECONVERTED_AUDIO_FINAL,
+    _atomic_write_json,
+    _load_json,
+)
 from el_sbobinator.pipeline.pipeline_adapter import _drain_dnd_paths
 from el_sbobinator.services.archive_service import find_candidate_audio_path
 from el_sbobinator.services.session_audio_service import (
@@ -348,8 +352,12 @@ class MediaControllerMixin:
                         if valid:
                             session_audio_path = resolved_file_path
                     resolved_file_path = session_audio_path or ""
+                    # A run closed while encoding its playback copy leaves the
+                    # transcription audio behind: it is the session's own copy
+                    # of the lecture, usable even after the source has moved.
+                    preconverted = os.path.join(abs_dir, PRECONVERTED_AUDIO_FINAL)
                     if (
-                        resolved_file_path
+                        (resolved_file_path or os.path.isfile(preconverted))
                         and data.get("stage") == "done"
                         and not playback_audio_path(data, abs_dir)
                     ):
@@ -357,6 +365,7 @@ class MediaControllerMixin:
                             created = create_playback_audio(
                                 abs_dir,
                                 resolved_file_path,
+                                preconverted_path=preconverted,
                                 stop_event=getattr(self, "_audio_cancel_event", None),
                             )
                             try:
@@ -370,6 +379,12 @@ class MediaControllerMixin:
                                 discard_playback_audio(created)
                                 raise
                             resolved_file_path = created
+                            # Linked playback no longer needs the transcription copy.
+                            try:
+                                os.remove(preconverted)
+                                invalidate_session_storage_cache()
+                            except OSError:
+                                pass
                         except Exception as error:
                             self._push_console(
                                 f"Copia audio interna non salvata: {redact_secrets(error)}"

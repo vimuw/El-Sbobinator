@@ -669,6 +669,56 @@ class AppWebviewTests(unittest.TestCase):
         self.assertEqual(done[0]["failed"], 0)
         self.assertEqual(done[0]["total"], 2)
 
+    @patch("threading.Thread", _SyncThread)
+    @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
+    def test_stop_after_completed_document_reports_file_done_and_ends_batch(
+        self, mock_pipeline_run
+    ):
+        api = ElSbobinatorApi()
+        emitted = []
+        processed_paths: list[str] = []
+
+        def fake_emit(fn_name, data, batched=None):
+            emitted.append((fn_name, data, batched))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            html_path = os.path.join(tmpdir, "lesson_Sbobina.html")
+            with open(html_path, "w", encoding="utf-8") as handle:
+                handle.write("<p>Sbobina</p>")
+
+            def fake_pipeline_run(path, _api_key, adapter, **_kwargs):
+                # Stop arrives while the finished document saves its audio copy.
+                processed_paths.append(path)
+                adapter.imposta_output_html(html_path, tmpdir)
+                api._cancel_event.set()
+                adapter.set_run_result("completed")
+
+            mock_pipeline_run.side_effect = fake_pipeline_run
+            api._adapter.emit = fake_emit
+            paths = []
+            for name in ("one.mp3", "two.mp3"):
+                paths.append(os.path.join(tmpdir, name))
+                with open(paths[-1], "wb") as handle:
+                    handle.write(b"fake")
+
+            result = api.start_processing(
+                [
+                    {"id": "file-1", "path": paths[0], "name": "one.mp3"},
+                    {"id": "file-2", "path": paths[1], "name": "two.mp3"},
+                ],
+                api_key="fake-key",
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(processed_paths, [paths[0]])
+        done_files = [data for name, data, _ in emitted if name == "fileDone"]
+        self.assertEqual([data["id"] for data in done_files], ["file-1"])
+        self.assertEqual(done_files[0]["output_html"], html_path)
+        process_done = [data for name, data, _ in emitted if name == "processDone"]
+        self.assertEqual(len(process_done), 1)
+        self.assertTrue(process_done[0]["cancelled"])
+        self.assertEqual(process_done[0]["completed"], 1)
+
     @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
     def test_failed_run_emits_file_failed_even_if_cancel_event_is_set(
         self, mock_pipeline_run
