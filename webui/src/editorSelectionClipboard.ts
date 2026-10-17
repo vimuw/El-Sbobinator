@@ -22,6 +22,10 @@ function inlineClipboardBlock(block: Element): HTMLSpanElement {
   return span;
 }
 
+// Chromium copies a web page's white background onto the selected spans. It
+// is the page, not a highlight: as a mark it shows as white bars in dark theme.
+const NO_HIGHLIGHT_BACKGROUNDS = new Set(['transparent', 'rgba(0, 0, 0, 0)', 'white', 'rgb(255, 255, 255)']);
+
 /** Interpret our clipboard hints without persisting them in the document. */
 export function preparePastedEditorHtml(html: string, view?: EditorView): string {
   const body = new DOMParser().parseFromString(html, 'text/html').body;
@@ -30,7 +34,7 @@ export function preparePastedEditorHtml(html: string, view?: EditorView): string
   // foreground/font on the span and represent its highlight semantically.
   body.querySelectorAll<HTMLSpanElement>('span[style]').forEach(span => {
     const background = span.style.backgroundColor;
-    if (!background || background === 'transparent' || background === 'rgba(0, 0, 0, 0)'
+    if (!background || NO_HIGHLIGHT_BACKGROUNDS.has(background)
       || span.closest('[data-editor-image],[data-math],.katex')) return;
     const mark = document.createElement('mark');
     mark.style.backgroundColor = background;
