@@ -1050,7 +1050,7 @@ test('representative mixed document preserves edits, merged table widths, image 
     // The backend sanitizer canonicalizes link rel independently of formatting.
     return { html: instance.getHTML().replaceAll('noopener noreferrer nofollow', 'noopener noreferrer'),
       cells: Array.from(root.querySelectorAll('th,td')).map(cell => ({ text: cell.textContent, colspan: cell.getAttribute('colspan'), colwidth: cell.getAttribute('colwidth'), width: cell.getBoundingClientRect().width })),
-      image: Array.from(root.querySelectorAll('img')).map(img => ({ sourceWidth: img.naturalWidth, sourceHeight: img.naturalHeight, width: img.getBoundingClientRect().width, height: img.getBoundingClientRect().height })),
+      image: Array.from(root.querySelectorAll('img:not(.ProseMirror-separator)')).map(img => ({ sourceWidth: img.naturalWidth, sourceHeight: img.naturalHeight, width: img.getBoundingClientRect().width, height: img.getBoundingClientRect().height })),
     };
   });
   await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
@@ -1991,7 +1991,8 @@ test('inline and arbitrary image wrap preserve text, editing, undo and native cl
   await page.getByRole('button', { name: 'Wrap', exact: true }).click();
   await expect(node).toHaveAttribute('data-position', '50');
   await expect.poll(async () => editor.evaluate(root => {
-    const img = root.querySelector('img')!.getBoundingClientRect();
+    // ProseMirror 1.42.6+ puts an empty separator <img> before leading inline atoms.
+    const img = root.querySelector('img:not(.ProseMirror-separator)')!.getBoundingClientRect();
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     let node: Node | null;
     let left = 0, right = 0, collisions = 0;
@@ -2118,7 +2119,7 @@ test('inline and arbitrary image wrap preserve text, editing, undo and native cl
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
   await expect(editor.getByAltText('Seconda figura')).toBeVisible();
   await expect.poll(async () => editor.evaluate(root => {
-    const images = Array.from(root.querySelectorAll('img')).map(img => img.getBoundingClientRect());
+    const images = Array.from(root.querySelectorAll('img:not(.ProseMirror-separator)')).map(img => img.getBoundingClientRect());
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     let node: Node | null, collisions = 0;
     while ((node = walker.nextNode())) {

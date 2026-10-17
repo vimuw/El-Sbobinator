@@ -146,11 +146,16 @@ test('HTML fallback restores CSS leading, fonts, selections, history and saved c
   await editor.focus();
   await editor.evaluate(root => { const instance = (root as HTMLElement & { editor: Editor }).editor; instance.commands.setTextSelection(instance.state.doc.content.size - 1); });
   await page.keyboard.press('Control+v');
-  const wordPaste = await editor.locator('p').last().evaluate(el => ({ text: el.textContent, size: getComputedStyle(el.querySelector('span')!).fontSize }));
+  // Reading-color decorations also wrap the existing text in spans: measure the pasted run.
+  const wordPaste = await editor.locator('p').last().evaluate(el => {
+    const pasted = Array.from(el.querySelectorAll('span')).find(span => span.textContent === 'Cella')!;
+    return { text: el.textContent, size: getComputedStyle(pasted).fontSize };
+  });
   expect(wordPaste).toEqual({ text: 'FineCella', size: '12.8333px' });
   await page.keyboard.press('Control+z');
   expect((await read()).html).toBe(reopened.html);
-  // Omitting the table shell must carry inherited leading as well as font.
+  // Omitting the table shell must carry the inherited font. Leading belongs to
+  // the paragraph, so a word selection adopts the destination's line spacing.
   await editor.evaluate(root => {
     const instance = (root as HTMLElement & { editor: Editor }).editor;
     instance.commands.focus();
@@ -161,8 +166,8 @@ test('HTML fallback restores CSS leading, fonts, selections, history and saved c
   expect(inheritedWord).not.toMatch(/<(p|table)[ >]/);
   expect(await page.evaluate(html => {
     const span = new DOMParser().parseFromString(html, 'text/html').querySelector<HTMLElement>('span')!;
-    return { text: span.textContent, size: span.style.fontSize, leading: Number(span.style.lineHeight) };
-  }, inheritedWord)).toEqual({ text: 'Esplicita', size: '14pt', leading: 1.71429 });
+    return { text: span.textContent, size: span.style.fontSize, leading: span.style.lineHeight };
+  }, inheritedWord)).toEqual({ text: 'Esplicita', size: '14pt', leading: '' });
   expect((await read()).html).toBe(reopened.html);
   fs.writeFileSync(testInfo.outputPath('table-inherited-word-clipboard.html'), inheritedWord);
   fs.writeFileSync(testInfo.outputPath('table-word-clipboard.json'), JSON.stringify(cellCopy));
