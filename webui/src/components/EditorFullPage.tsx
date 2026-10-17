@@ -11,10 +11,9 @@ import { useTheme } from '../hooks/useTheme';
 import { useEditorAutosave, type EditorSaveController } from '../hooks/useEditorAutosave';
 import { STORAGE_KEYS } from '../storageKeys';
 import { EditorShortcuts } from './EditorShortcuts';
+// Bundled with the editor page: a lazy player flashed "Caricamento player..." on every first open.
+import { AudioPlayer } from './AudioPlayer';
 
-const LazyAudioPlayer = React.lazy(() =>
-  import('./AudioPlayer').then(m => ({ default: m.AudioPlayer }))
-);
 const LazyRichTextEditor = React.lazy(() =>
   import('./RichTextEditor').then(m => ({ default: m.RichTextEditor }))
 );
@@ -325,17 +324,15 @@ export function EditorFullPage({
                   Preparazione audio della sbobina...
                 </div>
               ) : audioSrc ? (
-                <Suspense fallback={<div className="p-4 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento player...</div>}>
-                  <LazyAudioPlayer
-                    src={audioSrc}
-                    initialTime={previewInitAudio.time}
-                    initialPlaybackRate={previewInitAudio.playbackRate}
-                    initialVolume={previewInitAudio.volume}
-                    onStateChange={onAudioStateChange}
-                    onRelink={onRelink}
-                    onRemoveAudio={onRemoveAudio}
-                  />
-                </Suspense>
+                <AudioPlayer
+                  src={audioSrc}
+                  initialTime={previewInitAudio.time}
+                  initialPlaybackRate={previewInitAudio.playbackRate}
+                  initialVolume={previewInitAudio.volume}
+                  onStateChange={onAudioStateChange}
+                  onRelink={onRelink}
+                  onRemoveAudio={onRemoveAudio}
+                />
               ) : audioRelinkNeeded ? (
                 <div className="flex items-center justify-between gap-3 py-3.5">
                   <div className="min-w-0">
