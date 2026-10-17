@@ -1,7 +1,11 @@
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import { expectAutosaved } from './autosave';
+
+// CI installs the locked dependencies only in .venv, not in the runner's python.
+const projectPython = fileURLToPath(new URL(process.platform === 'win32' ? '../../.venv/Scripts/python.exe' : '../../.venv/bin/python', import.meta.url));
 
 async function openEditor(page: Page, info: TestInfo) {
   const audio = info.outputPath('reported_bugs.wav');
@@ -145,7 +149,7 @@ test('Enter adds no automatic gap and a second Enter leaves exactly one blank li
 });
 
 test('generated block gaps survive save and copy without spreading to new paragraphs or list items', async ({ page }, info) => {
-  const generated = execFileSync('python', ['-c', "from el_sbobinator.utils.html_export import build_html_document; print(build_html_document('Lezione', 'Prima\\n\\nSeconda\\n\\n- Uno\\n- Due\\n\\nDopo elenco'))"], { cwd: '..', encoding: 'utf8' });
+  const generated = execFileSync(projectPython, ['-c', "from el_sbobinator.utils.html_export import build_html_document; print(build_html_document('Lezione', 'Prima\\n\\nSeconda\\n\\n- Uno\\n- Due\\n\\nDopo elenco'))"], { cwd: '..', encoding: 'utf8' });
   await paste(page, generated);
   const editor = page.locator('.tiptap-editor');
   const read = () => editor.locator('p').evaluateAll(paragraphs => paragraphs.map(p => ({ text: p.textContent, top: p.getBoundingClientRect().top, height: p.getBoundingClientRect().height, before: getComputedStyle(p).marginTop, after: getComputedStyle(p).marginBottom })));
