@@ -197,6 +197,7 @@ class CloseHandlerTests(unittest.TestCase):
         api._force_close = False
         window = MagicMock()
         stop_event = MagicMock()
+        window.create_confirmation_dialog.return_value = False
         handler = build_close_handler(api, window, stop_event)
         window.evaluate_js.side_effect = lambda script, callback: callback(False)
         with patch("el_sbobinator.webview_entry.threading.Thread") as worker:
@@ -235,10 +236,61 @@ class CloseHandlerTests(unittest.TestCase):
         api._force_close = False
         window = MagicMock()
         window.evaluate_js.side_effect = RuntimeError("Bridge unavailable")
+        window.create_confirmation_dialog.return_value = False
         handler = build_close_handler(api, window)
         with patch("el_sbobinator.webview_entry.threading.Thread") as worker:
             self.assertIs(handler(), False)
             worker.call_args.kwargs["target"]()
+            window.destroy.assert_not_called()
+            self.assertIs(handler(), False)
+            self.assertEqual(worker.call_count, 2)
+
+    def test_failed_save_lets_the_user_close_anyway_after_confirmation(self):
+        api = MagicMock()
+        api.is_busy.return_value = False
+        api._force_close = False
+        window = MagicMock()
+        stop_event = MagicMock()
+        handler = build_close_handler(api, window, stop_event)
+        window.evaluate_js.side_effect = lambda script, callback: callback(False)
+        window.create_confirmation_dialog.side_effect = RuntimeError("Dialog failed")
+        with patch("el_sbobinator.webview_entry.threading.Thread") as worker:
+            self.assertIs(handler(), False)
+            worker.call_args.kwargs["target"]()
+            window.destroy.assert_not_called()
+
+            window.create_confirmation_dialog.side_effect = None
+            window.create_confirmation_dialog.return_value = True
+            self.assertIs(handler(), False)
+            worker.call_args.kwargs["target"]()
+            self.assertIn(
+                "modifiche non salvate andranno perse",
+                window.create_confirmation_dialog.call_args.args[1],
+            )
+            window.destroy.assert_called_once()
+            with patch("el_sbobinator.webview_entry.LocalMediaServer.shutdown_all"):
+                self.assertIsNone(handler())
+                stop_event.set.assert_called_once()
+
+    def test_unconfirmed_close_does_not_start_a_flush_while_asking(self):
+        api = MagicMock()
+        api.is_busy.return_value = False
+        api._force_close = False
+        window = MagicMock()
+        handler = build_close_handler(api, window)
+        window.evaluate_js.side_effect = lambda script, callback: callback(False)
+
+        def ask_while_user_clicks_close_again(*_args):
+            self.assertIs(handler(), False)
+            return False
+
+        window.create_confirmation_dialog.side_effect = (
+            ask_while_user_clicks_close_again
+        )
+        with patch("el_sbobinator.webview_entry.threading.Thread") as worker:
+            self.assertIs(handler(), False)
+            worker.call_args.kwargs["target"]()
+            worker.assert_called_once()
             window.destroy.assert_not_called()
             self.assertIs(handler(), False)
             self.assertEqual(worker.call_count, 2)
