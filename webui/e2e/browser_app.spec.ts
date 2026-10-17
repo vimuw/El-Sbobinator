@@ -35,6 +35,11 @@ async function startScenario(page: Page): Promise<void> {
 }
 
 test.describe('El Sbobinator Browser Host E2E', () => {
+  // The scenario is server-wide: later tests on this worker's server expect success.
+  test.afterEach(async ({ page }) => {
+    await selectScenario(page, 'success');
+  });
+
   test('happy path covers upload, phases, console, archive, and editor', async ({ page }, testInfo) => {
     const fixturePath = createAudioFixture(testInfo);
     await page.goto('/');
