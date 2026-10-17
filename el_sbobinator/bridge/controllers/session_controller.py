@@ -31,6 +31,7 @@ from el_sbobinator.services.session_audio_service import (
     attach_playback_audio,
     create_playback_audio,
     discard_playback_audio,
+    discard_unlinked_playback_audio,
     managed_audio_path,
     playback_audio_path,
     session_audio_lock,
@@ -260,8 +261,10 @@ class SessionControllerMixin:
                     discard_playback_audio(old_audio)
                 except OSError:
                     # The new association is already durable; an old active stream
-                    # must not make the relink appear to have failed.
+                    # must not make the relink appear to have failed. A later
+                    # open retries the deletion.
                     pass
+                discard_unlinked_playback_audio(abs_dir, keep=created)
                 with self._sessions_cache_lock:
                     self._sessions_cache = None
                     self._sessions_cache_gen += 1

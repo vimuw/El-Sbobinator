@@ -342,6 +342,34 @@ def test_failed_remove_restores_association(session_audio):
     assert source.exists()
 
 
+def test_copy_still_streamed_at_relink_is_deleted_on_a_later_open(session_audio):
+    api, session, source, _ = session_audio
+    assert api.update_session_input_path(str(session), str(source))["ok"]
+    old_path = playback_audio_path(load_session(session), str(session))
+    assert old_path is not None
+    old = Path(old_path)
+    # Windows cannot delete a copy that the player's open stream still reads.
+    with patch(
+        "el_sbobinator.bridge.controllers.session_controller.discard_playback_audio",
+        side_effect=PermissionError("in use"),
+    ):
+        assert api.update_session_input_path(str(session), str(source))["ok"]
+    current_path = playback_audio_path(load_session(session), str(session))
+    assert current_path is not None
+    current = Path(current_path)
+    assert old.exists() and current != old
+    os.utime(old, (old.stat().st_atime, old.stat().st_mtime - 3600))
+    # A copy published moments ago may still be waiting for its session link.
+    pending = session / "audio" / f"playback-{'0' * 32}.mp3"
+    pending.write_bytes(b"\x00" * 2048)
+
+    result, played = resolve_audio(api, session)
+
+    assert result["ok"] and played == str(current)
+    assert not old.exists()
+    assert current.exists() and pending.exists() and source.exists()
+
+
 def test_legacy_conversion_failure_plays_original_with_explicit_warning(session_audio):
     api, session, source, original = session_audio
     with patch(

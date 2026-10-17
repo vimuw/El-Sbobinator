@@ -28,6 +28,7 @@ from el_sbobinator.services.session_audio_service import (
     attach_playback_audio,
     create_playback_audio,
     discard_playback_audio,
+    discard_unlinked_playback_audio,
     playback_audio_path,
     session_audio_lock,
     session_metadata_lock,
@@ -393,6 +394,11 @@ class MediaControllerMixin:
                                 "Copia audio interna non salvata. Il player usa il file "
                                 "originale: non spostarlo e riapri la sbobina per riprovare."
                             )
+                    if data.get("stage") == "done":
+                        # Copies replaced while still streamed could not be deleted then.
+                        discard_unlinked_playback_audio(
+                            abs_dir, keep=resolved_file_path
+                        )
             except Exception as error:
                 return None, has_audio, str(redact_secrets(error))
             if not resolved_file_path or not os.path.isfile(resolved_file_path):
