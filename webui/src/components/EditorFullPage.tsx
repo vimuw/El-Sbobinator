@@ -295,7 +295,8 @@ export function EditorFullPage({
           </div>
 
           <div className="editor-fullpage-body">
-            <Suspense fallback={<div className="p-6 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento editor...</div>}>
+            {/* The fallback fills the body so the footer player stays at the bottom while the editor chunk loads. */}
+            <Suspense fallback={<div className="editor-fullpage-loading flex-1 min-h-0 p-6 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento editor...</div>}>
               <LazyRichTextEditor
                 key={htmlPath}
                 initialContent={previewContent}

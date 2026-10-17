@@ -38,3 +38,24 @@ test('the queue slides down instead of jumping when processing starts', async ({
   const largestStep = Math.max(...samples.slice(1).map((top, index) => Math.abs(top - samples[index])));
   expect(largestStep).toBeLessThan(100);
 });
+
+test('the player stays at the bottom while the editor is loading', async ({ page }, info) => {
+  // Hold the editor chunk, including any idle preload, so the loading fallback stays visible.
+  let releaseEditor = () => {};
+  const editorGate = new Promise<void>(resolve => { releaseEditor = resolve; });
+  await page.route('**/src/components/RichTextEditor.tsx*', async route => {
+    await editorGate;
+    await route.continue();
+  });
+  await queueFile(page, audioFixture(info, 'loading.wav'));
+  await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'loading.wav' });
+  await expect(completed).toBeVisible({ timeout: 15_000 });
+  await completed.getByRole('heading').click();
+
+  await expect(page.getByText('Caricamento editor...')).toBeVisible();
+  const footer = await page.locator('.editor-fullpage-footer').boundingBox();
+  const viewport = page.viewportSize()!;
+  expect(footer!.y + footer!.height).toBeGreaterThan(viewport.height - 4);
+  releaseEditor();
+});
