@@ -147,4 +147,8 @@ def discard_unlinked_playback_audio(session_dir: str, keep: str | None) -> None:
 
 
 def attach_playback_audio(data: dict, session_dir: str, path: str) -> None:
-    data["playback_audio"] = os.path.relpath(path, session_dir)
+    # Resolve both sides: a linked session root (macOS /var -> /private/var)
+    # would otherwise store a relative path that escapes the session.
+    data["playback_audio"] = os.path.relpath(
+        os.path.realpath(path), os.path.realpath(session_dir)
+    )
