@@ -489,7 +489,8 @@ export function RichTextEditor({
         onClose={() => setContextMenu(null)}
         editor={editor}
         onOpenImagePicker={() => imageInputRef.current?.click()}
-        onOpenFind={() => setFindMode('find')}
+        // The item advertises Ctrl+H, so it opens the same replace dialog.
+        onOpenFind={() => setFindMode('replace')}
         onOpenMath={() => setIsMathOpen(true)}
         onOpenLink={openLinkPanel}
       />

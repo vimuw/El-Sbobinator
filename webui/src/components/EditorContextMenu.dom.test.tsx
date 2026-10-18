@@ -176,6 +176,22 @@ describe('EditorContextMenu', () => {
     } finally { prompt.mockRestore(); editor.destroy(); }
   });
 
+  it('labels Trova e sostituisci with its Ctrl+H shortcut', () => {
+    const editor = new Editor({ extensions: [StarterKit], content: '<p>Testo</p>' });
+    try {
+      render(
+        <EditorContextMenu
+          contextMenu={{ x: 10, y: 10 }}
+          onClose={vi.fn()}
+          editor={editor}
+          onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
+          onOpenFind={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('Trova e sostituisci').closest('button')?.textContent).toContain('Ctrl+H');
+    } finally { editor.destroy(); }
+  });
+
   it('closes on Esc without reaching the editor page', () => {
     const editor = new Editor({ extensions: [StarterKit], content: '<p>Testo</p>' });
     const onClose = vi.fn();

@@ -275,7 +275,7 @@ export function EditorContextMenu({
           <Search className="h-4 w-4 shrink-0" />
           <span>Trova e sostituisci</span>
         </span>
-        <kbd className="editor-context-menu-shortcut">Ctrl+F</kbd>
+        <kbd className="editor-context-menu-shortcut">Ctrl+H</kbd>
       </button>
     </div>,
     document.body,
