@@ -37,21 +37,16 @@ const extractImageAttrs = (element: HTMLElement) => {
   }
   const figcaption = element.querySelector('figcaption, .editor-image-caption');
 
-  let widthVal = element.getAttribute('data-width') || img.getAttribute('data-width') || '';
-  if (!widthVal) {
-    const elementStyleWidth = element.style.width;
-    const imgStyleWidth = img.style.width;
-    const imgWidthAttr = img.getAttribute('width');
-    if (elementStyleWidth && elementStyleWidth.endsWith('%')) {
-      widthVal = elementStyleWidth;
-    } else if (imgStyleWidth && imgStyleWidth.endsWith('%')) {
-      widthVal = imgStyleWidth;
-    } else if (imgWidthAttr && Number.isFinite(Number(imgWidthAttr))) {
-      const px = Number(imgWidthAttr);
-      widthVal = String(Math.round((px / EDITOR_CONTENT_WIDTH_PX) * 100));
-    } else if (elementStyleWidth || imgStyleWidth) {
-      widthVal = elementStyleWidth || imgStyleWidth;
-    }
+  // Our own width may exceed the text area after a resize. External HTML
+  // sizes are page geometry: convert them and fit them inside the text area.
+  let width = clampWidth(element.getAttribute('data-width') || img.getAttribute('data-width') || '56');
+  if (!element.getAttribute('data-width') && !img.getAttribute('data-width')) {
+    const percent = [element.style.width, img.style.width].find(value => value.endsWith('%'));
+    const length = [element.style.width, img.style.width, img.getAttribute('width') ?? ''].map(value => /^(\d*\.?\d+)(px|pt)?$/i.exec(value.trim())).find(Boolean);
+    const external = percent ? Number.parseFloat(percent)
+      : length ? Number(length[1]) * (length[2]?.toLowerCase() === 'pt' ? 4 / 3 : 1) / EDITOR_CONTENT_WIDTH_PX * 100
+        : Number.NaN;
+    if (Number.isFinite(external)) width = Math.min(100, clampWidth(external));
   }
 
   const requestedLayout = normalizeImageLayout(element.getAttribute('data-layout') || (element.style.float === 'left' || element.style.float === 'right' ? 'wrap' : 'inline'));
@@ -64,7 +59,7 @@ const extractImageAttrs = (element: HTMLElement) => {
     src: img.getAttribute('src') || '',
     alt: img.getAttribute('alt') || '',
     title: img.getAttribute('title') || '',
-    width: clampWidth(widthVal || '56'),
+    width,
     align,
     layout,
     position: normalizeImagePosition(element.getAttribute('data-position'), align),

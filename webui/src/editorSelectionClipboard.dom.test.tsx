@@ -69,3 +69,20 @@ describe('internal copy and paste', () => {
     expect(editor.getHTML()).not.toContain('inherit');
   });
 });
+
+describe('pasted image width', () => {
+  const src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j9N0AAAAASUVORK5CYII=';
+  it.each([
+    ['a wide width attribute', `<p>Prima<img src="${src}" width="1600">Dopo</p>`, 100],
+    ['a px style without width attribute', `<p>Prima<img src="${src}" style="width:800px">Dopo</p>`, 100],
+    ['a narrow width attribute', `<p>Prima<img src="${src}" width="301">Dopo</p>`, 50],
+    ['a percentage over the page', `<p>Prima<img src="${src}" style="width:180%">Dopo</p>`, 100],
+    ['our own resize past the text area', `<p>Prima<span data-editor-image data-width="150"><img src="${src}"></span>Dopo</p>`, 150],
+  ])('fits %s', async (_case, html, width) => {
+    const editor = await openEditor();
+    act(() => { editor.view.pasteHTML(html, new Event('paste') as ClipboardEvent); });
+    const images: number[] = [];
+    editor.state.doc.descendants(node => { if (node.type.name === 'floatingImage') images.push(node.attrs.width); });
+    expect(images).toEqual([width]);
+  });
+});
