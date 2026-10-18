@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Segnala un problema
+    url: https://docs.google.com/forms/d/e/1FAIpQLSdzfLau1SrSZuJgQ2J3lERgtXcz9EjE_vP63nHkiVYCsRqMzA/viewform
+    about: Usa questo modulo per segnalare un bug di El Sbobinator.
