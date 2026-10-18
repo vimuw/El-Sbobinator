@@ -32,11 +32,21 @@ describe('preparePastedEditorHtml', () => {
   ])('stores no colours from a %s web page', async (_theme, color, background) => {
     const editor = await openEditor();
     act(() => {
-      editor.view.pasteHTML(`<meta charset="utf-8"><p style="color: ${color}; background-color: ${background};"><span style="color: ${color}; background-color: ${background};">Testo dal web</span> <font color="${color}">e font</font> <mark style="background-color: ${background}">segnato</mark></p>`, new Event('paste') as ClipboardEvent);
+      // Chromium page copy: the page's computed style is inlined on the selection.
+      editor.view.pasteHTML(`<meta charset="utf-8"><p style="color: ${color}; font-family: sans-serif; font-size: 14px; font-style: normal; font-variant-ligatures: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: ${background};"><span style="color: ${color}; background-color: ${background};">Testo dal web</span> <font color="${color}">e font</font> <mark style="background-color: ${background}">segnato</mark></p>`, new Event('paste') as ClipboardEvent);
     });
     const html = editor.getHTML();
     expect(html).toContain('Testo dal web');
     expect(html).not.toMatch(/color|rgb|#e3e3e3|#1f1f1f/i);
+  });
+
+  it('keeps the colours of authored HTML that is not a page copy', async () => {
+    const editor = await openEditor();
+    act(() => {
+      editor.view.pasteHTML('<p><span style="color:#123abc">Blu</span> <mark style="background-color:#ffee00">giallo</mark></p>', new Event('paste') as ClipboardEvent);
+    });
+    expect(editor.getHTML()).toContain('color: rgb(18, 58, 188)');
+    expect(editor.getHTML()).toMatch(/background-color: (#ffee00|rgb\(255, 238, 0\))/);
   });
 });
 
