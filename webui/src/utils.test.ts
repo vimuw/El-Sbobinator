@@ -6,6 +6,11 @@ describe('isQuotaError', () => {
     expect(isQuotaError(undefined)).toBe(false);
   });
 
+  it('returns true for phase1_all_models_unavailable and labels it in Italian', () => {
+    expect(isResumableError('phase1_all_models_unavailable')).toBe(true);
+    expect(errorLabel('phase1_all_models_unavailable')).not.toContain('phase1_');
+  });
+
   it('returns true for quota_daily_limit_phase1', () => {
     expect(isQuotaError('quota_daily_limit_phase1')).toBe(true);
   });

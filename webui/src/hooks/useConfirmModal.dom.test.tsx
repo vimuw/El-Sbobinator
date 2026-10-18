@@ -5,7 +5,7 @@ import type { FileItem } from '../appState';
 
 describe('useConfirmModal', () => {
   const dispatch = vi.fn();
-  const setFolders = vi.fn();
+  const onFoldersChange = vi.fn().mockResolvedValue(undefined);
   const setArchiveSessions = vi.fn();
   const setArchiveTotal = vi.fn();
   const refreshArchiveSessions = vi.fn();
@@ -27,7 +27,7 @@ describe('useConfirmModal', () => {
         dispatch,
         filesRef,
         foldersRef,
-        setFolders,
+        onFoldersChange,
         setArchiveSessions,
         setArchiveTotal,
         refreshArchiveSessions,
@@ -77,7 +77,7 @@ describe('useConfirmModal', () => {
         dispatch,
         filesRef,
         foldersRef,
-        setFolders,
+        onFoldersChange,
         setArchiveSessions,
         setArchiveTotal,
         refreshArchiveSessions,
@@ -127,7 +127,7 @@ describe('useConfirmModal', () => {
         dispatch,
         filesRef,
         foldersRef,
-        setFolders,
+        onFoldersChange,
         setArchiveSessions,
         setArchiveTotal,
         refreshArchiveSessions,

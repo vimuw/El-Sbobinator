@@ -14,6 +14,7 @@ export function normalizeSessionPath(path?: string): string {
   return String(path || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 }
 const _ERROR_MAP: Record<string, string> = {
+  phase1_all_models_unavailable: 'Nessun modello disponibile durante la trascrizione. Sessione salvata: clicca Riprendi per continuare.',
   phase1_degenerate_output: 'Trascrizione interrotta: testo non valido anche dopo il retry automatico.',
   quota_daily_limit_phase1: 'Quota API giornaliera esaurita — riprova domani, oppure aggiungi una chiave di riserva nelle impostazioni.',
   quota_daily_limit_phase2: 'Quota API esaurita durante la revisione — riprova domani, oppure aggiungi una chiave di riserva nelle impostazioni.',
@@ -32,6 +33,7 @@ const _RESUMABLE_ERRORS = new Set([
   'quota_daily_limit_phase1',
   'quota_daily_limit_phase2',
   'regenerate_prompt_timeout',
+  'phase1_all_models_unavailable',
 ]);
 
 function sentence(text: string): string {

@@ -28,7 +28,7 @@ interface UseConfirmModalOptions {
   dispatch: React.Dispatch<ProcessingAction>;
   filesRef: React.MutableRefObject<FileItem[]>;
   foldersRef: React.MutableRefObject<ArchiveFolder[]>;
-  setFolders: React.Dispatch<React.SetStateAction<ArchiveFolder[]>>;
+  onFoldersChange: (next: ArchiveFolder[]) => Promise<void>;
   setArchiveSessions: React.Dispatch<React.SetStateAction<ArchiveSession[]>>;
   setArchiveTotal: React.Dispatch<React.SetStateAction<number>>;
   refreshArchiveSessions: () => Promise<void>;
@@ -44,7 +44,7 @@ export function useConfirmModal({
   dispatch,
   filesRef,
   foldersRef,
-  setFolders,
+  onFoldersChange,
   setArchiveSessions,
   setArchiveTotal,
   refreshArchiveSessions,
@@ -199,8 +199,7 @@ export function useConfirmModal({
             ...folder,
             session_dirs: folder.session_dirs.filter(d => normalizeSessionDir(d) !== normTarget),
           }));
-          setFolders(updated);
-          void window.pywebview?.api?.save_archive_folders?.(updated).catch(() => {});
+          void onFoldersChange(updated);
         } else {
           appendConsole(`❌ Errore eliminazione sessione: ${res?.error ?? 'errore sconosciuto'}`);
         }
@@ -221,8 +220,7 @@ export function useConfirmModal({
           ...folder,
           session_dirs: folder.session_dirs.filter(d => !normDirSet.has(normalizeSessionDir(d))),
         }));
-        setFolders(updated);
-        void window.pywebview?.api?.save_archive_folders?.(updated).catch(() => {});
+        void onFoldersChange(updated);
       }).catch((e: unknown) => {
         appendConsole(`❌ Errore eliminazione sessioni: ${getErrorMessage(e)}`);
       });
@@ -250,7 +248,7 @@ export function useConfirmModal({
     setArchiveSessions,
     setArchiveTotal,
     foldersRef,
-    setFolders,
+    onFoldersChange,
     onFileRemovedFromBatch,
   ]);
 

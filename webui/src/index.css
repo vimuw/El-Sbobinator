@@ -4795,12 +4795,12 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 .math-editor-source.is-invalid {
-  border-color: var(--status-error-text, #b91c1c);
+  border-color: var(--error-text);
 }
 
 .math-editor-error {
   padding: 2px 4px;
-  color: var(--status-error-text, #b91c1c);
+  color: var(--error-text);
   font: 11px/1.4 sans-serif;
 }
 

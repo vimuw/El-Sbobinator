@@ -228,7 +228,7 @@ export default function App() {
     dispatch,
     filesRef,
     foldersRef,
-    setFolders,
+    onFoldersChange: handleFoldersChange,
     setArchiveSessions,
     setArchiveTotal,
     refreshArchiveSessions,
