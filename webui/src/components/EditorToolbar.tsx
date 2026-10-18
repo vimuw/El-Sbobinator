@@ -38,6 +38,8 @@ const menuBarStateKey = (editor: TiptapEditor): string => [
   editor.getAttributes('textStyle').color ?? '',
   editor.getAttributes('textStyle').fontFamily ?? '',
   editor.getAttributes('textStyle').fontSize ?? '',
+  // Docs paragraph styles feed the font, size and colour controls too.
+  JSON.stringify(editor.getAttributes(editor.isActive('heading') ? 'heading' : 'paragraph').documentStyle ?? null),
 ].join('|');
 
 export const MenuBar = ({

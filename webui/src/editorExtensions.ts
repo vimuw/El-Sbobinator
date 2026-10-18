@@ -52,6 +52,7 @@ declare module '@tiptap/core' {
     };
     blockTypography: {
       clearBlockFontSize: () => ReturnType;
+      clearBlockFontFamily: () => ReturnType;
     };
   }
 }
@@ -219,6 +220,17 @@ export const FontSize = Extension.create({
           .setMark('textStyle', { fontSize: null })
           .removeEmptyTextStyle()
           .run();
+      },
+      clearBlockFontFamily: () => ({ tr, state }) => {
+        // The default font must also drop a paragraph-level font from Docs.
+        const { from, to } = state.selection;
+        state.doc.nodesBetween(from, to, (node, pos) => {
+          const direct = node.attrs.documentStyle as Record<string, string> | null | undefined;
+          if (!direct?.['font-family']) return;
+          const { 'font-family': _removed, ...kept } = direct;
+          tr.setNodeAttribute(pos, 'documentStyle', Object.keys(kept).length ? kept : null);
+        });
+        return true;
       },
       clearBlockFontSize: () => ({ tr, state }) => {
         const { from, to } = state.selection;

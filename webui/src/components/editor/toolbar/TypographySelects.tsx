@@ -70,7 +70,7 @@ export const FontFamilySelect = ({ editor }: { editor: TiptapEditor }) => {
   const selectFamily = (value: string) => {
     setIsOpen(false);
     if (value === '') {
-      editor.chain().focus().unsetFontFamily().run();
+      editor.chain().focus().unsetFontFamily().clearBlockFontFamily().run();
     } else {
       editor.chain().focus().setFontFamily(value).run();
     }
