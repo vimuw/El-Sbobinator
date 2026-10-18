@@ -184,6 +184,9 @@ def find_audio_for_session(session_dir: str, session_data: dict) -> str | None:
     for candidate_dir in [os.path.join(session_dir, "audio"), session_dir]:
         if os.path.isdir(candidate_dir):
             for entry in os.listdir(candidate_dir):
+                if entry.lower().endswith(".partial.mp3"):
+                    # An unfinished playback copy, never a usable lecture audio.
+                    continue
                 ext = os.path.splitext(entry)[1].lower()
                 if ext in {
                     ".mp3",

@@ -17,6 +17,10 @@ _AUDIO_LOCKS = tuple(threading.RLock() for _ in range(32))
 _METADATA_LOCKS = tuple(threading.RLock() for _ in range(32))
 PLAYBACK_AUDIO_BITRATE = "32k"
 _PLAYBACK_AUDIO_NAME = re.compile(r"playback-[0-9a-f]{32}\.mp3")
+_PARTIAL_PLAYBACK_AUDIO_NAME = re.compile(r"playback-[0-9a-f]{32}\.partial\.mp3")
+# Partial copies being encoded right now by this process: never cleaned up.
+_ACTIVE_PARTIALS: set[str] = set()
+_ACTIVE_PARTIALS_LOCK = threading.Lock()
 _UNLINKED_AUDIO_GRACE_SECONDS = 60
 
 
@@ -85,6 +89,8 @@ def create_playback_audio(
         raise ValueError("Cartella audio della sbobina non valida.")
     os.makedirs(os.path.dirname(target), exist_ok=True)
     partial = target.removesuffix(".mp3") + ".partial.mp3"
+    with _ACTIVE_PARTIALS_LOCK:
+        _ACTIVE_PARTIALS.add(os.path.normcase(partial))
     try:
         encoding_source = source_path
         if (
@@ -107,9 +113,13 @@ def create_playback_audio(
         os.replace(partial, target)
         return target
     finally:
-        if os.path.isfile(partial):
-            os.remove(partial)
-        invalidate_session_storage_cache()
+        try:
+            if os.path.isfile(partial):
+                os.remove(partial)
+        finally:
+            with _ACTIVE_PARTIALS_LOCK:
+                _ACTIVE_PARTIALS.discard(os.path.normcase(partial))
+            invalidate_session_storage_cache()
 
 
 def discard_playback_audio(path: str | None) -> None:
@@ -124,6 +134,8 @@ def discard_unlinked_playback_audio(session_dir: str, keep: str | None) -> None:
 
     Windows refuses to delete a copy that an open player stream still reads, so
     a relink can leave the previous copy behind; later opens remove it.
+    A process killed while encoding leaves a .partial.mp3 behind: stale ones
+    are removed too, never one this process is still writing.
     """
     audio_dir = os.path.join(os.path.realpath(session_dir), "audio")
     try:
@@ -133,11 +145,15 @@ def discard_unlinked_playback_audio(session_dir: str, keep: str | None) -> None:
     kept = os.path.normcase(os.path.realpath(keep)) if keep else None
     now = time.time()
     removed = False
+    with _ACTIVE_PARTIALS_LOCK:
+        active = set(_ACTIVE_PARTIALS)
     for name in names:
-        if not is_playback_audio_name(name):
+        if not (
+            is_playback_audio_name(name) or _PARTIAL_PLAYBACK_AUDIO_NAME.fullmatch(name)
+        ):
             continue
         path = managed_audio_path(session_dir, os.path.join("audio", name))
-        if path is None or os.path.normcase(path) == kept:
+        if path is None or os.path.normcase(path) in (kept, *active):
             continue
         try:
             # A copy published moments ago may still be awaiting its link.
