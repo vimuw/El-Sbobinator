@@ -367,7 +367,7 @@ def build_html_document_from_body(
     hr {{ display: none; }}
     code {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 0.95em; }}
     blockquote {{ margin: 0.9rem 0; padding: 0.1rem 0 0.1rem 1rem; border-left: 3px solid var(--rule); color: var(--muted); }}
-    table {{ border-collapse: collapse; width: 100%; margin: 1.2rem 0; font-size: 0.95em; }}
+    table {{ border-collapse: collapse; width: 100%; margin: 1.2rem 0; font-size: {formatting["table"]["fontSizeEm"]}em; line-height: {formatting["table"]["lineHeight"]}; }}
     th, td {{ border: 1px solid var(--rule); padding: {formatting["table"]["paddingVerticalPt"]}pt {formatting["table"]["paddingHorizontalPt"]}pt; text-align: left; vertical-align: top; }}
     th {{ background: #f8f9fa; font-weight: 700; }}
   </style>

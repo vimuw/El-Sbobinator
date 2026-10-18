@@ -66,7 +66,7 @@ def prepare_source_environment(root: Path, launcher: Path) -> None:
 
         verify_dependencies(root)
         verify_frontend_build(root)
-    except (OSError, RuntimeError) as exc:
+    except (OSError, RuntimeError, ValueError, KeyError) as exc:
         show_startup_error(
             f"Impossibile avviare l'app dai sorgenti.\n\n{exc}\n\n"
             "Aggiorna l'ambiente con questo comando PowerShell:\n"
