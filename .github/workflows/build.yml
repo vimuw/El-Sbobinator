@@ -388,7 +388,7 @@ jobs:
     needs: [dependency-gate, release-context]
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    if: ${{ !cancelled() && needs.dependency-gate.result == 'success' && needs.release-context.result == 'success' && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') }}
     strategy:
       fail-fast: false
       matrix:
@@ -488,7 +488,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    if: needs.release-context.outputs.tag != ''
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.release-context.outputs.tag != '' }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
