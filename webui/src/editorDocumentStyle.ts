@@ -1,6 +1,6 @@
 import { Extension } from '@tiptap/core';
 import { closeHistory } from '@tiptap/pm/history';
-import { DOCUMENT_FORMATTING, pointSize } from './documentFormatting';
+import { DOCUMENT_FORMATTING, isDefaultBlockStyle, pointSize } from './documentFormatting';
 import { EditorEmptyTextMarks } from './editorEmptyTextMarks';
 import { clipboardCssLineHeight } from './editorLineSpacing';
 import { readMarks } from './emptyTextMarks';
@@ -32,6 +32,9 @@ export const EditorDocumentStyle = Extension.create({
               && element.getAttribute('data-editor-default-heading-color') === style.color) delete values.color;
             const clipboardLeading = clipboardCssLineHeight(element as HTMLElement);
             if (clipboardLeading) values['line-height'] = clipboardLeading;
+            const level = Number(/^H([1-6])$/.exec(element.tagName)?.[1]) || null;
+            const inTable = Boolean(element.closest('td,th'));
+            Object.entries(values).forEach(([property, value]) => { if (isDefaultBlockStyle(property, String(value), level, inTable)) delete values[property]; });
             return Object.keys(values).length ? values : null;
           },
           renderHTML: attributes => {
@@ -88,7 +91,9 @@ export const EditorDocumentStyle = Extension.create({
                 })));
               }
             }
-            const inherited = node.attrs.documentStyle?.color;
+            // CSS inherit is no ink of its own: never spread it as a mark.
+            const stored = node.attrs.documentStyle?.color;
+            const inherited = stored === 'inherit' ? null : stored;
             node.forEach((child, offset) => {
               if (!child.isInline) return;
               const start = pos + 1 + offset;
@@ -108,7 +113,7 @@ export const EditorDocumentStyle = Extension.create({
               }
               if (!empty) apply(Math.max(start, from), Math.min(end, to), null);
             });
-            if (inherited) {
+            if (stored) {
               const style = { ...node.attrs.documentStyle };
               delete style.color;
               tr.setNodeAttribute(pos, 'documentStyle', Object.keys(style).length ? style : null);

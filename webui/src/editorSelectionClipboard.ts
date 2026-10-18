@@ -1,7 +1,7 @@
 import { DOMSerializer, Fragment, type Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { EditorView } from '@tiptap/pm/view';
 import { closeHistory } from '@tiptap/pm/history';
-import { clipboardPlainText, DOCUMENT_FORMATTING, pointSize } from './documentFormatting';
+import { clipboardPlainText, DOCUMENT_FORMATTING, isDefaultBlockStyle, pointSize } from './documentFormatting';
 import { createNativeClipboardFormats, setClipboardFormats } from './editorClipboard';
 import { prepareHtmlForClipboardSync } from './utils';
 import { reportClientError } from './diagnostics';
@@ -51,6 +51,11 @@ export function preparePastedEditorHtml(html: string, view?: EditorView): string
   body.querySelectorAll(`h1[${SOURCE_HEADING_ATTRIBUTE}],h2[${SOURCE_HEADING_ATTRIBUTE}],h3[${SOURCE_HEADING_ATTRIBUTE}],h4[${SOURCE_HEADING_ATTRIBUTE}],h5[${SOURCE_HEADING_ATTRIBUTE}],h6[${SOURCE_HEADING_ATTRIBUTE}]`).forEach(block => {
     if (block.getAttribute(SOURCE_HEADING_ATTRIBUTE) === '1' && block.closest('[data-document-format="1"]') && !canReplaceParagraph) inlineClipboardBlock(block);
     else block.removeAttribute(SOURCE_HEADING_ATTRIBUTE);
+  });
+  // A heading's profile weight is not bold text: as a mark it would stay
+  // bold after the block becomes a paragraph, and reach the Docs copy.
+  body.querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6').forEach(heading => {
+    if (isDefaultBlockStyle('font-weight', heading.style.fontWeight, Number(heading.tagName[1]), false)) heading.style.removeProperty('font-weight');
   });
   body.querySelectorAll<HTMLSpanElement>(`span[${DEFAULT_HEADING_COLOR_ATTRIBUTE}]`).forEach(span => {
     if (span.closest('[data-document-format="1"]') && span.getAttribute(DEFAULT_HEADING_COLOR_ATTRIBUTE) === span.style.color) span.style.removeProperty('color');
