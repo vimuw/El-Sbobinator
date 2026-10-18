@@ -27,7 +27,7 @@ describe('EditorShortcuts', () => {
     expect(within(dialog).getByRole('region', { name: 'Audio' })).toBeTruthy();
     expect(within(dialog).getByText('Ctrl+.')).toBeTruthy();
     expect(within(dialog).getByText('Ctrl+,')).toBeTruthy();
-    for (const [keys, action] of [['Ctrl+K', 'Inserisci o modifica link'], ['Ctrl+clic', 'Apri il link nel browser'], ['Ctrl+\\', 'Rimuovi formattazione'], ['Ctrl+Alt+0', 'Testo normale']]) {
+    for (const [keys, action] of [['Ctrl+K', 'Inserisci o modifica link'], ['Ctrl+clic', 'Apri il link nel browser'], ['Ctrl+\\', 'Rimuovi formattazione'], ['Ctrl+Alt+0', 'Testo normale'], ['Tab / Shift+Tab', 'Inserisci tabulazione, aumenta / riduci rientro']]) {
       expect(within(dialog).getByText(keys).closest('div')?.textContent).toBe(`${keys}${action}`);
     }
     expect(within(dialog).getByText('Collega un file audio per usare questi comandi.')).toBeTruthy();

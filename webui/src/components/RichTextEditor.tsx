@@ -31,6 +31,7 @@ import { editorFormattingVariables } from '../documentFormatting';
 import { EditorDocumentStyle } from '../editorDocumentStyle';
 import { EditorListItem, EditorOrderedList } from '../editorLists';
 import { EditorReadingColors } from '../editorReadingColors';
+import { EditorParagraphTab } from '../editorParagraphTab';
 
 export type { Heading };
 
@@ -130,6 +131,7 @@ export function RichTextEditor({
     EditorReadingColors,
     EditorOrderedList,
     EditorListItem,
+    EditorParagraphTab,
     FloatingImage,
     TextStyle,
     Color,

@@ -10,6 +10,7 @@ const editorShortcutGroups = [
     ['Ctrl+V', 'Incolla'],
     ['Ctrl+Shift+V', 'Incolla senza formattazione'],
     ['Shift+Invio', 'Vai a capo nello stesso paragrafo'],
+    ['Tab / Shift+Tab', 'Inserisci tabulazione, aumenta / riduci rientro'],
   ] },
   { id: 'format', title: 'Formattazione', shortcuts: [
     ['Ctrl+B', 'Grassetto'],
