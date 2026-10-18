@@ -1,5 +1,6 @@
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
+import TextAlign from '@tiptap/extension-text-align';
 import { afterEach, describe, expect, it } from 'vitest';
 import { EditorListItem, EditorOrderedList } from './editorLists';
 import { prepareSelectionClipboard } from './editorSelectionClipboard';
@@ -544,6 +545,30 @@ describe('Ordered list gestures and selected clipboard', () => {
     editor.commands.undo(); expect(editor.getJSON()).toEqual(first);
     editor.commands.redo(); expect(editor.getHTML()).toBe(html);
     editor.commands.setContent(html); expect(editor.getHTML()).toBe(html);
+  });
+
+  it.each(['center', 'right'])('returns an empty %s line to the start before joining it', align => {
+    const editor = new Editor({ element: document.body.appendChild(document.createElement('div')), extensions: [StarterKit.configure({ orderedList: false, listItem: false }), EditorOrderedList, EditorListItem, EditorDocumentStyle, TextAlign.configure({ types: ['heading', 'paragraph'] })], content: `<p style="text-align:${align}">Ciao</p><p style="text-align:${align}"></p><p>Fine</p>` });
+    editors.push(editor);
+    editor.commands.setTextSelection(editor.state.doc.child(0).nodeSize + 1);
+    const original = editor.getJSON();
+    const backspace = () => editor.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }));
+    backspace();
+    expect(editor.state.doc.childCount).toBe(3);
+    expect(editor.state.doc.child(1).attrs.textAlign).toBeNull();
+    expect(editor.state.doc.child(0).attrs.textAlign).toBe(align);
+    editor.commands.undo(); expect(editor.getJSON()).toEqual(original);
+    editor.commands.redo(); backspace();
+    expect(editor.state.doc.childCount).toBe(2);
+    expect(editor.state.doc.child(0).textContent).toBe('Ciao');
+  });
+
+  it('keeps the alignment of a non-empty centered line on Backspace at its start', () => {
+    const editor = new Editor({ element: document.body.appendChild(document.createElement('div')), extensions: [StarterKit.configure({ orderedList: false, listItem: false }), EditorOrderedList, EditorListItem, EditorDocumentStyle, TextAlign.configure({ types: ['heading', 'paragraph'] })], content: '<p>Prima</p><p style="text-align:center">Seconda</p>' });
+    editors.push(editor);
+    select(editor, 'Seconda'); editor.commands.setTextSelection(editor.state.selection.from);
+    editor.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }));
+    expect(editor.state.doc.child(0).textContent).toBe('PrimaSeconda');
   });
 
   it('keeps paragraph indentation when Backspace is inside text or over a selection', () => {
