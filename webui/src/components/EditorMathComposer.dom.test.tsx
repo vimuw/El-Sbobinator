@@ -61,7 +61,7 @@ describe('editor math insertion', () => {
     expect(editor.getText()).toBe('Prima dopo nuovo');
   });
 
-  it('commits on leaving a valid draft and never serializes editor controls', async () => {
+  it('keeps a draft open on blur and never serializes editor controls', async () => {
     const { editor, root } = await setup();
     fireEvent.click(screen.getByTitle('Inserisci formula matematica (LaTeX)'));
     const input = screen.getByLabelText('Formula LaTeX');
@@ -69,7 +69,16 @@ describe('editor math insertion', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     fireEvent.change(input, { target: { value: 'x^2' } });
     expect(editor.getHTML()).not.toContain('math-editor');
+    const original = editor.getJSON();
     fireEvent.blur(input);
+    expect(editor.getJSON()).toEqual(original);
+    expect((screen.getByRole('textbox', { name: 'Formula LaTeX' }) as HTMLInputElement).value).toBe('x^2');
+    // An invalid partial formula also survives blur instead of being dropped.
+    fireEvent.change(input, { target: { value: '\\frac{a}' } });
+    fireEvent.blur(input);
+    expect(screen.getByRole('textbox', { name: 'Formula LaTeX' })).toBeTruthy();
+    fireEvent.change(input, { target: { value: 'x^2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Conferma formula' }));
     expect(editor.state.doc.firstChild?.firstChild?.attrs.latex).toBe('x^2');
     expect(screen.queryByRole('textbox', { name: 'Formula LaTeX' })).toBeNull();
   });
