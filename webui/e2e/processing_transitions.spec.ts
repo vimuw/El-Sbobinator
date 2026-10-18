@@ -43,7 +43,8 @@ test('the player stays at the bottom while the editor is loading', async ({ page
   // Hold the editor chunk, including any idle preload, so the loading fallback stays visible.
   let releaseEditor = () => {};
   const editorGate = new Promise<void>(resolve => { releaseEditor = resolve; });
-  await page.route('**/src/components/RichTextEditor.tsx*', async route => {
+  // Matches the bundled chunk (assets/RichTextEditor-<hash>.js) and the dev source module.
+  await page.route(/\/RichTextEditor[^/]*\.(js|tsx)(\?|$)/, async route => {
     await editorGate;
     await route.continue();
   });

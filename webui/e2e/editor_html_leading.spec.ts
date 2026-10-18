@@ -45,9 +45,8 @@ test('HTML fallback restores CSS leading, fonts, selections, history and saved c
   });
   expect(await emptySeparator()).toEqual({ tag: 'P', empty: true, next: 'TABLE' });
   const inputs = await page.evaluate(async html => {
-    const formatting = await import('/src/utils.ts' /* @vite-ignore */);
-    const clipboard = await import('/src/editorClipboard.ts' /* @vite-ignore */);
-    const spacing = await import('/src/editorLineSpacing.ts' /* @vite-ignore */);
+    // Served by the E2E build (e2e/sourceModules.ts).
+    const { formatting, clipboard, spacing } = await import('/e2e-modules.js' /* @vite-ignore */);
     const portable = formatting.prepareHtmlForClipboardSync(html);
     const parsed = new DOMParser().parseFromString(portable, 'text/html').body;
     const measure = spacing.nativeLineSpacingReader();
