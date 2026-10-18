@@ -34,26 +34,33 @@ def parse_semver(tag: str) -> tuple[int, ...] | None:
 
 
 def get_previous_tag(resolved_tag: str, current_tag: str = "") -> str:
+    """Return the highest semver tag lower than the current one.
+
+    Ordering is by version rather than ancestry: a history rewrite can leave
+    the previous release tag off the current branch, and ``git describe``
+    would then fall back to an older release.
+    """
     clean_tag = (
         current_tag[len("refs/tags/") :]
         if current_tag.startswith("refs/tags/")
         else current_tag
     )
-    cmd = ["describe", "--tags", "--abbrev=0"]
-    if clean_tag:
-        cmd.extend(["--exclude", clean_tag])
-    cmd.append(f"{resolved_tag}^")
     try:
-        tag_out = run_git(cmd)
-        if tag_out == clean_tag or tag_out == resolved_tag:
-            return ""
-        curr_ver = parse_semver(clean_tag or resolved_tag)
-        prev_ver = parse_semver(tag_out)
-        if curr_ver is not None and prev_ver is not None and prev_ver >= curr_ver:
-            return ""
-        return tag_out
+        tags = run_git(["tag", "--list"]).splitlines()
     except Exception:
         return ""
+    curr_ver = parse_semver(clean_tag or resolved_tag)
+    candidates = []
+    for tag in tags:
+        tag = tag.strip()
+        version = parse_semver(tag)
+        if not tag or version is None or tag in (clean_tag, resolved_tag):
+            continue
+        if curr_ver is not None and version >= curr_ver:
+            continue
+        # Prefer the stable release over its prereleases at the same version.
+        candidates.append((version, "-" not in tag, tag))
+    return max(candidates)[2] if candidates else ""
 
 
 def sanitize_commit_message(msg: str) -> str:
