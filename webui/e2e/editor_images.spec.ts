@@ -1342,12 +1342,16 @@ test('partial clear and empty caret preserve paragraph layout, future typing and
   await page.keyboard.press('Control+a'); await page.keyboard.press('Control+c');
   const copied = await readClipboardFormats(page);
   fs.writeFileSync(testInfo.outputPath('partial-clear-clipboard.json'), JSON.stringify(copied));
-  await editor.focus(); await page.keyboard.press('Control+z');
+  // ProseMirror's focus handler re-syncs the DOM caret 20 ms later, which
+  // would revert the arrow keys below if they landed before that timer runs.
+  await editor.evaluate(root => new Promise(resolve => { (root as HTMLElement).focus(); setTimeout(resolve, 20); }));
+  await page.keyboard.press('Control+z');
   expect(await editor.evaluate(element => (element as HTMLElement & { editor: Editor }).editor.getJSON())).toEqual(original);
 
   await page.keyboard.press('Control+Home');
   for (let n = 0; n < 6; n++) await page.keyboard.press('ArrowRight');
-  await expect.poll(() => editor.evaluate(element => (element as HTMLElement & { editor: Editor }).editor.state.selection.empty)).toBe(true);
+  // Caret right after "Prima ": paragraph content starts at position 1.
+  await expect.poll(() => editor.evaluate(element => { const { selection } = (element as HTMLElement & { editor: Editor }).editor.state; return selection.empty ? selection.from : -1; })).toBe(7);
   await page.keyboard.press('Control+Backslash'); await page.keyboard.type('NUOVO');
   await expect(editor).toHaveText('Prima NUOVOSCELTA dopo');
   const typed = await editor.evaluate(element => (element as HTMLElement & { editor: Editor }).editor.getJSON().content![0].content!);
@@ -1774,8 +1778,14 @@ for (const zoom of [{ key: 'Control+=', value: '1.1' }, { key: 'Control+-', valu
       return Math.max(Math.abs(bounds.x - ghost.x), Math.abs(bounds.y - ghost.y), Math.abs(bounds.width - ghost.width), Math.abs(bounds.height - ghost.height));
     }).toBeLessThan(2);
     const committed = (await image.boundingBox())!;
+    // Zoom is only a view scale, as in Docs: the saved width stays put and the
+    // on-screen size follows the zoom.
+    expect(Math.abs(ghost.width - initial.width * Number(zoom.value))).toBeLessThan(2);
+    expect(Math.abs(committed.width - initial.width * Number(zoom.value))).toBeLessThan(2);
     const moved = await read();
     expect(moved).not.toEqual(original);
+    const widths = (doc: ReturnType<Editor['getJSON']>) => JSON.stringify(doc).match(/"width":[^,}]+/g);
+    expect(widths(moved)).toEqual(widths(original));
     await page.keyboard.press('Control+z');
     await expect.poll(read).toEqual(original);
     await page.keyboard.press('Control+Shift+z');
