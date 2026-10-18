@@ -5,12 +5,12 @@ import type { Editor as TiptapEditor } from '@tiptap/core';
 import { closeHistory } from '@tiptap/pm/history';
 import {
   Bold,
-  Calculator,
   Clipboard,
   Copy,
   ImagePlus,
   Italic,
   Link2,
+  Radical,
   RemoveFormatting,
   Scissors,
   Search,
@@ -258,7 +258,7 @@ export function EditorContextMenu({
         onClick={onOpenMath}
       >
         <span className="flex items-center gap-2.5 font-medium">
-          <Calculator className="h-4 w-4 shrink-0" />
+          <Radical className="h-4 w-4 shrink-0" />
           <span>Inserisci formula LaTeX</span>
         </span>
         <kbd className="editor-context-menu-shortcut">Ctrl+M</kbd>
