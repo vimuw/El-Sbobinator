@@ -90,6 +90,11 @@ def get_dist_path() -> str:
     )
 
 
+# Bound at import: the evaluate_js worker must stay a real thread even where
+# tests replace threading.Thread to drive the close worker by hand.
+_DaemonThread = threading.Thread
+
+
 def _cancel_audio_preparation(api: Any) -> None:
     audio_cancel = getattr(api, "_audio_cancel_event", None)
     if audio_cancel is not None:
@@ -115,6 +120,54 @@ def _confirm_close_without_saving(window: webview.Window) -> bool:
         return False
 
 
+def _bridge_ready(window: webview.Window) -> bool:
+    ready = getattr(getattr(window, "events", None), "_pywebviewready", None)
+    return ready is None or bool(ready.is_set())
+
+
+def _flush_editor_before_close(window: webview.Window) -> bool:
+    """Ask the editor to save; False when unconfirmed within 10 seconds."""
+    if not _bridge_ready(window):
+        # The page never loaded the bridge, so no editor can hold edits.
+        return True
+    completed = threading.Event()
+    lock = threading.Lock()
+    results: list[Any] = []
+
+    def _finish(saved: Any) -> None:
+        with lock:
+            if completed.is_set():
+                return
+            results.append(saved)
+            completed.set()
+
+    def _evaluate() -> None:
+        try:
+            window.evaluate_js(
+                "(async () => { try { "
+                "const flush = window.__elSbobinatorFlushPendingAutosave; "
+                "return typeof flush !== 'function' || await flush(); "
+                "} catch (_) { return false; } })()",
+                callback=_finish,
+            )
+        except Exception:
+            _finish(False)
+            get_logger(__name__).exception(
+                "Salvataggio dell'editor non confermato alla chiusura."
+            )
+
+    # The native closing event runs on the UI thread. Evaluate and save from
+    # workers so WebView2 can service the asynchronous bridge call;
+    # evaluate_js has no timeout of its own when the renderer hangs.
+    _DaemonThread(target=_evaluate, daemon=True).start()
+    if not completed.wait(10):
+        _finish(False)
+        get_logger(__name__).warning(
+            "Salvataggio dell'editor non confermato alla chiusura: non risponde."
+        )
+    return results[0] is True
+
+
 def build_close_handler(
     api: Any,
     window: webview.Window,
@@ -126,43 +179,28 @@ def build_close_handler(
     close_ready = threading.Event()
     close_lock = threading.Lock()
     close_pending = False
+    runtime_stopped = threading.Event()
+
+    def _stop_runtime() -> None:
+        # Runs before window.destroy(): Cocoa does not fire `closing` again
+        # after destroy(), so the second closing event cannot be relied on.
+        with close_lock:
+            if runtime_stopped.is_set():
+                return
+            runtime_stopped.set()
+        _cancel_audio_preparation(api)
+        if stop_event is not None:
+            stop_event.set()
+        LocalMediaServer.shutdown_all()
 
     def _flush_editor_and_close() -> None:
         nonlocal close_pending
-        completed = threading.Event()
-        results: list[Any] = []
-
-        def _finish(saved: Any) -> None:
-            with close_lock:
-                if completed.is_set():
-                    return
-                results.append(saved)
-                completed.set()
-
-        try:
-            # The native closing event runs on the UI thread. Evaluate and save
-            # from a worker so WebView2 can service the asynchronous bridge call.
-            window.evaluate_js(
-                "(async () => { try { "
-                "const flush = window.__elSbobinatorFlushPendingAutosave; "
-                "return typeof flush !== 'function' || await flush(); "
-                "} catch (_) { return false; } })()",
-                callback=_finish,
-            )
-            if not completed.wait(10):
-                _finish(False)
-                get_logger(__name__).warning(
-                    "Salvataggio dell'editor non confermato alla chiusura: non risponde."
-                )
-        except Exception:
-            _finish(False)
-            get_logger(__name__).exception(
-                "Salvataggio dell'editor non confermato alla chiusura."
-            )
+        saved = _flush_editor_before_close(window)
         try:
             # Keep close_pending while the dialog is open: no second flush.
-            if results[0] is True or _confirm_close_without_saving(window):
+            if saved or _confirm_close_without_saving(window):
                 close_ready.set()
+                _stop_runtime()
                 window.destroy()
         finally:
             with close_lock:
@@ -179,10 +217,7 @@ def build_close_handler(
 
     def _on_closing() -> bool | None:
         if not require_editor_save or close_ready.is_set():
-            _cancel_audio_preparation(api)
-            if stop_event is not None:
-                stop_event.set()
-            LocalMediaServer.shutdown_all()
+            _stop_runtime()
             return None
 
         if (
