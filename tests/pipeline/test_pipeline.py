@@ -1263,6 +1263,7 @@ class PipelineCleanupCacheTests(unittest.TestCase):
 
             self.assertTrue(session_ctx.session.get("playback_audio"))
             mock_invalidate.assert_called_once()
+            self.assertTrue(os.path.isfile(preconv_path))
 
     def test_cleanup_runs_on_done_early_return(self):
         """finally-block safety net retains the preconverted audio on the

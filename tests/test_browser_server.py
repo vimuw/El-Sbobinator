@@ -462,6 +462,13 @@ def test_media_stream_and_scenario_server_endpoints(isolated_app):
     assert resolved["has_audio"] is True
     assert "/api/media/stream?" in resolved["url"]
 
+    bad_session = client.get(
+        f"/api/media/resolve?path={media_file}&session_dir={os.path.join(temp_dir, 'missing-session')}",
+        headers=headers,
+    ).json()
+    assert bad_session["ok"] is False
+    assert "Sessione non" in bad_session["error"]
+
     # Scenario RPC start and stop
     res_start = client.post(
         "/api/rpc/start_processing",
