@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
 function audioFixture(info: TestInfo, name: string): string {
@@ -12,7 +13,8 @@ async function queueFile(page: Page, fixture: string): Promise<void> {
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(fixture);
-  await expect(page.locator('.queue-card').first()).toBeVisible();
+  // Earlier tests on this worker's server leave completed cards: wait for this file.
+  await expect(page.locator('.queue-card', { hasText: path.basename(fixture) })).toBeVisible();
 }
 
 test('the queue slides down instead of jumping when processing starts', async ({ page }, info) => {

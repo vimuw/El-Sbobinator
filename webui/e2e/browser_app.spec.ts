@@ -14,6 +14,9 @@ function createAudioFixture(testInfo: TestInfo, name = 'lezione_test.wav'): stri
 }
 
 async function selectScenario(page: Page, scenario: BrowserScenario): Promise<void> {
+  // The host installs window.pywebview only after /api/bootstrap answers, which
+  // can land after page.goto resolves.
+  await page.waitForFunction(() => typeof window.pywebview?.api?.set_browser_scenario === 'function');
   const result = await page.evaluate(async selected => {
     return window.pywebview?.api?.set_browser_scenario?.(selected);
   }, scenario);
