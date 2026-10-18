@@ -306,6 +306,27 @@ export const CustomHeading = HeadingExtension.extend({
   renderHTML({ node, HTMLAttributes }) {
     return this.parent!({ node, HTMLAttributes: mergeAttributes(HTMLAttributes, authoredWhitespaceAttributes(node)) });
   },
+  // Mod-Alt-N, minus AltGr: Windows reports it as Ctrl+Alt, and AltGr+digit
+  // types characters such as { [ ] on German or Polish layouts.
+  addKeyboardShortcuts() {
+    return {};
+  },
+  addProseMirrorPlugins() {
+    const levels: number[] = this.options.levels;
+    return [...(this.parent?.() ?? []), new Plugin({
+      key: new PluginKey('headingShortcuts'),
+      props: {
+        handleKeyDown: (_view, event) => {
+          const mac = /Mac|iP(hone|[oa]d)/.test(navigator.platform);
+          const mod = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+          if (!mod || !event.altKey || event.shiftKey || event.getModifierState?.('AltGraph')) return false;
+          const level = Number(/^[1-6]$/.test(event.key) ? event.key : /^Digit([1-6])$/.exec(event.code)?.[1]);
+          if (!levels.includes(level)) return false;
+          return this.editor.commands.toggleHeading({ level: level as 1 | 2 | 3 | 4 | 5 | 6 });
+        },
+      },
+    })];
+  },
   addCommands() {
     return {
       ...this.parent?.(),
