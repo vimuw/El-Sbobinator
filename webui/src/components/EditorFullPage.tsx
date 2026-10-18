@@ -13,10 +13,10 @@ import { STORAGE_KEYS } from '../storageKeys';
 import { EditorShortcuts } from './EditorShortcuts';
 // Bundled with the editor page: a lazy player flashed "Caricamento player..." on every first open.
 import { AudioPlayer } from './AudioPlayer';
+import { RichTextEditorChunk } from '../editorPreload';
 
-const LazyRichTextEditor = React.lazy(() =>
-  import('./RichTextEditor').then(m => ({ default: m.RichTextEditor }))
-);
+// Shared with the idle warm-up, so a preloaded editor opens without the Suspense fallback.
+const LazyRichTextEditor = RichTextEditorChunk.Component;
 
 export interface EditorDocumentProps {
   content: string | null;

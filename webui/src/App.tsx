@@ -34,8 +34,9 @@ import { ConfirmActionModal } from './components/modals/ConfirmActionModal';
 import { DuplicateFileModal } from './components/modals/DuplicateFileModal';
 import { NavSidebar, type ActivePage } from './components/NavSidebar';
 import { NotificationDropdown } from './components/NotificationDropdown';
+import { EditorFullPageChunk } from './editorPreload';
 
-const EditorFullPage = React.lazy(() => import('./components/EditorFullPage').then(m => ({ default: m.EditorFullPage })));
+const EditorFullPage = EditorFullPageChunk.Component;
 const SettingsModal = React.lazy(() => import('./components/modals/SettingsModal').then(m => ({ default: m.SettingsModal })));
 const archivePagePromise = import('./components/ArchivePage');
 const ArchivePage = React.lazy(() => archivePagePromise.then(m => ({ default: m.ArchivePage })));

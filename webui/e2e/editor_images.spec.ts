@@ -1326,7 +1326,8 @@ test('partial clear and empty caret preserve paragraph layout, future typing and
   const originalHeight = (await editor.locator('p').boundingBox())!.height;
   await page.keyboard.press('Control+Home');
   for (let n = 0; n < 6; n++) await page.keyboard.press('ArrowRight');
-  await page.keyboard.press('Control+Shift+ArrowRight');
+  // Ctrl+Shift+Right takes the trailing space on Windows but not on Linux.
+  for (let n = 0; n < 7; n++) await page.keyboard.press('Shift+ArrowRight');
   await expect.poll(() => editor.evaluate(element => { const { state } = (element as HTMLElement & { editor: Editor }).editor; return state.doc.textBetween(state.selection.from, state.selection.to); })).toBe('SCELTA ');
   await page.keyboard.press('Control+Backslash');
   await expect(editor.locator('p')).toHaveCSS('text-align', 'center');
