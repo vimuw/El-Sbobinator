@@ -58,6 +58,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run only the FastAPI backend server (without starting Vite)",
     )
     parser.add_argument(
+        "--settle-runs-on-bootstrap",
+        action="store_true",
+        help="E2E: each page load waits for simulated runs started by earlier pages",
+    )
+    parser.add_argument(
         "--open",
         action="store_true",
         help="Automatically open the browser once started",
@@ -142,6 +147,7 @@ def main() -> None:
         app = create_browser_app(
             session_root=session_root,
             scenario=args.scenario,
+            settle_runs_on_bootstrap=args.settle_runs_on_bootstrap,
         )
         uvicorn.run(
             app,
