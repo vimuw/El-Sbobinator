@@ -2,6 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { ChevronDown } from 'lucide-react';
+import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
 
 const COLOR_PALETTE: string[][] = [
   ['#000000', '#434343', '#666666', '#999999', '#b7b7b7', '#cccccc', '#d9d9d9', '#ffffff'],
@@ -28,6 +29,8 @@ export const ColorPickerButton = ({ editor }: { editor: TiptapEditor }) => {
     }
     setIsOpen(prev => !prev);
   };
+
+  useEscapeToClose(isOpen, () => setIsOpen(false));
 
   React.useEffect(() => {
     if (!isOpen) return;

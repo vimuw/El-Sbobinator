@@ -2,6 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { AlignCenter, AlignJustify, AlignLeft, AlignRight, ChevronDown } from 'lucide-react';
+import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
 
 export const AlignDropdownButton = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -20,6 +21,8 @@ export const AlignDropdownButton = ({ editor }: { editor: TiptapEditor }) => {
     }
     setIsOpen(prev => !prev);
   };
+
+  useEscapeToClose(isOpen, () => setIsOpen(false));
 
   React.useEffect(() => {
     if (!isOpen) return;

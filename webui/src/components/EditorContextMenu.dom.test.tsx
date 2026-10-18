@@ -175,4 +175,28 @@ describe('EditorContextMenu', () => {
       expect(prompt).not.toHaveBeenCalled();
     } finally { prompt.mockRestore(); editor.destroy(); }
   });
+
+  it('closes on Esc without reaching the editor page', () => {
+    const editor = new Editor({ extensions: [StarterKit], content: '<p>Testo</p>' });
+    const onClose = vi.fn();
+    const pageEscape = vi.fn();
+    window.addEventListener('keydown', pageEscape);
+    try {
+      render(
+        <EditorContextMenu
+          contextMenu={{ x: 10, y: 10 }}
+          onClose={onClose}
+          editor={editor}
+          onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
+          onOpenFind={vi.fn()}
+        />,
+      );
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(pageEscape).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('keydown', pageEscape);
+      editor.destroy();
+    }
+  });
 });

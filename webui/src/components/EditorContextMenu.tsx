@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { getLastHighlightColor } from '../editorUtils';
 import { HighlightIcon } from './HighlightIcon';
+import { useEscapeToClose } from '../hooks/useEscapeToClose';
 import { writeEditorClipboard } from '../editorClipboard';
 import { pasteEditorClipboard, prepareSelectionClipboard } from '../editorSelectionClipboard';
 
@@ -71,6 +72,7 @@ export function EditorContextMenu({
     window.addEventListener('resize', place);
     return () => window.removeEventListener('resize', place);
   }, [contextMenu, editor]);
+  useEscapeToClose(Boolean(contextMenu), onClose);
   if (!contextMenu || !editor || editor.isDestroyed) return null;
 
   return createPortal(

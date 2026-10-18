@@ -167,4 +167,17 @@ describe('TypographySelects', () => {
     } finally { editor.destroy(); }
   });
 
+  it('closes an open dropdown on Esc without reaching the editor page', () => {
+    const { editor } = createMockEditor();
+    const pageEscape = vi.fn();
+    window.addEventListener('keydown', pageEscape);
+    try {
+      render(<FontFamilySelect editor={editor as unknown as TiptapEditor} />);
+      fireEvent.click(screen.getByTitle('Carattere'));
+      expect(screen.getByRole('button', { name: 'Georgia' })).toBeTruthy();
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      expect(screen.queryByRole('button', { name: 'Georgia' })).toBeNull();
+      expect(pageEscape).not.toHaveBeenCalled();
+    } finally { window.removeEventListener('keydown', pageEscape); }
+  });
 });

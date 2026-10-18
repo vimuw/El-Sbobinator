@@ -314,7 +314,7 @@ export const EditorBubbleMenu: React.FC<EditorBubbleMenuProps> = ({ editor, isCo
             onChange={e => setLinkUrl(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter') applyLink();
-              if (e.key === 'Escape') setIsLinkOpen(false);
+              if (e.key === 'Escape') { e.stopPropagation(); setIsLinkOpen(false); editor.commands.focus(); }
             }}
             className="link-input"
           />

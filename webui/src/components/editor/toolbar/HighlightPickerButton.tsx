@@ -4,6 +4,7 @@ import { type Editor as TiptapEditor } from '@tiptap/core';
 import { ChevronDown } from 'lucide-react';
 import { getLastHighlightColor, setLastHighlightColor } from '../../../editorUtils';
 import { HighlightIcon } from '../../HighlightIcon';
+import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
 
 const HIGHLIGHT_COLORS = [
   { label: 'Giallo', color: '#fef08a' },
@@ -30,6 +31,8 @@ export const HighlightPickerButton = ({ editor }: { editor: TiptapEditor }) => {
     }
     setIsOpen(prev => !prev);
   };
+
+  useEscapeToClose(isOpen, () => setIsOpen(false));
 
   React.useEffect(() => {
     if (!isOpen) return;

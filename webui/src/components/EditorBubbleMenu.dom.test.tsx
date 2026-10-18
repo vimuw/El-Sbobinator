@@ -296,4 +296,20 @@ describe('EditorBubbleMenu', () => {
 
     expect(screen.queryByTitle('Grassetto (Ctrl+B)')).toBeNull();
   });
+
+  it('closes the link input on Esc without reaching the editor page', () => {
+    const focus = vi.fn();
+    const { editor } = createMockEditor({ commands: { focus } });
+    render(<EditorBubbleMenu editor={editor as unknown as TiptapEditor} />);
+    editor.emit('selectionUpdate');
+    fireEvent.mouseDown(screen.getByTitle('Inserisci link (Ctrl+K)'));
+    const pageEscape = vi.fn();
+    window.addEventListener('keydown', pageEscape);
+    try {
+      fireEvent.keyDown(screen.getByPlaceholderText('https://...'), { key: 'Escape' });
+      expect(screen.queryByPlaceholderText('https://...')).toBeNull();
+      expect(pageEscape).not.toHaveBeenCalled();
+      expect(focus).toHaveBeenCalled();
+    } finally { window.removeEventListener('keydown', pageEscape); }
+  });
 });
