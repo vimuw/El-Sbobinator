@@ -4,7 +4,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import type { EditorView } from '@tiptap/pm/view';
 import { FloatingImage } from './components/FloatingImage';
-import { startImageDrag } from './imageDrag';
+import { EDITOR_ZOOM_EVENT, startImageDrag } from './imageDrag';
 
 const cleanups: Array<() => void> = [];
 const editors: Editor[] = [];
@@ -232,5 +232,45 @@ describe('wrap drop across paragraphs', () => {
     const image = editor.state.doc.child(0).firstChild!;
     expect(image.type.name).toBe('floatingImage');
     expect(image.marks.map(mark => [mark.type.name, mark.attrs.href])).toEqual([['link', 'https://example.com/lezione']]);
+  });
+});
+
+describe('wrap drag across a zoom change', () => {
+  // Docs zoom is only a view scale: the stored width never follows it.
+  it.each([[110, 'its own'], [210, 'another']])('keeps the stored width when dropped at Y=%s in %s paragraph', dropY => {
+    const editor = new Editor({
+      extensions: [StarterKit, FloatingImage.extend({ addNodeView: () => null })],
+      content: '<p>Intro <span data-editor-image data-layout="wrap" data-width="35"><img src="drag.png"></span></p><p>Fine</p>',
+    });
+    editors.push(editor);
+    document.body.append(editor.view.dom);
+    let scale = 1;
+    const rect = (top: number, width: number) => new DOMRect(0, top * scale, width * scale, 40 * scale);
+    Object.defineProperties(editor.view.dom, { offsetWidth: { value: 640 }, clientWidth: { value: 640 } });
+    vi.spyOn(editor.view.dom, 'getBoundingClientRect').mockImplementation(() => rect(0, 640));
+    const [intro, end] = Array.from(editor.view.dom.querySelectorAll(':scope > p'));
+    vi.spyOn(intro, 'getBoundingClientRect').mockImplementation(() => rect(100, 640));
+    vi.spyOn(end, 'getBoundingClientRect').mockImplementation(() => rect(200, 640));
+    let pos = 0;
+    editor.state.doc.descendants((node, nodePos) => { if (node.type.name === 'floatingImage') pos = nodePos; });
+    const anchor = editor.view.nodeDOM(pos) as HTMLElement;
+    vi.spyOn(anchor.querySelector<HTMLElement>('.editor-image-surface')!, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 100 * scale, 224 * scale, 40 * scale));
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(fn => { fn(16); return 0; });
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+    const pointer = (type: string, clientX: number, clientY: number) => {
+      const event = new Event(type, { cancelable: true });
+      Object.assign(event, { pointerId: 1, clientX, clientY });
+      return event as PointerEvent;
+    };
+    cleanups.push(startImageDrag(editor.view, pos, anchor, pointer('pointerdown', 10, 110)));
+    window.dispatchEvent(pointer('pointermove', 40, 120));
+    scale = 1.1;
+    window.dispatchEvent(new Event(EDITOR_ZOOM_EVENT));
+    window.dispatchEvent(pointer('pointermove', 60 * scale, dropY * scale));
+    expect(document.querySelector<HTMLElement>('.editor-image-drag-preview')!.style.width).toBe(`${224 * scale}px`);
+    window.dispatchEvent(pointer('pointerup', 60 * scale, dropY * scale));
+    const images: number[] = [];
+    editor.state.doc.descendants(node => { if (node.type.name === 'floatingImage') images.push(node.attrs.width); });
+    expect(images).toEqual([35]);
   });
 });

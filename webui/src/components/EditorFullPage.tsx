@@ -134,7 +134,11 @@ export function EditorFullPage({
   }, []);
 
   const zoomLevelRef = useRef(zoomLevel);
-  useEffect(() => { zoomLevelRef.current = zoomLevel; }, [zoomLevel]);
+  useEffect(() => {
+    zoomLevelRef.current = zoomLevel;
+    // EDITOR_ZOOM_EVENT in imageDrag.ts, kept literal so the editor stays lazy.
+    window.dispatchEvent(new Event('editor-zoom-change'));
+  }, [zoomLevel]);
 
   useEffect(() => {
     if (copiedTimerRef.current) { window.clearTimeout(copiedTimerRef.current); copiedTimerRef.current = null; }

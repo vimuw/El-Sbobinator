@@ -5,6 +5,8 @@ import { normalizeImageOffsetY, normalizeImagePosition, normalizeImageWidth } fr
 import { startImageAutoScroll } from './imageAutoScroll';
 
 export const IMAGE_WRAP_PREVIEW_EVENT = 'editor-image-wrap-preview';
+// Editor zoom changes layout without a scroll or viewport resize.
+export const EDITOR_ZOOM_EVENT = 'editor-zoom-change';
 
 const refresh = (view: EditorView) => view.dom.dispatchEvent(new Event(IMAGE_WRAP_PREVIEW_EVENT));
 
@@ -73,11 +75,13 @@ export function startImageDrag(view: EditorView, pos: number, anchor: HTMLElemen
     };
   };
   let metrics = readMetrics();
+  // Zoom is only a view scale: keep the image's layout width, not its pixels.
+  const layoutWidth = start.width / (view.dom.getBoundingClientRect().width / metrics.width || 1);
   const readGeometry = () => {
     const root = view.dom.getBoundingClientRect();
     const scale = root.width / metrics.width || 1;
     const { paddingLeft, paddingRight } = metrics;
-    const width = start.width / scale;
+    const width = layoutWidth;
     const contentRight = metrics.clientWidth - paddingRight;
     const targets = [
       { align: 'center', left: (paddingLeft + contentRight - width) / 2, x: (paddingLeft + contentRight) / 2 },
@@ -120,8 +124,9 @@ export function startImageDrag(view: EditorView, pos: number, anchor: HTMLElemen
       guide = null;
     }
     if (!ghost) {
-      ghost = createImageGhost(surface, start.width);
+      ghost = createImageGhost(surface, layoutWidth * scale);
     }
+    ghost.style.width = `${layoutWidth * scale}px`;
     ghost.style.transform = `translate3d(${root.left + left * scale}px, ${root.top + top * scale}px, 0)`;
   };
   const queuePreview = () => {
@@ -153,6 +158,7 @@ export function startImageDrag(view: EditorView, pos: number, anchor: HTMLElemen
     window.removeEventListener('keydown', escape, true);
     window.removeEventListener('scroll', scrolled, true);
     window.removeEventListener('resize', resized);
+    window.removeEventListener(EDITOR_ZOOM_EVENT, resized);
     window.removeEventListener('blur', cancel);
     if (anchor.hasPointerCapture?.(pointerId)) anchor.releasePointerCapture(pointerId);
     ghost?.remove();
@@ -176,7 +182,7 @@ export function startImageDrag(view: EditorView, pos: number, anchor: HTMLElemen
     }
     cleanup();
     // Do not apply stale document positions if another edit arrived mid-gesture.
-    if (moved && !view.isDestroyed && view.state.doc === originalDoc) placeImage(view, pos, left, top, start.width);
+    if (moved && !view.isDestroyed && view.state.doc === originalDoc) placeImage(view, pos, left, top);
     if (!view.isDestroyed) refresh(view);
   };
   window.addEventListener('pointermove', move, { passive: false });
@@ -185,11 +191,12 @@ export function startImageDrag(view: EditorView, pos: number, anchor: HTMLElemen
   window.addEventListener('keydown', escape, true);
   window.addEventListener('scroll', scrolled, true);
   window.addEventListener('resize', resized);
+  window.addEventListener(EDITOR_ZOOM_EVENT, resized);
   window.addEventListener('blur', cancel);
   return cancel;
 }
 
-function placeImage(view: EditorView, pos: number, left: number, top: number, visualWidth: number) {
+function placeImage(view: EditorView, pos: number, left: number, top: number) {
   const image = view.state.doc.nodeAt(pos);
   if (image?.type.name !== 'floatingImage') return;
   const root = view.dom.getBoundingClientRect();
@@ -218,7 +225,12 @@ function placeImage(view: EditorView, pos: number, left: number, top: number, vi
   // Prefer the column under the image; retain free movement beyond page edges.
   target = columnTarget ?? target ?? first;
   if (!target) return;
-  const width = normalizeImageWidth(visualWidth / target.rect.width * 100);
+  // Keep the stored width in its own paragraph. Another paragraph rescales it to
+  // keep the same layout size; both rects share the current zoom.
+  const sourcePos = view.state.doc.resolve(pos).before();
+  const source = view.nodeDOM(sourcePos);
+  const sourceWidth = source instanceof HTMLElement ? source.getBoundingClientRect().width : 0;
+  const width = normalizeImageWidth(sourcePos === target.pos || !sourceWidth ? image.attrs.width : normalizeImageWidth(image.attrs.width) * sourceWidth / target.rect.width);
   // Oversized images have negative remaining space. Match positionImages so
   // moving a resized image keeps the preview's origin on release.
   const freeWidth = target.rect.width * (1 - width / 100);

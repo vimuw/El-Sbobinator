@@ -1774,8 +1774,14 @@ for (const zoom of [{ key: 'Control+=', value: '1.1' }, { key: 'Control+-', valu
       return Math.max(Math.abs(bounds.x - ghost.x), Math.abs(bounds.y - ghost.y), Math.abs(bounds.width - ghost.width), Math.abs(bounds.height - ghost.height));
     }).toBeLessThan(2);
     const committed = (await image.boundingBox())!;
+    // Zoom is only a view scale, as in Docs: the saved width stays put and the
+    // on-screen size follows the zoom.
+    expect(Math.abs(ghost.width - initial.width * Number(zoom.value))).toBeLessThan(2);
+    expect(Math.abs(committed.width - initial.width * Number(zoom.value))).toBeLessThan(2);
     const moved = await read();
     expect(moved).not.toEqual(original);
+    const widths = (doc: ReturnType<Editor['getJSON']>) => JSON.stringify(doc).match(/"width":[^,}]+/g);
+    expect(widths(moved)).toEqual(widths(original));
     await page.keyboard.press('Control+z');
     await expect.poll(read).toEqual(original);
     await page.keyboard.press('Control+Shift+z');
