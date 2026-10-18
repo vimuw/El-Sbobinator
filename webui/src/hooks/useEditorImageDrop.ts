@@ -141,7 +141,7 @@ export function useEditorImageDrop({ editorRef }: UseEditorImageDropOptions) {
 
   const transformPastedHTML = useCallback((html: string): string => {
     // The schema validates supported styles and discards unsupported markup.
-    // Formatted paste must retain explicit colors, highlights and heading sizes.
+    // Docs and internal paste retain explicit colors, highlights and sizes.
     return preparePastedEditorHtml(html, editorRef.current?.view);
   }, [editorRef]);
 

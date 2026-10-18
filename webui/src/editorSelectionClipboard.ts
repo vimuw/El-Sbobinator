@@ -29,6 +29,15 @@ const NO_HIGHLIGHT_BACKGROUNDS = new Set(['transparent', 'rgba(0, 0, 0, 0)', 'wh
 /** Interpret our clipboard hints without persisting them in the document. */
 export function preparePastedEditorHtml(html: string, view?: EditorView): string {
   const body = new DOMParser().parseFromString(html, 'text/html').body;
+  // Docs and our own format carry authored ink. A web page's colours belong
+  // to its theme: kept, they are unreadable in the other reading theme and
+  // would be stored and sent to Docs as highlights and text colours.
+  if (!body.querySelector('[data-document-format="1"],[id^="docs-internal-guid-"]')) {
+    body.querySelectorAll<HTMLElement>('[style]').forEach(element => {
+      ['color', 'background-color', 'background'].forEach(property => element.style.removeProperty(property));
+    });
+    body.querySelectorAll('font[color]').forEach(font => font.removeAttribute('color'));
+  }
   // Docs exports character highlighting as span background-color, whereas
   // TipTap's Highlight parser recognizes mark elements. Keep the original
   // foreground/font on the span and represent its highlight semantically.

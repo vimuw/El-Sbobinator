@@ -72,23 +72,26 @@ describe('useEditorImageDrop Hook', () => {
     expect(typeof result.current.transformPastedHTML).toBe('function');
   });
 
-  it('retains explicit color and background-color during formatted paste', () => {
+  it('retains explicit color and background-color during Docs paste only', () => {
     const editorRef = { current: null };
     const { result } = renderHook(() => useEditorImageDrop({ editorRef }));
 
     const inputHtml = '<p style="color: red; background-color: yellow; font-weight: bold;">Test text</p>';
-    const outputHtml = result.current.transformPastedHTML(inputHtml);
+    const outputHtml = result.current.transformPastedHTML(`<b id="docs-internal-guid-1">${inputHtml}</b>`);
 
     expect(outputHtml).toContain('color: red');
     expect(outputHtml).toContain('background-color: yellow');
     expect(outputHtml).toContain('Test text');
+    const webHtml = result.current.transformPastedHTML(inputHtml);
+    expect(webHtml).not.toContain('color');
+    expect(webHtml).toContain('font-weight: bold');
   });
 
   it('retains explicit font sizes in pasted headings and nested spans', () => {
     const editorRef = { current: null };
     const { result } = renderHook(() => useEditorImageDrop({ editorRef }));
 
-    const inputHtml = '<h1 style="font-size: 14pt; color: red;"><span style="font-size: 11pt;">Heading Text</span></h1>';
+    const inputHtml = '<b id="docs-internal-guid-1"><h1 style="font-size: 14pt; color: red;"><span style="font-size: 11pt;">Heading Text</span></h1></b>';
     const outputHtml = result.current.transformPastedHTML(inputHtml);
 
     expect(outputHtml).toContain('font-size: 14pt');

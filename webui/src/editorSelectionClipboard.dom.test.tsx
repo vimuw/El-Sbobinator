@@ -13,16 +13,30 @@ async function openEditor() {
 }
 
 describe('preparePastedEditorHtml', () => {
-  it.each(['rgb(255, 255, 255)', '#ffffff', 'white'])('does not turn a copied web page background (%s) into a highlight', async background => {
+  it.each(['rgb(255, 255, 255)', '#ffffff', 'white'])('does not turn a copied page background (%s) into a highlight', async background => {
     const editor = await openEditor();
-    // Chromium web copy: the selection wrapper carries the page background.
+    // Docs keeps authored ink; the page's white background is still no highlight.
     act(() => {
-      editor.view.pasteHTML(`<meta charset="utf-8"><span style="color: rgb(32, 33, 34); font-family: sans-serif; background-color: ${background}; display: inline !important;">Testo dal web </span><span style="background-color: #fef08a">evidenziato</span>`, new Event('paste') as ClipboardEvent);
+      editor.view.pasteHTML(`<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-1"><span style="color: rgb(32, 33, 34); font-family: sans-serif; background-color: ${background}; display: inline !important;">Testo dal web </span><span style="background-color: #fef08a">evidenziato</span></b>`, new Event('paste') as ClipboardEvent);
     });
     const text = (label: string) => (editor.getJSON() as JSONContent).content![0].content!.find(node => node.text === label)!;
     expect(text('Testo dal web ').marks?.some(mark => mark.type === 'highlight')).toBeFalsy();
     expect(text('evidenziato').marks).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'highlight', attrs: { color: 'rgb(254, 240, 138)' } })]));
+    expect(text('Testo dal web ').marks).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'textStyle', attrs: expect.objectContaining({ color: 'rgb(32, 33, 34)' }) })]));
     expect(editor.getHTML()).not.toContain('rgb(255, 255, 255)');
+  });
+
+  it.each([
+    ['light', 'rgb(32, 33, 34)', 'rgb(255, 255, 255)'],
+    ['dark', '#e3e3e3', '#1f1f1f'],
+  ])('stores no colours from a %s web page', async (_theme, color, background) => {
+    const editor = await openEditor();
+    act(() => {
+      editor.view.pasteHTML(`<meta charset="utf-8"><p style="color: ${color}; background-color: ${background};"><span style="color: ${color}; background-color: ${background};">Testo dal web</span> <font color="${color}">e font</font> <mark style="background-color: ${background}">segnato</mark></p>`, new Event('paste') as ClipboardEvent);
+    });
+    const html = editor.getHTML();
+    expect(html).toContain('Testo dal web');
+    expect(html).not.toMatch(/color|rgb|#e3e3e3|#1f1f1f/i);
   });
 });
 
