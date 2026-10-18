@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EDITOR_CONTENT_WIDTH_PX } from './documentFormatting';
 import { clipboardImageSize, createNativeClipboardFormats, NATIVE_IMAGES_MIME, NATIVE_SLICE_MIME, setClipboardFormats, writeEditorClipboard } from './editorClipboard';
+import { videoLink } from './editorLinks';
 import { prepareHtmlForClipboardSync } from './utils';
 
 const jpeg = `data:image/jpeg;base64,${fs.readFileSync('e2e/fixtures/image-layout.jpg').toString('base64')}`;
@@ -216,15 +217,27 @@ describe('Editor native image clipboard', () => {
     expect(doc.formats['text/plain']).not.toContain('\u0010');
   });
   it.each([
-    `${figure()}<span data-math="\\begin{pmatrix}a&amp;b\\end{pmatrix}">formula</span>`,
-    `${figure()}<iframe src="https://example.com"></iframe>`,
     `${figure()}<figcaption>Didascalia</figcaption>`,
-    figure().replace('</div>', '<figcaption>Didascalia a destra</figcaption></div>'),
     `${figure()}<img src="${jpeg}">`,
     figure('', 'data:image/jpeg;base64,broken'),
     figure('', 'https://example.com/image.jpg'),
   ])('does not replace unsupported content with a flattened native slice: %s', html => {
     expect(createNativeClipboardFormats(html)).toBeNull();
+  });
+  it('degrades a matrix, a video and a shifted caption locally while other Wrap images stay native', () => {
+    const doc = model(`<p>Testo</p>${figure()}<p><span data-math="\\begin{pmatrix}a&amp;b\\end{pmatrix}">formula</span> dopo</p><div data-youtube-video=""><iframe src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?controls=1"></iframe></div>${figure('data-caption="Didascalia a destra"')}<p>Fine</p>`);
+    const text = doc.resolved.dsl_spacers;
+    expect(text).toContain('$$\\begin{pmatrix}a&b\\end{pmatrix}$$ dopo');
+    const url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+    expect(text).toContain(`\n${url}\n`);
+    expect(style(doc, 'link', text.indexOf(url))).toEqual({ lnks_link: { lnk_type: 0, ulnk_url: url } });
+    expect(style(doc, 'paragraph', text.indexOf(url) + url.length)).toBeTruthy();
+    // The uncaptioned figure keeps its Wrap; the shifted captioned one becomes
+    // a right-aligned block table instead of a floating table moved to X zero.
+    expect(doc.resolved.dsl_entitypositionmap.positioned.filter(Boolean)).toHaveLength(1);
+    expect(doc.resolved.dsl_entitypositionmap.inline.filter(Boolean)).toHaveLength(1);
+    expect(style(doc, 'tbl', text.indexOf('\u0010'))).toMatchObject({ tbls_pt: 0, tbls_al: 2 });
+    expect(text).toContain('Didascalia a destra');
   });
   it('exports Wrap images in table cells as inline images, as Docs requires', () => {
     const doc = model(`<table><tr><td><p>Cella ${figure()}</p></td><td><p>B</p></td></tr></table><p>Fine</p>`);
@@ -235,6 +248,28 @@ describe('Editor native image clipboard', () => {
     const text = doc.resolved.dsl_spacers;
     expect(text.startsWith('\u0010\u0012\u001cCella ')).toBe(true);
     expect(text.slice(0, text.indexOf('\u001c', 3))).toContain('*');
+  });
+  it.each([
+    ['https://www.youtube.com/embed/abc_DEF-12', 'https://www.youtube.com/watch?v=abc_DEF-12'],
+    ['https://vimeo.com/123', 'https://vimeo.com/123'],
+    ['https://player.vimeo.com/video/123?h=abc', 'https://vimeo.com/123'],
+    ['https://googleads.g.doubleclick.net/pagead/ads?client=ca-pub-1', null],
+    ['https://www.google.com/maps/embed?pb=!1m18', null],
+    ['movie.mp4', null],
+    ['data:video/mp4;base64,AAAA', null],
+  ])('links the public page of video %s', (src, expected) => {
+    expect(videoLink(src)).toBe(expected);
+  });
+  it('keeps a remote video file address but never a local one', () => {
+    expect(videoLink('https://cdn.example.com/lezione.mp4', true)).toBe('https://cdn.example.com/lezione.mp4');
+    expect(videoLink('movie.mp4', true)).toBeNull();
+  });
+  it('drops embedded pages that are not videos instead of exporting their address', () => {
+    const text = model('<p>Prima</p><iframe src="https://googleads.g.doubleclick.net/pagead/ads?client=ca-pub-1"></iframe><iframe src="https://www.google.com/maps/embed?pb=!1m18"></iframe><p>Dopo</p>').resolved.dsl_spacers;
+    expect(text).not.toContain('doubleclick');
+    expect(text).not.toContain('maps');
+    expect(text).toContain('Prima');
+    expect(text).toContain('Dopo');
   });
   it('reads displayed remote image dimensions without an asynchronous clipboard write', () => {
     const root = document.createElement('div');
@@ -302,7 +337,9 @@ describe('Editor native image clipboard', () => {
     expect(style(doc, 'paragraph', text.indexOf(' dopo') + ' dopo'.length)).toMatchObject({ ps_ls: 1.15 });
     expect(Object.values(doc.resolved.dsl_entitymap).some(entity => entity.le_nb?.nl_0.b_sn === 4)).toBe(true);
     expect(doc.formats['text/html']).toContain('data-math="\\sin x+\\lim_{t\\to0}t"');
-    expect(createNativeClipboardFormats(doc.formats['text/html'] + '<p><span data-math="\\begin{pmatrix}a&amp;b\\end{pmatrix}">matrix</span></p>')).toBeNull();
+    const mixed = model(doc.formats['text/html'] + '<p><span data-math="\\begin{pmatrix}a&amp;b\\end{pmatrix}">matrix</span></p>');
+    expect(mixed.resolved.dsl_spacers).toContain('$$\\begin{pmatrix}a&b\\end{pmatrix}$$');
+    expect(mixed.resolved.dsl_styleslices.find(slice => slice.stsl_type === 'equation_function')!.stsl_styles.filter(Boolean)).toHaveLength(3);
   });
   it('preserves resized table column widths and rendered wrap alignment', () => {
     const doc = model(`${figure().replace('data-position="100"', 'data-position="40"')}<table><colgroup><col style="width:200px"><col style="width:300px"></colgroup><tr><td colwidth="210"><p>A</p></td><td><p>B</p></td></tr></table>`);
@@ -363,7 +400,7 @@ describe('Editor native image clipboard', () => {
     expect(document.querySelector('textarea')).toBeNull();
   });
   it.each([true, false])('writes the HTML fallback with prepared formats = %s', async prepared => {
-    const html = prepared ? '<p>Seconda figura</p>' : '<p>Seconda figura</p><video src="movie.mp4"></video>';
+    const html = prepared ? '<p>Seconda figura</p>' : '<p>Seconda figura</p><figcaption>Estranea</figcaption>';
     const formats = { 'text/html': '<p style="line-height:1.75">Selezione preparata</p>', 'text/plain': 'Selezione preparata' };
     const write = vi.fn().mockResolvedValue(undefined);
     const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
@@ -387,7 +424,7 @@ describe('Editor native image clipboard', () => {
       expect(Object.keys(item.data)).toEqual(['text/html', 'text/plain']);
       expect(await readBlob(item.data['text/plain'])).toBe(prepared ? formats['text/plain'] : 'Seconda figura');
       if (prepared) expect(await readBlob(item.data['text/html'])).toBe(formats['text/html']);
-      else expect(await readBlob(item.data['text/html'])).toContain('<video src="movie.mp4"></video>');
+      else expect(await readBlob(item.data['text/html'])).toContain('<figcaption>Estranea</figcaption>');
     } finally {
       vi.unstubAllGlobals();
       if (clipboardDescriptor) Object.defineProperty(navigator, 'clipboard', clipboardDescriptor);

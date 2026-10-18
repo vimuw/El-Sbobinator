@@ -1132,7 +1132,7 @@ test('representative mixed document preserves edits, merged table widths, image 
   await page.screenshot({ path: testInfo.outputPath('representative-app.png') });
 });
 
-test('mixed wrap images and captions preserve surrounding content through history, save and clipboard fallback', async ({ page, context }, testInfo) => {
+test('mixed wrap images and captions preserve surrounding content through history, save and native clipboard', async ({ page, context }, testInfo) => {
   test.setTimeout(180000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await openImageEditor(page, testInfo.outputPath('parity_mixed_wrap.wav'));
@@ -1154,7 +1154,8 @@ test('mixed wrap images and captions preserve surrounding content through histor
     { name: 'caption-left', position: 0, offsetY: 18, caption: 'Figura 1: campione sintetico', native: true },
     { name: 'caption-left-negative', position: 0, offsetY: -20, caption: 'Figura 1: campione sintetico', native: true },
     { name: 'caption-left-zero', position: 0, offsetY: 0, caption: 'Figura 1: campione sintetico', native: true },
-    { name: 'caption-right-html', position: 100, offsetY: 18, caption: 'Figura 1: campione sintetico', native: false },
+    // Docs resets floating-table X on paste: the right caption becomes a right-aligned block figure.
+    { name: 'caption-right-block', position: 100, offsetY: 18, caption: 'Figura 1: campione sintetico', native: true },
   ]) {
     const source = fixture.replace(/<p>Figura del campione:.*?<\/p>/, `<div data-editor-image="true" data-layout="wrap" data-align="${variant.position ? 'right' : 'left'}" data-position="${variant.position}" data-offset-y="${variant.offsetY}" data-width="35" data-caption="${variant.caption}"><img src="__IMAGE_SOURCE__" alt="Campione sintetico"></div><p>Figura del campione: il testo continua accanto alla figura. Le misure restano confrontabili e la didascalia descrive il campione.</p>`).replace('__IMAGE_SOURCE__', imageSource);
     await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, source);
@@ -1178,9 +1179,9 @@ test('mixed wrap images and captions preserve surrounding content through histor
     if (variant.native && variant.caption) {
       const resolved = JSON.parse(JSON.parse(copied[nativeMime]).data).resolved;
       expect(resolved.dsl_spacers).toContain('\u0011\n\u0010');
-      expect(resolved.dsl_styleslices.find((slice: { stsl_type: string }) => slice.stsl_type === 'tbl').stsl_styles.filter(Boolean)[1]).toMatchObject({
-        tbls_ftp: { ft_p: { p_vp: { vp_to: variant.offsetY * 0.75 } } },
-      });
+      expect(resolved.dsl_styleslices.find((slice: { stsl_type: string }) => slice.stsl_type === 'tbl').stsl_styles.filter(Boolean)[1]).toMatchObject(variant.position
+        ? { tbls_pt: 0, tbls_al: 2 }
+        : { tbls_pt: 1, tbls_ftp: { ft_p: { p_vp: { vp_to: variant.offsetY * 0.75 } } } });
     }
     expect(copied['text/plain']).toContain('Misura da correggere: confermata');
     if (variant.caption) expect(copied['text/plain']).toContain(variant.caption);
@@ -1852,8 +1853,8 @@ for (const native of [true, false]) {
       context.fillRect(0, 0, canvas.width, canvas.height);
       return canvas.toDataURL('image/jpeg', 0.85);
     });
-    // A centered wrapping caption deliberately selects the HTML fallback.
-    const html = `<p>Prima <span data-editor-image="true" data-layout="${native ? 'inline' : 'wrap'}" data-position="50" data-width="20"><img src="${source}" alt="Figura da ricampionare">${native ? '' : '<span class="editor-image-caption">Didascalia</span>'}</span> dopo.</p>`;
+    // An image without readable dimensions deliberately selects the HTML fallback.
+    const html = `<p>Prima <span data-editor-image="true" data-layout="inline" data-position="50" data-width="20"><img src="${source}" alt="Figura da ricampionare"></span> dopo.</p>${native ? '' : '<p><img src="http://127.0.0.1:9/offline.png" alt="Non raggiungibile"></p>'}`;
     await page.evaluate(async value => {
       await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]);
     }, html);

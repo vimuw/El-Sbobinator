@@ -6,7 +6,7 @@ import type { Editor } from '@tiptap/core';
 // Playwright's Node loader cannot import the shared JSON profile without import attributes.
 const { contentWidthPx: EDITOR_CONTENT_WIDTH_PX } = JSON.parse(fs.readFileSync(new URL('../../el_sbobinator/document_formatting.json', import.meta.url), 'utf8')) as { contentWidthPx: number };
 
-test('HTML fallback preserves right caption image geometry, pixels, history and saved content', async ({ page, context }, testInfo) => {
+test('right caption image keeps geometry, pixels, history and saved content as a native block figure', async ({ page, context }, testInfo) => {
   test.setTimeout(180000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const audio = testInfo.outputPath('html-images.wav');
@@ -50,6 +50,15 @@ test('HTML fallback preserves right caption image geometry, pixels, history and 
     await page.locator('#html-images-probe').evaluate(probe => probe.remove());
     return formats;
   };
+  // Docs resets the X of floating tables on paste, so a captioned Wrap figure on
+  // the right is copied as a right-aligned block figure inside the native slice.
+  const expectBlockFigure = (formats: Record<string, string>) => {
+    const model = JSON.parse(JSON.parse(formats['application/x-vnd.google-docs-document-slice-clip+wrapped']).data).resolved;
+    const tables = model.dsl_styleslices.find((slice: { stsl_type: string }) => slice.stsl_type === 'tbl').stsl_styles.filter(Boolean);
+    expect(tables.find((table: { tbls_bw: number }) => table.tbls_bw === 0)).toMatchObject({ tbls_pt: 0, tbls_al: 2 });
+    expect(model.dsl_entitypositionmap.positioned.filter(Boolean)).toHaveLength(0);
+    expect(model.dsl_spacers).toContain('Figura 1: campione sintetico');
+  };
   for (const variant of [
     { name: 'intrinsic', width: 35, offsetX: 0, offsetY: 18, ratio: null },
     { name: 'explicit-ratio', width: 42, offsetX: -12, offsetY: 18, ratio: 2 },
@@ -62,7 +71,7 @@ test('HTML fallback preserves right caption image geometry, pixels, history and 
     await expectAutosaved(page);
     const original = await read();
     const formats = await capture();
-    expect(formats['application/x-vnd.google-docs-document-slice-clip+wrapped']).toBeUndefined();
+    expectBlockFigure(formats);
     const exported = await page.evaluate(html => {
       const body = new DOMParser().parseFromString(html, 'text/html').body;
       const wrapper = body.querySelector<HTMLElement>('[data-editor-image]')!;
@@ -75,7 +84,7 @@ test('HTML fallback preserves right caption image geometry, pixels, history and 
       float: 'right', transform: `translate(${variant.offsetX}px, 18px)`, caption: 'Figura 1: campione sintetico' });
     expect(Math.abs(original.geometry.width - width)).toBeLessThan(1);
     expect(Math.abs(original.geometry.height - width / (variant.ratio ?? 1.5))).toBeLessThan(1);
-    // Use the real fallback bytes; the native MIME must remain absent.
+    // Paste the real copied HTML back into the app.
     await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
     const pasted = await read();
     expect(pasted.images).toEqual(original.images);
@@ -102,9 +111,9 @@ test('HTML fallback preserves right caption image geometry, pixels, history and 
     expect(reopened.text).toBe(edited.text);
     expect(reopened.geometry).toEqual(edited.geometry);
     const finalFormats = await capture();
-    expect(finalFormats['application/x-vnd.google-docs-document-slice-clip+wrapped']).toBeUndefined();
+    expectBlockFigure(finalFormats);
     const button = await capture(true);
-    expect(button['application/x-vnd.google-docs-document-slice-clip+wrapped']).toBeUndefined();
+    expectBlockFigure(button);
     const imageDimensions = (html: string) => page.evaluate(value => {
       const img = new DOMParser().parseFromString(value, 'text/html').querySelector('img')!;
       return { src: img.getAttribute('src'), width: img.getAttribute('width'), height: img.getAttribute('height') };
