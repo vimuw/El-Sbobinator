@@ -176,6 +176,7 @@ class AppWebviewTests(unittest.TestCase):
         with _tempfile.NamedTemporaryFile(
             "w+", suffix=".html", delete=False, encoding="utf-8"
         ) as tmp:
+            self.addCleanup(Path(tmp.name).unlink, missing_ok=True)
             tmp.write(
                 "<!DOCTYPE html><html><head><meta charset='utf-8'><style>body{color:red}</style></head>"
                 "<body><p>Old</p></body></html>"
@@ -226,6 +227,7 @@ class AppWebviewTests(unittest.TestCase):
         api = ElSbobinatorApi()
         window = _FakeWindow()
         with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            self.addCleanup(Path(tmp.name).unlink, missing_ok=True)
             window.dialog_result = tmp.name
         api.set_window(window)  # type: ignore[arg-type]
 
@@ -242,6 +244,7 @@ class AppWebviewTests(unittest.TestCase):
         api = ElSbobinatorApi()
         window = _FakeWindow()
         with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            self.addCleanup(Path(tmp.name).unlink, missing_ok=True)
             window.dialog_result = tmp.name
         api.set_window(window)  # type: ignore[arg-type]
 
@@ -4347,6 +4350,7 @@ class TestRetryStartProcessingGuard(unittest.TestCase):
 
     def _make_file(self) -> str:
         with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            self.addCleanup(Path(tmp.name).unlink, missing_ok=True)
             tmp.write(b"fake")
             return tmp.name
 
