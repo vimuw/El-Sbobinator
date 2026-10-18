@@ -63,7 +63,16 @@ export function useEditorImageDrop({ editorRef }: UseEditorImageDropOptions) {
             if (normalizeImageLayout(node.attrs.layout) === 'wrap') { event.preventDefault(); return true; }
             draggedImageRef.current = { pos, size: node.nodeSize, node };
             setInlineImageDragPreview(imageNodeView, event);
-            dragCleanupRef.current = startInlineImageAutoScroll(view.dom, event);
+            const stopAutoScroll = startInlineImageAutoScroll(view.dom, event);
+            // A drag cancelled by Esc or dropped outside the editor never reaches
+            // handleDrop, so dragend must forget the stale source position too.
+            const forget = () => {
+              stopAutoScroll();
+              draggedImageRef.current = null;
+              window.removeEventListener('dragend', forget, true);
+            };
+            window.addEventListener('dragend', forget, true);
+            dragCleanupRef.current = forget;
           }
         }
       } catch (_) {
@@ -87,7 +96,9 @@ export function useEditorImageDrop({ editorRef }: UseEditorImageDropOptions) {
   }, [insertImageFiles]);
 
   const handleDrop = useCallback((view: EditorView, event: DragEvent): boolean => {
+    let dragged = draggedImageRef.current;
     dragCleanupRef.current?.();
+    draggedImageRef.current = null;
     const files = Array.from(event.dataTransfer?.files || []).filter(f => f.type.startsWith('image/'));
     if (files.length) {
       event.preventDefault();
@@ -95,18 +106,14 @@ export function useEditorImageDrop({ editorRef }: UseEditorImageDropOptions) {
       return true;
     }
 
-    let dragged = draggedImageRef.current;
-    draggedImageRef.current = null;
-
+    // Only ProseMirror's own drag of exactly one selected image is a move.
+    // External drops and text drags that begin at an image stay native.
     if (!dragged) {
       const sel = view.state.selection;
-      if (sel instanceof NodeSelection && sel.node.type.name === 'floatingImage') {
+      const slice = view.dragging?.slice;
+      const single = slice?.openStart === 0 && slice.openEnd === 0 && slice.content.childCount === 1 ? slice.content.firstChild : null;
+      if (sel instanceof NodeSelection && sel.node.type.name === 'floatingImage' && single === sel.node) {
         dragged = { pos: sel.from, size: sel.node.nodeSize, node: sel.node };
-      } else if (sel) {
-        const nodeAtFrom = view.state.doc.nodeAt(sel.from);
-        if (nodeAtFrom?.type.name === 'floatingImage') {
-          dragged = { pos: sel.from, size: nodeAtFrom.nodeSize, node: nodeAtFrom };
-        }
       }
     }
 
@@ -128,6 +135,8 @@ export function useEditorImageDrop({ editorRef }: UseEditorImageDropOptions) {
       const mapped = tr.mapping.map(insertPos);
       const target = tr.doc.resolve(mapped);
       const inline = target.parent.inlineContent;
+      // Code blocks accept only text; refuse the drop instead of throwing.
+      if (inline && !target.parent.canReplaceWith(target.index(), target.index(), dragged.node.type, dragged.node.marks)) return true;
       tr.insert(mapped, inline ? dragged.node : view.state.schema.nodes.paragraph.create(null, dragged.node));
       tr.setSelection(NodeSelection.create(tr.doc, mapped + (inline ? 0 : 1)));
 

@@ -204,7 +204,8 @@ function placeImage(view: EditorView, pos: number, left: number, top: number, vi
   view.state.doc.descendants((node, nodePos) => {
     // Docs anchors floating images only to paragraphs outside tables.
     if (node.type.spec.tableRole === 'table') return false;
-    if (!node.isTextblock) return;
+    // Code blocks accept only text, so they cannot anchor an image.
+    if (!node.isTextblock || !node.type.contentMatch.matchType(image.type)) return;
     const dom = view.nodeDOM(nodePos);
     if (!(dom instanceof HTMLElement)) return;
     const rect = dom.getBoundingClientRect();
@@ -230,7 +231,7 @@ function placeImage(view: EditorView, pos: number, left: number, top: number, vi
   else {
     tr.delete(pos, pos + image.nodeSize);
     selectedPos = tr.mapping.map(target.pos + 1);
-    tr.insert(selectedPos, image.type.create(attrs));
+    tr.insert(selectedPos, image.type.create(attrs, null, image.marks));
   }
   tr.setSelection(NodeSelection.create(tr.doc, selectedPos));
   view.dispatch(tr);

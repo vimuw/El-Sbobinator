@@ -198,3 +198,39 @@ describe('wrap alignment guides', () => {
     cancel();
   });
 });
+
+describe('wrap drop across paragraphs', () => {
+  it('skips a code block target and keeps the link mark when moving to another paragraph', () => {
+    const editor = new Editor({
+      extensions: [StarterKit, FloatingImage.extend({ addNodeView: () => null })],
+      content: '<p>Intro</p><pre><code>codice</code></pre><p>Fine <a href="https://example.com/lezione"><span data-editor-image data-layout="wrap" data-width="35"><img src="drag.png"></span></a></p>',
+    });
+    editors.push(editor);
+    document.body.append(editor.view.dom);
+    Object.defineProperties(editor.view.dom, { offsetWidth: { value: 640 }, clientWidth: { value: 640 } });
+    vi.spyOn(editor.view.dom, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 0, 640, 600));
+    const [intro, end] = Array.from(editor.view.dom.querySelectorAll(':scope > p'));
+    vi.spyOn(intro, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 40, 640, 40));
+    vi.spyOn(editor.view.dom.querySelector('pre')!, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 100, 640, 40));
+    vi.spyOn(end, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 200, 640, 40));
+    let pos = 0;
+    editor.state.doc.descendants((node, nodePos) => { if (node.type.name === 'floatingImage') pos = nodePos; });
+    const anchor = editor.view.nodeDOM(pos) as HTMLElement;
+    vi.spyOn(anchor.querySelector<HTMLElement>('.editor-image-surface')!, 'getBoundingClientRect').mockReturnValue(new DOMRect(350, 200, 70, 40));
+    vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(1);
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+    const pointer = (type: string, clientY: number) => {
+      const event = new Event(type, { cancelable: true });
+      Object.assign(event, { pointerId: 1, clientX: 360, clientY });
+      return event as PointerEvent;
+    };
+    cleanups.push(startImageDrag(editor.view, pos, anchor, pointer('pointerdown', 210)));
+    // The image top lands on the code block line, so the paragraph above anchors it.
+    window.dispatchEvent(pointer('pointermove', 110));
+    expect(() => window.dispatchEvent(pointer('pointerup', 110))).not.toThrow();
+    expect(editor.state.doc.child(1).textContent).toBe('codice');
+    const image = editor.state.doc.child(0).firstChild!;
+    expect(image.type.name).toBe('floatingImage');
+    expect(image.marks.map(mark => [mark.type.name, mark.attrs.href])).toEqual([['link', 'https://example.com/lezione']]);
+  });
+});
