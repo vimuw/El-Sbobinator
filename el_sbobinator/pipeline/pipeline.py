@@ -66,6 +66,8 @@ from el_sbobinator.services.session_audio_service import (
     create_playback_audio,
     discard_playback_audio,
     playback_audio_path,
+    session_audio_lock,
+    session_metadata_lock,
 )
 from el_sbobinator.utils.logging_utils import (
     attach_file_handler,
@@ -462,12 +464,6 @@ def _export_html_and_finish(
         save_session()
         return False
 
-    # The document is complete: Stop no longer interrupts saving its audio
-    # copy, otherwise the transcription cache would be left behind unused.
-    _retain_playback_audio(
-        session_ctx, session, input_path, stop_event=runtime.shutdown_event
-    )
-
     try:
         _update_session(
             session,
@@ -481,6 +477,14 @@ def _export_html_and_finish(
         save_session()
     except Exception:
         pass
+
+    # Persist the outputs first: the archive hides a done session without
+    # outputs.html, and a quit during the long encode below must not do that.
+    # The document is complete: Stop no longer interrupts saving its audio
+    # copy, otherwise the transcription cache would be left behind unused.
+    _retain_playback_audio(
+        session_ctx, session, input_path, stop_event=runtime.shutdown_event
+    )
 
     try:
         runtime.update_model(
@@ -512,6 +516,27 @@ def _export_html_and_finish(
     return True
 
 
+def _latest_session(session_ctx: PipelineSessionContext, session: dict) -> dict:
+    try:
+        latest = _load_json(session_ctx.session_path)
+    except FileNotFoundError:
+        return dict(session)
+    if not isinstance(latest, dict):
+        raise OSError("session.json non valido.")
+    return latest
+
+
+def _link_playback_audio(
+    session_ctx: PipelineSessionContext, session: dict, path: str
+) -> None:
+    """Merge the link into the latest session.json, keeping concurrent edits."""
+    with session_metadata_lock(session_ctx.session_dir):
+        latest = _latest_session(session_ctx, session)
+        attach_playback_audio(latest, session_ctx.session_dir, path)
+        _atomic_write_json(session_ctx.session_path, latest)
+        session["playback_audio"] = latest["playback_audio"]
+
+
 def _retain_playback_audio(
     session_ctx: PipelineSessionContext,
     session: dict,
@@ -519,29 +544,28 @@ def _retain_playback_audio(
     *,
     stop_event=None,
 ) -> None:
-    if playback_audio_path(session, session_ctx.session_dir):
-        return
     try:
-        path = create_playback_audio(
-            session_ctx.session_dir,
-            input_path,
-            preconverted_path=os.path.join(
-                session_ctx.session_dir, PRECONVERTED_AUDIO_FINAL
-            ),
-            stop_event=stop_event,
-        )
-        previous = session.get("playback_audio")
-        try:
-            attach_playback_audio(session, session_ctx.session_dir, path)
-            if not session_ctx.save():
-                raise OSError("Impossibile salvare il collegamento alla copia audio.")
-        except Exception:
-            if previous is None:
-                session.pop("playback_audio", None)
-            else:
-                session["playback_audio"] = previous
-            discard_playback_audio(path)
-            raise
+        # Serialize with opening the session, which may encode the same copy.
+        with session_audio_lock(session_ctx.session_dir):
+            latest = _latest_session(session_ctx, session)
+            if latest.get("audio_removed"):
+                return
+            if playback_audio_path(latest, session_ctx.session_dir):
+                session["playback_audio"] = latest["playback_audio"]
+                return
+            path = create_playback_audio(
+                session_ctx.session_dir,
+                input_path,
+                preconverted_path=os.path.join(
+                    session_ctx.session_dir, PRECONVERTED_AUDIO_FINAL
+                ),
+                stop_event=stop_event,
+            )
+            try:
+                _link_playback_audio(session_ctx, session, path)
+            except Exception:
+                discard_playback_audio(path)
+                raise
         invalidate_session_storage_cache()
     except Exception as error:
         print(
