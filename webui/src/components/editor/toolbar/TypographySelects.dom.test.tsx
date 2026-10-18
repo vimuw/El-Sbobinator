@@ -1,7 +1,12 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { FontFamilySelect, FontSizeSelect, HeadingSelect, ZoomSelect } from './TypographySelects';
-import type { Editor as TiptapEditor } from '@tiptap/core';
+import { Editor, type Editor as TiptapEditor } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
+import { TextStyle } from '@tiptap/extension-text-style';
+import FontFamily from '@tiptap/extension-font-family';
+import { EditorDocumentStyle } from '../../../editorDocumentStyle';
+import { FontSize } from '../../../editorExtensions';
 
 const createMockEditor = (attrs: Record<string, unknown> = {}, activeChecks: Record<string, boolean> = {}) => {
   const runMock = vi.fn().mockReturnValue(true);
@@ -13,6 +18,7 @@ const createMockEditor = (attrs: Record<string, unknown> = {}, activeChecks: Rec
     clearBlockFontSize: vi.fn().mockReturnThis(),
     setFontFamily: vi.fn().mockReturnThis(),
     unsetFontFamily: vi.fn().mockReturnThis(),
+    clearBlockFontFamily: vi.fn().mockReturnThis(),
     setMark: vi.fn().mockReturnThis(),
     run: runMock,
   };
@@ -145,5 +151,33 @@ describe('TypographySelects', () => {
 
       expect(onZoomChange).toHaveBeenCalledWith(75);
     });
+  });
+
+  it('clears a paragraph-level Docs font when the default font is chosen', () => {
+    const editor = new Editor({ extensions: [StarterKit, TextStyle, FontFamily, FontSize, EditorDocumentStyle], content: '<p style="font-family: Georgia, serif">Lezione</p>' });
+    try {
+      editor.commands.setTextSelection(3);
+      const { rerender } = render(<FontFamilySelect editor={editor} />);
+      expect(screen.getByTitle('Carattere').textContent).toContain('Georgia');
+      fireEvent.click(screen.getByTitle('Carattere'));
+      fireEvent.click(screen.getByRole('button', { name: 'Arial' }));
+      expect(editor.state.doc.firstChild?.attrs.documentStyle?.['font-family']).toBeUndefined();
+      rerender(<FontFamilySelect editor={editor} />);
+      expect(screen.getByTitle('Carattere').textContent).toContain('Arial');
+    } finally { editor.destroy(); }
+  });
+
+  it('closes an open dropdown on Esc without reaching the editor page', () => {
+    const { editor } = createMockEditor();
+    const pageEscape = vi.fn();
+    window.addEventListener('keydown', pageEscape);
+    try {
+      render(<FontFamilySelect editor={editor as unknown as TiptapEditor} />);
+      fireEvent.click(screen.getByTitle('Carattere'));
+      expect(screen.getByRole('button', { name: 'Georgia' })).toBeTruthy();
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      expect(screen.queryByRole('button', { name: 'Georgia' })).toBeNull();
+      expect(pageEscape).not.toHaveBeenCalled();
+    } finally { window.removeEventListener('keydown', pageEscape); }
   });
 });

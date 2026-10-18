@@ -2,8 +2,10 @@ import React from 'react';
 import katex from 'katex';
 import { Extension, Node, mergeAttributes, textInputRule, type Editor as TiptapEditor, type JSONContent } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
-import { Fragment, type Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { Fragment, type Node as ProseMirrorNode, type Schema, type TagParseRule } from '@tiptap/pm/model';
 import { EMPTY_PARAGRAPH_ATTRIBUTE } from './editorLineSpacing';
+import { isDefaultBlockStyle } from './documentFormatting';
+import { videoLink } from './editorLinks';
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
 import { closeHistory } from '@tiptap/pm/history';
 import { MathEditorField } from './components/MathEditorField';
@@ -50,6 +52,7 @@ declare module '@tiptap/core' {
     };
     blockTypography: {
       clearBlockFontSize: () => ReturnType;
+      clearBlockFontFamily: () => ReturnType;
     };
   }
 }
@@ -218,9 +221,30 @@ export const FontSize = Extension.create({
           .removeEmptyTextStyle()
           .run();
       },
+      clearBlockFontFamily: () => ({ tr, state }) => {
+        // The default font must also drop a paragraph-level font from Docs.
+        const { from, to } = state.selection;
+        state.doc.nodesBetween(from, to, (node, pos) => {
+          const direct = node.attrs.documentStyle as Record<string, string> | null | undefined;
+          if (!direct?.['font-family']) return;
+          const { 'font-family': _removed, ...kept } = direct;
+          tr.setNodeAttribute(pos, 'documentStyle', Object.keys(kept).length ? kept : null);
+        });
+        return true;
+      },
       clearBlockFontSize: () => ({ tr, state }) => {
         const { from, to } = state.selection;
         state.doc.nodesBetween(from, to, (node, pos) => {
+          // A type change must not keep the old type's profile values as
+          // direct formatting, as earlier internal pastes stored them.
+          const direct = node.attrs.documentStyle as Record<string, string> | null | undefined;
+          if (direct && ['paragraph', 'heading'].includes(node.type.name)) {
+            const $pos = state.doc.resolve(pos);
+            const inTable = Array.from({ length: $pos.depth }, (_, i) => $pos.node(i + 1)).some(parent => ['cell', 'header_cell'].includes(parent.type.spec.tableRole));
+            const level = node.type.name === 'heading' ? Number(node.attrs.level) : null;
+            const kept = Object.fromEntries(Object.entries(direct).filter(([property, value]) => !isDefaultBlockStyle(property, value, level, inTable)));
+            if (Object.keys(kept).length !== Object.keys(direct).length) tr.setNodeAttribute(pos, 'documentStyle', Object.keys(kept).length ? kept : null);
+          }
           if (node.isTextblock) {
             const start = pos + 1;
             const end = pos + node.nodeSize - 1;
@@ -301,9 +325,24 @@ export const CustomHeading = HeadingExtension.extend({
   },
 });
 
+// Saved or pasted players become a paragraph holding the video's link, which
+// is exactly what Docs receives. The editor previews YouTube from that link.
+const embeddedVideoRule = (tag: string): TagParseRule => ({
+  tag,
+  getAttrs: element => embeddedVideoLink(element) ? null : false,
+  getContent: (element, schema: Schema) => {
+    const href = embeddedVideoLink(element as HTMLElement)!;
+    return Fragment.from(schema.text(href, schema.marks.link ? [schema.marks.link.create({ href })] : []));
+  },
+});
+const embeddedVideoLink = (element: HTMLElement) => {
+  const player = element.matches('iframe, video') ? element : element.querySelector('iframe, video');
+  return videoLink(player?.getAttribute('src') ?? player?.querySelector('source')?.getAttribute('src') ?? '', player?.tagName === 'VIDEO');
+};
+
 export const CustomParagraph = ParagraphExtension.extend({
   parseHTML() {
-    return [{
+    return [embeddedVideoRule('div[data-youtube-video]'), embeddedVideoRule('iframe[src]'), {
       tag: `div[${EMPTY_PARAGRAPH_ATTRIBUTE}="true"]`,
       // Only our exact empty transport shell is a paragraph. Never discard
       // text or objects pasted inside a malformed/foreign marked container.

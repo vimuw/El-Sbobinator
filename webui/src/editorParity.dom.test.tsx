@@ -415,11 +415,11 @@ describe('Editor parity: clipboard and logical text', () => {
     expect(editor.getJSON()).toEqual(original);
   });
 
-  it('does not turn rendered equations into HTML source when one unsupported formula forces the whole fragment to HTML', async () => {
+  it('keeps the native slice and its LaTeX source when one formula has no native equation', async () => {
     const { editor, element } = await openEditor('<h3>Formule</h3><p><span style="color:#123abc"><mark data-color="#ffee00">Scelto</mark></span> <span data-math="x^2">x</span></p><div data-math-block="\\begin{matrix}a&amp;b\\end{matrix}">matrice</div>');
     act(() => { editor.commands.selectAll(); });
     const { formats } = transfer(element, 'copy');
-    expect(formats[NATIVE_SLICE_MIME]).toBeUndefined();
+    expect(JSON.parse(JSON.parse(formats[NATIVE_SLICE_MIME]).data).resolved.dsl_spacers).toContain('$$\\begin{matrix}a&b\\end{matrix}$$\n');
     const html = new DOMParser().parseFromString(formats['text/html'], 'text/html');
     expect(html.querySelectorAll('.katex')).toHaveLength(2);
     expect(html.querySelector('.katex-mathml,annotation')).toBeNull();
@@ -439,7 +439,7 @@ describe('Editor parity: clipboard and logical text', () => {
       render(<EditorContextMenu contextMenu={{ x: 20, y: 20 }} onClose={() => {}} editor={editor} onOpenMath={() => {}} onOpenImagePicker={() => {}} onOpenFind={() => {}} />);
       fireEvent.click(Array.from(document.querySelectorAll<HTMLButtonElement>('.editor-context-menu-item')).find(button => button.textContent?.includes('Rimuovi formattazione'))!);
     } else if (path === 'keyboard') fireEvent.keyDown(element, { key: '\\', code: 'Backslash', ctrlKey: true });
-    else fireEvent.click(document.querySelector<HTMLButtonElement>('.editor-toolbar [title="Rimuovi formattazione"]')!);
+    else fireEvent.click(document.querySelector<HTMLButtonElement>('.editor-toolbar [title^="Rimuovi formattazione"]')!);
     const html = editor.getHTML();
     expect(html).toContain('<h2>Titolo</h2>');
     expect(html).toContain('<ol start="4">');

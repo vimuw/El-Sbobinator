@@ -5,12 +5,12 @@ import type { Editor as TiptapEditor } from '@tiptap/core';
 import { closeHistory } from '@tiptap/pm/history';
 import {
   Bold,
-  Calculator,
   Clipboard,
   Copy,
   ImagePlus,
   Italic,
   Link2,
+  Radical,
   RemoveFormatting,
   Scissors,
   Search,
@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { getLastHighlightColor } from '../editorUtils';
 import { HighlightIcon } from './HighlightIcon';
+import { useEscapeToClose } from '../hooks/useEscapeToClose';
 import { writeEditorClipboard } from '../editorClipboard';
 import { pasteEditorClipboard, prepareSelectionClipboard } from '../editorSelectionClipboard';
 
@@ -29,6 +30,7 @@ interface EditorContextMenuProps {
   onOpenImagePicker: () => void;
   onOpenFind: () => void;
   onOpenMath: () => void;
+  onOpenLink?: () => void;
 }
 
 async function copySelectionToClipboard(editor: TiptapEditor, cut = false) {
@@ -55,6 +57,7 @@ export function EditorContextMenu({
   onOpenImagePicker,
   onOpenFind,
   onOpenMath,
+  onOpenLink,
 }: EditorContextMenuProps) {
   const menuRef = React.useRef<HTMLDivElement>(null);
   React.useLayoutEffect(() => {
@@ -69,6 +72,7 @@ export function EditorContextMenu({
     window.addEventListener('resize', place);
     return () => window.removeEventListener('resize', place);
   }, [contextMenu, editor]);
+  useEscapeToClose(Boolean(contextMenu), onClose);
   if (!contextMenu || !editor || editor.isDestroyed) return null;
 
   return createPortal(
@@ -216,16 +220,13 @@ export function EditorContextMenu({
       <button
         type="button"
         className="editor-context-menu-item"
-        onClick={() => {
-          if (!editor.state.selection.empty) {
-            editor.chain().focus().clearDocumentFormatting().run();
-          }
-        }}
+        onClick={() => editor.chain().focus().clearDocumentFormatting().run()}
       >
         <span className="flex items-center gap-2.5 font-medium">
           <RemoveFormatting className="h-4 w-4 shrink-0" />
           <span>Rimuovi formattazione</span>
         </span>
+        <kbd className="editor-context-menu-shortcut">Ctrl+\</kbd>
       </button>
 
       <div className="my-1 border-t border-[var(--border-subtle)]" />
@@ -233,10 +234,7 @@ export function EditorContextMenu({
       <button
         type="button"
         className="editor-context-menu-item"
-        onClick={() => {
-          const url = window.prompt('Inserisci URL del link:');
-          if (url) editor.chain().focus().setLink({ href: url }).run();
-        }}
+        onClick={onOpenLink}
       >
         <span className="flex items-center gap-2.5 font-medium">
           <Link2 className="h-4 w-4 shrink-0" />
@@ -262,7 +260,7 @@ export function EditorContextMenu({
         onClick={onOpenMath}
       >
         <span className="flex items-center gap-2.5 font-medium">
-          <Calculator className="h-4 w-4 shrink-0" />
+          <Radical className="h-4 w-4 shrink-0" />
           <span>Inserisci formula LaTeX</span>
         </span>
         <kbd className="editor-context-menu-shortcut">Ctrl+M</kbd>
@@ -277,7 +275,7 @@ export function EditorContextMenu({
           <Search className="h-4 w-4 shrink-0" />
           <span>Trova e sostituisci</span>
         </span>
-        <kbd className="editor-context-menu-shortcut">Ctrl+F</kbd>
+        <kbd className="editor-context-menu-shortcut">Ctrl+H</kbd>
       </button>
     </div>,
     document.body,

@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from el_sbobinator.pipeline.pipeline import (
+    _export_html_and_finish,
     _pipeline_finally_cleanup,
     _retain_playback_audio,
     esegui_sbobinatura,
@@ -911,12 +912,108 @@ class PipelineCleanupCacheTests(unittest.TestCase):
             self._write_preconverted_audio(preconverted)
             with open(preconverted, "rb") as handle:
                 cache_bytes = handle.read()
-            with patch.object(context, "save", return_value=False):
+            with patch(
+                "el_sbobinator.pipeline.pipeline._atomic_write_json",
+                side_effect=OSError("disk full"),
+            ):
                 _retain_playback_audio(context, context.session, "missing.mp3")  # type: ignore[arg-type]
             with open(preconverted, "rb") as handle:
                 self.assertEqual(handle.read(), cache_bytes)
             self.assertNotIn("playback_audio", context.session)
             self.assertEqual(os.listdir(os.path.join(context.session_dir, "audio")), [])
+
+    def test_quit_during_playback_encode_keeps_the_exported_document(self):
+        from el_sbobinator.core.session_store import load_session, save_session
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            context = self._make_session_ctx(os.path.join(tmpdir, "session"))
+            context.session["stage"] = "done"
+
+            def save():
+                save_session(context.session_path, context.session)
+                return True
+
+            save()
+            html_path = os.path.join(context.session_dir, "lezione.html")
+
+            def fake_export(**_kwargs):
+                with open(html_path, "w", encoding="utf-8") as handle:
+                    handle.write("<html></html>")
+                return "Lezione", html_path
+
+            adapter = PipelineAdapter(
+                None, threading.Event(), shutdown_event=threading.Event()
+            )
+            with (
+                patch(
+                    "el_sbobinator.pipeline.pipeline.export_final_html_document",
+                    side_effect=fake_export,
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.create_playback_audio",
+                    side_effect=SystemExit,
+                ),
+                self.assertRaises(SystemExit),
+            ):
+                _export_html_and_finish(
+                    "input.mp3",
+                    context,  # type: ignore[arg-type]
+                    context.session,
+                    save,
+                    "testo",
+                    context.phase2_revised_dir,
+                    PipelineRuntime(adapter),
+                    adapter,
+                    _FakeLogger(),
+                    time.monotonic(),
+                )
+            stored = load_session(context.session_path)
+            self.assertEqual(stored["outputs"]["html"], html_path)
+            self.assertEqual(stored["title"], "Lezione")
+
+    def test_playback_link_keeps_edits_saved_while_encoding(self):
+        from el_sbobinator.core.session_store import load_session, save_session
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            context = self._make_session_ctx(os.path.join(tmpdir, "session"))
+            context.session.update({"stage": "done", "title": "Vecchio"})
+            save_session(context.session_path, context.session)
+            audio_dir = os.path.join(context.session_dir, "audio")
+            os.makedirs(audio_dir)
+            created = os.path.join(audio_dir, "playback-" + "a" * 32 + ".mp3")
+
+            def encode_while_user_edits(*_args, **_kwargs):
+                edited = load_session(context.session_path)
+                edited.update(
+                    {
+                        "title": "Rinominata",
+                        "title_is_custom": True,
+                        "last_opened_at": "2026-10-18T10:00:00",
+                        "user_edited": True,
+                    }
+                )
+                save_session(context.session_path, edited)
+                with open(created, "wb") as handle:
+                    handle.write(b"\x00" * 2048)
+                return created
+
+            with patch(
+                "el_sbobinator.pipeline.pipeline.create_playback_audio",
+                side_effect=encode_while_user_edits,
+            ):
+                _retain_playback_audio(context, context.session, "input.mp3")  # type: ignore[arg-type]
+            stored = load_session(context.session_path)
+            self.assertEqual(stored["title"], "Rinominata")
+            self.assertTrue(stored["title_is_custom"])
+            self.assertEqual(stored["last_opened_at"], "2026-10-18T10:00:00")
+            self.assertTrue(stored["user_edited"])
+            self.assertEqual(
+                stored["playback_audio"],
+                os.path.join("audio", os.path.basename(created)),
+            )
+            self.assertEqual(
+                context.session["playback_audio"], stored["playback_audio"]
+            )
 
     def _cleanup_completed_session(self, cancel=False, shutdown=False):
         from el_sbobinator.core.shared import PRECONVERTED_AUDIO_FINAL
@@ -1166,6 +1263,7 @@ class PipelineCleanupCacheTests(unittest.TestCase):
 
             self.assertTrue(session_ctx.session.get("playback_audio"))
             mock_invalidate.assert_called_once()
+            self.assertTrue(os.path.isfile(preconv_path))
 
     def test_cleanup_runs_on_done_early_return(self):
         """finally-block safety net retains the preconverted audio on the

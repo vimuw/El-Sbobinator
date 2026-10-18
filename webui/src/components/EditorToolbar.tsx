@@ -38,12 +38,16 @@ const menuBarStateKey = (editor: TiptapEditor): string => [
   editor.getAttributes('textStyle').color ?? '',
   editor.getAttributes('textStyle').fontFamily ?? '',
   editor.getAttributes('textStyle').fontSize ?? '',
+  // Docs paragraph styles feed the font, size and colour controls too.
+  JSON.stringify(editor.getAttributes(editor.isActive('heading') ? 'heading' : 'paragraph').documentStyle ?? null),
 ].join('|');
 
 export const MenuBar = ({
   editor,
   onOpenImagePicker,
   onOpenMath,
+  linkRequest,
+  onOpenLink,
   showFindReplace,
   onToggleFindReplace,
   zoomLevel,
@@ -52,6 +56,8 @@ export const MenuBar = ({
   editor: TiptapEditor | null;
   onOpenImagePicker: () => void;
   onOpenMath: () => void;
+  linkRequest?: number;
+  onOpenLink: () => void;
   showFindReplace: boolean;
   onToggleFindReplace: () => void;
   zoomLevel?: number;
@@ -147,15 +153,15 @@ export const MenuBar = ({
         type="button"
         onClick={() => editor.chain().focus().clearDocumentFormatting().run()}
         className="editor-button"
-        title="Rimuovi formattazione"
+        title="Rimuovi formattazione (Ctrl+\)"
       >
         <RemoveFormatting className="h-4 w-4" />
       </button>
       <div className="editor-separator" />
       <InsertImageButton onOpenImagePicker={onOpenImagePicker} />
-      <InsertYoutubeButton editor={editor} />
+      <InsertYoutubeButton onOpenLink={onOpenLink} />
       <InsertMathButton onOpenMath={onOpenMath} />
-      <LinkButton editor={editor} />
+      <LinkButton editor={editor} openRequest={linkRequest} />
       <div className="editor-separator" />
       <AlignDropdownButton editor={editor} />
       <div className="editor-separator" />

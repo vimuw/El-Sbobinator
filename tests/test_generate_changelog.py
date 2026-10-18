@@ -68,12 +68,24 @@ class TestGenerateChangelog(unittest.TestCase):
 
     @patch("scripts.generate_changelog.run_git")
     def test_get_previous_tag(self, mock_run_git) -> None:
-        mock_run_git.return_value = "v0.9.0"
+        mock_run_git.return_value = "v0.9.0\nv1.0.0"
         prev = get_previous_tag("v1.0.0", current_tag="v1.0.0")
         self.assertEqual(prev, "v0.9.0")
-        mock_run_git.assert_called_once_with(
-            ["describe", "--tags", "--abbrev=0", "--exclude", "v1.0.0", "v1.0.0^"]
+        mock_run_git.assert_called_once_with(["tag", "--list"])
+
+    @patch("scripts.generate_changelog.run_git")
+    def test_get_previous_tag_orders_by_version_not_ancestry(
+        self, mock_run_git
+    ) -> None:
+        # After a history rewrite v2.8.0 is no longer an ancestor of v2.8.1;
+        # the notes must still start from it rather than from v2.7.3.
+        mock_run_git.return_value = (
+            "v2.10.0\nv2.7.3\nv2.8.0\nv2.8.0-rc1\nv2.8.1\nv2.9.0-rc1\nlatest"
         )
+        self.assertEqual(get_previous_tag("v2.8.1", current_tag="v2.8.1"), "v2.8.0")
+        self.assertEqual(get_previous_tag("HEAD", current_tag="v2.9.0"), "v2.8.1")
+        self.assertEqual(get_previous_tag("v2.7.3", current_tag="v2.7.3"), "")
+        self.assertEqual(get_previous_tag("HEAD"), "v2.10.0")
 
     def test_main_custom_release_body_empty_env_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -93,8 +105,8 @@ class TestGenerateChangelog(unittest.TestCase):
                     return "commit"
                 if args[0] == "rev-parse":
                     return "v1.0.0"
-                if args[0] == "describe":
-                    return "v0.9.0"
+                if args[0] == "tag":
+                    return "v0.9.0\nv1.0.0"
                 if args[0] == "log":
                     return "abc1234|feat: add foo"
                 return ""
@@ -150,8 +162,8 @@ class TestGenerateChangelog(unittest.TestCase):
                     return "Custom announcement or highlights in tag"
                 if args[0] == "rev-parse":
                     return "v1.0.0"
-                if args[0] == "describe":
-                    return "v0.9.0"
+                if args[0] == "tag":
+                    return "v0.9.0\nv1.0.0"
                 if args[0] == "log":
                     return "abc1234|feat: add foo"
                 return ""

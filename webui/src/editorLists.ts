@@ -231,6 +231,15 @@ export const EditorOrderedList = OrderedList.extend({
               for (let depth = 1; depth < $from.depth; depth++) {
                 if (['orderedList', 'bulletList'].includes($from.node(depth).type.name)) listIndent += 36;
               }
+              // As in Docs, an empty centered or right-aligned line returns to
+              // the start before any indent reset or join.
+              if ($from.parent.content.size === 0 && ['center', 'right'].includes($from.parent.attrs.textAlign)) {
+                const tr = closeHistory(state.tr).setNodeMarkup($from.before(), undefined, { ...$from.parent.attrs, textAlign: null });
+                if (state.storedMarks) tr.setStoredMarks(state.storedMarks);
+                this.editor.view.dispatch(tr.scrollIntoView());
+                this.editor.view.dispatch(closeHistory(this.editor.state.tr));
+                return true;
+              }
               const style = $from.parent.attrs.documentStyle ?? {};
               if (listIndent + pointSize(style['margin-left'] ?? '', 0) > 0) {
                 const nextStyle = { ...style };

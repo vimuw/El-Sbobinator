@@ -2,8 +2,6 @@
 
 <p align="center">
   <a href="https://github.com/vimuw/El-Sbobinator/releases/latest"><img src="https://img.shields.io/github/v/release/vimuw/El-Sbobinator?style=flat-square&color=blue&label=Versione" alt="Ultima Versione" /></a>
-  <a href="https://github.com/vimuw/El-Sbobinator/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/vimuw/El-Sbobinator/build.yml?branch=main&style=flat-square&label=CI" alt="Build Status" /></a>
-  <a href="https://codecov.io/gh/vimuw/El-Sbobinator"><img src="https://img.shields.io/codecov/c/github/vimuw/El-Sbobinator?style=flat-square&label=Coverage" alt="Coverage" /></a>
   <a href="https://github.com/vimuw/El-Sbobinator/releases"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-informational?style=flat-square" alt="Platform" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License: MIT" /></a>
 </p>
@@ -37,6 +35,8 @@ Applicazione desktop per trasformare lezioni audio e video in dispense di studio
 
 ## Download e Installazione
 
+**Requisiti**: Windows 10 o 11 oppure macOS, una connessione a internet e una chiave API Google Gemini personale (vedi [Guida Rapida](#guida-rapida)).
+
 Scarica la versione per il tuo sistema operativo:
 
 | Sistema Operativo | Pacchetto | Installazione rapida |
@@ -63,7 +63,7 @@ Inizia a sbobinare in 4 passaggi:
 All'avvio di **El Sbobinator**, incolla la chiave nel campo iniziale e clicca su **Salva e inizia**. La chiave viene memorizzata in modo protetto nel portachiavi sicuro del sistema operativo (Windows DPAPI o macOS Keychain).
 
 > [!NOTE]
-> **Costi e quote Google**: Disponibilità dei modelli, eventuali costi e limiti dipendono dal piano del **progetto Google Cloud** dell'utente. Se raggiungi un limite al minuto, l'app attende e riprova. Se esaurisci la quota giornaliera, può continuare con una chiave di riserva che abbia quota disponibile; altrimenti occorre attendere il ripristino a mezzanotte Pacific Time. Consulta le [quote Gemini API](https://ai.google.dev/gemini-api/docs/rate-limits).
+> **Costi e quote Google**: modelli disponibili, costi e limiti dipendono dal piano del tuo **progetto Google Cloud**. Se raggiungi un limite al minuto, l'app attende e riprova da sola; se esaurisci la quota giornaliera, puoi usare una chiave di riserva oppure attendere il ripristino a mezzanotte (ora del Pacifico). Dettagli nelle [quote Gemini API](https://ai.google.dev/gemini-api/docs/rate-limits).
 
 ### 3. Trascina la registrazione e avvia
 Trascina il file audio o video direttamente nella finestra dell'applicazione (è possibile inserire più registrazioni in coda) e clicca su **Avvia Sbobinatura**.
@@ -77,28 +77,42 @@ Al termine dell'elaborazione puoi aprire la lezione nell'editor per riascoltare 
 
 ## Risoluzione Problemi Comuni
 
-### Avviso SmartScreen su Windows ("PC protetto da Windows")
+<details>
+<summary><strong>Windows: avviso SmartScreen ("PC protetto da Windows")</strong></summary>
+
 Windows può mostrare questo avviso quando l'app scaricata non è ancora riconosciuta come affidabile. Se hai scaricato El Sbobinator dalla pagina ufficiale delle release:
-1. Nella schermata blu, cliccare su **Ulteriori informazioni**.
-2. Cliccare sul pulsante **Esegui comunque**.
+1. Nella schermata blu, clicca su **Ulteriori informazioni**.
+2. Clicca sul pulsante **Esegui comunque**.
 
-### Schermata bianca o vuota all'avvio su Windows
-Se la finestra resta vuota, verifica che [WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703) sia installato; se manca, installalo e riavvia l'app. Il componente è preinstallato su Windows 11 e presente sulla maggior parte dei dispositivi Windows 10.
+</details>
 
-### Avviso sviluppatore non verificato su macOS (Gatekeeper)
-macOS può bloccare un'app se non ne riconosce lo sviluppatore o se manca la notarizzazione. Se hai scaricato El Sbobinator dalla pagina ufficiale delle release, segui la procedura per il messaggio visualizzato:
+<details>
+<summary><strong>Windows: schermata bianca o vuota all'avvio</strong></summary>
 
-- **Sviluppatore non verificato o app non verificabile**:
-  1. Aprire **Impostazioni di Sistema** → **Privacy e Sicurezza**.
-  2. Scorrere in basso fino alla sezione **Sicurezza**.
-  3. In corrispondenza dell'avviso di blocco per *El Sbobinator*, cliccare su **Apri comunque** e confermare con la propria password o Touch ID.
-- **Se macOS mostra "App danneggiata" (rimozione quarantena)**:
-  Il messaggio può indicare anche file alterati o incompleti: prima scarica nuovamente il pacchetto dalla pagina ufficiale delle release. Se il pacchetto integro resta bloccato dalla quarantena, apri il **Terminale** ed esegui:
-  ```bash
-  xattr -cr "/Applications/El Sbobinator.app"
-  ```
-- **Metodo rapido alternativo (versioni precedenti)**:
-  Nella cartella **Applicazioni**, fare clic destro (o `Control` + clic) su *El Sbobinator* e selezionare **Apri**, quindi confermare nella finestra di dialogo.
+Verifica che [WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703) sia installato; se manca, installalo e riavvia l'app. Il componente è preinstallato su Windows 11 e presente sulla maggior parte dei dispositivi Windows 10.
+
+</details>
+
+<details>
+<summary><strong>macOS: sviluppatore non verificato o app non verificabile</strong></summary>
+
+Se hai scaricato El Sbobinator dalla pagina ufficiale delle release:
+1. Apri **Impostazioni di Sistema** → **Privacy e Sicurezza**.
+2. Scorri in basso fino alla sezione **Sicurezza**.
+3. Accanto all'avviso di blocco per *El Sbobinator*, clicca su **Apri comunque** e conferma con la password o Touch ID.
+
+</details>
+
+<details>
+<summary><strong>macOS: "App danneggiata"</strong></summary>
+
+Il messaggio può indicare file alterati o incompleti: prima scarica di nuovo il pacchetto dalla pagina ufficiale delle release. Se il pacchetto integro resta bloccato dalla quarantena, apri il **Terminale** ed esegui:
+
+```bash
+xattr -cr "/Applications/El Sbobinator.app"
+```
+
+</details>
 
 ---
 

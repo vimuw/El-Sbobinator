@@ -16,10 +16,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function setupTableDrag(sourceCell = 1, scale = 1) {
+function setupTableDrag(scale = 1) {
   const editor = new Editor({
     extensions: [StarterKit, Table, TableRow, TableCell, TableHeader, FloatingImage.extend({ addNodeView: () => null })],
-    content: `<table><tr>${['Left', 'Right'].map((text, cell) => `<td><p>${cell === sourceCell ? '<span data-editor-image data-layout="wrap" data-width="35"><img src="drag.png"></span>' : ''}${text}</p></td>`).join('')}</tr></table><p></p>`,
+    content: '<p>Intro <span data-editor-image data-layout="wrap" data-width="35"><img src="drag.png"></span></p><table><tr><td><p>Left</p></td><td><p>Right</p></td></tr></table><p>Fine</p>',
   });
   editors.push(editor);
   document.body.append(editor.view.dom);
@@ -27,13 +27,14 @@ function setupTableDrag(sourceCell = 1, scale = 1) {
   const rect = (left: number, top: number, width: number, height = 40): DOMRect => new DOMRect(left * scale, top * scale, width * scale, height * scale);
   Object.defineProperties(editor.view.dom, { offsetWidth: { value: 640 }, clientWidth: { value: 640 } });
   vi.spyOn(editor.view.dom, 'getBoundingClientRect').mockImplementation(() => rect(0, 0, 640, 600));
-  const paragraphs = editor.view.dom.querySelectorAll('td p');
-  [100, 330].forEach((left, cell) => vi.spyOn(paragraphs[cell], 'getBoundingClientRect').mockImplementation(() => rect(left, 100, 200)));
+  const [intro, end] = Array.from(editor.view.dom.querySelectorAll(':scope > p'));
+  vi.spyOn(intro, 'getBoundingClientRect').mockImplementation(() => rect(0, 40, 640));
+  vi.spyOn(end, 'getBoundingClientRect').mockImplementation(() => rect(0, 200, 640));
+  editor.view.dom.querySelectorAll('td p').forEach((paragraph, cell) => vi.spyOn(paragraph, 'getBoundingClientRect').mockImplementation(() => rect([100, 330][cell], 100, 200)));
   let pos = 0;
   editor.state.doc.descendants((node, nodePos) => { if (node.type.name === 'floatingImage') pos = nodePos; });
   const anchor = editor.view.nodeDOM(pos) as HTMLElement;
-  const startLeft = (sourceCell === 0 ? 100 : 330) + 20;
-  vi.spyOn(anchor.querySelector<HTMLElement>('.editor-image-surface')!, 'getBoundingClientRect').mockReturnValue(rect(startLeft, 100, 70));
+  vi.spyOn(anchor.querySelector<HTMLElement>('.editor-image-surface')!, 'getBoundingClientRect').mockReturnValue(rect(350, 100, 70));
   const pointer = (type: string, left: number) => {
     const event = new Event(type, { cancelable: true });
     Object.assign(event, { pointerId: 1, clientX: (left + 10) * scale, clientY: 110 * scale });
@@ -41,34 +42,36 @@ function setupTableDrag(sourceCell = 1, scale = 1) {
   };
   vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(1);
   vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
-  cleanups.push(startImageDrag(editor.view, pos, anchor, pointer('pointerdown', startLeft)));
+  cleanups.push(startImageDrag(editor.view, pos, anchor, pointer('pointerdown', 350)));
   const drop = (left: number) => {
     window.dispatchEvent(pointer('pointermove', left));
     window.dispatchEvent(pointer('pointerup', left));
   };
-  const cells = () => editor.state.doc.firstChild!.firstChild!.content;
-  const imageInCell = (cell: number) => {
-    let image: ReturnType<typeof editor.state.doc.nodeAt> | undefined;
-    cells().child(cell).descendants(node => { if (node.type.name === 'floatingImage') image = node; });
-    return image;
+  const images = () => {
+    const found: Array<{ node: NonNullable<ReturnType<typeof editor.state.doc.nodeAt>>; inCell: boolean }> = [];
+    editor.state.doc.descendants((node, nodePos) => {
+      if (node.type.name !== 'floatingImage') return;
+      const $pos = editor.state.doc.resolve(nodePos);
+      found.push({ node, inCell: Array.from({ length: $pos.depth }, (_, depth) => $pos.node(depth + 1).type.name).includes('tableCell') });
+    });
+    return found;
   };
-  return { editor, original, drop, cells, imageInCell, setScale: (value: number) => { scale = value; }, move: (left: number) => window.dispatchEvent(pointer('pointermove', left)) };
+  return { editor, original, drop, images };
 }
 
-describe('wrap drop anchors in table columns', () => {
-  it.each([0.9, 1.1])('refreshes geometry on release after zoom changes to %s without scroll or resize', scale => {
-    const { editor, original, move, setScale, drop, imageInCell } = setupTableDrag();
-    move(370);
-    expect(editor.getJSON()).toEqual(original);
-    setScale(scale);
+describe('wrap drop over a table', () => {
+  // Docs anchors floating images only to paragraphs outside tables.
+  it.each([0.75, 1, 1.5])('anchors above the table and keeps the displayed position at scale %s', scale => {
+    const { editor, original, drop, images } = setupTableDrag(scale);
     drop(380);
-    const image = imageInCell(1)!;
-    expect(image).toBeDefined();
-    expect(imageInCell(0)).toBeUndefined();
-    const { width, position, offsetX, offsetY } = image.attrs;
-    // Preserve the original screen-space grab offset under the new scale.
-    expect(330 + 200 * (1 - width / 100) * position / 100 + offsetX).toBeCloseTo(390 - 10 / scale, 1);
-    expect(100 + offsetY).toBeCloseTo(110 - 10 / scale, 1);
+    const [image] = images();
+    expect(images()).toHaveLength(1);
+    expect(image.inCell).toBe(false);
+    expect(editor.state.doc.child(0).textContent).toBe('Intro ');
+    const { layout, width, position, offsetX, offsetY } = image.node.attrs;
+    expect(layout).toBe('wrap');
+    expect(640 * (1 - width / 100) * position / 100 + offsetX).toBeCloseTo(380, 1);
+    expect(40 + offsetY).toBeCloseTo(100, 1);
     const moved = editor.getJSON();
     editor.commands.undo();
     expect(editor.getJSON()).toEqual(original);
@@ -76,34 +79,13 @@ describe('wrap drop anchors in table columns', () => {
     expect(editor.getJSON()).toEqual(moved);
   });
 
-  it.each([0.75, 1, 1.5])('keeps a drag inside the second cell in that cell at scale %s', scale => {
-    const { editor, original, drop, cells, imageInCell } = setupTableDrag(1, scale);
-    drop(380);
-    expect(imageInCell(0)).toBeUndefined();
-    expect(imageInCell(1)).toBeDefined();
-    expect(cells().child(0).textContent).toBe('Left');
-    expect(cells().child(1).textContent).toBe('Right');
-    const moved = editor.getJSON();
-    editor.commands.undo();
-    expect(editor.getJSON()).toEqual(original);
-    editor.commands.redo();
-    expect(editor.getJSON()).toEqual(moved);
-  });
-
-  it.each([{ source: 0, destination: 1, left: 380 }, { source: 1, destination: 0, left: 150 }])('moves from cell $source to cell $destination', ({ source, destination, left }) => {
-    const { drop, imageInCell } = setupTableDrag(source);
+  it.each([-120, 700])('keeps a free drop at X=%s outside the table', left => {
+    const { drop, images } = setupTableDrag();
     drop(left);
-    expect(imageInCell(source)).toBeUndefined();
-    expect(imageInCell(destination)).toBeDefined();
-  });
-
-  it.each([-120, 700])('keeps a free drop at X=%s when no column contains the image origin', left => {
-    const { drop, imageInCell } = setupTableDrag();
-    drop(left);
-    const image = imageInCell(0)!;
-    expect(image).toBeDefined();
-    const { width, position, offsetX } = image.attrs;
-    expect(100 + 200 * (1 - width / 100) * position / 100 + offsetX).toBeCloseTo(left);
+    const [image] = images();
+    expect(image.inCell).toBe(false);
+    const { width, position, offsetX } = image.node.attrs;
+    expect(640 * (1 - width / 100) * position / 100 + offsetX).toBeCloseTo(left);
   });
 });
 
@@ -214,5 +196,41 @@ describe('wrap alignment guides', () => {
     move(425);
     expect(document.querySelector('.editor-image-alignment-guide, .editor-image-drag-preview')).toBeNull();
     cancel();
+  });
+});
+
+describe('wrap drop across paragraphs', () => {
+  it('skips a code block target and keeps the link mark when moving to another paragraph', () => {
+    const editor = new Editor({
+      extensions: [StarterKit, FloatingImage.extend({ addNodeView: () => null })],
+      content: '<p>Intro</p><pre><code>codice</code></pre><p>Fine <a href="https://example.com/lezione"><span data-editor-image data-layout="wrap" data-width="35"><img src="drag.png"></span></a></p>',
+    });
+    editors.push(editor);
+    document.body.append(editor.view.dom);
+    Object.defineProperties(editor.view.dom, { offsetWidth: { value: 640 }, clientWidth: { value: 640 } });
+    vi.spyOn(editor.view.dom, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 0, 640, 600));
+    const [intro, end] = Array.from(editor.view.dom.querySelectorAll(':scope > p'));
+    vi.spyOn(intro, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 40, 640, 40));
+    vi.spyOn(editor.view.dom.querySelector('pre')!, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 100, 640, 40));
+    vi.spyOn(end, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 200, 640, 40));
+    let pos = 0;
+    editor.state.doc.descendants((node, nodePos) => { if (node.type.name === 'floatingImage') pos = nodePos; });
+    const anchor = editor.view.nodeDOM(pos) as HTMLElement;
+    vi.spyOn(anchor.querySelector<HTMLElement>('.editor-image-surface')!, 'getBoundingClientRect').mockReturnValue(new DOMRect(350, 200, 70, 40));
+    vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(1);
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+    const pointer = (type: string, clientY: number) => {
+      const event = new Event(type, { cancelable: true });
+      Object.assign(event, { pointerId: 1, clientX: 360, clientY });
+      return event as PointerEvent;
+    };
+    cleanups.push(startImageDrag(editor.view, pos, anchor, pointer('pointerdown', 210)));
+    // The image top lands on the code block line, so the paragraph above anchors it.
+    window.dispatchEvent(pointer('pointermove', 110));
+    expect(() => window.dispatchEvent(pointer('pointerup', 110))).not.toThrow();
+    expect(editor.state.doc.child(1).textContent).toBe('codice');
+    const image = editor.state.doc.child(0).firstChild!;
+    expect(image.type.name).toBe('floatingImage');
+    expect(image.marks.map(mark => [mark.type.name, mark.attrs.href])).toEqual([['link', 'https://example.com/lezione']]);
   });
 });

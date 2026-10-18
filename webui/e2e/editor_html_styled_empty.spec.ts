@@ -21,7 +21,8 @@ test('styled empty paragraphs retain separate typography and typing marks throug
   const imageSource = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
   const fixture = fs.readFileSync(new URL('./fixtures/editor-parity-mixed.html', import.meta.url), 'utf8');
   const source = fixture.replace('__IMAGE_SOURCE__', imageSource).replace('<table>', '<p style="font-family:Georgia;font-size:18pt;line-height:1.6;margin-top:8pt" data-editor-empty-marks="[{&quot;type&quot;:&quot;bold&quot;}]"></p><p style="font-family:Courier New;font-size:10pt;line-height:1.8;margin-bottom:10pt" data-editor-empty-marks="[{&quot;type&quot;:&quot;italic&quot;}]"></p><table>') +
-    '<div data-math-block="\\begin{pmatrix}a&amp;b\\\\c&amp;d\\end{pmatrix}">formula</div><p>Dopo la matrice.</p>';
+    // An image without readable dimensions still forces the HTML fallback.
+    '<p><img src="http://127.0.0.1:9/offline.png" alt="Immagine non raggiungibile"></p><p>Dopo la matrice.</p>';
   await page.evaluate(async html => {
     await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })]);
   }, source);
@@ -55,7 +56,7 @@ test('styled empty paragraphs retain separate typography and typing marks throug
       else await editor.evaluate(root => {
         const instance = (root as HTMLElement & { editor: Editor }).editor;
         instance.state.doc.forEach((node, pos) => {
-          if (node.type.name === 'mathBlock') instance.commands.setTextSelection({ from: 1, to: pos - 1 });
+          if (node.firstChild?.type.name === 'floatingImage') instance.commands.setTextSelection({ from: 1, to: pos - 1 });
         });
       });
       await page.keyboard.press('Control+c');

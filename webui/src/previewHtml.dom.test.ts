@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normalizePreviewHtmlContent, ALLOWED_STYLE_PROPS, EDITOR_IMAGE_ALLOWED_DATA_ATTRS } from './previewHtml';
+import { EDITOR_CONTENT_WIDTH_PX } from './documentFormatting';
 
 describe('normalizePreviewHtmlContent', () => {
   it('preserves explicit paragraph layout and native spacing when reopening a saved document', () => {
@@ -118,7 +119,7 @@ describe('normalizePreviewHtmlContent', () => {
   it('preserves and computes width attribute for images inside editor image containers', () => {
     const html = '<div data-editor-image data-width="35"><img src="img.png" /></div>';
     const result = normalizePreviewHtmlContent(html);
-    expect(result).toContain('width="222"');
+    expect(result).toContain(`width="${Math.round(EDITOR_CONTENT_WIDTH_PX * 35 / 100)}"`);
     expect(result).toContain('src="img.png"');
   });
 

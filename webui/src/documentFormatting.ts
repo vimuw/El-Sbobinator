@@ -21,6 +21,27 @@ export const headingStyle = (element: HTMLElement) => {
   return level ? formatting.headings[Number(level) - 1] : null;
 };
 
+/**
+ * Whether a block style equals what the profile already gives that block type.
+ * Portable HTML spells these defaults out; stored as direct formatting they
+ * would survive a later heading/paragraph change and reach the Docs copy.
+ */
+export const isDefaultBlockStyle = (property: string, value: string, level: number | null, inTable: boolean): boolean => {
+  const heading = level ? formatting.headings[level - 1] : null;
+  const fontPt = heading?.fontSizePt ?? (inTable ? formatting.fontSizePt * formatting.table.fontSizeEm : formatting.fontSizePt);
+  const near = (actual: string, expected: number, parentPt = fontPt) => Math.abs(pointSize(actual, Number.NaN, parentPt) - expected) < 0.01;
+  switch (property) {
+    case 'font-family': return value.replace(/["']/g, '').trim().toLowerCase() === formatting.fontFamily.toLowerCase();
+    case 'font-size': return near(value, fontPt, formatting.fontSizePt);
+    case 'line-height': return value === String(heading?.lineHeight ?? (inTable ? formatting.table.lineHeight : formatting.lineHeight));
+    case 'margin-top': return near(value, heading?.beforePt ?? 0);
+    case 'margin-bottom': return near(value, heading?.afterPt ?? (inTable ? 0 : formatting.paragraphGapPt));
+    case 'font-weight': return Boolean(heading) && (value === 'bold' ? 700 : Number(value)) === heading!.fontWeight;
+    case 'color': return value === 'inherit';
+    default: return false;
+  }
+};
+
 /** Resolve document units, without depending on UI zoom, theme or viewport. */
 export const pointSize = (value: string, fallback: number, parentPt = fallback): number => {
   const match = /^(-?\d*\.?\d+)(pt|px|rem|em|%)?$/i.exec(value.trim());

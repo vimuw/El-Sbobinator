@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { Link2, Link2Off } from 'lucide-react';
 
-export const LinkButton = ({ editor }: { editor: TiptapEditor }) => {
+export const LinkButton = ({ editor, openRequest = 0 }: { editor: TiptapEditor; openRequest?: number }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [url, setUrl] = React.useState('');
   const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
@@ -12,11 +12,7 @@ export const LinkButton = ({ editor }: { editor: TiptapEditor }) => {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const isActive = editor.isActive('link');
 
-  const openPanel = () => {
-    if (isActive) {
-      editor.chain().focus().unsetLink().run();
-      return;
-    }
+  const showPanel = () => {
     setUrl(editor.getAttributes('link').href ?? '');
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
@@ -25,6 +21,24 @@ export const LinkButton = ({ editor }: { editor: TiptapEditor }) => {
     setIsOpen(true);
     setTimeout(() => inputRef.current?.focus(), 50);
   };
+
+  const openPanel = () => {
+    if (isActive) {
+      editor.chain().focus().unsetLink().run();
+      return;
+    }
+    showPanel();
+  };
+
+  // Ctrl+K and the context menu edit an existing link instead of removing it.
+  const handledRequestRef = React.useRef(openRequest);
+  React.useEffect(() => {
+    if (openRequest === handledRequestRef.current) return;
+    handledRequestRef.current = openRequest;
+    showPanel();
+    // showPanel reads the current selection when the request arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openRequest]);
 
   React.useEffect(() => {
     if (!isOpen) return;
@@ -44,7 +58,13 @@ export const LinkButton = ({ editor }: { editor: TiptapEditor }) => {
   const applyLink = () => {
     if (!url.trim()) return;
     const href = url.startsWith('http') ? url : `https://${url}`;
-    editor.chain().focus().setLink({ href }).run();
+    const chain = editor.chain().focus();
+    if (!editor.state.selection.empty) chain.setLink({ href }).run();
+    // As in Docs, a caret inside a link edits the whole link, and a caret
+    // elsewhere inserts the address as linked text. Links are inclusive, so
+    // drop the stored link mark: the text typed next stays plain.
+    else if (editor.isActive('link')) chain.extendMarkRange('link').setLink({ href }).run();
+    else chain.insertContent({ type: 'text', text: href, marks: [{ type: 'link', attrs: { href } }] }).unsetMark('link').run();
     setIsOpen(false);
   };
 
@@ -55,7 +75,7 @@ export const LinkButton = ({ editor }: { editor: TiptapEditor }) => {
         type="button"
         onClick={openPanel}
         className={`editor-button${isActive ? ' is-active' : ''}`}
-        title={isActive ? 'Rimuovi link' : 'Inserisci link'}
+        title={isActive ? 'Rimuovi link' : 'Inserisci link (Ctrl+K)'}
       >
         {isActive ? <Link2Off className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
       </button>
@@ -73,7 +93,7 @@ export const LinkButton = ({ editor }: { editor: TiptapEditor }) => {
             onChange={e => setUrl(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter') applyLink();
-              if (e.key === 'Escape') { e.stopPropagation(); setIsOpen(false); }
+              if (e.key === 'Escape') { e.stopPropagation(); setIsOpen(false); editor.commands.focus(); }
             }}
             className="link-input"
           />

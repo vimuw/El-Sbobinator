@@ -92,6 +92,7 @@ pnpm-debug.log*
 # Agent scratchpads and temporary workspace files
 # Keep project agent skills and other agent files private to this checkout.
 /.agents/
+/.claude/
 progress.md
 ORIGINAL_REQUEST.md
 learning_proposal.md

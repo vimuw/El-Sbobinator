@@ -283,6 +283,7 @@ export interface PywebviewApi {
   answer_new_key?: (key: string) => Promise<{ ok: boolean }>;
   open_file?: (path: string) => Promise<{ ok: boolean; error?: string }>;
   open_url?: (url: string) => Promise<{ ok: boolean; error?: string }>;
+  open_link?: (url: string) => Promise<{ ok: boolean; error?: string }>;
   read_html_content?: (path: string) => Promise<{ ok: boolean; content?: string; error?: string }>;
   save_html_content?: (path: string, content: string, generation?: number) => Promise<SaveHtmlResult>;
   stream_media_file?: (path: string, sessionDir?: string) => Promise<{ ok: boolean; url?: string; has_audio?: boolean; error?: string; warning?: string }>;

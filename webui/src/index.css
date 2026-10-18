@@ -1931,7 +1931,8 @@ button {
 }
 
 .editor-page .tiptap-editor {
-  padding: 72px 80px;
+  /* Google Docs A4 defaults: 1in margins leave the same 602px text column. */
+  padding: 96px;
   min-height: 900px;
   cursor: text;
 }
@@ -2223,6 +2224,84 @@ button {
   border-color: var(--border-strong);
 }
 
+/* Docs-style link card: address plus open, preview, copy, edit and remove. */
+.editor-link-card {
+  position: fixed;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 360px;
+  padding: 4px 4px 4px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  box-shadow: var(--shadow-strong);
+}
+
+.editor-link-card-url {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--accent-text);
+  font-size: 0.78rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.editor-link-card-url span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-link-card-actions {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+/* Docs plays a YouTube link in a floating window at the bottom right. */
+.editor-video-preview {
+  position: fixed;
+  right: 24px;
+  bottom: 96px;
+  z-index: 9999;
+  width: min(400px, calc(100vw - 48px));
+  overflow: hidden;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  box-shadow: var(--shadow-strong);
+}
+
+.editor-video-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px 4px 10px;
+}
+
+.editor-video-preview-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.editor-video-preview-open:hover {
+  color: var(--accent-text);
+}
+
+.editor-video-preview iframe {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+}
+
 /* ═══ EDITOR TOC ═══ */
 .toc-left-sidebar {
   flex-shrink: 0;
@@ -2387,6 +2466,45 @@ button {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* Keep the index mounted while it fades; opening still reveals it immediately. */
+.editor-toc-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease-out, visibility 0s linear 120ms;
+}
+
+.editor-toc-open .editor-toc-content {
+  opacity: 1;
+  visibility: visible;
+  transition: none;
+}
+
+.editor-toc-trigger {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 80ms ease-out 170ms, visibility 0s linear 170ms;
+}
+
+.editor-toc-open .editor-toc-trigger {
+  opacity: 0;
+  visibility: hidden;
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-toc-col,
+  .editor-toc-spacer,
+  .editor-toc-content,
+  .editor-toc-trigger {
+    transition: none;
+  }
 }
 
 .editor-toc-btn {
@@ -3920,17 +4038,14 @@ input::-webkit-contacts-auto-fill-button {
 
 .editor-fullpage-actions .icon-button.editor-fullpage-copy {
   width: auto;
-  min-width: 32px;
+  /* Fixed width keeps the button from resizing between "Copia documento" and
+     "Copiato!", while icon and label stay grouped in the center. */
+  min-width: 152px;
   gap: 7px;
   padding: 0 10px;
   font-size: 0.78rem;
   font-weight: 500;
   white-space: nowrap;
-}
-
-.editor-fullpage-copy-label {
-  min-width: 96px;
-  text-align: center;
 }
 
 .editor-fullpage-utilities {
@@ -3944,7 +4059,7 @@ input::-webkit-contacts-auto-fill-button {
 
 @media (max-width: 720px) {
   .editor-fullpage-copy-label { display: none; }
-  .editor-fullpage-actions .icon-button.editor-fullpage-copy { width: 32px; padding: 0; }
+  .editor-fullpage-actions .icon-button.editor-fullpage-copy { width: 32px; min-width: 32px; padding: 0; }
 }
 
 .editor-fullpage-actions .icon-button.icon-button--active {
@@ -4680,12 +4795,12 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 .math-editor-source.is-invalid {
-  border-color: var(--status-error-text, #b91c1c);
+  border-color: var(--error-text);
 }
 
 .math-editor-error {
   padding: 2px 4px;
-  color: var(--status-error-text, #b91c1c);
+  color: var(--error-text);
   font: 11px/1.4 sans-serif;
 }
 

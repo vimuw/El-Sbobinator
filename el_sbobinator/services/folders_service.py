@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from pathlib import Path
 
 from el_sbobinator.services.config_service import CONFIG_FILE
@@ -51,6 +52,9 @@ def get_folders() -> list[dict]:
         return []
 
 
+_SAVE_LOCK = threading.Lock()
+
+
 def save_folders(folders: list[dict]) -> None:
     """Atomically write *folders* to disk."""
     if not isinstance(folders, list):
@@ -58,16 +62,17 @@ def save_folders(folders: list[dict]) -> None:
     os.makedirs(os.path.dirname(FOLDERS_FILE), exist_ok=True)
     tmp = FOLDERS_FILE + ".tmp"
     payload = json.dumps({"folders": folders}, ensure_ascii=False, indent=2)
-    try:
-        with open(tmp, "w", encoding="utf-8") as fh:
-            fh.write(payload)
-        os.replace(tmp, FOLDERS_FILE)
-    except Exception:
+    with _SAVE_LOCK:
         try:
-            os.remove(tmp)
+            with open(tmp, "w", encoding="utf-8") as fh:
+                fh.write(payload)
+            os.replace(tmp, FOLDERS_FILE)
         except Exception:
-            pass
-        raise
+            try:
+                os.remove(tmp)
+            except Exception:
+                pass
+            raise
 
 
 def _relative_path_under_root(path: str, root: str) -> str | None:

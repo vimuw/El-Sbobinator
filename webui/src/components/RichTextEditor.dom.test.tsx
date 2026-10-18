@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Editor } from '@tiptap/core';
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { RichTextEditor } from './RichTextEditor';
 
@@ -63,6 +63,43 @@ describe('RichTextEditor Component', () => {
     );
 
     expect(pageWrapper.style.zoom).toBe('1.5');
+  });
+
+  it('keeps the index mounted for its exit fade and restores it on immediate reopen', () => {
+    const onTocToggle = vi.fn();
+    const onScrollToHeading = vi.fn();
+    const heading = { id: 'h-0', level: 2, text: 'Capitolo indice' };
+    const props = {
+      initialContent: '<p>Appunti</p>',
+      tocHeadings: [heading],
+      onTocToggle,
+      onScrollToHeading,
+    };
+    const { rerender } = render(<RichTextEditor {...props} isTocOpen />);
+    const navigation = screen.getByRole('navigation');
+    const headingButton = screen.getByRole('button', { name: heading.text });
+    const content = navigation.parentElement!;
+    const trigger = screen.getByTitle('Apri indice').parentElement!;
+    expect(trigger.hasAttribute('inert')).toBe(true);
+
+    fireEvent.click(screen.getByTitle('Chiudi'));
+    expect(onTocToggle).toHaveBeenCalledOnce();
+    rerender(<RichTextEditor {...props} isTocOpen={false} />);
+
+    expect(navigation.isConnected).toBe(true);
+    expect(headingButton.isConnected).toBe(true);
+    expect(content.getAttribute('aria-hidden')).toBe('true');
+    expect(content.hasAttribute('inert')).toBe(true);
+    expect(screen.queryByRole('navigation')).toBeNull();
+    expect(trigger.hasAttribute('inert')).toBe(false);
+
+    rerender(<RichTextEditor {...props} isTocOpen />);
+    expect(screen.getByRole('navigation')).toBe(navigation);
+    expect(content.hasAttribute('inert')).toBe(false);
+    expect(content.getAttribute('aria-hidden')).toBe('false');
+    fireEvent.click(screen.getByRole('button', { name: heading.text }));
+    expect(onScrollToHeading).toHaveBeenCalledWith(heading);
+    expect(trigger.hasAttribute('inert')).toBe(true);
   });
 
   it('preserves local edits through toolbar undo and redo', async () => {
@@ -163,5 +200,54 @@ describe('RichTextEditor Component', () => {
     expect(outputHtml).toContain('ID Soggetto');
     expect(outputHtml).toContain('Maschio');
     expect(outputHtml).not.toContain('IDSoggettoSessoEtà');
+  });
+
+  it('opens the shared link panel with Ctrl+K and links a selection or inserts a link at the caret', async () => {
+    const prompt = vi.spyOn(window, 'prompt');
+    render(<RichTextEditor initialContent="<p>Vedi appunti</p>" />);
+    const element = document.querySelector('.tiptap-editor') as HTMLElement & { editor: Editor };
+    await waitFor(() => expect(element.editor).toBeTruthy());
+    act(() => { element.editor.commands.setTextSelection({ from: 1, to: 5 }); });
+    const ctrlK = () => act(() => { fireEvent.keyDown(element, { key: 'k', ctrlKey: true }); });
+    ctrlK();
+    const input = await screen.findByPlaceholderText('https://...');
+    fireEvent.change(input, { target: { value: 'example.com' } });
+    act(() => { fireEvent.keyDown(input, { key: 'Enter' }); });
+    expect(element.editor.getHTML()).toContain('<a target="_blank" rel="noopener noreferrer nofollow" href="https://example.com">Vedi</a>');
+
+    // A caret inside the link edits the whole link rather than removing it.
+    act(() => { element.editor.commands.setTextSelection(3); });
+    ctrlK();
+    const editInput = await screen.findByPlaceholderText('https://...');
+    expect((editInput as HTMLInputElement).value).toBe('https://example.com');
+    fireEvent.change(editInput, { target: { value: 'https://docs.example.com' } });
+    act(() => { fireEvent.keyDown(editInput, { key: 'Enter' }); });
+    expect(element.editor.getHTML()).toContain('href="https://docs.example.com">Vedi</a> appunti');
+
+    // A caret outside a link inserts the address as linked text.
+    act(() => { element.editor.commands.setTextSelection(element.editor.state.doc.content.size - 1); });
+    ctrlK();
+    const insertInput = await screen.findByPlaceholderText('https://...');
+    fireEvent.change(insertInput, { target: { value: 'https://a.it' } });
+    act(() => { fireEvent.keyDown(insertInput, { key: 'Enter' }); });
+    expect(element.editor.getHTML()).toContain('appunti<a target="_blank" rel="noopener noreferrer nofollow" href="https://a.it">https://a.it</a>');
+    expect(prompt).not.toHaveBeenCalled();
+    prompt.mockRestore();
+  });
+
+  it('opens the link panel from the context menu without a native prompt', async () => {
+    const prompt = vi.spyOn(window, 'prompt');
+    render(<RichTextEditor initialContent="<p>Vedi appunti</p>" />);
+    const element = document.querySelector('.tiptap-editor') as HTMLElement & { editor: Editor };
+    await waitFor(() => expect(element.editor).toBeTruthy());
+    act(() => { element.editor.commands.setTextSelection({ from: 1, to: 5 }); });
+    fireEvent.contextMenu(element, { clientX: 40, clientY: 40 });
+    act(() => { fireEvent.click(within(document.querySelector('.editor-context-menu') as HTMLElement).getByRole('button', { name: /Inserisci link/ })); });
+    const input = await screen.findByPlaceholderText('https://...');
+    fireEvent.change(input, { target: { value: 'https://example.com' } });
+    act(() => { fireEvent.keyDown(input, { key: 'Enter' }); });
+    expect(element.editor.getHTML()).toContain('href="https://example.com">Vedi</a>');
+    expect(prompt).not.toHaveBeenCalled();
+    prompt.mockRestore();
   });
 });

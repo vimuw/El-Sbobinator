@@ -4,6 +4,12 @@ import { expectAutosaved } from './autosave';
 import type { Page } from '@playwright/test';
 import type { Editor } from '@tiptap/core';
 
+// Playwright's Node loader cannot import the shared JSON profile without import attributes.
+const { contentWidthPx: EDITOR_CONTENT_WIDTH_PX } = JSON.parse(fs.readFileSync(new URL('../../el_sbobinator/document_formatting.json', import.meta.url), 'utf8')) as { contentWidthPx: number };
+const columnPx = (percent: number) => Math.round(EDITOR_CONTENT_WIDTH_PX * percent / 100);
+// Native Wrap X: the free column share at a position, in points, minus the 12pt wrap margin.
+const nativeWrapLeft = (widthPercent: number, position: number) => (EDITOR_CONTENT_WIDTH_PX - columnPx(widthPercent)) * position / 100 * 0.75 - 12;
+
 async function openImageEditor(page: Page, audio: string) {
   fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
   // Vite can become ready before FastAPI; opening the app in that window leaves
@@ -240,7 +246,10 @@ test('combined empty-line styles survive keyboard return, second Enter, autosave
     const navigation = [];
     for (const direction of (blankIndex ? ['ArrowUp', 'ArrowDown'] : ['ArrowUp']) as ('ArrowUp' | 'ArrowDown')[]) {
       // Focus first: focusing afterwards can make ProseMirror adopt the DOM caret.
-      await editor.focus(); await selectNeighbour(blankIndex, direction); await page.keyboard.press(direction);
+      // ProseMirror's focus handler re-syncs the DOM caret 20 ms later, which
+      // would revert an arrow key pressed before that timer runs.
+      await editor.evaluate(root => new Promise(resolve => { (root as HTMLElement).focus(); setTimeout(resolve, 20); }));
+      await selectNeighbour(blankIndex, direction); await page.keyboard.press(direction);
       await expect.poll(() => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.state.selection.$from.parent.textContent)).toBe('');
       expect(await html()).toBe(emptyHtml);
       const caret = await editor.evaluate(root => {
@@ -1126,7 +1135,7 @@ test('representative mixed document preserves edits, merged table widths, image 
   await page.screenshot({ path: testInfo.outputPath('representative-app.png') });
 });
 
-test('mixed wrap images and captions preserve surrounding content through history, save and clipboard fallback', async ({ page, context }, testInfo) => {
+test('mixed wrap images and captions preserve surrounding content through history, save and native clipboard', async ({ page, context }, testInfo) => {
   test.setTimeout(180000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await openImageEditor(page, testInfo.outputPath('parity_mixed_wrap.wav'));
@@ -1148,7 +1157,8 @@ test('mixed wrap images and captions preserve surrounding content through histor
     { name: 'caption-left', position: 0, offsetY: 18, caption: 'Figura 1: campione sintetico', native: true },
     { name: 'caption-left-negative', position: 0, offsetY: -20, caption: 'Figura 1: campione sintetico', native: true },
     { name: 'caption-left-zero', position: 0, offsetY: 0, caption: 'Figura 1: campione sintetico', native: true },
-    { name: 'caption-right-html', position: 100, offsetY: 18, caption: 'Figura 1: campione sintetico', native: false },
+    // Docs resets floating-table X on paste: the right caption becomes a right-aligned block figure.
+    { name: 'caption-right-block', position: 100, offsetY: 18, caption: 'Figura 1: campione sintetico', native: true },
   ]) {
     const source = fixture.replace(/<p>Figura del campione:.*?<\/p>/, `<div data-editor-image="true" data-layout="wrap" data-align="${variant.position ? 'right' : 'left'}" data-position="${variant.position}" data-offset-y="${variant.offsetY}" data-width="35" data-caption="${variant.caption}"><img src="__IMAGE_SOURCE__" alt="Campione sintetico"></div><p>Figura del campione: il testo continua accanto alla figura. Le misure restano confrontabili e la didascalia descrive il campione.</p>`).replace('__IMAGE_SOURCE__', imageSource);
     await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, source);
@@ -1172,9 +1182,9 @@ test('mixed wrap images and captions preserve surrounding content through histor
     if (variant.native && variant.caption) {
       const resolved = JSON.parse(JSON.parse(copied[nativeMime]).data).resolved;
       expect(resolved.dsl_spacers).toContain('\u0011\n\u0010');
-      expect(resolved.dsl_styleslices.find((slice: { stsl_type: string }) => slice.stsl_type === 'tbl').stsl_styles.filter(Boolean)[1]).toMatchObject({
-        tbls_ftp: { ft_p: { p_vp: { vp_to: variant.offsetY * 0.75 } } },
-      });
+      expect(resolved.dsl_styleslices.find((slice: { stsl_type: string }) => slice.stsl_type === 'tbl').stsl_styles.filter(Boolean)[1]).toMatchObject(variant.position
+        ? { tbls_pt: 0, tbls_al: 2 }
+        : { tbls_pt: 1, tbls_ftp: { ft_p: { p_vp: { vp_to: variant.offsetY * 0.75 } } } });
     }
     expect(copied['text/plain']).toContain('Misura da correggere: confermata');
     if (variant.caption) expect(copied['text/plain']).toContain(variant.caption);
@@ -1287,7 +1297,7 @@ test('document defaults and direct colors agree with clipboard and all clear for
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
     await page.keyboard.press('Control+a');
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
-    if (control === 'toolbar') await page.locator('.editor-toolbar [title="Rimuovi formattazione"]').click();
+    if (control === 'toolbar') await page.locator('.editor-toolbar [title^="Rimuovi formattazione"]').click();
     else if (control === 'keyboard') await page.keyboard.press('Control+Backslash');
     else if (control === 'context') {
       const selected = await editor.evaluate(element => { const { from, to } = (element as HTMLElement & { editor: Editor }).editor.state.selection; return { from, to }; });
@@ -1296,7 +1306,7 @@ test('document defaults and direct colors agree with clipboard and all clear for
       expect(await editor.evaluate(element => { const { from, to } = (element as HTMLElement & { editor: Editor }).editor.state.selection; return { from, to }; }), 'context keeps the complete selection').toEqual(selected);
       expect(await editor.evaluate(element => (element as HTMLElement & { editor: Editor }).editor.state.selection.empty), 'context menu keeps the selected document').toBe(false);
       await page.locator('.editor-context-menu').getByRole('button', { name: 'Rimuovi formattazione' }).click();
-    } else await page.locator('.editor-bubble-menu [title="Rimuovi formattazione"]').click();
+    } else await page.locator('.editor-bubble-menu [title^="Rimuovi formattazione"]').click();
     await expect(editor.locator('h2')).toHaveText('Titolo');
     await expect(editor.locator('h2'), control).toHaveCSS('text-align', 'start');
     await expect(editor.locator('ol')).toHaveAttribute('start', '4');
@@ -1682,50 +1692,46 @@ test('inline selection keeps the image and its handles at the same position afte
   await expect(editor.locator('p').nth(1).getByAltText('Selezione stabile')).toHaveCount(1);
 });
 
-test('wrap drag keeps the destination table cell through history and saved reopen', async ({ page, context }, testInfo) => {
+test('Wrap images pasted into table cells stay inline, as in Docs, through copy and saved reopen', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await openImageEditor(page, testInfo.outputPath('table_drag_anchor.wav'));
   const editor = page.locator('.tiptap-editor');
   const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
-  // Fixed columns keep the drop-position assertion independent of table auto-sizing.
-  const html = `<table><tr><td colwidth="300"><p>Prima cella</p></td><td colwidth="300"><p><span data-editor-image data-layout="wrap" data-width="35"><img src="${src}" alt="Figura nella seconda cella"></span>${'Testo nella seconda cella. '.repeat(12)}</p></td></tr></table><p>Fine</p>`;
+  const html = `<table><tr><td colwidth="300"><p>Prima cella</p></td><td colwidth="300"><p><span data-editor-image data-layout="wrap" data-position="60" data-offset-y="12" data-width="35"><img src="${src}" alt="Figura nella seconda cella"></span>${'Testo nella seconda cella. '.repeat(12)}</p></td></tr></table><p>Fine</p>`;
   await page.evaluate(async value => navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]), html);
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
   const image = editor.getByAltText('Figura nella seconda cella');
   const cells = editor.locator('td');
-  await expect(cells.nth(1).locator('[data-editor-image]')).toHaveCount(1);
-  await expect.poll(async () => {
-    const paragraphs = await cells.locator('p').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().top));
-    return Math.abs(paragraphs[0] - paragraphs[1]);
-  }).toBeLessThan(1);
+  const figure = cells.nth(1).locator('[data-editor-image]');
+  await expect(figure).toHaveCount(1);
+  await expect(figure).toHaveAttribute('data-layout', 'inline');
+  await expect(figure).toHaveAttribute('data-offset-y', '0');
+  await image.click();
+  const wrapButton = page.getByRole('button', { name: 'Wrap', exact: true });
+  await expect(wrapButton).toBeDisabled();
+  await expect(wrapButton).toHaveAttribute('title', /Google Docs/);
   const read = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
   const original = await read();
-  const drag = async (left: number) => {
-    const start = (await image.boundingBox())!;
-    await page.mouse.move(start.x + 15, start.y + 15); await page.mouse.down();
-    await page.mouse.move(left + 15, start.y + 15, { steps: 8 });
-    const preview = (await page.locator('.editor-image-drag-preview img').boundingBox())!;
-    await page.mouse.up();
-    await expect.poll(async () => Math.abs((await image.boundingBox())!.x - preview.x)).toBeLessThan(2);
-  };
-  await drag((await image.boundingBox())!.x + 20);
-  await expect(cells.nth(0).locator('[data-editor-image]')).toHaveCount(0);
-  await expect(cells.nth(1).locator('[data-editor-image]')).toHaveCount(1);
-  const moved = await read();
-  await page.keyboard.press('Control+z');
-  await expect.poll(read).toEqual(original);
-  await page.keyboard.press('Control+Shift+z');
-  await expect.poll(read).toEqual(moved);
-  await drag((await cells.nth(0).locator('p').boundingBox())!.x + 20);
-  await expect(cells.nth(0).locator('[data-editor-image]')).toHaveCount(1);
-  await expect(cells.nth(1).locator('[data-editor-image]')).toHaveCount(0);
-  await page.keyboard.press('Control+z');
-  await expect.poll(read).toEqual(moved);
+  // The native clipboard carries the cell image inline; Docs has no Wrap in tables.
+  await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+c');
+  await page.evaluate(() => {
+    const probe = document.createElement('textarea'); probe.id = 'cell-image-probe';
+    probe.addEventListener('paste', event => {
+      event.preventDefault();
+      probe.value = event.clipboardData!.getData('application/x-vnd.google-docs-document-slice-clip+wrapped');
+    }, { once: true });
+    document.body.appendChild(probe); probe.focus();
+  });
+  await page.keyboard.press('Control+v');
+  const model = JSON.parse(JSON.parse(await page.locator('#cell-image-probe').inputValue()).data).resolved;
+  await page.locator('#cell-image-probe').evaluate(probe => probe.remove());
+  expect(model.dsl_entitypositionmap.positioned.filter(Boolean)).toHaveLength(0);
+  expect(model.dsl_entitypositionmap.inline.filter(Boolean)).toHaveLength(1);
   await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await page.locator('.queue-card.is-completed', { hasText: 'table_drag_anchor.wav' }).getByRole('heading').click();
-  await expect.poll(read).toEqual(moved);
-  await expect(cells.nth(1).locator('[data-editor-image]')).toHaveCount(1);
+  await expect.poll(read).toEqual(original);
+  await expect(figure).toHaveAttribute('data-layout', 'inline');
 });
 
 for (const zoom of [{ key: 'Control+=', value: '1.1' }, { key: 'Control+-', value: '0.9' }]) {
@@ -1851,8 +1857,8 @@ for (const native of [true, false]) {
       context.fillRect(0, 0, canvas.width, canvas.height);
       return canvas.toDataURL('image/jpeg', 0.85);
     });
-    // A centered wrapping caption deliberately selects the HTML fallback.
-    const html = `<p>Prima <span data-editor-image="true" data-layout="${native ? 'inline' : 'wrap'}" data-position="50" data-width="20"><img src="${source}" alt="Figura da ricampionare">${native ? '' : '<span class="editor-image-caption">Didascalia</span>'}</span> dopo.</p>`;
+    // An image without readable dimensions deliberately selects the HTML fallback.
+    const html = `<p>Prima <span data-editor-image="true" data-layout="inline" data-position="50" data-width="20"><img src="${source}" alt="Figura da ricampionare"></span> dopo.</p>${native ? '' : '<p><img src="http://127.0.0.1:9/offline.png" alt="Non raggiungibile"></p>'}`;
     await page.evaluate(async value => {
       await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]);
     }, html);
@@ -1876,10 +1882,11 @@ for (const native of [true, false]) {
       await image.decode();
       return { declaredWidth: copied.getAttribute('width'), width: image.naturalWidth, height: image.naturalHeight };
     }, html);
-    expect(await dimensions(keyboardFormats['text/html'])).toEqual({ declaredWidth: '127', width: 1600, height: 1000 });
+    const declared = columnPx(20);
+    expect(await dimensions(keyboardFormats['text/html'])).toEqual({ declaredWidth: String(declared), width: 1600, height: 1000 });
     if (native) {
       const nativeImages = JSON.parse(JSON.parse(keyboardFormats['application/x-vnd.google-docs-image-clip+wrapped']).data).image_urls;
-      expect(await dimensions(`<img width="127" src="${Object.values(nativeImages)[0]}">`)).toEqual({ declaredWidth: '127', width: 127, height: 79 });
+      expect(await dimensions(`<img width="${declared}" src="${Object.values(nativeImages)[0]}">`)).toEqual({ declaredWidth: String(declared), width: declared, height: Math.round(declared * 1000 / 1600) });
     }
     await page.getByRole('button', { name: 'Copia documento', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Copia documento' })).toHaveAttribute('title', 'Copiato!');
@@ -1954,7 +1961,7 @@ test('native copy retains body leading and a small vertical wrap offset', async 
   const model = JSON.parse(JSON.parse(formats['application/x-vnd.google-docs-document-slice-clip+wrapped']).data).resolved;
   const paragraphs = model.dsl_styleslices.find((slice: { stsl_type: string }) => slice.stsl_type === 'paragraph').stsl_styles.filter(Boolean);
   expect(paragraphs[2].ps_ls).toBe(1.15);
-  expect(Object.values(model.dsl_entitymap)).toContainEqual(expect.objectContaining({ pe_to: 10.5, pe_lo: 197.25 }));
+  expect(Object.values(model.dsl_entitymap)).toContainEqual(expect.objectContaining({ pe_to: 10.5, pe_lo: nativeWrapLeft(56, 100) }));
   await page.keyboard.press('ArrowLeft');
   fs.writeFileSync(testInfo.outputPath('leading-wrap-metrics.json'), JSON.stringify(await editor.evaluate(root => Array.from(root.querySelectorAll('h1,h2,h3,p,.editor-image-surface')).map(el => ({tag:el.tagName, rect:el.getBoundingClientRect().toJSON(),font:getComputedStyle(el).fontFamily,size:getComputedStyle(el).fontSize,weight:getComputedStyle(el).fontWeight,lineHeight:getComputedStyle(el).lineHeight, text:el.textContent?.slice(0,35)})))));
   await page.screenshot({ path: testInfo.outputPath('leading-wrap-editor.png') });
@@ -2096,7 +2103,7 @@ test('inline and arbitrary image wrap preserve text, editing, undo and native cl
     expect.objectContaining({ ps_ls: 1.15, ps_sb: 0, ps_sa: 0 }),
     expect.objectContaining({ ps_ls: expect.any(Number), ps_sb: 0, ps_sa: 0 }),
   ]);
-  expect(Object.values(nativeSlice.dsl_entitymap)).toEqual([expect.objectContaining({ pe_l: 0, pe_lo: 142.5 })]);
+  expect(Object.values(nativeSlice.dsl_entitymap)).toEqual([expect.objectContaining({ pe_l: 0, pe_lo: nativeWrapLeft(35, 50) })]);
   expect(nativeCopy['text/html']).not.toContain('image-wrap-gap');
   fs.writeFileSync(testInfo.outputPath('native-center-clipboard.json'), JSON.stringify(Object.entries(nativeCopy).map(([mimeType, text]) => ({ mimeType, text }))));
   await image.click();
@@ -2178,8 +2185,9 @@ test('inline and arbitrary image wrap preserve text, editing, undo and native cl
   await page.evaluate(async html => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })]); }, cellHtml);
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
   await expect(editor.getByAltText('Immagine in cella')).toBeVisible();
-  await expect.poll(async () => editor.locator('.image-wrap-gap').count()).toBeGreaterThan(0);
-  await expect(editor.locator('.image-wrap-gap')).not.toHaveCount(1000);
+  // As in Docs, an image in a table cell stays inline and reserves no wrap gaps.
+  await expect(editor.locator('td [data-editor-image]')).toHaveAttribute('data-layout', 'inline');
+  await expect(editor.locator('.image-wrap-gap')).toHaveCount(0);
   await expect(editor.locator('table')).toHaveCount(1);
   await expect(editor).toContainText('Altra cella');
 

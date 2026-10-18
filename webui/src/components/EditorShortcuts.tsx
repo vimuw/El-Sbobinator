@@ -10,6 +10,7 @@ const editorShortcutGroups = [
     ['Ctrl+V', 'Incolla'],
     ['Ctrl+Shift+V', 'Incolla senza formattazione'],
     ['Shift+Invio', 'Vai a capo nello stesso paragrafo'],
+    ['Tab / Shift+Tab', 'Inserisci tabulazione, aumenta / riduci rientro'],
   ] },
   { id: 'format', title: 'Formattazione', shortcuts: [
     ['Ctrl+B', 'Grassetto'],
@@ -18,6 +19,8 @@ const editorShortcutGroups = [
     ['Ctrl+Shift+S', 'Barrato'],
     ['Ctrl+.', 'Apice'],
     ['Ctrl+,', 'Pedice'],
+    ['Ctrl+\\', 'Rimuovi formattazione'],
+    ['Ctrl+Alt+0', 'Testo normale'],
     ['Ctrl+Alt+1…5', 'Titolo di livello 1…5'],
     ['Ctrl+Shift+7', 'Elenco numerato'],
     ['Ctrl+Shift+8', 'Elenco puntato'],
@@ -27,6 +30,8 @@ const editorShortcutGroups = [
   { id: 'document', title: 'Ricerca e documento', shortcuts: [
     ['Ctrl+F', 'Trova'],
     ['Ctrl+H', 'Trova e sostituisci'],
+    ['Ctrl+K', 'Inserisci o modifica link'],
+    ['Ctrl+clic', 'Apri il link nel browser'],
     ['Ctrl+M', 'Inserisci formula'],
     ['Ctrl+Alt+O', 'Mostra / Nascondi indice'],
     ['Ctrl++ / Ctrl+−', 'Aumenta / Riduci zoom'],

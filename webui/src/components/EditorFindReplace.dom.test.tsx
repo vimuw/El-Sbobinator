@@ -46,6 +46,18 @@ describe('FindReplacePanel formatting and history', () => {
     expect(editor.getHTML()).toBe('<p>Prima <strong>potenza</strong> dopo</p>');
   });
 
+  it('replaces the highlighted match after Successivo and advances to the next one', () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const editor = openReplacement('<p>energia uno, energia due, energia tre</p>', 'energia potenziale');
+    fireEvent.click(screen.getByRole('button', { name: 'Successivo' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Successivo' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sostituisci' }));
+    expect(editor.getText()).toBe('energia uno, energia potenziale due, energia tre');
+    expect(document.querySelector('.find-replace-dialog-count')?.textContent).toBe('3 di 3');
+    fireEvent.click(screen.getByRole('button', { name: 'Sostituisci' }));
+    expect(editor.getText()).toBe('energia uno, energia potenziale due, energia potenziale tre');
+  });
+
   it('inherits the first matched character when a match crosses differently styled runs', () => {
     const editor = openReplacement('<p>Prima <em>ene</em><strong>rgia</strong> dopo</p>');
     fireEvent.click(screen.getByRole('button', { name: 'Sostituisci tutto' }));

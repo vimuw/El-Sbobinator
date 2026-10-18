@@ -1,5 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { act } from 'react';
 import { describe, expect, it, vi } from 'vitest';
+import { Editor } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
+import { TextStyle } from '@tiptap/extension-text-style';
+import FontFamily from '@tiptap/extension-font-family';
+import { EditorDocumentStyle } from '../editorDocumentStyle';
 import { MenuBar } from './EditorToolbar';
 import type { Editor as TiptapEditor } from '@tiptap/core';
 
@@ -47,6 +53,7 @@ describe('EditorToolbar MenuBar', () => {
         onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
         showFindReplace={false}
         onToggleFindReplace={vi.fn()}
+        onOpenLink={vi.fn()}
         zoomLevel={100}
         onZoomChange={onZoomChange}
       />
@@ -79,6 +86,7 @@ describe('EditorToolbar MenuBar', () => {
         onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
         showFindReplace={false}
         onToggleFindReplace={vi.fn()}
+        onOpenLink={vi.fn()}
         zoomLevel={100}
         onZoomChange={onZoomChange}
       />
@@ -115,6 +123,7 @@ describe('EditorToolbar MenuBar', () => {
           onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
           showFindReplace={false}
           onToggleFindReplace={vi.fn()}
+        onOpenLink={vi.fn()}
         />
       );
     }).not.toThrow();
@@ -130,5 +139,26 @@ describe('EditorToolbar MenuBar', () => {
       fireEvent.click(undoBtn);
       fireEvent.click(redoBtn);
     }).not.toThrow();
+  });
+
+  it('refreshes the font control between paragraphs that differ only in paragraph style', () => {
+    const editor = new Editor({ extensions: [StarterKit, TextStyle, FontFamily, EditorDocumentStyle], content: '<p style="font-family: Georgia, serif">Uno</p><p>Due</p>' });
+    try {
+      editor.commands.setTextSelection(2);
+      render(
+        <MenuBar
+          editor={editor}
+          onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
+          showFindReplace={false}
+          onToggleFindReplace={vi.fn()}
+          onOpenLink={vi.fn()}
+          zoomLevel={100}
+          onZoomChange={vi.fn()}
+        />
+      );
+      expect(screen.getByTitle('Carattere').textContent).toContain('Georgia');
+      act(() => { editor.commands.setTextSelection(7); });
+      expect(screen.getByTitle('Carattere').textContent).toContain('Arial');
+    } finally { editor.destroy(); }
   });
 });

@@ -3,7 +3,8 @@ import { reportClientError } from '../diagnostics';
 import React, { useEffect, useRef } from 'react';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react';
-import { NodeSelection, Plugin, PluginKey } from '@tiptap/pm/state';
+import { NodeSelection, Plugin, PluginKey, type Transaction } from '@tiptap/pm/state';
+import type { ResolvedPos } from '@tiptap/pm/model';
 import { closeHistory } from '@tiptap/pm/history';
 import { imageWrapperStyle, imageWrapperCss, imageAssetCss, normalizeImageAspectRatio, normalizeImageAlignment, normalizeImageLayout, normalizeImagePosition, normalizeImageOffsetY, normalizeImageWidth } from '../imageLayout';
 import { createImageWrapPlugin } from '../imageWrap';
@@ -19,6 +20,13 @@ export { EDITOR_CONTENT_WIDTH_PX } from '../documentFormatting';
 
 export const clampWidth = normalizeImageWidth;
 
+const isTableCell = ($pos: ResolvedPos) => {
+  for (let depth = $pos.depth; depth > 0; depth--) {
+    if (['cell', 'header_cell'].includes($pos.node(depth).type.spec.tableRole)) return true;
+  }
+  return false;
+};
+
 export const calculateImagePixelWidth = (widthPercent: unknown) =>
   Math.round((EDITOR_CONTENT_WIDTH_PX * clampWidth(widthPercent)) / 100);
 
@@ -29,35 +37,34 @@ const extractImageAttrs = (element: HTMLElement) => {
   }
   const figcaption = element.querySelector('figcaption, .editor-image-caption');
 
-  let widthVal = element.getAttribute('data-width') || img.getAttribute('data-width') || '';
-  if (!widthVal) {
-    const elementStyleWidth = element.style.width;
-    const imgStyleWidth = img.style.width;
-    const imgWidthAttr = img.getAttribute('width');
-    if (elementStyleWidth && elementStyleWidth.endsWith('%')) {
-      widthVal = elementStyleWidth;
-    } else if (imgStyleWidth && imgStyleWidth.endsWith('%')) {
-      widthVal = imgStyleWidth;
-    } else if (imgWidthAttr && Number.isFinite(Number(imgWidthAttr))) {
-      const px = Number(imgWidthAttr);
-      widthVal = String(Math.round((px / EDITOR_CONTENT_WIDTH_PX) * 100));
-    } else if (elementStyleWidth || imgStyleWidth) {
-      widthVal = elementStyleWidth || imgStyleWidth;
-    }
+  // Our own width may exceed the text area after a resize. External HTML
+  // sizes are page geometry: convert them and fit them inside the text area.
+  let width = clampWidth(element.getAttribute('data-width') || img.getAttribute('data-width') || '56');
+  if (!element.getAttribute('data-width') && !img.getAttribute('data-width')) {
+    const percent = [element.style.width, img.style.width].find(value => value.endsWith('%'));
+    const length = [element.style.width, img.style.width, img.getAttribute('width') ?? ''].map(value => /^(\d*\.?\d+)(px|pt)?$/i.exec(value.trim())).find(Boolean);
+    const external = percent ? Number.parseFloat(percent)
+      : length ? Number(length[1]) * (length[2]?.toLowerCase() === 'pt' ? 4 / 3 : 1) / EDITOR_CONTENT_WIDTH_PX * 100
+        : Number.NaN;
+    if (Number.isFinite(external)) width = Math.min(100, clampWidth(external));
   }
 
-  const layout = normalizeImageLayout(element.getAttribute('data-layout') || (element.style.float === 'left' || element.style.float === 'right' ? 'wrap' : 'inline'));
+  const requestedLayout = normalizeImageLayout(element.getAttribute('data-layout') || (element.style.float === 'left' || element.style.float === 'right' ? 'wrap' : 'inline'));
+  // As in Docs, an image in a table cell is always inline. Its Wrap offsets
+  // were relative to the paragraph and do not apply to the inline position.
+  const inCell = requestedLayout === 'wrap' && Boolean(element.closest('td, th'));
+  const layout = inCell ? 'inline' : requestedLayout;
   const align = normalizeImageAlignment(element.getAttribute('data-align') || element.getAttribute('align') || element.style.float || img.getAttribute('align'));
   return {
     src: img.getAttribute('src') || '',
     alt: img.getAttribute('alt') || '',
     title: img.getAttribute('title') || '',
-    width: clampWidth(widthVal || '56'),
+    width,
     align,
     layout,
     position: normalizeImagePosition(element.getAttribute('data-position'), align),
-    offsetY: normalizeImageOffsetY(element.getAttribute('data-offset-y')),
-    offsetX: normalizeImageOffsetY(element.getAttribute('data-offset-x')),
+    offsetY: inCell ? 0 : normalizeImageOffsetY(element.getAttribute('data-offset-y')),
+    offsetX: inCell ? 0 : normalizeImageOffsetY(element.getAttribute('data-offset-x')),
     aspectRatio: normalizeImageAspectRatio(element.getAttribute('data-aspect-ratio')),
     caption: figcaption ? figcaption.textContent || '' : element.getAttribute('data-caption') || '',
   };
@@ -83,6 +90,8 @@ function FloatingImageView({ node, selected, getPos, editor }: NodeViewProps) {
   const position = normalizeImagePosition(node.attrs.position, align);
   const aspectRatio = normalizeImageAspectRatio(node.attrs.aspectRatio);
   const caption: string = String(node.attrs.caption || '');
+  const imagePos = selected ? getPos() : undefined;
+  const inCell = typeof imagePos === 'number' && isTableCell(editor.state.doc.resolve(imagePos));
 
   const selectImageNode = (e: React.SyntheticEvent) => {
     if ((e.target as HTMLElement)?.closest('.editor-image-resize-handle, .editor-image-toolbar')) return;
@@ -182,7 +191,7 @@ function FloatingImageView({ node, selected, getPos, editor }: NodeViewProps) {
           <button type="button" className={`editor-image-toolbar-button ${layout === 'inline' ? 'active' : ''}`} aria-pressed={layout === 'inline'} title="In-line" aria-label="In-line" onClick={() => changeImage({ layout: 'inline', offsetX: 0, offsetY: 0 }, true)}>
             <ImageLayoutIcon /><span>In-line</span>
           </button>
-          <button type="button" className={`editor-image-toolbar-button ${layout === 'wrap' ? 'active' : ''}`} aria-pressed={layout === 'wrap'} title="Wrap" aria-label="Wrap" onClick={() => changeImage({ layout: 'wrap', offsetX: 0, offsetY: 0 }, true)}>
+          <button type="button" className={`editor-image-toolbar-button ${layout === 'wrap' ? 'active' : ''}`} aria-pressed={layout === 'wrap'} title={inCell ? 'Nelle tabelle le immagini restano in linea, come in Google Docs' : 'Wrap'} aria-label="Wrap" disabled={inCell} onClick={() => changeImage({ layout: 'wrap', offsetX: 0, offsetY: 0 }, true)}>
             <ImageLayoutIcon wrap /><span>Wrap</span>
           </button>
         </div>
@@ -329,6 +338,23 @@ export const FloatingImage = Node.create({
     return [
       createImageWrapPlugin(),
       createImageCaretPlugin(),
+      new Plugin({
+        key: new PluginKey('floatingImageCellLayout'),
+        // Paste and moves can place a Wrap image in a cell. Docs keeps images
+        // in tables inline, so the editor shows what the copy will produce.
+        appendTransaction: (transactions, _old, state) => {
+          if (!transactions.some(tr => tr.docChanged)) return null;
+          let tr: Transaction | null = null;
+          state.doc.descendants((node, pos) => {
+            if (node.isTextblock && !isTableCell(state.doc.resolve(pos))) return false;
+            if (node.type.name === this.name && node.attrs.layout === 'wrap' && isTableCell(state.doc.resolve(pos))) {
+              tr ??= state.tr;
+              tr.setNodeMarkup(pos, undefined, { ...node.attrs, layout: 'inline', offsetX: 0, offsetY: 0 });
+            }
+          });
+          return tr;
+        },
+      }),
       new Plugin({
         key: new PluginKey('floatingImageClick'),
         props: {

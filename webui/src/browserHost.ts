@@ -300,6 +300,10 @@ export function createBrowserPywebviewApi(): PywebviewApi {
       window.open(url, '_blank');
       return { ok: true };
     },
+    open_link: async (url) => {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return { ok: true };
+    },
     open_file: async (_path) => {
       return { ok: false, error: 'Disponibile nell’app desktop' };
     },

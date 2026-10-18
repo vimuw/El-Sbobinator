@@ -25,6 +25,7 @@ from el_sbobinator.browser_server.scenarios import (
 )
 from el_sbobinator.browser_server.server import create_browser_app
 from el_sbobinator.browser_server.ws_dispatcher import WebSocketDispatcher
+from el_sbobinator.core.session_store import get_session_root, set_session_root
 from el_sbobinator.pipeline.pipeline_adapter import PipelineAdapter
 
 
@@ -59,12 +60,22 @@ def test_lifespan_keeps_stdout_and_stderr_separate():
     assert stderr.getvalue() == "err line\n"
 
 
+@pytest.fixture(autouse=True)
+def isolated_session_root():
+    previous_root = get_session_root()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        set_session_root(temp_dir)
+        try:
+            yield temp_dir
+        finally:
+            set_session_root(previous_root)
+
+
 @pytest.fixture
-def isolated_app():
-    temp_dir = tempfile.mkdtemp()
-    app = create_browser_app(session_root=temp_dir)
-    client = TestClient(app)
-    yield client, app, temp_dir
+def isolated_app(isolated_session_root):
+    app = create_browser_app(session_root=isolated_session_root)
+    with TestClient(app) as client:
+        yield client, app, isolated_session_root
 
 
 def test_bootstrap_endpoint(isolated_app):
@@ -413,10 +424,8 @@ def test_all_deterministic_scenarios():
     )
 
 
-def test_media_stream_and_scenario_server_endpoints():
-    temp_dir = tempfile.mkdtemp()
-    app = create_browser_app(session_root=temp_dir, scenario="success")
-    client = TestClient(app)
+def test_media_stream_and_scenario_server_endpoints(isolated_app):
+    client, _app, temp_dir = isolated_app
 
     boot = client.get("/api/bootstrap")
     token = boot.json()["session_token"]
@@ -452,6 +461,13 @@ def test_media_stream_and_scenario_server_endpoints():
     assert resolved["ok"] is True
     assert resolved["has_audio"] is True
     assert "/api/media/stream?" in resolved["url"]
+
+    bad_session = client.get(
+        f"/api/media/resolve?path={media_file}&session_dir={os.path.join(temp_dir, 'missing-session')}",
+        headers=headers,
+    ).json()
+    assert bad_session["ok"] is False
+    assert "Sessione non" in bad_session["error"]
 
     # Scenario RPC start and stop
     res_start = client.post(

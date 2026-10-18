@@ -17,7 +17,10 @@ from el_sbobinator.app_webview import ElSbobinatorApi
 from el_sbobinator.core.media_server import LocalMediaServer
 from el_sbobinator.core.session_storage import _folder_size
 from el_sbobinator.core.session_store import PRECONVERTED_AUDIO_FINAL
-from el_sbobinator.services.archive_service import find_candidate_audio_path
+from el_sbobinator.services.archive_service import (
+    find_candidate_audio_path,
+    list_completed_sessions,
+)
 from el_sbobinator.services.audio_service import (
     preconvert_media_to_mp3,
     probe_media_duration,
@@ -28,6 +31,7 @@ from el_sbobinator.services.revision_service import execute_failed_blocks_retry_
 from el_sbobinator.services.session_audio_service import (
     attach_playback_audio,
     create_playback_audio,
+    discard_unlinked_playback_audio,
     managed_audio_path,
     playback_audio_path,
 )
@@ -419,6 +423,41 @@ def test_internal_audio_survives_archive_move_and_package_roundtrip(
     )
 
 
+def test_imported_playback_copy_keeps_the_source_identity(session_audio, tmp_path):
+    # Duplicate detection matches the archive by source name, size and duration:
+    # the internal copy's UUID name and smaller size must not replace them.
+    api, session, source, original = session_audio
+    assert resolve_audio(api, session, source)[0]["ok"]
+    package = tmp_path / "lezione.sbobina"
+    assert create_sbobina_package(str(session), str(package))["audio_included"]
+    imported = unpack_and_import_package(str(package), str(tmp_path / "imported"))
+    imported_dir = Path(imported["session_dir"])
+    imported_data = load_session(imported_dir)
+    playback = playback_audio_path(imported_data, str(imported_dir))
+    assert playback and Path(playback).name.startswith("playback-")
+    assert imported_data["input"]["path"] == playback
+    assert imported_data["input"]["name"] == original["input"]["name"]
+    assert imported_data["input"]["size"] == original["input"]["size"]
+    listed, _total = list_completed_sessions(str(tmp_path / "imported"))
+    assert listed[0]["input_name"] == source.name
+    assert listed[0]["input_size"] == original["input"]["size"]
+
+    # A package carrying the original file keeps that file's own identity.
+    legacy = tmp_path / "legacy"
+    shutil.copytree(session, legacy)
+    legacy_data = load_session(legacy)
+    legacy_data.pop("playback_audio")
+    legacy_data["input"]["name"] = "Nome precedente.wav"
+    (legacy / "session.json").write_text(json.dumps(legacy_data), encoding="utf-8")
+    assert create_sbobina_package(
+        str(legacy), str(package), audio_path_override=str(source)
+    )["audio_included"]
+    imported = unpack_and_import_package(str(package), str(tmp_path / "legacy-in"))
+    legacy_input = load_session(Path(imported["session_dir"]))["input"]
+    assert legacy_input["name"] == source.name
+    assert legacy_input["size"] == source.stat().st_size
+
+
 @pytest.mark.parametrize(
     "relative",
     ["../source.mp3", "audio/../../source.mp3", "audio/file.html", "", "/external.mp3"],
@@ -466,6 +505,60 @@ def test_missing_source_creates_no_asset(tmp_path):
     with pytest.raises(FileNotFoundError):
         create_playback_audio(str(tmp_path / "session"), str(tmp_path / "missing.mp3"))
     assert list((tmp_path / "session" / "audio").iterdir()) == []
+
+
+def _old_audio(path: Path) -> Path:
+    path.write_bytes(b"0" * 2048)
+    stale = path.stat().st_mtime - 3600
+    os.utime(path, (stale, stale))
+    return path
+
+
+def test_unlinked_cleanup_removes_partials_left_by_a_killed_encode(tmp_path):
+    audio_dir = tmp_path / "session" / "audio"
+    audio_dir.mkdir(parents=True)
+    orphan = _old_audio(audio_dir / f"playback-{'a' * 32}.partial.mp3")
+    fresh = audio_dir / f"playback-{'b' * 32}.partial.mp3"
+    fresh.write_bytes(b"0" * 2048)
+    linked = _old_audio(audio_dir / f"playback-{'c' * 32}.mp3")
+
+    discard_unlinked_playback_audio(str(tmp_path / "session"), keep=str(linked))
+
+    assert not orphan.exists()
+    assert fresh.exists()
+    assert linked.exists()
+
+
+def test_unlinked_cleanup_never_removes_the_partial_being_encoded(tmp_path):
+    session = tmp_path / "session"
+    source = tmp_path / "lezione.mp3"
+    source.write_bytes(b"0" * 2048)
+    seen: list[bool] = []
+
+    def encode_slowly(*, output_path, **_kwargs):
+        _old_audio(Path(output_path))
+        discard_unlinked_playback_audio(str(session), keep=None)
+        seen.append(os.path.isfile(output_path))
+        return False, "interrotta"
+
+    with (
+        patch(
+            "el_sbobinator.services.session_audio_service.preconvert_media_to_mp3",
+            side_effect=encode_slowly,
+        ),
+        pytest.raises(RuntimeError),
+    ):
+        create_playback_audio(str(session), str(source))
+    assert seen == [True]
+    assert list((session / "audio").iterdir()) == []
+
+
+def test_package_audio_lookup_skips_an_unfinished_playback_copy(tmp_path):
+    audio_dir = tmp_path / "session" / "audio"
+    audio_dir.mkdir(parents=True)
+    (audio_dir / f"playback-{'a' * 32}.partial.mp3").write_bytes(b"0" * 2048)
+
+    assert find_audio_for_session(str(tmp_path / "session"), {}) is None
 
 
 def test_remove_cannot_delete_original_via_forged_playback_path(session_audio):

@@ -317,7 +317,8 @@ def _register_api_routes(app: FastAPI) -> None:
             return scenario_res
 
         try:
-            return invoke_rpc(
+            return await run_in_threadpool(
+                invoke_rpc,
                 app.state.api,
                 method,
                 body.args,

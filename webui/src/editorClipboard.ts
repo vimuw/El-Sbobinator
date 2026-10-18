@@ -3,6 +3,7 @@ import { clipboardPlainText, DOCUMENT_FORMATTING, EDITOR_CONTENT_WIDTH_PX, forma
 import { createClipboardEquation, type ClipboardEquation } from './clipboardEquations';
 import { resampleClipboardImageSync } from './utils';
 import { nativeLineSpacingReader, prepareHtmlLineSpacing } from './editorLineSpacing';
+import { videoLink } from './editorLinks';
 
 // Docs ignores CSS floats on HTML paste. Its native clipboard slice carries the
 // positioned entities. Keep this adapter separate from saved editor HTML.
@@ -63,19 +64,13 @@ export function createNativeClipboardFormats(html: string, sourceRoot?: HTMLElem
   const body = new DOMParser().parseFromString(html, 'text/html').body;
   const displayedFigures = sourceFigures ?? Array.from(sourceRoot?.querySelectorAll<HTMLElement>('.editor-image-node') ?? []);
   let figureIndex = 0;
-  if (body.querySelector('iframe, video, figcaption:not([data-editor-image] figcaption)')) return null;
-  for (const figure of body.querySelectorAll<HTMLElement>('[data-editor-image]')) {
-    const caption = figure.querySelector('figcaption, .editor-image-caption')?.textContent ?? figure.getAttribute('data-caption');
-    // Docs resets floating-table X coordinates even on its own native paste.
-    // A caption groups with its image in a table, so wrapping at a nonzero X cannot use
-    // this adapter without moving the figure.
-    if (caption && normalizeImageLayout(figure.getAttribute('data-layout')) === 'wrap' && (normalizeImagePosition(figure.getAttribute('data-position'), normalizeImageAlignment(figure.getAttribute('data-align'))) > 0 || normalizeImageOffsetY(figure.getAttribute('data-offset-x')) !== 0)) return null;
-  }
-  const equations = new Map<HTMLElement, ClipboardEquation>();
+  if (body.querySelector('figcaption:not([data-editor-image] figcaption)')) return null;
+  // An object without a native equivalent degrades on its own. Returning null
+  // would send the whole fragment as HTML, where Docs drops every Wrap image.
+  const equations = new Map<HTMLElement, ClipboardEquation | string>();
   for (const element of body.querySelectorAll<HTMLElement>('[data-math], [data-math-block]')) {
-    const equation = createClipboardEquation(element.getAttribute('data-math') ?? element.getAttribute('data-math-block') ?? '', element.hasAttribute('data-math-block'));
-    if (!equation) return null;
-    equations.set(element, equation);
+    const latex = element.getAttribute('data-math') ?? element.getAttribute('data-math-block') ?? '';
+    equations.set(element, createClipboardEquation(latex, element.hasAttribute('data-math-block')) ?? latex);
   }
   const sizes = new Map<HTMLImageElement, ImageSize>();
   for (const img of body.querySelectorAll('img')) {
@@ -171,9 +166,14 @@ export function createNativeClipboardFormats(html: string, sourceRoot?: HTMLElem
     const width = Math.round(EDITOR_CONTENT_WIDTH_PX * normalizeImageWidth(container.getAttribute('data-width') ?? 56) / 100);
     const height = width / (normalizeImageAspectRatio(container.getAttribute('data-aspect-ratio')) ?? size.width / size.height);
     const align = normalizeImageAlignment(container.getAttribute('data-align'));
-    const layout = normalizeImageLayout(container.getAttribute('data-layout'));
     const position = normalizeImagePosition(container.getAttribute('data-position'), align);
     const caption = container.querySelector('figcaption, .editor-image-caption')?.textContent ?? container.getAttribute('data-caption') ?? '';
+    // Docs keeps images in table cells inline. It also resets the X coordinate
+    // of floating tables on paste, so a captioned Wrap figure away from the left
+    // margin becomes an aligned block figure instead of jumping to the left.
+    const shiftedCaption = Boolean(caption) && (position > 0 || normalizeImageOffsetY(container.getAttribute('data-offset-x')) !== 0);
+    const layout = normalizeImageLayout(container.getAttribute('data-layout')) === 'wrap' && !container.closest('td, th') && !shiftedCaption ? 'wrap' : 'inline';
+    const blockAlign = !shiftedCaption ? 0 : position >= 67 ? 2 : position > 33 ? 1 : 0;
     let offsetY = normalizeImageOffsetY(container.getAttribute('data-offset-y'));
     // Wrap decorations can move the paragraph while keeping its image fixed.
     // Docs offsets are relative to that paragraph, so export the displayed
@@ -196,7 +196,7 @@ export function createNativeClipboardFormats(html: string, sourceRoot?: HTMLElem
     if (caption) {
       separateAdjacentTables();
       setStyle('tbl', spacers.length, {
-        tbls_bc2: color('#000000'), tbls_bw: 0, tbls_al: 0, tbls_in: 0, tbls_ltr: true,
+        tbls_bc2: color('#000000'), tbls_bw: 0, tbls_al: blockAlign, tbls_in: 0, tbls_ltr: true,
         tbls_cols: { cv: { op: 'set', opValue: [{ col_wt: 0, col_wv: width * 0.75 }] } },
         tbls_pt: layout === 'wrap' ? 1 : 0,
         tbls_ftp: {
@@ -254,6 +254,16 @@ export function createNativeClipboardFormats(html: string, sourceRoot?: HTMLElem
     if (['script', 'style'].includes(tag)) return;
     const current = textStyle(node, inherited);
     const equation = equations.get(node);
+    if (typeof equation === 'string') {
+      // Keep the LaTeX source editable, with delimiters recognized by the
+      // common Docs equation add-ons, rather than flattening KaTeX glyphs.
+      append(`$$${equation}$$`, current, link);
+      if (node.hasAttribute('data-math-block')) {
+        append('\n', current);
+        setParagraph(spacers.length - 1, node, { ...paragraphStyle(node, quote), ps_al: 1 });
+      }
+      return;
+    }
     if (equation) {
       const start = spacers.length;
       setStyle('equation', start, { eqs_p: '$' });
@@ -270,6 +280,19 @@ export function createNativeClipboardFormats(html: string, sourceRoot?: HTMLElem
     if (node.hasAttribute('data-editor-image')) {
       const img = node.querySelector('img');
       if (img) image(img, node);
+      return;
+    }
+    if (tag === 'iframe' || tag === 'video') {
+      // Docs cannot embed a player. A linked paragraph keeps the video reachable.
+      const url = videoLink(node.getAttribute('src') ?? node.querySelector('source')?.getAttribute('src') ?? '', tag === 'video');
+      if (!url) return;
+      if (spacers && !spacers.endsWith('\n') && !spacers.endsWith('\u0011')) {
+        append('\n', baseText());
+        setStyle('paragraph', spacers.length - 1, baseParagraph());
+      }
+      append(url, { ...baseText(), ts_un: true, ts_fgc2: color('#1155cc') }, url);
+      append('\n', baseText());
+      setStyle('paragraph', spacers.length - 1, baseParagraph());
       return;
     }
     if (tag === 'br') { append('\u000b', current, link); return; }

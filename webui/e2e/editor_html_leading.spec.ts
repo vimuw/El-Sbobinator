@@ -25,7 +25,8 @@ test('HTML fallback restores CSS leading, fonts, selections, history and saved c
     '<p style="font-family:Courier New;font-size:10pt;line-height:normal">Courier<br>Seconda riga</p>' +
     '<ol start="4"><li><p>Madre</p><ol type="a"><li><p style="line-height:1.6">Figlia</p></li></ol></li></ol>' +
     '<p></p><table><tr><td><p style="line-height:1.8">Cella<br>Seconda riga</p></td><td><p style="font-size:14pt">Esplicita</p></td><th><p>Testata <span style="font-size:150%">Grande</span></p></th></tr></table>' +
-    '<div data-math-block="\\begin{pmatrix}a&amp;b\\end{pmatrix}">formula</div><p>Fine</p>';
+    // An image without readable dimensions still forces the HTML fallback.
+    '<p><img src="http://127.0.0.1:9/offline.png" alt="Immagine non raggiungibile"></p><p>Fine</p>';
   await page.evaluate(async html => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })]); }, source);
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
   await expect(editor.getByText('Georgia', { exact: false })).toBeVisible();
@@ -50,7 +51,7 @@ test('HTML fallback restores CSS leading, fonts, selections, history and saved c
     const portable = formatting.prepareHtmlForClipboardSync(html);
     const parsed = new DOMParser().parseFromString(portable, 'text/html').body;
     const measure = spacing.nativeLineSpacingReader();
-    parsed.querySelector('[data-math-block]')?.remove();
+    parsed.querySelector('[data-editor-image]')?.remove();
     const native = clipboard.createNativeClipboardFormats(parsed.innerHTML)!;
     const model = JSON.parse(JSON.parse(native['application/x-vnd.google-docs-document-slice-clip+wrapped']).data).resolved;
     return { portable, expected: Array.from(parsed.querySelectorAll('h2,p')).map(el => ({ text: el.textContent, native: measure(el as HTMLElement) })),

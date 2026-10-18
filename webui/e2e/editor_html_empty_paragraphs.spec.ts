@@ -21,7 +21,8 @@ test('two empty paragraphs between a list and table survive fallback copy, editi
   const imageSource = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
   const fixture = fs.readFileSync(new URL('./fixtures/editor-parity-mixed.html', import.meta.url), 'utf8');
   const source = fixture.replace('__IMAGE_SOURCE__', imageSource).replace('<table>', '<p></p><p></p><table>') +
-    '<div data-math-block="\\begin{pmatrix}a&amp;b\\\\c&amp;d\\end{pmatrix}">formula</div><p>Dopo la matrice.</p>';
+    // An image without readable dimensions still forces the HTML fallback.
+    '<p><img src="http://127.0.0.1:9/offline.png" alt="Immagine non raggiungibile"></p><p>Dopo la matrice.</p>';
   await page.evaluate(async html => {
     await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })]);
   }, source);

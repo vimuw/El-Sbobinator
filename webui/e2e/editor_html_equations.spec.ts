@@ -79,7 +79,11 @@ test('mixed equation clipboard routes preserve editable source through HTML past
   const fallback = await capture('fallback');
   const button = await capture('button');
   for (const formats of [fallback, button]) {
-    expect(formats[wrapped]).toBeUndefined();
+    // The matrix has no native equation. It keeps its LaTeX source while the
+    // other formulas and the rest of the document stay in the native slice.
+    const whole = JSON.parse(JSON.parse(formats[wrapped]).data).resolved;
+    expect(Array.from(whole.dsl_spacers as string).filter(char => char.charCodeAt(0) === 26)).toHaveLength(3);
+    expect(whole.dsl_spacers).toContain(`$$${original.equations[3].latex}$$`);
     expect(formats['text/plain']).toContain(original.equations[3].latex);
     const htmlEquations = await page.evaluate(html => {
       const parsed = new DOMParser().parseFromString(html, 'text/html');

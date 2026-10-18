@@ -106,7 +106,8 @@ describe('HTML fallback line spacing', () => {
       editor.state.doc.descendants(node => {
         if (node.type.name === 'paragraph') blocks.push({ text: node.textContent, leading: node.attrs.documentStyle?.['line-height'] });
       });
-      expect(blocks[0].leading).toBe('1.38');
+      // The profile leading is the paragraph default, not direct formatting.
+      expect(blocks[0].leading).toBeUndefined();
       expect(blocks[1].leading).toBe('1.6');
       expect(editor.getHTML()).not.toContain('data-editor-css-line-height');
       expect(editor.getHTML()).not.toContain('calc(');

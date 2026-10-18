@@ -105,12 +105,16 @@ async function readClipboardFormats(page: Page): Promise<Record<string, string>>
   await page.evaluate(() => {
     const input = document.createElement('textarea');
     input.id = 'clipboard-format-probe';
+    // Focusing a probe at the end of <body> scrolls the page, and the late
+    // scroll event would close a context menu opened right after this read.
+    input.style.position = 'fixed';
+    input.style.top = '0';
     input.addEventListener('paste', event => {
       event.preventDefault();
       input.value = JSON.stringify(Object.fromEntries(Array.from(event.clipboardData!.types, type => [type, event.clipboardData!.getData(type)])));
     }, { once: true });
     document.body.appendChild(input);
-    input.focus();
+    input.focus({ preventScroll: true });
   });
   await page.keyboard.press('Control+v');
   const formats = JSON.parse(await page.locator('#clipboard-format-probe').inputValue());

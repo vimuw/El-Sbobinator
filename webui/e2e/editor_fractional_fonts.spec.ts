@@ -4,7 +4,8 @@ import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
 // Keep the app's precision even when a recipient rounds its HTML import.
-// The unsupported matrix selects the actual fallback clipboard route.
+// An image without readable dimensions selects the actual fallback clipboard
+// route; formulas and videos now degrade inside the native slice.
 test('fractional fonts survive clipboard routing, history and saved content', async ({ page, context }, testInfo) => {
   test.setTimeout(180000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -24,7 +25,7 @@ test('fractional fonts survive clipboard routing, history and saved content', as
   const samples = sizes.map((size, index) => ({ label: `F${String(index).padStart(2, '0')}=${size}`, size }));
   const source = samples.map(sample => `<p style="font-family:Arial;font-size:${sample.size}pt;line-height:1.38">${sample.label}</p>`).join('') +
     '<table><tr><td><p>Cella</p></td><th><p>Testata <span style="font-size:150%">Grande</span></p></th></tr></table><p>Fine</p>' +
-    '<div data-math-block="\\begin{pmatrix}a&amp;b\\end{pmatrix}">formula</div><p>Ultima</p>';
+    '<p><img src="http://127.0.0.1:9/offline.png" alt="Immagine non raggiungibile"></p><p>Ultima</p>';
   await page.evaluate(async html => {
     await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })]);
   }, source);
@@ -44,7 +45,7 @@ test('fractional fonts survive clipboard routing, history and saved content', as
     else await editor.evaluate(root => {
       const instance = (root as HTMLElement & { editor: Editor }).editor;
       instance.state.doc.forEach((node, pos) => {
-        if (node.type.name === 'mathBlock') instance.commands.setTextSelection({ from: 1, to: pos - 1 });
+        if (node.firstChild?.type.name === 'floatingImage') instance.commands.setTextSelection({ from: 1, to: pos - 1 });
       });
     });
     await page.keyboard.press('Control+c');

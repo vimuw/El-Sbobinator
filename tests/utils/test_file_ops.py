@@ -448,6 +448,18 @@ class OpenPathWithDefaultAppTests(unittest.TestCase):
             open_path_with_default_app("http://example.com")
             mock_sf.assert_called_once_with("http://example.com")
 
+    def test_url_scheme_is_case_insensitive(self):
+        # A document link may keep an uppercase scheme; it is still a URL,
+        # not a missing file path.
+        for url in ["HTTPS://Example.com/Lezione", "Http://example.com"]:
+            with (
+                self.subTest(url=url),
+                patch.object(sys, "platform", "win32"),
+                patch("os.startfile", create=True) as mock_sf,
+            ):
+                open_path_with_default_app(url)
+                mock_sf.assert_called_once_with(url)
+
     def test_url_linux_xdg_open(self):
         with (
             patch.object(sys, "platform", "linux"),

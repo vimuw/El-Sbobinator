@@ -384,6 +384,28 @@ class TestFoldersService(unittest.TestCase):
         ):
             self.assertFalse(_path_under_root(saved, root))
 
+    def test_save_folders_concurrent_writes_do_not_collide(self):
+        import threading
+
+        from el_sbobinator.services import folders_service
+
+        errors = []
+
+        def _worker(i):
+            try:
+                for _ in range(20):
+                    folders_service.save_folders([{"id": str(i), "name": "x"}])
+            except Exception as exc:  # pragma: no cover
+                errors.append(exc)
+
+        threads = [threading.Thread(target=_worker, args=(i,)) for i in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(errors, [])
+        self.assertFalse(os.path.exists(self.folders_file + ".tmp"))
+
 
 if __name__ == "__main__":
     unittest.main()

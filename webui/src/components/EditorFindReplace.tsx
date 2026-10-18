@@ -89,6 +89,7 @@ export const FindReplacePanel = ({
     setCurrentMatch(idx + 1);
     editor.commands.setSearchTerm(text, idx, caseFlag);
     requestAnimationFrame(() => {
+      if (editor.isDestroyed) return;
       const activeEl = editor.view.dom.querySelector('.search-highlight-active');
       if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
       findInputRef.current?.focus({ preventScroll: true });
@@ -110,25 +111,37 @@ export const FindReplacePanel = ({
   }, [editor, scrollToMatch]);
 
   const handleReplace = () => {
-    if (!editor || !findText || !matchesRef.current.length) return;
-    const { from, to } = editor.state.selection;
-    const selectedText = editor.state.doc.textBetween(from, to);
-    const isMatch = matchCase
-      ? selectedText === findText
-      : selectedText.toLowerCase() === findText.toLowerCase();
-    if (isMatch) {
-      const tr = editor.state.tr;
-      if (replaceText) {
-        const marks = tr.doc.resolve(from).nodeAfter?.marks;
-        editor.view.dispatch(tr.replaceWith(from, to, editor.schema.text(replaceText, marks)));
-      } else {
-        editor.view.dispatch(tr.delete(from, to));
-      }
-      const newMatches = updateSearch(findText, -1);
-      if (newMatches.length) scrollToMatch(newMatches, Math.min(currentMatchRef.current - 1, newMatches.length - 1));
-    } else {
+    if (!editor || !findText) return;
+    const matches = getSearchMatches(editor);
+    if (!matches.length) return;
+    // Successivo and Enter only highlight the active match, so it is the
+    // replacement target; a hand selection of a match is the fallback.
+    const { from: selFrom, to: selTo } = editor.state.selection;
+    const target = matches[currentMatchRef.current - 1]
+      ?? matches.find(m => m.from === selFrom && m.to === selTo);
+    if (!target) {
       handleNext();
+      return;
     }
+    const { from, to } = target;
+    const tr = editor.state.tr;
+    if (replaceText) {
+      const marks = tr.doc.resolve(from).nodeAfter?.marks;
+      editor.view.dispatch(tr.replaceWith(from, to, editor.schema.text(replaceText, marks)));
+    } else {
+      editor.view.dispatch(tr.delete(from, to));
+    }
+    const newMatches = updateSearch(findText, -1);
+    if (!newMatches.length) {
+      currentMatchRef.current = 0;
+      setCurrentMatch(0);
+      return;
+    }
+    // Advance past the inserted text, so a replacement containing the query
+    // is not matched again.
+    const after = from + replaceText.length;
+    const nextIdx = newMatches.findIndex(m => m.from >= after);
+    scrollToMatch(newMatches, nextIdx === -1 ? 0 : nextIdx);
   };
 
   const handleReplaceAll = () => {

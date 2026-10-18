@@ -120,6 +120,35 @@ class SystemControllerSecurityTests(unittest.TestCase):
                     self.assertTrue(res["ok"])
                     mock_open.assert_called_with(url)
 
+    def test_open_link_accepts_document_web_links_only(self):
+        with patch(
+            "el_sbobinator.utils.file_ops.open_path_with_default_app"
+        ) as mock_open:
+            for url in [
+                "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "http://example.com/path?q=1#frag",
+                "HTTPS://Example.com/Lezione",
+            ]:
+                with self.subTest(url=url):
+                    self.assertTrue(self.host.open_link(url)["ok"])
+                    mock_open.assert_called_with(url)
+            mock_open.reset_mock()
+            for url in [
+                "javascript:alert(1)",
+                "file:///C:/Windows/System32/calc.exe",
+                "mailto:someone@example.com",
+                "https:///no-host",
+                "https://example.com/a b",
+                "https://example.com/\nnext",
+                "/relative/path",
+                "https://" + "a" * 2050 + ".com",
+                12345,
+            ]:
+                with self.subTest(url=url):
+                    res = self.host.open_link(url)  # type: ignore[arg-type]
+                    self.assertFalse(res["ok"])
+            mock_open.assert_not_called()
+
     def test_open_file_rejects_urls(self):
         res = self.host.open_file("https://github.com")
         self.assertFalse(res["ok"])

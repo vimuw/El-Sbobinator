@@ -196,7 +196,8 @@ describe('Shared document formatting', () => {
   });
 
   it('keeps the portable fallback styled when native conversion cannot represent the document', () => {
-    const html = '<h2>Matrici</h2><p>Testo</p><div data-math-block="\\begin{matrix}a&b\\end{matrix}">Formula originale</div>';
+    // A matrix now degrades locally; a foreign caption still has no native form.
+    const html = '<h2>Matrici</h2><p>Testo</p><div data-math-block="\\begin{matrix}a&b\\end{matrix}">Formula originale</div><figcaption>Estranea</figcaption>';
     const portable = prepareHtmlForClipboardSync(html);
     expect(createNativeClipboardFormats(portable)).toBeNull();
     expect(body(portable).querySelector('h2')?.style.fontSize).toBe('16pt');

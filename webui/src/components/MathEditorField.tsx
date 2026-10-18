@@ -25,11 +25,9 @@ export function MathEditorField({ initialLatex = '', displayMode = false, onComm
     else onCancel(returnFocus);
   };
 
-  return <span className="math-editor-field" contentEditable={false} role="group" aria-label="Modifica formula"
-    onBlur={event => {
-      if (event.relatedTarget instanceof globalThis.Node && event.currentTarget.contains(event.relatedTarget)) return;
-      finish(Boolean(preview), false);
-    }}>
+  // Blur neither commits nor discards: clicking the audio player or the page
+  // keeps the draft. Only Enter/confirm saves and only Esc/cancel closes it.
+  return <span className="math-editor-field" contentEditable={false} role="group" aria-label="Modifica formula">
     {preview && <span className="math-editor-preview" aria-hidden="true" dangerouslySetInnerHTML={{ __html: preview }} />}
     <span className={`math-editor-source${invalid ? ' is-invalid' : ''}`}>
       <input autoFocus type="text" aria-label="Formula LaTeX" aria-invalid={invalid}

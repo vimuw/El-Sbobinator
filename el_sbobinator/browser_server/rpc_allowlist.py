@@ -49,6 +49,7 @@ ALLOWED_RPC_METHODS: frozenset[str] = frozenset(
         # Desktop-only methods that safely return no-op or desktop disclaimer
         "open_file",
         "open_url",
+        "open_link",
         "show_notification",
         "flash_window",
         "close_window",
@@ -66,6 +67,7 @@ DESKTOP_ONLY_RESPONSES: dict[str, Any] = {
     "record_frontend_event": {"ok": True},
     "open_file": {"ok": False, "error": "Disponibile nell'app desktop"},
     "open_url": {"ok": True},
+    "open_link": {"ok": True},
     "show_notification": {"ok": True},
     "flash_window": {"ok": True},
     "close_window": {"ok": True},

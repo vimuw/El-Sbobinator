@@ -4,7 +4,7 @@
   "lineHeight": 1.38,
   "nativeLineHeight": 1.15,
   "paragraphGapPt": 0,
-  "contentWidthPx": 634,
+  "contentWidthPx": 602,
   "headings": [
     { "fontSizePt": 20, "lineHeight": 1.38, "beforePt": 20, "afterPt": 6, "fontWeight": 700, "color": "#000000" },
     { "fontSizePt": 16, "lineHeight": 1.38, "beforePt": 18, "afterPt": 6, "fontWeight": 700, "color": "#000000" },

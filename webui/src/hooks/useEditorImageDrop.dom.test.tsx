@@ -54,10 +54,57 @@ describe('useEditorImageDrop Hook', () => {
     const original = editor.getJSON();
     vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: 7, inside: 5 });
     editor.commands.setNodeSelection(2);
+    editor.view.dragging = { slice: editor.state.selection.content(), move: true };
     result.current.handleDrop(editor.view, { dataTransfer: { files: [] }, clientX: 0, clientY: 0, preventDefault: vi.fn() } as unknown as DragEvent);
     expect(editor.getJSON().content?.[0].content).toEqual([{ type: 'text', text: 'AB' }]);
     expect(editor.getJSON().content?.[1].content?.map(n => n.type)).toEqual(['text', 'floatingImage', 'text']);
     editor.commands.undo();
+    expect(editor.getJSON()).toEqual(original);
+    editor.destroy();
+  });
+  it('forgets a cancelled inline drag so a later external text drop stays native', () => {
+    const editor = new Editor({ extensions: [StarterKit, FloatingImage], content: '<p>A<span data-editor-image><img src="drag.png"></span>B</p><p>CD</p>' });
+    const original = editor.getJSON();
+    const { result } = renderHook(() => useEditorImageDrop({ editorRef: { current: editor } }));
+    const anchor = document.createElement('span'); anchor.className = 'editor-image-node';
+    const image = document.createElement('img'); anchor.appendChild(image);
+    vi.spyOn(editor.view, 'posAtDOM').mockReturnValue(2);
+    vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: 7, inside: 5 });
+    result.current.handleDragStart(editor.view, { target: image, clientX: 0, clientY: 0, dataTransfer: { setDragImage: vi.fn() } } as unknown as DragEvent);
+    window.dispatchEvent(new Event('dragend'));
+    const drop = { dataTransfer: { files: [] }, clientX: 0, clientY: 0, preventDefault: vi.fn() } as unknown as DragEvent;
+    expect(result.current.handleDrop(editor.view, drop)).toBe(false);
+    expect(drop.preventDefault).not.toHaveBeenCalled();
+    expect(editor.getJSON()).toEqual(original);
+    editor.destroy();
+  });
+  it('moves an image only for a genuine internal drag of that image', () => {
+    const editor = new Editor({ extensions: [StarterKit, FloatingImage], content: '<p>A<span data-editor-image><img src="drag.png"></span>B</p><p>CD</p>' });
+    const original = editor.getJSON();
+    const { result } = renderHook(() => useEditorImageDrop({ editorRef: { current: editor } }));
+    vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: 7, inside: 5 });
+    const drop = () => ({ dataTransfer: { files: [] }, clientX: 0, clientY: 0, preventDefault: vi.fn() } as unknown as DragEvent);
+    // External text dropped while the image is selected.
+    editor.commands.setNodeSelection(2);
+    expect(result.current.handleDrop(editor.view, drop())).toBe(false);
+    // Internal text drag that starts at the image.
+    editor.commands.setTextSelection({ from: 2, to: 4 });
+    editor.view.dragging = { slice: editor.state.selection.content(), move: true };
+    expect(result.current.handleDrop(editor.view, drop())).toBe(false);
+    editor.view.dragging = null;
+    expect(editor.getJSON()).toEqual(original);
+    editor.destroy();
+  });
+  it('refuses an inline image drop into a code block without throwing', () => {
+    const editor = new Editor({ extensions: [StarterKit, FloatingImage], content: '<p>A<span data-editor-image><img src="drag.png"></span>B</p><pre><code>codice</code></pre>' });
+    const { result } = renderHook(() => useEditorImageDrop({ editorRef: { current: editor } }));
+    vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: 8, inside: 5 });
+    editor.commands.setNodeSelection(2);
+    const original = editor.getJSON();
+    editor.view.dragging = { slice: editor.state.selection.content(), move: true };
+    const drop = { dataTransfer: { files: [] }, clientX: 0, clientY: 0, preventDefault: vi.fn() } as unknown as DragEvent;
+    expect(result.current.handleDrop(editor.view, drop)).toBe(true);
+    editor.view.dragging = null;
     expect(editor.getJSON()).toEqual(original);
     editor.destroy();
   });
@@ -82,6 +129,10 @@ describe('useEditorImageDrop Hook', () => {
     expect(outputHtml).toContain('color: red');
     expect(outputHtml).toContain('background-color: yellow');
     expect(outputHtml).toContain('Test text');
+    // A browser page copy carries the page theme instead: drop its colours.
+    const pageCopy = result.current.transformPastedHTML('<p style="color: red; background-color: yellow; font-weight: bold; orphans: 2; widows: 2; -webkit-text-stroke-width: 0px;">Test text</p>');
+    expect(pageCopy).not.toMatch(/(^|[\s;"])(background-)?color:/);
+    expect(pageCopy).toContain('font-weight: bold');
   });
 
   it('retains explicit font sizes in pasted headings and nested spans', () => {

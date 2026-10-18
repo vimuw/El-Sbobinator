@@ -126,18 +126,18 @@ class AppWebviewTests(unittest.TestCase):
         self.assertIn("updatePhase", joined)
         self.assertIn("fileDone", joined)
 
-    def test_update_model_first_call_sets_primary_model(self):
+    def test_update_model_first_call_sets_last_effective_model(self):
         adapter = PipelineAdapter(None, cancel_event=__import__("threading").Event())
         adapter.update_model("gemini-2.5-flash")
         self.assertEqual(adapter.last_effective_model, "gemini-2.5-flash")
 
-    def test_update_model_subsequent_call_replaces_primary_model(self):
+    def test_update_model_subsequent_call_replaces_last_effective_model(self):
         adapter = PipelineAdapter(None, cancel_event=__import__("threading").Event())
         adapter.update_model("gemini-2.5-flash")
         adapter.update_model("gemini-3.6-flash")
         self.assertEqual(adapter.last_effective_model, "gemini-3.6-flash")
 
-    def test_reset_run_state_clears_primary_model(self):
+    def test_reset_run_state_clears_last_effective_model(self):
         adapter = PipelineAdapter(None, cancel_event=__import__("threading").Event())
         adapter.update_model("gemini-2.5-flash")
         adapter.update_model("gemini-3.6-flash")
@@ -176,6 +176,7 @@ class AppWebviewTests(unittest.TestCase):
         with _tempfile.NamedTemporaryFile(
             "w+", suffix=".html", delete=False, encoding="utf-8"
         ) as tmp:
+            self.addCleanup(Path(tmp.name).unlink, missing_ok=True)
             tmp.write(
                 "<!DOCTYPE html><html><head><meta charset='utf-8'><style>body{color:red}</style></head>"
                 "<body><p>Old</p></body></html>"
@@ -226,6 +227,7 @@ class AppWebviewTests(unittest.TestCase):
         api = ElSbobinatorApi()
         window = _FakeWindow()
         with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            self.addCleanup(Path(tmp.name).unlink, missing_ok=True)
             window.dialog_result = tmp.name
         api.set_window(window)  # type: ignore[arg-type]
 
@@ -242,6 +244,7 @@ class AppWebviewTests(unittest.TestCase):
         api = ElSbobinatorApi()
         window = _FakeWindow()
         with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            self.addCleanup(Path(tmp.name).unlink, missing_ok=True)
             window.dialog_result = tmp.name
         api.set_window(window)  # type: ignore[arg-type]
 
@@ -4347,6 +4350,7 @@ class TestRetryStartProcessingGuard(unittest.TestCase):
 
     def _make_file(self) -> str:
         with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            self.addCleanup(Path(tmp.name).unlink, missing_ok=True)
             tmp.write(b"fake")
             return tmp.name
 

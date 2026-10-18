@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { ChevronDown } from 'lucide-react';
 import { DOCUMENT_FORMATTING, pointSize } from '../../../documentFormatting';
+import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
 
 const FONT_FAMILIES = [
   { label: DOCUMENT_FORMATTING.fontFamily, value: '', cssFamily: `${DOCUMENT_FORMATTING.fontFamily}, sans-serif` },
@@ -44,6 +45,8 @@ export const FontFamilySelect = ({ editor }: { editor: TiptapEditor }) => {
     setIsOpen(prev => !prev);
   };
 
+  useEscapeToClose(isOpen, () => setIsOpen(false));
+
   React.useEffect(() => {
     if (!isOpen) return;
     const handler = (e: PointerEvent | MouseEvent) => {
@@ -70,7 +73,7 @@ export const FontFamilySelect = ({ editor }: { editor: TiptapEditor }) => {
   const selectFamily = (value: string) => {
     setIsOpen(false);
     if (value === '') {
-      editor.chain().focus().unsetFontFamily().run();
+      editor.chain().focus().unsetFontFamily().clearBlockFontFamily().run();
     } else {
       editor.chain().focus().setFontFamily(value).run();
     }
@@ -149,6 +152,8 @@ export const FontSizeSelect = ({ editor }: { editor: TiptapEditor }) => {
     }
     setIsOpen(prev => !prev);
   };
+
+  useEscapeToClose(isOpen, () => setIsOpen(false));
 
   React.useEffect(() => {
     if (!isOpen) return;
@@ -241,6 +246,8 @@ export const HeadingSelect = ({ editor }: { editor: TiptapEditor }) => {
     }
     setIsOpen(prev => !prev);
   };
+
+  useEscapeToClose(isOpen, () => setIsOpen(false));
 
   React.useEffect(() => {
     if (!isOpen) return;
@@ -342,6 +349,8 @@ export const ZoomSelect = ({
     }
     setIsOpen(prev => !prev);
   };
+
+  useEscapeToClose(isOpen, () => setIsOpen(false));
 
   React.useEffect(() => {
     if (!isOpen) return;

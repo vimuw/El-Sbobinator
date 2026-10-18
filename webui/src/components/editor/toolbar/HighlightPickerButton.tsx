@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { ChevronDown } from 'lucide-react';
 import { getLastHighlightColor, setLastHighlightColor } from '../../../editorUtils';
+import { HighlightIcon } from '../../HighlightIcon';
+import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
 
 const HIGHLIGHT_COLORS = [
   { label: 'Giallo', color: '#fef08a' },
@@ -30,6 +32,8 @@ export const HighlightPickerButton = ({ editor }: { editor: TiptapEditor }) => {
     setIsOpen(prev => !prev);
   };
 
+  useEscapeToClose(isOpen, () => setIsOpen(false));
+
   React.useEffect(() => {
     if (!isOpen) return;
     const handler = (e: PointerEvent | MouseEvent) => {
@@ -54,13 +58,7 @@ export const HighlightPickerButton = ({ editor }: { editor: TiptapEditor }) => {
         className={`editor-button color-picker-btn${isOpen || editor.isActive('highlight') ? ' is-active' : ''}`}
         title="Evidenziatore"
       >
-        <span className="color-picker-label">
-          <span style={{ fontWeight: 700, fontSize: '0.8rem', lineHeight: 1 }}>H</span>
-          <span
-            className="color-indicator"
-            style={{ background: activeColor, opacity: 0.9 }}
-          />
-        </span>
+        <HighlightIcon color={activeColor} className="h-4 w-4" />
         <ChevronDown size={9} style={{ opacity: 0.55, flexShrink: 0 }} />
       </button>
       {isOpen && createPortal(
