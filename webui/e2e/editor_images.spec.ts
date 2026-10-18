@@ -1294,7 +1294,7 @@ test('document defaults and direct colors agree with clipboard and all clear for
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
     await page.keyboard.press('Control+a');
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
-    if (control === 'toolbar') await page.locator('.editor-toolbar [title="Rimuovi formattazione"]').click();
+    if (control === 'toolbar') await page.locator('.editor-toolbar [title^="Rimuovi formattazione"]').click();
     else if (control === 'keyboard') await page.keyboard.press('Control+Backslash');
     else if (control === 'context') {
       const selected = await editor.evaluate(element => { const { from, to } = (element as HTMLElement & { editor: Editor }).editor.state.selection; return { from, to }; });
@@ -1303,7 +1303,7 @@ test('document defaults and direct colors agree with clipboard and all clear for
       expect(await editor.evaluate(element => { const { from, to } = (element as HTMLElement & { editor: Editor }).editor.state.selection; return { from, to }; }), 'context keeps the complete selection').toEqual(selected);
       expect(await editor.evaluate(element => (element as HTMLElement & { editor: Editor }).editor.state.selection.empty), 'context menu keeps the selected document').toBe(false);
       await page.locator('.editor-context-menu').getByRole('button', { name: 'Rimuovi formattazione' }).click();
-    } else await page.locator('.editor-bubble-menu [title="Rimuovi formattazione"]').click();
+    } else await page.locator('.editor-bubble-menu [title^="Rimuovi formattazione"]').click();
     await expect(editor.locator('h2')).toHaveText('Titolo');
     await expect(editor.locator('h2'), control).toHaveCSS('text-align', 'start');
     await expect(editor.locator('ol')).toHaveAttribute('start', '4');

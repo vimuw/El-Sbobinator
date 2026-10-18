@@ -218,16 +218,13 @@ export function EditorContextMenu({
       <button
         type="button"
         className="editor-context-menu-item"
-        onClick={() => {
-          if (!editor.state.selection.empty) {
-            editor.chain().focus().clearDocumentFormatting().run();
-          }
-        }}
+        onClick={() => editor.chain().focus().clearDocumentFormatting().run()}
       >
         <span className="flex items-center gap-2.5 font-medium">
           <RemoveFormatting className="h-4 w-4 shrink-0" />
           <span>Rimuovi formattazione</span>
         </span>
+        <kbd className="editor-context-menu-shortcut">Ctrl+\</kbd>
       </button>
 
       <div className="my-1 border-t border-[var(--border-subtle)]" />

@@ -18,6 +18,8 @@ const editorShortcutGroups = [
     ['Ctrl+Shift+S', 'Barrato'],
     ['Ctrl+.', 'Apice'],
     ['Ctrl+,', 'Pedice'],
+    ['Ctrl+\\', 'Rimuovi formattazione'],
+    ['Ctrl+Alt+0', 'Testo normale'],
     ['Ctrl+Alt+1…5', 'Titolo di livello 1…5'],
     ['Ctrl+Shift+7', 'Elenco numerato'],
     ['Ctrl+Shift+8', 'Elenco puntato'],

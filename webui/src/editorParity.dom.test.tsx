@@ -439,7 +439,7 @@ describe('Editor parity: clipboard and logical text', () => {
       render(<EditorContextMenu contextMenu={{ x: 20, y: 20 }} onClose={() => {}} editor={editor} onOpenMath={() => {}} onOpenImagePicker={() => {}} onOpenFind={() => {}} />);
       fireEvent.click(Array.from(document.querySelectorAll<HTMLButtonElement>('.editor-context-menu-item')).find(button => button.textContent?.includes('Rimuovi formattazione'))!);
     } else if (path === 'keyboard') fireEvent.keyDown(element, { key: '\\', code: 'Backslash', ctrlKey: true });
-    else fireEvent.click(document.querySelector<HTMLButtonElement>('.editor-toolbar [title="Rimuovi formattazione"]')!);
+    else fireEvent.click(document.querySelector<HTMLButtonElement>('.editor-toolbar [title^="Rimuovi formattazione"]')!);
     const html = editor.getHTML();
     expect(html).toContain('<h2>Titolo</h2>');
     expect(html).toContain('<ol start="4">');

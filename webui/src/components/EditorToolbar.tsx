@@ -151,7 +151,7 @@ export const MenuBar = ({
         type="button"
         onClick={() => editor.chain().focus().clearDocumentFormatting().run()}
         className="editor-button"
-        title="Rimuovi formattazione"
+        title="Rimuovi formattazione (Ctrl+\)"
       >
         <RemoveFormatting className="h-4 w-4" />
       </button>

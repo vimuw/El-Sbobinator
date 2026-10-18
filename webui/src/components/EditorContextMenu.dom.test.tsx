@@ -7,6 +7,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
 import * as clipboard from '../editorClipboard';
+import { EditorDocumentStyle } from '../editorDocumentStyle';
 
 describe('EditorContextMenu', () => {
   it('does not render when contextMenu is null', () => {
@@ -149,6 +150,18 @@ describe('EditorContextMenu', () => {
       else Reflect.deleteProperty(navigator, 'clipboard');
       editor.destroy();
     }
+  });
+
+  it('clears the typing formatting at a caret, like the toolbar and Ctrl+\\', () => {
+    const editor = new Editor({ extensions: [StarterKit, TextStyle, Color, EditorDocumentStyle], content: '<p><strong>Grassetto</strong></p>' });
+    try {
+      editor.commands.setTextSelection(4);
+      expect(editor.isActive('bold')).toBe(true);
+      render(<EditorContextMenu contextMenu={{ x: 50, y: 50 }} onClose={vi.fn()} editor={editor} onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()} onOpenFind={vi.fn()} />);
+      fireEvent.click(screen.getByRole('button', { name: /Rimuovi formattazione/ }));
+      editor.commands.insertContent('x');
+      expect(editor.getHTML()).toBe('<p><strong>Gra</strong>x<strong>ssetto</strong></p>');
+    } finally { editor.destroy(); }
   });
 
   it('asks the editor to open its link panel instead of a native prompt', () => {

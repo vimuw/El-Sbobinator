@@ -98,7 +98,7 @@ describe('EditorBubbleMenu', () => {
     expect(screen.getByTitle('Titolo 2')).toBeTruthy();
     expect(screen.getByTitle('Titolo 3')).toBeTruthy();
     expect(screen.getByTitle('Inserisci link (Ctrl+K)')).toBeTruthy();
-    expect(screen.getByTitle('Rimuovi formattazione')).toBeTruthy();
+    expect(screen.getByTitle('Rimuovi formattazione (Ctrl+\\)')).toBeTruthy();
   });
 
   it('toggles bold mark on click', () => {
@@ -267,7 +267,7 @@ describe('EditorBubbleMenu', () => {
     editor.emit('selectionUpdate');
 
     act(() => {
-      fireEvent.mouseDown(screen.getByTitle('Rimuovi formattazione'));
+      fireEvent.mouseDown(screen.getByTitle('Rimuovi formattazione (Ctrl+\\)'));
     });
     expect(chainMock.clearDocumentFormatting).toHaveBeenCalled();
   });
