@@ -158,7 +158,6 @@ export default function App() {
     setArchiveTotal,
     isArchiveLoaded,
     folders,
-    setFolders,
     archiveSessionsRef,
     foldersRef,
     pendingArchiveReplacementsRef,
