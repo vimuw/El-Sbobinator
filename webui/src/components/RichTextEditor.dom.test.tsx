@@ -65,6 +65,43 @@ describe('RichTextEditor Component', () => {
     expect(pageWrapper.style.zoom).toBe('1.5');
   });
 
+  it('keeps the index mounted for its exit fade and restores it on immediate reopen', () => {
+    const onTocToggle = vi.fn();
+    const onScrollToHeading = vi.fn();
+    const heading = { id: 'h-0', level: 2, text: 'Capitolo indice' };
+    const props = {
+      initialContent: '<p>Appunti</p>',
+      tocHeadings: [heading],
+      onTocToggle,
+      onScrollToHeading,
+    };
+    const { rerender } = render(<RichTextEditor {...props} isTocOpen />);
+    const navigation = screen.getByRole('navigation');
+    const headingButton = screen.getByRole('button', { name: heading.text });
+    const content = navigation.parentElement!;
+    const trigger = screen.getByTitle('Apri indice').parentElement!;
+    expect(trigger.hasAttribute('inert')).toBe(true);
+
+    fireEvent.click(screen.getByTitle('Chiudi'));
+    expect(onTocToggle).toHaveBeenCalledOnce();
+    rerender(<RichTextEditor {...props} isTocOpen={false} />);
+
+    expect(navigation.isConnected).toBe(true);
+    expect(headingButton.isConnected).toBe(true);
+    expect(content.getAttribute('aria-hidden')).toBe('true');
+    expect(content.hasAttribute('inert')).toBe(true);
+    expect(screen.queryByRole('navigation')).toBeNull();
+    expect(trigger.hasAttribute('inert')).toBe(false);
+
+    rerender(<RichTextEditor {...props} isTocOpen />);
+    expect(screen.getByRole('navigation')).toBe(navigation);
+    expect(content.hasAttribute('inert')).toBe(false);
+    expect(content.getAttribute('aria-hidden')).toBe('false');
+    fireEvent.click(screen.getByRole('button', { name: heading.text }));
+    expect(onScrollToHeading).toHaveBeenCalledWith(heading);
+    expect(trigger.hasAttribute('inert')).toBe(true);
+  });
+
   it('preserves local edits through toolbar undo and redo', async () => {
     const onChange = vi.fn();
     render(<RichTextEditor initialContent="<p>Appunti originali</p>" onChange={onChange} />);

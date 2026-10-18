@@ -2468,6 +2468,45 @@ button {
   overflow: hidden;
 }
 
+/* Keep the index mounted while it fades; opening still reveals it immediately. */
+.editor-toc-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease-out, visibility 0s linear 120ms;
+}
+
+.editor-toc-open .editor-toc-content {
+  opacity: 1;
+  visibility: visible;
+  transition: none;
+}
+
+.editor-toc-trigger {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 80ms ease-out 170ms, visibility 0s linear 170ms;
+}
+
+.editor-toc-open .editor-toc-trigger {
+  opacity: 0;
+  visibility: hidden;
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-toc-col,
+  .editor-toc-spacer,
+  .editor-toc-content,
+  .editor-toc-trigger {
+    transition: none;
+  }
+}
+
 .editor-toc-btn {
   width: 32px;
   height: 32px;

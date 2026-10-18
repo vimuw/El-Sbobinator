@@ -11,7 +11,7 @@ import TextAlign from '@tiptap/extension-text-align';
 import FontFamily from '@tiptap/extension-font-family';
 import Link from '@tiptap/extension-link';
 import { EditorSubscript, EditorSuperscript, EditorScriptCaret } from '../editorScripts';
-import { Menu, X } from 'lucide-react';
+import { ListTree, X } from 'lucide-react';
 import { FloatingImage } from './FloatingImage';
 import { type Heading, SearchHighlight, FontSize, CustomHeading, CustomParagraph, CustomHardBreak, MathInline, MathBlock, SmartArrows, extractHeadings } from '../editorExtensions';
 import Typography from '@tiptap/extension-typography';
@@ -443,37 +443,36 @@ export function RichTextEditor({
         <div className="editor-page-outer">
           <div className="editor-toc-col" style={{ width: isTocOpen ? 260 : 44 }}>
             <div className="editor-toc-sticky" ref={tocStickyRef}>
-              {!isTocOpen ? (
+              <div className="editor-toc-trigger" aria-hidden={isTocOpen} inert={isTocOpen}>
                 <button className="editor-toc-btn" onClick={onTocToggle} title="Apri indice">
-                  <Menu className="w-4 h-4" />
+                  <ListTree className="w-4 h-4" />
                 </button>
-              ) : (
-                <>
-                  <div className="editor-toc-header">
-                    <span>Indice</span>
-                    <button className="toc-left-close" onClick={onTocToggle} title="Chiudi">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <nav className="editor-toc-nav" ref={tocNavRef}>
-                    {tocHeadings.length === 0 ? (
-                      <p className="toc-empty">Nessun titolo</p>
-                    ) : (
-                      tocHeadings.map(h => (
-                        <button
-                          key={h.id}
-                          className={`toc-item toc-item-h${h.level}${activeHeadingId === h.id ? ' toc-item-active' : ''}`}
-                          style={{ paddingLeft: `${(h.level - 1) * 12 + 14}px` }}
-                          onClick={() => onScrollToHeading?.(h)}
-                          title={h.text}
-                        >
-                          {h.text}
-                        </button>
-                      ))
-                    )}
-                  </nav>
-                </>
-              )}
+              </div>
+              <div className="editor-toc-content" aria-hidden={!isTocOpen} inert={!isTocOpen}>
+                <div className="editor-toc-header">
+                  <span>Indice</span>
+                  <button className="toc-left-close" onClick={onTocToggle} title="Chiudi">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <nav className="editor-toc-nav" ref={tocNavRef}>
+                  {tocHeadings.length === 0 ? (
+                    <p className="toc-empty">Nessun titolo</p>
+                  ) : (
+                    tocHeadings.map(h => (
+                      <button
+                        key={h.id}
+                        className={`toc-item toc-item-h${h.level}${activeHeadingId === h.id ? ' toc-item-active' : ''}`}
+                        style={{ paddingLeft: `${(h.level - 1) * 12 + 14}px` }}
+                        onClick={() => onScrollToHeading?.(h)}
+                        title={h.text}
+                      >
+                        {h.text}
+                      </button>
+                    ))
+                  )}
+                </nav>
+              </div>
             </div>
           </div>
           <div className="editor-page-center">
