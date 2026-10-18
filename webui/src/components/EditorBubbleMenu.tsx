@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { getLastHighlightColor } from '../editorUtils';
 import { HighlightIcon } from './HighlightIcon';
+import { editorIsBold } from '../editorBold';
 
 interface EditorBubbleMenuProps {
   editor: TiptapEditor | null;
@@ -177,7 +178,7 @@ export const EditorBubbleMenu: React.FC<EditorBubbleMenuProps> = ({ editor, isCo
         <button
           type="button"
           onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleBold().run(); }}
-          className={btn(editor.isActive('bold'))}
+          className={btn(editorIsBold(editor))}
           title="Grassetto (Ctrl+B)"
         >
           <Bold className="h-3.5 w-3.5 shrink-0" />

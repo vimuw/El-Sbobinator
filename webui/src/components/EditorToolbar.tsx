@@ -11,9 +11,10 @@ import {
   InsertImageButton, InsertMathButton, InsertYoutubeButton,
   ZoomSelect,
 } from './EditorToolbarControls';
+import { editorIsBold } from '../editorBold';
 
 const menuBarStateKey = (editor: TiptapEditor): string => [
-  editor.isActive('bold'),
+  editorIsBold(editor),
   editor.isActive('italic'),
   editor.isActive('underline'),
   editor.isActive('strike'),
@@ -127,7 +128,7 @@ export const MenuBar = ({
       <FontFamilySelect editor={editor} />
       <FontSizeSelect editor={editor} />
       <div className="editor-separator" />
-      <button type="button" onClick={() => editor.chain().focus().toggleBold().run()} className={btn(editor.isActive('bold'))} title="Grassetto (Ctrl+B)">
+      <button type="button" onClick={() => editor.chain().focus().toggleBold().run()} className={btn(editorIsBold(editor))} title="Grassetto (Ctrl+B)">
         <Bold className="h-4 w-4" />
       </button>
       <button type="button" onClick={() => editor.chain().focus().toggleItalic().run()} className={btn(editor.isActive('italic'))} title="Corsivo (Ctrl+I)">

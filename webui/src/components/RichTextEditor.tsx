@@ -4,7 +4,6 @@ import { TextSelection } from '@tiptap/pm/state';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Color } from '@tiptap/extension-color';
-import { TextStyle } from '@tiptap/extension-text-style';
 import Underline from '@tiptap/extension-underline';
 import Highlight from '@tiptap/extension-highlight';
 import TextAlign from '@tiptap/extension-text-align';
@@ -32,6 +31,7 @@ import { EditorDocumentStyle } from '../editorDocumentStyle';
 import { EditorListItem, EditorOrderedList } from '../editorLists';
 import { EditorReadingColors } from '../editorReadingColors';
 import { EditorParagraphTab } from '../editorParagraphTab';
+import { EditorBold, EditorTextStyle } from '../editorBold';
 
 export type { Heading };
 
@@ -114,7 +114,10 @@ export function RichTextEditor({
   } = useEditorImageDrop({ editorRef });
 
   const extensions = useMemo(() => [
+    // First, as in StarterKit: mark order decides that bold wraps the others.
+    EditorBold,
     StarterKit.configure({
+      bold: false,
       heading: false,
       paragraph: false,
       link: false,
@@ -133,7 +136,7 @@ export function RichTextEditor({
     EditorListItem,
     EditorParagraphTab,
     FloatingImage,
-    TextStyle,
+    EditorTextStyle,
     Color,
     FontFamily.configure({ types: ['textStyle'] }),
     FontSize,
