@@ -150,4 +150,16 @@ describe('EditorContextMenu', () => {
       editor.destroy();
     }
   });
+
+  it('asks the editor to open its link panel instead of a native prompt', () => {
+    const prompt = vi.spyOn(window, 'prompt');
+    const onOpenLink = vi.fn();
+    const editor = new Editor({ extensions: [StarterKit], content: '<p>Testo</p>' });
+    try {
+      render(<EditorContextMenu contextMenu={{ x: 50, y: 50 }} onClose={vi.fn()} editor={editor} onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()} onOpenFind={vi.fn()} onOpenLink={onOpenLink} />);
+      fireEvent.click(screen.getByRole('button', { name: /Inserisci link/ }));
+      expect(onOpenLink).toHaveBeenCalledOnce();
+      expect(prompt).not.toHaveBeenCalled();
+    } finally { prompt.mockRestore(); editor.destroy(); }
+  });
 });

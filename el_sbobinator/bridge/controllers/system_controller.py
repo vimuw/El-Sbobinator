@@ -22,6 +22,22 @@ from el_sbobinator.utils import file_ops
 from el_sbobinator.utils.logging_utils import redact_secrets
 from el_sbobinator.utils.webview_dialogs import file_dialog_type
 
+
+def _is_web_link(url: object) -> bool:
+    """Accept a single absolute http(s) address, without spaces or controls."""
+    from urllib.parse import urlsplit
+
+    if not isinstance(url, str) or not url or len(url) > 2048:
+        return False
+    if any(ord(char) <= 0x20 or ord(char) == 0x7F for char in url):
+        return False
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return False
+    return parts.scheme in ("http", "https") and bool(parts.hostname)
+
+
 if TYPE_CHECKING:
     import logging
 
@@ -240,6 +256,20 @@ class SystemControllerMixin:
             url.startswith(p) for p in _ALLOWED_URL_PREFIXES
         ):
             return bridge_error("URL non consentito.")
+        try:
+            file_ops.open_path_with_default_app(url)
+            return bridge_ok()
+        except Exception as e:
+            return bridge_error(e)
+
+    def open_link(self, url: str) -> dict:
+        """Open a web link from the user's document in the system browser.
+
+        Unlike open_url, the destination is the user's own content, so any
+        http(s) address is accepted, while other schemes stay rejected.
+        """
+        if not _is_web_link(url):
+            return bridge_error("Link non valido.")
         try:
             file_ops.open_path_with_default_app(url)
             return bridge_ok()

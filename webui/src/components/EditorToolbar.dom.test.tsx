@@ -47,6 +47,7 @@ describe('EditorToolbar MenuBar', () => {
         onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
         showFindReplace={false}
         onToggleFindReplace={vi.fn()}
+        onOpenLink={vi.fn()}
         zoomLevel={100}
         onZoomChange={onZoomChange}
       />
@@ -79,6 +80,7 @@ describe('EditorToolbar MenuBar', () => {
         onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
         showFindReplace={false}
         onToggleFindReplace={vi.fn()}
+        onOpenLink={vi.fn()}
         zoomLevel={100}
         onZoomChange={onZoomChange}
       />
@@ -115,6 +117,7 @@ describe('EditorToolbar MenuBar', () => {
           onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
           showFindReplace={false}
           onToggleFindReplace={vi.fn()}
+        onOpenLink={vi.fn()}
         />
       );
     }).not.toThrow();

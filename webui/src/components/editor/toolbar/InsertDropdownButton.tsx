@@ -1,6 +1,5 @@
 import React from 'react';
-import { type Editor as TiptapEditor } from '@tiptap/core';
-import { Calculator, ImagePlus, Video } from 'lucide-react';
+import { Calculator, ImagePlus, SquarePlay } from 'lucide-react';
 
 export const InsertImageButton = ({ onOpenImagePicker }: { onOpenImagePicker: () => void }) => {
   return (
@@ -28,22 +27,16 @@ export const InsertMathButton = ({ onOpenMath }: { onOpenMath: () => void }) => 
   );
 };
 
-export const InsertYoutubeButton = ({ editor }: { editor: TiptapEditor }) => {
-  const handleInsert = () => {
-    const url = window.prompt('Inserisci URL del video YouTube:');
-    if (url && url.trim()) {
-      (editor.chain().focus() as unknown as { setYoutubeVideo: (options: { src: string }) => { run: () => boolean } }).setYoutubeVideo({ src: url.trim() }).run();
-    }
-  };
-
+// Docs keeps a video as a link; the editor previews YouTube links from its card.
+export const InsertYoutubeButton = ({ onOpenLink }: { onOpenLink: () => void }) => {
   return (
     <button
       type="button"
-      onClick={handleInsert}
+      onClick={onOpenLink}
       className="editor-button"
-      title="Inserisci video YouTube"
+      title="Inserisci link a un video YouTube"
     >
-      <Video className="h-4 w-4" />
+      <SquarePlay className="h-4 w-4" />
     </button>
   );
 };

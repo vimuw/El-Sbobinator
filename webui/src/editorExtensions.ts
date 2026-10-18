@@ -2,8 +2,9 @@ import React from 'react';
 import katex from 'katex';
 import { Extension, Node, mergeAttributes, textInputRule, type Editor as TiptapEditor, type JSONContent } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
-import { Fragment, type Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { Fragment, type Node as ProseMirrorNode, type Schema, type TagParseRule } from '@tiptap/pm/model';
 import { EMPTY_PARAGRAPH_ATTRIBUTE } from './editorLineSpacing';
+import { videoLink } from './editorLinks';
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
 import { closeHistory } from '@tiptap/pm/history';
 import { MathEditorField } from './components/MathEditorField';
@@ -301,9 +302,24 @@ export const CustomHeading = HeadingExtension.extend({
   },
 });
 
+// Saved or pasted players become a paragraph holding the video's link, which
+// is exactly what Docs receives. The editor previews YouTube from that link.
+const embeddedVideoRule = (tag: string): TagParseRule => ({
+  tag,
+  getAttrs: element => embeddedVideoLink(element) ? null : false,
+  getContent: (element, schema: Schema) => {
+    const href = embeddedVideoLink(element as HTMLElement)!;
+    return Fragment.from(schema.text(href, schema.marks.link ? [schema.marks.link.create({ href })] : []));
+  },
+});
+const embeddedVideoLink = (element: HTMLElement) => {
+  const player = element.matches('iframe, video') ? element : element.querySelector('iframe, video');
+  return videoLink(player?.getAttribute('src') ?? player?.querySelector('source')?.getAttribute('src') ?? '', player?.tagName === 'VIDEO');
+};
+
 export const CustomParagraph = ParagraphExtension.extend({
   parseHTML() {
-    return [{
+    return [embeddedVideoRule('div[data-youtube-video]'), embeddedVideoRule('iframe[src]'), {
       tag: `div[${EMPTY_PARAGRAPH_ATTRIBUTE}="true"]`,
       // Only our exact empty transport shell is a paragraph. Never discard
       // text or objects pasted inside a malformed/foreign marked container.

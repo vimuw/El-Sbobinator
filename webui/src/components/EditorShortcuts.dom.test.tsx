@@ -27,6 +27,9 @@ describe('EditorShortcuts', () => {
     expect(within(dialog).getByRole('region', { name: 'Audio' })).toBeTruthy();
     expect(within(dialog).getByText('Ctrl+.')).toBeTruthy();
     expect(within(dialog).getByText('Ctrl+,')).toBeTruthy();
+    for (const [keys, action] of [['Ctrl+K', 'Inserisci o modifica link'], ['Ctrl+clic', 'Apri il link nel browser']]) {
+      expect(within(dialog).getByText(keys).closest('div')?.textContent).toBe(`${keys}${action}`);
+    }
     expect(within(dialog).getByText('Collega un file audio per usare questi comandi.')).toBeTruthy();
     const closeEditor = vi.fn();
     window.addEventListener('keydown', closeEditor);

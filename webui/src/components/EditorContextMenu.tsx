@@ -29,6 +29,7 @@ interface EditorContextMenuProps {
   onOpenImagePicker: () => void;
   onOpenFind: () => void;
   onOpenMath: () => void;
+  onOpenLink?: () => void;
 }
 
 async function copySelectionToClipboard(editor: TiptapEditor, cut = false) {
@@ -55,6 +56,7 @@ export function EditorContextMenu({
   onOpenImagePicker,
   onOpenFind,
   onOpenMath,
+  onOpenLink,
 }: EditorContextMenuProps) {
   const menuRef = React.useRef<HTMLDivElement>(null);
   React.useLayoutEffect(() => {
@@ -233,10 +235,7 @@ export function EditorContextMenu({
       <button
         type="button"
         className="editor-context-menu-item"
-        onClick={() => {
-          const url = window.prompt('Inserisci URL del link:');
-          if (url) editor.chain().focus().setLink({ href: url }).run();
-        }}
+        onClick={onOpenLink}
       >
         <span className="flex items-center gap-2.5 font-medium">
           <Link2 className="h-4 w-4 shrink-0" />

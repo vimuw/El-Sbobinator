@@ -2223,6 +2223,84 @@ button {
   border-color: var(--border-strong);
 }
 
+/* Docs-style link card: address plus open, preview, copy, edit and remove. */
+.editor-link-card {
+  position: fixed;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 360px;
+  padding: 4px 4px 4px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  box-shadow: var(--shadow-strong);
+}
+
+.editor-link-card-url {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--accent-text);
+  font-size: 0.78rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.editor-link-card-url span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-link-card-actions {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+/* Docs plays a YouTube link in a floating window at the bottom right. */
+.editor-video-preview {
+  position: fixed;
+  right: 24px;
+  bottom: 96px;
+  z-index: 9999;
+  width: min(400px, calc(100vw - 48px));
+  overflow: hidden;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  box-shadow: var(--shadow-strong);
+}
+
+.editor-video-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px 4px 10px;
+}
+
+.editor-video-preview-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.editor-video-preview-open:hover {
+  color: var(--accent-text);
+}
+
+.editor-video-preview iframe {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+}
+
 /* ═══ EDITOR TOC ═══ */
 .toc-left-sidebar {
   flex-shrink: 0;

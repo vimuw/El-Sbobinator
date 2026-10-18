@@ -1,7 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { InsertImageButton, InsertMathButton, InsertYoutubeButton } from './InsertDropdownButton';
-import type { Editor as TiptapEditor } from '@tiptap/core';
 
 describe('InsertButtons', () => {
   it('InsertImageButton calls onOpenImagePicker when clicked', () => {
@@ -23,23 +22,12 @@ describe('InsertButtons', () => {
     expect(prompt).not.toHaveBeenCalled();
   });
 
-  it('InsertYoutubeButton prompts and sets YouTube video', () => {
-    const setYoutubeVideoMock = vi.fn().mockReturnValue({ run: vi.fn().mockReturnValue(true) });
-    const editor = {
-      chain: vi.fn().mockReturnValue({
-        focus: vi.fn().mockReturnValue({
-          setYoutubeVideo: setYoutubeVideoMock,
-        }),
-      }),
-    };
-
-    vi.spyOn(window, 'prompt').mockReturnValue('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
-    render(<InsertYoutubeButton editor={editor as unknown as TiptapEditor} />);
-    const btn = screen.getByTitle('Inserisci video YouTube');
-    fireEvent.click(btn);
-
-    expect(setYoutubeVideoMock).toHaveBeenCalledWith({
-      src: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-    });
+  it('InsertYoutubeButton opens the link panel instead of embedding a player', () => {
+    const onOpenLink = vi.fn();
+    const prompt = vi.spyOn(window, 'prompt');
+    render(<InsertYoutubeButton onOpenLink={onOpenLink} />);
+    fireEvent.click(screen.getByTitle('Inserisci link a un video YouTube'));
+    expect(onOpenLink).toHaveBeenCalledTimes(1);
+    expect(prompt).not.toHaveBeenCalled();
   });
 });

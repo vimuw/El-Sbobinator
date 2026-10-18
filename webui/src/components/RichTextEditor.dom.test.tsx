@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Editor } from '@tiptap/core';
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { RichTextEditor } from './RichTextEditor';
 
@@ -163,5 +163,54 @@ describe('RichTextEditor Component', () => {
     expect(outputHtml).toContain('ID Soggetto');
     expect(outputHtml).toContain('Maschio');
     expect(outputHtml).not.toContain('IDSoggettoSessoEtà');
+  });
+
+  it('opens the shared link panel with Ctrl+K and links a selection or inserts a link at the caret', async () => {
+    const prompt = vi.spyOn(window, 'prompt');
+    render(<RichTextEditor initialContent="<p>Vedi appunti</p>" />);
+    const element = document.querySelector('.tiptap-editor') as HTMLElement & { editor: Editor };
+    await waitFor(() => expect(element.editor).toBeTruthy());
+    act(() => { element.editor.commands.setTextSelection({ from: 1, to: 5 }); });
+    const ctrlK = () => act(() => { fireEvent.keyDown(element, { key: 'k', ctrlKey: true }); });
+    ctrlK();
+    const input = await screen.findByPlaceholderText('https://...');
+    fireEvent.change(input, { target: { value: 'example.com' } });
+    act(() => { fireEvent.keyDown(input, { key: 'Enter' }); });
+    expect(element.editor.getHTML()).toContain('<a target="_blank" rel="noopener noreferrer nofollow" href="https://example.com">Vedi</a>');
+
+    // A caret inside the link edits the whole link rather than removing it.
+    act(() => { element.editor.commands.setTextSelection(3); });
+    ctrlK();
+    const editInput = await screen.findByPlaceholderText('https://...');
+    expect((editInput as HTMLInputElement).value).toBe('https://example.com');
+    fireEvent.change(editInput, { target: { value: 'https://docs.example.com' } });
+    act(() => { fireEvent.keyDown(editInput, { key: 'Enter' }); });
+    expect(element.editor.getHTML()).toContain('href="https://docs.example.com">Vedi</a> appunti');
+
+    // A caret outside a link inserts the address as linked text.
+    act(() => { element.editor.commands.setTextSelection(element.editor.state.doc.content.size - 1); });
+    ctrlK();
+    const insertInput = await screen.findByPlaceholderText('https://...');
+    fireEvent.change(insertInput, { target: { value: 'https://a.it' } });
+    act(() => { fireEvent.keyDown(insertInput, { key: 'Enter' }); });
+    expect(element.editor.getHTML()).toContain('appunti<a target="_blank" rel="noopener noreferrer nofollow" href="https://a.it">https://a.it</a>');
+    expect(prompt).not.toHaveBeenCalled();
+    prompt.mockRestore();
+  });
+
+  it('opens the link panel from the context menu without a native prompt', async () => {
+    const prompt = vi.spyOn(window, 'prompt');
+    render(<RichTextEditor initialContent="<p>Vedi appunti</p>" />);
+    const element = document.querySelector('.tiptap-editor') as HTMLElement & { editor: Editor };
+    await waitFor(() => expect(element.editor).toBeTruthy());
+    act(() => { element.editor.commands.setTextSelection({ from: 1, to: 5 }); });
+    fireEvent.contextMenu(element, { clientX: 40, clientY: 40 });
+    act(() => { fireEvent.click(within(document.querySelector('.editor-context-menu') as HTMLElement).getByRole('button', { name: /Inserisci link/ })); });
+    const input = await screen.findByPlaceholderText('https://...');
+    fireEvent.change(input, { target: { value: 'https://example.com' } });
+    act(() => { fireEvent.keyDown(input, { key: 'Enter' }); });
+    expect(element.editor.getHTML()).toContain('href="https://example.com">Vedi</a>');
+    expect(prompt).not.toHaveBeenCalled();
+    prompt.mockRestore();
   });
 });

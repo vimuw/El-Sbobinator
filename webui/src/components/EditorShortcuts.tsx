@@ -27,6 +27,8 @@ const editorShortcutGroups = [
   { id: 'document', title: 'Ricerca e documento', shortcuts: [
     ['Ctrl+F', 'Trova'],
     ['Ctrl+H', 'Trova e sostituisci'],
+    ['Ctrl+K', 'Inserisci o modifica link'],
+    ['Ctrl+clic', 'Apri il link nel browser'],
     ['Ctrl+M', 'Inserisci formula'],
     ['Ctrl+Alt+O', 'Mostra / Nascondi indice'],
     ['Ctrl++ / Ctrl+−', 'Aumenta / Riduci zoom'],

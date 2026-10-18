@@ -220,12 +220,9 @@ def open_path_with_default_app(path: str) -> None:
     if not isinstance(path, str) or not path:
         raise ValueError("Path non valido.")
 
-    # URLs and mailto bypass filesystem validation entirely
-    if (
-        path.startswith("http://")
-        or path.startswith("https://")
-        or path.startswith("mailto:")
-    ):
+    # URLs and mailto bypass filesystem validation entirely. Schemes are
+    # case-insensitive, so "HTTPS://" in a document link is still a URL.
+    if path.lower().startswith(("http://", "https://", "mailto:")):
         if sys.platform == "win32":
             os.startfile(path)
         elif sys.platform == "darwin":

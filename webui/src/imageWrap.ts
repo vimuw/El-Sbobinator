@@ -122,7 +122,7 @@ function measure(view: EditorView): { gaps: Gap[]; affectedEnd: number | null; t
       return { element: el, left: rect.left - GAP * cloneScale, right: rect.right + GAP * cloneScale, top: rect.top - 4 * cloneScale, bottom: rect.bottom + GAP * cloneScale };
     });
     const gaps: Gap[] = [];
-    const atomSelector = '.math-node-wrapper, .math-block-wrapper, table, pre, .editor-video-node';
+    const atomSelector = '.math-node-wrapper, .math-block-wrapper, table, pre';
     const atoms = Array.from(clone.querySelectorAll<HTMLElement>(atomSelector));
     const liveAtoms = measuredChildren.flatMap(child => [
       ...(child.matches(atomSelector) ? [child as HTMLElement] : []),

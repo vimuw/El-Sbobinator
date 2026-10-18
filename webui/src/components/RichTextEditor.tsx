@@ -14,7 +14,6 @@ import { EditorSubscript, EditorSuperscript, EditorScriptCaret } from '../editor
 import { Menu, X } from 'lucide-react';
 import { FloatingImage } from './FloatingImage';
 import { type Heading, SearchHighlight, FontSize, CustomHeading, CustomParagraph, CustomHardBreak, MathInline, MathBlock, SmartArrows, extractHeadings } from '../editorExtensions';
-import Youtube from '@tiptap/extension-youtube';
 import Typography from '@tiptap/extension-typography';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import { MenuBar } from './EditorToolbar';
@@ -24,6 +23,8 @@ import { FindReplacePanel } from './EditorFindReplace';
 import { useEditorImageDrop } from '../hooks/useEditorImageDrop';
 import { useTocScrollSpy } from '../hooks/useTocScrollSpy';
 import { EditorContextMenu } from './EditorContextMenu';
+import { EditorLinkCard } from './EditorLinkCard';
+import { openDocumentLink } from '../editorLinks';
 import { EditorMathComposer } from './EditorMathComposer';
 import { handleEditorClipboardEvent } from '../editorSelectionClipboard';
 import { editorFormattingVariables } from '../documentFormatting';
@@ -66,6 +67,9 @@ export function RichTextEditor({
 }: RichTextEditorProps) {
   const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number } | null>(null);
   const [isMathOpen, setIsMathOpen] = useState(false);
+  // Each request opens the shared link panel once (Ctrl+K and the context menu).
+  const [linkRequest, setLinkRequest] = useState(0);
+  const openLinkPanel = React.useCallback(() => setLinkRequest(prev => prev + 1), []);
   const closeMathComposer = React.useCallback(() => setIsMathOpen(false), []);
   const [findMode, setFindMode] = useState<null | 'find' | 'replace'>(initialSearchTerm ? 'find' : null);
   const [findFocusTrigger, setFindFocusTrigger] = useState(0);
@@ -139,12 +143,6 @@ export function RichTextEditor({
     EditorSuperscript,
     EditorScriptCaret,
     SearchHighlight,
-    Youtube.configure({
-      controls: true,
-      nocookie: true,
-      width: 640,
-      height: 360,
-    }),
     Typography,
     MathInline,
     MathBlock,
@@ -203,6 +201,15 @@ export function RichTextEditor({
         dragstart: (view, event) => handleDragStart(view, event as DragEvent),
         copy: (view, event) => handleEditorClipboardEvent(view, event as ClipboardEvent),
         cut: (view, event) => handleEditorClipboardEvent(view, event as ClipboardEvent, true),
+        // As in Docs, Ctrl+click opens a link while a plain click edits it.
+        click: (view, event) => {
+          const mouse = event as MouseEvent;
+          const link = (mouse.target as HTMLElement | null)?.closest?.('a[href]');
+          if (!(mouse.ctrlKey || mouse.metaKey) || !link || !view.dom.contains(link)) return false;
+          mouse.preventDefault();
+          openDocumentLink(link.getAttribute('href')!);
+          return true;
+        },
       },
       handlePaste: (view, event) => handlePaste(view, event as ClipboardEvent),
       handleDrop: (view, event) => handleDrop(view, event as DragEvent),
@@ -255,6 +262,14 @@ export function RichTextEditor({
         setContextMenu(null);
         setIsMathOpen(true);
       }
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k'
+        && (e.target as HTMLElement | null)?.closest('.editor-shell')
+        && !(e.target as HTMLElement).closest('input, textarea, select')) {
+        if (!editorRef.current || editorRef.current.isDestroyed) return;
+        e.preventDefault();
+        setContextMenu(null);
+        openLinkPanel();
+      }
       if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
         e.preventDefault();
         if (findModeRef.current) {
@@ -279,7 +294,7 @@ export function RichTextEditor({
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onTocToggle]);
+  }, [onTocToggle, openLinkPanel]);
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -395,10 +410,13 @@ export function RichTextEditor({
   return (
     <div className={`editor-shell flex flex-1 min-h-0 w-full flex-col relative ${isTocOpen ? 'editor-toc-open' : ''}`} onContextMenu={handleContextMenu}>
       {editor && <EditorBubbleMenu editor={editor} isContextMenuOpen={Boolean(contextMenu)} />}
+      {editor && <EditorLinkCard editor={editor} onEdit={openLinkPanel} />}
       <MenuBar
         editor={editor}
         onOpenImagePicker={() => imageInputRef.current?.click()}
         onOpenMath={() => setIsMathOpen(true)}
+        linkRequest={linkRequest}
+        onOpenLink={openLinkPanel}
         showFindReplace={findMode !== null}
         onToggleFindReplace={() => setFindMode(p => p ? null : 'find')}
         zoomLevel={zoomLevel}
@@ -472,6 +490,7 @@ export function RichTextEditor({
         onOpenImagePicker={() => imageInputRef.current?.click()}
         onOpenFind={() => setFindMode('find')}
         onOpenMath={() => setIsMathOpen(true)}
+        onOpenLink={openLinkPanel}
       />
       {isMathOpen && editor && !editor.isDestroyed && (
         <EditorMathComposer editor={editor} onClose={closeMathComposer} />
