@@ -17,7 +17,10 @@ from el_sbobinator.app_webview import ElSbobinatorApi
 from el_sbobinator.core.media_server import LocalMediaServer
 from el_sbobinator.core.session_storage import _folder_size
 from el_sbobinator.core.session_store import PRECONVERTED_AUDIO_FINAL
-from el_sbobinator.services.archive_service import find_candidate_audio_path
+from el_sbobinator.services.archive_service import (
+    find_candidate_audio_path,
+    list_completed_sessions,
+)
 from el_sbobinator.services.audio_service import (
     preconvert_media_to_mp3,
     probe_media_duration,
@@ -417,6 +420,41 @@ def test_internal_audio_survives_archive_move_and_package_roundtrip(
         )
         is None
     )
+
+
+def test_imported_playback_copy_keeps_the_source_identity(session_audio, tmp_path):
+    # Duplicate detection matches the archive by source name, size and duration:
+    # the internal copy's UUID name and smaller size must not replace them.
+    api, session, source, original = session_audio
+    assert resolve_audio(api, session, source)[0]["ok"]
+    package = tmp_path / "lezione.sbobina"
+    assert create_sbobina_package(str(session), str(package))["audio_included"]
+    imported = unpack_and_import_package(str(package), str(tmp_path / "imported"))
+    imported_dir = Path(imported["session_dir"])
+    imported_data = load_session(imported_dir)
+    playback = playback_audio_path(imported_data, str(imported_dir))
+    assert playback and Path(playback).name.startswith("playback-")
+    assert imported_data["input"]["path"] == playback
+    assert imported_data["input"]["name"] == original["input"]["name"]
+    assert imported_data["input"]["size"] == original["input"]["size"]
+    listed, _total = list_completed_sessions(str(tmp_path / "imported"))
+    assert listed[0]["input_name"] == source.name
+    assert listed[0]["input_size"] == original["input"]["size"]
+
+    # A package carrying the original file keeps that file's own identity.
+    legacy = tmp_path / "legacy"
+    shutil.copytree(session, legacy)
+    legacy_data = load_session(legacy)
+    legacy_data.pop("playback_audio")
+    legacy_data["input"]["name"] = "Nome precedente.wav"
+    (legacy / "session.json").write_text(json.dumps(legacy_data), encoding="utf-8")
+    assert create_sbobina_package(
+        str(legacy), str(package), audio_path_override=str(source)
+    )["audio_included"]
+    imported = unpack_and_import_package(str(package), str(tmp_path / "legacy-in"))
+    legacy_input = load_session(Path(imported["session_dir"]))["input"]
+    assert legacy_input["name"] == source.name
+    assert legacy_input["size"] == source.stat().st_size
 
 
 @pytest.mark.parametrize(

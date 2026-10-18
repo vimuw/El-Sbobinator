@@ -399,18 +399,45 @@ def unpack_and_import_package(package_path: str, session_root: str) -> dict:
                 session_data["input"], dict
             ):
                 session_data["input"] = {}
+            from el_sbobinator.services.session_audio_service import (
+                is_playback_audio_name,
+            )
+
+            # A retained playback copy is not the sender's lecture file: keep the
+            # source's name and size, which identify duplicates in the archive.
+            source_name = os.path.basename(
+                str(session_data["input"].get("name") or "").strip()
+            )
+            source_size = session_data["input"].get("size")
+            keep_source_identity = bool(source_name) and is_playback_audio_name(
+                os.path.basename(extracted_audio_path)
+            )
             session_data["input"]["path"] = extracted_audio_path
-            session_data["input"]["name"] = os.path.basename(extracted_audio_path)
+            session_data["input"]["name"] = (
+                source_name
+                if keep_source_identity
+                else os.path.basename(extracted_audio_path)
+            )
             session_data["input"]["path_rel_to_session"] = os.path.relpath(
                 extracted_audio_path, new_session_dir
             )
             session_data["playback_audio"] = os.path.relpath(
                 extracted_audio_path, new_session_dir
             )
-            try:
-                session_data["input"]["size"] = os.path.getsize(extracted_audio_path)
-            except Exception:
-                pass
+            if (
+                keep_source_identity
+                and isinstance(source_size, int)
+                and not isinstance(source_size, bool)
+                and source_size > 0
+            ):
+                session_data["input"]["size"] = source_size
+            else:
+                try:
+                    session_data["input"]["size"] = os.path.getsize(
+                        extracted_audio_path
+                    )
+                except Exception:
+                    pass
         else:
             session_data["audio_removed"] = True
             # Se il pacchetto non contiene audio (es. text_only), azzeriamo i vecchi path del creatore

@@ -59,6 +59,11 @@ def managed_audio_path(session_dir: str, relative_path: object) -> str | None:
     return candidate
 
 
+def is_playback_audio_name(name: str) -> bool:
+    """Recognize the file name of a copy made by create_playback_audio."""
+    return bool(_PLAYBACK_AUDIO_NAME.fullmatch(name))
+
+
 def playback_audio_path(data: dict, session_dir: str) -> str | None:
     if data.get("audio_removed"):
         return None
@@ -129,7 +134,7 @@ def discard_unlinked_playback_audio(session_dir: str, keep: str | None) -> None:
     now = time.time()
     removed = False
     for name in names:
-        if not _PLAYBACK_AUDIO_NAME.fullmatch(name):
+        if not is_playback_audio_name(name):
             continue
         path = managed_audio_path(session_dir, os.path.join("audio", name))
         if path is None or os.path.normcase(path) == kept:
