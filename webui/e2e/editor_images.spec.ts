@@ -1342,12 +1342,16 @@ test('partial clear and empty caret preserve paragraph layout, future typing and
   await page.keyboard.press('Control+a'); await page.keyboard.press('Control+c');
   const copied = await readClipboardFormats(page);
   fs.writeFileSync(testInfo.outputPath('partial-clear-clipboard.json'), JSON.stringify(copied));
-  await editor.focus(); await page.keyboard.press('Control+z');
+  // ProseMirror's focus handler re-syncs the DOM caret 20 ms later, which
+  // would revert the arrow keys below if they landed before that timer runs.
+  await editor.evaluate(root => new Promise(resolve => { (root as HTMLElement).focus(); setTimeout(resolve, 20); }));
+  await page.keyboard.press('Control+z');
   expect(await editor.evaluate(element => (element as HTMLElement & { editor: Editor }).editor.getJSON())).toEqual(original);
 
   await page.keyboard.press('Control+Home');
   for (let n = 0; n < 6; n++) await page.keyboard.press('ArrowRight');
-  await expect.poll(() => editor.evaluate(element => (element as HTMLElement & { editor: Editor }).editor.state.selection.empty)).toBe(true);
+  // Caret right after "Prima ": paragraph content starts at position 1.
+  await expect.poll(() => editor.evaluate(element => { const { selection } = (element as HTMLElement & { editor: Editor }).editor.state; return selection.empty ? selection.from : -1; })).toBe(7);
   await page.keyboard.press('Control+Backslash'); await page.keyboard.type('NUOVO');
   await expect(editor).toHaveText('Prima NUOVOSCELTA dopo');
   const typed = await editor.evaluate(element => (element as HTMLElement & { editor: Editor }).editor.getJSON().content![0].content!);
