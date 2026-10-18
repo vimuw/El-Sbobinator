@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
 test('authored paragraph and heading whitespace survives the actual preview reload', async ({ page }, testInfo) => {
@@ -30,7 +31,7 @@ test('authored paragraph and heading whitespace survives the actual preview relo
   });
   fs.writeFileSync(testInfo.outputPath('whitespace-cssom.json'), JSON.stringify(cssom));
   await testInfo.attach('white-space-cssom', { body: JSON.stringify(cssom), contentType: 'application/json' });
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await completed.getByRole('heading').click();
   const reopened = await read();

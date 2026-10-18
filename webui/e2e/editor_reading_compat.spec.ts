@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { test, expect, type Page } from '@playwright/test';
+import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
 type EditorRoot = HTMLElement & { editor: Editor };
@@ -71,7 +72,7 @@ test('reading colors and highlight contrast change only the view, across themes 
     expect(html).toContain('rgb(0, 0, 0)');
     await page.screenshot({ path: info.outputPath(`reading-${theme}.png`) });
   }
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
   await expect(page.locator('.tiptap-editor')).toBeVisible();

@@ -14,6 +14,9 @@ function createAudioFixture(testInfo: TestInfo, name = 'lezione_test.wav'): stri
 }
 
 async function selectScenario(page: Page, scenario: BrowserScenario): Promise<void> {
+  // The host installs window.pywebview only after /api/bootstrap answers, which
+  // can land after page.goto resolves.
+  await page.waitForFunction(() => typeof window.pywebview?.api?.set_browser_scenario === 'function');
   const result = await page.evaluate(async selected => {
     return window.pywebview?.api?.set_browser_scenario?.(selected);
   }, scenario);
@@ -35,6 +38,11 @@ async function startScenario(page: Page): Promise<void> {
 }
 
 test.describe('El Sbobinator Browser Host E2E', () => {
+  // The scenario is server-wide: later tests on this worker's server expect success.
+  test.afterEach(async ({ page }) => {
+    await selectScenario(page, 'success');
+  });
+
   test('happy path covers upload, phases, console, archive, and editor', async ({ page }, testInfo) => {
     const fixturePath = createAudioFixture(testInfo);
     await page.goto('/');

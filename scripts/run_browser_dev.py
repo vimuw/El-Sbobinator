@@ -58,6 +58,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run only the FastAPI backend server (without starting Vite)",
     )
     parser.add_argument(
+        "--dist",
+        type=str,
+        default=None,
+        help="Serve this built frontend from the backend (requires --no-vite)",
+    )
+    parser.add_argument(
+        "--settle-runs-on-bootstrap",
+        action="store_true",
+        help="E2E: each page load waits for simulated runs started by earlier pages",
+    )
+    parser.add_argument(
+        "--log-level",
+        choices=["debug", "info", "warning", "error"],
+        default="info",
+        help="Uvicorn log level (default: info)",
+    )
+    parser.add_argument(
         "--open",
         action="store_true",
         help="Automatically open the browser once started",
@@ -80,6 +97,13 @@ def main() -> None:
         )
     parser = build_parser()
     args = parser.parse_args()
+    dist_dir: str | None = None
+    if args.dist:
+        if not args.no_vite:
+            parser.error("--dist richiede --no-vite")
+        dist_dir = os.path.abspath(args.dist)
+        if not os.path.isfile(os.path.join(dist_dir, "index.html")):
+            parser.error(f"Build del frontend non trovata: {dist_dir}")
 
     # Session isolation
     temp_dir_to_clean: str | None = None
@@ -142,12 +166,14 @@ def main() -> None:
         app = create_browser_app(
             session_root=session_root,
             scenario=args.scenario,
+            dist_dir=dist_dir,
+            settle_runs_on_bootstrap=args.settle_runs_on_bootstrap,
         )
         uvicorn.run(
             app,
             host="127.0.0.1",
             port=args.port,
-            log_level="info",
+            log_level=args.log_level,
         )
     except KeyboardInterrupt:
         print("\nArresto in corso...")

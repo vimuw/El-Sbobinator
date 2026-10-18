@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
 async function openEditor(page: Page, info: TestInfo) {
@@ -81,7 +82,7 @@ test('toolbar, context menu and Ctrl+M insert user formulas directly in the page
   await page.getByRole('textbox', { name: 'Formula LaTeX', exact: true }).fill('x^2');
   await page.keyboard.press('Escape');
   expect(await read()).toEqual(final);
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
   expect(await read()).toEqual(final);
@@ -124,7 +125,7 @@ test('compact inline and block formula editing preserves cancel, typing, history
     expect(await read()).toEqual(changed);
   }
   const final = await read();
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
   expect(await read()).toEqual(final);
@@ -209,7 +210,7 @@ test('wrap typing after the figure reuses gaps while edits beside it measure a b
   await expect(editor.locator('p').first()).not.toContainText('SCRITTURA');
   await page.keyboard.press('Control+Shift+z');
   expect(await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON())).toEqual(final);
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
   expect(await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON())).toEqual(final);

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 import type { SaveHtmlResult } from '../src/bridge';
 
@@ -34,7 +35,7 @@ for (const scenario of [
     await completed.getByRole('heading').click();
     const editor = page.locator('.tiptap-editor');
     await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.commands.setContent('<p>ORIGINAL</p>'));
-    await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+    await expectAutosaved(page);
     const originalModel = await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
 
     await page.evaluate(({ delay }) => {
@@ -85,7 +86,7 @@ for (const scenario of [
     if (scenario.route === 'flush') {
       expect(await page.evaluate(() => (window as AutosaveProbeWindow).__elSbobinatorFlushPendingAutosave())).toBe(true);
     } else {
-      await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+      await expectAutosaved(page);
     }
     await expect.poll(() => page.evaluate(() => (window as AutosaveProbeWindow).__undoProbe.calls.length)).toBe(2);
     expect(await readDisk()).toContain('ORIGINAL');

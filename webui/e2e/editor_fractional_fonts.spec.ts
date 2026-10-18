@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
 // Keep the app's precision even when a recipient rounds its HTML import.
@@ -28,7 +29,7 @@ test('fractional fonts survive clipboard routing, history and saved content', as
     await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })]);
   }, source);
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   const read = () => editor.evaluate(root => ({
     html: (root as HTMLElement & { editor: Editor }).editor.getHTML(),
     text: root.textContent,
@@ -105,7 +106,7 @@ test('fractional fonts survive clipboard routing, history and saved content', as
   expect(parseFloat(pastedSizes.find(entry => entry.text === 'Grande')!.size) * 0.75).toBeCloseTo(14.4375, 3);
   await page.keyboard.press('Control+z'); expect((await read()).html).toBe(original.html);
   await page.keyboard.press('Control+Shift+z'); expect(await effectiveSizes()).toEqual(pastedSizes);
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await completed.getByRole('heading').click();
   expect(await effectiveSizes()).toEqual(pastedSizes);

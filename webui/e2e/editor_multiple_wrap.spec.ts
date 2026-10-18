@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
 for (const { count, width } of [{ count: 2, width: 56 }, { count: 4, width: 56 }, { count: 2, width: 35 }]) test(`${count} wrap images stay at their drop coordinates beside and above each other, with bounded layout work${width === 35 ? ' inside the page' : ''}`, async ({ page }, info) => {
@@ -116,8 +117,7 @@ for (const { count, width } of [{ count: 2, width: 56 }, { count: 4, width: 56 }
   expect(await read()).toEqual(typed);
   await page.keyboard.press('Control+z');
   expect(await read()).toEqual(final);
-  await page.waitForTimeout(100);
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await completed.getByRole('heading').click();
   expect(await read()).toEqual(final);

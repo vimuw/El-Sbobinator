@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
 test('two empty paragraphs between a list and table survive fallback copy, editing and reopen', async ({ page, context }, testInfo) => {
@@ -25,7 +26,7 @@ test('two empty paragraphs between a list and table survive fallback copy, editi
     await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })]);
   }, source);
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   const read = () => editor.evaluate(root => {
     const instance = (root as HTMLElement & { editor: Editor }).editor;
     const blocks: { type: string; text: string; position: number; size: number }[] = [];
@@ -86,7 +87,7 @@ test('two empty paragraphs between a list and table survive fallback copy, editi
     await page.keyboard.press('Control+Shift+z'); expect((await read()).text).toBe(edited.text);
     await page.keyboard.press('Control+z'); expect((await read()).html).toBe(pasted.html);
   }
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await completed.getByRole('heading').click();
   const reopened = await read();

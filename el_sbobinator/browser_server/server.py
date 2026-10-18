@@ -269,9 +269,20 @@ def _handle_scenario_rpc(
     return None
 
 
+def _join_scenario_threads(app: FastAPI, timeout: float) -> None:
+    with app.state.scenario_threads_lock:
+        scenario_threads = list(app.state.scenario_threads)
+    for scenario_thread in scenario_threads:
+        scenario_thread.join(timeout=timeout)
+
+
 def _register_api_routes(app: FastAPI) -> None:
     @app.get("/api/bootstrap")
     async def bootstrap(response: Response):
+        if app.state.settle_runs_on_bootstrap:
+            # A new page starts from the event sequence returned here, so the tail
+            # of a run started by an earlier page must be emitted first.
+            await asyncio.to_thread(_join_scenario_threads, app, 5.0)
         response.set_cookie(
             key="sbobinator_session",
             value=app.state.session_token,
@@ -540,8 +551,14 @@ def create_browser_app(
     session_root: str | None = None,
     scenario: str | None = "success",
     dist_dir: str | None = None,
+    settle_runs_on_bootstrap: bool = False,
 ) -> FastAPI:
-    """Create and configure the FastAPI browser development application."""
+    """Create and configure the FastAPI browser development application.
+
+    ``settle_runs_on_bootstrap`` lets E2E tests share one server: each page load
+    waits for simulated runs started by an earlier page instead of receiving
+    their remaining events.
+    """
 
     session_token = secrets.token_urlsafe(32)
 
@@ -577,10 +594,7 @@ def create_browser_app(
         finally:
             api._cancel_event.set()
             api._audio_cancel_event.set()
-            with app.state.scenario_threads_lock:
-                scenario_threads = list(app.state.scenario_threads)
-            for scenario_thread in scenario_threads:
-                scenario_thread.join(timeout=2.0)
+            _join_scenario_threads(app, 2.0)
             ws_dispatcher.close()
             sys.stdout = old_stdout
             sys.stderr = old_stderr
@@ -608,6 +622,7 @@ def create_browser_app(
     app.state.archive_folders = []
     app.state.scenario_threads = set()
     app.state.scenario_threads_lock = threading.Lock()
+    app.state.settle_runs_on_bootstrap = settle_runs_on_bootstrap
 
     app.add_middleware(
         CORSMiddleware,

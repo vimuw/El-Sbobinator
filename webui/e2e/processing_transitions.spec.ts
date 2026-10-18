@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
 function audioFixture(info: TestInfo, name: string): string {
@@ -12,7 +13,8 @@ async function queueFile(page: Page, fixture: string): Promise<void> {
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(fixture);
-  await expect(page.locator('.queue-card').first()).toBeVisible();
+  // Earlier tests on this worker's server leave completed cards: wait for this file.
+  await expect(page.locator('.queue-card', { hasText: path.basename(fixture) })).toBeVisible();
 }
 
 test('the queue slides down instead of jumping when processing starts', async ({ page }, info) => {
@@ -43,7 +45,8 @@ test('the player stays at the bottom while the editor is loading', async ({ page
   // Hold the editor chunk, including any idle preload, so the loading fallback stays visible.
   let releaseEditor = () => {};
   const editorGate = new Promise<void>(resolve => { releaseEditor = resolve; });
-  await page.route('**/src/components/RichTextEditor.tsx*', async route => {
+  // Matches the bundled chunk (assets/RichTextEditor-<hash>.js) and the dev source module.
+  await page.route(/\/RichTextEditor[^/]*\.(js|tsx)(\?|$)/, async route => {
     await editorGate;
     await route.continue();
   });

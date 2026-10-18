@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectAutosaved } from './autosave';
 import type { Page } from '@playwright/test';
 import type { Editor } from '@tiptap/core';
 
@@ -19,6 +20,18 @@ async function openImageEditor(page: Page, audio: string) {
   await expect(page.locator('.tiptap-editor')).toBeVisible();
 }
 
+// Saves now instead of after the autosave debounce, then ends the undo group so
+// the next edit is its own history step without relying on a timed pause.
+async function commitEdit(page: Page) {
+  expect(await page.evaluate(() => (window as unknown as { __elSbobinatorFlushPendingAutosave: () => Promise<boolean> }).__elSbobinatorFlushPendingAutosave())).toBe(true);
+  await expectAutosaved(page);
+  await page.locator('.tiptap-editor').evaluate(async root => {
+    const { closeHistory } = await import('/e2e-modules.js' /* @vite-ignore */);
+    const { view } = (root as HTMLElement & { editor: Editor }).editor;
+    view.dispatch(closeHistory(view.state.tr));
+  });
+}
+
 test('soft breaks replace selections using the first selected styles and persist through copy', async ({ page, context }, testInfo) => {
   test.setTimeout(240000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -30,7 +43,8 @@ test('soft breaks replace selections using the first selected styles and persist
     return { document: instance.getJSON(), html: instance.getHTML().replaceAll('data-color="#ffee00"', 'data-color="rgb(255, 238, 0)"'), offset: instance.state.selection.$from.parentOffset,
       geometry: Array.from(root.querySelectorAll('p')).map(node => ({ text: node.textContent, left: node.getBoundingClientRect().left, top: node.getBoundingClientRect().top, height: node.getBoundingClientRect().height })) };
   });
-  for (const kind of ['paragraph', 'root', 'nested']) for (const profile of ['uniform', 'mixed', 'boundary', 'reverse-uniform', 'reverse-mixed', 'reverse-boundary', 'start', 'whole', 'reverse-start', 'reverse-whole', 'across-break', 'reverse-across-break', 'from-break', 'reverse-from-break']) {
+  const profiles = ['uniform', 'mixed', 'boundary', 'reverse-uniform', 'reverse-mixed', 'reverse-boundary', 'start', 'whole', 'reverse-start', 'reverse-whole', 'across-break', 'reverse-across-break', 'from-break', 'reverse-from-break'];
+  for (const kind of ['paragraph', 'root', 'nested']) for (const profile of profiles) {
     const name = `${kind}-${profile}`;
     const originalText = profile.endsWith('break') ? 'Pr\u000bima' : 'Prima';
     const text = profile.endsWith('uniform') ? styled('Prima') : styled(profile.endsWith('break') ? 'Pr<br>' : 'Pr') + 'ima';
@@ -39,7 +53,7 @@ test('soft breaks replace selections using the first selected styles and persist
     await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, source);
     await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
     await expect(editor.locator('p')).toHaveText(kind === 'nested' ? ['Madre', 'Prima', 'Seconda', 'Ultima', ''] : ['Prima', 'Seconda', '']);
-    await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+    await commitEdit(page);
     await editor.evaluate(root => {
       const instance = (root as HTMLElement & { editor: Editor }).editor;
       instance.state.doc.descendants((node, pos) => { if (node.isText && node.text?.startsWith('Pr')) instance.commands.setTextSelection(pos); });
@@ -84,10 +98,17 @@ test('soft breaks replace selections using the first selected styles and persist
     for (const index of [at, at + 1]) expect(styles.slice(0, index + 1).filter(Boolean).at(-1)).toMatchObject(profile.endsWith('boundary')
       ? { ts_bd: false, ts_it: false, ts_un: false, ts_st: false, ts_ff: 'Arial', ts_fs: 11, ts_fgc2: { hclr_color: '#000000' }, ts_bgc2: { hclr_color: null } }
       : { ts_bd: true, ts_it: true, ts_un: true, ts_st: true, ts_ff: 'Georgia', ts_fs: 18, ts_fgc2: { hclr_color: '#123abc' }, ts_bgc2: { hclr_color: '#ffee00' } });
-    await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
-    await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-    await page.locator('.queue-card.is-completed', { hasText: 'parity_soft_selection.wav' }).getByRole('heading').click();
-    await expect(editor).toBeVisible(); await expect.poll(async () => (await read()).html).toBe(typed.html);
+    // Every profile must re-parse to the same document; the saved-file reopen path
+    // is shared by all profiles, so it runs once per list kind.
+    await commitEdit(page);
+    if (profile === profiles.at(-1)) {
+      await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
+      await page.locator('.queue-card.is-completed', { hasText: 'parity_soft_selection.wav' }).getByRole('heading').click();
+      await expect(editor).toBeVisible();
+    } else {
+      await editor.evaluate(root => { const instance = (root as HTMLElement & { editor: Editor }).editor; instance.chain().setMeta('addToHistory', false).setContent(instance.getHTML()).run(); });
+    }
+    await expect.poll(async () => (await read()).html).toBe(typed.html);
     await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+c');
     const reopenedClipboard = await readClipboardFormats(page);
     reopenedClipboard['text/html'] = reopenedClipboard['text/html'].replaceAll('data-color="rgb(255, 238, 0)"', 'data-color="#ffee00"');
@@ -116,7 +137,7 @@ test('soft breaks preserve combined styles, list structure, history and saved cl
     await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, source);
     await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
     await expect(editor.locator('p')).toHaveText(kind === 'nested' ? ['Madre', 'Prima', 'Seconda', 'Ultima', ''] : ['Prima', 'Seconda', '']);
-    await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+    await commitEdit(page);
     await editor.evaluate((root, offset) => {
       const instance = (root as HTMLElement & { editor: Editor }).editor;
       instance.state.doc.descendants((node, pos) => { if (node.isText && node.text === 'Prima') instance.commands.setTextSelection(pos + offset); });
@@ -146,10 +167,16 @@ test('soft breaks preserve combined styles, list structure, history and saved cl
     const native = JSON.parse(JSON.parse(clipboard['application/x-vnd.google-docs-document-slice-clip+wrapped']).data).resolved;
     expect(native.dsl_spacers).toContain('Prima'.slice(0, offset) + '\u000b'.repeat(count) + 'X' + 'Prima'.slice(offset) + '\n');
     expect(clipboard['text/html']).toContain('<br');
-    await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
-    await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-    await page.locator('.queue-card.is-completed', { hasText: 'parity_soft_break.wav' }).getByRole('heading').click();
-    await expect(editor).toBeVisible();
+    // Every case must re-parse to the same document; the saved-file reopen path is
+    // shared by all of them, so it runs once per list kind.
+    await commitEdit(page);
+    if (offset === 5 && count === 2) {
+      await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
+      await page.locator('.queue-card.is-completed', { hasText: 'parity_soft_break.wav' }).getByRole('heading').click();
+      await expect(editor).toBeVisible();
+    } else {
+      await editor.evaluate(root => { const instance = (root as HTMLElement & { editor: Editor }).editor; instance.chain().setMeta('addToHistory', false).setContent(instance.getHTML()).run(); });
+    }
     await expect.poll(html).toBe(typed.html);
     await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+c');
     const reopenedClipboard = await readClipboardFormats(page);
@@ -203,7 +230,7 @@ test('combined empty-line styles survive keyboard return, second Enter, autosave
     const emptyHtml = await html();
     await page.keyboard.press('Control+a'); await page.keyboard.press('Control+c');
     fs.writeFileSync(testInfo.outputPath(`empty-styles-${name}-clipboard.json`), JSON.stringify(await readClipboardFormats(page)));
-    await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+    await expectAutosaved(page);
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
     await expect(editor).not.toBeVisible();
     await page.locator('.queue-card.is-completed', { hasText: 'parity_empty_styles.wav' }).getByRole('heading').click();
@@ -212,7 +239,8 @@ test('combined empty-line styles survive keyboard return, second Enter, autosave
     let typedHtml = '';
     const navigation = [];
     for (const direction of (blankIndex ? ['ArrowUp', 'ArrowDown'] : ['ArrowUp']) as ('ArrowUp' | 'ArrowDown')[]) {
-      await selectNeighbour(blankIndex, direction); await editor.focus(); await page.keyboard.press(direction);
+      // Focus first: focusing afterwards can make ProseMirror adopt the DOM caret.
+      await editor.focus(); await selectNeighbour(blankIndex, direction); await page.keyboard.press(direction);
       await expect.poll(() => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.state.selection.$from.parent.textContent)).toBe('');
       expect(await html()).toBe(emptyHtml);
       const caret = await editor.evaluate(root => {
@@ -239,7 +267,7 @@ test('combined empty-line styles survive keyboard return, second Enter, autosave
     await page.keyboard.press('Control+Shift+z'); expect(await html()).toBe(typedHtml);
     await page.keyboard.press('Control+a'); await page.keyboard.press('Control+c');
     fs.writeFileSync(testInfo.outputPath(`empty-styles-${name}-typed-clipboard.json`), JSON.stringify(await readClipboardFormats(page)));
-    await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+    await expectAutosaved(page);
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
     await page.locator('.queue-card.is-completed', { hasText: 'parity_empty_styles.wav' }).getByRole('heading').click();
     await expect(editor).toBeVisible(); await expect.poll(html).toBe(typedHtml);
@@ -286,7 +314,7 @@ test('list second Enter on an empty parent exits one level and retains descendan
     const saved = await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getHTML());
     await editor.evaluate((root, content) => { (root as HTMLElement & { editor: Editor }).editor.commands.setContent(content); }, saved);
     expect(await getDocument()).toEqual(exited); expect(await geometry()).toEqual(after);
-    await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+    await expectAutosaved(page);
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
     await expect(editor).not.toBeVisible();
     await page.locator('.queue-card.is-completed', { hasText: 'parity_empty_enter.wav' }).getByRole('heading').click();
@@ -1053,7 +1081,7 @@ test('representative mixed document preserves edits, merged table widths, image 
       image: Array.from(root.querySelectorAll('img:not(.ProseMirror-separator)')).map(img => ({ sourceWidth: img.naturalWidth, sourceHeight: img.naturalHeight, width: img.getBoundingClientRect().width, height: img.getBoundingClientRect().height })),
     };
   });
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   const original = await read();
   await editor.getByText('Misura da correggere', { exact: true }).click();
   await page.keyboard.press('End'); await page.keyboard.type(': confermata');
@@ -1077,7 +1105,7 @@ test('representative mixed document preserves edits, merged table widths, image 
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+x');
   expect(await readClipboardFormats(page)).toEqual(copied);
   await editor.focus(); await page.keyboard.press('Control+z'); expect((await read()).html).toBe(edited.html);
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await page.locator('.queue-card.is-completed', { hasText: 'parity_representative.wav' }).getByRole('heading').click();
   await expect(editor).toBeVisible();
@@ -1127,7 +1155,7 @@ test('mixed wrap images and captions preserve surrounding content through histor
     await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
     await expect.poll(() => editor.getByAltText('Campione sintetico').evaluate(node => (node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
     await expect(editor.locator('td[colspan="2"]')).toHaveText('Conclusione comune alle due colonne');
-    await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+    await expectAutosaved(page);
     const original = await read();
     expect(original.images).toHaveLength(1);
     expect(original.images![0]).toMatchObject({ layout: 'wrap', position: variant.position, offsetY: variant.offsetY, caption: variant.caption });
@@ -1153,7 +1181,7 @@ test('mixed wrap images and captions preserve surrounding content through histor
     await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+x');
     expect(await readClipboardFormats(page)).toEqual(copied);
     await editor.focus(); await page.keyboard.press('Control+z'); expect((await read()).html).toBe(edited.html);
-    await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+    await expectAutosaved(page);
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
     await page.locator('.queue-card.is-completed', { hasText: 'parity_mixed_wrap.wav' }).getByRole('heading').click();
     await expect(editor).toBeVisible();
@@ -1291,7 +1319,8 @@ test('partial clear and empty caret preserve paragraph layout, future typing and
   const originalHeight = (await editor.locator('p').boundingBox())!.height;
   await page.keyboard.press('Control+Home');
   for (let n = 0; n < 6; n++) await page.keyboard.press('ArrowRight');
-  await page.keyboard.press('Control+Shift+ArrowRight');
+  // Ctrl+Shift+Right takes the trailing space on Windows but not on Linux.
+  for (let n = 0; n < 7; n++) await page.keyboard.press('Shift+ArrowRight');
   await expect.poll(() => editor.evaluate(element => { const { state } = (element as HTMLElement & { editor: Editor }).editor; return state.doc.textBetween(state.selection.from, state.selection.to); })).toBe('SCELTA ');
   await page.keyboard.press('Control+Backslash');
   await expect(editor.locator('p')).toHaveCSS('text-align', 'center');
@@ -1377,7 +1406,7 @@ for (const layout of ['inline', 'wrap']) {
       await page.keyboard.press('Control+z'); await expect(node).toHaveAttribute('data-width', '35');
       await page.keyboard.press('Control+Shift+z');
       await expect.poll(() => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getHTML())).toBe(saved);
-      await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+      await expectAutosaved(page);
       await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
       await page.locator('.queue-card.is-completed', { hasText: audio.split(/[\\/]/).pop()! }).getByRole('heading').click();
       await expect(editor).toBeVisible();
@@ -1692,7 +1721,7 @@ test('wrap drag keeps the destination table cell through history and saved reope
   await expect(cells.nth(1).locator('[data-editor-image]')).toHaveCount(0);
   await page.keyboard.press('Control+z');
   await expect.poll(read).toEqual(moved);
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await page.locator('.queue-card.is-completed', { hasText: 'table_drag_anchor.wav' }).getByRole('heading').click();
   await expect.poll(read).toEqual(moved);
@@ -1745,7 +1774,7 @@ for (const zoom of [{ key: 'Control+=', value: '1.1' }, { key: 'Control+-', valu
     await expect.poll(read).toEqual(original);
     await page.keyboard.press('Control+Shift+z');
     await expect.poll(read).toEqual(moved);
-    await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+    await expectAutosaved(page);
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
     await page.locator('.queue-card.is-completed', { hasText: 'drag_zoom.wav' }).getByRole('heading').click();
     await expect(editor).toBeVisible();

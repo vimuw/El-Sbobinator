@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
 test('HTML fallback restores CSS leading, fonts, selections, history and saved content', async ({ page, context }, testInfo) => {
@@ -28,7 +29,7 @@ test('HTML fallback restores CSS leading, fonts, selections, history and saved c
   await page.evaluate(async html => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })]); }, source);
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
   await expect(editor.getByText('Georgia', { exact: false })).toBeVisible();
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   const read = () => editor.evaluate(root => ({
     html: (root as HTMLElement & { editor: Editor }).editor.getHTML(),
     blocks: Array.from(root.querySelectorAll('h2,p')).map(el => {
@@ -44,9 +45,8 @@ test('HTML fallback restores CSS leading, fonts, selections, history and saved c
   });
   expect(await emptySeparator()).toEqual({ tag: 'P', empty: true, next: 'TABLE' });
   const inputs = await page.evaluate(async html => {
-    const formatting = await import('/src/utils.ts' /* @vite-ignore */);
-    const clipboard = await import('/src/editorClipboard.ts' /* @vite-ignore */);
-    const spacing = await import('/src/editorLineSpacing.ts' /* @vite-ignore */);
+    // Served by the E2E build (e2e/sourceModules.ts).
+    const { formatting, clipboard, spacing } = await import('/e2e-modules.js' /* @vite-ignore */);
     const portable = formatting.prepareHtmlForClipboardSync(html);
     const parsed = new DOMParser().parseFromString(portable, 'text/html').body;
     const measure = spacing.nativeLineSpacingReader();
@@ -92,7 +92,7 @@ test('HTML fallback restores CSS leading, fonts, selections, history and saved c
   expect(pasted.html).not.toContain('calc(');
   await page.keyboard.press('Control+z'); expect((await read()).html).toBe(original.html);
   await page.keyboard.press('Control+Shift+z'); expect((await read()).html).toBe(pasted.html);
-  await expect(page.locator('.editor-autosave-badge')).toHaveText('Salvato');
+  await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await completed.getByRole('heading').click();
   await expect(editor).toBeVisible();
