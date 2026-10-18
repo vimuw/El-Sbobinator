@@ -171,7 +171,8 @@ export function createNativeClipboardFormats(html: string, sourceRoot?: HTMLElem
     const width = Math.round(EDITOR_CONTENT_WIDTH_PX * normalizeImageWidth(container.getAttribute('data-width') ?? 56) / 100);
     const height = width / (normalizeImageAspectRatio(container.getAttribute('data-aspect-ratio')) ?? size.width / size.height);
     const align = normalizeImageAlignment(container.getAttribute('data-align'));
-    const layout = normalizeImageLayout(container.getAttribute('data-layout'));
+    // Docs keeps images in table cells inline.
+    const layout = normalizeImageLayout(container.getAttribute('data-layout')) === 'wrap' && !container.closest('td, th') ? 'wrap' : 'inline';
     const position = normalizeImagePosition(container.getAttribute('data-position'), align);
     const caption = container.querySelector('figcaption, .editor-image-caption')?.textContent ?? container.getAttribute('data-caption') ?? '';
     let offsetY = normalizeImageOffsetY(container.getAttribute('data-offset-y'));

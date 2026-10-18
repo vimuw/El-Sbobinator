@@ -15,7 +15,7 @@ type Model = {
     dsl_spacers: string;
     dsl_styleslices: Array<{ stsl_type: string; stsl_styles: Array<Record<string, unknown> | null> }>;
     dsl_entitymap: Record<string, { pe_l?: number; pe_lo?: number; pe_to?: number; ee_eo?: { i_wth: number; i_ht: number; i_cid: string; eo_ml: number; eo_mt: number }; le_nb?: Record<string, { b_sn: number; b_gt: number }> }>;
-    dsl_entitypositionmap: { positioned: Array<string[] | null> };
+    dsl_entitypositionmap: { positioned: Array<string[] | null>; inline: Array<string[] | null> };
   };
 };
 const model = (html: string, sourceRoot?: HTMLElement, sourceFigures?: readonly HTMLElement[]) => {
@@ -225,6 +225,16 @@ describe('Editor native image clipboard', () => {
     figure('', 'https://example.com/image.jpg'),
   ])('does not replace unsupported content with a flattened native slice: %s', html => {
     expect(createNativeClipboardFormats(html)).toBeNull();
+  });
+  it('exports Wrap images in table cells as inline images, as Docs requires', () => {
+    const doc = model(`<table><tr><td><p>Cella ${figure()}</p></td><td><p>B</p></td></tr></table><p>Fine</p>`);
+    expect(doc.resolved.dsl_entitypositionmap.positioned.filter(Boolean)).toHaveLength(0);
+    const [entity] = Object.values(doc.resolved.dsl_entitymap).filter(value => value.ee_eo);
+    expect(entity.pe_lo).toBeUndefined();
+    expect(entity.ee_eo!.eo_ml).toBe(0);
+    const text = doc.resolved.dsl_spacers;
+    expect(text.startsWith('\u0010\u0012\u001cCella ')).toBe(true);
+    expect(text.slice(0, text.indexOf('\u001c', 3))).toContain('*');
   });
   it('reads displayed remote image dimensions without an asynchronous clipboard write', () => {
     const root = document.createElement('div');

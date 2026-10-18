@@ -119,6 +119,30 @@ describe('FloatingImage selection and resize handles', () => {
     expect(image?.querySelector('.editor-image-caption')?.textContent).toBe('Figura 1: schema & formula');
   });
 
+  it('keeps images in table cells inline, as Docs does, on load and after later edits', async () => {
+    let getHtml: (() => string) | undefined;
+    const wrap = (alt: string) => `<span data-editor-image data-layout="wrap" data-position="80" data-offset-x="14" data-offset-y="-9" data-width="35"><img src="${alt}.png" alt="${alt}"></span>`;
+    render(<RichTextEditor initialContent={`<table><tr><td><p>A ${wrap('cella')}</p></td><td><p>B</p></td></tr></table><p>Fuori ${wrap('fuori')}</p>`} onEditorReady={fn => { getHtml = fn; }} />);
+    const inCell = (await screen.findByAltText('cella')).closest('.editor-image-node') as HTMLElement;
+    expect(inCell.dataset).toMatchObject({ layout: 'inline', offsetX: '0', offsetY: '0' });
+    expect((await screen.findByAltText('fuori')).closest<HTMLElement>('.editor-image-node')!.dataset.layout).toBe('wrap');
+    await act(async () => { fireEvent.mouseDown(await screen.findByAltText('cella')); });
+    const wrapButton = await screen.findByRole('button', { name: 'Wrap' });
+    expect(wrapButton).toHaveProperty('disabled', true);
+    expect(wrapButton.getAttribute('title')).toContain('Google Docs');
+
+    // Content that reaches a cell later, such as a paste, is normalized too.
+    const editor = (document.querySelector('.tiptap-editor') as HTMLElement & { editor: import('@tiptap/core').Editor }).editor;
+    let cellText = 0;
+    editor.state.doc.descendants((node, pos) => { if (node.isText && node.text === 'B') cellText = pos; });
+    await act(async () => { editor.commands.insertContentAt(cellText, { type: 'floatingImage', attrs: { src: 'incollata.png', alt: 'incollata', layout: 'wrap', offsetX: 12, offsetY: 5 } }); });
+    const pasted = (await screen.findByAltText('incollata')).closest('.editor-image-node') as HTMLElement;
+    expect(pasted.dataset).toMatchObject({ layout: 'inline', offsetX: '0', offsetY: '0' });
+    const saved = new DOMParser().parseFromString(getHtml!(), 'text/html');
+    expect(Array.from(saved.querySelectorAll('td [data-editor-image]'), image => image.getAttribute('data-layout'))).toEqual(['inline', 'inline']);
+    expect(saved.querySelector('p:not(td p) [data-editor-image]')?.getAttribute('data-layout')).toBe('wrap');
+  });
+
   it('selects image node on mousedown and renders selection handles', async () => {
     const htmlContent = '<div data-editor-image="true" data-width="56"><img src="test.png" alt="test image" /></div>';
     render(<RichTextEditor initialContent={htmlContent} />);

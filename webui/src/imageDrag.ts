@@ -202,6 +202,8 @@ function placeImage(view: EditorView, pos: number, left: number, top: number, vi
   // The anchor follows the paragraph at the image's top, not a line beneath the
   // pointer. This preserves the grab offset when dragging into another section.
   view.state.doc.descendants((node, nodePos) => {
+    // Docs anchors floating images only to paragraphs outside tables.
+    if (node.type.spec.tableRole === 'table') return false;
     if (!node.isTextblock) return;
     const dom = view.nodeDOM(nodePos);
     if (!(dom instanceof HTMLElement)) return;
