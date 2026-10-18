@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readAndOptimizeImageAsDataUrl, optimizeDataUrlImage, convertWebpImagesInHtml, prepareHtmlForClipboardSync } from './utils';
+import { EDITOR_CONTENT_WIDTH_PX } from './documentFormatting';
+
+const figureWidth = Math.round(EDITOR_CONTENT_WIDTH_PX * 35 / 100);
 
 describe('readAndOptimizeImageAsDataUrl (browser / jsdom environment)', () => {
   it('preserves SVG files without raster optimization', async () => {
@@ -290,12 +293,12 @@ describe('prepareHtmlForClipboard / convertWebpImagesInHtml', () => {
     Object.defineProperties(root.querySelector('img')!, { naturalWidth: { value: 240 }, naturalHeight: { value: 160 } });
     const source = '<span data-editor-image data-layout="wrap" data-align="right" data-width="35" data-caption="Figura"><img src="data:image/jpeg;base64,original-pixels"></span>';
     const result = new DOMParser().parseFromString(prepareHtmlForClipboardSync(source, root), 'text/html');
-    expect(result.querySelector('img')!.getAttribute('width')).toBe('222');
-    expect(result.querySelector('img')!.getAttribute('height')).toBe('148');
+    expect(result.querySelector('img')!.getAttribute('width')).toBe(String(figureWidth));
+    expect(result.querySelector('img')!.getAttribute('height')).toBe(String(Math.round(figureWidth / 1.5)));
     expect(result.querySelector('img')!.getAttribute('src')).toBe(root.querySelector('img')!.getAttribute('src'));
     expect(result.querySelector('[data-editor-image]')!.hasAttribute('data-aspect-ratio')).toBe(false);
     const explicit = new DOMParser().parseFromString(prepareHtmlForClipboardSync(source.replace('data-width="35"', 'data-width="35" data-aspect-ratio="2"'), root), 'text/html');
-    expect(explicit.querySelector('img')!.getAttribute('height')).toBe('111');
+    expect(explicit.querySelector('img')!.getAttribute('height')).toBe(String(Math.round(figureWidth / 2)));
     const unloaded = new DOMParser().parseFromString(prepareHtmlForClipboardSync(source), 'text/html');
     expect(unloaded.querySelector('img')!.hasAttribute('height')).toBe(false);
   });
@@ -313,7 +316,7 @@ describe('prepareHtmlForClipboard / convertWebpImagesInHtml', () => {
     const canvas = vi.spyOn(document, 'createElement');
     const result = new DOMParser().parseFromString(await convertWebpImagesInHtml(html), 'text/html');
     expect(result.querySelector('img')!.getAttribute('src')).toBe(src);
-    expect(result.querySelector('img')!.getAttribute('width')).toBe('222');
+    expect(result.querySelector('img')!.getAttribute('width')).toBe(String(figureWidth));
     expect(canvas.mock.calls.some(([tag]) => tag === 'canvas')).toBe(false);
     canvas.mockRestore();
   });

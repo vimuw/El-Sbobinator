@@ -1931,7 +1931,8 @@ button {
 }
 
 .editor-page .tiptap-editor {
-  padding: 72px 80px;
+  /* Google Docs A4 defaults: 1in margins leave the same 602px text column. */
+  padding: 96px;
   min-height: 900px;
   cursor: text;
 }

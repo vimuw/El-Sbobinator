@@ -4,6 +4,12 @@ import { expectAutosaved } from './autosave';
 import type { Page } from '@playwright/test';
 import type { Editor } from '@tiptap/core';
 
+// Playwright's Node loader cannot import the shared JSON profile without import attributes.
+const { contentWidthPx: EDITOR_CONTENT_WIDTH_PX } = JSON.parse(fs.readFileSync(new URL('../../el_sbobinator/document_formatting.json', import.meta.url), 'utf8')) as { contentWidthPx: number };
+const columnPx = (percent: number) => Math.round(EDITOR_CONTENT_WIDTH_PX * percent / 100);
+// Native Wrap X: the free column share at a position, in points, minus the 12pt wrap margin.
+const nativeWrapLeft = (widthPercent: number, position: number) => (EDITOR_CONTENT_WIDTH_PX - columnPx(widthPercent)) * position / 100 * 0.75 - 12;
+
 async function openImageEditor(page: Page, audio: string) {
   fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
   // Vite can become ready before FastAPI; opening the app in that window leaves
@@ -1875,10 +1881,11 @@ for (const native of [true, false]) {
       await image.decode();
       return { declaredWidth: copied.getAttribute('width'), width: image.naturalWidth, height: image.naturalHeight };
     }, html);
-    expect(await dimensions(keyboardFormats['text/html'])).toEqual({ declaredWidth: '127', width: 1600, height: 1000 });
+    const declared = columnPx(20);
+    expect(await dimensions(keyboardFormats['text/html'])).toEqual({ declaredWidth: String(declared), width: 1600, height: 1000 });
     if (native) {
       const nativeImages = JSON.parse(JSON.parse(keyboardFormats['application/x-vnd.google-docs-image-clip+wrapped']).data).image_urls;
-      expect(await dimensions(`<img width="127" src="${Object.values(nativeImages)[0]}">`)).toEqual({ declaredWidth: '127', width: 127, height: 79 });
+      expect(await dimensions(`<img width="${declared}" src="${Object.values(nativeImages)[0]}">`)).toEqual({ declaredWidth: String(declared), width: declared, height: Math.round(declared * 1000 / 1600) });
     }
     await page.getByRole('button', { name: 'Copia documento', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Copia documento' })).toHaveAttribute('title', 'Copiato!');
@@ -1953,7 +1960,7 @@ test('native copy retains body leading and a small vertical wrap offset', async 
   const model = JSON.parse(JSON.parse(formats['application/x-vnd.google-docs-document-slice-clip+wrapped']).data).resolved;
   const paragraphs = model.dsl_styleslices.find((slice: { stsl_type: string }) => slice.stsl_type === 'paragraph').stsl_styles.filter(Boolean);
   expect(paragraphs[2].ps_ls).toBe(1.15);
-  expect(Object.values(model.dsl_entitymap)).toContainEqual(expect.objectContaining({ pe_to: 10.5, pe_lo: 197.25 }));
+  expect(Object.values(model.dsl_entitymap)).toContainEqual(expect.objectContaining({ pe_to: 10.5, pe_lo: nativeWrapLeft(56, 100) }));
   await page.keyboard.press('ArrowLeft');
   fs.writeFileSync(testInfo.outputPath('leading-wrap-metrics.json'), JSON.stringify(await editor.evaluate(root => Array.from(root.querySelectorAll('h1,h2,h3,p,.editor-image-surface')).map(el => ({tag:el.tagName, rect:el.getBoundingClientRect().toJSON(),font:getComputedStyle(el).fontFamily,size:getComputedStyle(el).fontSize,weight:getComputedStyle(el).fontWeight,lineHeight:getComputedStyle(el).lineHeight, text:el.textContent?.slice(0,35)})))));
   await page.screenshot({ path: testInfo.outputPath('leading-wrap-editor.png') });
@@ -2095,7 +2102,7 @@ test('inline and arbitrary image wrap preserve text, editing, undo and native cl
     expect.objectContaining({ ps_ls: 1.15, ps_sb: 0, ps_sa: 0 }),
     expect.objectContaining({ ps_ls: expect.any(Number), ps_sb: 0, ps_sa: 0 }),
   ]);
-  expect(Object.values(nativeSlice.dsl_entitymap)).toEqual([expect.objectContaining({ pe_l: 0, pe_lo: 142.5 })]);
+  expect(Object.values(nativeSlice.dsl_entitymap)).toEqual([expect.objectContaining({ pe_l: 0, pe_lo: nativeWrapLeft(35, 50) })]);
   expect(nativeCopy['text/html']).not.toContain('image-wrap-gap');
   fs.writeFileSync(testInfo.outputPath('native-center-clipboard.json'), JSON.stringify(Object.entries(nativeCopy).map(([mimeType, text]) => ({ mimeType, text }))));
   await image.click();

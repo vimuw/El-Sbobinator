@@ -3,6 +3,9 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { RichTextEditor } from './RichTextEditor';
 import { prepareHtmlForClipboard } from '../utils';
 import { normalizePreviewHtmlContent } from '../previewHtml';
+import { EDITOR_CONTENT_WIDTH_PX } from '../documentFormatting';
+
+const columnPx = (percent: number) => Math.round(EDITOR_CONTENT_WIDTH_PX * percent / 100);
 
 describe('FloatingImage selection and resize handles', () => {
   beforeAll(() => {
@@ -21,7 +24,7 @@ describe('FloatingImage selection and resize handles', () => {
     expect(container.dataset.layout).toBe('wrap');
     expect(container.dataset.position).toBe('43');
     expect(container.dataset.offsetY).toBe('28');
-    expect(container.querySelector('img')?.getAttribute('width')).toBe('222');
+    expect(container.querySelector('img')?.getAttribute('width')).toBe(String(columnPx(35)));
     unmount();
     render(<RichTextEditor initialContent={preview} />);
     const reopened = (await screen.findByAltText('layout test')).closest('.editor-image-node') as HTMLElement;
@@ -64,11 +67,12 @@ describe('FloatingImage selection and resize handles', () => {
     const { unmount } = render(<RichTextEditor initialContent={'<p>Prima <span data-editor-image data-layout="inline" data-width="35" data-aspect-ratio="2.5" data-offset-x="-25" data-offset-y="-30"><img src="stretch.png" alt="Stretched"></span> Dopo</p>'} onEditorReady={fn => { getHtml = fn; }} />);
     const image = await screen.findByAltText('Stretched');
     expect(Number.parseFloat(image.style.aspectRatio)).toBe(2.5);
-    expect(new DOMParser().parseFromString(getHtml!(), 'text/html').querySelector('img')?.getAttribute('height')).toBe('89');
+    const height = String(Math.round(columnPx(35) / 2.5));
+    expect(new DOMParser().parseFromString(getHtml!(), 'text/html').querySelector('img')?.getAttribute('height')).toBe(height);
     const html = normalizePreviewHtmlContent(await prepareHtmlForClipboard(getHtml!()));
     const parsed = new DOMParser().parseFromString(html, 'text/html');
     const asset = parsed.querySelector('img')!;
-    expect(asset.getAttribute('height')).toBe('89');
+    expect(asset.getAttribute('height')).toBe(height);
     expect(Number.parseFloat(asset.style.aspectRatio)).toBe(2.5);
     expect(parsed.querySelector('[data-editor-image]')?.getAttribute('data-offset-x')).toBe('-25');
     unmount();
@@ -88,10 +92,12 @@ describe('FloatingImage selection and resize handles', () => {
     expect(saved).toContain('data-width="125.5"');
     const html = normalizePreviewHtmlContent(await prepareHtmlForClipboard(saved));
     const parsed = new DOMParser().parseFromString(html, 'text/html');
-    expect(parsed.querySelector('img')!.getAttribute('width')).toBe('796');
-    expect(parsed.querySelector('img')!.getAttribute('height')).toBe('398');
+    const width = columnPx(125.5);
+    expect(width).toBeGreaterThan(EDITOR_CONTENT_WIDTH_PX);
+    expect(parsed.querySelector('img')!.getAttribute('width')).toBe(String(width));
+    expect(parsed.querySelector('img')!.getAttribute('height')).toBe(String(Math.round(width / 2)));
     const previewWithoutWidth = normalizePreviewHtmlContent(saved.replace(/ width="\d+"/, ''));
-    expect(new DOMParser().parseFromString(previewWithoutWidth, 'text/html').querySelector('img')!.getAttribute('width')).toBe('796');
+    expect(new DOMParser().parseFromString(previewWithoutWidth, 'text/html').querySelector('img')!.getAttribute('width')).toBe(String(width));
     unmount();
     render(<RichTextEditor initialContent={html} />);
     const reopened = (await screen.findByAltText('Oversized')).closest('.editor-image-node') as HTMLElement;
@@ -156,14 +162,16 @@ describe('FloatingImage selection and resize handles', () => {
     await screen.findByAltText('test image 3');
     expect(getHtmlFn).toBeDefined();
     const serializedHtml = getHtmlFn!();
-    expect(serializedHtml).toContain('width="222"');
+    const width = columnPx(35);
+    expect(serializedHtml).toContain(`width="${width}"`);
     expect(serializedHtml).toContain('data-width="35"');
-    expect(serializedHtml).toMatch(/width:\s*222px/);
+    expect(serializedHtml).toMatch(new RegExp(`width:\\s*${width}px`));
   });
 
   it('parses pixel width attribute when data-width is absent', async () => {
     let getHtmlFn: (() => string) | undefined;
-    const htmlContent = '<img src="test4.png" alt="test image 4" width="317" />';
+    const halfColumn = columnPx(50);
+    const htmlContent = `<img src="test4.png" alt="test image 4" width="${halfColumn}" />`;
 
     render(<RichTextEditor initialContent={htmlContent} onEditorReady={fn => { getHtmlFn = fn; }} />);
 
@@ -171,6 +179,6 @@ describe('FloatingImage selection and resize handles', () => {
     expect(getHtmlFn).toBeDefined();
     const serializedHtml = getHtmlFn!();
     expect(serializedHtml).toContain('data-width="50"');
-    expect(serializedHtml).toContain('width="317"');
+    expect(serializedHtml).toContain(`width="${halfColumn}"`);
   });
 });

@@ -3,6 +3,9 @@ import { expect, test } from '@playwright/test';
 import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
+// Playwright's Node loader cannot import the shared JSON profile without import attributes.
+const { contentWidthPx: EDITOR_CONTENT_WIDTH_PX } = JSON.parse(fs.readFileSync(new URL('../../el_sbobinator/document_formatting.json', import.meta.url), 'utf8')) as { contentWidthPx: number };
+
 test('HTML fallback preserves right caption image geometry, pixels, history and saved content', async ({ page, context }, testInfo) => {
   test.setTimeout(180000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -67,7 +70,7 @@ test('HTML fallback preserves right caption image geometry, pixels, history and 
       return { src: img.getAttribute('src'), width: img.getAttribute('width'), height: img.getAttribute('height'),
         float: wrapper.style.float, transform: wrapper.style.transform, caption: wrapper.querySelector('.editor-image-caption')!.textContent };
     }, formats['text/html']);
-    const width = Math.round(634 * variant.width / 100);
+    const width = Math.round(EDITOR_CONTENT_WIDTH_PX * variant.width / 100);
     expect(exported).toEqual({ src: imageSource, width: String(width), height: String(Math.round(width / (variant.ratio ?? 1.5))),
       float: 'right', transform: `translate(${variant.offsetX}px, 18px)`, caption: 'Figura 1: campione sintetico' });
     expect(Math.abs(original.geometry.width - width)).toBeLessThan(1);

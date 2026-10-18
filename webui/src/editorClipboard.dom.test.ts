@@ -1,10 +1,15 @@
 import fs from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { EDITOR_CONTENT_WIDTH_PX } from './documentFormatting';
 import { clipboardImageSize, createNativeClipboardFormats, NATIVE_IMAGES_MIME, NATIVE_SLICE_MIME, setClipboardFormats, writeEditorClipboard } from './editorClipboard';
 import { prepareHtmlForClipboardSync } from './utils';
 
 const jpeg = `data:image/jpeg;base64,${fs.readFileSync('e2e/fixtures/image-layout.jpg').toString('base64')}`;
 const figure = (attributes = '', src = jpeg) => `<div data-editor-image="true" data-width="35" data-layout="wrap" data-align="right" data-position="100" ${attributes}><img src="${src}" alt="Figura"></div>`;
+// Expected native geometry follows the shared profile's text column.
+const column = EDITOR_CONTENT_WIDTH_PX;
+const columnPx = (percent: number) => Math.round(column * percent / 100);
+const figureWidth = columnPx(35);
 type Model = {
   resolved: {
     dsl_spacers: string;
@@ -24,8 +29,8 @@ describe('Editor native image clipboard', () => {
   it.each([0.75, 1, 1.5])('exports the compensated paragraph-relative wrap offset at scale %s without changing saved HTML', scale => {
     const root = document.createElement('div');
     root.innerHTML = `<p><span class="editor-image-node" data-layout="wrap"><span class="editor-image-surface"><img src="${jpeg}"></span></span>Prima</p><p><span class="editor-image-node" data-layout="wrap"><span class="editor-image-surface"><img src="${jpeg}"></span></span>Seconda</p>`;
-    Object.defineProperty(root, 'offsetWidth', { value: 634 });
-    vi.spyOn(root, 'getBoundingClientRect').mockReturnValue({ width: 634 * scale } as DOMRect);
+    Object.defineProperty(root, 'offsetWidth', { value: column });
+    vi.spyOn(root, 'getBoundingClientRect').mockReturnValue({ width: column * scale } as DOMRect);
     const figures = Array.from(root.querySelectorAll<HTMLElement>('.editor-image-node'));
     figures.forEach((figure, i) => {
       vi.spyOn(figure.closest('p')!, 'getBoundingClientRect').mockReturnValue({ top: (100 + i * 400) * scale } as DOMRect);
@@ -60,7 +65,7 @@ describe('Editor native image clipboard', () => {
   it('exports signed offsets outside the page and retains them in the HTML fallback', () => {
     const doc = model(figure('data-offset-x="-600" data-offset-y="-80"'));
     const image = Object.values(doc.resolved.dsl_entitymap)[0];
-    expect(image.pe_lo! + image.ee_eo!.eo_ml).toBeCloseTo((634 - 222 - 600) * 0.75);
+    expect(image.pe_lo! + image.ee_eo!.eo_ml).toBeCloseTo((column - figureWidth - 600) * 0.75);
     expect(image.pe_to! + image.ee_eo!.eo_mt).toBeCloseTo(-60);
     expect(doc.formats['text/html']).toContain('data-offset-x="-600"');
     expect(doc.formats['text/html']).toContain('data-offset-y="-80"');
@@ -102,18 +107,20 @@ describe('Editor native image clipboard', () => {
   });
   it('copies the resized aspect ratio instead of reverting to the intrinsic image dimensions', () => {
     const doc = model(figure('data-aspect-ratio="3"'));
-    expect(Object.values(doc.resolved.dsl_entitymap)[0].ee_eo).toMatchObject({ i_wth: 166.5, i_ht: 55.5 });
+    expect(Object.values(doc.resolved.dsl_entitymap)[0].ee_eo).toMatchObject({ i_wth: figureWidth * 0.75, i_ht: figureWidth / 3 * 0.75 });
   });
   it.each(['inline', 'wrap'])('copies %s images wider than the text area without reducing their native or HTML dimensions', layout => {
     const doc = model(prepareHtmlForClipboardSync(figure('data-aspect-ratio="2"').replace('data-width="35"', 'data-width="125.5"').replace('data-layout="wrap"', `data-layout="${layout}"`)));
-    expect(Object.values(doc.resolved.dsl_entitymap)[0].ee_eo).toMatchObject({ i_wth: 597, i_ht: 298.5 });
+    const width = columnPx(125.5);
+    expect(width).toBeGreaterThan(column);
+    expect(Object.values(doc.resolved.dsl_entitymap)[0].ee_eo).toMatchObject({ i_wth: width * 0.75, i_ht: width / 2 * 0.75 });
     expect(doc.formats['text/html']).toContain('data-width="125.5"');
-    expect(new DOMParser().parseFromString(doc.formats['text/html'], 'text/html').querySelector('img')!.getAttribute('width')).toBe('796');
+    expect(new DOMParser().parseFromString(doc.formats['text/html'], 'text/html').querySelector('img')!.getAttribute('width')).toBe(String(width));
   });
   it.each([[0, -20], [40, 0], [100, 18], [0, 120]])('preserves the image rectangle at position %s and vertical offset %s, accounting for wrapping margins', (position, offsetY) => {
     const doc = model(figure(`data-offset-y="${offsetY}"`).replace('data-position="100"', `data-position="${position}"`));
     const entity = Object.values(doc.resolved.dsl_entitymap)[0];
-    expect(entity.pe_lo! + entity.ee_eo!.eo_ml).toBeCloseTo((634 - 222) * position / 100 * 0.75);
+    expect(entity.pe_lo! + entity.ee_eo!.eo_ml).toBeCloseTo((column - figureWidth) * position / 100 * 0.75);
     expect(entity.pe_to! + entity.ee_eo!.eo_mt).toBe(offsetY * 0.75);
   });
   it.each([
@@ -165,7 +172,8 @@ describe('Editor native image clipboard', () => {
     expect(Object.values(images.image_urls)).toEqual([jpeg]);
     expect(doc.formats[NATIVE_SLICE_MIME]).not.toMatch(/"edi"|"edrk"|internal-clip-id/);
     const entity = Object.values(doc.resolved.dsl_entitymap)[0];
-    expect(entity).toMatchObject({ pe_l: 0, pe_lo: 297, ee_eo: { i_wth: 166.5, i_ht: 111 } });
+    // Right-aligned Wrap: the native X is the column remainder minus the 12pt wrap margin.
+    expect(entity).toMatchObject({ pe_l: 0, pe_lo: (column - figureWidth) * 0.75 - 12, ee_eo: { i_wth: figureWidth * 0.75, i_ht: figureWidth / 1.5 * 0.75 } });
     expect(doc.resolved.dsl_spacers).toBe('Prima\nDopo\n');
     expect(doc.resolved.dsl_entitypositionmap.positioned[6]).toHaveLength(1);
   });
@@ -242,7 +250,7 @@ describe('Editor native image clipboard', () => {
       tbls_ftp: { ft_p: { p_vp: { vp_rt: 4, vp_t: 1, vp_to: typeof offsetY === 'number' ? offsetY * 0.75 : 0 } } },
     });
     expect(doc.resolved.dsl_spacers).toContain('Didascalia');
-    expect(Object.values(doc.resolved.dsl_entitymap)[0].ee_eo).toMatchObject({ i_wth: 166.5, i_ht: 111 });
+    expect(Object.values(doc.resolved.dsl_entitymap)[0].ee_eo).toMatchObject({ i_wth: figureWidth * 0.75, i_ht: figureWidth / 1.5 * 0.75 });
   });
   it('keeps inline caption tables independent of floating vertical coordinates', () => {
     const doc = model(figure('data-offset-y="18" data-caption="Didascalia"').replace('data-layout="wrap"', 'data-layout="inline"'));
@@ -260,7 +268,7 @@ describe('Editor native image clipboard', () => {
     const tables = doc.resolved.dsl_styleslices.find(slice => slice.stsl_type === 'tbl')!.stsl_styles.filter(Boolean);
     expect(tables).toHaveLength(2);
     expect(tables[0]).toMatchObject({ tbls_cols: { cv: { opValue: [{ col_wv: 157.5 }] } } });
-    expect(tables[1]).toMatchObject({ tbls_cols: { cv: { opValue: [{ col_wv: kind === 'table' ? 292.5 : 166.5 }] } } });
+    expect(tables[1]).toMatchObject({ tbls_cols: { cv: { opValue: [{ col_wv: kind === 'table' ? 292.5 : figureWidth * 0.75 }] } } });
     expect(doc.resolved.dsl_styleslices.find(slice => slice.stsl_type === 'equation_function')!.stsl_styles.filter(Boolean)).toEqual([{ eqfs_c: '\\superscript' }]);
   });
   it('keeps inline and block equations native and resets math styles afterwards', () => {
@@ -288,7 +296,7 @@ describe('Editor native image clipboard', () => {
   });
   it('preserves resized table column widths and rendered wrap alignment', () => {
     const doc = model(`${figure().replace('data-position="100"', 'data-position="40"')}<table><colgroup><col style="width:200px"><col style="width:300px"></colgroup><tr><td colwidth="210"><p>A</p></td><td><p>B</p></td></tr></table>`);
-    expect(Object.values(doc.resolved.dsl_entitymap)[0].pe_lo).toBeCloseTo(111.6);
+    expect(Object.values(doc.resolved.dsl_entitymap)[0].pe_lo).toBeCloseTo((column - figureWidth) * 0.4 * 0.75 - 12);
     const table = style(doc, 'tbl', doc.resolved.dsl_spacers.indexOf('\u0010'))!;
     expect(table.tbls_cols).toMatchObject({ cv: { opValue: [{ col_wv: 157.5 }, { col_wv: 225 }] } });
   });

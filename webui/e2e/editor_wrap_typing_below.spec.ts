@@ -36,7 +36,9 @@ for (const zoom of [1, 1.1, 0.9]) test(`typing below two late wrap figures prese
     const instance = (root as HTMLElement & { editor: Editor }).editor;
     const image = (name: string, offsetY: number) => `<span data-editor-image data-layout="wrap" data-width="59" data-position="100" data-offset-y="${offsetY}" data-aspect-ratio="1.3333"><img src="${src}" alt="${name}"></span>`;
     const prefix = Array.from({ length: 180 }, (_, i) => `<p>Paragrafo precedente ${i}. ${'Testo lungo della lezione. '.repeat(12)}</p>`).join('');
-    instance.commands.setContent(prefix + `<p>${image('Prima figura tardiva', 40)}${'Testo accanto alla prima figura. '.repeat(20)}</p><h3>Sezione con seconda figura</h3><p>${image('Seconda figura tardiva', 230)}${'Testo accanto alla seconda figura. '.repeat(18)}</p><p>SCRIVI QUI</p><h2>Sezione successiva</h2><p>Testo successivo.</p>`);
+    // The second figure's text must run past the figure in the 602px column,
+    // so the typing target starts below it rather than beside its last lines.
+    instance.commands.setContent(prefix + `<p>${image('Prima figura tardiva', 40)}${'Testo accanto alla prima figura. '.repeat(20)}</p><h3>Sezione con seconda figura</h3><p>${image('Seconda figura tardiva', 230)}${'Testo accanto alla seconda figura. '.repeat(24)}</p><p>SCRIVI QUI</p><h2>Sezione successiva</h2><p>Testo successivo.</p>`);
     instance.state.doc.descendants((node, pos) => {
       if (node.isText && node.text === 'SCRIVI QUI') instance.commands.setTextSelection(pos + node.nodeSize);
     });
