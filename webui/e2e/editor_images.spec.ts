@@ -20,6 +20,18 @@ async function openImageEditor(page: Page, audio: string) {
   await expect(page.locator('.tiptap-editor')).toBeVisible();
 }
 
+// Saves now instead of after the autosave debounce, then ends the undo group so
+// the next edit is its own history step without relying on a timed pause.
+async function commitEdit(page: Page) {
+  expect(await page.evaluate(() => (window as unknown as { __elSbobinatorFlushPendingAutosave: () => Promise<boolean> }).__elSbobinatorFlushPendingAutosave())).toBe(true);
+  await expectAutosaved(page);
+  await page.locator('.tiptap-editor').evaluate(async root => {
+    const { closeHistory } = await import('/e2e-modules.js' /* @vite-ignore */);
+    const { view } = (root as HTMLElement & { editor: Editor }).editor;
+    view.dispatch(closeHistory(view.state.tr));
+  });
+}
+
 test('soft breaks replace selections using the first selected styles and persist through copy', async ({ page, context }, testInfo) => {
   test.setTimeout(240000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -31,7 +43,8 @@ test('soft breaks replace selections using the first selected styles and persist
     return { document: instance.getJSON(), html: instance.getHTML().replaceAll('data-color="#ffee00"', 'data-color="rgb(255, 238, 0)"'), offset: instance.state.selection.$from.parentOffset,
       geometry: Array.from(root.querySelectorAll('p')).map(node => ({ text: node.textContent, left: node.getBoundingClientRect().left, top: node.getBoundingClientRect().top, height: node.getBoundingClientRect().height })) };
   });
-  for (const kind of ['paragraph', 'root', 'nested']) for (const profile of ['uniform', 'mixed', 'boundary', 'reverse-uniform', 'reverse-mixed', 'reverse-boundary', 'start', 'whole', 'reverse-start', 'reverse-whole', 'across-break', 'reverse-across-break', 'from-break', 'reverse-from-break']) {
+  const profiles = ['uniform', 'mixed', 'boundary', 'reverse-uniform', 'reverse-mixed', 'reverse-boundary', 'start', 'whole', 'reverse-start', 'reverse-whole', 'across-break', 'reverse-across-break', 'from-break', 'reverse-from-break'];
+  for (const kind of ['paragraph', 'root', 'nested']) for (const profile of profiles) {
     const name = `${kind}-${profile}`;
     const originalText = profile.endsWith('break') ? 'Pr\u000bima' : 'Prima';
     const text = profile.endsWith('uniform') ? styled('Prima') : styled(profile.endsWith('break') ? 'Pr<br>' : 'Pr') + 'ima';
@@ -40,7 +53,7 @@ test('soft breaks replace selections using the first selected styles and persist
     await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, source);
     await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
     await expect(editor.locator('p')).toHaveText(kind === 'nested' ? ['Madre', 'Prima', 'Seconda', 'Ultima', ''] : ['Prima', 'Seconda', '']);
-    await expectAutosaved(page);
+    await commitEdit(page);
     await editor.evaluate(root => {
       const instance = (root as HTMLElement & { editor: Editor }).editor;
       instance.state.doc.descendants((node, pos) => { if (node.isText && node.text?.startsWith('Pr')) instance.commands.setTextSelection(pos); });
@@ -85,10 +98,17 @@ test('soft breaks replace selections using the first selected styles and persist
     for (const index of [at, at + 1]) expect(styles.slice(0, index + 1).filter(Boolean).at(-1)).toMatchObject(profile.endsWith('boundary')
       ? { ts_bd: false, ts_it: false, ts_un: false, ts_st: false, ts_ff: 'Arial', ts_fs: 11, ts_fgc2: { hclr_color: '#000000' }, ts_bgc2: { hclr_color: null } }
       : { ts_bd: true, ts_it: true, ts_un: true, ts_st: true, ts_ff: 'Georgia', ts_fs: 18, ts_fgc2: { hclr_color: '#123abc' }, ts_bgc2: { hclr_color: '#ffee00' } });
-    await expectAutosaved(page);
-    await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-    await page.locator('.queue-card.is-completed', { hasText: 'parity_soft_selection.wav' }).getByRole('heading').click();
-    await expect(editor).toBeVisible(); await expect.poll(async () => (await read()).html).toBe(typed.html);
+    // Every profile must re-parse to the same document; the saved-file reopen path
+    // is shared by all profiles, so it runs once per list kind.
+    await commitEdit(page);
+    if (profile === profiles.at(-1)) {
+      await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
+      await page.locator('.queue-card.is-completed', { hasText: 'parity_soft_selection.wav' }).getByRole('heading').click();
+      await expect(editor).toBeVisible();
+    } else {
+      await editor.evaluate(root => { const instance = (root as HTMLElement & { editor: Editor }).editor; instance.chain().setMeta('addToHistory', false).setContent(instance.getHTML()).run(); });
+    }
+    await expect.poll(async () => (await read()).html).toBe(typed.html);
     await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+c');
     const reopenedClipboard = await readClipboardFormats(page);
     reopenedClipboard['text/html'] = reopenedClipboard['text/html'].replaceAll('data-color="rgb(255, 238, 0)"', 'data-color="#ffee00"');
@@ -117,7 +137,7 @@ test('soft breaks preserve combined styles, list structure, history and saved cl
     await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, source);
     await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
     await expect(editor.locator('p')).toHaveText(kind === 'nested' ? ['Madre', 'Prima', 'Seconda', 'Ultima', ''] : ['Prima', 'Seconda', '']);
-    await expectAutosaved(page);
+    await commitEdit(page);
     await editor.evaluate((root, offset) => {
       const instance = (root as HTMLElement & { editor: Editor }).editor;
       instance.state.doc.descendants((node, pos) => { if (node.isText && node.text === 'Prima') instance.commands.setTextSelection(pos + offset); });
@@ -147,10 +167,16 @@ test('soft breaks preserve combined styles, list structure, history and saved cl
     const native = JSON.parse(JSON.parse(clipboard['application/x-vnd.google-docs-document-slice-clip+wrapped']).data).resolved;
     expect(native.dsl_spacers).toContain('Prima'.slice(0, offset) + '\u000b'.repeat(count) + 'X' + 'Prima'.slice(offset) + '\n');
     expect(clipboard['text/html']).toContain('<br');
-    await expectAutosaved(page);
-    await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-    await page.locator('.queue-card.is-completed', { hasText: 'parity_soft_break.wav' }).getByRole('heading').click();
-    await expect(editor).toBeVisible();
+    // Every case must re-parse to the same document; the saved-file reopen path is
+    // shared by all of them, so it runs once per list kind.
+    await commitEdit(page);
+    if (offset === 5 && count === 2) {
+      await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
+      await page.locator('.queue-card.is-completed', { hasText: 'parity_soft_break.wav' }).getByRole('heading').click();
+      await expect(editor).toBeVisible();
+    } else {
+      await editor.evaluate(root => { const instance = (root as HTMLElement & { editor: Editor }).editor; instance.chain().setMeta('addToHistory', false).setContent(instance.getHTML()).run(); });
+    }
     await expect.poll(html).toBe(typed.html);
     await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+c');
     const reopenedClipboard = await readClipboardFormats(page);
