@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useReducer, useRef, use
 import { motion, AnimatePresence } from 'motion/react';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { GithubIcon } from './components/icons/GithubIcon';
+import { ReportProblemLink } from './components/ReportProblemLink';
 import { GITHUB_URL } from './branding';
 import { type ElSbobinatorBridge, type PywebviewApi } from './bridge';
 import { createInitialProcessingState, processingReducer } from './appState';
@@ -608,10 +609,11 @@ export default function App() {
                   />
                 </React.Suspense>
               </div>
-              <footer className="app-footer">
+              <footer className="app-footer app-footer-links">
                 <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link">
                   <GithubIcon className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
                 </a>
+                <ReportProblemLink />
               </footer>
             </motion.main>
           )}
