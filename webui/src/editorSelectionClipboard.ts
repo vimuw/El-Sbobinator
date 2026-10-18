@@ -26,13 +26,22 @@ function inlineClipboardBlock(block: Element): HTMLSpanElement {
 // is the page, not a highlight: as a mark it shows as white bars in dark theme.
 const NO_HIGHLIGHT_BACKGROUNDS = new Set(['transparent', 'rgba(0, 0, 0, 0)', 'white', 'rgb(255, 255, 255)']);
 
+// Chromium (and WebView2) copies a page selection with its computed style
+// inlined, including properties nobody authors by hand for document text.
+const PAGE_COPY_STYLE = /(?:^|;)\s*(?:-webkit-text-stroke-width|font-variant-ligatures|orphans|widows)\s*:/i;
+
+function isWebPageCopy(body: HTMLElement): boolean {
+  if (body.querySelector('[data-document-format="1"],[id^="docs-internal-guid-"]')) return false;
+  return Array.from(body.querySelectorAll('[style]')).some(element => PAGE_COPY_STYLE.test(element.getAttribute('style') ?? ''));
+}
+
 /** Interpret our clipboard hints without persisting them in the document. */
 export function preparePastedEditorHtml(html: string, view?: EditorView): string {
   const body = new DOMParser().parseFromString(html, 'text/html').body;
-  // Docs and our own format carry authored ink. A web page's colours belong
-  // to its theme: kept, they are unreadable in the other reading theme and
-  // would be stored and sent to Docs as highlights and text colours.
-  if (!body.querySelector('[data-document-format="1"],[id^="docs-internal-guid-"]')) {
+  // A web page's colours belong to its theme: kept, they are unreadable in the
+  // other reading theme and reach Docs as highlights and text colours. Docs,
+  // our own format and authored HTML carry real ink and keep it.
+  if (isWebPageCopy(body)) {
     body.querySelectorAll<HTMLElement>('[style]').forEach(element => {
       ['color', 'background-color', 'background'].forEach(property => element.style.removeProperty(property));
     });

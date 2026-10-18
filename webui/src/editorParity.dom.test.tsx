@@ -530,7 +530,7 @@ describe('Editor parity: clipboard and logical text', () => {
   it('preserves supported explicit styles during formatted paste and serialization', async () => {
     const { editor } = await openEditor('<p></p>');
     act(() => {
-      editor.view.pasteHTML('<b id="docs-internal-guid-1"><h2><span style="font-size:18pt;font-family:Georgia;color:#123abc">Titolo scelto</span></h2><p><mark data-color="#ffee00" style="background-color:#ffee00"><span style="color:#123abc">Evidenziato</span></mark></p></b>', new Event('paste') as ClipboardEvent);
+      editor.view.pasteHTML('<h2><span style="font-size:18pt;font-family:Georgia;color:#123abc">Titolo scelto</span></h2><p><mark data-color="#ffee00" style="background-color:#ffee00"><span style="color:#123abc">Evidenziato</span></mark></p>', new Event('paste') as ClipboardEvent);
     });
     const html = editor.getHTML();
     expect(html).toContain('font-size: 18pt');

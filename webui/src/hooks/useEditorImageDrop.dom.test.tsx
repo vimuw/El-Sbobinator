@@ -119,26 +119,27 @@ describe('useEditorImageDrop Hook', () => {
     expect(typeof result.current.transformPastedHTML).toBe('function');
   });
 
-  it('retains explicit color and background-color during Docs paste only', () => {
+  it('retains explicit color and background-color during formatted paste', () => {
     const editorRef = { current: null };
     const { result } = renderHook(() => useEditorImageDrop({ editorRef }));
 
     const inputHtml = '<p style="color: red; background-color: yellow; font-weight: bold;">Test text</p>';
-    const outputHtml = result.current.transformPastedHTML(`<b id="docs-internal-guid-1">${inputHtml}</b>`);
+    const outputHtml = result.current.transformPastedHTML(inputHtml);
 
     expect(outputHtml).toContain('color: red');
     expect(outputHtml).toContain('background-color: yellow');
     expect(outputHtml).toContain('Test text');
-    const webHtml = result.current.transformPastedHTML(inputHtml);
-    expect(webHtml).not.toContain('color');
-    expect(webHtml).toContain('font-weight: bold');
+    // A browser page copy carries the page theme instead: drop its colours.
+    const pageCopy = result.current.transformPastedHTML('<p style="color: red; background-color: yellow; font-weight: bold; orphans: 2; widows: 2; -webkit-text-stroke-width: 0px;">Test text</p>');
+    expect(pageCopy).not.toMatch(/(^|[\s;"])(background-)?color:/);
+    expect(pageCopy).toContain('font-weight: bold');
   });
 
   it('retains explicit font sizes in pasted headings and nested spans', () => {
     const editorRef = { current: null };
     const { result } = renderHook(() => useEditorImageDrop({ editorRef }));
 
-    const inputHtml = '<b id="docs-internal-guid-1"><h1 style="font-size: 14pt; color: red;"><span style="font-size: 11pt;">Heading Text</span></h1></b>';
+    const inputHtml = '<h1 style="font-size: 14pt; color: red;"><span style="font-size: 11pt;">Heading Text</span></h1>';
     const outputHtml = result.current.transformPastedHTML(inputHtml);
 
     expect(outputHtml).toContain('font-size: 14pt');
