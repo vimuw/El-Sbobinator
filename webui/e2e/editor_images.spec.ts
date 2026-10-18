@@ -246,7 +246,10 @@ test('combined empty-line styles survive keyboard return, second Enter, autosave
     const navigation = [];
     for (const direction of (blankIndex ? ['ArrowUp', 'ArrowDown'] : ['ArrowUp']) as ('ArrowUp' | 'ArrowDown')[]) {
       // Focus first: focusing afterwards can make ProseMirror adopt the DOM caret.
-      await editor.focus(); await selectNeighbour(blankIndex, direction); await page.keyboard.press(direction);
+      // ProseMirror's focus handler re-syncs the DOM caret 20 ms later, which
+      // would revert an arrow key pressed before that timer runs.
+      await editor.evaluate(root => new Promise(resolve => { (root as HTMLElement).focus(); setTimeout(resolve, 20); }));
+      await selectNeighbour(blankIndex, direction); await page.keyboard.press(direction);
       await expect.poll(() => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.state.selection.$from.parent.textContent)).toBe('');
       expect(await html()).toBe(emptyHtml);
       const caret = await editor.evaluate(root => {
