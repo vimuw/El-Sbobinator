@@ -284,7 +284,7 @@ def _generate_chunk_content_with_fallback(
                 tried_upload_fallback = True
                 audio_mode = "upload"
                 print(
-                    "      [Inline audio non accettato. Fallback a upload del chunk...]"
+                    "      ⚠ [Inline audio non accettato. Fallback a upload del chunk...]"
                 )
                 continue
             if (
@@ -425,10 +425,10 @@ def _record_chunk_success(
     )
     try:
         _atomic_write_text(out_chunk_md, generated_text + "\n")
-        print(f"   [autosave] Chunk salvato: {os.path.basename(out_chunk_md)}")
+        print(f"   ✅ Chunk salvato: {os.path.basename(out_chunk_md)}")
     except Exception as save_err:
         last_failure_detail = _sanitize_error_detail(save_err)
-        print(f"   [!] Autosave chunk fallito: {save_err}")
+        print(f"   ❌ Autosave chunk fallito: {save_err}")
         return False, full_transcript, "", last_failure_detail
 
     new_full_transcript = full_transcript + f"\n\n{generated_text}\n\n"
@@ -476,11 +476,11 @@ def _handle_phase1_chunk_recovery(
         if session.get("last_error_detail") != "api_key_prompt_timeout":
             session["last_error_detail"] = None
         save_session()
-        print("[*] Interruzione: progressi salvati. Potrai riprendere piu' tardi.")
+        print("⚠ Interruzione: progressi salvati. Potrai riprendere piu' tardi.")
         return False, True
 
     if isinstance(exc, PermanentError):
-        print(f"   [!] Richiesta non valida (400). Dettagli:\n{exc}")
+        print(f"   ❌ Richiesta non valida (400). Dettagli:\n{exc}")
         session["last_error"] = "bad_request_phase1"
         session["last_error_detail"] = None
         save_session()
@@ -489,13 +489,13 @@ def _handle_phase1_chunk_recovery(
     if isinstance(exc, DegenerateOutputError):
         if not chunk_recovery_used:
             print(
-                f"   [Recovery automatica] chunk={chunk_idx}: output non valido ({exc}) - riprovo lo stesso modello ({model_name})..."
+                f"   ⚠ [Recovery automatica] chunk={chunk_idx}: output non valido ({exc}) - riprovo lo stesso modello ({model_name})..."
             )
             return True, False
         _excerpt = getattr(exc, "rejected_text", "")
         _excerpt_log = f"\n      excerpt: {_excerpt[:400]}" if _excerpt else ""
         print(
-            f'   [!] Output degenerato nel blocco {chunk_idx}: anche il pass di recovery ha fallito reason="{exc}"{_excerpt_log}'
+            f'   ❌ Output degenerato nel blocco {chunk_idx}: anche il pass di recovery ha fallito reason="{exc}"{_excerpt_log}'
         )
         session["last_error"] = "phase1_degenerate_output"
         session["last_error_detail"] = None
@@ -696,7 +696,7 @@ def _process_single_phase1_chunk_iteration(
 
     except Exception as e:
         last_failure_detail = _sanitize_error_detail(e)
-        print(f"   [!] Errore durante l'elaborazione del blocco: {e}")
+        print(f"   ❌ Errore durante l'elaborazione del blocco: {e}")
 
     finally:
         if os.path.exists(chunk_path):
@@ -713,12 +713,12 @@ def _process_single_phase1_chunk_iteration(
         save_session()
         if retry_exhausted_message is not None:
             print(
-                f"   [!] {retry_exhausted_message} "
+                f"   ❌ {retry_exhausted_message} "
                 "Elaborazione interrotta, progressi salvati. Potrai riprendere piu' tardi."
             )
         else:
             print(
-                "   [!] Errore critico durante l'elaborazione del blocco. Interrompo (progressi salvati)."
+                "   ❌ Errore critico durante l'elaborazione del blocco. Interrompo (progressi salvati)."
             )
         return Phase1ChunkIterationResult(
             client=client,

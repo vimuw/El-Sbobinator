@@ -199,7 +199,7 @@ export function QueuePage({
   const isApiKeyValid = hasProtectedKey || GEMINI_KEY_PATTERN.test(apiKey.trim());
   const handleNetworkChange = useCallback((online: boolean) => {
     if (online) {
-      appendConsole('Connessione a Internet ripristinata.');
+      appendConsole('✅ Connessione a Internet ripristinata.');
     } else {
       appendConsole('⚠️ Connessione a Internet interrotta.');
     }

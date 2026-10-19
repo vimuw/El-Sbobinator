@@ -388,7 +388,7 @@ class MediaControllerMixin:
                                 pass
                         except Exception as error:
                             self._push_console(
-                                f"Copia audio interna non salvata: {redact_secrets(error)}"
+                                f"⚠ Copia audio interna non salvata: {redact_secrets(error)}"
                             )
                             warning = (
                                 "Copia audio interna non salvata. Il player usa il file "

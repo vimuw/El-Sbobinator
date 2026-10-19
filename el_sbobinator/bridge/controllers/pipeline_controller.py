@@ -236,20 +236,20 @@ class PipelineControllerMixin:
     ) -> None:
         if not remaining:
             self._push_console(
-                "REVISIONE COMPLETATA CON SUCCESSO! ✅ Tutti i blocchi sono stati revisionati."
+                "✅ REVISIONE COMPLETATA CON SUCCESSO! Tutti i blocchi sono stati revisionati."
             )
         else:
             if cancelled:
                 self._push_console(
-                    "REVISIONE INTERROTTA! ⚠ Operazione annullata dall'utente."
+                    "⚠ REVISIONE INTERROTTA! Operazione annullata dall'utente."
                 )
             elif quota_exhausted:
                 self._push_console(
-                    "REVISIONE INTERROTTA! ⚠ Quota giornaliera API esaurita. Riprova domani."
+                    "⚠ REVISIONE INTERROTTA! Quota giornaliera API esaurita. Riprova domani."
                 )
             else:
                 self._push_console(
-                    f"REVISIONE COMPLETATA CON AVVISI! ⚠ Rimangono {len(remaining)} blocchi non revisionati."
+                    f"⚠ REVISIONE COMPLETATA CON AVVISI! Rimangono {len(remaining)} blocchi non revisionati."
                 )
 
     def retry_failed_revision_blocks(self, session_dir: str) -> dict:
@@ -453,11 +453,11 @@ class PipelineControllerMixin:
             )
         except OSError as e:
             self._push_console(
-                f"[!] Impossibile salvare le impostazioni di configurazione: {e}"
+                f"❌ Impossibile salvare le impostazioni di configurazione: {e}"
             )
         except Exception as e:
             self._push_console(
-                f"[!] Errore imprevisto durante il salvataggio della configurazione: {e}"
+                f"❌ Errore imprevisto durante il salvataggio della configurazione: {e}"
             )
 
     def _low_disk_start_response(
@@ -524,7 +524,7 @@ class PipelineControllerMixin:
         try:
             removed = cleanup_orphan_temp_chunks()
             if removed > 0:
-                self._push_console(f"[*] Pulizia: rimossi {removed} file temporanei.")
+                self._push_console(f"Pulizia: rimossi {removed} file temporanei.")
         except Exception:
             pass
 
@@ -555,7 +555,7 @@ class PipelineControllerMixin:
                         self._adapter.reset_run_state(active_api_key)
                         file_path = file_info.get("path", "")
                         if not file_path or not os.path.exists(file_path):
-                            self._push_console(f"[!] File non trovato: {file_path}")
+                            self._push_console(f"❌ File non trovato: {file_path}")
                             ff_payload: FileFailedPayload = {
                                 "index": idx,
                                 "id": file_info.get("id", ""),
@@ -650,11 +650,11 @@ class PipelineControllerMixin:
                             }
                             self._adapter.emit("fileFailed", ff_payload4, batched=False)
                             failed_count += 1
-                        self._push_console(f"[!] Errore su file {idx + 1}: {e}")
+                        self._push_console(f"❌ Errore su file {idx + 1}: {e}")
                         current_index = None
                         current_file_id = ""
             except Exception as e:
-                self._push_console(f"[!] Errore fatale: {e}")
+                self._push_console(f"❌ Errore fatale: {e}")
             finally:
                 self._adapter.is_running = False
                 with self._sessions_cache_lock:

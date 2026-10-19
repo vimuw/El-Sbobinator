@@ -4,17 +4,37 @@ import type { AppStatus } from '../appState';
 
 const COLLAPSED_LINES = 3;
 
+type LogTone = 'error' | 'warning' | 'success' | 'normal';
+
+const TONE_COLORS: Record<LogTone, string> = {
+  error: 'var(--console-error, var(--error-text))',
+  warning: 'var(--console-warning, var(--warning-text))',
+  success: 'var(--console-success, var(--success-text))',
+  normal: 'var(--console-text)',
+};
+
+// appendConsole prefixes every line with toLocaleTimeString(), whose format depends on the locale.
+const TIMESTAMP = /^\[[^\]]*\d[^\]]*\]/;
+
+// Messages state their severity with a leading marker (❌ stops, ⚠ continues, ✅ done), so the
+// colour never depends on words that can appear in any message. Uncaught Python errors carry no
+// marker and are recognised by their traceback shape.
+function logTone(message: string): LogTone {
+  const body = message.trimStart();
+  if (body.startsWith('❌') || /^(Traceback \(most recent call last\)|\w+(Error|Exception)\b.*:)/.test(body)) return 'error';
+  if (body.startsWith('⚠')) return 'warning';
+  if (body.startsWith('✅')) return 'success';
+  return 'normal';
+}
+
 function LogLine({ log }: { log: string }) {
-  const color = log.includes('Errore') || log.includes('❌') || log.includes('[!]') || log.includes('Annullamento') ? 'var(--console-error, var(--error-text))'
-    : log.includes('COMPLETATA') || log.includes('✅') ? 'var(--console-success, var(--success-text))'
-    : log.includes('⚠') ? 'var(--console-warning, var(--warning-text))' : 'var(--console-text)';
-  const match = log.match(/^\[\d{2}:\d{2}:\d{2}\]/);
-  if (match) {
-    const ts = match[0];
-    const rest = log.slice(ts.length);
-    return <div><span style={{ color: 'var(--console-muted, var(--text-muted))' }}>{ts}</span><span style={{ color }}>{rest}</span></div>;
+  const ts = log.match(TIMESTAMP)?.[0] ?? '';
+  const rest = log.slice(ts.length);
+  const tone = logTone(rest);
+  if (ts) {
+    return <div data-tone={tone}><span style={{ color: 'var(--console-muted, var(--text-muted))' }}>{ts}</span><span style={{ color: TONE_COLORS[tone] }}>{rest}</span></div>;
   }
-  return <div style={{ color }}>{log}</div>;
+  return <div data-tone={tone} style={{ color: TONE_COLORS[tone] }}>{log}</div>;
 }
 
 interface ConsolePanelProps {

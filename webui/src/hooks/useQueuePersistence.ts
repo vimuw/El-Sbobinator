@@ -91,7 +91,7 @@ export function useQueuePersistence(
       dispatch({ type: 'queue/add', files: restoredFiles });
       appendConsole(`Coda ripristinata: ${restoredFiles.length} file.`);
     } catch (error) {
-      appendConsole(`[ERRORE] Ripristino coda fallito: ${error}`);
+      appendConsole(`❌ Ripristino coda fallito: ${error}`);
     }
   }, [appendConsole, dispatch]);
 
@@ -106,7 +106,7 @@ export function useQueuePersistence(
       const persisted = currentFiles.map(serializeQueueFile);
       window.localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(persisted));
     } catch (error) {
-      appendConsole(`[ERRORE] Persistenza coda fallita: ${error}`);
+      appendConsole(`❌ Persistenza coda fallita: ${error}`);
     }
   }, [structuralVersion, appendConsole]);
 }

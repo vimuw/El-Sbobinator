@@ -166,3 +166,24 @@ def test_browser_filters_complete_http_lines_but_desktop_keeps_them():
         assert lines[-1] == "pipeline message"
         assert len(lines) == (1 if tee_class is _BrowserConsoleTee else 4)
         assert "HTTP/1.1" in original.getvalue()
+
+
+def test_console_messages_use_the_severity_markers_the_console_colours():
+    """ConsolePanel colours a line by its leading ❌/⚠/✅ only; legacy tags would stay grey."""
+    import re
+    from pathlib import Path
+
+    import el_sbobinator
+
+    legacy = re.compile(
+        r"""(?:print|_push_console|console_error)\(\s*f?["'](?:\n)*\s*"""
+        r"\[(?:\*|!+|OK|X|ERRORE|⏸)\]"
+    )
+    root = Path(el_sbobinator.__file__).parent
+    offenders = [
+        f"{path.relative_to(root)}:{source[: match.start()].count(chr(10)) + 1}"
+        for path in root.rglob("*.py")
+        for source in [path.read_text(encoding="utf-8")]
+        for match in legacy.finditer(source)
+    ]
+    assert offenders == []

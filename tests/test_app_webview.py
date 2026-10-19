@@ -1415,7 +1415,7 @@ class AppWebviewTests(unittest.TestCase):
         mock_cleanup.assert_called_once()
         api._adapter.emit.assert_any_call(  # type: ignore[attr-defined]
             "appendConsole",
-            "[*] Pulizia: rimossi 2 file temporanei.",
+            "Pulizia: rimossi 2 file temporanei.",
             batched=False,
         )
 

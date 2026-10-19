@@ -90,7 +90,7 @@ class SaveSessionGuard:
             if self._consecutive_failures >= self.THRESHOLD:
                 self._fatal = True
                 msg = (
-                    f"[!!] ERRORE CRITICO: autosalvataggio sessione fallito "
+                    f"❌ ERRORE CRITICO: autosalvataggio sessione fallito "
                     f"{self.THRESHOLD} volte di seguito. "
                     "Disco pieno o directory non scrivibile? Elaborazione interrotta."
                 )
@@ -162,7 +162,7 @@ class PipelineSessionContext:
             save_session_data(self.session_path, self.session)
             return True
         except Exception as exc:
-            print(f"   [!] Autosave sessione fallito: {exc}")
+            print(f"   ⚠ Autosave sessione fallito: {exc}")
             return False
 
 
@@ -408,7 +408,7 @@ def ensure_preconverted_audio(
 
     try:
         if os.path.exists(preconv_path) and os.path.getsize(preconv_path) > 1024:
-            print("[*] Pre-conversione: file gia' presente. Riutilizzo.")
+            print("Pre-conversione: file gia' presente. Riutilizzo.")
             return preconv_enabled, preconv_path
     except Exception:
         pass
@@ -416,7 +416,7 @@ def ensure_preconverted_audio(
     _cleanup_partial()
 
     phase_callback("Fase 0/3: pre-conversione audio")
-    print("[*] Pre-conversione unica dell'audio (mono, 16kHz) in corso...")
+    print("Pre-conversione unica dell'audio (mono, 16kHz) in corso...")
     ok, err = preconvert_media_to_mp3(
         input_path=input_path,
         output_path=partial_path,
@@ -428,7 +428,7 @@ def ensure_preconverted_audio(
         _cleanup_partial()
         if str(err or "").strip().lower() == "cancelled" or cancelled():
             return preconv_enabled, None
-        print("[!] Pre-conversione fallita. Continuo senza pre-conversione.")
+        print("⚠ Pre-conversione fallita. Continuo senza pre-conversione.")
         if warn is not None:
             warn(
                 "preconversion_failed",
@@ -441,7 +441,7 @@ def ensure_preconverted_audio(
     try:
         if os.path.exists(partial_path) and os.path.getsize(partial_path) > 1024:
             os.replace(partial_path, preconv_path)
-            print("[*] Pre-conversione completata.")
+            print("✅ Pre-conversione completata.")
             context.session.setdefault("phase1", {})
             context.session["phase1"]["preconverted_path"] = preconv_path
             context.session["phase1"]["preconverted_done"] = True
@@ -611,20 +611,20 @@ def check_disk_space(
             )
         if estimate.kind == "combined":
             print(
-                f"[!] ATTENZIONE — Spazio su disco potenzialmente insufficiente.\n"
+                f"⚠ ATTENZIONE — Spazio su disco potenzialmente insufficiente.\n"
                 f"    Stimato necessario (audio pre-convertito + chunk temporanei): ~{_fmt_bytes(estimate.needed_bytes)}\n"
                 f"    Disponibile: {_fmt_bytes(estimate.free_bytes)}\n"
                 f"    Libera spazio prima di continuare per evitare errori durante l'elaborazione."
             )
         elif estimate.kind == "session":
             print(
-                f"[!] ATTENZIONE — Spazio insufficiente per la pre-conversione audio.\n"
+                f"⚠ ATTENZIONE — Spazio insufficiente per la pre-conversione audio.\n"
                 f"    Stimato: ~{_fmt_bytes(estimate.needed_bytes)} · Disponibile in {estimate.location}: {_fmt_bytes(estimate.free_bytes)}\n"
                 f"    Libera spazio prima di continuare."
             )
         else:
             print(
-                f"[!] ATTENZIONE — Spazio insufficiente nella cartella temporanea ({estimate.location}).\n"
+                f"⚠ ATTENZIONE — Spazio insufficiente nella cartella temporanea ({estimate.location}).\n"
                 f"    Stimato per i chunk audio: ~{_fmt_bytes(estimate.needed_bytes)} · Disponibile: {_fmt_bytes(estimate.free_bytes)}\n"
                 f"    Libera spazio prima di continuare."
             )

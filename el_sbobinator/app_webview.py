@@ -140,7 +140,7 @@ class ElSbobinatorApi(
         try:
             removed = cleanup_orphan_temp_chunks()
             if removed > 0 and self._adapter.window is not None:
-                self._push_console(f"[*] Pulizia: rimossi {removed} file temporanei.")
+                self._push_console(f"Pulizia: rimossi {removed} file temporanei.")
         except Exception as exc:
             try:
                 self._logger.debug("startup temp cleanup failed: %s", exc)

@@ -309,7 +309,7 @@ def try_rotate_key(
                 "Chiave di fallback valida, rotazione completata.",
                 extra={"stage": "key_rotation"},
             )
-            print(f"   [OK] Chiave di riserva valida! ({len(fallback_keys)} rimanenti)")
+            print(f"   ✅ Chiave di riserva valida! ({len(fallback_keys)} rimanenti)")
             return new_client, True, key
         except Exception as err:
             error = _error_text(err)
@@ -322,7 +322,7 @@ def try_rotate_key(
                     extra={"stage": "key_rotation"},
                 )
                 print(
-                    "   [!] Validazione temporanea fallita per chiave di riserva: "
+                    "   ⚠ Validazione temporanea fallita per chiave di riserva: "
                     f"{safe_err}"
                 )
                 continue
@@ -334,12 +334,12 @@ def try_rotate_key(
                     "Chiave di fallback non utilizzabile.",
                     extra={"stage": "key_rotation"},
                 )
-                print(f"   [!] Chiave di riserva non utilizzabile: {safe_err}")
+                print(f"   ⚠ Chiave di riserva non utilizzabile: {safe_err}")
             else:
                 log.warning(
                     "Chiave di fallback non valida.", extra={"stage": "key_rotation"}
                 )
-                print(f"   [!] Chiave di riserva non valida: {safe_err}")
+                print(f"   ⚠ Chiave di riserva non valida: {safe_err}")
     return current_client, False, None
 
 
@@ -411,7 +411,7 @@ def request_new_api_key(
         event.set()
 
     if not runtime.ask_new_api_key(handler):
-        print("ERRORE: Funzione webview non trovata per il popup.")
+        print("❌ ERRORE: Funzione webview non trovata per il popup.")
         return None
 
     while not event.is_set():
@@ -429,7 +429,7 @@ def request_new_api_key(
                     # The caller owns the timeout and reports it with its outcome.
                     on_timeout()
                 else:
-                    print("   [!] Attesa nuova API Key scaduta.")
+                    print("   ⚠ Attesa nuova API Key scaduta.")
                 return None
             wait_seconds = min(wait_seconds, remaining)
         event.wait(wait_seconds)
@@ -590,7 +590,7 @@ def _retry_on_quota(
             recommended_retry_after_seconds=1800.0,
         ) from exc
 
-    print("\n[!!] CHIAVE API ESAURITA O QUOTA GIORNALIERA RAGGIUNTA!")
+    print("⚠ CHIAVE API ESAURITA O QUOTA GIORNALIERA RAGGIUNTA!")
 
     old_key = extract_client_api_key(client) or ""
     if is_exhausted_key or kind_429 == "quota_exceeded":
@@ -642,10 +642,10 @@ def _retry_on_quota(
                 runtime.set_effective_api_key(new_api_key.strip())
             if on_key_rotated is not None:
                 on_key_rotated(client)
-            print("   [OK] Nuova API Key valida! Ripresa confermata dall'utente...")
+            print("   ✅ Nuova API Key valida! Ripresa confermata dall'utente...")
             return True, client
         except Exception as err:
-            print(f"   [!] Chiave non valida fornita: {redact_secrets(err)}")
+            print(f"   ⚠ Chiave non valida fornita: {redact_secrets(err)}")
 
     raise QuotaDailyLimitError(str(exc)) from exc
 

@@ -60,7 +60,7 @@ export function useConfirmModal({
   const confirmStopProcessing = useCallback(async () => {
     setConfirmAction(null);
     dispatch({ type: 'app/set_status', status: 'canceling' });
-    appendConsole('[!] Annullamento in corso, attendere prego...');
+    appendConsole('Annullamento in corso, attendere prego...');
     if (window.pywebview?.api) await window.pywebview.api.stop_processing?.();
   }, [appendConsole, dispatch]);
 

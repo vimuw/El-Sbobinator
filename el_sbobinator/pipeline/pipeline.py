@@ -100,7 +100,9 @@ def _probe_input_media(
             )
         return total_duration_sec, ffmpeg_exe
     except Exception as e:
-        print(f"Errore caricamento audio. File corrotto o formato non supportato.\n{e}")
+        print(
+            f"❌ Errore caricamento audio. File corrotto o formato non supportato.\n{e}"
+        )
         logger.exception("Analisi file fallita.", extra={"stage": "probe"})
         return None, None
 
@@ -187,7 +189,7 @@ def _make_fallback_key_requester(runtime: PipelineRuntime, session: dict, save_s
                     except Exception:
                         pass
                 runtime.console_error(
-                    "Attesa chiave API scaduta. Sessione salvata - riprendi quando vuoi."
+                    "⚠ Attesa chiave API scaduta. Sessione salvata - riprendi quando vuoi."
                 )
                 runtime.set_run_error_detail("api_key_prompt_timeout")
                 raise generation_service.QuotaDailyLimitError("api_key_prompt_timeout")
@@ -228,13 +230,13 @@ def _handle_regeneration_flow(
         session["last_error_detail"] = None
         save_session()
         runtime.console_error(
-            "Risposta non ricevuta entro 120 secondi. Sessione salvata - riprendi quando vuoi."
+            "⚠ Risposta non ricevuta entro 120 secondi. Sessione salvata - riprendi quando vuoi."
         )
         runtime.set_run_result("failed", _REGENERATE_PROMPT_TIMEOUT_ERROR)
         return "timeout", stage, True
     if _is_regen:
         print(
-            f"[*] L'utente ha scelto di rigenerare il file {os.path.basename(input_path)}. Pulizia sessione precedente..."
+            f"L'utente ha scelto di rigenerare il file {os.path.basename(input_path)}. Pulizia sessione precedente..."
         )
         reset_for_regeneration(session_ctx)
         logger.info(
@@ -250,7 +252,7 @@ def _handle_regeneration_flow(
         )
         if existing_html and os.path.exists(str(existing_html)):
             print(
-                "[*] File gia' completato, l'utente ha scelto di usare la versione pronta."
+                "File gia' completato, l'utente ha scelto di usare la versione pronta."
             )
             runtime.update_model(session_ctx.settings.effective_model)
             runtime.output_html(str(existing_html))
@@ -446,14 +448,14 @@ def _export_html_and_finish(
             ],
         )
     except Exception as e:
-        print(f"[!] Errore salvataggio HTML: {e}")
+        print(f"❌ Errore salvataggio HTML: {e}")
         session["last_error"] = "html_export_failed"
         session["last_error_detail"] = None
         save_session()
         return False
 
     if not os.path.exists(html_path):
-        print("[!] Errore salvataggio HTML: file finale non trovato dopo la scrittura.")
+        print("❌ Errore salvataggio HTML: file finale non trovato dopo la scrittura.")
         session["last_error"] = "html_export_missing"
         session["last_error_detail"] = None
         save_session()
@@ -565,7 +567,7 @@ def _retain_playback_audio(
         invalidate_session_storage_cache()
     except Exception as error:
         print(
-            "[!] Copia audio interna non salvata. Conserva il file originale "
+            "⚠ Copia audio interna non salvata. Conserva il file originale "
             f"e riapri la sbobina per riprovare: {error}"
         )
 
@@ -697,7 +699,7 @@ def _handle_circuit_breaker_paused(
         e,
         extra={"stage": "paused"},
     )
-    print(f"\n[⏸] PIPELINE SOSPESA (CIRCUIT BREAKER):\n{e}")
+    print(f"⚠ PIPELINE SOSPESA (CIRCUIT BREAKER):\n{e}")
 
 
 def _esegui_sbobinatura_impl(
@@ -725,7 +727,7 @@ def _esegui_sbobinatura_impl(
     try:
         if not api_key_value or api_key_value.strip() == "":
             runtime.set_run_result("failed", "api_key_mancante")
-            print("Errore: Formato API Key non valido o assente.")
+            print("❌ Errore: Formato API Key non valido o assente.")
             logger.error("API key mancante o non valida.", extra={"stage": "startup"})
             return
 
@@ -774,7 +776,7 @@ def _esegui_sbobinatura_impl(
         if total_duration_sec is None or ffmpeg_exe is None:
             return
 
-        print(f"[*] Durata totale rilevata: {int(total_duration_sec / 60)} minuti.")
+        print(f"Durata totale rilevata: {int(total_duration_sec / 60)} minuti.")
         persist_phase1_metadata(session_ctx, total_duration_sec, settings.step_seconds)
 
         previous_stage = str(session.get("stage", "phase1")).strip().lower()
@@ -913,7 +915,7 @@ def _esegui_sbobinatura_impl(
     except Exception as e:
         runtime.set_run_result("failed", str(e))
         logger.exception("Errore imprevisto nella pipeline.", extra={"stage": "fatal"})
-        print(f"\n[X] ERRORE IMPREVISTO DURANTE L'ESECUZIONE:\n{e}")
+        print(f"❌ ERRORE IMPREVISTO DURANTE L'ESECUZIONE:\n{e}")
     finally:
         _pipeline_finally_cleanup(
             session_ctx,

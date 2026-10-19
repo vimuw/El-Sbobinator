@@ -152,9 +152,7 @@ def _run_macro_retry_pass(
     if not pending_retry:
         return client, failed_blocks, revised_done, False
 
-    print(
-        f"\n[*] Retry pass: {len(pending_retry)} blocco/i senza revisione. Riprovo..."
-    )
+    print(f"Retry pass: {len(pending_retry)} blocco/i senza revisione. Riprovo...")
     _update_session(
         session, {"revision_pending_blocks": [idx for idx, _, _ in pending_retry]}
     )
@@ -219,7 +217,7 @@ def _run_macro_retry_pass(
                 os.remove(raw_path)
             except Exception:
                 pass
-            print(f"   [OK] Retry blocco {index}: revisione completata.")
+            print(f"   ✅ Retry blocco {index}: revisione completata.")
             retry_success = True
             revised_done += 1
             _update_session(
@@ -241,7 +239,7 @@ def _run_macro_retry_pass(
                 session, "macro", _macro_secs, done=revised_done, total=macro_total
             )
         except QuotaDailyLimitError:
-            print("   Interruzione: quota giornaliera raggiunta durante retry pass.")
+            print("   ⚠ Interruzione: quota giornaliera raggiunta durante retry pass.")
             session["last_error"] = "quota_daily_limit_phase2"
             if session.get("last_error_detail") != "api_key_prompt_timeout":
                 session["last_error_detail"] = None
@@ -259,7 +257,7 @@ def _run_macro_retry_pass(
 
         if not retry_success:
             print(
-                f"   [!!] Blocco {index}: revisione definitivamente fallita. Incluso non revisionato."
+                f"   ⚠ Blocco {index}: revisione definitivamente fallita. Incluso non revisionato."
             )
             try:
                 with open(raw_path, encoding="utf-8") as _fh:
@@ -384,7 +382,7 @@ def _process_macro_block_item(
 
         _atomic_write_text(rev_path, current_text + "\n")
         session.setdefault("settings", {})["effective_model"] = model_name
-        print(f"   [autosave] Revisione salvata: {os.path.basename(rev_path)}")
+        print(f"   ✅ Revisione salvata: {os.path.basename(rev_path)}")
 
         new_revised_done = revised_done + 1
         _update_session(
@@ -415,7 +413,7 @@ def _process_macro_block_item(
         )
 
     except QuotaDailyLimitError:
-        print("   Interruzione: progressi salvati. Potrai riprendere più tardi.")
+        print("   ⚠ Interruzione: progressi salvati. Potrai riprendere più tardi.")
         session["last_error"] = "quota_daily_limit_phase2"
         if session.get("last_error_detail") != "api_key_prompt_timeout":
             session["last_error_detail"] = None
@@ -439,7 +437,7 @@ def _process_macro_block_item(
 
     if not success:
         print(
-            f"   [!] Revisione blocco {index} fallita. Salvo provvisoriamente come raw (sarà riprovato)."
+            f"   ⚠ Revisione blocco {index} fallita. Salvo provvisoriamente come raw (sarà riprovato)."
         )
         _atomic_write_text(raw_path, block_src + "\n")
         _macro_secs = max(0.0, time.monotonic() - float(step_t0))

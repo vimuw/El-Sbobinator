@@ -315,7 +315,7 @@ def main():
             raise
     else:
         print(
-            "[!] Microsoft Edge WebView2 Runtime non trovato. Mostro schermata di recupero."
+            "⚠ Microsoft Edge WebView2 Runtime non trovato. Mostro schermata di recupero."
         )
         window = webview.create_window(
             "El Sbobinator",
