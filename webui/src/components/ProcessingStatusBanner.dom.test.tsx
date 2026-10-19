@@ -236,4 +236,96 @@ describe('ProcessingStatusBanner', () => {
     rerender(<ProcessingStatusBanner {...props} currentPhase="__completed__" activeProgress={100} />);
     expect(screen.getByTestId('drawn-check')).toBeTruthy();
   });
+
+  describe('segmented phase track', () => {
+    const base = {
+      appState: 'processing' as const,
+      currentModel: 'gemini-2.5-flash',
+      activeProgress: 35,
+      workDone: { chunks: 3, macro: 0 },
+      workTotals: { chunks: 6, macro: 4 },
+      currentFileIndex: 0,
+      currentBatchTotal: 1,
+      currentFileName: 'lesson.mp3',
+    };
+    const states = () => ['preconversione', 'trascrizione', 'revisione'].map(
+      key => screen.getByTestId(`phase-segment-${key}`).getAttribute('data-state'),
+    );
+
+    it('fills completed steps and marks the running one active', () => {
+      const { rerender } = render(<ProcessingStatusBanner {...base} currentPhase="Fase 1/3: trascrizione (chunk 4/6)" />);
+      expect(states()).toEqual(['done', 'active', 'pending']);
+      expect(screen.getByRole('progressbar', { name: 'Avanzamento' }).getAttribute('aria-valuenow')).toBe('35');
+
+      rerender(<ProcessingStatusBanner {...base} currentPhase="Fase 2/3: revisione (blocco 1/4)" activeProgress={72} />);
+      expect(states()).toEqual(['done', 'done', 'active']);
+
+      rerender(<ProcessingStatusBanner {...base} currentPhase="__completed__" activeProgress={100} />);
+      expect(states()).toEqual(['done', 'done', 'done']);
+    });
+
+    it('keeps the step labels focusable with their explanation', () => {
+      render(<ProcessingStatusBanner {...base} currentPhase="Fase 0/3: pre-conversione audio" activeProgress={0} />);
+      expect(states()).toEqual(['active', 'pending', 'pending']);
+      const label = screen.getByLabelText(/^Trascrizione\. Il modello analizza/);
+      expect(label.getAttribute('tabindex')).toBe('0');
+    });
+
+    it('keeps the last steps while waiting for the server', () => {
+      const { rerender } = render(<ProcessingStatusBanner {...base} currentPhase="Fase 1/3: trascrizione (chunk 4/6)" />);
+      rerender(<ProcessingStatusBanner {...base} currentPhase="Rate limit: attendo 60s" />);
+      expect(screen.getByText('Pausa automatica')).toBeTruthy();
+      expect(states()).toEqual(['done', 'active', 'pending']);
+    });
+  });
+
+  describe('estimated remaining time', () => {
+    const base = {
+      appState: 'processing' as const,
+      currentPhase: 'Fase 1/3: trascrizione (chunk 3/6)',
+      currentModel: 'gemini-2.5-flash',
+      workDone: { chunks: 2, macro: 0 },
+      workTotals: { chunks: 6, macro: 4 },
+      currentFileIndex: 0,
+      currentBatchTotal: 1,
+      currentFileName: 'lesson.mp3',
+    };
+
+    it('stays hidden while the estimate would be noise', () => {
+      const { rerender } = render(<ProcessingStatusBanner {...base} activeProgress={30} startedAt={Date.now() - 10_000} />);
+      expect(screen.queryByTestId('remaining-time')).toBeNull();
+
+      rerender(<ProcessingStatusBanner {...base} activeProgress={3} startedAt={Date.now() - 120_000} />);
+      expect(screen.queryByTestId('remaining-time')).toBeNull();
+    });
+
+    it('shows an Italian estimate next to the elapsed time once meaningful', () => {
+      render(<ProcessingStatusBanner {...base} activeProgress={50} startedAt={Date.now() - 120_000} />);
+      expect(screen.getByText(/^Da 2m/)).toBeTruthy();
+      expect(screen.getByTestId('remaining-time').textContent).toBe('circa 2 min rimanenti');
+    });
+
+    it('smooths a sudden progress jump instead of following it', () => {
+      const startedAt = Date.now() - 120_000;
+      const { rerender } = render(<ProcessingStatusBanner {...base} activeProgress={50} startedAt={startedAt} />);
+      // A raw estimate would drop to 30 s; the smoothed one only moves part of the way.
+      rerender(<ProcessingStatusBanner {...base} activeProgress={80} startedAt={startedAt} />);
+      expect(screen.getByTestId('remaining-time').textContent).toBe('circa 2 min rimanenti');
+    });
+
+    it('hides the estimate while waiting or canceling', () => {
+      const startedAt = Date.now() - 120_000;
+      const { rerender } = render(<ProcessingStatusBanner {...base} activeProgress={50} startedAt={startedAt} />);
+      expect(screen.getByTestId('remaining-time')).toBeTruthy();
+
+      rerender(<ProcessingStatusBanner {...base} currentPhase="Server Gemini occupato — ritento tra 3s" activeProgress={50} startedAt={startedAt} />);
+      expect(screen.queryByTestId('remaining-time')).toBeNull();
+
+      rerender(<ProcessingStatusBanner {...base} currentPhase="Rate limit: attendo 60s" activeProgress={50} startedAt={startedAt} />);
+      expect(screen.queryByTestId('remaining-time')).toBeNull();
+
+      rerender(<ProcessingStatusBanner {...base} appState="canceling" activeProgress={50} startedAt={startedAt} />);
+      expect(screen.queryByTestId('remaining-time')).toBeNull();
+    });
+  });
 });

@@ -8,6 +8,7 @@ import {
   Check,
   FileDown,
   Files,
+  Hourglass,
   Layers,
   Loader,
   Mic,
@@ -56,7 +57,7 @@ const STEP_TOOLTIPS: Record<StepKey, string> = {
 function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
   if (appState === 'canceling') {
     return {
-      icon: <XCircle className="w-8 h-8" />,
+      icon: <XCircle className="h-[18px] w-[18px]" />,
       iconAnimation: 'none',
       title: 'Interruzione in corso...',
       description: "Attendere il completamento dell'operazione corrente prima di fermarsi.",
@@ -68,7 +69,7 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
 
   if (!phase) {
     return {
-      icon: <Loader className="w-8 h-8" />,
+      icon: <Loader className="h-[18px] w-[18px]" />,
       iconAnimation: 'spin',
       title: 'Preparazione...',
       description: "Avvio dell'elaborazione in corso.",
@@ -88,7 +89,7 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
 
   if (phase.startsWith('Fase 0/3')) {
     return {
-      icon: <AudioLines className="w-8 h-8" />,
+      icon: <AudioLines className="h-[18px] w-[18px]" />,
       iconAnimation: 'none',
       title: 'Pre-conversione audio',
       description: "Conversione del file audio in un formato ottimizzato per l'elaborazione.",
@@ -98,7 +99,7 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
 
   if (phase.startsWith('Fase 1/3')) {
     return {
-      icon: <Mic className="w-8 h-8" />,
+      icon: <Mic className="h-[18px] w-[18px]" />,
       iconAnimation: 'none',
       title: 'Trascrizione e sbobinatura',
       description: 'Gemini trascrive e sbobina ogni blocco audio in appunti dettagliati.',
@@ -109,7 +110,7 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
   if (phase.startsWith('Fase 2/3')) {
     const isRetry = phase.includes('retry');
     return {
-      icon: <Sparkles className="w-8 h-8" />,
+      icon: <Sparkles className="h-[18px] w-[18px]" />,
       iconAnimation: 'none',
       title: isRetry ? 'Revisione blocchi mancanti' : 'Revisione e pulizia',
       description: isRetry ? phase : 'Il testo viene rivisto e ripulito da ripetizioni e imprecisioni.',
@@ -119,7 +120,7 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
 
   if (phase.startsWith('Fase: esportazione') || phase.startsWith('Fase:esportazione')) {
     return {
-      icon: <FileDown className="w-8 h-8" />,
+      icon: <FileDown className="h-[18px] w-[18px]" />,
       iconAnimation: 'none',
       title: 'Generazione output',
       description: 'Salvataggio del file HTML finale sul Desktop.',
@@ -129,7 +130,7 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
 
   if (phase.startsWith('Server Gemini occupato')) {
     return {
-      icon: <WifiOff className="w-8 h-8" />,
+      icon: <WifiOff className="h-[18px] w-[18px]" />,
       iconAnimation: 'none',
       title: 'In attesa...',
       description: phase,
@@ -139,7 +140,7 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
 
   if (phase.startsWith('Rate limit') || phase.includes('Rate limit')) {
     return {
-      icon: <Pause className="w-8 h-8" />,
+      icon: <Pause className="h-[18px] w-[18px]" />,
       iconAnimation: 'none',
       title: 'Pausa automatica',
       description: 'Limite richieste API raggiunto. Ripresa automatica tra qualche secondo.',
@@ -148,7 +149,7 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
   }
 
   return {
-    icon: <Loader className="w-8 h-8" />,
+    icon: <Loader className="h-[18px] w-[18px]" />,
     iconAnimation: 'spin',
     title: 'Elaborazione in corso',
     description: currentPhase,
@@ -159,7 +160,7 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
 // The success check draws itself once instead of popping in.
 function DrawnCheck() {
   return (
-    <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" data-testid="drawn-check">
+    <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" data-testid="drawn-check">
       <motion.circle cx="12" cy="12" r="10" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={enterTransition(DURATION.slow * 1.5)} />
       <motion.path d="m9 12 2 2 4-4" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={enterTransition(DURATION.slow, DURATION.slow)} />
     </svg>
@@ -245,8 +246,6 @@ function getProgressLabel(
   return null;
 }
 
-
-
 function formatElapsed(secs: number): string {
   if (secs < 60) return `Da ${secs}s`;
   const minutes = Math.floor(secs / 60);
@@ -257,61 +256,78 @@ function formatElapsed(secs: number): string {
   return `Da ${hours}h ${remainingMinutes}m`;
 }
 
-function StepBadge({
-  state,
-  label,
-  num,
-  accentColor,
-  tooltip,
-}: {
-  state: StepState;
-  label: string;
-  num: number;
-  accentColor: string;
-  tooltip: string;
-}) {
-  const wrapperStyle: React.CSSProperties = { color: 'var(--text-primary)' };
+// Early estimates are noise: wait for some real progress and some elapsed time.
+const ETA_MIN_PROGRESS = 5;
+const ETA_MIN_ELAPSED_SECS = 20;
+// Each tick moves the shown estimate a fifth of the way towards the new one.
+const ETA_SMOOTHING = 0.2;
 
-  const content = state === 'done'
-    ? (
-        <span className="flex items-center gap-2">
-          <span className="flex items-center justify-center w-5 h-5 rounded-full shrink-0" style={{ background: 'var(--success-text)' }}>
-            <Check className="w-3 h-3" style={{ color: 'white' }} />
-          </span>
-          <span className="text-xs line-through" style={{ color: 'var(--text-muted)' }}>{label}</span>
-        </span>
-      )
-    : state === 'active'
-      ? (
-          <span className="flex items-center gap-2">
-            <span className="relative flex items-center justify-center shrink-0">
-              <span className="relative flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold" style={{ background: accentColor, color: 'white' }}>
-                {num}
-              </span>
-            </span>
-            <span className="text-sm font-semibold" style={{ color: accentColor }}>{label}</span>
-          </span>
-        )
-      : (
-          <span className="flex items-center gap-2">
-            <span className="flex items-center justify-center w-5 h-5 rounded-full border text-[10px] shrink-0" style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}>
-              {num}
-            </span>
-            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</span>
-          </span>
-        );
+function formatRemaining(secs: number): string {
+  const rawMinutes = Math.round(secs / 60);
+  if (rawMinutes < 1) return 'meno di un minuto rimanente';
+  // Long runs round to 5 minutes so the figure does not flicker every few seconds.
+  const minutes = rawMinutes > 10 ? Math.round(rawMinutes / 5) * 5 : rawMinutes;
+  if (minutes < 60) return `circa ${minutes} min rimanenti`;
+  const hours = Math.floor(minutes / 60);
+  const restMinutes = minutes % 60;
+  return restMinutes ? `circa ${hours} h ${restMinutes} min rimanenti` : `circa ${hours} h rimanenti`;
+}
 
+function useRemainingSecs(elapsedSecs: number, progress: number, enabled: boolean, startedAt?: number): number | null {
+  const [smoothed, setSmoothed] = useState<number | null>(null);
+  const eligible = enabled && progress >= ETA_MIN_PROGRESS && progress < 100 && elapsedSecs >= ETA_MIN_ELAPSED_SECS;
+
+  useEffect(() => { setSmoothed(null); }, [startedAt]);
+
+  useEffect(() => {
+    if (!eligible) return;
+    const raw = (elapsedSecs * (100 - progress)) / progress;
+    setSmoothed(prev => (prev === null ? raw : prev + ETA_SMOOTHING * (raw - prev)));
+  }, [eligible, elapsedSecs, progress]);
+
+  return eligible ? smoothed : null;
+}
+
+const STEPS: Array<{ key: StepKey; label: string }> = [
+  { key: 'preconversione', label: 'Pre-conversione' },
+  { key: 'trascrizione', label: 'Trascrizione' },
+  { key: 'revisione', label: 'Revisione' },
+];
+
+// Overall progress is 0-70% for transcription and 70-90% for revision (see the pipeline services).
+function getActiveFraction(
+  step: StepKey,
+  activeProgress: number,
+  workDone: { chunks: number; macro: number },
+  workTotals: { chunks: number; macro: number },
+): number {
+  if (step === 'trascrizione') {
+    return workTotals.chunks > 0 ? workDone.chunks / workTotals.chunks : activeProgress / 70;
+  }
+  if (step === 'revisione') {
+    return workTotals.macro > 0 ? workDone.macro / workTotals.macro : (activeProgress - 70) / 20;
+  }
+  return 0;
+}
+
+// An active segment always shows a sliver so it reads as started.
+const ACTIVE_MIN_FILL = 0.04;
+
+function StepLabel({ state, label, accentColor, tooltip }: { state: StepState; label: string; accentColor: string; tooltip: string }) {
+  const color = state === 'active' ? accentColor : state === 'done' ? 'var(--text-secondary)' : 'var(--text-muted)';
   return (
     <span
-      className="group relative inline-flex focus:outline-none"
-      style={wrapperStyle}
+      className="processing-step-label group relative inline-flex min-w-0 focus:outline-none"
       tabIndex={0}
       aria-label={`${label}. ${tooltip}`}
     >
-      <span className="cursor-help">{content}</span>
+      <span className={`flex cursor-help items-center gap-1 truncate text-xs ${state === 'active' ? 'font-semibold' : 'font-medium'}`} style={{ color, transition: 'color 0.2s ease-out' }}>
+        {state === 'done' && <Check className="h-3 w-3 shrink-0" aria-hidden="true" />}
+        {label}
+      </span>
       <span
         role="tooltip"
-        className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-48 -translate-x-1/2 translate-y-1 rounded-xl border px-3 py-2 text-left text-[11px] leading-snug opacity-0 transition-all duration-150 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100"
+        className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-48 translate-y-1 rounded-xl border px-3 py-2 text-left text-[11px] leading-snug opacity-0 transition-all duration-150 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100"
         style={{
           background: 'var(--bg-elevated)',
           borderColor: 'var(--border-default)',
@@ -338,8 +354,8 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
   startedAt,
 }: ProcessingStatusBannerProps) {
   const { icon, iconAnimation, title, description, kind } = getPhaseInfo(appState, currentPhase);
-  const isCanceling = appState === 'canceling';
   const isWaiting = kind === 'wait';
+  const isDimmed = kind === 'cancel' || isWaiting;
 
   const lastNormalPhaseRef = useRef('');
   if (kind === 'normal') lastNormalPhaseRef.current = currentPhase;
@@ -361,145 +377,146 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
     return () => clearInterval(id);
   }, [startedAt]);
 
-  const accentColor = isCanceling
+  // Retries restart the progress scale, so only steady phases feed the estimate.
+  const isRetry = currentPhase.includes('retry');
+  const remainingSecs = useRemainingSecs(elapsedSecs, activeProgress, kind === 'normal' && !isRetry && Boolean(startedAt), startedAt);
+
+  const accentColor = kind === 'cancel'
     ? 'var(--error-text)'
-    : kind === 'wait'
-      ? 'var(--error-text)'
+    : isWaiting
+      ? 'var(--warning-text)'
       : kind === 'success'
         ? 'var(--success-text)'
         : 'var(--processing-text)';
 
-  const accentSubtle = isCanceling
+  const accentSubtle = kind === 'cancel'
     ? 'var(--error-subtle)'
-    : kind === 'wait'
-      ? 'var(--error-subtle)'
+    : isWaiting
+      ? 'var(--warning-subtle)'
       : kind === 'success'
         ? 'var(--success-subtle)'
         : 'var(--processing-bg)';
 
-  const progressFill = isCanceling
-    ? 'linear-gradient(90deg, var(--error-bg), var(--error-text))'
-    : kind === 'wait'
-      ? 'linear-gradient(90deg, var(--error-bg), var(--error-text))'
-      : kind === 'success'
-        ? 'linear-gradient(90deg, var(--success-subtle), var(--success-text))'
-        : 'linear-gradient(90deg, var(--accent-gradient-start), var(--accent-gradient-end))';
-
-  const isDimmed = isCanceling || isWaiting;
-
-  const metaChips: Array<{ icon: React.ReactElement; label: string }> = [];
+  const metaItems: Array<{ icon: React.ReactElement; label: string; testId?: string }> = [];
   if (currentModel && kind !== 'success') {
-    metaChips.push({ icon: <Bot className="w-3 h-3" />, label: shortModelName(currentModel) });
+    metaItems.push({ icon: <Bot className="h-3.5 w-3.5" />, label: shortModelName(currentModel) });
   }
   if (currentBatchTotal > 1) {
-    metaChips.push({ icon: <Files className="w-3 h-3" />, label: `File ${currentFileIndex + 1} di ${currentBatchTotal}` });
-  }
-  if (startedAt && elapsedSecs > 0 && kind !== 'success') {
-    metaChips.push({ icon: <Timer className="w-3 h-3" />, label: formatElapsed(elapsedSecs) });
+    metaItems.push({ icon: <Files className="h-3.5 w-3.5" />, label: `File ${currentFileIndex + 1} di ${currentBatchTotal}` });
   }
   if (progressLabel) {
-    metaChips.push({ icon: <Layers className="w-3 h-3" />, label: progressLabel });
+    metaItems.push({ icon: <Layers className="h-3.5 w-3.5" />, label: progressLabel });
+  }
+  if (startedAt && elapsedSecs > 0 && kind !== 'success') {
+    metaItems.push({ icon: <Timer className="h-3.5 w-3.5" />, label: formatElapsed(elapsedSecs) });
+  }
+  if (remainingSecs !== null) {
+    metaItems.push({ icon: <Hourglass className="h-3.5 w-3.5" />, label: formatRemaining(remainingSecs), testId: 'remaining-time' });
   }
 
   return (
     <motion.section
       {...staggerContainer}
       className="relative w-full px-5 py-6 sm:px-7 sm:py-7"
+      data-kind={kind}
       aria-label="Stato elaborazione"
     >
-
-      <div className="relative z-10 flex flex-col items-center gap-5 text-center">
+      <div className="relative z-10 flex flex-col gap-5">
         {/* popLayout crossfades phase titles; "wait" left the header empty between quick phases. */}
         <motion.div {...staggerItem} className="w-full">
-        <AnimatePresence mode="popLayout" initial={false}>
-          <motion.div
-            key={title}
-            initial={{ opacity: 0, y: 4, filter: 'blur(4px)' }}
-            animate={{ opacity: 1, y: 0, filter: 'blur(0px)', transition: enterTransition() }}
-            exit={{ opacity: 0, filter: 'blur(4px)', transition: { duration: DURATION.fast, ease: EASE_IN } }}
-            className="flex flex-col items-center gap-5"
-          >
-            <div className="relative flex items-center justify-center">
-              <div
-                className="relative flex h-16 w-16 items-center justify-center rounded-full"
-                style={{ background: accentSubtle, color: accentColor, transition: 'background 0.2s ease-out, color 0.2s ease-out' }}
-              >
-                <div className={iconAnimation === 'spin' ? 'animate-spin' : ''}>
-                  {icon}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex max-w-xl flex-col items-center gap-1.5">
-              <h2 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                {title}
-              </h2>
-              <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                {description}
-              </p>
-            </div>
-          </motion.div>
-        </AnimatePresence>
-        </motion.div>
-
-        <motion.div {...staggerItem} className="flex flex-col items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-[0.24em]" style={{ color: 'var(--text-muted)' }}>
-            Avanzamento
-          </span>
-          <span className="text-5xl font-bold leading-none tabular-nums" style={{ color: accentColor }} data-testid="progress-percent">
-            <ProgressNumber value={activeProgress} />
-          </span>
-        </motion.div>
-
-        <motion.div {...staggerItem} className="w-full max-w-2xl">
-          <div className="h-3 w-full overflow-hidden rounded-full" style={{ background: 'var(--progress-bg)' }}>
+          <AnimatePresence mode="popLayout" initial={false}>
             <motion.div
-              className="processing-progress-fill h-full rounded-full"
-              style={{ background: progressFill }}
-              initial={{ width: 0 }}
-              animate={{ width: `${activeProgress}%` }}
-              transition={enterTransition(0.6)}
-            />
-          </div>
+              key={title}
+              initial={{ opacity: 0, y: 4, filter: 'blur(4px)' }}
+              animate={{ opacity: 1, y: 0, filter: 'blur(0px)', transition: enterTransition() }}
+              exit={{ opacity: 0, filter: 'blur(4px)', transition: { duration: DURATION.fast, ease: EASE_IN } }}
+              className="flex items-start gap-3"
+            >
+              <span className="processing-banner-icon" style={{ background: accentSubtle, color: accentColor }}>
+                <span className={iconAnimation === 'spin' ? 'flex animate-spin' : 'flex'}>{icon}</span>
+              </span>
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <h2 className="section-title">{title}</h2>
+                {/* One line keeps the banner height stable when long status messages arrive. */}
+                <p className="truncate text-sm" style={{ color: 'var(--text-secondary)' }} title={description}>
+                  {description}
+                </p>
+              </div>
+            </motion.div>
+          </AnimatePresence>
         </motion.div>
 
-        {currentFileName && (
-          <motion.p {...staggerItem} className="max-w-xl truncate text-sm font-medium" style={{ color: 'var(--text-primary)' }} title={currentFileName}>
-            {currentFileName}
-          </motion.p>
-        )}
+        <motion.div {...staggerItem} className="flex flex-col gap-2">
+          <div className="flex items-center gap-3">
+            <div
+              className="flex flex-1 gap-1.5"
+              role="progressbar"
+              aria-label="Avanzamento"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={activeProgress}
+              style={{ opacity: isDimmed ? 0.55 : 1, transition: 'opacity 0.3s' }}
+            >
+              {STEPS.map(({ key }) => {
+                const state = stepperState?.[key] ?? 'pending';
+                const fraction = state === 'done'
+                  ? 1
+                  : state === 'active'
+                    ? Math.max(ACTIVE_MIN_FILL, Math.min(1, getActiveFraction(key, activeProgress, workDone, workTotals)))
+                    : 0;
+                return (
+                  <div key={key} className="phase-segment" data-testid={`phase-segment-${key}`} data-state={state}>
+                    <motion.div
+                      className="phase-segment-fill"
+                      style={{ background: accentColor }}
+                      initial={false}
+                      animate={{ width: `${fraction * 100}%` }}
+                      transition={enterTransition(0.6)}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <span className="processing-percent" style={{ color: accentColor }} data-testid="progress-percent">
+              <ProgressNumber value={activeProgress} />
+            </span>
+          </div>
+          {stepperState && (
+            <div className="processing-step-labels grid grid-cols-3 gap-1.5">
+              {STEPS.map(({ key, label }) => (
+                <StepLabel
+                  key={key}
+                  state={stepperState[key]}
+                  label={label}
+                  accentColor={isDimmed ? 'var(--text-muted)' : accentColor}
+                  tooltip={STEP_TOOLTIPS[key]}
+                />
+              ))}
+            </div>
+          )}
+        </motion.div>
 
-        {(metaChips.length > 0 || stepperState) && (
-          <motion.div
-            {...staggerItem}
-            className="flex flex-col items-center gap-3"
-            style={isDimmed ? { opacity: 0.45, filter: 'grayscale(0.6)', transition: 'opacity 0.3s, filter 0.3s' } : undefined}
-          >
-            {metaChips.length > 0 && (
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                {metaChips.map(({ icon, label }, index) => (
-                  <span
-                    key={`${label}-${index}`}
-                    className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs"
-                    style={{ background: 'var(--progress-bg)', color: 'var(--text-secondary)' }}
-                  >
-                    {icon}
-                    {label}
-                  </span>
-                ))}
-              </div>
-            )}
-            {stepperState && (
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
-                <StepBadge state={stepperState.preconversione} label="Pre-conversione" num={1} accentColor={isDimmed ? 'var(--text-muted)' : accentColor} tooltip={STEP_TOOLTIPS.preconversione} />
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--border-default)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
-                <StepBadge state={stepperState.trascrizione} label="Trascrizione" num={2} accentColor={isDimmed ? 'var(--text-muted)' : accentColor} tooltip={STEP_TOOLTIPS.trascrizione} />
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--border-default)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
-                <StepBadge state={stepperState.revisione} label="Revisione" num={3} accentColor={isDimmed ? 'var(--text-muted)' : accentColor} tooltip={STEP_TOOLTIPS.revisione} />
-              </div>
-            )}
-          </motion.div>
-        )}
+        <motion.div
+          {...staggerItem}
+          className="flex min-w-0 flex-col gap-1.5"
+          style={{ opacity: isDimmed ? 0.6 : 1, transition: 'opacity 0.3s' }}
+        >
+          {currentFileName && (
+            <p className="truncate text-sm font-medium" style={{ color: 'var(--text-primary)' }} title={currentFileName}>
+              {currentFileName}
+            </p>
+          )}
+          {metaItems.length > 0 && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs tabular-nums" style={{ color: 'var(--text-secondary)' }}>
+              {metaItems.map(({ icon, label, testId }) => (
+                <span key={testId ?? label} className="flex items-center gap-1.5" data-testid={testId}>
+                  <span className="flex" style={{ color: 'var(--text-muted)' }}>{icon}</span>
+                  {label}
+                </span>
+              ))}
+            </div>
+          )}
+        </motion.div>
       </div>
     </motion.section>
   );

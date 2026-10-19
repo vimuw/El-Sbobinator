@@ -1696,22 +1696,54 @@ button {
   gap: 0.4rem;
 }
 
-.processing-progress {
-  position: relative;
+/* Processing banner: phase title first, then one segmented track per pipeline step. */
+.processing-banner-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-top: 1px;
+  border-radius: 8px;
+  transition: background 0.2s var(--ease-out), color 0.2s var(--ease-out);
 }
 
-.processing-progress-fill {
+.phase-segment {
   position: relative;
+  flex: 1 1 0;
+  height: 6px;
   overflow: hidden;
+  border-radius: 999px;
+  background: var(--progress-bg);
 }
 
-.processing-progress-fill::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
-  transform: translateX(-100%);
-  animation: processing-progress-sheen 1.6s linear infinite;
+.phase-segment-fill {
+  height: 100%;
+  border-radius: inherit;
+  transition: background 0.2s var(--ease-out);
+}
+
+.processing-percent {
+  width: 3.5rem;
+  flex-shrink: 0;
+  text-align: right;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.2s var(--ease-out);
+}
+
+/* Labels sit under their segments; the right padding matches the percent column. */
+.processing-step-labels {
+  padding-right: calc(3.5rem + 0.75rem);
+}
+
+.processing-step-label:focus-visible {
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px var(--processing-ring);
 }
 
 .soft-divider {
@@ -3545,12 +3577,6 @@ input::-webkit-contacts-auto-fill-button {
   object-fit: contain;
   flex-shrink: 0;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.18));
-}
-
-@keyframes processing-progress-sheen {
-  to {
-    transform: translateX(100%);
-  }
 }
 
 @keyframes dz-march {
