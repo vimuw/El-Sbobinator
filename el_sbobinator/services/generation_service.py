@@ -426,8 +426,10 @@ def request_new_api_key(
                 except Exception:
                     pass
                 if on_timeout is not None:
+                    # The caller owns the timeout and reports it with its outcome.
                     on_timeout()
-                print("   [!] Attesa nuova API Key scaduta.")
+                else:
+                    print("   [!] Attesa nuova API Key scaduta.")
                 return None
             wait_seconds = min(wait_seconds, remaining)
         event.wait(wait_seconds)

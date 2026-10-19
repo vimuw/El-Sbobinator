@@ -753,7 +753,6 @@ def _esegui_sbobinatura_impl(
         logger.info("Elaborazione avviata.", extra={"stage": "startup"})
 
         def _on_autosave_fatal(msg: str) -> None:
-            print(msg)
             runtime.console_error(msg)
             if isinstance(session, dict):
                 session["last_error"] = "autosave_failed"

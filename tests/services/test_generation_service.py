@@ -1482,16 +1482,37 @@ class RequestNewApiKeyTests(unittest.TestCase):
                 self.dismissed = True
 
         runtime = _FakeRuntime()
-        result = request_new_api_key(
-            runtime,
-            lambda: False,
-            timeout_seconds=0.01,
-            on_timeout=timeout_called.set,
-        )
+        out = io.StringIO()
+        with redirect_stdout(out):
+            result = request_new_api_key(
+                runtime,
+                lambda: False,
+                timeout_seconds=0.01,
+                on_timeout=timeout_called.set,
+            )
 
         self.assertIsNone(result)
         self.assertTrue(timeout_called.is_set())
         self.assertTrue(runtime.dismissed)
+        # The pipeline reports the timeout with its saved-session hint.
+        self.assertNotIn("scaduta", out.getvalue())
+
+    def test_timeout_without_owner_is_reported_here(self):
+        from el_sbobinator.services.generation_service import request_new_api_key
+
+        class _FakeRuntime:
+            def ask_new_api_key(self, callback):
+                return True
+
+            def dismiss_new_api_key_prompt(self):
+                pass
+
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.assertIsNone(
+                request_new_api_key(_FakeRuntime(), lambda: False, timeout_seconds=0.01)
+            )
+        self.assertIn("scaduta", out.getvalue())
 
 
 class ExtractResponseTextMoreTests(unittest.TestCase):
