@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { QueuePage, type QueuePageProps } from './QueuePage';
 import { credentialStorageWarning } from '../credentialStorage';
+import type { FileItem } from '../appState';
 
 vi.mock('../branding', async importOriginal => ({
   ...await importOriginal<typeof import('../branding')>(),
@@ -148,5 +149,36 @@ describe('QueuePage Component', () => {
       />,
     );
     expect(await screen.findByText('Configura la tua API Key')).toBeTruthy();
+  });
+
+  const queuedFile: FileItem = { id: 'q1', name: 'lezione.mp3', size: 1024, duration: 60, status: 'queued', progress: 0, phase: 0 };
+
+  it('centres the empty page but anchors the column to the top once work is on it', () => {
+    const { rerender } = render(<QueuePage {...defaultProps} />);
+    expect(screen.getByTestId('queue-column').className).toContain('my-auto');
+
+    rerender(<QueuePage {...defaultProps} files={[queuedFile]} />);
+    // A centred column would shift everything above when the taller banner swaps in.
+    expect(screen.getByTestId('queue-column').className).toContain('mb-auto');
+    expect(screen.getByTestId('queue-column').className).not.toContain('my-auto');
+  });
+
+  it('crossfades the dropzone into the processing banner instead of collapsing heights', async () => {
+    const { rerender } = render(<QueuePage {...defaultProps} files={[queuedFile]} />);
+    expect(screen.getByRole('button', { name: 'Aggiungi file audio o video' })).toBeTruthy();
+
+    rerender(
+      <QueuePage
+        {...defaultProps}
+        files={[{ ...queuedFile, status: 'processing', startedAt: Date.now() }]}
+        progress={{ ...defaultProps.progress, appState: 'processing', currentPhase: 'Fase 1/3: trascrizione (chunk 1/4)', activeProgress: 12 }}
+      />,
+    );
+
+    const bannerSlot = await screen.findByTestId('processing-banner-slot');
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Aggiungi file audio o video' })).toBeNull());
+    // The swapped content only fades; the shared slot owns the single height change.
+    expect(bannerSlot.style.height).toBe('');
+    expect(screen.getByTestId('processing-slot').contains(bannerSlot)).toBe(true);
   });
 });

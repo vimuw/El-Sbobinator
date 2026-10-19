@@ -217,4 +217,23 @@ describe('ProcessingStatusBanner', () => {
     expect(screen.getByRole('heading', { name: 'Pre-conversione audio' })).toBeTruthy();
   });
 
+  it('keeps one live indicator during a phase and draws the check on success', () => {
+    const props = {
+      appState: 'processing' as const,
+      currentModel: 'gemini-2.5-flash',
+      workDone: { chunks: 1, macro: 0 },
+      workTotals: { chunks: 4, macro: 2 },
+      currentFileIndex: 0,
+      currentBatchTotal: 1,
+      currentFileName: 'lesson.mp3',
+    };
+    const { container, rerender } = render(
+      <ProcessingStatusBanner {...props} currentPhase="Fase 1/3: trascrizione (chunk 2/4)" activeProgress={40} />,
+    );
+    expect(container.querySelector('.animate-ping, .animate-pulse, .blur-3xl')).toBeNull();
+    expect(screen.getByTestId('progress-percent').textContent).toBe('40%');
+
+    rerender(<ProcessingStatusBanner {...props} currentPhase="__completed__" activeProgress={100} />);
+    expect(screen.getByTestId('drawn-check')).toBeTruthy();
+  });
 });

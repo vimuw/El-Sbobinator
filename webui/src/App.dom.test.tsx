@@ -21,7 +21,7 @@ vi.mock('motion/react', () => ({
         motionCache.set(
           tag,
           React.forwardRef((props: Record<string, unknown>, ref: unknown) => {
-            const { initial: _i, animate: _a, exit: _e, transition: _t, layout: _l, variants: _v, layoutId: _li, whileTap: _wt, whileHover: _wh, ...rest } = props;
+            const { initial: _i, animate: _a, exit: _e, transition: _t, layout: _l, variants: _v, layoutId: _li, whileTap: _wt, whileHover: _wh, onAnimationStart: _as, onAnimationComplete: _ac, ...rest } = props;
             return React.createElement(tag, { ...rest, ref: ref as React.Ref<unknown> });
           })
         );
@@ -30,6 +30,9 @@ vi.mock('motion/react', () => ({
     },
   }),
   AnimatePresence: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+  MotionConfig: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+  useSpring: (v: unknown) => ({ get: () => v, set: vi.fn() }),
+  useTransform: (source: { get: () => unknown }, transform: (value: unknown) => unknown) => transform(source.get()),
   useAnimation: () => ({ start: vi.fn(), stop: vi.fn() }),
   useAnimationControls: () => logoAnimationControls,
   useMotionValue: (v: unknown) => ({ get: () => v, set: vi.fn() }),

@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
+import { DURATION, EASE_IN, enterTransition, exitTransition } from '../motion';
 import { AlertCircle, AlertTriangle, CheckCircle, Clock, ExternalLink, FileAudio, FolderOpen, GripVertical, PenLine, RotateCcw, Settings, Trash2, X, XCircle } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -52,10 +53,16 @@ function QueueFileCardInner({
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: isDragging ? 0.4 : 1 }}
-        exit={{ opacity: 0, transition: { duration: 0.11, ease: 'easeIn' } }}
-        transition={{
-          opacity: { duration: 0.18, ease: 'easeOut' },
+        // Collapse while fading so the cards below close the gap instead of jumping.
+        exit={{
+          opacity: 0,
+          height: 0,
+          paddingTop: 0,
+          paddingBottom: 0,
+          overflow: 'hidden',
+          transition: { opacity: exitTransition, default: { duration: DURATION.base, ease: EASE_IN } },
         }}
+        transition={{ opacity: enterTransition() }}
         className={`queue-card relative transition-colors px-4 py-3 group/card ${
           file.status === 'processing'
             ? isCanceling ? 'is-canceling' : 'is-processing'
@@ -207,8 +214,12 @@ interface CompletedFileCardProps {
   currentFolder?: Pick<ArchiveFolder, 'name' | 'color'>;
 }
 
+// A sbobina finished moments ago gets a brief background highlight instead of motion.
+const FRESH_COMPLETION_MS = 6000;
+
 function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetryFailedRevisionBlocks, currentFolder }: CompletedFileCardProps) {
   const canOpenLocalPath = getHostCapabilities().openLocalPath;
+  const [isFresh] = React.useState(() => file.completedAt !== undefined && Date.now() - file.completedAt < FRESH_COMPLETION_MS);
   const isClickable = Boolean(file.outputHtml);
   const [isRetryingBlocks, setIsRetryingBlocks] = React.useState(false);
   const isRetrying = file.isRetryingBlocks || isRetryingBlocks;
@@ -229,14 +240,12 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0, transition: { duration: 0.11, ease: 'easeIn' } }}
-      transition={{
-        opacity: { duration: 0.2, ease: 'easeOut' },
-      }}
+      exit={{ opacity: 0, transition: exitTransition }}
+      transition={{ opacity: enterTransition() }}
       onClick={isClickable ? () => onPreview(file.outputHtml!, file.name, file.path, file.id, file.outputDir) : undefined}
       className={`queue-card relative px-4 py-3 transition-colors group/card ${isClickable ? 'cursor-pointer' : ''} is-completed ${
         hasRevisionWarnings ? 'is-warning' : ''
-      }`}
+      }${isFresh ? ' is-fresh' : ''}`}
     >
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0 flex-1">

@@ -3,6 +3,7 @@ import { DndContext, closestCenter, useSensors, type DragEndEvent, type SensorDe
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { motion, AnimatePresence } from 'motion/react';
+import { fade, fadeUp } from '../motion';
 import { FileAudio, MoreVertical, Play, RotateCcw, Square, Trash2, Check, Zap, Plus } from 'lucide-react';
 import type { AppStatus, FileItem } from '../appState';
 import { shortModelName } from '../utils';
@@ -130,8 +131,7 @@ export const QueueSection = memo(function QueueSection({
         <motion.div
           key="batch-queue"
           className="premium-panel p-5 sm:p-6 space-y-4"
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' } }}
+          {...fadeUp}
         >
           <div className="flex items-center justify-between gap-3 border-b pb-5" style={{ borderColor: 'var(--border-subtle)' }}>
             <div className="flex items-center gap-2 min-w-0">
@@ -240,9 +240,10 @@ export const QueueSection = memo(function QueueSection({
 
           {(appState !== 'idle' || queuedCount > 0 || failedCount > 0) && (
             <div className="pt-4 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-              <AnimatePresence mode="wait">
+              {/* Same-size buttons crossfade in place instead of bobbing up and down. */}
+              <AnimatePresence mode="wait" initial={false}>
                 {appState === 'idle' && queuedCount > 0 && (
-                  <motion.div key="idle" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <motion.div key="idle" {...fade}>
                     <button onClick={onStart} disabled={!canStart}
                       className={`premium-button w-full${canStart ? ' premium-button--ready' : ''}`}
                       style={canStart ? {} : { cursor: 'not-allowed' }}>
@@ -252,7 +253,7 @@ export const QueueSection = memo(function QueueSection({
                   </motion.div>
                 )}
                 {appState === 'idle' && queuedCount === 0 && failedCount > 0 && onResumeAll && (
-                  <motion.div key="resume-all" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <motion.div key="resume-all" {...fade}>
                     <button onClick={onResumeAll} disabled={!canResumeAll}
                       className={`premium-button w-full${canResumeAll ? ' premium-button--ready' : ''}`}
                       style={canResumeAll ? {} : { cursor: 'not-allowed' }}>
@@ -262,7 +263,7 @@ export const QueueSection = memo(function QueueSection({
                   </motion.div>
                 )}
                 {appState === 'processing' && (
-                  <motion.div key="processing" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <motion.div key="processing" {...fade}>
                     <button onClick={onStop} className="premium-button is-danger w-full">
                       <Square className="w-5 h-5 fill-current" />
                       Interrompi elaborazione
@@ -270,7 +271,7 @@ export const QueueSection = memo(function QueueSection({
                   </motion.div>
                 )}
                 {appState === 'canceling' && (
-                  <motion.div key="canceling" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <motion.div key="canceling" {...fade}>
                     <button disabled className="premium-button is-danger w-full" style={{ opacity: 0.65, cursor: 'wait' }}>
                       <Square className="w-5 h-5 fill-current animate-pulse" />
                       Annullamento in corso...

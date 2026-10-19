@@ -15,6 +15,8 @@ import { DropZone } from './DropZone';
 import { WelcomeDashboard } from './WelcomeDashboard';
 import { QueueSection } from './QueueSection';
 import { CompletedSection } from './CompletedSection';
+import { AutoHeight } from './AutoHeight';
+import { fade, fadeUp } from '../motion';
 import { ConsolePanel } from './ConsolePanel';
 import type { ConfirmAction } from '../hooks/useConfirmModal';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
@@ -213,7 +215,8 @@ export function QueuePage({
     () => files.find(f => f.status === 'processing' || f.isRetryingBlocks) ?? (completionFlash ? doneFiles[0] : undefined),
     [files, completionFlash, doneFiles],
   );
-  const isConsoleDisabled = !hasApiKey || !isApiKeyValid || !(pendingFiles.length > 0 || doneFiles.length > 0 || showProcessingBanner);
+  const hasWork = pendingFiles.length > 0 || doneFiles.length > 0 || showProcessingBanner;
+  const isConsoleDisabled = !hasApiKey || !isApiKeyValid || !hasWork;
 
   useEffect(() => {
     if (isConsoleDisabled && showConsole) {
@@ -226,20 +229,21 @@ export function QueuePage({
     <motion.main
       key="queue"
       className="flex-1 w-full flex flex-col overflow-y-auto app-scroll"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.15, ease: 'easeOut' }}
+      {...fade}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div className="my-auto px-5 sm:px-6 py-8 flex flex-col gap-5 max-w-3xl w-full mx-auto">
+      {/* With work on the page the column stays anchored to the top: a vertically
+          centred column would shift everything above when the banner swaps in. */}
+      <div
+        data-testid="queue-column"
+        className={`${hasWork ? 'mb-auto' : 'my-auto'} px-5 sm:px-6 py-8 flex flex-col gap-5 max-w-3xl w-full mx-auto`}
+      >
         {apiKeyInsecure && (
           <motion.div
             key="api-key-insecure-banner"
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
+            {...fadeUp}
             className="w-full alert-card is-warning px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
           >
             <div className="flex items-start gap-3 text-sm leading-relaxed text-[var(--warning-text)]">
@@ -261,9 +265,7 @@ export function QueuePage({
         {uiMode === 'loading' ? (
           <motion.div
             key="connecting-loader"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, ease: 'easeOut' }}
+            {...fadeUp}
             className="premium-panel py-12 px-6 flex flex-col items-center justify-center gap-4 text-center max-w-md mx-auto w-full"
           >
             <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent-text)' }} />
@@ -275,8 +277,7 @@ export function QueuePage({
             </p>
             {bridgeDelayed && (
               <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
+                {...fade}
                 className="alert-card is-error p-3 rounded-lg text-xs leading-relaxed max-w-sm mt-2 text-[var(--error-text)]"
               >
                 Il motore dell'applicazione sta impiegando più tempo del previsto.
@@ -303,52 +304,42 @@ export function QueuePage({
           </React.Suspense>
         ) : (
           <>
-            {!(pendingFiles.length > 0 || doneFiles.length > 0 || showProcessingBanner) && (
+            {!hasWork && (
               <WelcomeDashboard archiveSessions={archiveSessions} isArchiveLoaded={isArchiveLoaded} />
             )}
-            {/* Height animations let the queue below slide instead of jumping when the banner swaps in. */}
-            <AnimatePresence initial={false}>
-              {showProcessingBanner ? (
-                <motion.div
-                  key="processing-banner"
-                  data-testid="processing-banner-slot"
-                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  animate={{ opacity: 1, height: 'auto', transitionEnd: { overflow: 'visible' } }}
-                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  transition={{ duration: 0.28, ease: 'easeOut' }}
-                >
-                  <ProcessingStatusBanner
-                    appState={appState}
-                    currentPhase={completionFlash ? '__completed__' : currentPhase}
-                    currentModel={currentModel}
-                    activeProgress={completionFlash ? 100 : activeProgress}
-                    workTotals={workTotals}
-                    workDone={workDone}
-                    currentFileIndex={batchCompleted}
-                    currentBatchTotal={batchTotal}
-                    currentFileName={bannerFile?.name}
-                    startedAt={bannerFile?.startedAt}
-                  />
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="dropzone"
-                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  animate={{ opacity: 1, height: 'auto', transitionEnd: { overflow: 'visible' } }}
-                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  transition={{ duration: 0.28, ease: 'easeOut' }}
-                >
-                  <DropZone
-                    compact={pendingFiles.length > 0 || doneFiles.length > 0}
-                    isDragging={isDragging}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    onClick={handleBrowseClick}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {/* Fade-through: the dropzone fades out, the slot settles to the banner's
+                height, then the banner fades in. Nothing slides across the page. */}
+            <AutoHeight testId="processing-slot">
+              <AnimatePresence mode="wait" initial={false}>
+                {showProcessingBanner ? (
+                  <motion.div key="processing-banner" data-testid="processing-banner-slot" {...fade}>
+                    <ProcessingStatusBanner
+                      appState={appState}
+                      currentPhase={completionFlash ? '__completed__' : currentPhase}
+                      currentModel={currentModel}
+                      activeProgress={completionFlash ? 100 : activeProgress}
+                      workTotals={workTotals}
+                      workDone={workDone}
+                      currentFileIndex={batchCompleted}
+                      currentBatchTotal={batchTotal}
+                      currentFileName={bannerFile?.name}
+                      startedAt={bannerFile?.startedAt}
+                    />
+                  </motion.div>
+                ) : (
+                  <motion.div key="dropzone" {...fade}>
+                    <DropZone
+                      compact={pendingFiles.length > 0 || doneFiles.length > 0}
+                      isDragging={isDragging}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      onClick={handleBrowseClick}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </AutoHeight>
           </>
         )}
 

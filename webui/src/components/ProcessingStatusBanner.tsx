@@ -1,11 +1,11 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import type React from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useSpring, useTransform } from 'motion/react';
+import { DURATION, EASE_IN, enterTransition, staggerContainer, staggerItem } from '../motion';
 import {
   AudioLines,
   Bot,
   Check,
-  CheckCircle,
   FileDown,
   Files,
   Layers,
@@ -35,7 +35,8 @@ interface ProcessingStatusBannerProps {
 
 type PhaseInfo = {
   icon: React.ReactElement;
-  iconAnimation: 'spin' | 'pulse' | 'none';
+  // Only the indeterminate loader moves; during real phases the progress bar is the one live signal.
+  iconAnimation: 'spin' | 'none';
   title: string;
   description: string;
   kind: 'normal' | 'wait' | 'cancel' | 'success';
@@ -77,7 +78,7 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
 
   if (phase === '__completed__') {
     return {
-      icon: <CheckCircle className="w-8 h-8" />,
+      icon: <DrawnCheck />,
       iconAnimation: 'none',
       title: 'Sbobinatura completata!',
       description: 'Tutti i passaggi sono stati completati con successo.',
@@ -88,7 +89,7 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
   if (phase.startsWith('Fase 0/3')) {
     return {
       icon: <AudioLines className="w-8 h-8" />,
-      iconAnimation: 'pulse',
+      iconAnimation: 'none',
       title: 'Pre-conversione audio',
       description: "Conversione del file audio in un formato ottimizzato per l'elaborazione.",
       kind: 'normal',
@@ -98,7 +99,7 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
   if (phase.startsWith('Fase 1/3')) {
     return {
       icon: <Mic className="w-8 h-8" />,
-      iconAnimation: 'pulse',
+      iconAnimation: 'none',
       title: 'Trascrizione e sbobinatura',
       description: 'Gemini trascrive e sbobina ogni blocco audio in appunti dettagliati.',
       kind: 'normal',
@@ -109,7 +110,7 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
     const isRetry = phase.includes('retry');
     return {
       icon: <Sparkles className="w-8 h-8" />,
-      iconAnimation: 'pulse',
+      iconAnimation: 'none',
       title: isRetry ? 'Revisione blocchi mancanti' : 'Revisione e pulizia',
       description: isRetry ? phase : 'Il testo viene rivisto e ripulito da ripetizioni e imprecisioni.',
       kind: 'normal',
@@ -119,7 +120,7 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
   if (phase.startsWith('Fase: esportazione') || phase.startsWith('Fase:esportazione')) {
     return {
       icon: <FileDown className="w-8 h-8" />,
-      iconAnimation: 'pulse',
+      iconAnimation: 'none',
       title: 'Generazione output',
       description: 'Salvataggio del file HTML finale sul Desktop.',
       kind: 'normal',
@@ -129,7 +130,7 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
   if (phase.startsWith('Server Gemini occupato')) {
     return {
       icon: <WifiOff className="w-8 h-8" />,
-      iconAnimation: 'pulse',
+      iconAnimation: 'none',
       title: 'In attesa...',
       description: phase,
       kind: 'wait',
@@ -155,8 +156,30 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
   };
 }
 
+// The success check draws itself once instead of popping in.
+function DrawnCheck() {
+  return (
+    <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" data-testid="drawn-check">
+      <motion.circle cx="12" cy="12" r="10" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={enterTransition(DURATION.slow * 1.5)} />
+      <motion.path d="m9 12 2 2 4-4" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={enterTransition(DURATION.slow, DURATION.slow)} />
+    </svg>
+  );
+}
+
+// Percent counts up smoothly instead of jumping; overdamped so it never passes the target.
+function ProgressNumber({ value }: { value: number }) {
+  const spring = useSpring(value, { stiffness: 90, damping: 30 });
+  const rounded = useTransform(spring, latest => `${Math.round(Math.min(100, Math.max(0, latest)))}%`);
+  useEffect(() => { spring.set(value); }, [spring, value]);
+  return <motion.span>{rounded}</motion.span>;
+}
+
 function getStepperState(currentPhase: string): StepperState {
   const phase = currentPhase.trim();
+  // Show the steps while preparing too, so the banner keeps its height when phase 0 starts.
+  if (!phase) {
+    return { preconversione: 'pending', trascrizione: 'pending', revisione: 'pending' };
+  }
   if (phase === '__completed__' || phase.startsWith('Fase: esportazione') || phase.startsWith('Fase:esportazione')) {
     return { preconversione: 'done', trascrizione: 'done', revisione: 'done' };
   }
@@ -262,7 +285,6 @@ function StepBadge({
       ? (
           <span className="flex items-center gap-2">
             <span className="relative flex items-center justify-center shrink-0">
-              <span className="absolute w-5 h-5 rounded-full animate-ping" style={{ background: accentColor, opacity: 0.35 }} />
               <span className="relative flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold" style={{ background: accentColor, color: 'white' }}>
                 {num}
               </span>
@@ -323,7 +345,10 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
   if (kind === 'normal') lastNormalPhaseRef.current = currentPhase;
   const phaseForMeta = isWaiting ? lastNormalPhaseRef.current : currentPhase;
 
-  const stepperState = getStepperState(phaseForMeta);
+  // Unrecognised status messages keep the last steps on screen instead of shrinking the banner.
+  const lastStepperRef = useRef<StepperState>(null);
+  const stepperState = getStepperState(phaseForMeta) ?? lastStepperRef.current;
+  lastStepperRef.current = stepperState;
   const progressLabel = getProgressLabel(phaseForMeta, workDone, workTotals);
 
   const [elapsedSecs, setElapsedSecs] = useState(0);
@@ -378,41 +403,28 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
 
   return (
     <motion.section
-      initial={{ opacity: 0, y: -8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.22, ease: 'easeOut' }}
+      {...staggerContainer}
       className="relative w-full px-5 py-6 sm:px-7 sm:py-7"
       aria-label="Stato elaborazione"
     >
 
-      <div
-        className="absolute left-1/2 top-0 h-28 w-28 -translate-x-1/2 rounded-full blur-3xl"
-        style={{ background: accentSubtle, opacity: 0.45, transition: 'background 0.2s ease-out' }}
-      />
-
       <div className="relative z-10 flex flex-col items-center gap-5 text-center">
         {/* popLayout crossfades phase titles; "wait" left the header empty between quick phases. */}
+        <motion.div {...staggerItem} className="w-full">
         <AnimatePresence mode="popLayout" initial={false}>
           <motion.div
             key={title}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15, ease: 'easeOut' }}
+            initial={{ opacity: 0, y: 4, filter: 'blur(4px)' }}
+            animate={{ opacity: 1, y: 0, filter: 'blur(0px)', transition: enterTransition() }}
+            exit={{ opacity: 0, filter: 'blur(4px)', transition: { duration: DURATION.fast, ease: EASE_IN } }}
             className="flex flex-col items-center gap-5"
           >
             <div className="relative flex items-center justify-center">
-              {iconAnimation === 'pulse' && (
-                <span
-                  className="absolute inset-0 rounded-full animate-ping"
-                  style={{ background: accentSubtle, opacity: 0.6 }}
-                />
-              )}
               <div
                 className="relative flex h-16 w-16 items-center justify-center rounded-full"
-                style={{ background: accentSubtle, color: accentColor }}
+                style={{ background: accentSubtle, color: accentColor, transition: 'background 0.2s ease-out, color 0.2s ease-out' }}
               >
-                <div className={iconAnimation === 'spin' ? 'animate-spin' : iconAnimation === 'pulse' ? 'animate-pulse' : ''}>
+                <div className={iconAnimation === 'spin' ? 'animate-spin' : ''}>
                   {icon}
                 </div>
               </div>
@@ -428,36 +440,38 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
             </div>
           </motion.div>
         </AnimatePresence>
+        </motion.div>
 
-        <div className="flex flex-col items-center gap-2">
+        <motion.div {...staggerItem} className="flex flex-col items-center gap-2">
           <span className="text-xs font-semibold uppercase tracking-[0.24em]" style={{ color: 'var(--text-muted)' }}>
             Avanzamento
           </span>
-          <span className="text-5xl font-bold leading-none tabular-nums" style={{ color: accentColor }}>
-            {activeProgress}%
+          <span className="text-5xl font-bold leading-none tabular-nums" style={{ color: accentColor }} data-testid="progress-percent">
+            <ProgressNumber value={activeProgress} />
           </span>
-        </div>
+        </motion.div>
 
-        <div className="w-full max-w-2xl">
+        <motion.div {...staggerItem} className="w-full max-w-2xl">
           <div className="h-3 w-full overflow-hidden rounded-full" style={{ background: 'var(--progress-bg)' }}>
             <motion.div
               className="processing-progress-fill h-full rounded-full"
               style={{ background: progressFill }}
               initial={{ width: 0 }}
               animate={{ width: `${activeProgress}%` }}
-              transition={{ ease: 'linear', duration: 0.3 }}
+              transition={enterTransition(0.6)}
             />
           </div>
-        </div>
+        </motion.div>
 
         {currentFileName && (
-          <p className="max-w-xl truncate text-sm font-medium" style={{ color: 'var(--text-primary)' }} title={currentFileName}>
+          <motion.p {...staggerItem} className="max-w-xl truncate text-sm font-medium" style={{ color: 'var(--text-primary)' }} title={currentFileName}>
             {currentFileName}
-          </p>
+          </motion.p>
         )}
 
         {(metaChips.length > 0 || stepperState) && (
-          <div
+          <motion.div
+            {...staggerItem}
             className="flex flex-col items-center gap-3"
             style={isDimmed ? { opacity: 0.45, filter: 'grayscale(0.6)', transition: 'opacity 0.3s, filter 0.3s' } : undefined}
           >
@@ -484,7 +498,7 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
                 <StepBadge state={stepperState.revisione} label="Revisione" num={3} accentColor={isDimmed ? 'var(--text-muted)' : accentColor} tooltip={STEP_TOOLTIPS.revisione} />
               </div>
             )}
-          </div>
+          </motion.div>
         )}
       </div>
     </motion.section>

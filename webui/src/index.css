@@ -1868,13 +1868,13 @@ button {
   border-radius: 12px;
   box-shadow: var(--shadow-strong);
   min-width: 200px;
-  animation: dropdownPop 0.12s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: dropdownPop 0.12s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   transform-origin: top left;
 }
 
 .editor-dropdown-panel.open-up {
   transform-origin: bottom center;
-  animation: dropdownPopUp 0.12s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: dropdownPopUp 0.12s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 :root[data-theme="dark"] .editor-dropdown-panel {
@@ -2633,7 +2633,7 @@ button {
   flex-direction: column;
   gap: 8px;
   min-width: 160px;
-  animation: dropdownPop 0.12s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: dropdownPop 0.12s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   transform-origin: top left;
 }
 
@@ -3444,7 +3444,7 @@ input::-webkit-contacts-auto-fill-button {
   border-radius: 10px;
   box-shadow: var(--shadow-strong);
   padding: 4px;
-  animation: dropdownPop 0.12s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: dropdownPop 0.12s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   transform-origin: top right;
 }
 
@@ -4253,7 +4253,7 @@ input::-webkit-contacts-auto-fill-button {
   border: 1px solid var(--border-default) !important;
   box-shadow: var(--shadow-strong) !important;
   border-radius: 12px !important;
-  animation: dropdownPop 0.12s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: dropdownPop 0.12s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   transform-origin: top center;
 }
 
@@ -4634,6 +4634,23 @@ input::-webkit-contacts-auto-fill-button {
 .queue-card.is-completed.is-warning {
   background: var(--card-queued-bg) !important;
   border-color: var(--warning-ring) !important;
+}
+
+/* A just-finished sbobina is marked by a tint that fades out, not by motion.
+   An overlay, because the card backgrounds above are !important. */
+.queue-card.is-completed.is-fresh::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--success-subtle);
+  pointer-events: none;
+  animation: queue-card-fresh 1.6s cubic-bezier(0.4, 0, 1, 1) 0.2s both;
+}
+
+@keyframes queue-card-fresh {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 /* App Footer Layout */

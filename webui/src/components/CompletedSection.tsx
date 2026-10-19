@@ -1,5 +1,6 @@
 import { memo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { fade, fadeUp } from '../motion';
 import { CheckCircle, Search, Trash2, X } from 'lucide-react';
 import type { AppStatus, FileItem } from '../appState';
 import type { ArchiveFolder } from '../bridge';
@@ -32,9 +33,7 @@ export const CompletedSection = memo(function CompletedSection({ doneFiles, appS
       {doneFiles.length > 0 && (
         <motion.div
           key="completed-section"
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2, ease: 'easeOut' }}
+          {...fadeUp}
           className="premium-panel p-5 sm:p-6 space-y-4"
         >
           <div className="flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--border-subtle)' }}>
@@ -103,9 +102,7 @@ export const CompletedSection = memo(function CompletedSection({ doneFiles, appS
                 {completedSearch.trim() && filteredDoneFiles.length === 0 && (
                   <motion.p
                     key="no-results"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
+                    {...fade}
                     className="text-sm text-center py-6"
                     style={{ color: 'var(--text-muted)' }}
                   >

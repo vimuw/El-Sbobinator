@@ -364,3 +364,25 @@ describe('CompletedFileCard', () => {
     expect(screen.queryByText(/fallback/i)).toBeNull();
   });
 });
+
+describe('CompletedFileCard fresh highlight', () => {
+  it('highlights a sbobina that has just finished', () => {
+    const { container } = render(
+      <CompletedFileCard
+        file={makeFile({ status: 'done', outputHtml: '/out/file.html', completedAt: Date.now() })}
+        onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
+      />,
+    );
+    expect(container.querySelector('.queue-card.is-fresh')).toBeTruthy();
+  });
+
+  it('does not highlight completions restored from an earlier run', () => {
+    const { container } = render(
+      <CompletedFileCard
+        file={makeFile({ status: 'done', outputHtml: '/out/file.html', completedAt: Date.now() - 60_000 })}
+        onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
+      />,
+    );
+    expect(container.querySelector('.queue-card.is-fresh')).toBeNull();
+  });
+});

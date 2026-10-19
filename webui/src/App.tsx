@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, MotionConfig } from 'motion/react';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { GithubIcon } from './components/icons/GithubIcon';
+import { fade } from './motion';
 import { ReportProblemLink } from './components/ReportProblemLink';
 import { GITHUB_URL } from './branding';
 import { type ElSbobinatorBridge, type PywebviewApi } from './bridge';
@@ -491,7 +492,9 @@ export default function App() {
     setConfirmAction({ type: 'remove-file', fileId: id, fileName: f.name, isDone: true });
   }, [setConfirmAction]);
 
+  // Full motion even when Windows "Animation effects" is off: the workflow relies on it.
   return (
+    <MotionConfig reducedMotion="never">
     <div className="app-shell h-screen overflow-hidden font-sans flex flex-row bg-[var(--bg-base)] text-[var(--text-secondary)]">
       <NavSidebar
         activePage={activePage}
@@ -586,9 +589,7 @@ export default function App() {
             <motion.main
               key="archive"
               className="flex-1 w-full flex flex-col overflow-y-auto app-scroll"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.15, ease: 'easeOut' }}
+              {...fade}
             >
               <div className="flex-1 px-5 sm:px-6 py-8 flex flex-col max-w-4xl w-full mx-auto">
                 <React.Suspense fallback={null}>
@@ -740,5 +741,6 @@ export default function App() {
         bottomOffset={16}
       />
     </div>
+    </MotionConfig>
   );
 }
