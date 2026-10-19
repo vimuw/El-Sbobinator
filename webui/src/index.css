@@ -4212,11 +4212,12 @@ input::-webkit-contacts-auto-fill-button {
   flex: 1;
 }
 
+/* Archive search is a pill, like the settings key field, with its icon and hint pulled in from the curve. */
 .search-pill-input {
   width: 100%;
   height: 36px;
-  padding: 0 2.4rem 0 2.1rem;
-  border-radius: 6px;
+  padding: 0 2.6rem 0 2.35rem;
+  border-radius: 999px;
   border: 1px solid var(--border-default);
   background: var(--bg-input);
   color: var(--text-primary);
@@ -4260,7 +4261,7 @@ input::-webkit-contacts-auto-fill-button {
 
 .search-pill-icon {
   position: absolute;
-  left: 0.6rem;
+  left: 0.85rem;
   pointer-events: none;
   color: var(--text-faint);
   transition: color 150ms ease;
@@ -4273,13 +4274,13 @@ input::-webkit-contacts-auto-fill-button {
 
 .search-pill-clear {
   position: absolute;
-  right: 0.45rem;
+  right: 0.55rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 22px;
   height: 22px;
-  border-radius: 5px;
+  border-radius: 999px;
   border: none;
   background: transparent;
   color: var(--text-faint);
@@ -4306,7 +4307,7 @@ input::-webkit-contacts-auto-fill-button {
 
 .search-pill-hint {
   position: absolute;
-  right: 0.55rem;
+  right: 0.75rem;
   pointer-events: none;
   display: inline-flex;
   align-items: center;
@@ -4325,10 +4326,11 @@ input::-webkit-contacts-auto-fill-button {
   letter-spacing: 0;
 }
 
+/* Toolbar chips are pills too; the square icon-only ones become circles. */
 .filter-chip {
   height: 36px;
   padding: 0 0.65rem;
-  border-radius: 6px;
+  border-radius: 999px;
   border: 1px solid var(--border-default);
   background: var(--bg-input);
   color: var(--text-secondary);
@@ -4549,14 +4551,15 @@ input::-webkit-contacts-auto-fill-button {
   border-color: var(--accent-ring);
 }
 
+/* Archive actions are outline pills, the twins of the settings actions. */
 .archive-action-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   height: 36px;
-  padding: 0 12px;
-  border-radius: 8px;
+  padding: 0 0.95rem;
+  border-radius: 999px;
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
   color: var(--text-secondary);
@@ -4576,7 +4579,7 @@ input::-webkit-contacts-auto-fill-button {
 
 .archive-action-button.is-collection-create {
   height: 32px;
-  padding: 0 8px;
+  padding: 0 0.8rem;
   font-size: 0.75rem;
 }
 
