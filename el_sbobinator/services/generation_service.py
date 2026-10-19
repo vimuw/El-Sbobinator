@@ -822,6 +822,8 @@ def _handle_generic_transient_retry(
     max_attempts: int,
     retry_sleep_seconds: float,
     cancelled,
+    runtime=None,
+    restore_phase=None,
 ) -> bool:
     """Returns True if sleep succeeded and should continue retry loop, False if cancelled.
 
@@ -840,10 +842,31 @@ def _handle_generic_transient_retry(
     print(
         f"      [Errore: {redact_secrets(exc)}. Riprovo in {int(retry_sleep_seconds)}s...]"
     )
+    if runtime is not None:
+        runtime.phase(
+            _generic_retry_phase_text(
+                exc, int(retry_sleep_seconds), attempts + 1, max_attempts
+            )
+        )
     if not sleep_with_cancel(cancelled, retry_sleep_seconds):
         print("   [*] Operazione annullata dall'utente.")
         return False
+    if restore_phase is not None:
+        restore_phase()
     return True
+
+
+def _generic_retry_phase_text(
+    exc: Exception, wait_seconds: int, next_attempt: int, max_attempts: int
+) -> str:
+    """Banner text for retries that previously surfaced only in the console."""
+    # The processing banner matches these prefixes; keep them in sync with ProcessingStatusBanner.tsx.
+    label = (
+        "Risposta vuota da Gemini"
+        if "risposta vuota" in _error_text(exc)
+        else "Errore temporaneo di Gemini"
+    )
+    return f"{label} — riprovo tra {wait_seconds}s (tentativo {next_attempt}/{max_attempts})"
 
 
 def retry_with_quota(
@@ -996,6 +1019,8 @@ def retry_with_quota(
                 max_attempts,
                 retry_sleep_seconds,
                 cancelled,
+                runtime,
+                _restore_phase,
             ):
                 return client, None
     return client, None

@@ -1716,10 +1716,36 @@ button {
   transition: background 0.2s var(--ease-out), color 0.2s var(--ease-out);
 }
 
+.processing-banner-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+  color: var(--text-primary);
+}
+
+/* A recoverable problem: the console keeps the details, the banner says it in plain words. */
+.processing-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--warning-text) 28%, transparent);
+  border-radius: 10px;
+  background: var(--warning-subtle);
+  color: var(--warning-text);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.processing-notice-detail {
+  color: var(--text-secondary);
+}
+
 .phase-segment {
   position: relative;
   flex: 1 1 0;
-  height: 6px;
+  height: 8px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--progress-bg);
@@ -1732,10 +1758,10 @@ button {
 }
 
 .processing-percent {
-  width: 3.5rem;
+  width: 4rem;
   flex-shrink: 0;
   text-align: right;
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.02em;
@@ -1745,7 +1771,7 @@ button {
 
 /* Labels sit under their segments; the right padding matches the percent column. */
 .processing-step-labels {
-  padding-right: calc(3.5rem + 0.75rem);
+  padding-right: calc(4rem + 0.75rem);
 }
 
 .processing-step-label:focus-visible {

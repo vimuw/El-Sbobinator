@@ -633,6 +633,66 @@ class RetryWithQuotaTests(unittest.TestCase):
             "resume phase must appear after first wait message",
         )
 
+    def test_generic_retry_is_announced_in_the_phase_and_restored(self):
+        """Empty responses used to reach only the console; the banner now sees them too."""
+        rt = _FakeRuntime()
+        call_count = [0]
+
+        def fn(_client):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise RuntimeError("Risposta vuota dal modello (text=None)")
+            return "ok"
+
+        _, result = retry_with_quota(
+            fn,
+            client=object(),
+            fallback_keys=[],
+            model_name="test-model",
+            cancelled=lambda: False,
+            runtime=rt,
+            request_fallback_key=lambda: None,
+            max_attempts=3,
+            retry_sleep_seconds=0.0,
+            resume_phase_text="Fase 1/3: trascrizione (chunk 7/7)",
+        )
+
+        self.assertEqual(result, "ok")
+        self.assertEqual(
+            rt.phase_calls,
+            [
+                "Risposta vuota da Gemini — riprovo tra 0s (tentativo 2/3)",
+                "Fase 1/3: trascrizione (chunk 7/7)",
+            ],
+        )
+
+    def test_unclassified_retry_uses_a_generic_banner_label(self):
+        rt = _FakeRuntime()
+        call_count = [0]
+
+        def fn(_client):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise RuntimeError("qualcosa di inatteso")
+            return "ok"
+
+        retry_with_quota(
+            fn,
+            client=object(),
+            fallback_keys=[],
+            model_name="test-model",
+            cancelled=lambda: False,
+            runtime=rt,
+            request_fallback_key=lambda: None,
+            max_attempts=3,
+            retry_sleep_seconds=0.0,
+        )
+
+        self.assertEqual(
+            rt.phase_calls,
+            ["Errore temporaneo di Gemini — riprovo tra 0s (tentativo 2/3)"],
+        )
+
     def test_rate_limit_phase_restored_after_wait(self):
         """After rate-limit sleep, runtime.phase() receives the resume text
         before the next callable_fn() attempt."""

@@ -562,7 +562,7 @@ class ChunkRecoveryTests(unittest.TestCase):
         request_fallback_key=lambda: None,
     )
 
-    def _run(self, session, chunks_dir, retry_side_effect):
+    def _run(self, session, chunks_dir, retry_side_effect, runtime=None):
         call_count = [0]
         effects = list(retry_side_effect) if not callable(retry_side_effect) else None
 
@@ -600,9 +600,39 @@ class ChunkRecoveryTests(unittest.TestCase):
                 phase1_chunks_dir=chunks_dir,
                 session=session,
                 save_session=lambda: True,
-                runtime=_FakeRuntime(),
+                runtime=runtime or _FakeRuntime(),
                 **self._COMMON_KWARGS,  # type: ignore[arg-type]
             ), call_count[0]
+
+    def test_recovery_pass_is_announced_in_the_phase(self):
+        """The banner learns about the extra pass, not only the console."""
+
+        class _RecordingRuntime(_FakeRuntime):
+            def __init__(self):
+                self.phases: list[str] = []
+
+            def phase(self, text):
+                self.phases.append(text)
+
+        runtime = _RecordingRuntime()
+        session = {"stage": "phase1", "phase1": {}}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            chunks_dir = os.path.join(tmpdir, "chunks")
+            os.makedirs(chunks_dir)
+            self._run(
+                session,
+                chunks_dir,
+                retry_side_effect=[
+                    DegenerateOutputError("output non valido"),
+                    "testo valido trascritto",
+                ],
+                runtime=runtime,
+            )
+
+        self.assertIn(
+            "Output non valido nel blocco 1 — rigenero il blocco", runtime.phases
+        )
 
     def test_recovery_succeeds_on_extra_pass(self):
         """An extra pass on the chosen model saves valid output without switching."""

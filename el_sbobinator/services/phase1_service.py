@@ -881,6 +881,9 @@ def _process_phase1_transcription_impl(
                 return _finish((client, None, prev_memory))
             if chunk_res.should_retry:
                 chunk_recovery_used = True
+                runtime.phase(
+                    f"Output non valido nel blocco {chunk_idx} — rigenero il blocco"
+                )
                 continue
             if chunk_res.success:
                 break

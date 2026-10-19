@@ -7,14 +7,17 @@ import {
   Bot,
   Check,
   FileDown,
+  FileSearch,
   Files,
-  Hourglass,
-  Layers,
   Loader,
+  MessageSquareOff,
   Mic,
   Pause,
+  RefreshCw,
+  ServerCrash,
   Sparkles,
   Timer,
+  TriangleAlert,
   WifiOff,
   XCircle,
 } from 'lucide-react';
@@ -39,8 +42,19 @@ type PhaseInfo = {
   // Only the indeterminate loader moves; during real phases the progress bar is the one live signal.
   iconAnimation: 'spin' | 'none';
   title: string;
-  description: string;
-  kind: 'normal' | 'wait' | 'cancel' | 'success';
+  kind: 'normal' | 'cancel' | 'success';
+};
+
+// A problem the pipeline is recovering from. "wait" pauses the run; "retrying" redoes work right away.
+type ProcessingNotice = {
+  kind: 'wait' | 'retrying';
+  icon: React.ReactElement;
+  label: string;
+  waitSecs: number | null;
+  attempt: { current: number; total: number } | null;
+  // What resumes when the countdown ends, or a fixed detail when there is no countdown.
+  resumeLabel: string;
+  detail?: string;
 };
 
 type StepState = 'done' | 'active' | 'pending';
@@ -54,113 +68,133 @@ const STEP_TOOLTIPS: Record<StepKey, string> = {
   revisione: "Il testo viene ripulito, organizzato e reso più chiaro sezione per sezione.",
 };
 
+const ICON_CLASS = 'h-[18px] w-[18px]';
+const NOTICE_ICON_CLASS = 'h-4 w-4';
+
 function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
   if (appState === 'canceling') {
-    return {
-      icon: <XCircle className="h-[18px] w-[18px]" />,
-      iconAnimation: 'none',
-      title: 'Interruzione in corso...',
-      description: "Attendere il completamento dell'operazione corrente prima di fermarsi.",
-      kind: 'cancel',
-    };
+    return { icon: <XCircle className={ICON_CLASS} />, iconAnimation: 'none', title: 'Interruzione in corso...', kind: 'cancel' };
   }
 
   const phase = currentPhase.trim();
 
   if (!phase) {
-    return {
-      icon: <Loader className="h-[18px] w-[18px]" />,
-      iconAnimation: 'spin',
-      title: 'Preparazione...',
-      description: "Avvio dell'elaborazione in corso.",
-      kind: 'normal',
-    };
+    return { icon: <Loader className={ICON_CLASS} />, iconAnimation: 'spin', title: 'Preparazione...', kind: 'normal' };
   }
-
   if (phase === '__completed__') {
-    return {
-      icon: <DrawnCheck />,
-      iconAnimation: 'none',
-      title: 'Sbobinatura completata!',
-      description: 'Tutti i passaggi sono stati completati con successo.',
-      kind: 'success',
-    };
+    return { icon: <DrawnCheck />, iconAnimation: 'none', title: 'Sbobinatura completata!', kind: 'success' };
   }
-
+  if (phase.startsWith('Fase: analisi')) {
+    return { icon: <FileSearch className={ICON_CLASS} />, iconAnimation: 'none', title: 'Analisi del file audio', kind: 'normal' };
+  }
   if (phase.startsWith('Fase 0/3')) {
-    return {
-      icon: <AudioLines className="h-[18px] w-[18px]" />,
-      iconAnimation: 'none',
-      title: 'Pre-conversione audio',
-      description: "Conversione del file audio in un formato ottimizzato per l'elaborazione.",
-      kind: 'normal',
-    };
+    return { icon: <AudioLines className={ICON_CLASS} />, iconAnimation: 'none', title: 'Pre-conversione audio', kind: 'normal' };
   }
-
   if (phase.startsWith('Fase 1/3')) {
-    return {
-      icon: <Mic className="h-[18px] w-[18px]" />,
-      iconAnimation: 'none',
-      title: 'Trascrizione e sbobinatura',
-      description: 'Gemini trascrive e sbobina ogni blocco audio in appunti dettagliati.',
-      kind: 'normal',
-    };
+    return { icon: <Mic className={ICON_CLASS} />, iconAnimation: 'none', title: 'Trascrizione e sbobinatura', kind: 'normal' };
   }
-
   if (phase.startsWith('Fase 2/3')) {
     const isRetry = phase.includes('retry');
     return {
-      icon: <Sparkles className="h-[18px] w-[18px]" />,
+      icon: <Sparkles className={ICON_CLASS} />,
       iconAnimation: 'none',
       title: isRetry ? 'Revisione blocchi mancanti' : 'Revisione e pulizia',
-      description: isRetry ? phase : 'Il testo viene rivisto e ripulito da ripetizioni e imprecisioni.',
       kind: 'normal',
     };
+  }
+  if (phase.startsWith('Fase: esportazione') || phase.startsWith('Fase:esportazione')) {
+    return { icon: <FileDown className={ICON_CLASS} />, iconAnimation: 'none', title: 'Generazione output', kind: 'normal' };
   }
 
-  if (phase.startsWith('Fase: esportazione') || phase.startsWith('Fase:esportazione')) {
-    return {
-      icon: <FileDown className="h-[18px] w-[18px]" />,
-      iconAnimation: 'none',
-      title: 'Generazione output',
-      description: 'Salvataggio del file HTML finale sul Desktop.',
-      kind: 'normal',
-    };
-  }
+  return { icon: <Loader className={ICON_CLASS} />, iconAnimation: 'spin', title: 'Elaborazione in corso', kind: 'normal' };
+}
+
+function parseWaitSecs(phase: string): number | null {
+  const match = phase.match(/(?:tra|attesa)\s+(\d+)\s*s\b/i);
+  return match ? Number(match[1]) : null;
+}
+
+function parseAttempt(phase: string): { current: number; total: number } | null {
+  const match = phase.match(/tentativo\s+(\d+)\s*\/\s*(\d+)/i);
+  return match ? { current: Number(match[1]), total: Number(match[2]) } : null;
+}
+
+// The backend reports recoverable problems as phase messages (see generation_service.py and phase1_service.py).
+// The console keeps the technical details; the banner says what is happening in plain words.
+function getProcessingNotice(currentPhase: string): ProcessingNotice | null {
+  const phase = currentPhase.trim();
+  const waitSecs = parseWaitSecs(phase);
+  const attempt = parseAttempt(phase);
 
   if (phase.startsWith('Server Gemini occupato')) {
     return {
-      icon: <WifiOff className="h-[18px] w-[18px]" />,
-      iconAnimation: 'none',
-      title: 'In attesa...',
-      description: phase,
       kind: 'wait',
+      icon: <ServerCrash className={NOTICE_ICON_CLASS} />,
+      label: 'Server Gemini sovraccarico',
+      waitSecs,
+      attempt,
+      resumeLabel: 'nuovo tentativo',
     };
   }
-
-  if (phase.startsWith('Rate limit') || phase.includes('Rate limit')) {
+  if (phase.includes('Rate limit')) {
     return {
-      icon: <Pause className="h-[18px] w-[18px]" />,
-      iconAnimation: 'none',
-      title: 'Pausa automatica',
-      description: 'Limite richieste API raggiunto. Ripresa automatica tra qualche secondo.',
       kind: 'wait',
+      icon: <Pause className={NOTICE_ICON_CLASS} />,
+      label: 'Limite di richieste al minuto raggiunto',
+      waitSecs,
+      attempt,
+      resumeLabel: 'ripresa',
     };
   }
-
-  return {
-    icon: <Loader className="h-[18px] w-[18px]" />,
-    iconAnimation: 'spin',
-    title: 'Elaborazione in corso',
-    description: currentPhase,
-    kind: 'normal',
-  };
+  if (phase.startsWith('Connessione assente')) {
+    return {
+      kind: 'wait',
+      icon: <WifiOff className={NOTICE_ICON_CLASS} />,
+      label: 'Connessione internet assente',
+      waitSecs: null,
+      attempt: null,
+      resumeLabel: 'ripresa',
+      detail: 'riprendo appena torna la rete',
+    };
+  }
+  if (phase.startsWith('Risposta vuota da Gemini')) {
+    return {
+      kind: 'wait',
+      icon: <MessageSquareOff className={NOTICE_ICON_CLASS} />,
+      label: 'Gemini ha restituito una risposta vuota',
+      waitSecs,
+      attempt,
+      resumeLabel: 'nuovo tentativo',
+    };
+  }
+  if (phase.startsWith('Errore temporaneo di Gemini')) {
+    return {
+      kind: 'wait',
+      icon: <TriangleAlert className={NOTICE_ICON_CLASS} />,
+      label: 'Errore temporaneo di Gemini',
+      waitSecs,
+      attempt,
+      resumeLabel: 'nuovo tentativo',
+    };
+  }
+  if (phase.startsWith('Output non valido')) {
+    return {
+      kind: 'retrying',
+      icon: <RefreshCw className={NOTICE_ICON_CLASS} />,
+      label: phase.split(' — ')[0],
+      waitSecs: null,
+      attempt: null,
+      resumeLabel: 'nuovo tentativo',
+      detail: 'rigenero il blocco',
+    };
+  }
+  return null;
 }
 
 // The success check draws itself once instead of popping in.
 function DrawnCheck() {
   return (
-    <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" data-testid="drawn-check">
+    <svg className={ICON_CLASS} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" data-testid="drawn-check">
       <motion.circle cx="12" cy="12" r="10" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={enterTransition(DURATION.slow * 1.5)} />
       <motion.path d="m9 12 2 2 4-4" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={enterTransition(DURATION.slow, DURATION.slow)} />
     </svg>
@@ -175,10 +209,44 @@ function ProgressNumber({ value }: { value: number }) {
   return <motion.span>{rounded}</motion.span>;
 }
 
+// Counts down from the moment the notice arrived; the row is keyed by message, so each retry restarts it.
+function useCountdown(totalSecs: number | null): number | null {
+  const [shownAt] = useState(() => Date.now());
+  const [now, setNow] = useState(shownAt);
+  useEffect(() => {
+    if (totalSecs === null) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [totalSecs]);
+  if (totalSecs === null) return null;
+  return Math.max(0, totalSecs - Math.floor((now - shownAt) / 1000));
+}
+
+function NoticeRow({ notice }: { notice: ProcessingNotice }) {
+  const remaining = useCountdown(notice.waitSecs);
+  let detail = notice.detail ?? '';
+  if (remaining !== null) {
+    detail = remaining > 0 ? `${notice.resumeLabel} tra ${remaining}s` : `${notice.resumeLabel} in corso…`;
+  }
+  if (notice.attempt) {
+    detail += ` · tentativo ${notice.attempt.current} di ${notice.attempt.total}`;
+  }
+
+  return (
+    <div className="processing-notice" data-testid="processing-notice" data-notice-kind={notice.kind}>
+      <span className="flex shrink-0" aria-hidden="true">{notice.icon}</span>
+      <span className="min-w-0 truncate">
+        <span role="status" className="font-medium">{notice.label}</span>
+        {detail && <span className="processing-notice-detail tabular-nums"> — {detail}</span>}
+      </span>
+    </div>
+  );
+}
+
 function getStepperState(currentPhase: string): StepperState {
   const phase = currentPhase.trim();
   // Show the steps while preparing too, so the banner keeps its height when phase 0 starts.
-  if (!phase) {
+  if (!phase || phase.startsWith('Fase: analisi')) {
     return { preconversione: 'pending', trascrizione: 'pending', revisione: 'pending' };
   }
   if (phase === '__completed__' || phase.startsWith('Fase: esportazione') || phase.startsWith('Fase:esportazione')) {
@@ -246,46 +314,23 @@ function getProgressLabel(
   return null;
 }
 
+function inferStepPhase(
+  workDone: { chunks: number; macro: number },
+  workTotals: { chunks: number; macro: number },
+): string {
+  if (workTotals.chunks > 0 && workDone.chunks >= workTotals.chunks) return 'Fase 2/3: revisione';
+  if (workTotals.chunks > 0) return 'Fase 1/3: trascrizione';
+  return '';
+}
+
 function formatElapsed(secs: number): string {
-  if (secs < 60) return `Da ${secs}s`;
+  if (secs < 60) return `${secs}s trascorsi`;
   const minutes = Math.floor(secs / 60);
   const remainingSeconds = secs % 60;
-  if (minutes < 60) return `Da ${minutes}m ${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}s`;
+  if (minutes < 60) return `${minutes}m ${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}s trascorsi`;
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
-  return `Da ${hours}h ${remainingMinutes}m`;
-}
-
-// Early estimates are noise: wait for some real progress and some elapsed time.
-const ETA_MIN_PROGRESS = 5;
-const ETA_MIN_ELAPSED_SECS = 20;
-// Each tick moves the shown estimate a fifth of the way towards the new one.
-const ETA_SMOOTHING = 0.2;
-
-function formatRemaining(secs: number): string {
-  const rawMinutes = Math.round(secs / 60);
-  if (rawMinutes < 1) return 'meno di un minuto rimanente';
-  // Long runs round to 5 minutes so the figure does not flicker every few seconds.
-  const minutes = rawMinutes > 10 ? Math.round(rawMinutes / 5) * 5 : rawMinutes;
-  if (minutes < 60) return `circa ${minutes} min rimanenti`;
-  const hours = Math.floor(minutes / 60);
-  const restMinutes = minutes % 60;
-  return restMinutes ? `circa ${hours} h ${restMinutes} min rimanenti` : `circa ${hours} h rimanenti`;
-}
-
-function useRemainingSecs(elapsedSecs: number, progress: number, enabled: boolean, startedAt?: number): number | null {
-  const [smoothed, setSmoothed] = useState<number | null>(null);
-  const eligible = enabled && progress >= ETA_MIN_PROGRESS && progress < 100 && elapsedSecs >= ETA_MIN_ELAPSED_SECS;
-
-  useEffect(() => { setSmoothed(null); }, [startedAt]);
-
-  useEffect(() => {
-    if (!eligible) return;
-    const raw = (elapsedSecs * (100 - progress)) / progress;
-    setSmoothed(prev => (prev === null ? raw : prev + ETA_SMOOTHING * (raw - prev)));
-  }, [eligible, elapsedSecs, progress]);
-
-  return eligible ? smoothed : null;
+  return `${hours}h ${remainingMinutes}m trascorsi`;
 }
 
 const STEPS: Array<{ key: StepKey; label: string }> = [
@@ -353,19 +398,25 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
   currentFileName,
   startedAt,
 }: ProcessingStatusBannerProps) {
-  const { icon, iconAnimation, title, description, kind } = getPhaseInfo(appState, currentPhase);
-  const isWaiting = kind === 'wait';
-  const isDimmed = kind === 'cancel' || isWaiting;
+  // While a problem is being handled, the banner keeps describing the step it interrupted.
+  const phaseNotice = getProcessingNotice(currentPhase);
+  const lastStepPhaseRef = useRef('');
+  if (!phaseNotice) lastStepPhaseRef.current = currentPhase;
+  // Mounted mid-problem (e.g. back from the archive), there is no remembered step: infer it from the counters.
+  const stepPhase = phaseNotice
+    ? lastStepPhaseRef.current || inferStepPhase(workDone, workTotals)
+    : currentPhase;
 
-  const lastNormalPhaseRef = useRef('');
-  if (kind === 'normal') lastNormalPhaseRef.current = currentPhase;
-  const phaseForMeta = isWaiting ? lastNormalPhaseRef.current : currentPhase;
+  const { icon, iconAnimation, title, kind } = getPhaseInfo(appState, stepPhase);
+  const notice = kind === 'cancel' ? null : phaseNotice;
+  const isWaiting = notice?.kind === 'wait';
+  const isDimmed = kind === 'cancel' || isWaiting;
 
   // Unrecognised status messages keep the last steps on screen instead of shrinking the banner.
   const lastStepperRef = useRef<StepperState>(null);
-  const stepperState = getStepperState(phaseForMeta) ?? lastStepperRef.current;
+  const stepperState = getStepperState(stepPhase) ?? lastStepperRef.current;
   lastStepperRef.current = stepperState;
-  const progressLabel = getProgressLabel(phaseForMeta, workDone, workTotals);
+  const progressLabel = kind === 'normal' ? getProgressLabel(stepPhase, workDone, workTotals) : null;
 
   const [elapsedSecs, setElapsedSecs] = useState(0);
 
@@ -376,10 +427,6 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
     const id = setInterval(update, 1000);
     return () => clearInterval(id);
   }, [startedAt]);
-
-  // Retries restart the progress scale, so only steady phases feed the estimate.
-  const isRetry = currentPhase.includes('retry');
-  const remainingSecs = useRemainingSecs(elapsedSecs, activeProgress, kind === 'normal' && !isRetry && Boolean(startedAt), startedAt);
 
   const accentColor = kind === 'cancel'
     ? 'var(--error-text)'
@@ -397,53 +444,52 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
         ? 'var(--success-subtle)'
         : 'var(--processing-bg)';
 
-  const metaItems: Array<{ icon: React.ReactElement; label: string; testId?: string }> = [];
+  const metaItems: Array<{ icon: React.ReactElement; label: string }> = [];
   if (currentModel && kind !== 'success') {
     metaItems.push({ icon: <Bot className="h-3.5 w-3.5" />, label: shortModelName(currentModel) });
   }
   if (currentBatchTotal > 1) {
     metaItems.push({ icon: <Files className="h-3.5 w-3.5" />, label: `File ${currentFileIndex + 1} di ${currentBatchTotal}` });
   }
-  if (progressLabel) {
-    metaItems.push({ icon: <Layers className="h-3.5 w-3.5" />, label: progressLabel });
-  }
   if (startedAt && elapsedSecs > 0 && kind !== 'success') {
     metaItems.push({ icon: <Timer className="h-3.5 w-3.5" />, label: formatElapsed(elapsedSecs) });
   }
-  if (remainingSecs !== null) {
-    metaItems.push({ icon: <Hourglass className="h-3.5 w-3.5" />, label: formatRemaining(remainingSecs), testId: 'remaining-time' });
-  }
+
+  // The file is what the user recognises; the step becomes its subtitle.
+  const heading = currentFileName || title;
 
   return (
     <motion.section
       {...staggerContainer}
-      className="relative w-full px-5 py-6 sm:px-7 sm:py-7"
+      className="premium-panel relative w-full p-5 sm:p-6"
       data-kind={kind}
+      data-waiting={isWaiting || undefined}
       aria-label="Stato elaborazione"
     >
       <div className="relative z-10 flex flex-col gap-5">
-        {/* popLayout crossfades phase titles; "wait" left the header empty between quick phases. */}
-        <motion.div {...staggerItem} className="w-full">
-          <AnimatePresence mode="popLayout" initial={false}>
-            <motion.div
-              key={title}
-              initial={{ opacity: 0, y: 4, filter: 'blur(4px)' }}
-              animate={{ opacity: 1, y: 0, filter: 'blur(0px)', transition: enterTransition() }}
-              exit={{ opacity: 0, filter: 'blur(4px)', transition: { duration: DURATION.fast, ease: EASE_IN } }}
-              className="flex items-start gap-3"
-            >
-              <span className="processing-banner-icon" style={{ background: accentSubtle, color: accentColor }}>
-                <span className={iconAnimation === 'spin' ? 'flex animate-spin' : 'flex'}>{icon}</span>
-              </span>
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <h2 className="section-title">{title}</h2>
-                {/* One line keeps the banner height stable when long status messages arrive. */}
-                <p className="truncate text-sm" style={{ color: 'var(--text-secondary)' }} title={description}>
-                  {description}
-                </p>
-              </div>
-            </motion.div>
-          </AnimatePresence>
+        <motion.div {...staggerItem} className="flex items-start gap-3">
+          <span className="processing-banner-icon" style={{ background: accentSubtle, color: accentColor }}>
+            <span className={iconAnimation === 'spin' ? 'flex animate-spin' : 'flex'}>{icon}</span>
+          </span>
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <h2 className="processing-banner-title truncate" title={heading}>{heading}</h2>
+            {/* popLayout crossfades step titles; "wait" left the subtitle empty between quick phases. */}
+            <AnimatePresence mode="popLayout" initial={false}>
+              <motion.p
+                key={title}
+                initial={{ opacity: 0, y: 4, filter: 'blur(4px)' }}
+                animate={{ opacity: 1, y: 0, filter: 'blur(0px)', transition: enterTransition() }}
+                exit={{ opacity: 0, filter: 'blur(4px)', transition: { duration: DURATION.fast, ease: EASE_IN } }}
+                className="truncate text-sm tabular-nums"
+                style={{ color: 'var(--text-secondary)' }}
+                data-testid="processing-step-title"
+              >
+                {currentFileName && <span style={{ color: accentColor }} className="font-medium">{title}</span>}
+                {progressLabel && currentFileName && <span aria-hidden="true"> · </span>}
+                {progressLabel && <span>{progressLabel}</span>}
+              </motion.p>
+            </AnimatePresence>
+          </div>
         </motion.div>
 
         <motion.div {...staggerItem} className="flex flex-col gap-2">
@@ -496,27 +542,34 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
           )}
         </motion.div>
 
-        <motion.div
-          {...staggerItem}
-          className="flex min-w-0 flex-col gap-1.5"
-          style={{ opacity: isDimmed ? 0.6 : 1, transition: 'opacity 0.3s' }}
-        >
-          {currentFileName && (
-            <p className="truncate text-sm font-medium" style={{ color: 'var(--text-primary)' }} title={currentFileName}>
-              {currentFileName}
-            </p>
+        <AnimatePresence initial={false}>
+          {notice && (
+            <motion.div
+              key="notice"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto', transition: enterTransition() }}
+              exit={{ opacity: 0, height: 0, transition: { duration: DURATION.fast, ease: EASE_IN } }}
+              className="-my-1 overflow-hidden py-1"
+            >
+              <NoticeRow key={currentPhase} notice={notice} />
+            </motion.div>
           )}
-          {metaItems.length > 0 && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs tabular-nums" style={{ color: 'var(--text-secondary)' }}>
-              {metaItems.map(({ icon, label, testId }) => (
-                <span key={testId ?? label} className="flex items-center gap-1.5" data-testid={testId}>
-                  <span className="flex" style={{ color: 'var(--text-muted)' }}>{icon}</span>
-                  {label}
-                </span>
-              ))}
-            </div>
-          )}
-        </motion.div>
+        </AnimatePresence>
+
+        {metaItems.length > 0 && (
+          <motion.div
+            {...staggerItem}
+            className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs tabular-nums"
+            style={{ color: 'var(--text-secondary)', opacity: isDimmed ? 0.6 : 1, transition: 'opacity 0.3s' }}
+          >
+            {metaItems.map(({ icon, label }, index) => (
+              <span key={index} className="flex items-center gap-1.5">
+                <span className="flex" style={{ color: 'var(--text-muted)' }}>{icon}</span>
+                {label}
+              </span>
+            ))}
+          </motion.div>
+        )}
       </div>
     </motion.section>
   );

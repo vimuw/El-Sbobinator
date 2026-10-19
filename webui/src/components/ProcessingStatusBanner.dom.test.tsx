@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProcessingStatusBanner } from './ProcessingStatusBanner';
 
 describe('ProcessingStatusBanner', () => {
@@ -59,40 +59,6 @@ describe('ProcessingStatusBanner', () => {
       />,
     );
     expect(screen.getByText('File 2 di 3')).toBeTruthy();
-  });
-
-  it('shows wait banner for Server Gemini occupato phase', () => {
-    render(
-      <ProcessingStatusBanner
-        appState="processing"
-        currentPhase="Server Gemini occupato — ritento tra 3s"
-        currentModel="gemini-2.5-flash"
-        activeProgress={30}
-        workDone={{ chunks: 2, macro: 0 }}
-        workTotals={{ chunks: 6, macro: 6 }}
-        currentFileIndex={0}
-        currentBatchTotal={1}
-        currentFileName="lesson.mp3"
-      />,
-    );
-    expect(screen.getByText('In attesa...')).toBeTruthy();
-  });
-
-  it('shows pause banner for Rate limit phase', () => {
-    render(
-      <ProcessingStatusBanner
-        appState="processing"
-        currentPhase="Rate limit: attendo 60s"
-        currentModel="gemini-2.5-flash"
-        activeProgress={40}
-        workDone={{ chunks: 3, macro: 0 }}
-        workTotals={{ chunks: 6, macro: 6 }}
-        currentFileIndex={0}
-        currentBatchTotal={1}
-        currentFileName="lesson.mp3"
-      />,
-    );
-    expect(screen.getByText('Pausa automatica')).toBeTruthy();
   });
 
   it('shows all-done stepper for __completed__ phase', () => {
@@ -198,7 +164,7 @@ describe('ProcessingStatusBanner', () => {
     expect(screen.getByText(/\d+h \d+m/)).toBeTruthy();
   });
 
-  it('shows the next phase title immediately instead of leaving the header empty', () => {
+  it('titles the banner with the file and shows the step underneath', () => {
     const props = {
       appState: 'processing' as const,
       currentModel: 'gemini-3.6-flash',
@@ -210,11 +176,29 @@ describe('ProcessingStatusBanner', () => {
       currentFileName: 'lesson.mp3',
     };
     const { rerender } = render(<ProcessingStatusBanner {...props} currentPhase="" />);
-    expect(screen.getByRole('heading', { name: 'Preparazione...' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'lesson.mp3' })).toBeTruthy();
+    expect(screen.getByTestId('processing-step-title').textContent).toBe('Preparazione...');
 
+    // The next step shows immediately instead of leaving the subtitle empty.
     rerender(<ProcessingStatusBanner {...props} activeProgress={2} currentPhase="Fase 0/3: pre-conversione audio" />);
+    expect(screen.getByText('Pre-conversione audio')).toBeTruthy();
+  });
 
-    expect(screen.getByRole('heading', { name: 'Pre-conversione audio' })).toBeTruthy();
+  it('falls back to the step as heading when the file name is unknown', () => {
+    render(
+      <ProcessingStatusBanner
+        appState="processing"
+        currentPhase="Fase 1/3: trascrizione (chunk 2/6)"
+        currentModel="gemini-2.5-flash"
+        activeProgress={20}
+        workDone={{ chunks: 1, macro: 0 }}
+        workTotals={{ chunks: 6, macro: 3 }}
+        currentFileIndex={0}
+        currentBatchTotal={1}
+      />,
+    );
+    expect(screen.getByRole('heading', { name: 'Trascrizione e sbobinatura' })).toBeTruthy();
+    expect(screen.getByText('Blocco 2 di 6')).toBeTruthy();
   });
 
   it('keeps one live indicator during a phase and draws the check on success', () => {
@@ -273,59 +257,114 @@ describe('ProcessingStatusBanner', () => {
 
     it('keeps the last steps while waiting for the server', () => {
       const { rerender } = render(<ProcessingStatusBanner {...base} currentPhase="Fase 1/3: trascrizione (chunk 4/6)" />);
-      rerender(<ProcessingStatusBanner {...base} currentPhase="Rate limit: attendo 60s" />);
-      expect(screen.getByText('Pausa automatica')).toBeTruthy();
+      rerender(<ProcessingStatusBanner {...base} currentPhase="⏳ Rate limit: attesa 60s prima della sonda..." />);
+      expect(screen.getByText('Limite di richieste al minuto raggiunto')).toBeTruthy();
       expect(states()).toEqual(['done', 'active', 'pending']);
     });
   });
 
-  describe('estimated remaining time', () => {
+  describe('elapsed time', () => {
+    it('shows only the time spent, never an estimate of what is left', () => {
+      render(
+        <ProcessingStatusBanner
+          appState="processing"
+          currentPhase="Fase 1/3: trascrizione (chunk 3/6)"
+          currentModel="gemini-2.5-flash"
+          activeProgress={50}
+          workDone={{ chunks: 2, macro: 0 }}
+          workTotals={{ chunks: 6, macro: 4 }}
+          currentFileIndex={0}
+          currentBatchTotal={1}
+          currentFileName="lesson.mp3"
+          startedAt={Date.now() - 120_000}
+        />,
+      );
+      expect(screen.getByText('2m 00s trascorsi')).toBeTruthy();
+      expect(screen.queryByText(/rimanent/i)).toBeNull();
+    });
+  });
+
+  describe('recoverable problems', () => {
     const base = {
       appState: 'processing' as const,
-      currentPhase: 'Fase 1/3: trascrizione (chunk 3/6)',
-      currentModel: 'gemini-2.5-flash',
-      workDone: { chunks: 2, macro: 0 },
-      workTotals: { chunks: 6, macro: 4 },
+      currentModel: 'gemini-3.8-flash',
+      activeProgress: 60,
+      workDone: { chunks: 6, macro: 0 },
+      workTotals: { chunks: 7, macro: 4 },
       currentFileIndex: 0,
       currentBatchTotal: 1,
-      currentFileName: 'lesson.mp3',
+      currentFileName: 'IMMUNOLOGIA 1, LEZIONE 4.mp3',
     };
+    const step = 'Fase 1/3: trascrizione (chunk 7/7)';
 
-    it('stays hidden while the estimate would be noise', () => {
-      const { rerender } = render(<ProcessingStatusBanner {...base} activeProgress={30} startedAt={Date.now() - 10_000} />);
-      expect(screen.queryByTestId('remaining-time')).toBeNull();
+    afterEach(() => { vi.useRealTimers(); });
 
-      rerender(<ProcessingStatusBanner {...base} activeProgress={3} startedAt={Date.now() - 120_000} />);
-      expect(screen.queryByTestId('remaining-time')).toBeNull();
+    it.each([
+      ['Risposta vuota da Gemini — riprovo tra 30s (tentativo 2/4)', 'Gemini ha restituito una risposta vuota', 'nuovo tentativo tra 30s · tentativo 2 di 4'],
+      ['Errore temporaneo di Gemini — riprovo tra 30s (tentativo 3/4)', 'Errore temporaneo di Gemini', 'nuovo tentativo tra 30s · tentativo 3 di 4'],
+      ['Server Gemini occupato — riprovo tra 15s (tentativo 2/5)', 'Server Gemini sovraccarico', 'nuovo tentativo tra 15s · tentativo 2 di 5'],
+      ['⏳ Rate limit: attesa 65s prima della sonda...', 'Limite di richieste al minuto raggiunto', 'ripresa tra 65s'],
+      ['Connessione assente — verifica rete in corso (riprovo ogni 10s)...', 'Connessione internet assente', 'riprendo appena torna la rete'],
+      ['Output non valido nel blocco 7 — rigenero il blocco', 'Output non valido nel blocco 7', 'rigenero il blocco'],
+    ])('explains "%s" without losing the interrupted step', async (phase, label, detail) => {
+      const { rerender } = render(<ProcessingStatusBanner {...base} currentPhase={step} />);
+      expect(screen.queryByTestId('processing-notice')).toBeNull();
+
+      rerender(<ProcessingStatusBanner {...base} currentPhase={phase} />);
+      expect(screen.getByRole('status').textContent).toBe(label);
+      expect(screen.getByTestId('processing-notice').textContent).toBe(`${label} — ${detail}`);
+      expect(screen.getByText('Trascrizione e sbobinatura')).toBeTruthy();
+      expect(screen.getByText('Blocco 7 di 7')).toBeTruthy();
+
+      rerender(<ProcessingStatusBanner {...base} currentPhase={step} />);
+      await waitFor(() => expect(screen.queryByTestId('processing-notice')).toBeNull());
     });
 
-    it('shows an Italian estimate next to the elapsed time once meaningful', () => {
-      render(<ProcessingStatusBanner {...base} activeProgress={50} startedAt={Date.now() - 120_000} />);
-      expect(screen.getByText(/^Da 2m/)).toBeTruthy();
-      expect(screen.getByTestId('remaining-time').textContent).toBe('circa 2 min rimanenti');
+    it('still names the interrupted step when it mounts during a problem', () => {
+      render(<ProcessingStatusBanner {...base} currentPhase="Server Gemini occupato — riprovo tra 15s (tentativo 2/5)" />);
+      expect(screen.getByText('Trascrizione e sbobinatura')).toBeTruthy();
+      expect(screen.getByText('Blocco 7 di 7')).toBeTruthy();
+      expect(screen.getByTestId('phase-segment-trascrizione').getAttribute('data-state')).toBe('active');
     });
 
-    it('smooths a sudden progress jump instead of following it', () => {
-      const startedAt = Date.now() - 120_000;
-      const { rerender } = render(<ProcessingStatusBanner {...base} activeProgress={50} startedAt={startedAt} />);
-      // A raw estimate would drop to 30 s; the smoothed one only moves part of the way.
-      rerender(<ProcessingStatusBanner {...base} activeProgress={80} startedAt={startedAt} />);
-      expect(screen.getByTestId('remaining-time').textContent).toBe('circa 2 min rimanenti');
+    it('counts down the wait and says when the retry starts', () => {
+      vi.useFakeTimers();
+      const { rerender } = render(<ProcessingStatusBanner {...base} currentPhase={step} />);
+      rerender(<ProcessingStatusBanner {...base} currentPhase="Risposta vuota da Gemini — riprovo tra 3s (tentativo 2/4)" />);
+      expect(screen.getByTestId('processing-notice').textContent).toContain('nuovo tentativo tra 3s');
+
+      act(() => { vi.advanceTimersByTime(2_000); });
+      expect(screen.getByTestId('processing-notice').textContent).toContain('nuovo tentativo tra 1s');
+
+      act(() => { vi.advanceTimersByTime(2_000); });
+      expect(screen.getByTestId('processing-notice').textContent).toContain('nuovo tentativo in corso…');
     });
 
-    it('hides the estimate while waiting or canceling', () => {
-      const startedAt = Date.now() - 120_000;
-      const { rerender } = render(<ProcessingStatusBanner {...base} activeProgress={50} startedAt={startedAt} />);
-      expect(screen.getByTestId('remaining-time')).toBeTruthy();
+    it('restarts the countdown for the next attempt', () => {
+      vi.useFakeTimers();
+      const { rerender } = render(<ProcessingStatusBanner {...base} currentPhase="Server Gemini occupato — riprovo tra 15s (tentativo 2/5)" />);
+      act(() => { vi.advanceTimersByTime(10_000); });
+      rerender(<ProcessingStatusBanner {...base} currentPhase="Server Gemini occupato — riprovo tra 30s (tentativo 3/5)" />);
+      expect(screen.getByTestId('processing-notice').textContent).toBe(
+        'Server Gemini sovraccarico — nuovo tentativo tra 30s · tentativo 3 di 5',
+      );
+    });
 
-      rerender(<ProcessingStatusBanner {...base} currentPhase="Server Gemini occupato — ritento tra 3s" activeProgress={50} startedAt={startedAt} />);
-      expect(screen.queryByTestId('remaining-time')).toBeNull();
+    it('dims the progress only while the run is actually waiting', () => {
+      const { container, rerender } = render(<ProcessingStatusBanner {...base} currentPhase={step} />);
+      rerender(<ProcessingStatusBanner {...base} currentPhase="Errore temporaneo di Gemini — riprovo tra 30s (tentativo 2/4)" />);
+      expect(container.querySelector('[data-waiting]')).toBeTruthy();
 
-      rerender(<ProcessingStatusBanner {...base} currentPhase="Rate limit: attendo 60s" activeProgress={50} startedAt={startedAt} />);
-      expect(screen.queryByTestId('remaining-time')).toBeNull();
+      rerender(<ProcessingStatusBanner {...base} currentPhase="Output non valido nel blocco 7 — rigenero il blocco" />);
+      expect(container.querySelector('[data-waiting]')).toBeNull();
+    });
 
-      rerender(<ProcessingStatusBanner {...base} appState="canceling" activeProgress={50} startedAt={startedAt} />);
-      expect(screen.queryByTestId('remaining-time')).toBeNull();
+    it('hides the notice while canceling', async () => {
+      const phase = 'Errore temporaneo di Gemini — riprovo tra 30s (tentativo 2/4)';
+      const { rerender } = render(<ProcessingStatusBanner {...base} currentPhase={phase} />);
+      rerender(<ProcessingStatusBanner {...base} appState="canceling" currentPhase={phase} />);
+      await waitFor(() => expect(screen.queryByTestId('processing-notice')).toBeNull());
+      expect(screen.getByText('Interruzione in corso...')).toBeTruthy();
     });
   });
 });
