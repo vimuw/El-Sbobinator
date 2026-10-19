@@ -12,6 +12,7 @@ import { DiagnosticsSection, type DisplayCheck } from './settings/DiagnosticsSec
 import { ActivitySection } from './settings/ActivitySection';
 import { ApiStatusSection } from './settings/ApiStatusSection';
 import { UpdaterSection, UpdateNotice, type SettingsUpdateInstallState } from './settings/UpdaterSection';
+import { SettingsDivider, SettingsPageHeader } from './settings/SettingsLayout';
 
 import { useSettingsStorage, SESSION_CLEANUP_DAYS } from '../../hooks/useSettingsStorage';
 import { formatSize } from '../../utils';
@@ -607,12 +608,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div ref={contentRef} className="app-scroll flex-1 overflow-y-auto overflow-x-hidden p-6 md:p-8 space-y-6 [scrollbar-gutter:stable]">
                   {activeTab === 'general' && (
                     <div className="space-y-6 animate-fade-in">
-                      <div>
-                        <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Generale</h2>
-                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                          Chiave API Google Gemini, modello di trascrizione e preferenze di sistema.
-                        </p>
-                      </div>
+                      <SettingsPageHeader
+                        title="Generale"
+                        description="Chiave API Google Gemini, modello di trascrizione e preferenze di sistema."
+                      />
 
                       <UpdateNotice
                         latestVersion={latestVersion}
@@ -626,7 +625,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         availableModels={availableModels}
                       />
 
-                      <div className="border-t border-[var(--border-default)]" />
+                      <SettingsDivider />
 
                       <ApiKeySection
                         apiKey={apiKey}
@@ -649,7 +648,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         statusSummary={<ApiStatusSection apiUsage={apiUsage} isLoadingUsage={isLoadingUsage} />}
                       />
 
-                      <div className="border-t border-[var(--border-default)]" />
+                      <SettingsDivider />
 
                       <NotificationSection
                         notificationsEnabled={notificationsEnabled}
@@ -657,7 +656,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         disabled={isSaving}
                       />
 
-                      <div className="border-t border-[var(--border-default)]" />
+                      <SettingsDivider />
 
                       <UpdaterSection
                         latestVersion={latestVersion}
@@ -673,12 +672,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                   {activeTab === 'storage' && (
                     <div className="space-y-6 animate-fade-in">
-                      <div>
-                        <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Archiviazione</h2>
-                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                          Spazio su disco occupato dalle sbobine e gestione della cartella di lavoro.
-                        </p>
-                      </div>
+                      <SettingsPageHeader
+                        title="Archiviazione"
+                        description="Spazio su disco occupato dalle sbobine e gestione della cartella di lavoro."
+                      />
 
                       <StorageSection
                         sessionInfo={sessionInfo}
@@ -704,19 +701,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                   {activeTab === 'diagnostics' && (
                     <div className="space-y-6 animate-fade-in">
-                      <div>
-                        <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Diagnostica</h2>
-                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                          Verifica requisiti di sistema (FFmpeg, API, disco) e report di assistenza.
-                        </p>
-                      </div>
+                      <SettingsPageHeader
+                        title="Diagnostica"
+                        description="Verifica requisiti di sistema (FFmpeg, API, disco) e report di assistenza."
+                      />
 
                       <ActivitySection
                         apiUsage={apiUsage}
                         isLoadingUsage={isLoadingUsage}
                         onRetry={handleRetryActivity}
                       />
-                      <div className="border-t border-[var(--border-default)]" />
+                      <SettingsDivider />
 
                       <DiagnosticsSection
                         isValidatingEnvironment={isValidatingEnvironment}

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { ConfirmActionModal } from '../ConfirmActionModal';
 import { QuotasSection } from './QuotasSection';
+import { SettingsSectionHeading, StatusBadge } from './SettingsLayout';
 import { KebabMenu, type KebabMenuItem } from '../../KebabMenu';
 import { DEFAULT_MODEL, GEMINI_KEY_PATTERN, getModelDisplayName } from '../../../utils';
 import type { ApiUsageResult, CredentialProfile, CredentialStorage } from '../../../bridge';
@@ -379,34 +380,31 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
   ) => {
     if (isLoadingUsage) {
       return (
-        <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)] inline-flex items-center gap-1 leading-normal shrink-0">
+        <StatusBadge tone="neutral">
           <Loader2 className="w-3 h-3 animate-spin text-[var(--accent-text)]" />
           <span>Verifica...</span>
-        </span>
+        </StatusBadge>
       );
     }
-
-    const baseBadge =
-      'text-[11px] font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center justify-center leading-normal shrink-0';
 
     if (!cred) {
       if (isPrimary) {
         return (
-          <span
-            className={`${baseBadge} bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)]`}
+          <StatusBadge
+            tone="accent"
             title={`Operativa per ${getModelDisplayName(effectivePreferredModel)}`}
           >
             Operativa
-          </span>
+          </StatusBadge>
         );
       }
       return (
-        <span
-          className={`${baseBadge} bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)]`}
+        <StatusBadge
+          tone="neutral"
           title={`Disponibile in riserva per ${getModelDisplayName(effectivePreferredModel)}`}
         >
           In riserva
-        </span>
+        </StatusBadge>
       );
     }
 
@@ -418,23 +416,23 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
 
     if (status === 'invalid') {
       return (
-        <span className={`${baseBadge} bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-ring)]`}>
+        <StatusBadge tone="error">
           Non valida (401)
-        </span>
+        </StatusBadge>
       );
     }
     if (status === 'permission_denied') {
       return (
-        <span className={`${baseBadge} bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-ring)]`}>
+        <StatusBadge tone="error">
           Permesso negato (403)
-        </span>
+        </StatusBadge>
       );
     }
     if (status === 'request_error') {
       return (
-        <span className={`${baseBadge} bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-ring)]`}>
+        <StatusBadge tone="error">
           Errore richiesta (400)
-        </span>
+        </StatusBadge>
       );
     }
 
@@ -450,12 +448,12 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     if (isCurrentModelQuotaExhausted) {
       if (exhaustedModels.length === 1) {
         return (
-          <span
-            className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}
+          <StatusBadge
+            tone="warning"
             title={`Quota esaurita per ${getModelDisplayName(exhaustedModels[0])}. Disponibile per gli altri modelli.`}
           >
             Quota esaurita per {getModelDisplayName(exhaustedModels[0])}
-          </span>
+          </StatusBadge>
         );
       }
       if (exhaustedModels.length > 1) {
@@ -465,26 +463,26 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
           ? `Quota esaurita per ${getModelDisplayName(effectivePreferredModel)} (+${otherCount})`
           : `Quota esaurita (${exhaustedModels.length} modelli)`;
         return (
-          <span
-            className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}
+          <StatusBadge
+            tone="warning"
             title={`Quota esaurita per: ${names}. Disponibile per gli altri modelli.`}
           >
             {label}
-          </span>
+          </StatusBadge>
         );
       }
       return (
-        <span className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}>
+        <StatusBadge tone="warning">
           Quota esaurita (oggi)
-        </span>
+        </StatusBadge>
       );
     }
 
     if (status === 'temporarily_failing' && exhaustedModels.length === 0) {
       return (
-        <span className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}>
+        <StatusBadge tone="warning">
           Non disponibile (temporaneo)
-        </span>
+        </StatusBadge>
       );
     }
 
@@ -501,12 +499,9 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
           : `Esaurita per ${otherExhaustedModels.length} modelli`;
       const title = `Disponibile per ${getModelDisplayName(effectivePreferredModel)}. Quota esaurita oggi per: ${otherExhaustedModels.map(getModelDisplayName).join(', ')}`;
       return (
-        <span
-          className="text-[10px] font-medium text-[var(--warning-text)] bg-[var(--warning-subtle,var(--bg-surface))] px-2 py-0.5 rounded-full border border-[var(--warning-ring)] leading-normal shrink-0"
-          title={title}
-        >
+        <StatusBadge tone="warning" minor title={title}>
           {label}
-        </span>
+        </StatusBadge>
       );
     };
 
@@ -514,12 +509,12 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     if (isPrimary || cred.is_primary) {
       return (
         <div className="flex items-center gap-1.5 flex-wrap justify-end">
-          <span
-            className={`${baseBadge} bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)]`}
+          <StatusBadge
+            tone="accent"
             title={`Operativa per ${getModelDisplayName(effectivePreferredModel)}`}
           >
             Operativa
-          </span>
+          </StatusBadge>
           {renderExhaustedTag()}
         </div>
       );
@@ -528,12 +523,12 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     if (keyVal && keyVal === activeFallbackKey) {
       return (
         <div className="flex items-center gap-1.5 flex-wrap justify-end">
-          <span
-            className={`${baseBadge} bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)]`}
+          <StatusBadge
+            tone="accent"
             title={`In uso per ${getModelDisplayName(effectivePreferredModel)}`}
           >
             In uso (riserva)
-          </span>
+          </StatusBadge>
           {renderExhaustedTag()}
         </div>
       );
@@ -541,12 +536,12 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
 
     return (
       <div className="flex items-center gap-1.5 flex-wrap justify-end">
-        <span
-          className={`${baseBadge} bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)]`}
+        <StatusBadge
+          tone="neutral"
           title={`Disponibile in riserva per ${getModelDisplayName(effectivePreferredModel)}`}
         >
           In riserva
-        </span>
+        </StatusBadge>
         {renderExhaustedTag()}
       </div>
     );
@@ -585,17 +580,16 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     <div className="space-y-3">
       {/* 1. Header with count & global actions */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <Key className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] truncate">
-            Chiavi API
-          </h3>
-          {totalKeysCount > 0 && (
+        <SettingsSectionHeading
+          icon={Key}
+          adornment={totalKeysCount > 0 && (
             <span className="text-[11px] font-semibold text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-default)] px-2 py-0.5 rounded-full leading-normal shrink-0">
               {totalKeysCount} {totalKeysCount === 1 ? 'chiave' : 'chiavi'}
             </span>
           )}
-        </div>
+        >
+          Chiavi API
+        </SettingsSectionHeading>
 
         <div className="flex items-center gap-1.5 shrink-0">
           {onRefreshUsage && (

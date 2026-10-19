@@ -1,5 +1,6 @@
 import { Activity, Layers } from 'lucide-react';
 import type { ApiUsageResult } from '../../../bridge';
+import { SettingsSectionHeading } from './SettingsLayout';
 
 interface ActivitySectionProps {
   apiUsage?: ApiUsageResult | null;
@@ -11,10 +12,7 @@ export function ActivitySection({ apiUsage, isLoadingUsage, onRetry }: ActivityS
   return (
     <div className="space-y-3" aria-busy={isLoadingUsage}>
       <div className="flex items-center justify-between gap-3">
-        <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-          <Activity className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-          Attività di oggi
-        </h3>
+        <SettingsSectionHeading icon={Activity}>Attività di oggi</SettingsSectionHeading>
       </div>
 
       {isLoadingUsage && <p role="status" className="text-xs text-[var(--text-secondary)] mt-3">Aggiornamento attività…</p>}

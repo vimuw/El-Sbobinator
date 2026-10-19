@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { ArrowDownToLine, CheckCircle2, RefreshCw, Tag, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
 import { APP_VERSION, GITHUB_RELEASES_URL } from '../../../branding';
+import { SettingsSectionHeading } from './SettingsLayout';
 
 export interface SettingsUpdateInstallState {
   status?: 'idle' | 'downloading' | 'verifying' | 'installing' | 'done' | 'error';
@@ -84,12 +85,7 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
       {/* Header row: Version Info & Check Button */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <Tag className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-              Versione e aggiornamenti
-            </h3>
-          </div>
+          <SettingsSectionHeading icon={Tag}>Versione e aggiornamenti</SettingsSectionHeading>
           <p className="text-xs text-[var(--text-secondary)]">
             Installata:{' '}
             <span className="font-mono font-bold text-[var(--text-primary)]">{cleanAppVersion}</span>

@@ -18,6 +18,7 @@ import { APP_VERSION } from '../../../branding';
 import { ReportProblemLink } from '../../ReportProblemLink';
 import { CustomSelect } from './CustomSelect';
 import type { ValidationResult, ApiUsageResult } from '../../../bridge';
+import { SettingsSectionHeading } from './SettingsLayout';
 
 export interface DisplayCheck {
   id: string;
@@ -123,12 +124,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
     <div className="space-y-3 animate-fade-in">
       <section aria-labelledby="diagnostic-environment-heading" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <FlaskConical className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-            <h3 id="diagnostic-environment-heading" className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-              Verifica ambiente
-            </h3>
-          </div>
+          <SettingsSectionHeading icon={FlaskConical} id="diagnostic-environment-heading">Verifica ambiente</SettingsSectionHeading>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
@@ -254,10 +250,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
 
       <section aria-labelledby="diagnostic-support-heading" className="space-y-3 border-t border-[var(--border-default)] pt-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <h3 id="diagnostic-support-heading" className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-            <FileText className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-            Report per assistenza
-          </h3>
+          <SettingsSectionHeading icon={FileText} id="diagnostic-support-heading">Report per assistenza</SettingsSectionHeading>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <ReportProblemLink className="app-button-secondary is-settings-action" />
             <button
