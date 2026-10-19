@@ -635,7 +635,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
           <button
             type="button"
             onClick={() => setShowNewKeyInput(prev => !prev)}
-            className="absolute inset-y-0 right-2 flex items-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+            className="absolute inset-y-0 right-3.5 flex items-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             aria-label={showNewKeyInput ? 'Nascondi nuova chiave' : 'Mostra nuova chiave'}
             title={showNewKeyInput ? 'Nascondi nuova chiave' : 'Mostra nuova chiave'}
           >

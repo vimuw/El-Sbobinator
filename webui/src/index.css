@@ -1178,9 +1178,11 @@ button {
   cursor: not-allowed;
 }
 
+/* Settings actions are pills, the outline twins of .settings-pill-button and of the same height. */
 .app-button-secondary.is-settings-action {
-  min-height: 36px;
-  padding: 0 0.75rem;
+  min-height: 2.375rem;
+  padding: 0 0.95rem;
+  border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 500;
   color: var(--text-secondary);
@@ -1205,8 +1207,8 @@ button {
 }
 
 .app-button-secondary.is-settings-action.is-icon {
-  width: 36px;
-  height: 36px;
+  width: 2.375rem;
+  height: 2.375rem;
   padding: 0;
 }
 
@@ -1222,9 +1224,11 @@ button {
   color: var(--error-text);
 }
 
+/* The key field is a pill too, so the Aggiungi row reads as one shape. */
 .app-input.is-settings-input {
-  min-height: 38px;
-  padding: 0.375rem 2.25rem 0.375rem 0.75rem;
+  min-height: 2.375rem;
+  padding: 0.375rem 2.5rem 0.375rem 1rem;
+  border-radius: 999px;
   font-family: var(--font-mono);
   font-size: 0.75rem;
 }
