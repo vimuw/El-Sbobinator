@@ -167,7 +167,13 @@ export const QueueSection = memo(function QueueSection({
                 </>
               )}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-3 shrink-0">
+              {appState === 'idle' && pendingFiles.length > 0 && (
+                <button type="button" onClick={onClearAll} className="queue-text-button is-danger shrink-0">
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Svuota coda
+                </button>
+              )}
               <button
                 type="button"
                 role="switch"
@@ -231,16 +237,16 @@ export const QueueSection = memo(function QueueSection({
             </div>
           </DndContext>
 
-          {(showStart || showResumeAll || startHint || (appState === 'idle' && pendingFiles.length > 0)) && (
-          <div className="pt-3 space-y-3">
-            {/* Same-size buttons crossfade in place instead of bobbing up and down. */}
+          {(showStart || showResumeAll || startHint) && (
+          <div className="pt-3 space-y-2.5">
+            {/* A slim full-width pill: the queue's focal action without the weight of a full-height slab. */}
             <AnimatePresence mode="wait" initial={false}>
               {showStart && (
                 <motion.div key="idle" {...fade}>
                   <button onClick={onStart} disabled={!canStart}
                     aria-describedby={startHint ? hintId : undefined}
-                    className="premium-button queue-start-button w-full">
-                    <Play className="w-5 h-5 fill-current" />
+                    className="queue-start-button">
+                    <Play className="w-3.5 h-3.5 fill-current" aria-hidden="true" />
                     <span>{`Avvia sbobinatura (${queuedCount + failedCount} file)`}</span>
                     {audioTotal && (
                       <span className="queue-start-meta" title="Durata totale dell'audio da sbobinare">{`· ${audioTotal} di audio`}</span>
@@ -252,8 +258,8 @@ export const QueueSection = memo(function QueueSection({
                 <motion.div key="resume-all" {...fade}>
                   <button onClick={onResumeAll} disabled={!canResumeAll}
                     aria-describedby={startHint ? hintId : undefined}
-                    className="premium-button queue-start-button w-full">
-                    <RotateCcw className="w-5 h-5" />
+                    className="queue-start-button">
+                    <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>{`Riprendi elaborazione (${failedCount} file)`}</span>
                   </button>
                 </motion.div>
@@ -261,7 +267,7 @@ export const QueueSection = memo(function QueueSection({
             </AnimatePresence>
 
             {startHint && (
-              <p id={hintId} role="status" className="queue-start-hint">
+              <p id={hintId} role="status" className="queue-start-hint justify-center">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                 <span>{startHint}</span>
                 {needsSettings && onOpenSettings && (
@@ -270,15 +276,6 @@ export const QueueSection = memo(function QueueSection({
                   </button>
                 )}
               </p>
-            )}
-
-            {appState === 'idle' && pendingFiles.length > 0 && (
-              <div className="flex justify-end">
-                <button type="button" onClick={onClearAll} className="queue-text-button is-danger">
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Svuota coda
-                </button>
-              </div>
             )}
           </div>
           )}

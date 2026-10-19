@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { AppStatus, FileItem } from '../appState';
 import { QueueSection, type QueueSectionProps } from './QueueSection';
@@ -275,6 +275,12 @@ describe('QueueSection', () => {
   it('shows Svuota coda button when idle and files present', () => {
     render(<QueueSection {...makeProps({ pendingFiles: [makeFile()] })} />);
     expect(screen.getByRole('button', { name: 'Svuota coda' })).toBeTruthy();
+  });
+
+  it('places Svuota coda in the section header, like Pulisci tutto in Recenti', () => {
+    const { container } = render(<QueueSection {...makeProps({ pendingFiles: [makeFile()] })} />);
+    const header = container.querySelector('.dashboard-section-header') as HTMLElement;
+    expect(within(header).getByRole('button', { name: 'Svuota coda' })).toBeTruthy();
   });
 
   it('calls onClearAll when Svuota coda is clicked', () => {
