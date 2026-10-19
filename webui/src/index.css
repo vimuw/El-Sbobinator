@@ -1899,16 +1899,15 @@ button {
 /* ═══ CONSOLE ═══ */
 
 .console-shell {
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   overflow: hidden;
   border: 1px solid var(--console-shell-border, var(--glass-border));
   background: var(--console-bg);
-  box-shadow: none;
+  box-shadow: var(--shadow-xs);
 }
 
 .console-shell-subtle {
   border-color: var(--console-shell-border, var(--glass-border));
-  box-shadow: none;
   background: var(--console-bg);
 }
 

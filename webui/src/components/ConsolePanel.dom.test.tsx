@@ -27,6 +27,14 @@ describe('ConsolePanel', () => {
     expect(screen.getByText('Ultimo messaggio')).toBeTruthy();
   });
 
+  it('shows the last three log lines when collapsed, like a terminal tail', () => {
+    const logs = ['[12:00:00] uno', '[12:00:01] due', '[12:00:02] tre', '[12:00:03] quattro'];
+    const { container } = render(<ConsolePanel consoleLogs={logs} lastConsoleMessage="[12:00:03] quattro" appState="processing" />);
+    const tail = container.querySelector('.console-tail') as HTMLElement;
+    expect(Array.from(tail.children, line => line.textContent)).toEqual(logs.slice(1));
+    expect(container.querySelector('.console-scroll')).toBeNull();
+  });
+
   it('shows Console heading', () => {
     render(<ConsolePanel consoleLogs={[]} lastConsoleMessage="" appState="idle" />);
     expect(screen.getByText('Console')).toBeTruthy();
