@@ -5,6 +5,7 @@ import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordi
 import type { ArchiveFolder, ArchiveSession } from '../../bridge';
 import { getFolderChildren } from '../../archiveFolders';
 import { FolderCardOverlay, SortableFolderCard } from './FolderCard';
+import { ArchiveSectionHeading } from './ArchiveLayout';
 
 export function FolderCollectionGrid({ folders, parentId, sessionsByDir, onNavigate, onCreate, onEdit, onDelete, onMove, onFoldersChange }: {
   folders: ArchiveFolder[];
@@ -35,7 +36,7 @@ export function FolderCollectionGrid({ folders, parentId, sessionsByDir, onNavig
   return (
     <section className="flex flex-col gap-3" aria-label="Raccolte">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Raccolte</span>
+        <ArchiveSectionHeading>Raccolte</ArchiveSectionHeading>
         <button type="button" onClick={onCreate} className="archive-action-button is-collection-create"><FolderPlus className="w-3.5 h-3.5" />Nuova raccolta</button>
       </div>
       <DndContext sensors={sensors} onDragStart={event => setDraggedId(String(event.active.id))} onDragEnd={onDragEnd} onDragCancel={() => setDraggedId(null)}>

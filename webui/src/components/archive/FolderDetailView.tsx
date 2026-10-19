@@ -23,6 +23,7 @@ import { type ArchivePageProps } from './types';
 import { getFolderColor, getFolderSessionDirs } from '../../archiveFolders';
 import { FolderBreadcrumbs } from './FolderBreadcrumbs';
 import { FolderIndicatorChip } from '../FolderChip';
+import { ArchivePageTitle, ArchiveSectionHeading } from './ArchiveLayout';
 
 export interface FolderDetailViewProps {
   folder: ArchiveFolder;
@@ -271,12 +272,9 @@ export function FolderDetailView({
             <ArrowLeft className="w-4 h-4 transition-transform duration-200 group-hover/back:-translate-x-0.5" />
           </button>
           <span className="folder-color-dot is-large" style={{ '--folder-color': folderColor } as React.CSSProperties} />
-          <div className="col-span-3 row-start-2 flex flex-wrap items-center gap-3 min-w-0">
-            <h1 className="min-w-0 max-w-full [overflow-wrap:anywhere] text-[1.75rem] font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-              {folder.name}
-            </h1>
-            <span className="status-pill shrink-0">{folderSessions.length}</span>
-          </div>
+          <ArchivePageTitle count={folderSessions.length} className="col-span-3 row-start-2">
+            {folder.name}
+          </ArchivePageTitle>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
@@ -299,7 +297,7 @@ export function FolderDetailView({
 
       {collectionGrid}
       <div className="flex flex-col gap-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Lezioni</h3>
+        <ArchiveSectionHeading>Lezioni</ArchiveSectionHeading>
         <div className="archive-sticky-toolbar sticky top-0 z-20 py-2 -my-2 bg-[var(--bg-base)]/95 backdrop-blur-md flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
             <div className="search-pill-wrap">

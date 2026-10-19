@@ -10,6 +10,7 @@ import { loadAllEditorSessions } from '../editorSessions';
 import { formatRelativeTime, normalizeSessionPath, shortModelName } from '../utils';
 import { FolderIndicatorChip } from './FolderChip';
 import { ShareExportModal } from './modals/ShareExportModal';
+import { ArchivePageTitle, ArchiveSectionHeading } from './archive/ArchiveLayout';
 
 import {
   type ArchivePageProps,
@@ -352,12 +353,9 @@ export function ArchivePage({
     <div className="flex flex-col gap-6 w-full">
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <h1 className="text-[1.75rem] font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-            Archivio Sbobine
-          </h1>
-          <span className="status-pill">{total != null && total > sessions.length ? total : sessions.length}</span>
-        </div>
+        <ArchivePageTitle count={total != null && total > sessions.length ? total : sessions.length}>
+          Archivio Sbobine
+        </ArchivePageTitle>
       </div>
 
       <FolderCollectionGrid folders={folders} parentId={null} sessionsByDir={sessionsByDir}
@@ -368,9 +366,7 @@ export function ArchivePage({
       {/* Mini Section: Ultima sbobina aperta / modificata */}
       {lastOpenedOrModifiedSessionData && (
         <div className="flex flex-col gap-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-            Ultima sbobina aperta / modificata
-          </h3>
+          <ArchiveSectionHeading>Ultima sbobina aperta / modificata</ArchiveSectionHeading>
           <div
             onClick={() => onPreview(
               lastOpenedOrModifiedSessionData.session.html_path,
@@ -432,9 +428,7 @@ export function ArchivePage({
 
       {/* Unfiled sessions */}
       <div className="flex flex-col gap-3 flex-1 min-h-0">
-        <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-          Tutte le sbobine
-        </h3>
+        <ArchiveSectionHeading>Tutte le sbobine</ArchiveSectionHeading>
 
         {/* Search + Sort + Actions */}
         <div className="archive-sticky-toolbar sticky top-0 z-20 py-2 -my-2 bg-[var(--bg-base)]/95 backdrop-blur-md flex flex-col gap-1.5">
