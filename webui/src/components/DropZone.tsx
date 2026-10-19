@@ -15,6 +15,20 @@ export const SUPPORTED_FORMATS = '.mp3 · .m4a · .wav · .mp4 · .mkv · .webm 
 export const SUPPORTED_FORMATS_SUMMARY = 'Audio o video · MP3, M4A, WAV, MP4 e altri';
 const FORMATS_TITLE = `Formati supportati: ${SUPPORTED_FORMATS}`;
 
+// The resting twin of the processing banner's hero icon: a round icon on a soft halo.
+// While a file hovers the page the halo breathes and a ring leaves the icon on the banner's beat.
+function DropIcon({ live }: { live: boolean }) {
+  return (
+    <span className={`dropzone-icon-wrap${live ? ' is-live' : ''}`} aria-hidden="true">
+      <span className="dropzone-glow" />
+      {live && <span className="dropzone-ring" data-testid="dropzone-ring" />}
+      <span className="dropzone-icon">
+        <UploadCloud className="w-6 h-6" />
+      </span>
+    </span>
+  );
+}
+
 function activateOnKey(onClick: () => void) {
   return (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -30,13 +44,14 @@ export const DropZone = memo(function DropZone({ isDragging, onClick, compact = 
       <div
         onClick={onClick}
         onKeyDown={activateOnKey(onClick)}
-        className={`dropzone-compact cursor-pointer flex items-center gap-3 px-4${isDragging ? ' is-dragging' : ''}`}
+        className={`dropzone-compact cursor-pointer flex items-center gap-3${isDragging ? ' is-dragging' : ''}`}
         role="button"
         tabIndex={0}
         aria-label="Aggiungi file audio o video"
         title={FORMATS_TITLE}
       >
         <span className="dropzone-compact-icon" aria-hidden="true">
+          {isDragging && <span className="dropzone-ring" data-testid="dropzone-ring" />}
           <Plus className="w-3.5 h-3.5" />
         </span>
         <span className="dropzone-compact-label text-sm">
@@ -53,15 +68,13 @@ export const DropZone = memo(function DropZone({ isDragging, onClick, compact = 
     <div
       onClick={onClick}
       onKeyDown={activateOnKey(onClick)}
-      className={`dropzone-card relative cursor-pointer flex flex-col items-center justify-center py-14 px-6 text-center${isDragging ? ' is-dragging' : ''}`}
+      className={`dropzone-card relative cursor-pointer flex flex-col items-center justify-center py-12 px-6 text-center${isDragging ? ' is-dragging' : ''}`}
       role="button"
       tabIndex={0}
       aria-label="Trascina i file qui o clicca per sfogliare"
     >
-      <div className={`dropzone-icon-container${isDragging ? ' is-dragging' : ''}`}>
-        <UploadCloud className="w-6 h-6" />
-      </div>
-      <h3 className="text-base font-semibold mb-1 text-[var(--text-primary)] tracking-tight">Trascina i file qui</h3>
+      <DropIcon live={isDragging} />
+      <h3 className="dropzone-title">Trascina i file qui</h3>
       <p className="text-xs max-w-xs text-[var(--text-muted)]" title={FORMATS_TITLE}>
         {SUPPORTED_FORMATS_SUMMARY}
       </p>
@@ -81,9 +94,7 @@ export const DropOverlay = memo(function DropOverlay({ visible }: { visible: boo
       {visible && (
         <motion.div key="drop-overlay" data-testid="drop-overlay" className="drop-overlay" aria-hidden="true" {...fade}>
           <div className="drop-overlay-target">
-            <div className="dropzone-icon-container is-dragging">
-              <UploadCloud className="w-6 h-6" />
-            </div>
+            <DropIcon live />
             <p className="drop-overlay-title">Rilascia per aggiungere</p>
             <p className="text-xs text-[var(--text-muted)]">{SUPPORTED_FORMATS_SUMMARY}</p>
           </div>

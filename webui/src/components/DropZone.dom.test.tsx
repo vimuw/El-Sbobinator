@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { DropZone } from './DropZone';
+import { DropOverlay, DropZone } from './DropZone';
 
 const baseProps = {
   isDragging: false,
@@ -72,5 +72,21 @@ describe('DropZone', () => {
   it('renders compact mode in dragging state', () => {
     render(<DropZone {...baseProps} compact isDragging />);
     expect(screen.getByText('Rilascia qui per aggiungere')).toBeTruthy();
+  });
+
+  it('sends the live ring from the icon only while a file hovers, in both sizes', () => {
+    const { rerender } = render(<DropZone {...baseProps} />);
+    expect(screen.queryByTestId('dropzone-ring')).toBeNull();
+    rerender(<DropZone {...baseProps} isDragging />);
+    expect(screen.getByTestId('dropzone-ring')).toBeTruthy();
+    rerender(<DropZone {...baseProps} compact />);
+    expect(screen.queryByTestId('dropzone-ring')).toBeNull();
+    rerender(<DropZone {...baseProps} compact isDragging />);
+    expect(screen.getByTestId('dropzone-ring')).toBeTruthy();
+  });
+
+  it('shows the live ring in the full-window overlay', () => {
+    render(<DropOverlay visible />);
+    expect(screen.getByTestId('dropzone-ring')).toBeTruthy();
   });
 });
