@@ -749,7 +749,7 @@ class TestCheckDiskSpace(unittest.TestCase):
                 patch("builtins.print", side_effect=printed.append),
             ):
                 check_disk_space(tmpdir, 3600.0, self._settings(), "phase1")
-        self.assertTrue(any("ATTENZIONE" in m for m in printed))
+        self.assertTrue(any(m.startswith("⚠ Spazio") for m in printed))
 
     def test_tight_space_warns_the_banner_once(self):
         warnings: list[tuple[str, str | None]] = []
@@ -828,7 +828,7 @@ class TestCheckDiskSpace(unittest.TestCase):
                 patch("builtins.print", side_effect=printed.append),
             ):
                 check_disk_space(tmpdir, 3600.0, self._settings(), "phase1")
-        self.assertTrue(any("ATTENZIONE" in m for m in printed))
+        self.assertTrue(any(m.startswith("⚠ Spazio") for m in printed))
 
     def test_warns_different_fs_temp_dir_low(self):
         """Warns about temp dir when on a different filesystem and free < chunk estimate."""
@@ -858,7 +858,7 @@ class TestCheckDiskSpace(unittest.TestCase):
                 check_disk_space(
                     tmpdir, 3600.0, self._settings(preconvert_audio=False), "phase1"
                 )
-        self.assertTrue(any("ATTENZIONE" in m for m in printed))
+        self.assertTrue(any(m.startswith("⚠ Spazio") for m in printed))
 
     def test_resume_last_chunk_caps_concurrent_no_spurious_warning(self):
         """On resume with only 1 chunk remaining, prefetch=True is capped to 1 — no false warning."""
@@ -881,7 +881,7 @@ class TestCheckDiskSpace(unittest.TestCase):
                     next_start_sec=3600 - settings.step_seconds,
                 )
         self.assertFalse(
-            any("ATTENZIONE" in m for m in printed),
+            any(m.startswith("⚠ Spazio") for m in printed),
             "Should not warn when only 1 chunk remains and free >= 1 chunk",
         )
 
@@ -901,7 +901,7 @@ class TestCheckDiskSpace(unittest.TestCase):
                     next_start_sec=3600,
                 )
         self.assertFalse(
-            any("ATTENZIONE" in m for m in printed),
+            any(m.startswith("⚠ Spazio") for m in printed),
             "Should not warn when no chunks remain (next_start_sec >= total_duration)",
         )
 
@@ -1207,7 +1207,7 @@ class TestPipelineSessionEdgeCases(unittest.TestCase):
             ):
                 check_disk_space(tmpdir, 3600.0, self._make_settings(), "phase1")
 
-        self.assertFalse(any("ATTENZIONE" in m for m in printed))
+        self.assertFalse(any(m.startswith("⚠ Spazio") for m in printed))
 
     def test_check_disk_space_zero_total_duration_skips_estimate(self):
         """total_duration_sec=0 → remaining=0 → temp_needed=0 → no warning even with 1 byte free."""
@@ -1224,7 +1224,7 @@ class TestPipelineSessionEdgeCases(unittest.TestCase):
                     tmpdir, 0.0, self._make_settings(preconvert_audio=False), "phase1"
                 )
 
-        self.assertFalse(any("ATTENZIONE" in m for m in printed))
+        self.assertFalse(any(m.startswith("⚠ Spazio") for m in printed))
 
     # ── normalize_stage ────────────────────────────────────────────────────────
 
@@ -1425,7 +1425,7 @@ class TestSaveSessionGuard(unittest.TestCase):
         except AutosaveFailedError:
             pass
         self.assertEqual(len(messages), 1)
-        self.assertIn("autosalvataggio", messages[0].lower())
+        self.assertTrue(messages[0].startswith("❌ Salvataggio automatico"))
 
     def test_subsequent_calls_raise_without_invoking_save_fn(self):
         """Once fatal, every subsequent call raises immediately without calling save_fn."""
@@ -1490,7 +1490,7 @@ class TestSaveSessionGuard(unittest.TestCase):
                     guard()
 
             self.assertEqual(len(messages), 1)
-            self.assertIn("autosalvataggio", messages[0].lower())
+            self.assertTrue(messages[0].startswith("❌ Salvataggio automatico"))
 
     def test_autosave_failed_error_is_not_caught_by_except_exception(self):
         """AutosaveFailedError(BaseException) must escape broad except Exception handlers."""

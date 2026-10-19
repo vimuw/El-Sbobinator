@@ -71,6 +71,7 @@ from el_sbobinator.services.session_audio_service import (
     session_audio_lock,
     session_metadata_lock,
 )
+from el_sbobinator.utils.console_utils import format_clock
 from el_sbobinator.utils.logging_utils import (
     attach_file_handler,
     detach_file_handler,
@@ -101,7 +102,7 @@ def _probe_input_media(
         return total_duration_sec, ffmpeg_exe
     except Exception as e:
         print(
-            f"❌ Errore caricamento audio. File corrotto o formato non supportato.\n{e}"
+            f"❌ Impossibile leggere l'audio: file danneggiato o formato non supportato.\nDettaglio: {e}"
         )
         logger.exception("Analisi file fallita.", extra={"stage": "probe"})
         return None, None
@@ -189,7 +190,7 @@ def _make_fallback_key_requester(runtime: PipelineRuntime, session: dict, save_s
                     except Exception:
                         pass
                 runtime.console_error(
-                    "⚠ Attesa chiave API scaduta. Sessione salvata - riprendi quando vuoi."
+                    "⚠ Nessuna nuova chiave API inserita in tempo: sbobina in pausa, potrai riprenderla quando vuoi."
                 )
                 runtime.set_run_error_detail("api_key_prompt_timeout")
                 raise generation_service.QuotaDailyLimitError("api_key_prompt_timeout")
@@ -230,13 +231,13 @@ def _handle_regeneration_flow(
         session["last_error_detail"] = None
         save_session()
         runtime.console_error(
-            "⚠ Risposta non ricevuta entro 120 secondi. Sessione salvata - riprendi quando vuoi."
+            "⚠ Nessuna risposta entro 120 secondi: sbobina in pausa, potrai riprenderla quando vuoi."
         )
         runtime.set_run_result("failed", _REGENERATE_PROMPT_TIMEOUT_ERROR)
         return "timeout", stage, True
     if _is_regen:
         print(
-            f"L'utente ha scelto di rigenerare il file {os.path.basename(input_path)}. Pulizia sessione precedente..."
+            f"Rigenero {os.path.basename(input_path)} da capo: elimino la sessione precedente..."
         )
         reset_for_regeneration(session_ctx)
         logger.info(
@@ -251,9 +252,7 @@ def _handle_regeneration_flow(
             else ""
         )
         if existing_html and os.path.exists(str(existing_html)):
-            print(
-                "File gia' completato, l'utente ha scelto di usare la versione pronta."
-            )
+            print("Sbobina già pronta: uso la versione esistente.")
             runtime.update_model(session_ctx.settings.effective_model)
             runtime.output_html(str(existing_html))
             runtime.set_revision_failed_blocks(
@@ -448,14 +447,16 @@ def _export_html_and_finish(
             ],
         )
     except Exception as e:
-        print(f"❌ Errore salvataggio HTML: {e}")
+        print(f"❌ Impossibile salvare il documento finale: {e}")
         session["last_error"] = "html_export_failed"
         session["last_error_detail"] = None
         save_session()
         return False
 
     if not os.path.exists(html_path):
-        print("❌ Errore salvataggio HTML: file finale non trovato dopo la scrittura.")
+        print(
+            "❌ Impossibile salvare il documento finale: il file non risulta scritto."
+        )
         session["last_error"] = "html_export_missing"
         session["last_error_detail"] = None
         save_session()
@@ -699,7 +700,9 @@ def _handle_circuit_breaker_paused(
         e,
         extra={"stage": "paused"},
     )
-    print(f"⚠ PIPELINE SOSPESA (CIRCUIT BREAKER):\n{e}")
+    print(
+        f"⚠ Sbobina in pausa: Gemini non accetta altre richieste per ora. Riprendila più tardi.\nDettaglio: {e}"
+    )
 
 
 def _esegui_sbobinatura_impl(
@@ -727,7 +730,9 @@ def _esegui_sbobinatura_impl(
     try:
         if not api_key_value or api_key_value.strip() == "":
             runtime.set_run_result("failed", "api_key_mancante")
-            print("❌ Errore: Formato API Key non valido o assente.")
+            print(
+                "❌ Chiave API mancante o non valida: controllala nelle impostazioni."
+            )
             logger.error("API key mancante o non valida.", extra={"stage": "startup"})
             return
 
@@ -776,7 +781,7 @@ def _esegui_sbobinatura_impl(
         if total_duration_sec is None or ffmpeg_exe is None:
             return
 
-        print(f"Durata totale rilevata: {int(total_duration_sec / 60)} minuti.")
+        print(f"Durata audio: {format_clock(total_duration_sec)}.")
         persist_phase1_metadata(session_ctx, total_duration_sec, settings.step_seconds)
 
         previous_stage = str(session.get("stage", "phase1")).strip().lower()
@@ -915,7 +920,7 @@ def _esegui_sbobinatura_impl(
     except Exception as e:
         runtime.set_run_result("failed", str(e))
         logger.exception("Errore imprevisto nella pipeline.", extra={"stage": "fatal"})
-        print(f"❌ ERRORE IMPREVISTO DURANTE L'ESECUZIONE:\n{e}")
+        print(f"❌ Errore imprevisto: elaborazione interrotta.\nDettaglio: {e}")
     finally:
         _pipeline_finally_cleanup(
             session_ctx,

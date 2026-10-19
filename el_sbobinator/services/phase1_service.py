@@ -33,6 +33,7 @@ from el_sbobinator.services.generation_service import (
     retry_with_quota,
     sleep_with_cancel,
 )
+from el_sbobinator.utils.console_utils import format_clock
 from el_sbobinator.utils.logging_utils import get_logger, redact_secrets
 
 
@@ -56,14 +57,6 @@ def _sanitize_error_detail(error: object, max_len: int = 500) -> str:
         text = str(error or "")
     text = " ".join(text.split())
     return redact_secrets(text, max_len=max_len)
-
-
-def _fmt_clock(seconds: float) -> str:
-    """Lecture position as m:ss (or h:mm:ss), the way a player shows it."""
-    total = max(0, int(seconds))
-    hours, rest = divmod(total, 3600)
-    minutes, secs = divmod(rest, 60)
-    return f"{hours}:{minutes:02}:{secs:02}" if hours else f"{minutes}:{secs:02}"
 
 
 def _phase1_temp_run_dir(phase1_chunks_dir: str) -> str:
@@ -243,7 +236,7 @@ def _generate_chunk_content_with_fallback(
                 audio_input = ensure_uploaded_audio_fn(current_client)
                 if audio_input is None:
                     return None
-            print("   -> (3/3) Generazione sbobina in corso...")
+            print("Trascrizione in corso...")
             _active_model = model_name
             response = current_client.models.generate_content(
                 model=_active_model,
@@ -283,9 +276,7 @@ def _generate_chunk_content_with_fallback(
             ):
                 tried_upload_fallback = True
                 audio_mode = "upload"
-                print(
-                    "      ⚠ [Inline audio non accettato. Fallback a upload del chunk...]"
-                )
+                print("⚠ Invio diretto dell'audio non accettato: lo carico come file.")
                 continue
             if (
                 "400" in err_txt
@@ -317,7 +308,7 @@ def _call_chunk_transcription_api(
         chunk_path, max_bytes=inline_max_bytes
     )
     if audio_inline is not None:
-        print("   -> (2/3) Preparazione audio (inline)...")
+        print("Invio dell'audio a Gemini...")
 
     chunk_prompt = generation_service.build_chunk_prompt(prev_memory)
     audio_file = None
@@ -337,7 +328,7 @@ def _call_chunk_transcription_api(
             except Exception:
                 return audio_file
             return audio_file
-        print("   -> (2/3) Caricamento sicuro nei server di google...")
+        print("Caricamento dell'audio su Google...")
         audio_file = generation_service.upload_audio_path(
             current_client,
             chunk_path,
@@ -367,9 +358,9 @@ def _call_chunk_transcription_api(
                 pass
             audio_file = None
             file_client = None
-            print("   Ricarico questo blocco con la nuova chiave...")
+            print("Ricarico l'audio del blocco con la nuova chiave...")
         else:
-            print("   Ripresa automatica (inline audio).")
+            print("Riprendo con la nuova chiave.")
 
     def _call(current_client):
         return _generate_chunk_content_with_fallback(
@@ -425,10 +416,10 @@ def _record_chunk_success(
     )
     try:
         _atomic_write_text(out_chunk_md, generated_text + "\n")
-        print(f"   ✅ Chunk salvato: {os.path.basename(out_chunk_md)}")
+        print(f"✅ Blocco {chunk_idx}/{total_chunks} salvato.")
     except Exception as save_err:
         last_failure_detail = _sanitize_error_detail(save_err)
-        print(f"   ❌ Autosave chunk fallito: {save_err}")
+        print(f"❌ Impossibile salvare il blocco {chunk_idx}: {save_err}")
         return False, full_transcript, "", last_failure_detail
 
     new_full_transcript = full_transcript + f"\n\n{generated_text}\n\n"
@@ -476,11 +467,13 @@ def _handle_phase1_chunk_recovery(
         if session.get("last_error_detail") != "api_key_prompt_timeout":
             session["last_error_detail"] = None
         save_session()
-        print("⚠ Interruzione: progressi salvati. Potrai riprendere piu' tardi.")
+        print(
+            "⚠ Quota giornaliera esaurita: progressi salvati, potrai riprendere più tardi."
+        )
         return False, True
 
     if isinstance(exc, PermanentError):
-        print(f"   ❌ Richiesta non valida (400). Dettagli:\n{exc}")
+        print(f"❌ Gemini ha rifiutato la richiesta come non valida.\nDettaglio: {exc}")
         session["last_error"] = "bad_request_phase1"
         session["last_error_detail"] = None
         save_session()
@@ -488,14 +481,16 @@ def _handle_phase1_chunk_recovery(
 
     if isinstance(exc, DegenerateOutputError):
         if not chunk_recovery_used:
-            print(
-                f"   ⚠ [Recovery automatica] chunk={chunk_idx}: output non valido ({exc}) - riprovo lo stesso modello ({model_name})..."
-            )
+            # The phase line announces the second pass; only the cause is new here.
+            print(f"Dettaglio: {exc}")
             return True, False
         _excerpt = getattr(exc, "rejected_text", "")
-        _excerpt_log = f"\n      excerpt: {_excerpt[:400]}" if _excerpt else ""
+        _excerpt_log = (
+            f"\nInizio del testo scartato: {_excerpt[:400]}" if _excerpt else ""
+        )
         print(
-            f'   ❌ Output degenerato nel blocco {chunk_idx}: anche il pass di recovery ha fallito reason="{exc}"{_excerpt_log}'
+            f"❌ Trascrizione del blocco {chunk_idx} non valida anche al secondo tentativo."
+            f"\nDettaglio: {exc}{_excerpt_log}"
         )
         session["last_error"] = "phase1_degenerate_output"
         session["last_error_detail"] = None
@@ -552,8 +547,8 @@ def _process_single_phase1_chunk_iteration(
 
     try:
         print(
-            "   -> (1/3) Estrazione e taglio audio "
-            f"(da {_fmt_clock(chunk_start_sec)} a {_fmt_clock(chunk_end_sec)})..."
+            f"Taglio dell'audio da {format_clock(chunk_start_sec)} "
+            f"a {format_clock(chunk_end_sec)}..."
         )
         cut_ok, cut_err, next_cut = _cut_phase1_audio_chunk(
             chunk_start_sec=chunk_start_sec,
@@ -696,7 +691,6 @@ def _process_single_phase1_chunk_iteration(
 
     except Exception as e:
         last_failure_detail = _sanitize_error_detail(e)
-        print(f"   ❌ Errore durante l'elaborazione del blocco: {e}")
 
     finally:
         if os.path.exists(chunk_path):
@@ -713,12 +707,17 @@ def _process_single_phase1_chunk_iteration(
         save_session()
         if retry_exhausted_message is not None:
             print(
-                f"   ❌ {retry_exhausted_message} "
-                "Elaborazione interrotta, progressi salvati. Potrai riprendere piu' tardi."
+                f"❌ Gemini non risponde dopo vari tentativi sul blocco {chunk_idx}: "
+                "elaborazione interrotta, progressi salvati. Potrai riprendere più tardi."
+                f"\nDettaglio: {retry_exhausted_message}"
             )
         else:
+            detail = (
+                f"\nDettaglio: {last_failure_detail}" if last_failure_detail else ""
+            )
             print(
-                "   ❌ Errore critico durante l'elaborazione del blocco. Interrompo (progressi salvati)."
+                f"❌ Errore nel blocco {chunk_idx}: elaborazione interrotta, progressi salvati."
+                f"{detail}"
             )
         return Phase1ChunkIterationResult(
             client=client,

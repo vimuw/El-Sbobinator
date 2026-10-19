@@ -1495,7 +1495,7 @@ class RequestNewApiKeyTests(unittest.TestCase):
         self.assertTrue(timeout_called.is_set())
         self.assertTrue(runtime.dismissed)
         # The pipeline reports the timeout with its saved-session hint.
-        self.assertNotIn("scaduta", out.getvalue())
+        self.assertNotIn("in tempo", out.getvalue())
 
     def test_timeout_without_owner_is_reported_here(self):
         from el_sbobinator.services.generation_service import request_new_api_key
@@ -1512,7 +1512,7 @@ class RequestNewApiKeyTests(unittest.TestCase):
             self.assertIsNone(
                 request_new_api_key(_FakeRuntime(), lambda: False, timeout_seconds=0.01)
             )
-        self.assertIn("scaduta", out.getvalue())
+        self.assertIn("⚠ Nessuna nuova chiave API inserita in tempo.", out.getvalue())
 
 
 class ExtractResponseTextMoreTests(unittest.TestCase):
@@ -2218,6 +2218,4 @@ class RetryConsoleLineTests(unittest.TestCase):
         self.assertEqual(
             phases[0], "Errore temporaneo di Gemini — riprovo tra 0s (tentativo 2/3)"
         )
-        self.assertEqual(
-            printed.splitlines(), ["      Dettaglio: qualcosa di inatteso"]
-        )
+        self.assertEqual(printed.splitlines(), ["Dettaglio: qualcosa di inatteso"])

@@ -236,20 +236,22 @@ class PipelineControllerMixin:
     ) -> None:
         if not remaining:
             self._push_console(
-                "✅ REVISIONE COMPLETATA CON SUCCESSO! Tutti i blocchi sono stati revisionati."
+                "✅ Revisione completata: tutte le sezioni sono revisionate."
             )
         else:
             if cancelled:
-                self._push_console(
-                    "⚠ REVISIONE INTERROTTA! Operazione annullata dall'utente."
-                )
+                self._push_console("⚠ Revisione interrotta: annullata dall'utente.")
             elif quota_exhausted:
                 self._push_console(
-                    "⚠ REVISIONE INTERROTTA! Quota giornaliera API esaurita. Riprova domani."
+                    "⚠ Revisione interrotta: quota giornaliera esaurita, riprova domani."
                 )
             else:
+                from el_sbobinator.services.revision_service import (
+                    unrevised_blocks_message,
+                )
+
                 self._push_console(
-                    f"⚠ REVISIONE COMPLETATA CON AVVISI! Rimangono {len(remaining)} blocchi non revisionati."
+                    f"⚠ Revisione completata con avvisi: {unrevised_blocks_message(remaining)}."
                 )
 
     def retry_failed_revision_blocks(self, session_dir: str) -> dict:
@@ -654,7 +656,7 @@ class PipelineControllerMixin:
                         current_index = None
                         current_file_id = ""
             except Exception as e:
-                self._push_console(f"❌ Errore fatale: {e}")
+                self._push_console(f"❌ Errore imprevisto: {e}")
             finally:
                 self._adapter.is_running = False
                 with self._sessions_cache_lock:

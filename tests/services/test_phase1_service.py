@@ -1179,10 +1179,15 @@ class TestPhase1EdgeCases(unittest.TestCase):
 
         self.assertIsNotNone(transcript)
         printed = out.getvalue()
-        self.assertIn("(da 0:00 a 1:00:00)", printed)
-        self.assertIn("(da 1:00:00 a 1:01:40)", printed)
+        self.assertIn("Taglio dell'audio da 0:00 a 1:00:00...", printed)
+        self.assertIn("Taglio dell'audio da 1:00:00 a 1:01:40...", printed)
         self.assertNotIn("Blocco Audio", printed)
         self.assertNotIn("-----", printed)
+        self.assertIn("✅ Blocco 2/2 salvato.", printed)
+        # Flat lines: the collapsed console tail has no phase line to indent under.
+        self.assertEqual(
+            [line for line in printed.splitlines() if line[:1].isspace()], []
+        )
 
     def test_cancellation_leaves_the_outcome_to_the_phase_line(self):
         cancel = threading.Event()

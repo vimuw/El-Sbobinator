@@ -466,7 +466,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       try {
         await onSettingsSaved?.();
       } catch (e: unknown) {
-        appendConsole(`⚠ Impostazioni salvate, ma il refresh dello stato non e riuscito: ${getErrorMessage(e)}`);
+        appendConsole(`⚠ Impostazioni salvate, ma l'aggiornamento dello stato non è riuscito: ${getErrorMessage(e)}`);
       }
       if (credentialStorageWarning(result.credential_storage, result.api_key_insecure)) {
         setActiveTab('general');

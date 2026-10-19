@@ -9,6 +9,7 @@ from el_sbobinator.utils.console_utils import (
     MAX_CONSOLE_LINE_LEN,
     MAX_PENDING_LINE_LEN,
     OVERSIZED_LINE_MESSAGE,
+    format_clock,
 )
 from el_sbobinator.webview_entry import _ConsoleTee
 
@@ -187,3 +188,11 @@ def test_console_messages_use_the_severity_markers_the_console_colours():
         for match in legacy.finditer(source)
     ]
     assert offenders == []
+
+
+@pytest.mark.parametrize(
+    ("seconds", "expected"),
+    [(0, "0:00"), (65.9, "1:05"), (2580, "43:00"), (3700, "1:01:40"), (-3, "0:00")],
+)
+def test_format_clock_reads_like_a_player(seconds, expected):
+    assert format_clock(seconds) == expected

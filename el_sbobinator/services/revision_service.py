@@ -152,7 +152,8 @@ def _run_macro_retry_pass(
     if not pending_retry:
         return client, failed_blocks, revised_done, False
 
-    print(f"Retry pass: {len(pending_retry)} blocco/i senza revisione. Riprovo...")
+    noun = "sezione" if len(pending_retry) == 1 else "sezioni"
+    print(f"Riprovo la revisione di {len(pending_retry)} {noun}...")
     _update_session(
         session, {"revision_pending_blocks": [idx for idx, _, _ in pending_retry]}
     )
@@ -217,7 +218,7 @@ def _run_macro_retry_pass(
                 os.remove(raw_path)
             except Exception:
                 pass
-            print(f"   ✅ Retry blocco {index}: revisione completata.")
+            print(f"✅ Sezione {index} revisionata al secondo tentativo.")
             retry_success = True
             revised_done += 1
             _update_session(
@@ -239,7 +240,9 @@ def _run_macro_retry_pass(
                 session, "macro", _macro_secs, done=revised_done, total=macro_total
             )
         except QuotaDailyLimitError:
-            print("   ⚠ Interruzione: quota giornaliera raggiunta durante retry pass.")
+            print(
+                "⚠ Quota giornaliera esaurita: progressi salvati, potrai riprendere più tardi."
+            )
             session["last_error"] = "quota_daily_limit_phase2"
             if session.get("last_error_detail") != "api_key_prompt_timeout":
                 session["last_error_detail"] = None
@@ -256,9 +259,7 @@ def _run_macro_retry_pass(
                 )
 
         if not retry_success:
-            print(
-                f"   ⚠ Blocco {index}: revisione definitivamente fallita. Incluso non revisionato."
-            )
+            print(f"⚠ Sezione {index} non revisionata: la includo così com'è.")
             try:
                 with open(raw_path, encoding="utf-8") as _fh:
                     _raw_content = _fh.read().rstrip("\n")
@@ -353,7 +354,7 @@ def _process_macro_block_item(
     block_for_ai = (block_local or block_src).strip()
     if removed_exact or removed_adj:
         print(
-            f"   -> Pre-clean locale ({index}/{macro_total}): {removed_exact + removed_adj} duplicati rimossi."
+            f"Sezione {index}/{macro_total}: {removed_exact + removed_adj} ripetizioni rimosse prima della revisione."
         )
 
     step_t0 = time.monotonic()
@@ -382,7 +383,7 @@ def _process_macro_block_item(
 
         _atomic_write_text(rev_path, current_text + "\n")
         session.setdefault("settings", {})["effective_model"] = model_name
-        print(f"   ✅ Revisione salvata: {os.path.basename(rev_path)}")
+        print(f"✅ Sezione {index}/{macro_total} revisionata.")
 
         new_revised_done = revised_done + 1
         _update_session(
@@ -413,7 +414,9 @@ def _process_macro_block_item(
         )
 
     except QuotaDailyLimitError:
-        print("   ⚠ Interruzione: progressi salvati. Potrai riprendere più tardi.")
+        print(
+            "⚠ Quota giornaliera esaurita: progressi salvati, potrai riprendere più tardi."
+        )
         session["last_error"] = "quota_daily_limit_phase2"
         if session.get("last_error_detail") != "api_key_prompt_timeout":
             session["last_error_detail"] = None
@@ -436,9 +439,7 @@ def _process_macro_block_item(
             )
 
     if not success:
-        print(
-            f"   ⚠ Revisione blocco {index} fallita. Salvo provvisoriamente come raw (sarà riprovato)."
-        )
+        print(f"⚠ Revisione della sezione {index} non riuscita: la riprovo alla fine.")
         _atomic_write_text(raw_path, block_src + "\n")
         _macro_secs = max(0.0, time.monotonic() - float(step_t0))
         record_step_metric(
