@@ -21,6 +21,7 @@ from el_sbobinator.core.media_server import LocalMediaServer
 from el_sbobinator.utils.console_utils import MAX_CONSOLE_LINE_LEN, LineConsoleTee
 from el_sbobinator.utils.logging_utils import (
     configure_logging,
+    detach_console_logging,
     get_logger,
     prepare_startup,
 )
@@ -269,7 +270,12 @@ def main():
     # Intercept stdout/stderr to forward to React console
     sys.stdout = _ConsoleTee(sys.__stdout__, api)
     sys.stderr = _ConsoleTee(sys.__stderr__, api)
-    configure_logging(stream=sys.stdout)
+    # Logger records go to the log files (and a native terminal, when there is one);
+    # the app console carries only the user-facing progress lines.
+    if sys.__stdout__ is not None:
+        configure_logging(stream=sys.__stdout__)
+    else:
+        detach_console_logging()
 
     dist_path = get_dist_path()
     webview2_available = has_webview2_runtime()
