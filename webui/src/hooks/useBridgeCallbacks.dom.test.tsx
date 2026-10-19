@@ -533,7 +533,7 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     expect(onBatchFullyDone).toHaveBeenCalledWith(payload);
   });
 
-  it('uses the backend retry-state names for cooldown, probe, and pause', () => {
+  it('leaves retry waits to the phase line instead of adding console lines', () => {
     const appendConsole = vi.fn();
     const opts = makeMinimalHook();
     opts.appendConsole = appendConsole;
@@ -547,12 +547,11 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
         state: 'probing', attempt: 2, max_attempts: 4, model: 'gemini-2.5-flash',
       });
       window.elSbobinatorBridge?.retryStateChanged?.({
-        state: 'paused', attempt: 4, max_attempts: 4,
+        state: 'exhausted', attempt: 4, max_attempts: 4,
       });
     });
 
-    expect(appendConsole).toHaveBeenCalledWith(expect.stringContaining('Attesa cooldown'));
-    expect(appendConsole).toHaveBeenCalledWith(expect.stringContaining('Esecuzione sonda'));
-    expect(appendConsole).toHaveBeenCalledWith(expect.stringContaining('Batch sospeso'));
+    // "Server Gemini occupato — riprovo tra 15s (tentativo 2/4)" already reaches the console as a phase.
+    expect(appendConsole).not.toHaveBeenCalled();
   });
 });

@@ -200,16 +200,6 @@ export function useBridgeCallbacks(options: {
           }
         }
       },
-      onRetryStateChanged: data => {
-        if (data.state === 'cooling_down') {
-          const sec = Math.round(data.seconds_remaining ?? 0);
-          appendConsoleRef.current(`⏳ Attesa cooldown (${data.attempt ?? 1}/${data.max_attempts ?? 4}): riprovo tra ${sec}s...`);
-        } else if (data.state === 'probing') {
-          appendConsoleRef.current(`🔍 Esecuzione sonda (${data.attempt ?? 1}/${data.max_attempts ?? 4}) con ${data.model ?? 'modello'}...`);
-        } else if (data.state === 'paused') {
-          appendConsoleRef.current(`⏸️ Batch sospeso: capacità Gemini non disponibile dopo ${data.max_attempts ?? 4} tentativi. Progressi salvati.`);
-        }
-      },
       onFileFailed: data => {
         const currentFile = filesRef.current?.find(file => file.id === data.id);
         const isPaused = data.retry_reason === 'circuit_breaker_paused' || Boolean(data.retryable) || isPausedError(data.error, data.error_detail);
