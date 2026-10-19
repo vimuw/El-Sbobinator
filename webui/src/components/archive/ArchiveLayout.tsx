@@ -22,10 +22,7 @@ export function ArchivePageTitle({ children, count, className = '' }: ArchivePag
   );
 }
 
+// A plain sentence-case title, the same as the dashboard's sections: no shouted caps.
 export function ArchiveSectionHeading({ children }: { children: ReactNode }) {
-  return (
-    <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-      {children}
-    </h3>
-  );
+  return <h3 className="dashboard-section-title">{children}</h3>;
 }

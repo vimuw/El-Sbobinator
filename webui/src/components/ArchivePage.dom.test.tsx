@@ -53,6 +53,18 @@ function renderArchive(overrides: Partial<{
 }
 
 describe('ArchivePage', () => {
+  it.each([false, true])('titles its sections like the dashboard, in plain sentence case (inside collection: %s)', (insideFolder) => {
+    const session = makeSession('s1');
+    renderArchive({ sessions: [session], folders: [{ id: 'f1', name: 'Anatomia', color: '', session_dirs: [session.session_dir] }] });
+    if (insideFolder) fireEvent.click(within(screen.getByRole('region', { name: 'Raccolte' })).getByText('Anatomia'));
+
+    const names = insideFolder ? ['Lezioni'] : ['Raccolte', 'Tutte le sbobine'];
+    for (const name of names) {
+      const heading = screen.getByRole('heading', { name, level: 3 });
+      expect(heading.className).toBe('dashboard-section-title');
+    }
+  });
+
   it.each([false, true])('renames a lesson from its menu (inside collection: %s)', async (insideFolder) => {
     const session = makeSession('s1');
     const onRenameSession = vi.fn().mockResolvedValue(undefined);
