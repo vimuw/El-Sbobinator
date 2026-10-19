@@ -1,43 +1,83 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useRef } from 'react';
 import { motion, useAnimationControls } from 'motion/react';
 import './BrandLogo.css';
 
-const reducedMotionQuery = '(prefers-reduced-motion: reduce)';
+// The app ignores Windows "Riduci animazioni" everywhere (see MotionConfig in App.tsx),
+// so the mascot does not consult prefers-reduced-motion either.
 
-function subscribeToMotionPreference(onChange: () => void) {
-  if (typeof window.matchMedia !== 'function') return () => {};
-  const preference = window.matchMedia(reducedMotionQuery);
-  preference.addEventListener('change', onChange);
-  return () => preference.removeEventListener('change', onChange);
-}
+let sessionGreetingPlayed = false;
 
-function prefersReducedMotion() {
-  return typeof window.matchMedia === 'function' && window.matchMedia(reducedMotionQuery).matches;
+/** Test-only: lets each test start from a fresh app session. */
+// eslint-disable-next-line react-refresh/only-export-components
+export function resetBrandLogoSessionGreeting() {
+  sessionGreetingPlayed = false;
 }
 
 interface BrandLogoProps {
   size: 36 | 52;
+  /** Hop once on mount (setup welcome). */
   welcome?: boolean;
+  /** Hop once per app session, not on every re-render or navigation back. */
+  greetOncePerSession?: boolean;
+  /** Celebratory hop each time this flips to true (a transcription just completed). */
+  celebrate?: boolean;
+  /** Replaces the click greet, e.g. sidebar navigation. */
+  onClick?: () => void;
+  ariaLabel?: string;
 }
 
-export function BrandLogo({ size, welcome = false }: BrandLogoProps) {
+const REST = { y: 0, rotate: 0, scaleX: 1, scaleY: 1 };
+
+export function BrandLogo({
+  size,
+  welcome = false,
+  greetOncePerSession = false,
+  celebrate = false,
+  onClick,
+  ariaLabel = 'Saluta El Sbobinator',
+}: BrandLogoProps) {
   const controls = useAnimationControls();
-  const reducedMotion = useSyncExternalStore(subscribeToMotionPreference, prefersReducedMotion, () => false);
+  const wasCelebrating = useRef(false);
 
   useEffect(() => {
-    if (welcome && !reducedMotion) {
-      void controls.start({
-        y: [0, 0, -size * 0.09, 0, 0],
-        rotate: [0, -3, 4, -2, 0],
-        scaleX: [1, 1.05, 0.98, 1.03, 1],
-        scaleY: [1, 0.94, 1.03, 0.97, 1],
-        transition: { duration: 0.5, delay: 0.2, ease: 'easeInOut' },
-      });
-    } else {
-      controls.set({ y: 0, rotate: 0, scaleX: 1, scaleY: 1 });
+    const hop = () => controls.start({
+      y: [0, 0, -size * 0.09, 0, 0],
+      rotate: [0, -3, 4, -2, 0],
+      scaleX: [1, 1.05, 0.98, 1.03, 1],
+      scaleY: [1, 0.94, 1.03, 0.97, 1],
+      transition: { duration: 0.5, delay: 0.2, ease: 'easeInOut' },
+    });
+    if (welcome) {
+      void hop();
+      return () => controls.stop();
     }
+    if (greetOncePerSession && !sessionGreetingPlayed) {
+      sessionGreetingPlayed = true;
+      let finished = false;
+      void hop().then(() => { finished = true; });
+      return () => {
+        // Interrupted before it finished (unmount, StrictMode re-run): let it play next time.
+        if (!finished) sessionGreetingPlayed = false;
+        controls.stop();
+      };
+    }
+    controls.set(REST);
     return () => controls.stop();
-  }, [controls, reducedMotion, size, welcome]);
+  }, [controls, size, welcome, greetOncePerSession]);
+
+  useEffect(() => {
+    const rising = celebrate && !wasCelebrating.current;
+    wasCelebrating.current = celebrate;
+    if (!rising) return;
+    controls.stop();
+    void controls.start({
+      y: [0, 0, -size * 0.32, 0, -size * 0.08, 0, 0],
+      rotate: [0, -4, 8, -6, 3, -1, 0],
+      scaleX: [1, 1.12, 0.94, 1.1, 0.98, 1.02, 1],
+      scaleY: [1, 0.86, 1.08, 0.9, 1.03, 0.98, 1],
+      transition: { duration: 0.9, ease: 'easeInOut' },
+    });
+  }, [celebrate, controls, size]);
 
   const greet = () => {
     controls.stop();
@@ -55,11 +95,11 @@ export function BrandLogo({ size, welcome = false }: BrandLogoProps) {
       type="button"
       className="brand-logo"
       style={{ width: size, height: size }}
-      aria-label="Saluta El Sbobinator"
-      onClick={greet}
-      whileHover={{ scale: 1.08, rotate: -6, y: -2 }}
-      whileTap={{ scale: 0.92 }}
-      transition={{ type: 'spring', stiffness: 380, damping: 20 }}
+      aria-label={ariaLabel}
+      onClick={onClick ?? greet}
+      whileHover={{ rotate: -5, y: -1 }}
+      whileTap={{ scale: 0.95 }}
+      transition={{ duration: 0.18, ease: 'easeOut' }}
     >
       <motion.img
         src="./icon.png"

@@ -27,6 +27,7 @@ interface NavSidebarProps {
   isNotificationsOpen: boolean;
   setIsNotificationsOpen: Dispatch<SetStateAction<boolean>>;
   shakeBell: boolean;
+  completionFlash?: boolean;
 }
 
 const bellVariants = {
@@ -49,6 +50,7 @@ export const NavSidebar = memo(function NavSidebar({
   isNotificationsOpen,
   setIsNotificationsOpen,
   shakeBell,
+  completionFlash = false,
 }: NavSidebarProps) {
   const apiStatusColor = !apiReady
     ? (bridgeDelayed ? 'var(--error-text)' : 'var(--warning-text)')
@@ -79,7 +81,12 @@ export const NavSidebar = memo(function NavSidebar({
     >
       {/* Logo */}
       <div className="flex justify-center pt-3 pb-1">
-        <BrandLogo size={36} />
+        <BrandLogo
+          size={36}
+          ariaLabel="Vai alla Dashboard"
+          onClick={() => setActivePage('queue')}
+          celebrate={completionFlash}
+        />
       </div>
 
       {/* Navigation items */}

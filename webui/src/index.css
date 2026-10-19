@@ -2746,15 +2746,6 @@ button {
   transition: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .editor-toc-col,
-  .editor-toc-spacer,
-  .editor-toc-content,
-  .editor-toc-trigger {
-    transition: none;
-  }
-}
-
 .editor-toc-btn {
   width: 32px;
   height: 32px;
@@ -3040,10 +3031,6 @@ button {
 
 @keyframes editor-script-caret-blink {
   50% { opacity: 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .tiptap-editor:focus:not([data-editor-script-composing]) .editor-script-caret::after { animation: none; }
 }
 
 .tiptap-editor h1,

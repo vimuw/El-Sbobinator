@@ -65,7 +65,7 @@ export const WelcomeDashboard = memo(function WelcomeDashboard({ archiveSessions
           <h1 className="page-title min-w-0">
             {hasSessions ? 'Bentornato' : 'Benvenuto in El Sbobinator'}
           </h1>
-          <BrandLogo size={36} />
+          <BrandLogo size={36} greetOncePerSession={hasSessions} />
         </div>
         <p className="text-base" style={{ color: 'var(--text-muted)' }}>
           {hasSessions
