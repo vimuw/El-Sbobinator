@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { DURATION, EASE_IN, enterTransition, exitTransition } from '../motion';
-import { AlertCircle, AlertTriangle, CheckCircle, Clock, ExternalLink, FileAudio, FolderOpen, GripVertical, PenLine, RotateCcw, Settings, Trash2, X, XCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowUpRight, CheckCircle, Clock, ExternalLink, FileAudio, FolderOpen, GripVertical, PenLine, RotateCcw, Settings, Trash2, X, XCircle } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
@@ -236,13 +236,25 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
       setIsRetryingBlocks(false);
     }
   };
+  const openEditor = () => onPreview(file.outputHtml!, file.name, file.path, file.id, file.outputDir);
+  const handleCardKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    // Only the card itself: Enter on the inner buttons keeps their own action.
+    if (event.target !== event.currentTarget) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openEditor();
+    }
+  };
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: exitTransition }}
       transition={{ opacity: enterTransition() }}
-      onClick={isClickable ? () => onPreview(file.outputHtml!, file.name, file.path, file.id, file.outputDir) : undefined}
+      onClick={isClickable ? openEditor : undefined}
+      onKeyDown={isClickable ? handleCardKeyDown : undefined}
+      tabIndex={isClickable ? 0 : undefined}
+      aria-label={isClickable ? `Apri ${file.name} nell'editor` : undefined}
       className={`queue-card relative px-4 py-3 transition-colors group/card ${isClickable ? 'cursor-pointer' : ''} is-completed ${
         hasRevisionWarnings ? 'is-warning' : ''
       }${isFresh ? ' is-fresh' : ''}`}
@@ -265,7 +277,7 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
                 <FolderIndicatorChip folder={currentFolder} />
               )}
             </div>
-            <div className="flex items-center gap-2.5 mt-1.5 text-xs text-[var(--text-muted)] min-w-0 flex-nowrap overflow-hidden">
+            <div className="queue-card-meta flex items-center gap-2 mt-0.5 text-xs text-[var(--text-muted)] min-w-0 flex-nowrap overflow-hidden">
               <span className="shrink-0">{formatSize(file.size)}</span>
               {file.duration > 0 && (
                 <>
@@ -282,7 +294,7 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
                 </>
               )}
               <span className="w-1 h-1 rounded-full bg-[var(--border-default)] shrink-0" />
-              <span className={`shrink-0 ${hasRevisionWarnings ? 'text-[var(--warning-text)] font-medium' : 'text-[var(--success-text)]'}`}>
+              <span className={`shrink-0 ${hasRevisionWarnings ? 'text-[var(--warning-text)] font-medium' : ''}`}>
                 {hasRevisionWarnings ? 'Completata con avvisi' : file.completedAt ? formatRelativeTime(file.completedAt) : 'Completato'}
               </span>
               {failedBlockCount > 0 && (
@@ -313,6 +325,17 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
             >
               <RotateCcw className={`w-4 h-4 transition-transform duration-500 ease-out ${isRetrying ? 'animate-spin' : 'group-hover/retry:-rotate-180 group-hover/retry:scale-105'}`} />
               <span className="sr-only">{isRetrying ? 'Riprovo…' : 'Riprova revisione'}</span>
+            </button>
+          )}
+          {isClickable && (
+            <button
+              type="button"
+              onClick={openEditor}
+              className="completed-open-button"
+              title="Apri nell'editor"
+            >
+              Apri
+              <ArrowUpRight className="w-3.5 h-3.5" />
             </button>
           )}
           <KebabMenu

@@ -127,4 +127,21 @@ describe('CompletedSection', () => {
     expect(scrollContainer).toBeTruthy();
     expect(scrollContainer?.className).toContain('max-h-[390px]');
   });
+
+  it('shows warnings in their own pill and Pulisci tutto as a labelled secondary action', () => {
+    const files = [makeFile({ id: 'f1' }), makeFile({ id: 'f2', completionStatus: 'completed_with_warnings' })];
+    render(<CompletedSection {...baseProps} doneFiles={files} />);
+    expect(screen.getByText('1').className).toContain('is-quiet');
+    expect(screen.getByText('1 con avvisi').className).toContain('is-warning');
+    const clear = screen.getByRole('button', { name: 'Pulisci tutto' });
+    expect(clear.className).toContain('queue-text-button');
+    expect(clear.textContent).toContain('Pulisci tutto');
+  });
+
+  it('opens a completed transcript from its Apri button', () => {
+    const onPreview = vi.fn();
+    render(<CompletedSection {...baseProps} onPreview={onPreview} doneFiles={[makeFile({ outputHtml: '/out/l.html' })]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Apri' }));
+    expect(onPreview).toHaveBeenCalledWith('/out/l.html', 'lezione.mp3', undefined, 'f1', undefined);
+  });
 });

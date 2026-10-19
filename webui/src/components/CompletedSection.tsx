@@ -1,7 +1,7 @@
 import { memo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { fade, fadeUp } from '../motion';
-import { CheckCircle, Search, Trash2, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Search, Trash2, X } from 'lucide-react';
 import type { AppStatus, FileItem } from '../appState';
 import type { ArchiveFolder } from '../bridge';
 import { CompletedFileCard } from './QueueFileCard';
@@ -42,9 +42,15 @@ export const CompletedSection = memo(function CompletedSection({ doneFiles, appS
                 <CheckCircle className="w-4 h-4" style={{ color: 'var(--success-text)' }} />
                 Sbobine completate
               </h2>
-              <span className="status-pill self-start sm:self-auto shrink-0 whitespace-nowrap">
-                {fullyCompletedCount}{warningCount > 0 ? ` · ${warningCount} con avvisi` : ''}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="status-pill is-quiet shrink-0" title="Sbobine completate senza avvisi">{fullyCompletedCount}</span>
+                {warningCount > 0 && (
+                  <span className="status-pill is-quiet is-warning shrink-0 whitespace-nowrap">
+                    <AlertTriangle className="w-3 h-3" />
+                    {warningCount} con avvisi
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {doneFiles.length >= 5 && (
@@ -70,14 +76,9 @@ export const CompletedSection = memo(function CompletedSection({ doneFiles, appS
                 </div>
               )}
               {(appState === 'idle' || appState === 'processing') && (
-                <button
-                  type="button"
-                  onClick={onClearAll}
-                  className="icon-button compact-icon-button hover-danger transition-colors text-[var(--text-muted)] hover:!text-[var(--error-text)]"
-                  title="Pulisci tutto"
-                  aria-label="Pulisci tutto"
-                >
-                  <Trash2 className="w-4 h-4" />
+                <button type="button" onClick={onClearAll} className="queue-text-button is-danger shrink-0" aria-label="Pulisci tutto">
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Pulisci tutto
                 </button>
               )}
             </div>

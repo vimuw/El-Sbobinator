@@ -430,3 +430,56 @@ describe('CompletedFileCard fresh highlight', () => {
     expect(container.querySelector('.queue-card.is-fresh')).toBeNull();
   });
 });
+
+describe('CompletedFileCard open affordance', () => {
+  const openableFile = () => makeFile({ status: 'done', outputHtml: '/out/file.html', path: '/src/f.mp3', outputDir: '/sessions/s1' });
+
+  it('shows an Apri button that opens the editor once, next to the kebab menu', () => {
+    const onPreview = vi.fn();
+    render(<CompletedFileCard file={openableFile()} onRemove={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()} />);
+    const openButton = screen.getByRole('button', { name: 'Apri' });
+    expect(openButton.className).toContain('completed-open-button');
+    expect(screen.getByLabelText('Altre opzioni')).toBeTruthy();
+    fireEvent.click(openButton);
+    expect(onPreview).toHaveBeenCalledTimes(1);
+    expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione.mp3', '/src/f.mp3', 'f1', '/sessions/s1');
+  });
+
+  it('makes the card focusable and opens the editor with Enter or Space', () => {
+    const onPreview = vi.fn();
+    const { container } = render(<CompletedFileCard file={openableFile()} onRemove={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()} />);
+    const card = container.querySelector('.queue-card') as HTMLElement;
+    expect(card.tabIndex).toBe(0);
+    expect(card.getAttribute('aria-label')).toBe("Apri lezione.mp3 nell'editor");
+    fireEvent.keyDown(card, { key: 'Enter' });
+    fireEvent.keyDown(card, { key: ' ' });
+    expect(onPreview).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves Enter on inner buttons to their own action', () => {
+    const onPreview = vi.fn();
+    render(<CompletedFileCard file={openableFile()} onRemove={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()} />);
+    fireEvent.keyDown(screen.getByLabelText('Altre opzioni'), { key: 'Enter' });
+    expect(onPreview).not.toHaveBeenCalled();
+  });
+
+  it('offers no open affordance or focus stop without an output', () => {
+    const { container } = render(<CompletedFileCard file={makeFile({ status: 'done' })} onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Apri' })).toBeNull();
+    expect((container.querySelector('.queue-card') as HTMLElement).hasAttribute('tabindex')).toBe(false);
+  });
+
+  it('keeps the meta line quiet and the warning prominent', () => {
+    const { container, rerender } = render(
+      <CompletedFileCard file={makeFile({ status: 'done', outputHtml: '/out/file.html', completedAt: Date.now() - 3_600_000 })} onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />,
+    );
+    const meta = container.querySelector('.queue-card-meta') as HTMLElement;
+    expect(meta).toBeTruthy();
+    expect(meta.innerHTML).not.toContain('--success-text');
+    rerender(
+      <CompletedFileCard file={makeFile({ status: 'done', outputHtml: '/out/file.html', completionStatus: 'completed_with_warnings', revisionFailedBlocks: [2] })} onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />,
+    );
+    expect(screen.getByText('Completata con avvisi').className).toContain('--warning-text');
+    expect(screen.getByText(/1 blocco non revisionato/).className).toContain('--warning-text');
+  });
+});
