@@ -61,6 +61,7 @@ from el_sbobinator.services.phase1_service import process_phase1_transcription
 from el_sbobinator.services.revision_service import (
     build_macro_blocks,
     process_macro_revision_phase,
+    unrevised_blocks_message,
 )
 from el_sbobinator.services.session_audio_service import (
     attach_playback_audio,
@@ -494,17 +495,18 @@ def _export_html_and_finish(
     elapsed = time.monotonic() - start_time
     minutes = int(elapsed // 60)
     seconds = int(elapsed % 60)
-    print("\n======================================")
-    print("SBOBINATURA COMPLETATA CON SUCCESSO!")
-    print(f"Tempo totale: {minutes}m {seconds}s")
-    print(f"File salvato in: {session_html_dir}")
-    runtime.phase("Fase: completato")
     runtime.set_revision_failed_blocks(session.get("revision_failed_blocks") or [])
-    _completion_status = (
-        "completed_with_warnings"
-        if runtime.get_revision_failed_blocks()
-        else "completed"
-    )
+    failed_blocks = runtime.get_revision_failed_blocks()
+    # The closing line must match the run result the banner and archive show.
+    if failed_blocks:
+        print(
+            f"⚠ Sbobina completata con avvisi in {minutes}m {seconds:02}s: "
+            f"{unrevised_blocks_message(failed_blocks)}."
+        )
+    else:
+        print(f"✅ Sbobina completata in {minutes}m {seconds:02}s.")
+    runtime.phase("Fase: completato")
+    _completion_status = "completed_with_warnings" if failed_blocks else "completed"
     runtime.set_run_result(_completion_status)
     logger.info("Pipeline completata con successo.", extra={"stage": "done"})
     return True

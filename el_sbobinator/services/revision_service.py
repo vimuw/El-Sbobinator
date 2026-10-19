@@ -459,7 +459,7 @@ def _process_macro_block_item(
     )
 
 
-def _unrevised_blocks_message(failed_blocks: list) -> str:
+def unrevised_blocks_message(failed_blocks: list) -> str:
     numbers = ", ".join(str(block) for block in failed_blocks)
     if len(failed_blocks) == 1:
         return f"1 sezione inclusa senza revisione (sezione {numbers})"
@@ -553,11 +553,9 @@ def process_macro_revision_phase(
         return client, revised_text
 
     if failed_blocks:
-        print(
-            f"\n[!!] ATTENZIONE: i seguenti blocchi sono stati inclusi non revisionati: {failed_blocks}"
-        )
+        # The completion line reports them in the console; the banner keeps them visible.
         warn_runtime(
-            runtime, "unrevised_blocks", _unrevised_blocks_message(failed_blocks)
+            runtime, "unrevised_blocks", unrevised_blocks_message(failed_blocks)
         )
 
     session_update: dict = {
