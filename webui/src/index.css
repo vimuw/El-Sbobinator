@@ -128,6 +128,19 @@
 
   --shadow-soft: none;
   --shadow-strong: 0 8px 32px rgba(15, 23, 42, 0.08);
+  /* Surface elevation: a hairline border carries the shape, these add depth
+     quietly. Rest → hover only ever steps up one level. */
+  --shadow-xs: 0 1px 2px rgba(28, 25, 18, 0.04);
+  --shadow-sm: 0 1px 2px rgba(28, 25, 18, 0.04), 0 4px 12px -4px rgba(28, 25, 18, 0.08);
+  --shadow-md: 0 1px 3px rgba(28, 25, 18, 0.05), 0 10px 24px -8px rgba(28, 25, 18, 0.14);
+
+  --radius-card: 12px;
+  --radius-panel: 16px;
+
+  /* Matches EASE_OUT in motion.ts: decelerate, never overshoot. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --tracking-display: -0.025em;
 
   --glass-top-shimmer: rgba(255, 255, 255, 0.90);
 
@@ -213,6 +226,9 @@
 
     --shadow-soft: none;
     --shadow-strong: 0 8px 48px rgba(0, 0, 0, 0.50);
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.30);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.30), 0 4px 12px -4px rgba(0, 0, 0, 0.40);
+    --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.35), 0 12px 28px -8px rgba(0, 0, 0, 0.55);
 
     --glass-bg: #202020;
     --glass-border: rgba(255, 255, 255, 0.15);
@@ -281,15 +297,6 @@
   background: transparent;
   box-shadow: none;
   border-color: transparent;
-}
-
-:root:not([data-theme="dark"]) .queue-card {
-  box-shadow: none;
-}
-
-:root:not([data-theme="dark"]) .queue-card:hover {
-  box-shadow: none;
-  border-color: rgba(100, 116, 139, 0.52);
 }
 
 :root:not([data-theme="dark"]) .dropzone-card {
@@ -543,6 +550,33 @@ button {
 
 .premium-panel {
   background: var(--glass-bg);
+  border-color: var(--border-subtle);
+  border-radius: var(--radius-panel);
+  /* The inset top line catches light on dark surfaces; on white it vanishes. */
+  box-shadow: inset 0 1px 0 var(--glass-top-shimmer), var(--shadow-sm);
+}
+
+/* Panels nested in a modal sit on an already elevated card. */
+.modal-card .premium-panel {
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+/* Type scale for the queue page: one display title, quieter section titles. */
+.page-title {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: var(--tracking-display);
+  color: var(--text-primary);
+}
+
+.section-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+  color: var(--text-primary);
 }
 
 .stat-card {
@@ -4566,31 +4600,23 @@ input::-webkit-contacts-auto-fill-button {
 /* Queue Card Status Modifiers */
 .queue-card {
   border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms cubic-bezier(0.34, 1.2, 0.64, 1);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-xs);
+  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms var(--ease-out), transform 180ms var(--ease-out);
 }
 
 .queue-card:hover {
-  border-color: var(--border-strong);
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-sm);
 }
 
-.queue-card:active:not(:has(button:active, a:active, [role="button"]:active)) {
-  transform: scale(0.99);
+/* Only cards that open something answer the hover with depth and a press. */
+.queue-card.cursor-pointer:hover {
+  box-shadow: var(--shadow-md);
 }
 
-.queue-card svg.lucide-file-audio,
-.queue-card svg.lucide-clock,
-.queue-card svg.lucide-check-circle,
-.queue-card svg.lucide-alert-circle,
-.queue-card svg.lucide-alert-triangle {
-  transition: transform 0.2s cubic-bezier(0.34, 1.2, 0.64, 1);
-}
-
-.queue-card:hover svg.lucide-file-audio,
-.queue-card:hover svg.lucide-check-circle,
-.queue-card:hover svg.lucide-alert-circle,
-.queue-card:hover svg.lucide-alert-triangle {
-  transform: scale(1.05);
+.queue-card.cursor-pointer:active:not(:has(button:active, a:active, [role="button"]:active)) {
+  transform: scale(0.995);
 }
 
 .queue-card.is-queued {
@@ -4603,7 +4629,7 @@ input::-webkit-contacts-auto-fill-button {
   position: relative;
   background: var(--card-queued-bg) !important;
   border-color: var(--processing-dot) !important;
-  box-shadow: none !important;
+  box-shadow: 0 0 0 3px var(--processing-bg), var(--shadow-xs) !important;
 }
 
 .queue-card.is-canceling,
@@ -4612,19 +4638,17 @@ input::-webkit-contacts-auto-fill-button {
   position: relative;
   background: var(--card-queued-bg) !important;
   border-color: var(--error-text) !important;
-  box-shadow: none !important;
+  box-shadow: 0 0 0 3px var(--error-subtle), var(--shadow-xs) !important;
 }
 
 .queue-card.is-error {
   background: var(--card-queued-bg) !important;
   border-color: var(--error-ring) !important;
-  box-shadow: none !important;
 }
 
 .queue-card.is-warning {
   background: var(--card-queued-bg) !important;
   border-color: var(--warning-ring) !important;
-  box-shadow: none !important;
 }
 
 .queue-card.is-completed {

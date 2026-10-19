@@ -38,8 +38,8 @@ export const CompletedSection = memo(function CompletedSection({ doneFiles, appS
         >
           <div className="flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--border-subtle)' }}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-              <h2 className="text-2xl font-semibold tracking-tight flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                <CheckCircle className="w-5 h-5" style={{ color: 'var(--success-text)' }} />
+              <h2 className="section-title flex items-center gap-2">
+                <CheckCircle className="w-4 h-4" style={{ color: 'var(--success-text)' }} />
                 Sbobine completate
               </h2>
               <span className="status-pill self-start sm:self-auto shrink-0 whitespace-nowrap">

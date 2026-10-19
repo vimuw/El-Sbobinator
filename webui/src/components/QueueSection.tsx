@@ -135,8 +135,8 @@ export const QueueSection = memo(function QueueSection({
         >
           <div className="flex items-center justify-between gap-3 border-b pb-5" style={{ borderColor: 'var(--border-subtle)' }}>
             <div className="flex items-center gap-2 min-w-0">
-              <h2 className="text-2xl font-semibold tracking-tight flex items-center gap-2 shrink-0" style={{ color: 'var(--text-primary)' }}>
-                <FileAudio className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
+              <h2 className="section-title flex items-center gap-2 shrink-0">
+                <FileAudio className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
                 Coda di elaborazione
               </h2>
               {pendingFiles.length > 0 && (
