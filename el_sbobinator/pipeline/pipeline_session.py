@@ -105,6 +105,28 @@ class SaveSessionGuard:
         return ok
 
 
+def report_save_failures(
+    save_fn: Callable[[], bool], warn: Callable[[str, str | None], None]
+) -> Callable[[], bool]:
+    """Wrap a save so the banner shows a failed autosave until a later save succeeds."""
+    failing = False
+
+    def _save() -> bool:
+        nonlocal failing
+        ok = save_fn()
+        if ok == failing:
+            failing = not ok
+            warn(
+                "autosave_failed",
+                None
+                if ok
+                else "Salvataggio automatico non riuscito: riprovo al prossimo passaggio",
+            )
+        return ok
+
+    return _save
+
+
 @dataclass
 class PipelineSessionContext:
     input_path: str
@@ -369,6 +391,7 @@ def ensure_preconverted_audio(
     cancel_event,
     cancelled,
     phase_callback,
+    warn: Callable[[str, str | None], None] | None = None,
 ) -> tuple[bool, str | None]:
     preconv_enabled = bool(context.settings.preconvert_audio)
     preconv_path = os.path.join(context.session_dir, PRECONVERTED_AUDIO_FINAL)
@@ -407,6 +430,11 @@ def ensure_preconverted_audio(
             print("   [*] Operazione annullata dall'utente.")
             return preconv_enabled, None
         print("[!] Pre-conversione fallita. Continuo senza pre-conversione.")
+        if warn is not None:
+            warn(
+                "preconversion_failed",
+                "Pre-conversione audio non riuscita: continuo con il file originale",
+            )
         if err:
             print(err)
         return False, None
@@ -559,11 +587,13 @@ def check_disk_space(
     settings: PipelineSettings,
     stage: str,
     next_start_sec: int = 0,
+    warn: Callable[[str, str | None], None] | None = None,
 ) -> None:
     """Probe available disk space and print a warning if estimated usage may exceed free space.
 
     Only active when stage == 'phase1'. Never raises — warnings only.
     """
+    warned = False
     for estimate in estimate_disk_space(
         session_dir,
         total_duration_sec,
@@ -573,6 +603,13 @@ def check_disk_space(
     ):
         if estimate.free_bytes >= estimate.needed_bytes:
             continue
+        if warn is not None and not warned:
+            warned = True
+            warn(
+                "low_disk_space",
+                f"Spazio su disco quasi esaurito: servono ~{_fmt_bytes(estimate.needed_bytes)},"
+                f" liberi {_fmt_bytes(estimate.free_bytes)}",
+            )
         if estimate.kind == "combined":
             print(
                 f"[!] ATTENZIONE — Spazio su disco potenzialmente insufficiente.\n"

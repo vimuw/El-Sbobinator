@@ -50,7 +50,7 @@ declare global {
 }
 
 export default function App() {
-  const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone }, dispatch] = useReducer(
+  const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone, processingWarnings }, dispatch] = useReducer(
     processingReducer,
     undefined,
     () => createInitialProcessingState(loadPersistedQueue()),
@@ -530,6 +530,7 @@ export default function App() {
                 activeProgress,
                 workDone,
                 workTotals,
+                processingWarnings,
                 batchCompleted,
                 batchTotal,
                 completionFlash,

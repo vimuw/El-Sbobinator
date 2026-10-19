@@ -5,6 +5,7 @@ import type {
   FileFailedPayload,
   ProcessDonePayload,
   ProcessingAction,
+  ProcessingWarningPayload,
   SetCurrentFilePayload,
   WorkDonePayload,
   WorkTotalsPayload,
@@ -237,6 +238,7 @@ export interface BridgeCallbacks {
   appendConsole: (msg: string) => void;
   updateProgress: (value: number) => void;
   updatePhase: (text: string) => void;
+  processingWarning?: (data: ProcessingWarningPayload) => void;
   updateModel: (model: string) => void;
   processDone: (data: ProcessDonePayload) => void;
   setWorkTotals: (data: WorkTotalsPayload) => void;
@@ -427,6 +429,7 @@ export function createBridge(options: {
       dispatch({ type: 'bridge/update_phase', text: normalized });
       appendConsole(normalized);
     },
+    processingWarning: data => dispatch({ type: 'bridge/processing_warning', data }),
     updateModel: model => dispatch({ type: 'bridge/update_model', model }),
     processDone: data => {
       dispatch({ type: 'bridge/process_done', data });

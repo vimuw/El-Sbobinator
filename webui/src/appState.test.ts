@@ -543,6 +543,38 @@ describe('processingReducer', () => {
     expect(state.files[1].outputHtml).toBe('D:\\other\\sess2\\out.html');
   });
 
+  describe('processing warnings', () => {
+    const warn = (state: ReturnType<typeof createInitialProcessingState>, code: string, message: string | null) =>
+      processingReducer(state, { type: 'bridge/processing_warning', data: { code, message } });
+
+    it('adds, updates in place and clears warnings by code', () => {
+      let state = warn(initialProcessingState, 'low_disk_space', 'Spazio su disco quasi esaurito');
+      state = warn(state, 'unrevised_blocks', '1 sezione inclusa senza revisione (sezione 2)');
+      state = warn(state, 'low_disk_space', 'Spazio su disco quasi esaurito: liberi 10 MB');
+      expect(state.processingWarnings).toEqual([
+        { code: 'low_disk_space', message: 'Spazio su disco quasi esaurito: liberi 10 MB' },
+        { code: 'unrevised_blocks', message: '1 sezione inclusa senza revisione (sezione 2)' },
+      ]);
+
+      state = warn(state, 'low_disk_space', null);
+      expect(state.processingWarnings.map(warning => warning.code)).toEqual(['unrevised_blocks']);
+    });
+
+    it('keeps the same state for repeated or empty events', () => {
+      const once = warn(initialProcessingState, 'autosave_failed', 'Salvataggio automatico non riuscito');
+      expect(warn(once, 'autosave_failed', 'Salvataggio automatico non riuscito')).toBe(once);
+      expect(warn(once, 'preconversion_failed', null)).toBe(once);
+      expect(warn(once, '  ', 'senza codice')).toBe(once);
+    });
+
+    it('starts each file with a clean list', () => {
+      let state = processingReducer(initialProcessingState, { type: 'queue/add', files: [makeFile({ id: 'next' })] });
+      state = warn(state, 'fallback_key_in_use', 'Quota della chiave principale esaurita');
+      state = processingReducer(state, { type: 'bridge/set_current_file', data: { id: 'next', index: 0, total: 1 } });
+      expect(state.processingWarnings).toEqual([]);
+    });
+  });
+
   describe('createInitialProcessingState', () => {
     it('initializes with default empty files when no arguments provided', () => {
       const state = createInitialProcessingState();

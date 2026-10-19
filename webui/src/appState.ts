@@ -94,6 +94,17 @@ export type FileFailedPayload = {
   recommended_retry_at?: string | null;
 };
 
+// A lasting problem in the current run (see PipelineRuntime.warning); message null clears the code.
+export type ProcessingWarningPayload = {
+  code: string;
+  message: string | null;
+};
+
+export type ProcessingWarning = {
+  code: string;
+  message: string;
+};
+
 export type WorkTotalsPayload = {
   chunks?: number | null;
   macro?: number | null;
@@ -122,6 +133,7 @@ export type ProcessingState = {
     chunks: number;
     macro: number;
   };
+  processingWarnings: ProcessingWarning[];
 };
 
 export type ProcessingAction =
@@ -140,6 +152,7 @@ export type ProcessingAction =
   | { type: 'app/set_status'; status: AppStatus }
   | { type: 'bridge/update_progress'; value: number }
   | { type: 'bridge/update_phase'; text: string }
+  | { type: 'bridge/processing_warning'; data: ProcessingWarningPayload }
   | { type: 'bridge/update_model'; model: string }
   | { type: 'bridge/process_done'; data: ProcessDonePayload }
   | { type: 'bridge/set_work_totals'; data: WorkTotalsPayload }
@@ -166,6 +179,7 @@ export function createInitialProcessingState(initialFiles: FileItem[] = []): Pro
       chunks: 0,
       macro: 0,
     },
+    processingWarnings: [],
   };
 }
 
@@ -328,6 +342,22 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
     case 'bridge/update_phase':
       if (state.currentPhase === action.text) return state;
       return { ...state, currentPhase: action.text };
+    case 'bridge/processing_warning': {
+      const code = String(action.data?.code ?? '').trim();
+      if (!code) return state;
+      const message = String(action.data?.message ?? '').trim();
+      const index = state.processingWarnings.findIndex(warning => warning.code === code);
+      if (!message) {
+        if (index === -1) return state;
+        return { ...state, processingWarnings: state.processingWarnings.filter(warning => warning.code !== code) };
+      }
+      if (index !== -1 && state.processingWarnings[index].message === message) return state;
+      // A code keeps its place when its message is updated, so the list does not jump around.
+      const processingWarnings = index === -1
+        ? [...state.processingWarnings, { code, message }]
+        : state.processingWarnings.map((warning, i) => (i === index ? { code, message } : warning));
+      return { ...state, processingWarnings };
+    }
     case 'bridge/update_model':
       if (state.currentModel === action.model) return state;
       return { ...state, currentModel: action.model };
@@ -380,6 +410,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         currentPhase: '',
         currentModel: '',
         activeProgress: 0,
+        processingWarnings: [],
         currentFileIndex: action.data.index,
         currentBatchTotal: action.data.total,
         files: state.files.map(file =>

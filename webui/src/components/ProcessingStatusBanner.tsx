@@ -22,7 +22,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { shortModelName } from '../utils';
-import type { AppStatus } from '../appState';
+import type { AppStatus, ProcessingWarning } from '../appState';
 
 interface ProcessingStatusBannerProps {
   appState: AppStatus;
@@ -35,6 +35,8 @@ interface ProcessingStatusBannerProps {
   currentBatchTotal: number;
   currentFileName?: string;
   startedAt?: number;
+  // Lasting problems of this run; unlike notices they stay until the next file starts.
+  warnings?: ProcessingWarning[];
 }
 
 type PhaseInfo = {
@@ -397,6 +399,7 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
   currentBatchTotal,
   currentFileName,
   startedAt,
+  warnings = [],
 }: ProcessingStatusBannerProps) {
   // While a problem is being handled, the banner keeps describing the step it interrupted.
   const phaseNotice = getProcessingNotice(currentPhase);
@@ -555,6 +558,17 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
             </motion.div>
           )}
         </AnimatePresence>
+
+        {warnings.length > 0 && (
+          <ul className="processing-warnings" aria-label="Avvisi elaborazione" data-testid="processing-warnings">
+            {warnings.map(warning => (
+              <li key={warning.code} className="processing-warning" data-code={warning.code}>
+                <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span>{warning.message}</span>
+              </li>
+            ))}
+          </ul>
+        )}
 
         {metaItems.length > 0 && (
           <motion.div

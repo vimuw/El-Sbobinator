@@ -21,6 +21,7 @@ from el_sbobinator.pipeline.pipeline_session import (
     normalize_stage,
     phase1_has_progress,
     record_step_metric,
+    report_save_failures,
     reset_for_regeneration,
     restore_phase1_progress,
 )
@@ -296,6 +297,37 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                         )
 
                 mock_invalidate.assert_not_called()
+
+    def test_failed_preconversion_is_reported_as_a_warning(self):
+        warnings: list[tuple[str, str | None]] = []
+        with tempfile.TemporaryDirectory() as tmpdir:
+            context = _DummyPreconvContext(tmpdir)
+            with patch(
+                "el_sbobinator.pipeline.pipeline_session.preconvert_media_to_mp3",
+                return_value=(False, "ffmpeg exited with 1"),
+            ):
+                enabled, result_path = ensure_preconverted_audio(  # type: ignore[arg-type]
+                    context,  # type: ignore[arg-type]
+                    input_path="lesson.mp3",
+                    stage="phase1",
+                    ffmpeg_exe="ffmpeg",
+                    cancel_event=None,
+                    cancelled=lambda: False,
+                    phase_callback=lambda _: None,
+                    warn=lambda code, message: warnings.append((code, message)),
+                )
+
+        self.assertFalse(enabled)
+        self.assertIsNone(result_path)
+        self.assertEqual(
+            warnings,
+            [
+                (
+                    "preconversion_failed",
+                    "Pre-conversione audio non riuscita: continuo con il file originale",
+                )
+            ],
+        )
 
     def test_ensure_preconverted_audio_cache_not_invalidated_on_failed_promotion(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -718,6 +750,23 @@ class TestCheckDiskSpace(unittest.TestCase):
             ):
                 check_disk_space(tmpdir, 3600.0, self._settings(), "phase1")
         self.assertTrue(any("ATTENZIONE" in m for m in printed))
+
+    def test_tight_space_warns_the_banner_once(self):
+        warnings: list[tuple[str, str | None]] = []
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch("shutil.disk_usage", return_value=self._fake_du(1 << 20)),
+                patch("builtins.print"),
+            ):
+                check_disk_space(
+                    tmpdir,
+                    3600.0,
+                    self._settings(),
+                    "phase1",
+                    warn=lambda code, message: warnings.append((code, message)),
+                )
+        self.assertEqual([code for code, _ in warnings], ["low_disk_space"])
+        self.assertIn("Spazio su disco quasi esaurito", warnings[0][1] or "")
 
     def test_preconvert_disabled_no_session_estimate(self):
         """When preconvert is disabled, session_needed=0; only chunk temp space checked."""
@@ -1722,3 +1771,27 @@ class TestSessionFingerprint(unittest.TestCase):
 
             expected = hashlib.sha256(data).hexdigest()
             self.assertEqual(_file_tail_hash(path), expected)
+
+
+class ReportSaveFailuresTests(unittest.TestCase):
+    def test_warns_on_failure_and_clears_after_the_next_success_only(self):
+        results = iter([True, False, False, True, True])
+        warnings: list[tuple[str, str | None]] = []
+        save = report_save_failures(
+            lambda: next(results),
+            lambda code, message: warnings.append((code, message)),
+        )
+
+        outcomes = [save() for _ in range(5)]
+
+        self.assertEqual(outcomes, [True, False, False, True, True])
+        self.assertEqual(
+            warnings,
+            [
+                (
+                    "autosave_failed",
+                    "Salvataggio automatico non riuscito: riprovo al prossimo passaggio",
+                ),
+                ("autosave_failed", None),
+            ],
+        )

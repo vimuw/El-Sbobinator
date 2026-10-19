@@ -97,6 +97,38 @@ class PipelineRuntimeTests(unittest.TestCase):
             self.assertEqual(target.file_temporanei, [])
 
 
+class PipelineRuntimeWarningTests(unittest.TestCase):
+    def test_warning_is_sent_as_an_unbatched_bridge_event(self):
+        target = _DummyTarget()
+        emitted = []
+        target.emit = lambda name, data, batched=None: emitted.append(  # type: ignore[attr-defined]
+            (name, data, batched)
+        )
+        runtime = PipelineRuntime(target)
+
+        runtime.warning("low_disk_space", "Spazio su disco quasi esaurito")
+        runtime.warning("low_disk_space", None)
+
+        self.assertEqual(
+            emitted,
+            [
+                (
+                    "processingWarning",
+                    {
+                        "code": "low_disk_space",
+                        "message": "Spazio su disco quasi esaurito",
+                    },
+                    False,
+                ),
+                (
+                    "processingWarning",
+                    {"code": "low_disk_space", "message": None},
+                    False,
+                ),
+            ],
+        )
+
+
 class PipelineRuntimeCancelledTests(unittest.TestCase):
     def test_cancelled_false_when_event_not_set(self):
         target = _DummyTarget()

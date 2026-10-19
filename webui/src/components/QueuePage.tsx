@@ -7,7 +7,7 @@ import { GithubIcon } from './icons/GithubIcon';
 import { GITHUB_URL } from '../branding';
 import { ReportProblemLink } from './ReportProblemLink';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
-import { type AppStatus, type FileItem, getDoneFiles, getPendingFiles } from '../appState';
+import { type AppStatus, type FileItem, type ProcessingWarning, getDoneFiles, getPendingFiles } from '../appState';
 import { GEMINI_KEY_PATTERN } from '../utils';
 import { STORAGE_KEYS } from '../storageKeys';
 import { ProcessingStatusBanner } from './ProcessingStatusBanner';
@@ -32,6 +32,7 @@ export interface QueueProgressProps {
   activeProgress: number;
   workDone: { chunks: number; macro: number };
   workTotals: { chunks: number; macro: number };
+  processingWarnings: ProcessingWarning[];
   batchCompleted: number;
   batchTotal: number;
   completionFlash: boolean;
@@ -123,6 +124,7 @@ export function QueuePage({
     activeProgress,
     workDone,
     workTotals,
+    processingWarnings,
     batchCompleted,
     batchTotal,
     completionFlash,
@@ -357,6 +359,7 @@ export function QueuePage({
                       currentBatchTotal={batchTotal}
                       currentFileName={bannerFile?.name}
                       startedAt={bannerFile?.startedAt}
+                      warnings={processingWarnings}
                     />
                   </motion.div>
                 ) : (

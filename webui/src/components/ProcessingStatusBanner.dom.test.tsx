@@ -284,6 +284,54 @@ describe('ProcessingStatusBanner', () => {
     });
   });
 
+  describe('lasting warnings', () => {
+    const base = {
+      appState: 'processing' as const,
+      currentPhase: 'Fase 2/3: revisione (2/4)',
+      currentModel: 'gemini-3.8-flash',
+      activeProgress: 80,
+      workDone: { chunks: 7, macro: 1 },
+      workTotals: { chunks: 7, macro: 4 },
+      currentFileIndex: 0,
+      currentBatchTotal: 1,
+      currentFileName: 'lesson.mp3',
+    };
+
+    it('lists every warning of the run alongside a live notice', () => {
+      render(
+        <ProcessingStatusBanner
+          {...base}
+          currentPhase="Server Gemini occupato — riprovo tra 15s (tentativo 2/5)"
+          warnings={[
+            { code: 'preconversion_failed', message: 'Pre-conversione audio non riuscita: continuo con il file originale' },
+            { code: 'fallback_key_in_use', message: 'Quota della chiave principale esaurita: continuo con una chiave di riserva' },
+          ]}
+        />,
+      );
+      const list = screen.getByRole('list', { name: 'Avvisi elaborazione' });
+      expect(Array.from(list.querySelectorAll('li')).map(item => item.textContent)).toEqual([
+        'Pre-conversione audio non riuscita: continuo con il file originale',
+        'Quota della chiave principale esaurita: continuo con una chiave di riserva',
+      ]);
+      expect(screen.getByTestId('processing-notice')).toBeTruthy();
+    });
+
+    it('keeps warnings visible on completion and hides the list when there are none', () => {
+      const { rerender } = render(<ProcessingStatusBanner {...base} />);
+      expect(screen.queryByTestId('processing-warnings')).toBeNull();
+
+      rerender(
+        <ProcessingStatusBanner
+          {...base}
+          currentPhase="__completed__"
+          activeProgress={100}
+          warnings={[{ code: 'unrevised_blocks', message: '1 sezione inclusa senza revisione (sezione 2)' }]}
+        />,
+      );
+      expect(screen.getByText('1 sezione inclusa senza revisione (sezione 2)')).toBeTruthy();
+    });
+  });
+
   describe('recoverable problems', () => {
     const base = {
       appState: 'processing' as const,

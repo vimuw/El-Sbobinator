@@ -23,6 +23,7 @@ from el_sbobinator.services.generation_service import (
     extract_response_text,
     retry_with_quota,
     sleep_with_cancel,
+    warn_runtime,
 )
 from el_sbobinator.services.session_audio_service import session_metadata_lock
 from el_sbobinator.utils.dedup_utils import local_macro_cleanup
@@ -461,6 +462,13 @@ def _process_macro_block_item(
     )
 
 
+def _unrevised_blocks_message(failed_blocks: list) -> str:
+    numbers = ", ".join(str(block) for block in failed_blocks)
+    if len(failed_blocks) == 1:
+        return f"1 sezione inclusa senza revisione (sezione {numbers})"
+    return f"{len(failed_blocks)} sezioni incluse senza revisione (sezioni {numbers})"
+
+
 def process_macro_revision_phase(
     *,
     client,
@@ -552,6 +560,9 @@ def process_macro_revision_phase(
     if failed_blocks:
         print(
             f"\n[!!] ATTENZIONE: i seguenti blocchi sono stati inclusi non revisionati: {failed_blocks}"
+        )
+        warn_runtime(
+            runtime, "unrevised_blocks", _unrevised_blocks_message(failed_blocks)
         )
 
     session_update: dict = {

@@ -72,6 +72,15 @@ class PipelineRuntime:
     def process_done(self) -> None:
         self._safe_call("processo_terminato")
 
+    def warning(self, code: str, message: str | None) -> None:
+        """Show (or, with message=None, clear) a lasting problem in the processing banner."""
+        self._safe_call(
+            "emit",
+            "processingWarning",
+            {"code": code, "message": message},
+            batched=False,
+        )
+
     def retry_state(self, payload: dict[str, Any]) -> None:
         if hasattr(self.target, "emit_retry_state"):
             self._safe_call("emit_retry_state", payload)

@@ -510,6 +510,12 @@ def _retry_on_model_unavailable(
     return client, None, None
 
 
+def warn_runtime(runtime, code: str, message: str | None) -> None:
+    """Report a lasting problem to the processing banner; test runtimes may not support it."""
+    if runtime is not None and hasattr(runtime, "warning"):
+        runtime.warning(code, message)
+
+
 def _retry_on_quota(
     exc: Exception,
     *,
@@ -613,6 +619,11 @@ def _retry_on_quota(
     )
     if rotated:
         client = new_c
+        warn_runtime(
+            runtime,
+            "fallback_key_in_use",
+            "Quota della chiave principale esaurita: continuo con una chiave di riserva",
+        )
         if runtime is not None and hasattr(runtime, "set_effective_api_key"):
             runtime.set_effective_api_key(rotated_key)
         if on_key_rotated is not None:
@@ -633,6 +644,11 @@ def _retry_on_quota(
                 print("   [*] Operazione annullata dall'utente.")
                 return False, client
             client = test_c
+            warn_runtime(
+                runtime,
+                "fallback_key_in_use",
+                "Quota della chiave principale esaurita: continuo con la nuova chiave inserita",
+            )
             if runtime is not None and hasattr(runtime, "set_effective_api_key"):
                 runtime.set_effective_api_key(new_api_key.strip())
             if on_key_rotated is not None:

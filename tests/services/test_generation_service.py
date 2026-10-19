@@ -22,6 +22,7 @@ class _FakeRuntime:
     def __init__(self):
         self.rotated_keys = []
         self.phase_calls: list[str] = []
+        self.warnings: list[tuple[str, str | None]] = []
         self.retry_states: list[dict[str, Any]] = []
 
     def phase(self, text):
@@ -32,6 +33,9 @@ class _FakeRuntime:
 
     def retry_state(self, payload):
         self.retry_states.append(dict(payload))
+
+    def warning(self, code, message):
+        self.warnings.append((code, message))
 
 
 class _Structured503QuotaError(RuntimeError):
@@ -474,6 +478,15 @@ class RetryWithQuotaTests(unittest.TestCase):
         self.assertIs(client, rotated_client)
         self.assertEqual(result, "ok")
         self.assertEqual(runtime.rotated_keys, ["fallback-key"])
+        self.assertEqual(
+            runtime.warnings,
+            [
+                (
+                    "fallback_key_in_use",
+                    "Quota della chiave principale esaurita: continuo con una chiave di riserva",
+                )
+            ],
+        )
         self.assertEqual(len(call_clients), 2)
         request_mock.assert_not_called()
 

@@ -20,6 +20,7 @@ describe('QueuePage Component', () => {
       activeProgress: 0,
       workDone: { chunks: 0, macro: 0 },
       workTotals: { chunks: 0, macro: 0 },
+      processingWarnings: [],
       batchCompleted: 0,
       batchTotal: 0,
       completionFlash: false,

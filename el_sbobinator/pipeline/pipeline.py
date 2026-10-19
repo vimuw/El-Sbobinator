@@ -40,6 +40,7 @@ from el_sbobinator.pipeline.pipeline_session import (
     persist_phase1_metadata,
     phase1_has_progress,
     read_text_file,
+    report_save_failures,
     reset_for_regeneration,
     restore_phase1_progress,
 )
@@ -763,7 +764,10 @@ def _esegui_sbobinatura_impl(
                 session["last_error"] = "autosave_failed"
                 session["last_error_detail"] = None
 
-        save_session = SaveSessionGuard(session_ctx.save, _on_autosave_fatal)
+        save_session = SaveSessionGuard(
+            report_save_failures(session_ctx.save, runtime.warning),
+            _on_autosave_fatal,
+        )
         request_fallback_key = _make_fallback_key_requester(
             runtime, session, save_session
         )
@@ -793,6 +797,7 @@ def _esegui_sbobinatura_impl(
             settings,
             stage,
             _next_start_sec,
+            warn=runtime.warning,
         )
 
         existing_chunks = list_phase1_chunks(session_ctx.phase1_chunks_dir)
@@ -827,6 +832,7 @@ def _esegui_sbobinatura_impl(
             cancel_event=cancel_event,
             cancelled=runtime.cancelled,
             phase_callback=runtime.phase,
+            warn=runtime.warning,
         )
         if runtime.cancelled():
             return
