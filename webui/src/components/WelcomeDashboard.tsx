@@ -1,43 +1,47 @@
-import { memo, useMemo, useState, type ComponentType } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import type { ArchiveSession } from '../bridge';
 import { STORAGE_KEYS } from '../storageKeys';
-import { fadeUp, staggerContainer, staggerItem } from '../motion';
+import { fadeUp } from '../motion';
 import { BrandLogo } from './BrandLogo';
-import { CalendarTickIcon, WaveformIcon, WritingDocIcon } from './StatIcons';
 
 interface WelcomeDashboardProps {
   archiveSessions: ArchiveSession[];
   isArchiveLoaded?: boolean;
 }
 
-function formatAudioDuration(totalSec: number): string {
+// Spoken Italian, not a dashboard figure: "18 ore", "1 ora e 20 minuti", "45 minuti".
+// Under a minute there is nothing worth saying, so the caller leaves the duration out.
+function formatSpokenDuration(totalSec: number): string | null {
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m`;
-  return '< 1m';
+  const hours = `${h} ${h === 1 ? 'ora' : 'ore'}`;
+  const minutes = `${m} ${m === 1 ? 'minuto' : 'minuti'}`;
+  // Past ten hours the minutes are noise.
+  if (h >= 10 || (h > 0 && m === 0)) return hours;
+  if (h > 0) return `${hours} e ${minutes}`;
+  if (m > 0) return minutes;
+  return null;
 }
 
-function formatLastSession(archiveSessions: ArchiveSession[]): string {
-  if (archiveSessions.length === 0) return '—';
-  let latest: Date | null = null;
-  for (const s of archiveSessions) {
-    if (!s.completed_at_iso) continue;
-    try {
-      const d = new Date(s.completed_at_iso);
-      if (!latest || d > latest) latest = d;
-    } catch { /* skip */ }
+// A friendly line under the greeting, not a stats panel: something nice to read on arrival.
+function ArchiveSummary({ total, totalSec }: { total: number; totalSec: number }) {
+  const duration = formatSpokenDuration(totalSec);
+  const figure = (text: string) => <strong className="welcome-summary-figure">{text}</strong>;
+  if (total === 1) {
+    return (
+      <p className="welcome-summary" data-testid="welcome-summary">
+        Hai sbobinato la tua {figure('prima lezione')}
+        {duration ? <>: {figure(duration)} di audio.</> : '.'}
+      </p>
+    );
   }
-  if (!latest) return '—';
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const latestStart = new Date(latest.getFullYear(), latest.getMonth(), latest.getDate());
-  const diffDays = Math.round((todayStart.getTime() - latestStart.getTime()) / 86400000);
-  if (diffDays === 0) return 'Oggi';
-  if (diffDays === 1) return 'Ieri';
-  if (diffDays > 1) return `${diffDays} giorni fa`;
-  return latest.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+  return (
+    <p className="welcome-summary" data-testid="welcome-summary">
+      Finora hai sbobinato {figure(`${total} lezioni`)}
+      {duration ? <>, per un totale di {figure(duration)} di audio.</> : '.'}
+    </p>
+  );
 }
 
 export const WelcomeDashboard = memo(function WelcomeDashboard({ archiveSessions, isArchiveLoaded = true }: WelcomeDashboardProps) {
@@ -49,12 +53,10 @@ export const WelcomeDashboard = memo(function WelcomeDashboard({ archiveSessions
     }
   });
 
-  const stats = useMemo(() => {
-    const total = archiveSessions.length;
-    const totalSec = archiveSessions.reduce((acc, s) => acc + (s.duration_sec ?? 0), 0);
-    const lastSession = formatLastSession(archiveSessions);
-    return { total, totalSec, lastSession };
-  }, [archiveSessions]);
+  const stats = useMemo(() => ({
+    total: archiveSessions.length,
+    totalSec: archiveSessions.reduce((acc, s) => acc + (s.duration_sec ?? 0), 0),
+  }), [archiveSessions]);
 
   const hasSessions = stats.total > 0 || (!isArchiveLoaded && cachedHasSessions);
 
@@ -67,54 +69,18 @@ export const WelcomeDashboard = memo(function WelcomeDashboard({ archiveSessions
           </h1>
           <BrandLogo size={36} greetOncePerSession={hasSessions} />
         </div>
-        <p className="text-base" style={{ color: 'var(--text-muted)' }}>
-          {hasSessions
-            ? 'Trascina un nuovo file audio o video per iniziare.'
-            : 'Trascina un file audio o video per iniziare la prima sbobinatura.'}
-        </p>
+        {/* With an archive the line under the greeting tells what was done so far;
+            the drop target right below already says how to start. */}
+        {stats.total > 0 ? (
+          <ArchiveSummary total={stats.total} totalSec={stats.totalSec} />
+        ) : (
+          <p className="text-base" style={{ color: 'var(--text-muted)' }}>
+            {hasSessions
+              ? 'Trascina un nuovo file audio o video per iniziare.'
+              : 'Trascina un file audio o video per iniziare la prima sbobinatura.'}
+          </p>
+        )}
       </div>
-
-      {stats.total > 0 && (
-        <motion.div {...staggerContainer} className="grid grid-cols-3 gap-3">
-          <StatCard index={0} Icon={WritingDocIcon} value={String(stats.total)} label="Sbobine completate" />
-          <StatCard index={1} Icon={WaveformIcon} value={formatAudioDuration(stats.totalSec)} label="Audio elaborato" />
-          <StatCard index={2} Icon={CalendarTickIcon} value={stats.lastSession} label="Ultima sbobina" />
-        </motion.div>
-      )}
     </motion.div>
   );
 });
-
-interface StatCardProps {
-  index: number;
-  Icon: ComponentType<{ run: number; delay?: number }>;
-  value: string;
-  label: string;
-}
-
-// Icons start once their card has faded in, one card after another.
-const ICON_ENTRANCE_DELAY = 0.25;
-const ICON_ENTRANCE_STEP = 0.15;
-
-// A figure with its label above. The icon acts out the stat once on arrival and
-// again on hover, then rests: nothing on the dashboard moves on its own.
-function StatCard({ index, Icon, value, label }: StatCardProps) {
-  const [run, setRun] = useState(0);
-  return (
-    <motion.div
-      {...staggerItem}
-      onMouseEnter={() => setRun(r => r + 1)}
-      className="premium-panel stat-card px-5 py-4 flex flex-col gap-3 min-w-0"
-    >
-      <div className="flex items-center gap-2 text-xs font-medium min-w-0" style={{ color: 'var(--text-muted)' }}>
-        <span className="stat-card-icon shrink-0">
-          <Icon run={run} delay={run === 0 ? ICON_ENTRANCE_DELAY + index * ICON_ENTRANCE_STEP : 0} />
-        </span>
-        <span className="truncate">{label}</span>
-      </div>
-      <span className="text-3xl font-semibold leading-tight truncate" style={{ color: 'var(--text-primary)', letterSpacing: 'var(--tracking-display)' }}>
-        {value}
-      </span>
-    </motion.div>
-  );
-}

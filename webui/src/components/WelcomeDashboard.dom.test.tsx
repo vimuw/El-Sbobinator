@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { ArchiveSession } from '../bridge';
 import { WelcomeDashboard } from './WelcomeDashboard';
@@ -23,11 +23,10 @@ describe('WelcomeDashboard', () => {
     expect(screen.getByText(/prima sbobinatura/)).toBeTruthy();
   });
 
-  it('does not render stat cards when there are no sessions', () => {
+  it('keeps the how-to-start line and no summary when there are no sessions', () => {
     render(<WelcomeDashboard archiveSessions={[]} />);
-    expect(screen.queryByText('Sbobine completate')).toBeNull();
-    expect(screen.queryByText('Audio elaborato')).toBeNull();
-    expect(screen.queryByText('Ultima sbobina')).toBeNull();
+    expect(screen.queryByTestId('welcome-summary')).toBeNull();
+    expect(screen.getByText(/Trascina un file audio o video/)).toBeTruthy();
   });
 
   it('shows returning welcome message when sessions exist', () => {
@@ -35,88 +34,52 @@ describe('WelcomeDashboard', () => {
     expect(screen.getByText(/Bentornato/)).toBeTruthy();
   });
 
-  it('renders all 3 stat card labels when sessions exist', () => {
+  it('replaces the how-to-start line with the archive summary when sessions exist', () => {
     render(<WelcomeDashboard archiveSessions={[makeSession()]} />);
-    expect(screen.getByText('Sbobine completate')).toBeTruthy();
-    expect(screen.getByText('Audio elaborato')).toBeTruthy();
-    expect(screen.getByText('Ultima sbobina')).toBeTruthy();
+    expect(screen.getByTestId('welcome-summary')).toBeTruthy();
+    expect(screen.queryByText(/Trascina un nuovo file/)).toBeNull();
   });
 
-  it('shows correct total session count', () => {
-    const sessions = [makeSession({ session_dir: '/s/1' }), makeSession({ session_dir: '/s/2' })];
-    render(<WelcomeDashboard archiveSessions={sessions} />);
-    expect(screen.getAllByText('2').length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('formats duration in hours and minutes for >= 1 hour', () => {
-    render(<WelcomeDashboard archiveSessions={[makeSession({ duration_sec: 5580 })]} />);
-    expect(screen.getByText('1h 33m')).toBeTruthy();
-  });
-
-  it('formats duration in minutes only for < 1 hour', () => {
+  it('celebrates the first lecture with its length', () => {
     render(<WelcomeDashboard archiveSessions={[makeSession({ duration_sec: 2700 })]} />);
-    expect(screen.getByText('45m')).toBeTruthy();
+    expect(screen.getByTestId('welcome-summary').textContent).toBe('Hai sbobinato la tua prima lezione: 45 minuti di audio.');
   });
 
-  it('shows "< 1m" for very short or zero duration', () => {
-    render(<WelcomeDashboard archiveSessions={[makeSession({ duration_sec: 0 })]} />);
-    expect(screen.getByText('< 1m')).toBeTruthy();
-  });
-
-  it('sums duration_sec across all sessions', () => {
+  it('counts lectures and sums their audio across sessions', () => {
     const sessions = [
       makeSession({ session_dir: '/s/1', duration_sec: 3600 }),
       makeSession({ session_dir: '/s/2', duration_sec: 1800 }),
     ];
     render(<WelcomeDashboard archiveSessions={sessions} />);
-    expect(screen.getByText('1h 30m')).toBeTruthy();
+    expect(screen.getByTestId('welcome-summary').textContent).toBe(
+      'Finora hai sbobinato 2 lezioni, per un totale di 1 ora e 30 minuti di audio.',
+    );
   });
 
-  it('handles missing duration_sec gracefully (treats as 0)', () => {
-    const session = makeSession({ duration_sec: undefined });
-    render(<WelcomeDashboard archiveSessions={[session]} />);
-    expect(screen.getByText('< 1m')).toBeTruthy();
+  it('highlights only the figures, the same way for one lecture or many', () => {
+    const { rerender } = render(<WelcomeDashboard archiveSessions={[makeSession({ duration_sec: 2700 })]} />);
+    const figures = () => [...screen.getByTestId('welcome-summary').querySelectorAll('strong')].map(el => el.textContent);
+    expect(figures()).toEqual(['prima lezione', '45 minuti']);
+    rerender(<WelcomeDashboard archiveSessions={[makeSession({ session_dir: '/s/1', duration_sec: 7200 }), makeSession({ session_dir: '/s/2', duration_sec: 0 })]} />);
+    expect(figures()).toEqual(['2 lezioni', '2 ore']);
   });
 
-  it('shows "Oggi" for ultima sbobina when most recent session is today', () => {
-    const today = new Date().toISOString();
-    render(<WelcomeDashboard archiveSessions={[makeSession({ completed_at_iso: today })]} />);
-    expect(screen.getByText('Oggi')).toBeTruthy();
-  });
-
-  it('shows "Ieri" for ultima sbobina when most recent session was yesterday', () => {
-    const yesterday = new Date(Date.now() - 86400000).toISOString();
-    render(<WelcomeDashboard archiveSessions={[makeSession({ completed_at_iso: yesterday })]} />);
-    expect(screen.getByText('Ieri')).toBeTruthy();
-  });
-
-  it('shows "X giorni fa" for ultima sbobina when most recent session was 3 days ago', () => {
-    const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString();
-    render(<WelcomeDashboard archiveSessions={[makeSession({ completed_at_iso: threeDaysAgo })]} />);
-    expect(screen.getByText('3 giorni fa')).toBeTruthy();
-  });
-
-  it('replays a stat icon animation on hover instead of looping on its own', () => {
-    render(<WelcomeDashboard archiveSessions={[makeSession()]} />);
-    const icon = screen.getByTestId('stat-icon-doc');
-    const firstLine = icon.querySelector('[data-run]');
-    expect(firstLine?.getAttribute('data-run')).toBe('0');
-
-    fireEvent.mouseEnter(screen.getByText('Sbobine completate').closest('.stat-card')!);
-
-    const replayedLine = icon.querySelector('[data-run]');
-    expect(replayedLine?.getAttribute('data-run')).toBe('1');
-    expect(replayedLine).not.toBe(firstLine);
-  });
-
-  it('picks the most recent session for ultima sbobina when multiple sessions exist', () => {
-    const today = new Date().toISOString();
-    const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString();
-    const sessions = [
-      makeSession({ session_dir: '/s/1', completed_at_iso: threeDaysAgo }),
-      makeSession({ session_dir: '/s/2', completed_at_iso: today }),
-    ];
+  it.each([
+    [60, '1 minuto'],
+    [7200, '2 ore'],
+    [5580, '1 ora e 33 minuti'],
+    [10 * 3600 + 25 * 60, '10 ore'],
+  ])('says %i seconds of audio as "%s"', (durationSec, spoken) => {
+    const sessions = [makeSession({ session_dir: '/s/1', duration_sec: durationSec }), makeSession({ session_dir: '/s/2', duration_sec: 0 })];
     render(<WelcomeDashboard archiveSessions={sessions} />);
-    expect(screen.getByText('Oggi')).toBeTruthy();
+    expect(screen.getByTestId('welcome-summary').textContent).toContain(`per un totale di ${spoken} di audio.`);
+  });
+
+  it('leaves the duration out instead of showing less than a minute', () => {
+    render(<WelcomeDashboard archiveSessions={[makeSession({ duration_sec: undefined })]} />);
+    expect(screen.getByTestId('welcome-summary').textContent).toBe('Hai sbobinato la tua prima lezione.');
+    const sessions = [makeSession({ session_dir: '/s/1', duration_sec: 20 }), makeSession({ session_dir: '/s/2', duration_sec: 10 })];
+    render(<WelcomeDashboard archiveSessions={sessions} />);
+    expect(screen.getAllByTestId('welcome-summary')[1].textContent).toBe('Finora hai sbobinato 2 lezioni.');
   });
 });

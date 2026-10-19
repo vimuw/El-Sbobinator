@@ -537,20 +537,16 @@ button {
   color: var(--text-primary);
 }
 
-/* Stats are read, not clicked: no hover lift, just figures that line up. */
-.stat-card {
-  font-variant-numeric: tabular-nums;
+/* Welcome summary: one friendly line under the greeting; the figures carry the accent. */
+.welcome-summary {
+  font-size: 1rem;
+  color: var(--text-muted);
 }
 
-.stat-card-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: var(--accent-subtle);
+.welcome-summary-figure {
+  font-weight: 600;
   color: var(--accent-text);
+  font-variant-numeric: tabular-nums;
 }
 
 
@@ -5355,9 +5351,4 @@ input::-webkit-contacts-auto-fill-button {
 
 .dashboard-section .queue-card.is-warning {
   background: var(--warning-subtle) !important;
-}
-
-/* Welcome figures are the first thing on the page: a raised surface and a large figure. */
-.premium-panel.stat-card {
-  box-shadow: var(--shadow-sm);
 }
