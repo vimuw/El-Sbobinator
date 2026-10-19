@@ -579,20 +579,20 @@ button {
   color: var(--text-primary);
 }
 
+/* Stats are read, not clicked: no hover lift, just figures that line up. */
 .stat-card {
-  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
-}
-
-.stat-card:hover {
-  border-color: var(--border-strong);
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-card-icon {
-  transition: transform 120ms cubic-bezier(0.2, 0.8, 0.4, 1);
-}
-
-.stat-card:hover .stat-card-icon {
-  transform: scale(1.08);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--accent-subtle);
+  color: var(--accent-text);
 }
 
 

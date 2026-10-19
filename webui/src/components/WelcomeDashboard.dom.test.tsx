@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { ArchiveSession } from '../bridge';
 import { WelcomeDashboard } from './WelcomeDashboard';
@@ -94,6 +94,19 @@ describe('WelcomeDashboard', () => {
     const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString();
     render(<WelcomeDashboard archiveSessions={[makeSession({ completed_at_iso: threeDaysAgo })]} />);
     expect(screen.getByText('3 giorni fa')).toBeTruthy();
+  });
+
+  it('replays a stat icon animation on hover instead of looping on its own', () => {
+    render(<WelcomeDashboard archiveSessions={[makeSession()]} />);
+    const icon = screen.getByTestId('stat-icon-doc');
+    const firstLine = icon.querySelector('[data-run]');
+    expect(firstLine?.getAttribute('data-run')).toBe('0');
+
+    fireEvent.mouseEnter(screen.getByText('Sbobine completate').closest('.stat-card')!);
+
+    const replayedLine = icon.querySelector('[data-run]');
+    expect(replayedLine?.getAttribute('data-run')).toBe('1');
+    expect(replayedLine).not.toBe(firstLine);
   });
 
   it('picks the most recent session for ultima sbobina when multiple sessions exist', () => {
