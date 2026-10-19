@@ -212,13 +212,80 @@ describe('QueueSection', () => {
     expect(screen.getAllByText('Annullamento in corso...').length).toBeGreaterThan(0);
   });
 
-  it('auto-continue toggle changes state and menu stays open', () => {
+  it('shows Coda automatica as a visible labelled switch that toggles', () => {
     const setAutoContinue = vi.fn();
-    render(<QueueSection {...makeProps({ pendingFiles: [makeFile()], setAutoContinue })} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Opzioni coda' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Coda automatica' }));
+    render(<QueueSection {...makeProps({ pendingFiles: [makeFile()], setAutoContinue, autoContinue: true })} />);
+    expect(screen.queryByRole('button', { name: 'Opzioni coda' })).toBeNull();
+    const toggle = screen.getByRole('switch', { name: 'Coda automatica' });
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(toggle);
     expect(setAutoContinue).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('menuitem', { name: 'Coda automatica' })).toBeTruthy();
+    const update = setAutoContinue.mock.calls[0][0] as (v: boolean) => boolean;
+    expect(update(true)).toBe(false);
+  });
+
+  it('keeps the Coda automatica switch available while processing', () => {
+    render(
+      <QueueSection
+        {...makeProps({ pendingFiles: [makeFile({ status: 'processing' })], appState: 'processing', autoContinue: false })}
+      />,
+    );
+    expect(screen.getByRole('switch', { name: 'Coda automatica' }).getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('shows the total audio duration of the files waiting to start', () => {
+    const files = [
+      makeFile({ id: 'f1', duration: 1800 }),
+      makeFile({ id: 'f2', duration: 2520 }),
+    ];
+    render(<QueueSection {...makeProps({ pendingFiles: files })} />);
+    expect(screen.getByRole('button', { name: /Avvia sbobinatura \(2 file\)/ }).textContent).toContain('1h 12m di audio');
+  });
+
+  it('marks the total as partial when some durations are unknown', () => {
+    const files = [makeFile({ id: 'f1', duration: 600 }), makeFile({ id: 'f2', duration: 0 })];
+    render(<QueueSection {...makeProps({ pendingFiles: files })} />);
+    expect(screen.getByText('· 10m 00s+ di audio')).toBeTruthy();
+  });
+
+  it('omits the duration when no file duration is known', () => {
+    render(<QueueSection {...makeProps({ pendingFiles: [makeFile({ duration: 0 })] })} />);
+    expect(screen.getByRole('button', { name: 'Avvia sbobinatura (1 file)' })).toBeTruthy();
+    expect(screen.queryByText(/di audio/)).toBeNull();
+  });
+
+  it('keeps the start label and explains why it is disabled in a linked hint', () => {
+    const onOpenSettings = vi.fn();
+    render(
+      <QueueSection
+        {...makeProps({ pendingFiles: [makeFile()], hasApiKey: false, canStart: false, onOpenSettings })}
+      />,
+    );
+    const startBtn = screen.getByRole('button', { name: /Avvia sbobinatura \(1 file\)/ }) as HTMLButtonElement;
+    expect(startBtn.disabled).toBe(true);
+    const hint = document.getElementById(startBtn.getAttribute('aria-describedby') ?? '');
+    expect(hint?.getAttribute('role')).toBe('status');
+    expect(hint?.textContent).toContain('Inserisci API Key nelle impostazioni');
+    fireEvent.click(screen.getByRole('button', { name: 'Apri impostazioni' }));
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not offer settings for the offline hint', () => {
+    render(
+      <QueueSection
+        {...makeProps({ pendingFiles: [makeFile()], isOnline: false, canStart: false, onOpenSettings: vi.fn() })}
+      />,
+    );
+    const startBtn = screen.getByRole('button', { name: /Avvia sbobinatura/ });
+    const hint = document.getElementById(startBtn.getAttribute('aria-describedby') ?? '');
+    expect(hint?.textContent).toContain('Connessione Internet assente');
+    expect(screen.queryByRole('button', { name: 'Apri impostazioni' })).toBeNull();
+  });
+
+  it('shows no hint when the start action is available', () => {
+    render(<QueueSection {...makeProps({ pendingFiles: [makeFile()] })} />);
+    expect(document.querySelector('.queue-start-hint')).toBeNull();
+    expect(screen.getByRole('button', { name: /Avvia sbobinatura/ }).getAttribute('aria-describedby')).toBeNull();
   });
 
   it('renders all files when more than 5 exist (no pagination button)', () => {
@@ -230,15 +297,13 @@ describe('QueueSection', () => {
 
   it('shows Svuota coda button when idle and files present', () => {
     render(<QueueSection {...makeProps({ pendingFiles: [makeFile()] })} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Opzioni coda' }));
-    expect(screen.getByRole('menuitem', { name: 'Svuota coda' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Svuota coda' })).toBeTruthy();
   });
 
   it('calls onClearAll when Svuota coda is clicked', () => {
     const onClearAll = vi.fn();
     render(<QueueSection {...makeProps({ pendingFiles: [makeFile()], onClearAll })} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Opzioni coda' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Svuota coda' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Svuota coda' }));
     expect(onClearAll).toHaveBeenCalledTimes(1);
   });
 
@@ -251,8 +316,7 @@ describe('QueueSection', () => {
         })}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Opzioni coda' }));
-    expect(screen.queryByRole('menuitem', { name: 'Svuota coda' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Svuota coda' })).toBeNull();
   });
 
   it('hides Aggiungi audio button when idle because dropzone is already visible', () => {
@@ -350,6 +414,8 @@ describe('QueueSection', () => {
       />,
     );
     const startBtn = screen.getByText('Avvia sbobinatura (3 file)');
+    // Only queued and failed files count toward the audio still to transcribe.
+    expect(screen.getByText('· 3m 00s di audio')).toBeTruthy();
     expect(startBtn).toBeTruthy();
     fireEvent.click(startBtn);
     expect(onStart).toHaveBeenCalledTimes(1);

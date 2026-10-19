@@ -1113,17 +1113,13 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
 
       await act(async () => { render(<App />); });
 
-      const optionsBtn = await screen.findByLabelText('Opzioni coda');
+      const clearAllBtn = await screen.findByRole('button', { name: 'Svuota coda' });
       await act(async () => {
-        fireEvent.click(optionsBtn);
-      });
-      const clearAllMenuItem = screen.getByText('Svuota coda');
-      await act(async () => {
-        fireEvent.click(clearAllMenuItem);
+        fireEvent.click(clearAllBtn);
       });
       expect(screen.getByRole('heading', { name: 'Svuotare tutta la coda?' })).toBeTruthy();
       await act(async () => {
-        fireEvent.click(screen.getByText('Svuota coda'));
+        fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Svuota coda' }));
       });
       expect(screen.queryByRole('heading', { name: 'Svuotare tutta la coda?' })).toBeNull();
     });

@@ -122,6 +122,50 @@ describe('QueueFileCard', () => {
     expect(container.querySelector('.is-canceling')).toBeTruthy();
   });
 
+  it('marks the processing file with a static indicator, leaving progress to the banner', () => {
+    const { container } = render(
+      <QueueWrapper>
+        <QueueFileCard
+          file={makeFile({ status: 'processing', isRetryingBlocks: true })}
+          appState="processing"
+          onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
+        />
+      </QueueWrapper>,
+    );
+    expect(container.querySelector('.animate-pulse, .animate-spin')).toBeNull();
+  });
+
+  it('keeps the drag handle inside the queue item so it can stay hidden until hover or focus', () => {
+    const { container } = render(
+      <QueueWrapper>
+        <QueueFileCard
+          file={makeFile()}
+          appState="idle"
+          onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
+        />
+      </QueueWrapper>,
+    );
+    const handle = screen.getByLabelText('Trascina per riordinare');
+    expect(handle.closest('.queue-item')).toBe(container.querySelector('.queue-item'));
+    expect(handle.classList.contains('drag-handle-btn')).toBe(true);
+  });
+
+  it('puts size and duration in a meta line under the file name', () => {
+    render(
+      <QueueWrapper>
+        <QueueFileCard
+          file={makeFile()}
+          appState="idle"
+          onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
+        />
+      </QueueWrapper>,
+    );
+    const name = screen.getByRole('heading', { name: 'lezione.mp3' });
+    const meta = name.nextElementSibling as HTMLElement;
+    expect(meta.classList.contains('queue-card-meta')).toBe(true);
+    expect(meta.textContent).toContain('1h 0m');
+  });
+
   it('shows Riprendi CTA for resumable error (quota) when idle', () => {
     const onRetry = vi.fn();
     render(

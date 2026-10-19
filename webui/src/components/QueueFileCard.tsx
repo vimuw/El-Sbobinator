@@ -49,7 +49,7 @@ function QueueFileCardInner({
   };
 
   return (
-    <div ref={setNodeRef} style={sortableStyle} {...attributes}>
+    <div ref={setNodeRef} style={sortableStyle} className="queue-item" {...attributes}>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: isDragging ? 0.4 : 1 }}
@@ -72,45 +72,45 @@ function QueueFileCardInner({
         }`}
       >
         <div className="relative z-10 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
             {isDraggable && (
-              <div className="group/drag flex items-center shrink-0 gap-1">
-                <button
-                  {...listeners}
-                  className="drag-handle-btn"
-                  tabIndex={-1}
-                  aria-label="Trascina per riordinare"
-                >
-                  <GripVertical className="w-4 h-4" />
-                </button>
-              </div>
+              <button
+                {...listeners}
+                className="drag-handle-btn shrink-0"
+                tabIndex={-1}
+                aria-label="Trascina per riordinare"
+              >
+                <GripVertical className="w-4 h-4" />
+              </button>
             )}
             <div
-              className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-lg transition-transform duration-200 group-hover/card:scale-105 ${
+              className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-lg ${
                 file.status === 'processing'
-                  ? isCanceling ? 'text-[var(--error-text)]' : 'text-[var(--processing-text)]'
+                  ? isCanceling
+                    ? 'bg-[var(--error-subtle)] text-[var(--error-text)] border border-[var(--error-ring)]'
+                    : 'bg-[var(--processing-bg)] text-[var(--processing-text)] border border-[var(--processing-ring)]'
                   : file.status === 'error'
                     ? isPaused
                       ? 'bg-[var(--warning-subtle)] text-[var(--warning-text)] border border-[var(--warning-ring)]'
                       : 'bg-[var(--error-subtle)] text-[var(--error-text)] border border-[var(--error-ring)]'
-                    : 'text-[var(--text-muted)]'
+                    : 'bg-[var(--bg-hover)] text-[var(--text-muted)]'
               }`}
             >
               {file.status === 'processing'
                 ? isCanceling
-                  ? <XCircle className="w-5 h-5" />
+                  ? <XCircle className="w-4 h-4" />
                   : file.isRetryingBlocks
-                    ? <RotateCcw className="w-5 h-5 animate-spin text-[var(--accent-text)]" />
-                    : <Clock className="w-5 h-5 animate-pulse" />
+                    ? <RotateCcw className="w-4 h-4" />
+                    : <Clock className="w-4 h-4" />
                 : file.status === 'error'
                   ? isPaused
                     ? <AlertTriangle className="w-4 h-4" />
                     : <AlertCircle className="w-4 h-4" />
-                  : <FileAudio className="w-5 h-5" />}
+                  : <FileAudio className="w-4 h-4" />}
             </div>
             <div className="min-w-0 flex-1">
               <h4 className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{file.name}</h4>
-              <div className="flex items-center gap-2.5 mt-1.5 text-xs text-[var(--text-muted)] min-w-0 flex-nowrap overflow-hidden">
+              <div className="queue-card-meta flex items-center gap-2 mt-0.5 text-xs text-[var(--text-muted)] min-w-0 flex-nowrap overflow-hidden">
                 <span className="shrink-0">{formatSize(file.size)}</span>
                 {file.duration > 0 && (
                   <>
@@ -122,7 +122,7 @@ function QueueFileCardInner({
                   <>
                     <span className="w-1 h-1 rounded-full bg-[var(--border-default)] shrink-0" />
                     <span className={`inline-flex items-center gap-1.5 font-medium shrink-0 ${isCanceling ? 'text-[var(--error-text)]' : 'text-[var(--processing-text)]'}`}>
-                      <span className={`inline-flex h-1.5 w-1.5 rounded-full animate-pulse ${isCanceling ? 'bg-[var(--error-text)]' : 'bg-[var(--processing-dot)]'}`} />
+                      <span className={`inline-flex h-1.5 w-1.5 rounded-full ${isCanceling ? 'bg-[var(--error-text)]' : 'bg-[var(--processing-dot)]'}`} />
                       {isCanceling
                         ? 'Annullamento in corso'
                         : file.isRetryingBlocks
