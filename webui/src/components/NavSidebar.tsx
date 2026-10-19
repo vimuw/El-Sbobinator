@@ -116,10 +116,8 @@ export const NavSidebar = memo(function NavSidebar({
             style={{ color: apiStatusColor }}
           >
             <span className="shrink-0 inline-flex items-center justify-center" style={{ width: 18, height: 18, lineHeight: 0 }}>
-              <span
-                className={`inline-flex h-2 w-2 rounded-full ${appState === 'processing' ? 'animate-pulse' : ''}`}
-                style={{ background: apiStatusColor }}
-              />
+              {/* Still on purpose: the Dashboard badge and the banner already show a run is live. */}
+              <span className="inline-flex h-2 w-2 rounded-full" style={{ background: apiStatusColor }} />
             </span>
           </div>
         </SidebarTooltip>
@@ -152,12 +150,7 @@ export const NavSidebar = memo(function NavSidebar({
               >
                 <Bell size={18} />
               </motion.span>
-              {unreadNotificationsCount > 0 && (
-                <span style={{ position: 'absolute', top: -3, right: -3, display: 'inline-flex' }}>
-                  <span className="animate-ping" style={{ position: 'absolute', width: 7, height: 7, borderRadius: '50%', background: 'var(--error-bg)', opacity: 0.6 }} />
-                  <span style={{ position: 'relative', width: 7, height: 7, borderRadius: '50%', background: 'var(--error-bg)', border: '1.5px solid var(--sidebar-bg)' }} />
-                </span>
-              )}
+              {unreadNotificationsCount > 0 && <SidebarBadge tone="alert" />}
             </span>
           }
           label={unreadNotificationsCount > 0 ? `Notifiche (${unreadNotificationsCount})` : 'Notifiche'}
@@ -169,12 +162,7 @@ export const NavSidebar = memo(function NavSidebar({
           icon={
             <span style={{ position: 'relative', display: 'inline-flex' }}>
               <Settings size={18} />
-              {hasPendingUpdate && (
-                <span style={{ position: 'absolute', top: -3, right: -3, display: 'inline-flex' }}>
-                  <span className="animate-ping" style={{ position: 'absolute', width: 7, height: 7, borderRadius: '50%', background: 'var(--accent-text)', opacity: 0.6 }} />
-                  <span style={{ position: 'relative', width: 7, height: 7, borderRadius: '50%', background: 'var(--accent-text)', border: '1.5px solid var(--sidebar-bg)' }} />
-                </span>
-              )}
+              {hasPendingUpdate && <SidebarBadge tone="accent" />}
             </span>
           }
           label={hasPendingUpdate ? 'Impostazioni (Nuova versione)' : 'Impostazioni'}
@@ -187,6 +175,17 @@ export const NavSidebar = memo(function NavSidebar({
     </nav>
   );
 });
+
+// A status dot on a sidebar icon. Its halo runs on the banner's beat (--processing-beat),
+// so a live run never shows dots pulsing at different speeds.
+function SidebarBadge({ tone }: { tone: 'processing' | 'alert' | 'accent' }) {
+  return (
+    <span className={`sidebar-badge tone-${tone}`} aria-hidden="true" data-testid={`sidebar-badge-${tone}`}>
+      <span className="sidebar-badge-halo" />
+      <span className="sidebar-badge-dot" />
+    </span>
+  );
+}
 
 function SidebarTooltip({
   label,
@@ -254,12 +253,7 @@ function NavItem({
       >
         <span className="inline-flex items-center justify-center transition-transform duration-200 group-hover/nav:scale-105" style={{ position: 'relative', color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>
           {icon}
-          {isProcessing && (
-            <span style={{ position: 'absolute', top: -3, right: -3, display: 'inline-flex' }}>
-              <span className="animate-ping" style={{ position: 'absolute', width: 8, height: 8, borderRadius: '50%', background: 'var(--processing-dot)', opacity: 0.7 }} />
-              <span style={{ position: 'relative', width: 8, height: 8, borderRadius: '50%', background: 'var(--processing-dot)', border: '1.5px solid var(--sidebar-bg)' }} />
-            </span>
-          )}
+          {isProcessing && <SidebarBadge tone="processing" />}
         </span>
       </button>
     </SidebarTooltip>
