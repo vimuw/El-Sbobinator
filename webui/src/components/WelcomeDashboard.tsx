@@ -104,7 +104,7 @@ function StatCard({ index, Icon, value, label }: StatCardProps) {
     <motion.div
       {...staggerItem}
       onMouseEnter={() => setRun(r => r + 1)}
-      className="premium-panel stat-card px-4 py-3.5 flex flex-col gap-2 min-w-0"
+      className="premium-panel stat-card px-5 py-4 flex flex-col gap-3 min-w-0"
     >
       <div className="flex items-center gap-2 text-xs font-medium min-w-0" style={{ color: 'var(--text-muted)' }}>
         <span className="stat-card-icon shrink-0">
@@ -112,7 +112,7 @@ function StatCard({ index, Icon, value, label }: StatCardProps) {
         </span>
         <span className="truncate">{label}</span>
       </div>
-      <span className="text-2xl font-semibold leading-tight truncate" style={{ color: 'var(--text-primary)', letterSpacing: 'var(--tracking-display)' }}>
+      <span className="text-3xl font-semibold leading-tight truncate" style={{ color: 'var(--text-primary)', letterSpacing: 'var(--tracking-display)' }}>
         {value}
       </span>
     </motion.div>

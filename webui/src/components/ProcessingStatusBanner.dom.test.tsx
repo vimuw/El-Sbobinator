@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProcessingStatusBanner } from './ProcessingStatusBanner';
 
@@ -164,7 +164,7 @@ describe('ProcessingStatusBanner', () => {
     expect(screen.getByText(/\d+h \d+m/)).toBeTruthy();
   });
 
-  it('titles the banner with the file and shows the step underneath', () => {
+  it('titles the banner with the step and shows the file underneath', () => {
     const props = {
       appState: 'processing' as const,
       currentModel: 'gemini-3.6-flash',
@@ -176,15 +176,15 @@ describe('ProcessingStatusBanner', () => {
       currentFileName: 'lesson.mp3',
     };
     const { rerender } = render(<ProcessingStatusBanner {...props} currentPhase="" />);
-    expect(screen.getByRole('heading', { name: 'lesson.mp3' })).toBeTruthy();
-    expect(screen.getByTestId('processing-step-title').textContent).toBe('Preparazione...');
+    expect(screen.getByRole('heading', { name: 'Preparazione...' })).toBeTruthy();
+    expect(screen.getByText('lesson.mp3')).toBeTruthy();
 
-    // The next step shows immediately instead of leaving the subtitle empty.
+    // The next step shows immediately instead of leaving the title empty.
     rerender(<ProcessingStatusBanner {...props} activeProgress={2} currentPhase="Fase 0/3: pre-conversione audio" />);
     expect(screen.getByText('Pre-conversione audio')).toBeTruthy();
   });
 
-  it('falls back to the step as heading when the file name is unknown', () => {
+  it('keeps the step as heading when the file name is unknown', () => {
     render(
       <ProcessingStatusBanner
         appState="processing"
@@ -201,7 +201,7 @@ describe('ProcessingStatusBanner', () => {
     expect(screen.getByText('Blocco 2 di 6')).toBeTruthy();
   });
 
-  it('keeps one live indicator during a phase and draws the check on success', () => {
+  it('animates only while a step runs and draws the check on success', () => {
     const props = {
       appState: 'processing' as const,
       currentModel: 'gemini-2.5-flash',
@@ -214,11 +214,25 @@ describe('ProcessingStatusBanner', () => {
     const { container, rerender } = render(
       <ProcessingStatusBanner {...props} currentPhase="Fase 1/3: trascrizione (chunk 2/4)" activeProgress={40} />,
     );
-    expect(container.querySelector('.animate-ping, .animate-pulse, .blur-3xl')).toBeNull();
+    expect(screen.getByTestId('processing-ping')).toBeTruthy();
+    expect(screen.getByTestId('step-live-dot')).toBeTruthy();
+    expect(screen.getByTestId('phase-segment-trascrizione').querySelector('.phase-segment-fill.is-live')).toBeTruthy();
+    expect(screen.getByTestId('phase-segment-preconversione').querySelector('.is-live')).toBeNull();
     expect(screen.getByTestId('progress-percent').textContent).toBe('40%');
+
+    // A wait keeps the step on screen but stops the live motion.
+    rerender(<ProcessingStatusBanner {...props} currentPhase="Server Gemini occupato (503). Nuovo tentativo tra 20s" activeProgress={40} />);
+    expect(screen.queryByTestId('processing-ping')).toBeNull();
+    expect(container.querySelector('.phase-segment-fill.is-live')).toBeNull();
+
+    rerender(<ProcessingStatusBanner {...props} appState="canceling" currentPhase="Fase 1/3: trascrizione (chunk 2/4)" activeProgress={40} />);
+    expect(screen.queryByTestId('processing-ping')).toBeNull();
+    expect(screen.queryByTestId('step-live-dot')).toBeNull();
 
     rerender(<ProcessingStatusBanner {...props} currentPhase="__completed__" activeProgress={100} />);
     expect(screen.getByTestId('drawn-check')).toBeTruthy();
+    expect(screen.queryByTestId('processing-ping')).toBeNull();
+    expect(container.querySelector('.is-live')).toBeNull();
   });
 
   describe('segmented phase track', () => {
@@ -413,6 +427,35 @@ describe('ProcessingStatusBanner', () => {
       rerender(<ProcessingStatusBanner {...base} appState="canceling" currentPhase={phase} />);
       await waitFor(() => expect(screen.queryByTestId('processing-notice')).toBeNull());
       expect(screen.getByText('Interruzione in corso...')).toBeTruthy();
+    });
+  });
+  describe('stop action', () => {
+    const base = {
+      currentModel: 'gemini-2.5-flash',
+      activeProgress: 30,
+      workDone: { chunks: 1, macro: 0 },
+      workTotals: { chunks: 4, macro: 2 },
+      currentFileIndex: 0,
+      currentBatchTotal: 1,
+      currentFileName: 'lesson.mp3',
+    };
+
+    it('stops the run from the banner while processing', () => {
+      const onStop = vi.fn();
+      render(<ProcessingStatusBanner {...base} appState="processing" currentPhase="Fase 1/3: trascrizione (chunk 2/4)" onStop={onStop} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Interrompi' }));
+      expect(onStop).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows a disabled pending state while canceling', () => {
+      render(<ProcessingStatusBanner {...base} appState="canceling" currentPhase="Fase 1/3: trascrizione (chunk 2/4)" onStop={vi.fn()} />);
+      expect(screen.queryByRole('button', { name: 'Interrompi' })).toBeNull();
+      expect((screen.getByRole('button', { name: 'Annullamento in corso...' }) as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('offers no stop once the file is completed', () => {
+      render(<ProcessingStatusBanner {...base} appState="processing" currentPhase="__completed__" activeProgress={100} onStop={vi.fn()} />);
+      expect(screen.queryByRole('button', { name: 'Interrompi' })).toBeNull();
     });
   });
 });

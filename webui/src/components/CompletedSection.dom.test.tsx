@@ -27,12 +27,12 @@ const baseProps = {
 describe('CompletedSection', () => {
   it('renders nothing when doneFiles is empty', () => {
     render(<CompletedSection {...baseProps} doneFiles={[]} />);
-    expect(screen.queryByText('Sbobine completate')).toBeNull();
+    expect(screen.queryByText('Recenti')).toBeNull();
   });
 
   it('renders heading and file count when files are present', () => {
     render(<CompletedSection {...baseProps} doneFiles={[makeFile()]} />);
-    expect(screen.getByText('Sbobine completate')).toBeTruthy();
+    expect(screen.getByText('Recenti')).toBeTruthy();
     expect(screen.getByText('1')).toBeTruthy();
   });
 
@@ -59,47 +59,28 @@ describe('CompletedSection', () => {
     expect(onClearAll).toHaveBeenCalledTimes(1);
   });
 
-  it('shows search box when there are 5 or more files', () => {
+  it('shows only the latest files up to the limit and links the rest to the archive', () => {
+    const onOpenArchive = vi.fn();
     const files = Array.from({ length: 5 }, (_, i) => makeFile({ id: `f${i}`, name: `file-${i}.mp3` }));
-    render(<CompletedSection {...baseProps} doneFiles={files} />);
-    expect(screen.getByPlaceholderText('Cerca...')).toBeTruthy();
+    render(<CompletedSection {...baseProps} doneFiles={files} limit={3} onOpenArchive={onOpenArchive} />);
+    expect(screen.getByText('file-0.mp3')).toBeTruthy();
+    expect(screen.getByText('file-2.mp3')).toBeTruthy();
+    expect(screen.queryByText('file-3.mp3')).toBeNull();
+    // The count still reflects every completed file, not just the visible ones.
+    expect(screen.getByText('5')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Vedi tutte \(5\) nell'Archivio/ }));
+    expect(onOpenArchive).toHaveBeenCalledTimes(1);
   });
 
-  it('does not show search box for fewer than 5 files', () => {
-    const files = [makeFile({ id: 'f1' }), makeFile({ id: 'f2' })];
+  it('offers the archive without a count when every file fits', () => {
+    render(<CompletedSection {...baseProps} doneFiles={[makeFile()]} limit={3} onOpenArchive={vi.fn()} />);
+    expect(screen.getByRole('button', { name: "Apri l'Archivio" })).toBeTruthy();
+  });
+
+  it('has no search field: searching lives in the archive', () => {
+    const files = Array.from({ length: 6 }, (_, i) => makeFile({ id: `f${i}`, name: `file-${i}.mp3` }));
     render(<CompletedSection {...baseProps} doneFiles={files} />);
     expect(screen.queryByPlaceholderText('Cerca...')).toBeNull();
-  });
-
-  it('filters files by search query — only matching file is active', () => {
-    const files = [
-      makeFile({ id: 'f1', name: 'fisica.mp3' }),
-      makeFile({ id: 'f2', name: 'chimica.mp3' }),
-      makeFile({ id: 'f3', name: 'biologia.mp3' }),
-      makeFile({ id: 'f4', name: 'storia.mp3' }),
-      makeFile({ id: 'f5', name: 'matematica.mp3' }),
-    ];
-    render(<CompletedSection {...baseProps} doneFiles={files} />);
-    fireEvent.change(screen.getByPlaceholderText('Cerca...'), { target: { value: 'fisica' } });
-    expect(screen.getByText('fisica.mp3')).toBeTruthy();
-  });
-
-  it('shows no-results message when search finds nothing', () => {
-    const files = Array.from({ length: 5 }, (_, i) => makeFile({ id: `f${i}`, name: `file-${i}.mp3` }));
-    render(<CompletedSection {...baseProps} doneFiles={files} />);
-    fireEvent.change(screen.getByPlaceholderText('Cerca...'), { target: { value: 'xyz-nonexistent' } });
-    expect(screen.getByText(/Nessun risultato per/)).toBeTruthy();
-  });
-
-  it('clears search input when clear button is clicked', () => {
-    const files = Array.from({ length: 5 }, (_, i) => makeFile({ id: `f${i}`, name: `file-${i}.mp3` }));
-    render(<CompletedSection {...baseProps} doneFiles={files} />);
-    const input = screen.getByPlaceholderText('Cerca...') as HTMLInputElement;
-    fireEvent.change(input, { target: { value: 'file-1' } });
-    expect(input.value).toBe('file-1');
-    const clearButton = screen.getByLabelText('Cancella ricerca');
-    fireEvent.click(clearButton);
-    expect(input.value).toBe('');
   });
 
   it('passes folder indicators to completed cards by outputDir', () => {

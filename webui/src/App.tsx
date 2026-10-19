@@ -586,6 +586,7 @@ export default function App() {
               completedSessionFolderMap={completedSessionFolderMap}
               dndSensors={dndSensors}
               handleDragEnd={handleDragEnd}
+              onOpenArchive={() => setActivePage('archive')}
             />
           ) : (
             <motion.main

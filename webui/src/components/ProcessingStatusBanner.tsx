@@ -16,6 +16,7 @@ import {
   RefreshCw,
   ServerCrash,
   Sparkles,
+  Square,
   Timer,
   TriangleAlert,
   WifiOff,
@@ -37,6 +38,8 @@ interface ProcessingStatusBannerProps {
   startedAt?: number;
   // Lasting problems of this run; unlike notices they stay until the next file starts.
   warnings?: ProcessingWarning[];
+  // Stopping lives with the run it stops.
+  onStop?: () => void;
 }
 
 type PhaseInfo = {
@@ -70,7 +73,7 @@ const STEP_TOOLTIPS: Record<StepKey, string> = {
   revisione: "Il testo viene ripulito, organizzato e reso più chiaro sezione per sezione.",
 };
 
-const ICON_CLASS = 'h-[18px] w-[18px]';
+const ICON_CLASS = 'h-7 w-7';
 const NOTICE_ICON_CLASS = 'h-4 w-4';
 
 function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
@@ -357,10 +360,13 @@ function getActiveFraction(
   return 0;
 }
 
+// The running segment uses the brand gradient and carries the sheen; finished ones are solid.
+const ACTIVE_FILL = 'linear-gradient(90deg, var(--accent-gradient-start), var(--accent-gradient-end))';
+
 // An active segment always shows a sliver so it reads as started.
 const ACTIVE_MIN_FILL = 0.04;
 
-function StepLabel({ state, label, accentColor, tooltip }: { state: StepState; label: string; accentColor: string; tooltip: string }) {
+function StepLabel({ state, label, accentColor, tooltip, live = false }: { state: StepState; label: string; accentColor: string; tooltip: string; live?: boolean }) {
   const color = state === 'active' ? accentColor : state === 'done' ? 'var(--text-secondary)' : 'var(--text-muted)';
   return (
     <span
@@ -370,11 +376,17 @@ function StepLabel({ state, label, accentColor, tooltip }: { state: StepState; l
     >
       <span className={`flex cursor-help items-center gap-1 truncate text-xs ${state === 'active' ? 'font-semibold' : 'font-medium'}`} style={{ color, transition: 'color 0.2s ease-out' }}>
         {state === 'done' && <Check className="h-3 w-3 shrink-0" aria-hidden="true" />}
+        {state === 'active' && live && (
+          <span className="relative mr-0.5 flex h-1.5 w-1.5 shrink-0" aria-hidden="true" data-testid="step-live-dot">
+            <span className="absolute inset-0 rounded-full motion-safe:animate-ping" style={{ background: accentColor, opacity: 0.45 }} />
+            <span className="relative h-1.5 w-1.5 rounded-full" style={{ background: accentColor }} />
+          </span>
+        )}
         {label}
       </span>
       <span
         role="tooltip"
-        className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-48 translate-y-1 rounded-xl border px-3 py-2 text-left text-[11px] leading-snug opacity-0 transition-all duration-150 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100"
+        className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-48 -translate-x-1/2 translate-y-1 rounded-xl border px-3 py-2 text-left text-[11px] leading-snug opacity-0 transition-all duration-150 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100"
         style={{
           background: 'var(--bg-elevated)',
           borderColor: 'var(--border-default)',
@@ -400,6 +412,7 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
   currentFileName,
   startedAt,
   warnings = [],
+  onStop,
 }: ProcessingStatusBannerProps) {
   // While a problem is being handled, the banner keeps describing the step it interrupted.
   const phaseNotice = getProcessingNotice(currentPhase);
@@ -458,80 +471,102 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
     metaItems.push({ icon: <Timer className="h-3.5 w-3.5" />, label: formatElapsed(elapsedSecs) });
   }
 
-  // The file is what the user recognises; the step becomes its subtitle.
-  const heading = currentFileName || title;
+  const isStoppable = appState === 'processing' && kind !== 'success' && Boolean(onStop);
+  // Live motion (ring, pulse, sheen) only while a step is really running; waits, cancel and success stay still.
+  const isLive = kind === 'normal' && !isWaiting;
 
   return (
     <motion.section
       {...staggerContainer}
-      className="premium-panel relative w-full p-5 sm:p-6"
+      className="processing-hero relative w-full"
       data-kind={kind}
       data-waiting={isWaiting || undefined}
       aria-label="Stato elaborazione"
     >
-      <div className="relative z-10 flex flex-col gap-5">
-        <motion.div {...staggerItem} className="flex items-start gap-3">
-          <span className="processing-banner-icon" style={{ background: accentSubtle, color: accentColor }}>
-            <span className={iconAnimation === 'spin' ? 'flex animate-spin' : 'flex'}>{icon}</span>
-          </span>
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <h2 className="processing-banner-title truncate" title={heading}>{heading}</h2>
-            {/* popLayout crossfades step titles; "wait" left the subtitle empty between quick phases. */}
+      <div className="relative z-10 flex flex-col items-center gap-6 text-center">
+        <motion.div {...staggerItem} className="flex w-full flex-col items-center gap-4">
+          <span className="processing-hero-icon-wrap">
+            <span className="processing-hero-glow" style={{ background: accentSubtle }} aria-hidden="true" />
+            {/* Each step brings its icon in with a small zoom, as in the first banner. */}
             <AnimatePresence mode="popLayout" initial={false}>
-              <motion.p
+              <motion.span
+                key={title}
+                className="relative flex"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1, transition: enterTransition() }}
+                exit={{ opacity: 0, scale: 0.9, transition: { duration: DURATION.fast, ease: EASE_IN } }}
+              >
+                {isLive && iconAnimation !== 'spin' && (
+                  <span className="absolute inset-0 rounded-full motion-safe:animate-ping" style={{ background: accentSubtle, opacity: 0.6 }} aria-hidden="true" data-testid="processing-ping" />
+                )}
+                <span className="processing-hero-icon" style={{ background: accentSubtle, color: accentColor }}>
+                  <span className={iconAnimation === 'spin' ? 'flex animate-spin' : isLive ? 'flex motion-safe:animate-pulse' : 'flex'}>{icon}</span>
+                </span>
+              </motion.span>
+            </AnimatePresence>
+          </span>
+          <div className="flex w-full max-w-xl flex-col items-center gap-1.5">
+            {/* popLayout crossfades step titles; "wait" left the header empty between quick phases. */}
+            <AnimatePresence mode="popLayout" initial={false}>
+              <motion.h2
                 key={title}
                 initial={{ opacity: 0, y: 4, filter: 'blur(4px)' }}
                 animate={{ opacity: 1, y: 0, filter: 'blur(0px)', transition: enterTransition() }}
                 exit={{ opacity: 0, filter: 'blur(4px)', transition: { duration: DURATION.fast, ease: EASE_IN } }}
-                className="truncate text-sm tabular-nums"
-                style={{ color: 'var(--text-secondary)' }}
+                className="processing-hero-title"
                 data-testid="processing-step-title"
               >
-                {currentFileName && <span style={{ color: accentColor }} className="font-medium">{title}</span>}
-                {progressLabel && currentFileName && <span aria-hidden="true"> · </span>}
-                {progressLabel && <span>{progressLabel}</span>}
-              </motion.p>
+                {title}
+              </motion.h2>
             </AnimatePresence>
+            {(currentFileName || progressLabel) && (
+              <p className="flex max-w-full items-center justify-center gap-1.5 text-sm tabular-nums" style={{ color: 'var(--text-secondary)' }}>
+                {currentFileName && (
+                  <span className="truncate font-medium" style={{ color: 'var(--text-primary)' }} title={currentFileName}>{currentFileName}</span>
+                )}
+                {progressLabel && currentFileName && <span aria-hidden="true">·</span>}
+                {progressLabel && <span className="shrink-0">{progressLabel}</span>}
+              </p>
+            )}
           </div>
         </motion.div>
 
-        <motion.div {...staggerItem} className="flex flex-col gap-2">
-          <div className="flex items-center gap-3">
-            <div
-              className="flex flex-1 gap-1.5"
-              role="progressbar"
-              aria-label="Avanzamento"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={activeProgress}
-              style={{ opacity: isDimmed ? 0.55 : 1, transition: 'opacity 0.3s' }}
-            >
-              {STEPS.map(({ key }) => {
-                const state = stepperState?.[key] ?? 'pending';
-                const fraction = state === 'done'
-                  ? 1
-                  : state === 'active'
-                    ? Math.max(ACTIVE_MIN_FILL, Math.min(1, getActiveFraction(key, activeProgress, workDone, workTotals)))
-                    : 0;
-                return (
-                  <div key={key} className="phase-segment" data-testid={`phase-segment-${key}`} data-state={state}>
-                    <motion.div
-                      className="phase-segment-fill"
-                      style={{ background: accentColor }}
-                      initial={false}
-                      animate={{ width: `${fraction * 100}%` }}
-                      transition={enterTransition(0.6)}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-            <span className="processing-percent" style={{ color: accentColor }} data-testid="progress-percent">
-              <ProgressNumber value={activeProgress} />
-            </span>
+        <motion.span {...staggerItem} className="processing-hero-percent" style={{ color: accentColor }} data-testid="progress-percent">
+          <ProgressNumber value={activeProgress} />
+        </motion.span>
+
+        <motion.div {...staggerItem} className="flex w-full max-w-2xl flex-col gap-2.5">
+          <div
+            className="flex gap-1.5"
+            role="progressbar"
+            aria-label="Avanzamento"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={activeProgress}
+            style={{ opacity: isDimmed ? 0.55 : 1, transition: 'opacity 0.3s' }}
+          >
+            {STEPS.map(({ key }) => {
+              const state = stepperState?.[key] ?? 'pending';
+              const fraction = state === 'done'
+                ? 1
+                : state === 'active'
+                  ? Math.max(ACTIVE_MIN_FILL, Math.min(1, getActiveFraction(key, activeProgress, workDone, workTotals)))
+                  : 0;
+              return (
+                <div key={key} className="phase-segment" data-testid={`phase-segment-${key}`} data-state={state}>
+                  <motion.div
+                    className={`phase-segment-fill${state === 'active' && isLive ? ' is-live' : ''}`}
+                    style={{ background: state === 'active' && isLive ? ACTIVE_FILL : accentColor }}
+                    initial={false}
+                    animate={{ width: `${fraction * 100}%` }}
+                    transition={enterTransition(0.6)}
+                  />
+                </div>
+              );
+            })}
           </div>
           {stepperState && (
-            <div className="processing-step-labels grid grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-3 justify-items-center gap-1.5">
               {STEPS.map(({ key, label }) => (
                 <StepLabel
                   key={key}
@@ -539,6 +574,7 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
                   label={label}
                   accentColor={isDimmed ? 'var(--text-muted)' : accentColor}
                   tooltip={STEP_TOOLTIPS[key]}
+                  live={isLive}
                 />
               ))}
             </div>
@@ -552,7 +588,7 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto', transition: enterTransition() }}
               exit={{ opacity: 0, height: 0, transition: { duration: DURATION.fast, ease: EASE_IN } }}
-              className="-my-1 overflow-hidden py-1"
+              className="-my-1 w-full max-w-2xl overflow-hidden py-1 text-left"
             >
               <NoticeRow key={currentPhase} notice={notice} />
             </motion.div>
@@ -560,7 +596,7 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
         </AnimatePresence>
 
         {warnings.length > 0 && (
-          <ul className="processing-warnings" aria-label="Avvisi elaborazione" data-testid="processing-warnings">
+          <ul className="processing-warnings w-full max-w-2xl text-left" aria-label="Avvisi elaborazione" data-testid="processing-warnings">
             {warnings.map(warning => (
               <li key={warning.code} className="processing-warning" data-code={warning.code}>
                 <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -570,18 +606,33 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
           </ul>
         )}
 
-        {metaItems.length > 0 && (
-          <motion.div
-            {...staggerItem}
-            className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs tabular-nums"
-            style={{ color: 'var(--text-secondary)', opacity: isDimmed ? 0.6 : 1, transition: 'opacity 0.3s' }}
-          >
-            {metaItems.map(({ icon, label }, index) => (
-              <span key={index} className="flex items-center gap-1.5">
-                <span className="flex" style={{ color: 'var(--text-muted)' }}>{icon}</span>
-                {label}
-              </span>
-            ))}
+        {(metaItems.length > 0 || isStoppable || kind === 'cancel') && (
+          <motion.div {...staggerItem} className="flex flex-col items-center gap-4">
+            {metaItems.length > 0 && (
+              <div
+                className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs tabular-nums"
+                style={{ color: 'var(--text-secondary)', opacity: isDimmed ? 0.6 : 1, transition: 'opacity 0.3s' }}
+              >
+                {metaItems.map(({ icon, label }, index) => (
+                  <span key={index} className="flex items-center gap-1.5">
+                    <span className="flex" style={{ color: 'var(--text-muted)' }}>{icon}</span>
+                    {label}
+                  </span>
+                ))}
+              </div>
+            )}
+            {isStoppable && (
+              <button type="button" onClick={onStop} className="processing-stop-button">
+                <Square className="h-3 w-3 fill-current" aria-hidden="true" />
+                Interrompi
+              </button>
+            )}
+            {kind === 'cancel' && (
+              <button type="button" disabled className="processing-stop-button is-pending">
+                <Loader className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                Annullamento in corso...
+              </button>
+            )}
           </motion.div>
         )}
       </div>

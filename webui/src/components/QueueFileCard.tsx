@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { DURATION, EASE_IN, enterTransition, exitTransition } from '../motion';
-import { AlertCircle, AlertTriangle, ArrowUpRight, CheckCircle, Clock, ExternalLink, FileAudio, FolderOpen, GripVertical, PenLine, RotateCcw, Settings, Trash2, X, XCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowUpRight, CheckCircle, Clock, ExternalLink, FileAudio, FolderOpen, GripVertical, Mic, PenLine, RotateCcw, Settings, Trash2, X, XCircle } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
@@ -63,7 +63,7 @@ function QueueFileCardInner({
           transition: { opacity: exitTransition, default: { duration: DURATION.base, ease: EASE_IN } },
         }}
         transition={{ opacity: enterTransition() }}
-        className={`queue-card relative transition-colors px-4 py-3 group/card ${
+        className={`queue-card relative transition-colors px-4 py-2 group/card ${
           file.status === 'processing'
             ? isCanceling ? 'is-canceling' : 'is-processing'
             : file.status === 'error'
@@ -83,6 +83,10 @@ function QueueFileCardInner({
                 <GripVertical className="w-4 h-4" />
               </button>
             )}
+            {/* Rows that can't be dragged keep the handle's slot so every icon sits in one column. */}
+            {showDragHandle && !isDraggable && (
+              <span className="drag-handle-btn drag-handle-spacer shrink-0" aria-hidden="true" />
+            )}
             <div
               className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-lg ${
                 file.status === 'processing'
@@ -101,12 +105,14 @@ function QueueFileCardInner({
                   ? <XCircle className="w-4 h-4" />
                   : file.isRetryingBlocks
                     ? <RotateCcw className="w-4 h-4" />
-                    : <Clock className="w-4 h-4" />
+                    : <Mic className="w-4 h-4" data-testid="queue-icon-active" />
                 : file.status === 'error'
                   ? isPaused
                     ? <AlertTriangle className="w-4 h-4" />
                     : <AlertCircle className="w-4 h-4" />
-                  : <FileAudio className="w-4 h-4" />}
+                  : file.status === 'queued'
+                    ? <Clock className="w-4 h-4" data-testid="queue-icon-waiting" />
+                    : <FileAudio className="w-4 h-4" />}
             </div>
             <div className="min-w-0 flex-1">
               <h4 className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{file.name}</h4>

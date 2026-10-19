@@ -38,7 +38,6 @@ interface TestOverrides {
   onPreview?: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string) => void;
   onOpenFile?: (path: string) => void;
   onStart?: () => void;
-  onStop?: () => void;
   onOpenSettings?: () => void;
   onAddFiles?: () => void;
 }
@@ -79,7 +78,6 @@ function makeProps(overrides: TestOverrides = {}): QueueSectionProps {
       onPreview: overrides.onPreview ?? vi.fn(),
       onOpenFile: overrides.onOpenFile ?? vi.fn(),
       onStart: overrides.onStart ?? vi.fn(),
-      onStop: overrides.onStop ?? vi.fn(),
       onOpenSettings: overrides.onOpenSettings,
       onAddFiles: overrides.onAddFiles,
     },
@@ -89,12 +87,12 @@ function makeProps(overrides: TestOverrides = {}): QueueSectionProps {
 describe('QueueSection', () => {
   it('renders nothing when no pending files and appState is idle', () => {
     render(<QueueSection {...makeProps({ pendingFiles: [], queuedCount: 0 })} />);
-    expect(screen.queryByText('Coda di elaborazione')).toBeNull();
+    expect(screen.queryByText('In coda')).toBeNull();
   });
 
   it('shows queue heading when files are present', () => {
     render(<QueueSection {...makeProps({ pendingFiles: [makeFile()] })} />);
-    expect(screen.getByText('Coda di elaborazione')).toBeTruthy();
+    expect(screen.getByText('In coda')).toBeTruthy();
   });
 
   it('shows file count pill', () => {
@@ -173,43 +171,10 @@ describe('QueueSection', () => {
     expect(screen.getByText(/Connessione Internet assente/)).toBeTruthy();
   });
 
-  it('shows Stop button when processing', () => {
-    render(
-      <QueueSection
-        {...makeProps({
-          pendingFiles: [makeFile({ status: 'processing' })],
-          appState: 'processing',
-        })}
-      />,
-    );
-    expect(screen.getByText('Interrompi elaborazione')).toBeTruthy();
-  });
-
-  it('calls onStop when Stop button is clicked', () => {
-    const onStop = vi.fn();
-    render(
-      <QueueSection
-        {...makeProps({
-          pendingFiles: [makeFile({ status: 'processing' })],
-          appState: 'processing',
-          onStop,
-        })}
-      />,
-    );
-    fireEvent.click(screen.getByText('Interrompi elaborazione'));
-    expect(onStop).toHaveBeenCalledTimes(1);
-  });
-
-  it('shows "Annullamento in corso" when canceling', () => {
-    render(
-      <QueueSection
-        {...makeProps({
-          pendingFiles: [makeFile({ status: 'processing' })],
-          appState: 'canceling',
-        })}
-      />,
-    );
-    expect(screen.getAllByText('Annullamento in corso...').length).toBeGreaterThan(0);
+  // Stopping lives in the processing banner; the queue only lists the files.
+  it.each(['processing', 'canceling'] as const)('has no stop control while %s', appState => {
+    render(<QueueSection {...makeProps({ pendingFiles: [makeFile({ status: 'processing' })], appState })} />);
+    expect(screen.queryByRole('button', { name: /^(Interrompi elaborazione|Annullamento in corso\.\.\.)$/ })).toBeNull();
   });
 
   it('shows Coda automatica as a visible labelled switch that toggles', () => {
@@ -231,6 +196,18 @@ describe('QueueSection', () => {
       />,
     );
     expect(screen.getByRole('switch', { name: 'Coda automatica' }).getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('places Coda automatica in the queue header, next to the add action', () => {
+    render(
+      <QueueSection
+        {...makeProps({ pendingFiles: [makeFile({ status: 'processing' })], appState: 'processing', onAddFiles: vi.fn() })}
+      />,
+    );
+    const toggle = screen.getByRole('switch', { name: 'Coda automatica' });
+    const header = screen.getByRole('heading', { name: 'In coda' }).closest('.dashboard-section-header');
+    expect(header?.contains(toggle)).toBe(true);
+    expect(header?.contains(screen.getByRole('button', { name: 'Aggiungi audio' }))).toBe(true);
   });
 
   it('shows the total audio duration of the files waiting to start', () => {
@@ -372,7 +349,26 @@ describe('QueueSection', () => {
     const { container } = render(<QueueSection {...makeProps({ pendingFiles: [makeFile()] })} />);
     const scrollContainer = container.querySelector('.overflow-y-auto.app-scroll.is-chainable');
     expect(scrollContainer).toBeTruthy();
-    expect(scrollContainer?.className).toContain('max-h-[390px]');
+    expect(scrollContainer?.className).toContain('max-h-[360px]');
+  });
+
+  it('fades the bottom of the queue list only while more files are hidden below', () => {
+    const heights = { scrollHeight: 600, clientHeight: 420 };
+    const scrollHeight = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(() => heights.scrollHeight);
+    const clientHeight = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(() => heights.clientHeight);
+    try {
+      const files = Array.from({ length: 8 }, (_, i) => makeFile({ id: `f${i}` }));
+      const { container } = render(<QueueSection {...makeProps({ pendingFiles: files })} />);
+      const scroller = container.querySelector('.queue-list-scroll') as HTMLElement;
+      expect(scroller.classList.contains('has-more-below')).toBe(true);
+
+      scroller.scrollTop = 180;
+      fireEvent.scroll(scroller);
+      expect(scroller.classList.contains('has-more-below')).toBe(false);
+    } finally {
+      scrollHeight.mockRestore();
+      clientHeight.mockRestore();
+    }
   });
 
   it('renders Riprendi elaborazione button when queuedCount is 0 and failedCount > 0', () => {

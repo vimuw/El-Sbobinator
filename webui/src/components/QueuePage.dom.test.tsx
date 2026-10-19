@@ -183,6 +183,30 @@ describe('QueuePage Component', () => {
     expect(screen.getByTestId('processing-slot').contains(bannerSlot)).toBe(true);
   });
 
+  it('stops the run from the processing banner and keeps only recent transcripts on the page', () => {
+    const handleQueueStop = vi.fn();
+    const onOpenArchive = vi.fn();
+    const done = Array.from({ length: 4 }, (_, i): FileItem => ({
+      ...queuedFile, id: `d${i}`, name: `fatta-${i}.mp3`, status: 'done', completedAt: 100 - i, outputHtml: `/out/${i}.html`,
+    }));
+    render(
+      <QueuePage
+        {...defaultProps}
+        files={[{ ...queuedFile, status: 'processing', startedAt: Date.now() }, ...done]}
+        progress={{ ...defaultProps.progress, appState: 'processing', currentPhase: 'Fase 1/3: trascrizione (chunk 1/4)', activeProgress: 12 }}
+        actions={{ ...defaultProps.actions, handleQueueStop }}
+        onOpenArchive={onOpenArchive}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Interrompi' }));
+    expect(handleQueueStop).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('fatta-2.mp3')).toBeTruthy();
+    expect(screen.queryByText('fatta-3.mp3')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /nell'Archivio/ }));
+    expect(onOpenArchive).toHaveBeenCalledTimes(1);
+  });
+
   describe('full-window drop overlay', () => {
     const fileDrag = { dataTransfer: { types: ['Files'], files: [] } };
 

@@ -1,10 +1,10 @@
-import { memo, useId, useMemo, type Dispatch, type SetStateAction } from 'react';
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { DndContext, closestCenter, useSensors, type DragEndEvent, type SensorDescriptor, type SensorOptions } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { motion, AnimatePresence } from 'motion/react';
 import { fade, fadeUp } from '../motion';
-import { AlertTriangle, FileAudio, Play, RotateCcw, Square, Trash2, Plus } from 'lucide-react';
+import { AlertTriangle, Play, RotateCcw, Trash2, Plus } from 'lucide-react';
 import type { AppStatus, FileItem } from '../appState';
 import { formatDuration, shortModelName } from '../utils';
 import { QueueFileCard } from './QueueFileCard';
@@ -44,7 +44,6 @@ export interface QueueSectionActionProps {
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string) => void;
   onOpenFile: (path: string) => void;
   onStart: () => void;
-  onStop: () => void;
   onOpenSettings?: () => void;
   onAddFiles?: () => void;
 }
@@ -88,7 +87,6 @@ export const QueueSection = memo(function QueueSection({
     onPreview,
     onOpenFile,
     onStart,
-    onStop,
     onOpenSettings,
     onAddFiles,
   } = actions;
@@ -101,6 +99,27 @@ export const QueueSection = memo(function QueueSection({
     return nonProcessingCount >= 2;
   }, [isBusy, pendingFiles]);
   const hintId = useId();
+
+  const isVisible = pendingFiles.length > 0 || appState !== 'idle';
+
+  // The list scrolls inside a scrolling page, so files past the fold get a fade that says "there is more".
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [hasMoreBelow, setHasMoreBelow] = useState(false);
+  const updateMoreBelow = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setHasMoreBelow(el.scrollHeight - el.scrollTop - el.clientHeight > 4);
+  }, []);
+  useEffect(() => {
+    updateMoreBelow();
+    const list = listRef.current;
+    if (!list || typeof ResizeObserver === 'undefined') return;
+    // Cards collapse on exit, so the height changes after pendingFiles does.
+    const observer = new ResizeObserver(updateMoreBelow);
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [isVisible, updateMoreBelow]);
 
   // Total audio still to transcribe; files without a known duration are left out and flagged with "+".
   const audioTotal = useMemo(() => {
@@ -130,18 +149,15 @@ export const QueueSection = memo(function QueueSection({
 
   return (
     <>
-      {(pendingFiles.length > 0 || appState !== 'idle') && (
+      {isVisible && (
         <motion.div
           key="batch-queue"
-          className="premium-panel p-5 sm:p-6 space-y-4"
+          className="dashboard-section"
           {...fadeUp}
         >
-          <div className="flex items-center justify-between gap-3 border-b pb-4" style={{ borderColor: 'var(--border-subtle)' }}>
+          <div className="dashboard-section-header">
             <div className="flex items-center gap-2 min-w-0">
-              <h2 className="section-title flex items-center gap-2 shrink-0">
-                <FileAudio className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
-                Coda di elaborazione
-              </h2>
+              <h2 className="dashboard-section-title shrink-0">In coda</h2>
               {pendingFiles.length > 0 && (
                 <>
                   <span className="status-pill is-quiet shrink-0">{pendingFiles.length}</span>
@@ -151,17 +167,30 @@ export const QueueSection = memo(function QueueSection({
                 </>
               )}
             </div>
-            {onAddFiles && appState === 'processing' && (
+            <div className="flex items-center gap-2 shrink-0">
               <button
                 type="button"
-                onClick={onAddFiles}
-                className="icon-button compact-icon-button shrink-0"
-                title="Aggiungi file audio alla coda"
-                aria-label="Aggiungi audio"
+                role="switch"
+                aria-checked={autoContinue}
+                onClick={() => setAutoContinue(v => !v)}
+                title="Avvia automaticamente il file successivo al termine di ogni sbobinatura"
+                className="queue-switch"
               >
-                <Plus className="w-4 h-4" />
+                <span className="queue-switch-track" aria-hidden="true"><span className="queue-switch-thumb" /></span>
+                Coda automatica
               </button>
-            )}
+              {onAddFiles && appState === 'processing' && (
+                <button
+                  type="button"
+                  onClick={onAddFiles}
+                  className="icon-button compact-icon-button shrink-0"
+                  title="Aggiungi file audio alla coda"
+                  aria-label="Aggiungi audio"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
 
           <DndContext
@@ -172,10 +201,12 @@ export const QueueSection = memo(function QueueSection({
             modifiers={[restrictToVerticalAxis, restrictToParentElement]}
           >
             <div
-              className="overflow-x-hidden overflow-y-auto app-scroll is-chainable max-h-[390px] px-1.5 py-1"
+              ref={scrollRef}
+              onScroll={updateMoreBelow}
+              className={`queue-list-scroll overflow-x-hidden overflow-y-auto app-scroll is-chainable max-h-[360px] py-0.5${hasMoreBelow ? ' has-more-below' : ''}`}
             >
             <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-              <div className="space-y-3">
+              <div ref={listRef} className="space-y-0.5">
               <AnimatePresence>
                 {pendingFiles.map((file) => {
                   const isActive = file.status === 'processing';
@@ -200,7 +231,8 @@ export const QueueSection = memo(function QueueSection({
             </div>
           </DndContext>
 
-          <div className="pt-4 border-t space-y-3" style={{ borderColor: 'var(--border-subtle)' }}>
+          {(showStart || showResumeAll || startHint || (appState === 'idle' && pendingFiles.length > 0)) && (
+          <div className="pt-3 space-y-3">
             {/* Same-size buttons crossfade in place instead of bobbing up and down. */}
             <AnimatePresence mode="wait" initial={false}>
               {showStart && (
@@ -226,22 +258,6 @@ export const QueueSection = memo(function QueueSection({
                   </button>
                 </motion.div>
               )}
-              {appState === 'processing' && (
-                <motion.div key="processing" {...fade}>
-                  <button onClick={onStop} className="premium-button is-danger w-full">
-                    <Square className="w-5 h-5 fill-current" />
-                    Interrompi elaborazione
-                  </button>
-                </motion.div>
-              )}
-              {appState === 'canceling' && (
-                <motion.div key="canceling" {...fade}>
-                  <button disabled className="premium-button is-danger w-full" style={{ opacity: 0.65, cursor: 'wait' }}>
-                    <Square className="w-5 h-5 fill-current" />
-                    Annullamento in corso...
-                  </button>
-                </motion.div>
-              )}
             </AnimatePresence>
 
             {startHint && (
@@ -256,26 +272,16 @@ export const QueueSection = memo(function QueueSection({
               </p>
             )}
 
-            <div className="flex items-center justify-between gap-3">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={autoContinue}
-                onClick={() => setAutoContinue(v => !v)}
-                title="Avvia automaticamente il file successivo al termine di ogni sbobinatura"
-                className="queue-switch"
-              >
-                <span className="queue-switch-track" aria-hidden="true"><span className="queue-switch-thumb" /></span>
-                Coda automatica
-              </button>
-              {appState === 'idle' && pendingFiles.length > 0 && (
+            {appState === 'idle' && pendingFiles.length > 0 && (
+              <div className="flex justify-end">
                 <button type="button" onClick={onClearAll} className="queue-text-button is-danger">
                   <Trash2 className="w-3.5 h-3.5" />
                   Svuota coda
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
+          )}
         </motion.div>
       )}
     </>

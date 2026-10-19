@@ -53,7 +53,7 @@ export const DropZone = memo(function DropZone({ isDragging, onClick, compact = 
     <div
       onClick={onClick}
       onKeyDown={activateOnKey(onClick)}
-      className={`dropzone-card relative cursor-pointer flex flex-col items-center justify-center py-10 px-6 text-center${isDragging ? ' is-dragging' : ''}`}
+      className={`dropzone-card relative cursor-pointer flex flex-col items-center justify-center py-14 px-6 text-center${isDragging ? ' is-dragging' : ''}`}
       role="button"
       tabIndex={0}
       aria-label="Trascina i file qui o clicca per sfogliare"

@@ -727,6 +727,18 @@ button {
   box-shadow: 0 0 0 3px var(--error-ring);
 }
 
+/* While a run is going well, stopping it is available but not the loudest thing on screen. */
+.premium-button.queue-stop-button {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: var(--border-default);
+  box-shadow: none;
+}
+
+.premium-button.queue-stop-button svg {
+  color: var(--error-text);
+}
+
 /* The queue's start action is the panel's focal point: depth instead of an idle pulse. */
 .queue-start-button:not(:disabled) {
   box-shadow: var(--shadow-sm);
@@ -1422,6 +1434,10 @@ button {
   transition: opacity 160ms var(--ease-out), color 160ms ease, background 160ms ease;
 }
 
+.queue-item .drag-handle-spacer {
+  pointer-events: none;
+}
+
 .queue-item:hover .drag-handle-btn,
 .queue-item:focus-within .drag-handle-btn,
 .queue-item:focus-visible .drag-handle-btn {
@@ -1703,25 +1719,89 @@ button {
   gap: 0.4rem;
 }
 
-/* Processing banner: phase title first, then one segmented track per pipeline step. */
-.processing-banner-icon {
+/* Processing hero: sits on the page, no card. Step title, a large figure, one segmented track. */
+.processing-hero {
+  padding: 2.5rem 0 2rem;
+}
+
+.processing-hero-icon-wrap {
+  position: relative;
   display: inline-flex;
-  flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  margin-top: 1px;
-  border-radius: 8px;
+}
+
+/* A soft halo behind the icon, from the first banner. */
+.processing-hero-glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 112px;
+  height: 112px;
+  border-radius: 999px;
+  opacity: 0.55;
+  filter: blur(28px);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: background 0.2s var(--ease-out);
+}
+
+.processing-hero-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
   transition: background 0.2s var(--ease-out), color 0.2s var(--ease-out);
 }
 
-.processing-banner-title {
-  font-size: 1.125rem;
+.processing-hero-title {
+  font-size: 1.5rem;
   font-weight: 600;
-  line-height: 1.3;
-  letter-spacing: -0.015em;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
+}
+
+.processing-hero-percent {
+  font-size: 3.5rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.2s var(--ease-out);
+}
+
+/* Quiet: the run is the focus, stopping is one deliberate click away. */
+.processing-stop-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  transition: color 0.15s var(--ease-out), border-color 0.15s var(--ease-out), background 0.15s var(--ease-out);
+}
+
+.processing-stop-button:hover:not(:disabled) {
+  border-color: var(--error-ring);
+  background: var(--error-subtle);
+  color: var(--error-text);
+}
+
+.processing-stop-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--error-ring);
+}
+
+.processing-stop-button.is-pending {
+  color: var(--error-text);
+  cursor: wait;
 }
 
 /* A recoverable problem: the console keeps the details, the banner says it in plain words. */
@@ -1768,33 +1848,41 @@ button {
 .phase-segment {
   position: relative;
   flex: 1 1 0;
-  height: 8px;
+  height: 10px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--progress-bg);
 }
 
 .phase-segment-fill {
+  position: relative;
+  overflow: hidden;
   height: 100%;
   border-radius: inherit;
   transition: background 0.2s var(--ease-out);
 }
 
-.processing-percent {
-  width: 4rem;
-  flex-shrink: 0;
-  text-align: right;
-  font-size: 1.5rem;
-  font-weight: 600;
-  line-height: 1;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-  transition: color 0.2s var(--ease-out);
+/* The running segment carries a light sheen, as the original progress bar did. */
+.phase-segment-fill.is-live::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.32), transparent);
+  transform: translateX(-100%);
+  animation: processing-progress-sheen 1.6s linear infinite;
 }
 
-/* Labels sit under their segments; the right padding matches the percent column. */
-.processing-step-labels {
-  padding-right: calc(4rem + 0.75rem);
+@keyframes processing-progress-sheen {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phase-segment-fill.is-live::after {
+    animation: none;
+    display: none;
+  }
 }
 
 .processing-step-label:focus-visible {
@@ -1844,6 +1932,11 @@ button {
   overscroll-behavior: contain;
   overscroll-behavior-y: contain;
   scrollbar-gutter: stable;
+}
+
+.queue-list-scroll.has-more-below {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent);
 }
 
 .app-scroll.is-chainable {
@@ -5207,3 +5300,78 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 /* ═══ ARCHIVE GRID PREVIEW ═══ */
+
+/* ═══ DASHBOARD SECTIONS ═══ */
+/* The queue page is one canvas: sections are a small heading over flat rows, no cards. */
+
+.dashboard-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem 1rem 1rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.dashboard-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.dashboard-section-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+/* Rows rest on the page and only take a surface on hover; state shows as a soft tint. */
+.dashboard-section .queue-card,
+:root:not([data-theme="dark"]) .dashboard-section .queue-card,
+:root[data-theme="dark"] .dashboard-section .queue-card {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 8px;
+}
+
+.dashboard-section .queue-card:hover,
+.dashboard-section .queue-card.cursor-pointer:hover {
+  background: var(--bg-hover) !important;
+  box-shadow: none !important;
+}
+
+.dashboard-section .queue-card.is-completed:focus-visible {
+  background: var(--bg-hover) !important;
+  box-shadow: 0 0 0 2px var(--accent-ring) !important;
+}
+
+.dashboard-section .queue-card.is-processing,
+:root:not([data-theme="dark"]) .dashboard-section .queue-card.is-processing,
+:root[data-theme="dark"] .dashboard-section .queue-card.is-processing {
+  background: var(--processing-bg) !important;
+}
+
+.dashboard-section .queue-card.is-canceling,
+:root:not([data-theme="dark"]) .dashboard-section .queue-card.is-canceling,
+:root[data-theme="dark"] .dashboard-section .queue-card.is-canceling,
+.dashboard-section .queue-card.is-error {
+  background: var(--error-subtle) !important;
+}
+
+.dashboard-section .queue-card.is-warning {
+  background: var(--warning-subtle) !important;
+}
+
+/* Welcome figures are the first thing on the page: a raised surface and a large figure. */
+.premium-panel.stat-card {
+  box-shadow: var(--shadow-sm);
+}

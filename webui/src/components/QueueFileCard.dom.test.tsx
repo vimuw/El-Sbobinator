@@ -135,6 +135,29 @@ describe('QueueFileCard', () => {
     expect(container.querySelector('.animate-pulse, .animate-spin')).toBeNull();
   });
 
+  it('shows the active file with the transcription icon and waiting files with a clock', () => {
+    render(
+      <QueueWrapper>
+        <QueueFileCard file={makeFile({ id: 'f1', status: 'processing' })} appState="processing" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />
+        <QueueFileCard file={makeFile({ id: 'f2' })} appState="processing" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />
+      </QueueWrapper>,
+    );
+    expect(screen.getAllByTestId('queue-icon-active')).toHaveLength(1);
+    expect(screen.getAllByTestId('queue-icon-waiting')).toHaveLength(1);
+  });
+
+  it('reserves the drag handle slot on the active row so icons line up with draggable rows', () => {
+    const { container } = render(
+      <QueueWrapper>
+        <QueueFileCard file={makeFile({ status: 'processing' })} appState="processing" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} showDragHandle />
+      </QueueWrapper>,
+    );
+    expect(screen.queryByLabelText('Trascina per riordinare')).toBeNull();
+    const spacer = container.querySelector('.drag-handle-spacer');
+    expect(spacer?.classList.contains('drag-handle-btn')).toBe(true);
+    expect(spacer?.getAttribute('aria-hidden')).toBe('true');
+  });
+
   it('keeps the drag handle inside the queue item so it can stay hidden until hover or focus', () => {
     const { container } = render(
       <QueueWrapper>

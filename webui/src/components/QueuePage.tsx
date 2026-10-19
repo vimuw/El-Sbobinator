@@ -100,7 +100,11 @@ export interface QueuePageProps {
   completedSessionFolderMap: Map<string, ArchiveFolder>;
   dndSensors: SensorDescriptor<SensorOptions>[];
   handleDragEnd: (event: DragEndEvent) => void;
+  onOpenArchive?: () => void;
 }
+
+// The dashboard shows the latest few; the archive keeps every transcript.
+const RECENT_LIMIT = 3;
 
 export function QueuePage({
   files,
@@ -116,6 +120,7 @@ export function QueuePage({
   completedSessionFolderMap,
   dndSensors,
   handleDragEnd,
+  onOpenArchive,
 }: QueuePageProps) {
   const {
     appState,
@@ -273,7 +278,7 @@ export function QueuePage({
           centred column would shift everything above when the banner swaps in. */}
       <div
         data-testid="queue-column"
-        className={`${hasWork ? 'mb-auto' : 'my-auto'} px-5 sm:px-6 py-8 flex flex-col gap-5 max-w-3xl w-full mx-auto`}
+        className={`${hasWork ? 'mb-auto' : 'my-auto'} px-5 sm:px-6 py-8 flex flex-col gap-8 max-w-3xl w-full mx-auto`}
       >
         {apiKeyInsecure && (
           <motion.div
@@ -360,6 +365,7 @@ export function QueuePage({
                       currentFileName={bannerFile?.name}
                       startedAt={bannerFile?.startedAt}
                       warnings={processingWarnings}
+                      onStop={handleQueueStop}
                     />
                   </motion.div>
                 ) : (
@@ -405,7 +411,6 @@ export function QueuePage({
                 onPreview: openPreview,
                 onOpenFile: openFile,
                 onStart: handleQueueStart,
-                onStop: handleQueueStop,
                 onOpenSettings: handleOpenSettings,
                 onAddFiles: handleBrowseClick,
               }}
@@ -420,6 +425,8 @@ export function QueuePage({
               onClearAll={() => setConfirmAction({ type: 'clear-completed', count: doneFiles.length })}
               onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
               sessionFolderMap={completedSessionFolderMap}
+              limit={RECENT_LIMIT}
+              onOpenArchive={onOpenArchive}
             />
           </>
         )}
