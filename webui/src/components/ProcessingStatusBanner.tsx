@@ -1,11 +1,11 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import type React from 'react';
 import { AnimatePresence, motion, useSpring, useTransform } from 'motion/react';
-import { DURATION, EASE_IN, enterTransition, staggerContainer, staggerItem } from '../motion';
+import { DURATION, EASE_IN, EASE_OUT, enterTransition, staggerContainer, staggerItem } from '../motion';
 import {
   AudioLines,
   Bot,
-  Check,
+  CircleCheck,
   FileDown,
   FileSearch,
   Files,
@@ -366,7 +366,38 @@ const ACTIVE_FILL = 'linear-gradient(90deg, var(--accent-gradient-start), var(--
 // An active segment always shows a sliver so it reads as started.
 const ACTIVE_MIN_FILL = 0.04;
 
-function StepLabel({ state, label, accentColor, tooltip, live = false }: { state: StepState; label: string; accentColor: string; tooltip: string; live?: boolean }) {
+// The bar fill and the percent share one overdamped spring, so they arrive together and never overshoot.
+const FILL_SPRING = { type: 'spring', stiffness: 90, damping: 30 } as const;
+// A finished step closes its fill in this fixed time; the next step starts filling only after it.
+const HANDOFF_SECS = 0.45;
+
+// A step that just finished draws its ring, then the tick, once its bar is full (as the success check does);
+// steps already done when the banner mounts stay still. The check carries the accent; the label stays quiet.
+function StepCheck({ draw, color }: { draw: boolean; color: string }) {
+  if (!draw) return <CircleCheck className="h-3.5 w-3.5 shrink-0" style={{ color }} aria-hidden="true" data-testid="step-check" />;
+  return (
+    <motion.svg
+      className="h-3.5 w-3.5 shrink-0"
+      style={{ color }}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.25}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      data-testid="step-drawn-check"
+      initial={{ scale: 0.5, opacity: 0 }}
+      animate={{ scale: [0.5, 1.2, 1], opacity: 1 }}
+      transition={{ duration: 0.5, ease: EASE_OUT, delay: HANDOFF_SECS, times: [0, 0.55, 1] }}
+    >
+      <motion.circle cx="12" cy="12" r="10" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={enterTransition(DURATION.slow * 1.5, HANDOFF_SECS)} />
+      <motion.path d="m9 12 2 2 4-4" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={enterTransition(DURATION.slow, HANDOFF_SECS + DURATION.slow)} />
+    </motion.svg>
+  );
+}
+
+function StepLabel({ state, label, accentColor, tooltip, live = false, settled = false }: { state: StepState; label: string; accentColor: string; tooltip: string; live?: boolean; settled?: boolean }) {
   const color = state === 'active' ? accentColor : state === 'done' ? 'var(--text-secondary)' : 'var(--text-muted)';
   return (
     <span
@@ -375,10 +406,10 @@ function StepLabel({ state, label, accentColor, tooltip, live = false }: { state
       aria-label={`${label}. ${tooltip}`}
     >
       <span className={`flex cursor-help items-center gap-1 truncate text-xs ${state === 'active' ? 'font-semibold' : 'font-medium'}`} style={{ color, transition: 'color 0.2s ease-out' }}>
-        {state === 'done' && <Check className="h-3 w-3 shrink-0" aria-hidden="true" />}
+        {state === 'done' && <StepCheck draw={settled} color={accentColor} />}
         {state === 'active' && live && (
           <span className="relative mr-0.5 flex h-1.5 w-1.5 shrink-0" aria-hidden="true" data-testid="step-live-dot">
-            <span className="absolute inset-0 rounded-full motion-safe:animate-ping" style={{ background: accentColor, opacity: 0.45 }} />
+            <span className="processing-live-dot-halo absolute inset-0 rounded-full" style={{ background: accentColor }} />
             <span className="relative h-1.5 w-1.5 rounded-full" style={{ background: accentColor }} />
           </span>
         )}
@@ -432,6 +463,29 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
   const lastStepperRef = useRef<StepperState>(null);
   const stepperState = getStepperState(stepPhase) ?? lastStepperRef.current;
   lastStepperRef.current = stepperState;
+
+  // The step that went from running to done during this banner's life gets a one-off settle.
+  const stepperKey = stepperState ? STEPS.map(({ key }) => stepperState[key]).join() : '';
+  const [seenStepper, setSeenStepper] = useState({ key: stepperKey, state: stepperState });
+  const [settledStep, setSettledStep] = useState<StepKey | null>(null);
+  // Until that step has filled up, the next one waits, so the fill never seems to jump ahead.
+  const [handingOff, setHandingOff] = useState(false);
+  if (seenStepper.key !== stepperKey) {
+    const finished = STEPS.find(({ key }) => seenStepper.state?.[key] === 'active' && stepperState?.[key] === 'done');
+    setSeenStepper({ key: stepperKey, state: stepperState });
+    if (finished) {
+      setSettledStep(finished.key);
+      setHandingOff(true);
+    }
+  }
+  useEffect(() => {
+    if (!handingOff) return;
+    const id = setTimeout(() => setHandingOff(false), HANDOFF_SECS * 1000);
+    return () => clearTimeout(id);
+  }, [handingOff, settledStep]);
+  const settledIndex = STEPS.findIndex(({ key }) => key === settledStep);
+  const waitingStep = handingOff && settledIndex >= 0 ? STEPS[settledIndex + 1]?.key ?? null : null;
+
   const progressLabel = kind === 'normal' ? getProgressLabel(stepPhase, workDone, workTotals) : null;
 
   const [elapsedSecs, setElapsedSecs] = useState(0);
@@ -472,7 +526,7 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
   }
 
   const isStoppable = appState === 'processing' && kind !== 'success' && Boolean(onStop);
-  // Live motion (ring, pulse, sheen) only while a step is really running; waits, cancel and success stay still.
+  // Live motion (ring, breathing halo, sheen) only while a step is really running; waits, cancel and success stay still.
   const isLive = kind === 'normal' && !isWaiting;
 
   return (
@@ -486,7 +540,7 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
       <div className="relative z-10 flex flex-col items-center gap-6 text-center">
         <motion.div {...staggerItem} className="flex w-full flex-col items-center gap-4">
           <span className="processing-hero-icon-wrap">
-            <span className="processing-hero-glow" style={{ background: accentSubtle }} aria-hidden="true" />
+            <span className={`processing-hero-glow${isLive ? ' is-live' : ''}`} style={{ background: accentSubtle }} aria-hidden="true" />
             {/* Each step brings its icon in with a small zoom, as in the first banner. */}
             <AnimatePresence mode="popLayout" initial={false}>
               <motion.span
@@ -497,10 +551,10 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
                 exit={{ opacity: 0, scale: 0.9, transition: { duration: DURATION.fast, ease: EASE_IN } }}
               >
                 {isLive && iconAnimation !== 'spin' && (
-                  <span className="absolute inset-0 rounded-full motion-safe:animate-ping" style={{ background: accentSubtle, opacity: 0.6 }} aria-hidden="true" data-testid="processing-ping" />
+                  <span className="processing-hero-ring" style={{ color: accentColor }} aria-hidden="true" data-testid="processing-ping" />
                 )}
                 <span className="processing-hero-icon" style={{ background: accentSubtle, color: accentColor }}>
-                  <span className={iconAnimation === 'spin' ? 'flex animate-spin' : isLive ? 'flex motion-safe:animate-pulse' : 'flex'}>{icon}</span>
+                  <span className={iconAnimation === 'spin' ? 'flex animate-spin' : 'flex'}>{icon}</span>
                 </span>
               </motion.span>
             </AnimatePresence>
@@ -553,13 +607,26 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
                   ? Math.max(ACTIVE_MIN_FILL, Math.min(1, getActiveFraction(key, activeProgress, workDone, workTotals)))
                   : 0;
               return (
-                <div key={key} className="phase-segment" data-testid={`phase-segment-${key}`} data-state={state}>
+                <div
+                  key={key}
+                  className={`phase-segment${state === 'done' && settledStep === key ? ' is-settled' : ''}`}
+                  style={{ '--segment-accent': accentColor } as React.CSSProperties}
+                  data-testid={`phase-segment-${key}`}
+                  data-state={state}
+                  data-waiting={waitingStep === key || undefined}
+                >
                   <motion.div
-                    className={`phase-segment-fill${state === 'active' && isLive ? ' is-live' : ''}`}
+                    className={`phase-segment-fill${state === 'active' && isLive ? ' is-live' : ''}${state === 'done' && settledStep === key ? ' is-settled' : ''}`}
                     style={{ background: state === 'active' && isLive ? ACTIVE_FILL : accentColor }}
                     initial={false}
                     animate={{ width: `${fraction * 100}%` }}
-                    transition={enterTransition(0.6)}
+                    transition={
+                      state === 'done' && settledStep === key && handingOff
+                        ? enterTransition(HANDOFF_SECS)
+                        : waitingStep === key
+                          ? { ...FILL_SPRING, delay: HANDOFF_SECS }
+                          : FILL_SPRING
+                    }
                   />
                 </div>
               );
@@ -575,6 +642,7 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
                   accentColor={isDimmed ? 'var(--text-muted)' : accentColor}
                   tooltip={STEP_TOOLTIPS[key]}
                   live={isLive}
+                  settled={settledStep === key}
                 />
               ))}
             </div>

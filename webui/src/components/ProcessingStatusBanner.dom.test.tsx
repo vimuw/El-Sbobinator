@@ -235,6 +235,76 @@ describe('ProcessingStatusBanner', () => {
     expect(container.querySelector('.is-live')).toBeNull();
   });
 
+  it('settles only the step that finishes while the banner is on screen', () => {
+    const props = {
+      appState: 'processing' as const,
+      currentModel: 'gemini-2.5-flash',
+      workDone: { chunks: 0, macro: 0 },
+      workTotals: { chunks: 4, macro: 2 },
+      currentFileIndex: 0,
+      currentBatchTotal: 1,
+      currentFileName: 'lesson.mp3',
+    };
+    const { container, rerender } = render(
+      <ProcessingStatusBanner {...props} currentPhase="Fase 0/3: pre-conversione audio" activeProgress={1} />,
+    );
+    expect(container.querySelector('.is-settled')).toBeNull();
+
+    rerender(<ProcessingStatusBanner {...props} currentPhase="Fase 1/3: trascrizione (chunk 1/4)" activeProgress={3} />);
+    const preconversione = screen.getByTestId('phase-segment-preconversione');
+    expect(preconversione.classList.contains('is-settled')).toBe(true);
+    expect(preconversione.querySelector('.phase-segment-fill.is-settled')).toBeTruthy();
+    expect(screen.getAllByTestId('step-drawn-check')).toHaveLength(1);
+    // The check, not the label, carries the step accent.
+    expect(screen.getByTestId('step-drawn-check').getAttribute('style')).toContain('var(--processing-text)');
+
+    // A wait in between keeps the same steps, so nothing settles again.
+    rerender(<ProcessingStatusBanner {...props} currentPhase="Server Gemini occupato (503). Nuovo tentativo tra 20s" activeProgress={3} />);
+    expect(container.querySelectorAll('.phase-segment.is-settled')).toHaveLength(1);
+
+    rerender(<ProcessingStatusBanner {...props} currentPhase="Fase 2/3: revisione (blocco 1/2)" activeProgress={72} />);
+    expect(screen.getByTestId('phase-segment-trascrizione').querySelector('.is-settled')).toBeTruthy();
+    expect(screen.getByTestId('phase-segment-preconversione').querySelector('.is-settled')).toBeNull();
+  });
+
+  it('starts filling the next step only after the finished one has closed', async () => {
+    const props = {
+      appState: 'processing' as const,
+      currentModel: 'gemini-2.5-flash',
+      workTotals: { chunks: 4, macro: 2 },
+      currentFileIndex: 0,
+      currentBatchTotal: 1,
+    };
+    const { rerender } = render(
+      <ProcessingStatusBanner {...props} currentPhase="Fase 0/3: pre-conversione audio" activeProgress={1} workDone={{ chunks: 0, macro: 0 }} />,
+    );
+    expect(screen.getByTestId('phase-segment-trascrizione').getAttribute('data-waiting')).toBeNull();
+
+    rerender(<ProcessingStatusBanner {...props} currentPhase="Fase 1/3: trascrizione (chunk 1/4)" activeProgress={3} workDone={{ chunks: 0, macro: 0 }} />);
+    expect(screen.getByTestId('phase-segment-trascrizione').getAttribute('data-waiting')).toBe('true');
+    expect(screen.getByTestId('phase-segment-preconversione').getAttribute('data-waiting')).toBeNull();
+
+    // Once the handoff is over, later progress fills right away.
+    await waitFor(() => expect(screen.getByTestId('phase-segment-trascrizione').getAttribute('data-waiting')).toBeNull());
+  });
+
+  it('keeps steps already done at mount still', () => {
+    const { container } = render(
+      <ProcessingStatusBanner
+        appState="processing"
+        currentPhase="Fase 2/3: revisione (blocco 1/2)"
+        currentModel="gemini-2.5-flash"
+        activeProgress={72}
+        workDone={{ chunks: 4, macro: 0 }}
+        workTotals={{ chunks: 4, macro: 2 }}
+        currentFileIndex={0}
+        currentBatchTotal={1}
+      />,
+    );
+    expect(container.querySelector('.is-settled')).toBeNull();
+    expect(screen.queryByTestId('step-drawn-check')).toBeNull();
+  });
+
   describe('segmented phase track', () => {
     const base = {
       appState: 'processing' as const,
