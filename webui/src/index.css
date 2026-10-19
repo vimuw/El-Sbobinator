@@ -693,10 +693,11 @@ button {
   color: var(--error-text);
 }
 
-/* The queue's start action: a slim full-width pill, the twin of the banner's Interrompi rather than a tall slab. */
-.queue-start-button {
-  display: flex;
-  width: 100%;
+/* The app's primary pill: the queue's start action (full width, the twin of the banner's Interrompi)
+   and the primary actions in Impostazioni share one shape instead of tall slabs. */
+.queue-start-button,
+.settings-pill-button {
+  display: inline-flex;
   min-height: 2.5rem;
   align-items: center;
   justify-content: center;
@@ -712,25 +713,41 @@ button {
   transition: transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out);
 }
 
-.queue-start-button:hover:not(:disabled) {
+.queue-start-button:hover:not(:disabled),
+.settings-pill-button:hover:not(:disabled) {
   background: var(--btn-primary-hover);
   transform: translateY(-1px);
 }
 
-.queue-start-button:active:not(:disabled) {
+.queue-start-button:active:not(:disabled),
+.settings-pill-button:active:not(:disabled) {
   transform: scale(0.985);
 }
 
-.queue-start-button:focus-visible {
+.queue-start-button:focus-visible,
+.settings-pill-button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--btn-primary-ring);
 }
 
-.queue-start-button:disabled {
+.queue-start-button:disabled,
+.settings-pill-button:disabled {
   background: var(--btn-disabled-bg);
   color: var(--btn-disabled-text);
   box-shadow: none;
   cursor: not-allowed;
+}
+
+.queue-start-button {
+  display: flex;
+  width: 100%;
+}
+
+/* In a settings row the pill sits beside a 38px input, so it matches that height. */
+.settings-pill-button {
+  min-height: 2.375rem;
+  flex-shrink: 0;
+  font-size: 0.8125rem;
 }
 
 .queue-start-meta {

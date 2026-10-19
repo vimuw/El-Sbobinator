@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { ArrowDownToLine, CheckCircle2, RefreshCw, Tag, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowDownToLine, CheckCircle2, RefreshCw, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
 import { APP_VERSION, GITHUB_RELEASES_URL } from '../../../branding';
 import { SettingsSectionHeading } from './SettingsLayout';
 
@@ -85,7 +85,7 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
       {/* Header row: Version Info & Check Button */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1 min-w-0">
-          <SettingsSectionHeading icon={Tag}>Versione e aggiornamenti</SettingsSectionHeading>
+          <SettingsSectionHeading>Versione e aggiornamenti</SettingsSectionHeading>
           <p className="text-xs text-[var(--text-secondary)]">
             Installata:{' '}
             <span className="font-mono font-bold text-[var(--text-primary)]">{cleanAppVersion}</span>
@@ -243,7 +243,7 @@ function InstallUpdateButton({ version, onInstallUpdate, onStart }: {
         void Promise.resolve(onInstallUpdate(version)).catch(() => {});
       }}
       aria-label="Installa aggiornamento"
-      className="premium-button compact-button cursor-pointer shrink-0 font-bold text-xs flex items-center gap-1.5"
+      className="settings-pill-button"
     >
       <ArrowDownToLine className="w-3.5 h-3.5" />
       Aggiorna ora

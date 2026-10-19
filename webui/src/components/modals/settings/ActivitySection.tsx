@@ -12,7 +12,7 @@ export function ActivitySection({ apiUsage, isLoadingUsage, onRetry }: ActivityS
   return (
     <div className="space-y-3" aria-busy={isLoadingUsage}>
       <div className="flex items-center justify-between gap-3">
-        <SettingsSectionHeading icon={Activity}>Attività di oggi</SettingsSectionHeading>
+        <SettingsSectionHeading>Attività di oggi</SettingsSectionHeading>
       </div>
 
       {isLoadingUsage && <p role="status" className="text-xs text-[var(--text-secondary)] mt-3">Aggiornamento attività…</p>}

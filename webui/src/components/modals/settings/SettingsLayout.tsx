@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import type { LucideIcon } from 'lucide-react';
 
 // Shared building blocks of the settings pages, so every tab speaks one visual language
 // and a restyle happens here instead of in each section.
@@ -14,18 +13,17 @@ export function SettingsPageHeader({ title, description }: { title: string; desc
 }
 
 interface SettingsSectionHeadingProps {
-  icon: LucideIcon;
   children: ReactNode;
   id?: string;
   // Sits right after the title, e.g. a count chip.
   adornment?: ReactNode;
 }
 
-export function SettingsSectionHeading({ icon: Icon, children, id, adornment }: SettingsSectionHeadingProps) {
+// A plain sentence-case title, like the dashboard's: no icon, no shouted caps.
+export function SettingsSectionHeading({ children, id, adornment }: SettingsSectionHeadingProps) {
   return (
     <div className="flex items-center gap-2 min-w-0">
-      <Icon className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-      <h3 id={id} className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] truncate">
+      <h3 id={id} className="text-sm font-semibold text-[var(--text-primary)] truncate">
         {children}
       </h3>
       {adornment}

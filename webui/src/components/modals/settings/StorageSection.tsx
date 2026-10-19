@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle2, FolderInput, HardDrive, Info, Loader2, Trash2, X } from 'lucide-react';
+import { CheckCircle2, FolderInput, Info, Loader2, Trash2, X } from 'lucide-react';
 import { SettingsSectionHeading } from './SettingsLayout';
 
 function formatSize(bytes: number): string {
@@ -59,7 +59,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
       {/* 1. Spazio Disco e Posizione Cartella */}
       <div className="space-y-3">
         {/* Header */}
-        <SettingsSectionHeading icon={HardDrive}>Spazio disco e archivio</SettingsSectionHeading>
+        <SettingsSectionHeading>Spazio disco e archivio</SettingsSectionHeading>
 
         {/* Metric Stat Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -163,7 +163,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
       {/* 2. Eliminazione e Pulizia Sbobine */}
       <div className="border-t border-[var(--border-default)] pt-6 space-y-3">
         {/* Header */}
-        <SettingsSectionHeading icon={Trash2}>Pulizia archivio</SettingsSectionHeading>
+        <SettingsSectionHeading>Pulizia archivio</SettingsSectionHeading>
 
         <div className="space-y-1">
           {/* Row: Incomplete Sessions */}

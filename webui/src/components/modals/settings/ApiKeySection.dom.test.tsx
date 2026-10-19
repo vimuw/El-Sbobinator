@@ -45,6 +45,16 @@ describe('ApiKeySection component', () => {
     expect(screen.getByText('3 chiavi')).toBeTruthy();
   });
 
+  it('titles the section in plain sentence case and offers Aggiungi as the settings pill', () => {
+    render(<ApiKeySection {...defaultProps} />);
+
+    const heading = screen.getByRole('heading', { name: 'Chiavi API' });
+    expect(heading.className).not.toContain('uppercase');
+    expect(heading.parentElement?.querySelector('svg')).toBeNull();
+    const addButton = screen.getByRole('button', { name: 'Aggiungi chiave di riserva' });
+    expect(addButton.className).toBe('settings-pill-button');
+  });
+
   it('adds a valid fallback key when clicking Aggiungi button', () => {
     const setFallbackKeys = vi.fn();
     render(<ApiKeySection {...defaultProps} setFallbackKeys={setFallbackKeys} />);

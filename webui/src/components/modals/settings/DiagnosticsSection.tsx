@@ -1,7 +1,6 @@
 import { reportClientError } from '../../../diagnostics';
 import React, { useState, useEffect } from 'react';
 import {
-  FlaskConical,
   Loader2,
   Check,
   CheckCircle2,
@@ -12,7 +11,6 @@ import {
   FolderOpen,
   RefreshCw,
   Download,
-  FileText,
 } from 'lucide-react';
 import { APP_VERSION } from '../../../branding';
 import { ReportProblemLink } from '../../ReportProblemLink';
@@ -124,7 +122,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
     <div className="space-y-3 animate-fade-in">
       <section aria-labelledby="diagnostic-environment-heading" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <SettingsSectionHeading icon={FlaskConical} id="diagnostic-environment-heading">Verifica ambiente</SettingsSectionHeading>
+          <SettingsSectionHeading id="diagnostic-environment-heading">Verifica ambiente</SettingsSectionHeading>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
@@ -250,7 +248,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
 
       <section aria-labelledby="diagnostic-support-heading" className="space-y-3 border-t border-[var(--border-default)] pt-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <SettingsSectionHeading icon={FileText} id="diagnostic-support-heading">Report per assistenza</SettingsSectionHeading>
+          <SettingsSectionHeading id="diagnostic-support-heading">Report per assistenza</SettingsSectionHeading>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <ReportProblemLink className="app-button-secondary is-settings-action" />
             <button

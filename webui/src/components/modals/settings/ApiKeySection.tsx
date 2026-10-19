@@ -1,7 +1,6 @@
 import { reportClientError } from '../../../diagnostics';
 import React, { useState, useMemo, useCallback } from 'react';
 import {
-  Key,
   ShieldCheck,
   AlertCircle,
   AlertTriangle,
@@ -581,7 +580,6 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
       {/* 1. Header with count & global actions */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SettingsSectionHeading
-          icon={Key}
           adornment={totalKeysCount > 0 && (
             <span className="text-[11px] font-semibold text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-default)] px-2 py-0.5 rounded-full leading-normal shrink-0">
               {totalKeysCount} {totalKeysCount === 1 ? 'chiave' : 'chiavi'}
@@ -648,7 +646,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
           type="button"
           onClick={handleAddKey}
           disabled={!newKeyInput.trim()}
-          className="premium-button compact-button text-xs font-bold shrink-0 cursor-pointer flex items-center gap-1.5 min-h-[38px]"
+          className="settings-pill-button"
           aria-label="Aggiungi chiave di riserva"
         >
           <Plus className="w-3.5 h-3.5" />
