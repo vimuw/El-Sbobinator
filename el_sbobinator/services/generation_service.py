@@ -466,10 +466,6 @@ def _retry_on_model_unavailable(
             attempt=retry_idx + 1,
         )
         usage_service.record_retry_event("503")
-        print(
-            f"      [Modello {current_model} temporaneamente occupato (503)."
-            f" Riprovo tra {int(wait)}s... (tentativo {retry_idx + 1}/{total_retries + 1})]"
-        )
         if runtime is not None:
             runtime.phase(
                 f"Server Gemini occupato — riprovo tra {int(wait)}s (tentativo {retry_idx + 1}/{total_retries + 1})"
@@ -477,7 +473,6 @@ def _retry_on_model_unavailable(
             if hasattr(runtime, "retry_state"):
                 runtime.retry_state(gov.get_state_payload())
         if not sleep_with_cancel(cancelled, wait):
-            print("   [*] Operazione annullata dall'utente.")
             return client, None, None
         restore_phase()
         gov.state = "probing"
@@ -493,7 +488,6 @@ def _retry_on_model_unavailable(
             return client, result, None
         except Exception as retry_exc:
             if cancelled():
-                print("   [*] Operazione annullata dall'utente.")
                 return client, None, None
             retry_error = _error_text(retry_exc)
             retry_code = _error_code(retry_exc)
@@ -564,15 +558,11 @@ def _retry_on_quota(
             current_model, sleep_dur if sleep_dur > 0 else 65.0
         )
         usage_service.record_retry_event("429")
-        print(
-            f"      [Rilevato rate limit ({kind_429}). Attesa di {display_dur}s per il reset quota...]"
-        )
         if runtime is not None:
             runtime.phase(phase_msg)
             if hasattr(runtime, "retry_state"):
                 runtime.retry_state(gov.get_state_payload())
         if not sleep_with_cancel(cancelled, sleep_dur):
-            print("   [*] Operazione annullata dall'utente.")
             return False, client
         restore_phase()
         gov.state = "probing"
@@ -607,7 +597,6 @@ def _retry_on_quota(
             old_key, current_model, reason="quota_exceeded", is_final=True
         )
     if cancelled():
-        print("   [*] Operazione annullata dall'utente.")
         return False, client
 
     new_c, rotated, rotated_key = try_rotate_key(
@@ -631,7 +620,6 @@ def _retry_on_quota(
         return True, client
 
     if cancelled():
-        print("   [*] Operazione annullata dall'utente.")
         return False, client
 
     # Explicit user-driven key replacement on quota exhaustion if fallback keys are exhausted.
@@ -641,7 +629,6 @@ def _retry_on_quota(
             test_c = create_gemini_client(new_api_key.strip())
             test_c.models.get(model=current_model)
             if cancelled():
-                print("   [*] Operazione annullata dall'utente.")
                 return False, client
             client = test_c
             warn_runtime(
@@ -712,16 +699,12 @@ def _handle_offline_network(
 ) -> bool:
     """Returns True to continue main retry loop, False if cancelled."""
     usage_service.record_retry_event("network")
-    print(
-        "      [Connessione assente: impossibile raggiungere i server Google. In attesa di rete (controllo ogni 10s)...]"
-    )
     if runtime is not None:
         runtime.phase(
             "Connessione assente — verifica rete in corso (riprovo ogni 10s)..."
         )
     while not network_service.is_network_online():
         if not sleep_with_cancel(cancelled, 10.0):
-            print("   [*] Operazione annullata dall'utente.")
             return False
     restore_phase()
     return True
@@ -855,17 +838,15 @@ def _handle_generic_transient_retry(
         raise exc
 
     usage_service.record_retry_event("other")
-    print(
-        f"      [Errore: {redact_secrets(exc)}. Riprovo in {int(retry_sleep_seconds)}s...]"
-    )
     if runtime is not None:
         runtime.phase(
             _generic_retry_phase_text(
                 exc, int(retry_sleep_seconds), attempts + 1, max_attempts
             )
         )
+    # The phase line already says that we retry; only the cause is new here.
+    print(f"      Dettaglio: {redact_secrets(exc)}")
     if not sleep_with_cancel(cancelled, retry_sleep_seconds):
-        print("   [*] Operazione annullata dall'utente.")
         return False
     if restore_phase is not None:
         restore_phase()
@@ -922,7 +903,6 @@ def retry_with_quota(
         if cancelled():
             return client, None
         if not gov.wait_if_needed(cancelled, runtime=runtime):
-            print("   [*] Operazione annullata dall'utente.")
             return client, None
 
         current_model = model_name
@@ -938,7 +918,6 @@ def retry_with_quota(
             return client, result
         except Exception as exc:
             if cancelled():
-                print("   [*] Operazione annullata dall'utente.")
                 return client, None
             error = _error_text(exc)
             error_code = _error_code(exc)

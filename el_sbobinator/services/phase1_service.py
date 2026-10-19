@@ -58,6 +58,14 @@ def _sanitize_error_detail(error: object, max_len: int = 500) -> str:
     return redact_secrets(text, max_len=max_len)
 
 
+def _fmt_clock(seconds: float) -> str:
+    """Lecture position as m:ss (or h:mm:ss), the way a player shows it."""
+    total = max(0, int(seconds))
+    hours, rest = divmod(total, 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{hours}:{minutes:02}:{secs:02}" if hours else f"{minutes}:{secs:02}"
+
+
 def _phase1_temp_run_dir(phase1_chunks_dir: str) -> str:
     session_dir = os.path.dirname(os.path.abspath(phase1_chunks_dir))
     run_name = f"run_{os.getpid()}_{uuid.uuid4().hex}"
@@ -339,7 +347,6 @@ def _call_chunk_transcription_api(
             current_client, audio_file, cancelled
         )
         if audio_file is None:
-            print("   [*] Operazione annullata dall'utente.")
             return None
         try:
             if getattr(audio_file, "uri", None):
@@ -544,7 +551,10 @@ def _process_single_phase1_chunk_iteration(
     retry_exhausted_message: str | None = None
 
     try:
-        print("   -> (1/3) Estrazione e taglio in corso...")
+        print(
+            "   -> (1/3) Estrazione e taglio audio "
+            f"(da {_fmt_clock(chunk_start_sec)} a {_fmt_clock(chunk_end_sec)})..."
+        )
         cut_ok, cut_err, next_cut = _cut_phase1_audio_chunk(
             chunk_start_sec=chunk_start_sec,
             chunk_end_sec=chunk_end_sec,
@@ -558,7 +568,6 @@ def _process_single_phase1_chunk_iteration(
         )
         if not cut_ok:
             if str(cut_err or "").strip().lower() == "cancelled" or cancelled():
-                print("   [*] Operazione annullata dall'utente.")
                 return Phase1ChunkIterationResult(
                     client=client,
                     full_transcript=full_transcript,
@@ -827,14 +836,9 @@ def _process_phase1_transcription_impl(
         chunk_idx += 1
         chunk_end_sec = min(chunk_start_sec + chunk_seconds, total_duration_sec)
 
-        print(f"\n--------------------------------------")
-        print(
-            f"-> Blocco Audio {chunk_idx}/{total_chunks} ({chunk_start_sec}s -> {int(chunk_end_sec)}s)"
-        )
         runtime.phase(f"Fase 1/3: trascrizione (chunk {chunk_idx}/{total_chunks})")
 
         if cancelled():
-            print("   [*] Operazione annullata dall'utente.")
             return _finish((client, None, prev_memory))
 
         chunk_recovery_used = False
@@ -890,7 +894,6 @@ def _process_phase1_transcription_impl(
 
         if chunk_start_sec + step_seconds < int(total_duration_sec):
             if not sleep_with_cancel(cancelled, 5):
-                print("   [*] Operazione annullata dall'utente.")
                 return _finish((client, None, prev_memory))
 
     return _finish((client, full_transcript, prev_memory))

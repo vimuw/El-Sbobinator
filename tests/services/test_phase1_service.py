@@ -4,6 +4,7 @@ import os
 import tempfile
 import threading
 import unittest
+from contextlib import redirect_stdout
 from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
@@ -1154,6 +1155,54 @@ class TestPhase1EdgeCases(unittest.TestCase):
         assert transcript is not None
         self.assertIn("Testo.", transcript)
         self.assertEqual(len(cut_calls), 1)
+
+    # ── console lines ──────────────────────────────────────────────────────────
+
+    def test_chunk_console_lines_show_the_lecture_range_once(self):
+        """The phase already names the chunk: no separator or second chunk header."""
+        session = {"stage": "phase1", "phase1": {}}
+        out = io.StringIO()
+        with (
+            patch(
+                "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                return_value=(True, None),
+            ),
+            patch(
+                "el_sbobinator.services.phase1_service.retry_with_quota",
+                return_value=(object(), "Testo."),
+            ),
+            redirect_stdout(out),
+        ):
+            _, transcript, _ = self._run(
+                session, total_duration_sec=3700, step_seconds=3600, chunk_seconds=3600
+            )
+
+        self.assertIsNotNone(transcript)
+        printed = out.getvalue()
+        self.assertIn("(da 0:00 a 1:00:00)", printed)
+        self.assertIn("(da 1:00:00 a 1:01:40)", printed)
+        self.assertNotIn("Blocco Audio", printed)
+        self.assertNotIn("-----", printed)
+
+    def test_cancellation_leaves_the_outcome_to_the_phase_line(self):
+        cancel = threading.Event()
+        cancel.set()
+        out = io.StringIO()
+        with (
+            patch(
+                "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                return_value=(False, "cancelled"),
+            ),
+            redirect_stdout(out),
+        ):
+            _, transcript, _ = self._run(
+                {"stage": "phase1", "phase1": {}},
+                cancel_event=cancel,
+                cancelled=cancel.is_set,
+            )
+
+        self.assertIsNone(transcript)
+        self.assertNotIn("annullata", out.getvalue())
 
     # ── stream-copy fallback ────────────────────────────────────────────────────
 

@@ -162,7 +162,6 @@ def _run_macro_retry_pass(
 
     for index, raw_path, rev_path in pending_retry:
         if cancelled():
-            print("   [*] Operazione annullata dall'utente (retry pass).")
             return client, failed_blocks, revised_done, True
 
         try:
@@ -196,7 +195,6 @@ def _run_macro_retry_pass(
         block_for_ai_retry = (block_local or block_src).strip()
 
         runtime.phase(f"Fase 2/3: retry revisione (blocco {index}/{macro_total})")
-        print(f"   -> Retry revisione blocco {index}/{macro_total}...")
         step_t0 = time.monotonic()
         retry_success = False
 
@@ -361,7 +359,6 @@ def _process_macro_block_item(
         )
 
     step_t0 = time.monotonic()
-    print(f"   -> Revisione Macro-blocco {index}/{macro_total}...")
     success = False
 
     try:
@@ -505,7 +502,6 @@ def process_macro_revision_phase(
 
     for index, block in enumerate(macro_blocks, 1):
         if cancelled():
-            print("   [*] Operazione annullata dall'utente.")
             return client, revised_text
 
         res = _process_macro_block_item(
@@ -535,7 +531,6 @@ def process_macro_revision_phase(
             return client, revised_text
 
         if not sleep_with_cancel(cancelled, 5):
-            print("   [*] Operazione annullata dall'utente.")
             return client, revised_text
 
     # ---- RETRY PASS: second attempt on provisionally-failed blocks ----

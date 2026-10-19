@@ -1,5 +1,7 @@
+import io
 import threading
 import unittest
+from contextlib import redirect_stdout
 from typing import Any, ClassVar, cast
 from unittest.mock import MagicMock, patch
 
@@ -2138,3 +2140,63 @@ class AdaptiveGovernorTests(unittest.TestCase):
 
         self.assertEqual(result, "recovered")
         self.assertEqual(call_count[0], 4)
+
+
+class RetryConsoleLineTests(unittest.TestCase):
+    """The phase line announces each wait; the console must not say it twice."""
+
+    def _retry_once(self, error_factory):
+        rt = _FakeRuntime()
+        calls = [0]
+
+        def fn(_client):
+            calls[0] += 1
+            if calls[0] == 1:
+                raise error_factory()
+            return "ok"
+
+        out = io.StringIO()
+        with redirect_stdout(out):
+            _, result = retry_with_quota(
+                fn,
+                client=object(),
+                fallback_keys=[],
+                model_name="test-model",
+                cancelled=lambda: False,
+                runtime=rt,
+                request_fallback_key=lambda: None,
+                max_attempts=3,
+                retry_sleep_seconds=0.0,
+                model_unavailable_retry_delays=(0.0,),
+                rate_limit_sleep_seconds=0.0,
+                resume_phase_text="Fase 1/3: trascrizione (chunk 1/2)",
+            )
+        self.assertEqual(result, "ok")
+        return rt.phase_calls, out.getvalue()
+
+    @staticmethod
+    def _coded(message: str, code: int) -> Exception:
+        err = RuntimeError(message)
+        err.code = code  # type: ignore[attr-defined]
+        return err
+
+    def test_503_and_rate_limit_waits_are_only_phase_lines(self):
+        cases = {
+            "503": lambda: self._coded("503 Service Unavailable", 503),
+            "429": lambda: self._coded("429 Too Many Requests per minute", 429),
+        }
+        for name, factory in cases.items():
+            with self.subTest(name):
+                phases, printed = self._retry_once(factory)
+                self.assertEqual(printed, "")
+                self.assertEqual(phases[-1], "Fase 1/3: trascrizione (chunk 1/2)")
+                self.assertEqual(len(phases), 2)
+
+    def test_generic_retry_prints_only_the_cause(self):
+        phases, printed = self._retry_once(lambda: RuntimeError("qualcosa di inatteso"))
+        self.assertEqual(
+            phases[0], "Errore temporaneo di Gemini — riprovo tra 0s (tentativo 2/3)"
+        )
+        self.assertEqual(
+            printed.splitlines(), ["      Dettaglio: qualcosa di inatteso"]
+        )

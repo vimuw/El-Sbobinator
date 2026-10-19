@@ -567,11 +567,9 @@ class PipelineControllerMixin:
                             current_file_id = ""
                             continue
 
-                        self._push_console(f"\n{'=' * 50}")
                         self._push_console(
-                            f"  File {idx + 1}/{len(files)}: {os.path.basename(file_path)}"
+                            f"File {idx + 1}/{len(files)}: {os.path.basename(file_path)}"
                         )
-                        self._push_console(f"{'=' * 50}")
                         _clear_retry_state_if_forced(file_info, force_retry)
                         current_payload: SetCurrentFilePayload = {
                             "index": idx,

@@ -87,7 +87,6 @@ def _probe_input_media(
     input_path: str, runtime: PipelineRuntime, logger
 ) -> tuple[float | None, str | None]:
     """Probe media duration and return (total_duration_sec, ffmpeg_exe) or (None, None) on failure."""
-    print(f"[*] Analisi del file originale in corso:\n{os.path.basename(input_path)}")
     runtime.phase("Fase: analisi file")
     try:
         ffmpeg_exe = resolve_ffmpeg()
@@ -223,7 +222,6 @@ def _handle_regeneration_flow(
         stage,
         cancel_event,
     )
-    print(f"[*] Risposta Rigenerare dal JS: {_is_regen}")
     if _is_regen == "timeout":
         session["last_error"] = _REGENERATE_PROMPT_TIMEOUT_ERROR
         session["last_error_detail"] = None
@@ -289,9 +287,6 @@ def _run_phase1_transcription(
 ) -> tuple[Any, str | None]:
     """Execute phase 1 chunked transcription."""
     logger.info("Trascrizione avviata.", extra={"stage": "phase1"})
-    print(
-        f"[*] INIZIO FASE 1: Trascrizione a blocchi (circa {settings.chunk_minutes} min per blocco)"
-    )
     runtime.phase("Fase 1/3: trascrizione (chunk)")
     client, full_transcript, _ = process_phase1_transcription(
         client=client,
@@ -344,7 +339,6 @@ def _run_phase2_revision(
 ) -> tuple[Any, str, bool]:
     """Execute phase 2 macro revision. Returns (client, revised_text, should_exit)."""
     logger.info("Revisione avviata.", extra={"stage": "phase2"})
-    print("\n--------------------------------------")
     runtime.phase("Fase 2/3: revisione")
 
     char_limit = int(
@@ -368,7 +362,6 @@ def _run_phase2_revision(
         except Exception:
             pass
 
-    print(f"[*] INIZIO FASE 2: Revisione e pulizia ({len(macro_blocks)} macro-sezioni)")
     _update_session(
         session,
         {

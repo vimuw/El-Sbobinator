@@ -427,7 +427,6 @@ def ensure_preconverted_audio(
     if not ok:
         _cleanup_partial()
         if str(err or "").strip().lower() == "cancelled" or cancelled():
-            print("   [*] Operazione annullata dall'utente.")
             return preconv_enabled, None
         print("[!] Pre-conversione fallita. Continuo senza pre-conversione.")
         if warn is not None:
