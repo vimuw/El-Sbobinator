@@ -347,9 +347,19 @@ describe('SettingsModal — save behavior', () => {
     expect(contentColumn?.className).not.toMatch(/(?:^|\s)h-full(?:\s|$)/);
   });
 
+  it('keeps the page title and close button outside the scrolling content', () => {
+    render(<SettingsModal {...makeProps()} />);
+    const content = screen.getByTestId('settings-content');
+
+    expect(content.contains(screen.getByRole('button', { name: 'Chiudi finestra' }))).toBe(false);
+    expect(content.contains(screen.getByRole('heading', { name: 'Generale' }))).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Archiviazione' }));
+    expect(screen.getByRole('heading', { name: 'Archiviazione', level: 2 })).toBeTruthy();
+  });
+
   it('starts each settings tab at the top after scrolling the previous tab', () => {
     render(<SettingsModal {...makeProps()} />);
-    const content = screen.getByRole('heading', { name: 'Generale' }).closest('.app-scroll')!;
+    const content = screen.getByTestId('settings-content');
     content.scrollTop = 250;
     fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' }));
     expect(content.scrollTop).toBe(0);
@@ -973,7 +983,7 @@ describe('SettingsModal — version status display', () => {
     const onInstallUpdate = vi.fn().mockResolvedValue(undefined);
     const props = makeProps({ hasChecked: false, checkForUpdates, onInstallUpdate });
     const { rerender } = render(<SettingsModal {...props} />);
-    const content = screen.getByRole('heading', { name: 'Generale' }).closest('.app-scroll')!;
+    const content = screen.getByTestId('settings-content');
     content.scrollTop = 500;
     const statusScrollIntoView = vi.fn();
     const section = screen.getByRole('region', { name: 'Versione e aggiornamenti' });

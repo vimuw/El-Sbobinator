@@ -70,6 +70,21 @@ export interface SettingsModalProps {
 
 type TabType = 'general' | 'storage' | 'diagnostics';
 
+const TAB_HEADERS: Record<TabType, { title: string; description: string }> = {
+  general: {
+    title: 'Generale',
+    description: 'Chiave API Google Gemini, modello di trascrizione e preferenze di sistema.',
+  },
+  storage: {
+    title: 'Archiviazione',
+    description: 'Spazio su disco occupato dalle sbobine e gestione della cartella di lavoro.',
+  },
+  diagnostics: {
+    title: 'Diagnostica',
+    description: 'Verifica requisiti di sistema (FFmpeg, API, disco) e report di assistenza.',
+  },
+};
+
 interface SettingsSnapshot {
   apiKey: string;
   fallbackKeys: string[];
@@ -596,23 +611,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </nav>
 
               <div className="flex-1 min-h-0 flex flex-col min-w-0 bg-[var(--bg-surface)] relative">
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  disabled={isSaving}
-                  className="icon-button modal-icon-button absolute top-4 right-4 z-20"
-                  aria-label="Chiudi finestra"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-                <div ref={contentRef} className="app-scroll flex-1 overflow-y-auto overflow-x-hidden p-6 md:p-8 space-y-6 [scrollbar-gutter:stable]">
+                {/* The page title and the close button stay put above the scrolling content,
+                    so nothing slides under the X. */}
+                <div className="flex items-start justify-between gap-4 px-6 md:px-8 pt-6 md:pt-8 pb-4 border-b border-[var(--border-subtle)]">
+                  <SettingsPageHeader {...TAB_HEADERS[activeTab]} />
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    disabled={isSaving}
+                    className="icon-button modal-icon-button shrink-0 -mt-1 -mr-2"
+                    aria-label="Chiudi finestra"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div ref={contentRef} data-testid="settings-content" className="app-scroll flex-1 overflow-y-auto overflow-x-hidden px-6 md:px-8 pt-5 pb-6 md:pb-8 space-y-6 [scrollbar-gutter:stable]">
                   {activeTab === 'general' && (
                     <div className="space-y-6 animate-fade-in">
-                      <SettingsPageHeader
-                        title="Generale"
-                        description="Chiave API Google Gemini, modello di trascrizione e preferenze di sistema."
-                      />
-
                       <UpdateNotice
                         latestVersion={latestVersion}
                         updateInstallState={updateInstallState}
@@ -672,11 +687,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                   {activeTab === 'storage' && (
                     <div className="space-y-6 animate-fade-in">
-                      <SettingsPageHeader
-                        title="Archiviazione"
-                        description="Spazio su disco occupato dalle sbobine e gestione della cartella di lavoro."
-                      />
-
                       <StorageSection
                         sessionInfo={sessionInfo}
                         isLoadingSessionInfo={isLoadingSessionInfo}
@@ -701,11 +711,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                   {activeTab === 'diagnostics' && (
                     <div className="space-y-6 animate-fade-in">
-                      <SettingsPageHeader
-                        title="Diagnostica"
-                        description="Verifica requisiti di sistema (FFmpeg, API, disco) e report di assistenza."
-                      />
-
                       <ActivitySection
                         apiUsage={apiUsage}
                         isLoadingUsage={isLoadingUsage}
