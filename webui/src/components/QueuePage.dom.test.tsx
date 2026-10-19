@@ -181,4 +181,66 @@ describe('QueuePage Component', () => {
     expect(bannerSlot.style.height).toBe('');
     expect(screen.getByTestId('processing-slot').contains(bannerSlot)).toBe(true);
   });
+
+  describe('full-window drop overlay', () => {
+    const fileDrag = { dataTransfer: { types: ['Files'], files: [] } };
+
+    function DraggablePage({ handleDrop = vi.fn() }: { handleDrop?: (e: React.DragEvent) => void }) {
+      const [isDragging, setIsDragging] = React.useState(false);
+      return (
+        <QueuePage
+          {...defaultProps}
+          ingest={{
+            ...defaultProps.ingest,
+            isDragging,
+            handleDragOver: e => { e.preventDefault(); setIsDragging(true); },
+            handleDragLeave: () => setIsDragging(false),
+            handleDrop: e => { setIsDragging(false); handleDrop(e); },
+          }}
+        />
+      );
+    }
+
+    it('appears when a file is dragged anywhere over the page', () => {
+      render(<DraggablePage />);
+      expect(screen.queryByTestId('drop-overlay')).toBeNull();
+      fireEvent.dragOver(screen.getByRole('main'), fileDrag);
+      expect(screen.getByTestId('drop-overlay')).toBeTruthy();
+      expect(screen.getByText('Rilascia per aggiungere')).toBeTruthy();
+    });
+
+    it('ignores drags that carry no files', () => {
+      render(<DraggablePage />);
+      fireEvent.dragOver(screen.getByRole('main'), { dataTransfer: { types: ['text/plain'] } });
+      expect(screen.queryByTestId('drop-overlay')).toBeNull();
+    });
+
+    it('stays put while the drag crosses nested elements, and hides when it leaves the window', async () => {
+      render(<DraggablePage />);
+      const main = screen.getByRole('main');
+      fireEvent.dragOver(main, fileDrag);
+      fireEvent.dragLeave(main, { ...fileDrag, relatedTarget: screen.getByTestId('queue-column') });
+      expect(screen.getByTestId('drop-overlay')).toBeTruthy();
+
+      fireEvent.dragLeave(main, { ...fileDrag, relatedTarget: null });
+      await waitFor(() => expect(screen.queryByTestId('drop-overlay')).toBeNull());
+    });
+
+    it('hides on Escape', async () => {
+      render(<DraggablePage />);
+      fireEvent.dragOver(screen.getByRole('main'), fileDrag);
+      fireEvent.keyDown(window, { key: 'Escape' });
+      await waitFor(() => expect(screen.queryByTestId('drop-overlay')).toBeNull());
+    });
+
+    it('hands the drop to the ingest handler and hides', async () => {
+      const handleDrop = vi.fn();
+      render(<DraggablePage handleDrop={handleDrop} />);
+      const main = screen.getByRole('main');
+      fireEvent.dragOver(main, fileDrag);
+      fireEvent.drop(main, fileDrag);
+      expect(handleDrop).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(screen.queryByTestId('drop-overlay')).toBeNull());
+    });
+  });
 });

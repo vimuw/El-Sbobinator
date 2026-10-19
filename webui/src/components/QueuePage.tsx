@@ -11,7 +11,7 @@ import { type AppStatus, type FileItem, getDoneFiles, getPendingFiles } from '..
 import { GEMINI_KEY_PATTERN } from '../utils';
 import { STORAGE_KEYS } from '../storageKeys';
 import { ProcessingStatusBanner } from './ProcessingStatusBanner';
-import { DropZone } from './DropZone';
+import { DropOverlay, DropZone } from './DropZone';
 import { WelcomeDashboard } from './WelcomeDashboard';
 import { QueueSection } from './QueueSection';
 import { CompletedSection } from './CompletedSection';
@@ -56,7 +56,7 @@ export interface QueueAuthProps {
 export interface QueueIngestProps {
   isDragging: boolean;
   handleDragOver: (e: React.DragEvent) => void;
-  handleDragLeave: (e: React.DragEvent) => void;
+  handleDragLeave: (e?: React.DragEvent) => void;
   handleDrop: (e: React.DragEvent) => void;
   handleBrowseClick: () => void;
 }
@@ -218,6 +218,38 @@ export function QueuePage({
   const hasWork = pendingFiles.length > 0 || doneFiles.length > 0 || showProcessingBanner;
   const isConsoleDisabled = !hasApiKey || !isApiKeyValid || !hasWork;
 
+  // Only file drags light up the page; nested dragleave events (moving between
+  // children) are ignored so the overlay never flickers while crossing the page.
+  const isFileDrag = (e: React.DragEvent) => {
+    const types = e.dataTransfer?.types;
+    return !types || Array.from(types).includes('Files');
+  };
+  const onPageDragOver = useCallback((e: React.DragEvent) => {
+    if (isFileDrag(e)) handleDragOver(e);
+  }, [handleDragOver]);
+  const onPageDragLeave = useCallback((e: React.DragEvent) => {
+    const next = e.relatedTarget as Node | null;
+    if (next && e.currentTarget.contains(next)) return;
+    handleDragLeave(e);
+  }, [handleDragLeave]);
+
+  useEffect(() => {
+    if (!isDragging) return;
+    const clear = () => handleDragLeave();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') clear();
+    };
+    // A drag cancelled or dropped outside the page never reaches the main element.
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('dragend', clear);
+    window.addEventListener('drop', clear);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('dragend', clear);
+      window.removeEventListener('drop', clear);
+    };
+  }, [isDragging, handleDragLeave]);
+
   useEffect(() => {
     if (isConsoleDisabled && showConsole) {
       setShowConsole(false);
@@ -230,10 +262,11 @@ export function QueuePage({
       key="queue"
       className="flex-1 w-full flex flex-col overflow-y-auto app-scroll"
       {...fade}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
+      onDragOver={onPageDragOver}
+      onDragLeave={onPageDragLeave}
       onDrop={handleDrop}
     >
+      <DropOverlay visible={isDragging && uiMode !== 'setup' && uiMode !== 'loading'} />
       {/* With work on the page the column stays anchored to the top: a vertically
           centred column would shift everything above when the banner swaps in. */}
       <div
@@ -331,9 +364,6 @@ export function QueuePage({
                     <DropZone
                       compact={pendingFiles.length > 0 || doneFiles.length > 0}
                       isDragging={isDragging}
-                      onDragOver={handleDragOver}
-                      onDragLeave={handleDragLeave}
-                      onDrop={handleDrop}
                       onClick={handleBrowseClick}
                     />
                   </motion.div>

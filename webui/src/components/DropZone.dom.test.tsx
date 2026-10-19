@@ -4,9 +4,6 @@ import { DropZone } from './DropZone';
 
 const baseProps = {
   isDragging: false,
-  onDragOver: vi.fn(),
-  onDragLeave: vi.fn(),
-  onDrop: vi.fn(),
   onClick: vi.fn(),
 };
 
@@ -16,9 +13,17 @@ describe('DropZone', () => {
     expect(screen.getByText('Trascina i file qui')).toBeTruthy();
   });
 
-  it('mentions supported formats', () => {
+  it('summarises supported formats and keeps the full list in the tooltip', () => {
     render(<DropZone {...baseProps} />);
-    expect(screen.getByText(/\.mp3/)).toBeTruthy();
+    const summary = screen.getByText('Audio o video · MP3, M4A, WAV, MP4 e altri');
+    expect(summary.getAttribute('title')).toContain('.flac');
+    expect(summary.getAttribute('title')).toContain('.aac');
+  });
+
+  it('shows Sfoglia file as decoration of the single card button, not a nested control', () => {
+    render(<DropZone {...baseProps} />);
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(screen.getByText('Sfoglia file').getAttribute('aria-hidden')).toBe('true');
   });
 
   it('applies is-dragging class when isDragging is true', () => {

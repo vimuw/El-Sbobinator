@@ -306,7 +306,7 @@
 
 :root:not([data-theme="dark"]) .dropzone-card:hover {
   box-shadow: none;
-  border-color: var(--accent-bg);
+  border-color: color-mix(in srgb, var(--accent-bg) 55%, var(--border-default));
 }
 
 :root:not([data-theme="dark"]) .dropzone-card::before {
@@ -327,7 +327,7 @@
 
 :root[data-theme="dark"] .dropzone-card:hover {
   box-shadow: none;
-  border-color: var(--accent-bg);
+  border-color: color-mix(in srgb, var(--accent-bg) 55%, var(--border-default));
 }
 
 :root[data-theme="dark"] .dropzone-card::before {
@@ -1385,24 +1385,23 @@ button {
 .dropzone-card {
   position: relative;
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   border: 1.5px dashed var(--border-default);
   background: var(--bg-panel);
   transition:
-    transform 160ms ease,
-    background 160ms ease,
-    box-shadow 160ms ease,
-    border-color 160ms ease;
+    background 200ms var(--ease-out),
+    box-shadow 200ms var(--ease-out),
+    border-color 200ms var(--ease-out);
 }
 
 .dropzone-card::before {
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 180ms ease-out;
+  transition: opacity 200ms var(--ease-out);
   will-change: opacity;
 }
 
@@ -1411,13 +1410,18 @@ button {
 }
 
 .dropzone-card:hover {
-  border-color: var(--accent-bg);
+  border-color: color-mix(in srgb, var(--accent-bg) 55%, var(--border-default));
   box-shadow: none;
-  transform: translateY(-1px);
 }
 
-.dropzone-card:active {
-  transform: scale(0.99);
+.dropzone-card:focus-visible {
+  outline: none;
+  border-color: var(--accent-bg);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.dropzone-card:focus-visible::before {
+  opacity: 1;
 }
 
 .dropzone-card.is-dragging {
@@ -1457,20 +1461,60 @@ button {
 
 .dropzone-compact {
   height: 52px;
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   border: 1.5px dashed var(--border-default);
   background: var(--glass-bg);
   transition:
-    border-color 160ms ease,
-    background 160ms ease,
-    box-shadow 160ms ease;
+    border-color 200ms var(--ease-out),
+    background 200ms var(--ease-out),
+    box-shadow 200ms var(--ease-out);
 }
 
-.dropzone-compact:hover,
+.dropzone-compact:hover {
+  border-color: color-mix(in srgb, var(--accent-bg) 55%, var(--border-default));
+  background: color-mix(in srgb, var(--accent-subtle) 60%, var(--glass-bg));
+}
+
 .dropzone-compact:focus-visible {
+  outline: none;
   border-color: var(--accent-bg);
   background: color-mix(in srgb, var(--accent-subtle) 60%, var(--glass-bg));
-  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.dropzone-compact-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--accent-ring);
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+  transition: border-color 200ms var(--ease-out), color 200ms var(--ease-out);
+}
+
+.dropzone-compact-label {
+  color: var(--text-secondary);
+  transition: color 200ms var(--ease-out);
+}
+
+.dropzone-compact:hover .dropzone-compact-label,
+.dropzone-compact:focus-visible .dropzone-compact-label {
+  color: var(--text-primary);
+}
+
+.dropzone-compact:hover .dropzone-compact-icon,
+.dropzone-compact:focus-visible .dropzone-compact-icon,
+.dropzone-compact.is-dragging .dropzone-compact-icon {
+  border-color: var(--accent-bg);
+}
+
+.dropzone-compact.is-dragging .dropzone-compact-label {
+  color: var(--accent-text);
+  font-weight: 500;
 }
 
 .dropzone-compact.is-dragging {
@@ -4552,49 +4596,70 @@ input::-webkit-contacts-auto-fill-button {
   border: 1px solid var(--accent-ring);
   background: var(--accent-subtle);
   color: var(--accent-text);
-  transition: background 160ms ease, color 160ms ease, border-color 160ms ease, transform 160ms ease;
+  transition: color 200ms var(--ease-out), border-color 200ms var(--ease-out);
 }
 
-.dropzone-card:hover .dropzone-icon-container {
-  transform: scale(1.06);
-  border-color: var(--accent-bg);
-}
-
+.dropzone-card:hover .dropzone-icon-container,
 .dropzone-icon-container.is-dragging {
-  background: var(--accent-subtle);
-  color: var(--accent-bg);
   border-color: var(--accent-bg);
-  transform: scale(1.10);
 }
 
+/* The primary action of the empty page, built on the primary button tokens. */
 .dropzone-browse-button {
-  margin-top: 16px;
-  padding: 5px 14px;
+  margin-top: 18px;
+  height: 36px;
+  padding: 0 1rem;
+  display: inline-flex;
+  align-items: center;
   border-radius: 8px;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   font-weight: 600;
-  background: var(--accent-subtle);
-  color: var(--accent-text);
-  border: 1px solid var(--accent-ring);
-  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  box-shadow: var(--shadow-xs);
+  transition: background 200ms var(--ease-out), box-shadow 200ms var(--ease-out);
 }
 
-.dropzone-card:hover .dropzone-browse-button,
-.dropzone-browse-button:hover {
-  background: var(--accent-ring);
-  border-color: var(--accent-bg);
+.dropzone-card:hover .dropzone-browse-button {
+  background: var(--btn-primary-hover);
+  box-shadow: var(--shadow-sm);
 }
 
-.dropzone-browse-button:active {
-  transform: scale(0.96);
+.dropzone-card:focus-visible .dropzone-browse-button {
+  box-shadow: var(--shadow-xs), 0 0 0 3px var(--btn-primary-ring);
 }
 
-.dropzone-compact svg.lucide-plus {
-  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+/* ═══ FULL-WINDOW DROP OVERLAY ═══ */
+
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  padding: 16px;
+  display: flex;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--bg-base) 90%, transparent);
+  backdrop-filter: blur(6px);
 }
 
-.dropzone-compact:hover svg.lucide-plus {
-  transform: rotate(90deg) scale(1.1);
+.drop-overlay-target {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: var(--radius-panel);
+  border: 1.5px dashed var(--accent-bg);
+  background: color-mix(in srgb, var(--accent-subtle) 70%, transparent);
+  box-shadow: inset 0 0 0 3px var(--accent-ring);
+}
+
+.drop-overlay-title {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
 }
 
 /* Queue Card Status Modifiers */
