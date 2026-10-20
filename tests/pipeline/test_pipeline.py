@@ -1493,6 +1493,56 @@ class PipelineCleanupCacheTests(unittest.TestCase):
             )
 
 
+class RegenerationPromptCancelTests(unittest.TestCase):
+    def test_stop_on_the_prompt_does_not_reuse_the_finished_document(self):
+        from el_sbobinator.pipeline.pipeline import _handle_regeneration_flow
+
+        for stopped, expected_status in ((True, "cancelled"), (False, "early_done")):
+            with (
+                self.subTest(stopped=stopped),
+                tempfile.TemporaryDirectory() as tmpdir,
+            ):
+                context = _FakeSessionContext(tmpdir)
+                html_path = os.path.join(tmpdir, "lezione.html")
+                with open(html_path, "w", encoding="utf-8") as handle:
+                    handle.write("<html></html>")
+                context.session.update(
+                    {"stage": "done", "outputs": {"html": html_path}}
+                )
+                cancel_event = threading.Event()
+                if stopped:
+                    cancel_event.set()
+                adapter = PipelineAdapter(None, cancel_event)
+                out = io.StringIO()
+                with (
+                    patch(
+                        "el_sbobinator.pipeline.pipeline._ask_regeneration_decision",
+                        return_value=(False, False),
+                    ),
+                    contextlib.redirect_stdout(out),
+                ):
+                    status, stage, timed_out = _handle_regeneration_flow(
+                        "lezione.mp3",
+                        context,  # type: ignore[arg-type]
+                        adapter,
+                        PipelineRuntime(adapter),
+                        "done",
+                        cancel_event,
+                        context.save,
+                        _FakeLogger(),
+                    )
+
+                self.assertEqual(
+                    (status, stage, timed_out), (expected_status, "done", False)
+                )
+                if stopped:
+                    self.assertEqual(out.getvalue(), "")
+                    self.assertNotEqual(adapter.last_run_status, "completed")
+                else:
+                    self.assertIn("Sbobina già pronta", out.getvalue())
+                    self.assertEqual(adapter.last_run_status, "completed")
+
+
 class PipelineStageRoutingTests(unittest.TestCase):
     """Tests that verify phase-skipping when resuming from phase2."""
 

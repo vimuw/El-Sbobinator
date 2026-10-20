@@ -216,7 +216,7 @@ def _handle_regeneration_flow(
     """Handle resume/regenerate prompt when progress already exists.
 
     Returns (status, new_stage, is_timeout_terminal). Status can be 'proceed', 'early_done',
-    'timeout', or 'continue'.
+    'timeout', 'cancelled', or 'continue'.
     """
     session = session_ctx.session
     _is_regen, _is_timeout = _ask_regeneration_decision(
@@ -236,6 +236,10 @@ def _handle_regeneration_flow(
         )
         runtime.set_run_result("failed", _REGENERATE_PROMPT_TIMEOUT_ERROR)
         return "timeout", stage, True
+    if runtime.cancelled():
+        # Stop, or closing the dialog, answers no question: neither reuse the
+        # finished document nor resume; the cancelled phase reports the outcome.
+        return "cancelled", stage, False
     if _is_regen:
         print(
             f"Rigenero {os.path.basename(input_path)} da capo: elimino la sessione precedente..."
@@ -816,7 +820,7 @@ def _esegui_sbobinatura_impl(
             )
             if timeout_flag:
                 regenerate_prompt_timeout_terminal = True
-            if status in ("timeout", "early_done"):
+            if status in ("timeout", "early_done", "cancelled"):
                 return
             if status == "regenerated":
                 session = session_ctx.session
