@@ -31,6 +31,14 @@ describe('StorageSection component', () => {
     expect(baseProps.onOpenSessionFolder).toHaveBeenCalledTimes(1);
   });
 
+  it('captions the stat cards in sentence case', () => {
+    render(<StorageSection {...baseProps} />);
+
+    for (const label of ['Spazio occupato', 'Sbobine salvate']) {
+      expect(screen.getByText(label).className).not.toContain('uppercase');
+    }
+  });
+
   it('renders move progress with .alert-card.is-info', () => {
     const { container } = render(
       <StorageSection

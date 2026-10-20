@@ -1,6 +1,6 @@
 import { Activity, Layers } from 'lucide-react';
 import type { ApiUsageResult } from '../../../bridge';
-import { SettingsSectionHeading } from './SettingsLayout';
+import { SettingsCardLabel, SettingsSectionHeading } from './SettingsLayout';
 
 interface ActivitySectionProps {
   apiUsage?: ApiUsageResult | null;
@@ -25,9 +25,7 @@ export function ActivitySection({ apiUsage, isLoadingUsage, onRetry }: ActivityS
         <div className="premium-panel p-3.5 space-y-2">
           <div className="flex items-center gap-2">
             <Layers className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-            <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">
-              Trascrizioni
-            </span>
+            <SettingsCardLabel>Trascrizioni</SettingsCardLabel>
           </div>
           <div className="grid grid-cols-3 gap-2 pt-1 border-t border-[var(--border-default)] text-center">
             <div>
@@ -61,9 +59,7 @@ export function ActivitySection({ apiUsage, isLoadingUsage, onRetry }: ActivityS
         <div className="premium-panel p-3.5 space-y-2">
           <div className="flex items-center gap-2">
             <Activity className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-            <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">
-              Chiamate API
-            </span>
+            <SettingsCardLabel>Chiamate API</SettingsCardLabel>
           </div>
           <div className="grid grid-cols-2 min-[1100px]:grid-cols-4 gap-x-3 gap-y-2 pt-1 border-t border-[var(--border-default)] text-center">
             <div>

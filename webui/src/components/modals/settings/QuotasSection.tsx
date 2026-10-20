@@ -69,7 +69,7 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
             {allKnownModels.length > 0 && (
               <details className="settings-details is-api-quota">
                 <summary>
-                  <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
+                  <span className="flex items-center gap-2 text-sm font-semibold">
                     <Gauge className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
                     Quote per modello
                   </span>

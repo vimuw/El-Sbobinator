@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle2, FolderInput, Info, Loader2, Trash2, X } from 'lucide-react';
-import { SettingsSectionHeading } from './SettingsLayout';
+import { SettingsCardLabel, SettingsSectionHeading } from './SettingsLayout';
 
 function formatSize(bytes: number): string {
   if (bytes <= 0) return '0 B';
@@ -64,17 +64,13 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
         {/* Metric Stat Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="premium-panel p-3.5 space-y-1">
-            <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider block">
-              Spazio occupato
-            </span>
+            <SettingsCardLabel block>Spazio occupato</SettingsCardLabel>
             <span className="text-2xl font-bold text-[var(--text-primary)] block">
               {isLoadingSessionInfo ? 'Calcolo…' : sessionInfo ? formatSize(sessionInfo.total_bytes) : '—'}
             </span>
           </div>
           <div className="premium-panel p-3.5 space-y-1">
-            <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider block">
-              Sbobine salvate
-            </span>
+            <SettingsCardLabel block>Sbobine salvate</SettingsCardLabel>
             <span className="text-2xl font-bold text-[var(--text-primary)] block">
               {sessionInfo ? `${sessionInfo.total_sessions} ${sessionInfo.total_sessions === 1 ? 'sbobina' : 'sbobine'}` : '—'}
             </span>

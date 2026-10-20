@@ -83,6 +83,22 @@ describe('QuotasSection', () => {
     expect(screen.queryByRole('button', { name: 'Configura modelli in Generale' })).toBeNull();
   });
 
+  it('captions the activity cards in sentence case', () => {
+    render(<ActivitySection apiUsage={dummyUsage} onRetry={vi.fn()} />);
+
+    for (const label of ['Trascrizioni', 'Chiamate API']) {
+      expect(screen.getByText(label).className).not.toContain('uppercase');
+    }
+  });
+
+  it('titles the model quotas row in sentence case', () => {
+    const { container } = render(<QuotasSection apiUsage={dummyUsage} />);
+    const label = container.querySelector('summary > span');
+
+    expect(label?.textContent?.trim()).toBe('Quote per modello');
+    expect(label?.className).not.toContain('uppercase');
+  });
+
   it('keeps activity visible without a refresh or collapse control', () => {
     const { container } = render(<ActivitySection apiUsage={dummyUsage} onRetry={vi.fn()} />);
     expect(container.querySelector('details')).toBeNull();

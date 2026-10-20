@@ -568,7 +568,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <nav aria-label="Sezioni delle impostazioni" className="settings-nav app-scroll">
                 <div className="hidden md:flex items-center gap-2 px-3 py-2.5 mb-3 border-b border-[var(--border-subtle)]">
                   <Settings className="w-5 h-5 text-[var(--accent-text)] shrink-0" />
-                  <span role="heading" aria-level={2} className="font-bold text-base tracking-wide uppercase text-[var(--text-primary)]">
+                  <span role="heading" aria-level={2} className="font-semibold text-base text-[var(--text-primary)]">
                     Impostazioni
                   </span>
                 </div>

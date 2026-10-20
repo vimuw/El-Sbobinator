@@ -357,6 +357,14 @@ describe('SettingsModal — save behavior', () => {
     expect(screen.getByRole('heading', { name: 'Archiviazione', level: 2 })).toBeTruthy();
   });
 
+  it('names the settings navigation in sentence case, not shouted caps', () => {
+    render(<SettingsModal {...makeProps()} />);
+    const title = screen.getByRole('heading', { name: 'Impostazioni' });
+
+    expect(title.className).not.toContain('uppercase');
+    expect(title.className).not.toContain('tracking-wide');
+  });
+
   it('starts each settings tab at the top after scrolling the previous tab', () => {
     render(<SettingsModal {...makeProps()} />);
     const content = screen.getByTestId('settings-content');

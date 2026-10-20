@@ -31,6 +31,16 @@ export function SettingsSectionHeading({ children, id, adornment }: SettingsSect
   );
 }
 
+// The small caption of a stat card or a collapsible row: sentence case, like the section
+// titles, one step quieter.
+export function SettingsCardLabel({ children, block = false }: { children: ReactNode; block?: boolean }) {
+  return (
+    <span className={`text-xs font-semibold text-[var(--text-secondary)]${block ? ' block' : ''}`}>
+      {children}
+    </span>
+  );
+}
+
 export function SettingsDivider() {
   return <div className="border-t border-[var(--border-default)]" />;
 }
