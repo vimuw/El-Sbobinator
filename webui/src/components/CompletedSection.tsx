@@ -63,8 +63,8 @@ export const CompletedSection = memo(function CompletedSection({ doneFiles, appS
             </div>
           </div>
 
-          <div className="overflow-x-hidden overflow-y-auto app-scroll is-chainable max-h-[390px] py-0.5">
-            <div className="space-y-0.5">
+          <div className="overflow-x-hidden overflow-y-auto app-scroll is-chainable max-h-[390px] p-1">
+            <div className="space-y-2">
             <AnimatePresence>
               {shownFiles.map(file => (
                 <CompletedFileCard

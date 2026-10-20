@@ -580,7 +580,7 @@ export function ArchivePage({
 
           {!fullTextMode && (
             <div className="py-1">
-              <div className="archive-session-list flex flex-col gap-0.5">
+              <div className="archive-session-list flex flex-col gap-3">
                 {sessionPageData.map(session => (
                   <DraggableSessionCard
                     key={session.session_dir}

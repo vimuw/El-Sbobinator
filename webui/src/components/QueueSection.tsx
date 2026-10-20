@@ -209,10 +209,10 @@ export const QueueSection = memo(function QueueSection({
             <div
               ref={scrollRef}
               onScroll={updateMoreBelow}
-              className={`queue-list-scroll overflow-x-hidden overflow-y-auto app-scroll is-chainable max-h-[360px] py-0.5${hasMoreBelow ? ' has-more-below' : ''}`}
+              className={`queue-list-scroll overflow-x-hidden overflow-y-auto app-scroll is-chainable max-h-[360px] p-1${hasMoreBelow ? ' has-more-below' : ''}`}
             >
             <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-              <div ref={listRef} className="space-y-0.5">
+              <div ref={listRef} className="space-y-2">
               <AnimatePresence>
                 {pendingFiles.map((file) => {
                   const isActive = file.status === 'processing';

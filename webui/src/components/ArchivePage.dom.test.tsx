@@ -53,7 +53,7 @@ function renderArchive(overrides: Partial<{
 }
 
 describe('ArchivePage', () => {
-  it('lists lessons as flat dashboard rows while the Riprendi card stays a card', () => {
+  it('lists each lesson as its own card, apart from the Riprendi card', () => {
     const session = { ...makeSession('s1'), last_opened_at_iso: '2026-10-01T10:00:00Z' };
     renderArchive({ sessions: [session] });
 

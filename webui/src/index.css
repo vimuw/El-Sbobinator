@@ -4087,36 +4087,6 @@ input::-webkit-contacts-auto-fill-button {
   border-color: var(--warning-ring);
 }
 
-/* Archive lists read like the dashboard's rows: they rest on the page, take a surface only on hover,
-   and show selection and warnings as a soft tint. The featured Riprendi card and drag overlays stay cards. */
-:root .archive-session-list .archive-session-card {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-  border-radius: 8px;
-}
-
-:root .archive-session-list .archive-session-card:hover,
-:root .archive-session-list .archive-session-card:focus-visible {
-  border-color: transparent;
-  background: var(--bg-hover);
-}
-
-:root .archive-session-list .archive-session-card.is-selected {
-  border-color: transparent;
-  background: var(--accent-subtle);
-}
-
-:root .archive-session-list .archive-session-card.is-selected:hover {
-  border-color: transparent;
-  background: color-mix(in srgb, var(--accent-text) 12%, transparent);
-}
-
-:root .archive-session-list .archive-session-card.is-warning:not(.is-selected) {
-  border-color: transparent;
-  background: var(--warning-subtle);
-}
-
 /* ═══ HOURGLASS BADGE ANIMATION ═══ */
 
 @keyframes hg-rotate {
@@ -5239,16 +5209,13 @@ input::-webkit-contacts-auto-fill-button {
   transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms var(--ease-out), transform 180ms var(--ease-out);
 }
 
+/* Like the Archivio cards, hover only firms up the border: a deeper shadow would spill
+   under the next card and be clipped by the scrolling list. */
 .queue-card:hover {
-  border-color: var(--border-default);
-  box-shadow: var(--shadow-sm);
+  border-color: var(--border-strong);
 }
 
-/* Only cards that open something answer the hover with depth and a press. */
-.queue-card.cursor-pointer:hover {
-  box-shadow: var(--shadow-md);
-}
-
+/* Cards that open something also answer with a press. */
 .queue-card.cursor-pointer:active:not(:has(button:active, a:active, [role="button"]:active)) {
   transform: scale(0.995);
 }
@@ -5578,7 +5545,7 @@ input::-webkit-contacts-auto-fill-button {
 /* ═══ ARCHIVE GRID PREVIEW ═══ */
 
 /* ═══ DASHBOARD SECTIONS ═══ */
-/* The queue page is one canvas: sections are a small heading over flat rows, no cards. */
+/* Each section is a panel; its sbobine are individual cards, like the Archivio lists. */
 
 .dashboard-section {
   display: flex;
@@ -5607,42 +5574,4 @@ input::-webkit-contacts-auto-fill-button {
   line-height: 1.3;
   letter-spacing: -0.01em;
   color: var(--text-primary);
-}
-
-/* Rows rest on the page and only take a surface on hover; state shows as a soft tint. */
-.dashboard-section .queue-card,
-:root:not([data-theme="dark"]) .dashboard-section .queue-card,
-:root[data-theme="dark"] .dashboard-section .queue-card {
-  border-color: transparent !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  border-radius: 8px;
-}
-
-.dashboard-section .queue-card:hover,
-.dashboard-section .queue-card.cursor-pointer:hover {
-  background: var(--bg-hover) !important;
-  box-shadow: none !important;
-}
-
-.dashboard-section .queue-card.is-completed:focus-visible {
-  background: var(--bg-hover) !important;
-  box-shadow: 0 0 0 2px var(--accent-ring) !important;
-}
-
-.dashboard-section .queue-card.is-processing,
-:root:not([data-theme="dark"]) .dashboard-section .queue-card.is-processing,
-:root[data-theme="dark"] .dashboard-section .queue-card.is-processing {
-  background: var(--processing-bg) !important;
-}
-
-.dashboard-section .queue-card.is-canceling,
-:root:not([data-theme="dark"]) .dashboard-section .queue-card.is-canceling,
-:root[data-theme="dark"] .dashboard-section .queue-card.is-canceling,
-.dashboard-section .queue-card.is-error {
-  background: var(--error-subtle) !important;
-}
-
-.dashboard-section .queue-card.is-warning {
-  background: var(--warning-subtle) !important;
 }
