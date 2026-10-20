@@ -1608,32 +1608,22 @@ button {
 /* ═══ DROPZONE ═══ */
 
 /* The empty page's drop target sits on the page like the processing banner that replaces it:
-   no card at rest, a dashed outline only once the pointer or a file is over it. */
+   never a card. Files drop anywhere on the page (DropOverlay), so the area itself is not
+   highlighted; hover lights up its icon and button instead, and only keyboard focus draws an edge. */
 .dropzone-card {
   --drop-beat: 2.8s; /* the processing banner's beat, so the handoff keeps one rhythm */
   position: relative;
   border-radius: var(--radius-panel);
-  border: 1.5px dashed transparent;
-  background: transparent;
+  border: 1.5px solid transparent;
   transition:
-    background 200ms var(--ease-out),
     box-shadow 200ms var(--ease-out),
     border-color 200ms var(--ease-out);
-}
-
-.dropzone-card:hover {
-  border-color: color-mix(in srgb, var(--accent-bg) 35%, var(--border-default));
 }
 
 .dropzone-card:focus-visible {
   outline: none;
   border-color: var(--accent-bg);
   box-shadow: 0 0 0 3px var(--accent-ring);
-}
-
-.dropzone-card.is-dragging {
-  background: color-mix(in srgb, var(--accent-subtle) 70%, transparent);
-  border-color: var(--accent-bg);
 }
 
 .dropzone-title {
@@ -5183,24 +5173,47 @@ input::-webkit-contacts-auto-fill-button {
   margin-bottom: 1.1rem;
 }
 
+/* A radial falloff rather than a blurred disc: the accent stays green at the core and fades
+   evenly to nothing, instead of turning into a grey smudge on the light page. The field is wide
+   and the core soft, so on hover the light spreads well past the icon instead of hugging it. */
 .dropzone-glow {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 104px;
-  height: 104px;
+  width: 280px;
+  height: 280px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent-bg) 22%, transparent);
-  opacity: 0.45;
-  filter: blur(26px);
-  transform: translate(-50%, -50%);
+  background: radial-gradient(
+    circle closest-side,
+    color-mix(in srgb, var(--accent-bg) 20%, transparent) 0%,
+    color-mix(in srgb, var(--accent-bg) 11%, transparent) 30%,
+    color-mix(in srgb, var(--accent-bg) 4%, transparent) 65%,
+    transparent 100%
+  );
+  opacity: 0.55;
+  transform: translate(-50%, -50%) scale(0.5);
   pointer-events: none;
-  transition: opacity 200ms var(--ease-out);
+  transition:
+    opacity 320ms var(--ease-out),
+    transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* On the near-black page the same mix barely registers, so the dark theme lights a stronger core. */
+:root[data-theme="dark"] .dropzone-glow {
+  background: radial-gradient(
+    circle closest-side,
+    color-mix(in srgb, var(--accent-bg) 28%, transparent) 0%,
+    color-mix(in srgb, var(--accent-bg) 15%, transparent) 30%,
+    color-mix(in srgb, var(--accent-bg) 6%, transparent) 65%,
+    transparent 100%
+  );
+}
+
+/* Hover blooms the halo outward along with the icon filling in. */
 .dropzone-card:hover .dropzone-glow,
 .dropzone-card:focus-visible .dropzone-glow {
-  opacity: 0.7;
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
 }
 
 .dropzone-icon-wrap.is-live .dropzone-glow {
@@ -5217,7 +5230,18 @@ input::-webkit-contacts-auto-fill-button {
   border-radius: 999px;
   background: var(--accent-subtle);
   color: var(--accent-text);
-  transition: background 200ms var(--ease-out), color 200ms var(--ease-out);
+  transition:
+    transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 200ms var(--ease-out),
+    color 200ms var(--ease-out);
+}
+
+/* Hover previews the live state: the icon fills with the accent and lifts toward the pointer. */
+.dropzone-card:hover .dropzone-icon,
+.dropzone-card:focus-visible .dropzone-icon {
+  background: var(--accent-bg);
+  color: var(--btn-primary-text);
+  transform: translateY(-2px) scale(1.05);
 }
 
 .dropzone-icon-wrap.is-live .dropzone-icon {
@@ -5236,7 +5260,8 @@ input::-webkit-contacts-auto-fill-button {
   animation: processing-ring var(--drop-beat, 2.8s) cubic-bezier(0.22, 1, 0.36, 1) infinite;
 }
 
-/* The primary action of the empty page: a pill, like the queue's start and the banner's Interrompi. */
+/* The primary action of the empty page: a pill, like the queue's start and the banner's Interrompi.
+   It moves in step with the icon: soft at rest, filled with the accent when the card is hovered. */
 .dropzone-browse-button {
   margin-top: 1.25rem;
   min-height: 2.25rem;
@@ -5246,27 +5271,25 @@ input::-webkit-contacts-auto-fill-button {
   border-radius: 999px;
   font-size: 0.85rem;
   font-weight: 600;
-  background: var(--btn-primary-bg);
-  color: var(--btn-primary-text);
-  box-shadow: var(--shadow-xs);
+  background: var(--accent-subtle);
+  color: var(--accent-text);
   transition:
     transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1),
     background 200ms var(--ease-out),
+    color 200ms var(--ease-out),
     box-shadow 200ms var(--ease-out);
 }
 
-.dropzone-card:hover .dropzone-browse-button {
-  background: var(--btn-primary-hover);
-  box-shadow: var(--shadow-sm);
+.dropzone-card:hover .dropzone-browse-button,
+.dropzone-card:focus-visible .dropzone-browse-button {
+  background: var(--accent-bg);
+  color: var(--btn-primary-text);
+  box-shadow: var(--shadow-sm), 0 4px 16px color-mix(in srgb, var(--accent-bg) 30%, transparent);
   transform: translateY(-1px);
 }
 
 .dropzone-card:active .dropzone-browse-button {
   transform: scale(0.985);
-}
-
-.dropzone-card:focus-visible .dropzone-browse-button {
-  box-shadow: var(--shadow-xs), 0 0 0 3px var(--btn-primary-ring);
 }
 
 /* ═══ FULL-WINDOW DROP OVERLAY ═══ */
