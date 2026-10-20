@@ -141,145 +141,53 @@ describe('SettingsModal — model parameters chunk display', () => {
   });
 });
 
-describe('SettingsModal — diagnostics environment pending checks', () => {
-  it.each(['success', 'failure', 'rejection'] as const)(
-    'ignores a stale background %s after a newer connection check', async outcome => {
-      vi.useFakeTimers();
-      const usage = (count: number) => ({ ok: true, result: { telemetry: { requests_sent: count } } });
-      let resolvePoll!: (value: unknown) => void;
-      let rejectPoll!: (reason: Error) => void;
-      const getUsage = vi.fn().mockResolvedValue(usage(7));
-      setPywebview({ get_api_usage: getUsage });
-      const { unmount } = render(<SettingsModal {...makeProps()} />);
-      try {
-        await act(async () => {});
-        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' })); });
-        getUsage.mockImplementationOnce(() => new Promise((resolve, reject) => {
-          resolvePoll = resolve;
-          rejectPoll = reject;
-        }));
-        await act(async () => { vi.advanceTimersByTime(10_000); });
-        getUsage.mockResolvedValue(usage(9));
-        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Generale' })); });
-        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Verifica connessione' })); });
-        expect(getUsage.mock.lastCall?.[3]).toBe(true);
-        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' })); });
-        expect(screen.getByText('9')).toBeTruthy();
-        await act(async () => {
-          if (outcome === 'rejection') rejectPoll(new Error('Delayed bridge failure'));
-          else resolvePoll(outcome === 'success' ? usage(7) : { ok: false });
-        });
-        expect(screen.getByText('9')).toBeTruthy();
-        expect(screen.queryByText('7')).toBeNull();
-        expect(screen.queryByText('Attività non disponibile.')).toBeNull();
-      } finally {
-        unmount();
-        vi.useRealTimers();
-      }
-    },
-  );
-
-  it('keeps the current request busy when a superseded request finishes', async () => {
-    vi.useFakeTimers();
-    let resolveOld!: (value: unknown) => void;
-    let resolveCurrent!: (value: unknown) => void;
-    const usage = { ok: true, result: { telemetry: { requests_sent: 9 } } };
-    const getUsage = vi.fn().mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }))
-      .mockImplementationOnce(() => new Promise(resolve => { resolveCurrent = resolve; }))
-      .mockResolvedValue(usage);
+describe('SettingsModal — API usage and support tab', () => {
+  it('keeps the newer usage check when a slower earlier request finishes later', async () => {
+    let resolveInitial!: (value: unknown) => void;
+    const getUsage = vi.fn()
+      .mockImplementationOnce(() => new Promise(resolve => { resolveInitial = resolve; }))
+      .mockResolvedValue({ ok: true, result: { primary_status: 'operational', credentials: [{ id: 'k' }] } });
     setPywebview({ get_api_usage: getUsage });
-    const { unmount } = render(<SettingsModal {...makeProps()} />);
-    try {
-      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' })); });
-      expect(getUsage).toHaveBeenCalledTimes(2);
-      await act(async () => { resolveOld(usage); });
-      expect(screen.getByText('Aggiornamento attività…')).toBeTruthy();
-      await act(async () => { vi.advanceTimersByTime(10_000); });
-      expect(getUsage).toHaveBeenCalledTimes(2);
-      await act(async () => { resolveCurrent(usage); });
-      expect(screen.queryByText('Aggiornamento attività…')).toBeNull();
-      expect(screen.getByText('9')).toBeTruthy();
-      await act(async () => { vi.advanceTimersByTime(10_000); });
-      expect(getUsage).toHaveBeenCalledTimes(3);
-    } finally {
-      unmount();
-      vi.useRealTimers();
-    }
+    const props = makeProps();
+    const { rerender } = render(<SettingsModal {...props} />);
+    await act(async () => {
+      rerender(<SettingsModal {...props} models={{ ...props.models, preferredModel: 'gemini-3.6-flash' }} />);
+    });
+    expect(getUsage.mock.lastCall?.[2]).toBe('gemini-3.6-flash');
+    await act(async () => {
+      resolveInitial({ ok: true, result: { primary_status: 'credential_error', credentials: [{ id: 'k' }] } });
+    });
+    expect(screen.queryByText('Verifica la chiave API')).toBeNull();
   });
 
-  it('refreshes activity locally every 10 seconds only while diagnostics is open', async () => {
+  it('does not poll API usage or show activity counters in the support tab', async () => {
     vi.useFakeTimers();
     const getUsage = vi.fn().mockResolvedValue({ ok: true, result: { telemetry: { requests_sent: 7 } } });
     setPywebview({ get_api_usage: getUsage });
-    const props = makeProps();
-    const { rerender, unmount } = render(<SettingsModal {...props} />);
+    const { unmount } = render(<SettingsModal {...makeProps()} />);
     try {
       await act(async () => {});
       getUsage.mockClear();
-      await act(async () => { vi.advanceTimersByTime(20_000); });
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Assistenza' })); });
+      await act(async () => { vi.advanceTimersByTime(30_000); });
       expect(getUsage).not.toHaveBeenCalled();
-      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' })); });
-      expect(screen.queryByRole('button', { name: 'Aggiorna attività di oggi' })).toBeNull();
-      expect(screen.queryByRole('button', { name: 'Riprova' })).toBeNull();
-      getUsage.mockResolvedValue({ ok: true, result: { telemetry: { requests_sent: 8 } } });
-      getUsage.mockClear();
-      await act(async () => { vi.advanceTimersByTime(10_000); });
-      expect(getUsage).toHaveBeenCalledTimes(1);
-      expect(getUsage.mock.calls[0][3]).toBe(false);
-      expect(screen.getByText('8')).toBeTruthy();
-      expect(screen.queryByText('Aggiornamento attività…')).toBeNull();
-      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Archiviazione' })); });
-      getUsage.mockClear();
-      await act(async () => { vi.advanceTimersByTime(20_000); });
-      expect(getUsage).not.toHaveBeenCalled();
-      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' })); });
-      await act(async () => { rerender(<SettingsModal {...props} isOpen={false} />); });
-      getUsage.mockClear();
-      await act(async () => { vi.advanceTimersByTime(20_000); });
-      expect(getUsage).not.toHaveBeenCalled();
+      expect(screen.queryByText('Attività di oggi')).toBeNull();
+      expect(screen.queryByText('Ritentativi')).toBeNull();
     } finally {
       unmount();
       vi.useRealTimers();
     }
   });
 
-  it('offers a local retry when activity loading fails', async () => {
-    const getUsage = vi.fn().mockResolvedValue({ ok: false });
-    setPywebview({ get_api_usage: getUsage });
-    render(<SettingsModal {...makeProps()} />);
-    await act(async () => {});
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' })); });
-    expect(screen.getByText('Attività non disponibile.')).toBeTruthy();
-    getUsage.mockResolvedValue({ ok: true, result: { telemetry: { requests_sent: 9 } } });
-    getUsage.mockClear();
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Riprova' })); });
-    expect(getUsage).toHaveBeenCalledTimes(1);
-    expect(getUsage.mock.calls[0][3]).toBe(false);
-    expect(screen.getByText('9')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Riprova' })).toBeNull();
-  });
-
-  it('shows pending environment checks with "da verificare" status initially', async () => {
-    render(
-      <SettingsModal
-        {...makeProps({
-          apiKey: 'test-api-key',
-          preferredModel: 'gemini-2.5-flash',
-        })}
-      />,
-    );
+  it('shows no pending check rows before the environment check runs', async () => {
+    render(<SettingsModal {...makeProps({ apiKey: 'test-api-key' })} />);
     await act(async () => {
-      fireEvent.click(screen.getByText('Diagnostica').closest('button')!);
+      fireEvent.click(screen.getByText('Assistenza').closest('button')!);
     });
 
-    expect(screen.getByText('API Key Gemini')).toBeDefined();
-    expect(screen.getByText('FFmpeg')).toBeDefined();
-    expect(screen.getByText('Config locale')).toBeDefined();
-    expect(screen.getByText('Cartella sessioni/output')).toBeDefined();
-
-    const statusBadges = screen.getAllByText('da verificare');
-    expect(statusBadges.length).toBeGreaterThanOrEqual(4);
-    expect(screen.queryByText('In attesa di verifica')).toBeNull();
+    expect(screen.queryByText('da verificare')).toBeNull();
+    expect(screen.queryByText('Config locale')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Verifica ambiente' })).toBeTruthy();
   });
 });
 
@@ -369,9 +277,9 @@ describe('SettingsModal — save behavior', () => {
     render(<SettingsModal {...makeProps()} />);
     const content = screen.getByTestId('settings-content');
     content.scrollTop = 250;
-    fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Assistenza' }));
     expect(content.scrollTop).toBe(0);
-    expect(screen.getByRole('button', { name: 'Diagnostica' }).getAttribute('aria-current')).toBe('page');
+    expect(screen.getByRole('button', { name: 'Assistenza' }).getAttribute('aria-current')).toBe('page');
     expect(screen.getByRole('button', { name: 'Generale' }).getAttribute('aria-current')).toBeNull();
   });
 
@@ -579,12 +487,12 @@ describe('SettingsModal — session info race condition', () => {
 
     await act(async () => { resolveFirst({ ok: true, total_bytes: 999999, total_sessions: 7777 }); });
 
-    expect(screen.queryByText('Calcolo…')).not.toBeNull();   // loading NOT prematurely cleared
+    expect(screen.queryByText('Calcolo dello spazio occupato…')).not.toBeNull();   // loading NOT prematurely cleared
     expect(screen.queryByText(/7777/)).toBeNull();            // stale data NOT applied
 
     await act(async () => { resolveSecond({ ok: true, total_bytes: 1024, total_sessions: 3 }); });
 
-    expect(screen.queryByText('Calcolo…')).toBeNull();
+    expect(screen.queryByText('Calcolo dello spazio occupato…')).toBeNull();
     expect(screen.queryByText(/3 sbobine/)).not.toBeNull();
   });
 });
@@ -623,7 +531,7 @@ describe('SettingsModal — main-section interactions', () => {
     fireEvent.click(toggle);
     expect(toggle.getAttribute('aria-checked')).toBe('false');
     expect(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Assistenza' }));
     fireEvent.click(screen.getByRole('button', { name: 'Generale' }));
     expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('false');
     await act(async () => {
@@ -748,35 +656,25 @@ describe('SettingsModal — session folder and cleanup', () => {
     await vi.waitFor(() =>
       expect(screen.getByText(/Rimoss/)).toBeTruthy(),
     );
-    expect(screen.getByText(/sbobine completate preservate/)).toBeTruthy();
     expect(cleanupFn).toHaveBeenCalledTimes(2);
     expect(cleanupFn).toHaveBeenLastCalledWith(0, false);
   });
 
-  it('counts completed notes before dangerous cleanup and deletes only after confirmation', async () => {
-    const cleanupCompletedFn = vi.fn()
-      .mockResolvedValueOnce({ ok: true, removed: 0, candidates: 4, freed_bytes: 2048 })
-      .mockResolvedValueOnce({ ok: true, removed: 4, candidates: 4, freed_bytes: 2048 });
-    setPywebview({ cleanup_completed_sessions: cleanupCompletedFn });
+  it('warns that cleanup also removes paused work and offers no completed-notes cleanup', async () => {
+    const cleanupFn = vi.fn().mockResolvedValue({ ok: true, removed: 0, candidates: 1, freed_bytes: 256 });
+    const cleanupCompletedFn = vi.fn();
+    setPywebview({ cleanup_old_sessions: cleanupFn, cleanup_completed_sessions: cleanupCompletedFn });
     render(<SettingsModal {...makeProps()} />);
     await act(async () => {
       fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
     });
+    expect(screen.queryByTitle(/sbobine completate/)).toBeNull();
+    expect(screen.queryByText('Sbobine archiviate')).toBeNull();
     await act(async () => {
-      fireEvent.click(screen.getByTitle(/Conta ed elimina sbobine completate/));
+      fireEvent.click(screen.getByTitle(/Conta ed elimina tutte le elaborazioni incomplete/));
     });
-    expect(await screen.findByText(/Sbobine interessate: 4/)).toBeTruthy();
-    expect(cleanupCompletedFn).toHaveBeenCalledTimes(1);
-    expect(cleanupCompletedFn).toHaveBeenCalledWith(30, true);
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Elimina sbobine completate'));
-    });
-    await vi.waitFor(() =>
-      expect(screen.getByText(/Eliminate 4 sbobine completate/)).toBeTruthy(),
-    );
-    expect(cleanupCompletedFn).toHaveBeenCalledTimes(2);
-    expect(cleanupCompletedFn).toHaveBeenLastCalledWith(30, false);
+    expect(await screen.findByText(/comprese quelle in pausa che potresti ancora riprendere/)).toBeTruthy();
+    expect(cleanupCompletedFn).not.toHaveBeenCalled();
   });
 
   it('dismisses cleanup notification when close button is clicked', async () => {
@@ -1135,13 +1033,13 @@ describe('SettingsModal — validate environment', () => {
       />,
     );
     await act(async () => {
-      fireEvent.click(screen.getByText('Diagnostica').closest('button')!);
+      fireEvent.click(screen.getByText('Assistenza').closest('button')!);
     });
     await act(async () => {
       fireEvent.click(screen.getByTitle('Verifica ambiente'));
     });
     await vi.waitFor(() => expect(screen.getByText('Ambiente OK')).toBeTruthy());
-    expect(screen.getByText('FFmpeg')).toBeTruthy();
+    expect(screen.queryByText('FFmpeg')).toBeNull();
   });
 
   it('resets validation result when preferredModel changes', async () => {
@@ -1167,7 +1065,7 @@ describe('SettingsModal — validate environment', () => {
     });
     const { rerender } = render(<SettingsModal {...props} />);
     await act(async () => {
-      fireEvent.click(screen.getByText('Diagnostica').closest('button')!);
+      fireEvent.click(screen.getByText('Assistenza').closest('button')!);
     });
     await act(async () => {
       fireEvent.click(screen.getByTitle('Verifica ambiente'));
@@ -1203,7 +1101,7 @@ describe('SettingsModal — validate environment', () => {
     });
     const { rerender } = render(<SettingsModal {...props} />);
     await act(async () => {
-      fireEvent.click(screen.getByText('Diagnostica').closest('button')!);
+      fireEvent.click(screen.getByText('Assistenza').closest('button')!);
     });
     await act(async () => {
       fireEvent.click(screen.getByTitle('Verifica ambiente'));
@@ -1217,50 +1115,42 @@ describe('SettingsModal — validate environment', () => {
     rerender(<SettingsModal {...props} isOpen={true} />);
 
     await act(async () => {
-      fireEvent.click(screen.getByText('Diagnostica').closest('button')!);
+      fireEvent.click(screen.getByText('Assistenza').closest('button')!);
     });
 
     // Expect 'Ambiente OK' to be cleared and state reset
     expect(screen.queryByText('Ambiente OK')).toBeNull();
-    const statusBadges = screen.getAllByText('da verificare');
-    expect(statusBadges.length).toBeGreaterThanOrEqual(4);
+    expect(screen.getByText('Verifica ora')).toBeTruthy();
   });
 
-  it('puts activity first in diagnostics and keeps refresh with the keys in General', async () => {
-    render(
-      <SettingsModal
-        {...makeProps({
-          apiKey: 'test-api-key',
-        })}
-      />,
-    );
+  it.each([
+    ['Assistenza', 'Assistenza'],
+    ['Archiviazione', 'Archiviazione'],
+  ])('shows only Chiudi in %s when nothing is pending', async (tab, heading) => {
+    render(<SettingsModal {...makeProps({ apiKey: 'test-api-key' })} />);
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' }));
+      fireEvent.click(screen.getByRole('button', { name: tab }));
     });
 
-    expect(screen.getByRole('heading', { name: 'Diagnostica' })).toBeTruthy();
-    const activity = screen.getByText('Attività di oggi');
-    const checks = screen.getByText('Verifica ambiente');
-    expect(activity.compareDocumentPosition(checks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(activity.closest('details')).toBeNull();
-    expect(screen.queryByText('Quote per modello')).toBeNull();
+    expect(screen.getByRole('heading', { name: heading, level: 2 })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Chiudi' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Salva e Chiudi' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Annulla' })).toBeNull();
+    expect(screen.queryByText(/effetto immediato/)).toBeNull();
   });
 
-  it('keeps save and cancel in diagnostics when general settings have pending changes', async () => {
+  it('keeps save and cancel in the support tab when general settings have pending changes', async () => {
     const props = makeProps();
     const { rerender } = render(<SettingsModal {...props} />);
     rerender(<SettingsModal {...props} models={{ ...props.models, preferredModel: 'gemini-3.6-flash' }} />);
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Diagnostica' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Assistenza' }));
     });
     expect(screen.getByRole('button', { name: 'Salva e Chiudi' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Annulla' })).toBeTruthy();
   });
 
-  it('renders sidebar tabs in the correct order: Generale, Archiviazione, Diagnostica', () => {
+  it('renders sidebar tabs in the correct order: Generale, Archiviazione, Assistenza', () => {
     const { container } = render(
       <SettingsModal
         {...makeProps({
@@ -1276,6 +1166,6 @@ describe('SettingsModal — validate environment', () => {
     expect(buttonTexts).toHaveLength(3);
     expect(buttonTexts[0]).toContain('Generale');
     expect(buttonTexts[1]).toContain('Archiviazione');
-    expect(buttonTexts[2]).toContain('Diagnostica');
+    expect(buttonTexts[2]).toContain('Assistenza');
   });
 });

@@ -1,8 +1,7 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { QuotasSection } from './QuotasSection';
-import { ActivitySection } from './ActivitySection';
 import { ApiStatusSection } from './ApiStatusSection';
 import type { ApiUsageResult } from '../../../bridge';
 
@@ -83,31 +82,12 @@ describe('QuotasSection', () => {
     expect(screen.queryByRole('button', { name: 'Configura modelli in Generale' })).toBeNull();
   });
 
-  it('captions the activity cards in sentence case', () => {
-    render(<ActivitySection apiUsage={dummyUsage} onRetry={vi.fn()} />);
-
-    for (const label of ['Trascrizioni', 'Chiamate API']) {
-      expect(screen.getByText(label).className).not.toContain('uppercase');
-    }
-  });
-
   it('titles the model quotas row in sentence case', () => {
     const { container } = render(<QuotasSection apiUsage={dummyUsage} />);
     const label = container.querySelector('summary > span');
 
     expect(label?.textContent?.trim()).toBe('Quote per modello');
     expect(label?.className).not.toContain('uppercase');
-  });
-
-  it('keeps activity visible without a refresh or collapse control', () => {
-    const { container } = render(<ActivitySection apiUsage={dummyUsage} onRetry={vi.fn()} />);
-    expect(container.querySelector('details')).toBeNull();
-    expect(screen.getByText('Trascrizioni')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Aggiorna attività di oggi' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Riprova' })).toBeNull();
-    expect(screen.getByText('Ritentativi').title).toContain('automaticamente');
-    expect(screen.getByText('Fallite').title).toContain('sbobine fallite');
-    expect(screen.queryByText('Quote per modello')).toBeNull();
   });
 
   it.each([
@@ -146,12 +126,5 @@ describe('QuotasSection', () => {
   it('does not show a temporary unavailable banner during the initial verification', () => {
     const { container } = render(<ApiStatusSection apiUsage={null} isLoadingUsage />);
     expect(container.firstChild).toBeNull();
-  });
-
-  it('reports missing activity without showing fabricated zero counts', () => {
-    render(<ActivitySection apiUsage={null} onRetry={vi.fn()} />);
-    expect(screen.getByText('Attività non disponibile.')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Riprova' })).toBeTruthy();
-    expect(screen.queryByText('0')).toBeNull();
   });
 });

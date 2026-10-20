@@ -154,9 +154,8 @@ test.describe('El Sbobinator Browser Host E2E', () => {
     await page.getByRole('button', { name: 'Archiviazione' }).click();
     await expect(page.getByRole('button', { name: 'Cambia cartella' })).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Diagnostica' }).click();
-    await expect(page.getByRole('button', { name: 'Apri cartella log' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Assistenza' }).click();
     await page.getByRole('button', { name: 'Verifica ambiente' }).click();
-    await expect(page.getByText(/API simulata/i)).toBeVisible();
+    await expect(page.getByText('Ambiente browser simulato pronto.')).toBeVisible();
   });
 });

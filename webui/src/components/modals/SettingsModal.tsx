@@ -1,20 +1,19 @@
 import { reportClientError } from '../../diagnostics';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings, HardDrive, SlidersHorizontal, Loader2, X, FlaskConical } from 'lucide-react';
+import { Settings, HardDrive, SlidersHorizontal, Loader2, X, LifeBuoy } from 'lucide-react';
 import type { ApiUsageResult, CredentialStorage, ModelOption, ValidationResult } from '../../bridge';
 import { ConfirmActionModal } from './ConfirmActionModal';
 import { ApiKeySection, type DeleteKeyTarget } from './settings/ApiKeySection';
 import { ModelSection } from './settings/ModelSection';
 import { NotificationSection } from './settings/NotificationSection';
 import { StorageSection } from './settings/StorageSection';
-import { DiagnosticsSection, type DisplayCheck } from './settings/DiagnosticsSection';
-import { ActivitySection } from './settings/ActivitySection';
+import { DiagnosticsSection } from './settings/DiagnosticsSection';
 import { ApiStatusSection } from './settings/ApiStatusSection';
 import { UpdaterSection, UpdateNotice, type SettingsUpdateInstallState } from './settings/UpdaterSection';
 import { SettingsDivider, SettingsPageHeader } from './settings/SettingsLayout';
 
-import { useSettingsStorage, SESSION_CLEANUP_DAYS } from '../../hooks/useSettingsStorage';
+import { useSettingsStorage } from '../../hooks/useSettingsStorage';
 import { formatSize } from '../../utils';
 import { credentialStorageWarning } from '../../credentialStorage';
 import { getHostCapabilities } from '../../browserHost';
@@ -80,8 +79,8 @@ const TAB_HEADERS: Record<TabType, { title: string; description: string }> = {
     description: 'Spazio su disco occupato dalle sbobine e gestione della cartella di lavoro.',
   },
   diagnostics: {
-    title: 'Diagnostica',
-    description: 'Verifica requisiti di sistema (FFmpeg, API, disco) e report di assistenza.',
+    title: 'Assistenza',
+    description: "Segnala un problema e controlla che l'app sia pronta a trascrivere.",
   },
 };
 
@@ -161,19 +160,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     handleConfirmMove,
     handleCancelMove,
     isCleaningSession,
-    isCleaningCompletedSessions,
     showCleanupConfirm,
     setShowCleanupConfirm,
-    showCompletedCleanupConfirm,
-    setShowCompletedCleanupConfirm,
     cleanupPreview,
-    completedCleanupPreview,
     cleanupResult,
-    completedCleanupResult,
     handleAskCleanup,
     handleCleanupSessions,
-    handleAskCompletedCleanup,
-    handleCleanupCompletedSessions,
     handleDismissCleanupResult,
   } = useSettingsStorage({
     isOpen,
@@ -221,16 +213,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     notificationsEnabled !== snapshot.notificationsEnabled ||
     clearProtectedPrimary
   ));
-  const showCloseOnly = activeTab === 'diagnostics' && !hasPendingChanges;
+  const showCloseOnly = activeTab !== 'general' && !hasPendingChanges;
 
-  const usageRequestInFlightRef = useRef(false);
   const usageRequestIdRef = useRef(0);
-  const fetchApiUsage = useCallback(async (forceRefresh = false, background = false) => {
+  const fetchApiUsage = useCallback(async (forceRefresh = false) => {
     if (!window.pywebview?.api?.get_api_usage) return;
-    if (background && usageRequestInFlightRef.current) return;
     const requestId = ++usageRequestIdRef.current;
-    usageRequestInFlightRef.current = true;
-    if (!background) setIsLoadingUsage(true);
+    setIsLoadingUsage(true);
     try {
       const res = await window.pywebview.api.get_api_usage(
         clearProtectedPrimary
@@ -251,9 +240,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       reportClientError('Failed to fetch api usage:', e);
     } finally {
       // A superseded request must not release the current request's busy state.
-      if (requestId === usageRequestIdRef.current) {
-        usageRequestInFlightRef.current = false;
-        if (!background && isMountedRef.current) setIsLoadingUsage(false);
+      if (requestId === usageRequestIdRef.current && isMountedRef.current) {
+        setIsLoadingUsage(false);
       }
     }
   }, [apiKey, clearProtectedPrimary, fallbackKeys, hasProtectedKey, preferredModel]);
@@ -262,21 +250,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     void fetchApiUsage(true);
   }, [fetchApiUsage]);
 
-  const handleRetryActivity = useCallback(() => {
-    void fetchApiUsage();
-  }, [fetchApiUsage]);
-
-  useEffect(() => {
-    if (!isOpen || activeTab !== 'diagnostics') return;
-    const intervalId = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void fetchApiUsage(false, true);
-    }, 10_000);
-    return () => window.clearInterval(intervalId);
-  }, [isOpen, activeTab, fetchApiUsage]);
-
   useEffect(() => {
     if (isOpen) {
-      if (activeTab === 'diagnostics' || activeTab === 'general') {
+      if (activeTab === 'general') {
         void fetchApiUsage();
       }
       if (activeTab === 'storage') {
@@ -330,7 +306,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       }
       setValidationResult(response.result);
       appendConsole(response.result.summary);
-      void fetchApiUsage();
     } catch (error: unknown) {
       if (isMountedRef.current) {
         appendConsole(`❌ Validazione ambiente fallita: ${getErrorMessage(error)}`);
@@ -354,81 +329,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       throw new Error(res?.error || 'Errore generazione report diagnostico');
     }
   };
-
-  const handleOpenLogs = useCallback(() => {
-    if (window.pywebview?.api?.open_logs_folder) {
-      void window.pywebview.api.open_logs_folder();
-    }
-  }, []);
-
-  const getPendingChecks = useCallback((): DisplayCheck[] => {
-    const isWindows = typeof window !== 'undefined' && /windows|win32/i.test(navigator.userAgent || '');
-    const checks: DisplayCheck[] = [
-      {
-        id: 'api_key',
-        label: 'API Key Gemini',
-        status: 'pending',
-        message: '',
-        details: '',
-      },
-      {
-        id: 'ffmpeg',
-        label: 'FFmpeg',
-        status: 'pending',
-        message: '',
-        details: '',
-      },
-      {
-        id: 'config',
-        label: 'Config locale',
-        status: 'pending',
-        message: '',
-        details: '',
-      },
-      {
-        id: 'output',
-        label: 'Cartella sessioni/output',
-        status: 'pending',
-        message: '',
-        details: sessionInfo?.session_root || '',
-      },
-    ];
-
-    if (!isWindows) {
-      checks.push({
-        id: 'keyring',
-        label: 'Keyring',
-        status: 'pending',
-        message: '',
-        details: '',
-      });
-    }
-
-    return checks;
-  }, [sessionInfo?.session_root]);
-
-  const getDisplayChecks = useCallback((): DisplayCheck[] => {
-    const pending = getPendingChecks();
-    if (!validationResult) return pending;
-
-    const resultChecks = validationResult.checks;
-    const list: DisplayCheck[] = [];
-    for (const p of pending) {
-      const match = resultChecks.find(r => r.id === p.id);
-      if (match) {
-        list.push({
-          id: p.id,
-          label: p.label,
-          status: match.status,
-          message: match.message,
-          details: match.details,
-        });
-      } else {
-        list.push(p);
-      }
-    }
-    return list;
-  }, [getPendingChecks, validationResult]);
 
   const handleSave = async () => {
     if (isSavingRef.current) return;
@@ -604,8 +504,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   className={`settings-nav-item ${activeTab === 'diagnostics' ? 'is-active' : ''}`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <FlaskConical className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'diagnostics' ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)]'}`} />
-                    <span className="truncate">Diagnostica</span>
+                    <LifeBuoy className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'diagnostics' ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)]'}`} />
+                    <span className="truncate">Assistenza</span>
                   </div>
                 </button>
               </nav>
@@ -696,13 +596,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         moveProgress={moveProgress}
                         moveError={moveError}
                         isCleaningSession={isCleaningSession}
-                        isCleaningCompletedSessions={isCleaningCompletedSessions}
-                        cleanupPreview={cleanupPreview}
-                        completedCleanupPreview={completedCleanupPreview}
                         onAskCleanup={handleAskCleanup}
-                        onAskCompletedCleanup={handleAskCompletedCleanup}
                         cleanupResult={cleanupResult}
-                        completedCleanupResult={completedCleanupResult}
                         onDismissCleanupResult={handleDismissCleanupResult}
                         canManageSessionFolder={hostCapabilities.nativeFolderPicker && hostCapabilities.openLocalPath}
                       />
@@ -711,23 +606,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                   {activeTab === 'diagnostics' && (
                     <div className="space-y-6 animate-fade-in">
-                      <ActivitySection
-                        apiUsage={apiUsage}
-                        isLoadingUsage={isLoadingUsage}
-                        onRetry={handleRetryActivity}
-                      />
-                      <SettingsDivider />
-
                       <DiagnosticsSection
                         isValidatingEnvironment={isValidatingEnvironment}
                         onRunValidation={runEnvironmentValidation}
                         validationResult={validationResult}
-                        displayChecks={getDisplayChecks()}
                         onCopyReport={handleCopyReport}
-                        onOpenLogs={handleOpenLogs}
-                        showOpenLogs={hostCapabilities.openLocalPath}
                       />
-
                     </div>
                   )}
                 </div>
@@ -771,25 +655,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       <ConfirmActionModal
         isOpen={showCleanupConfirm}
         title="Eliminare tutte le elaborazioni incomplete?"
-        description={`Questa operazione elimina subito tutte le elaborazioni incomplete per liberare spazio. Sbobine interessate: ${cleanupPreview?.candidates ?? 0}. Spazio stimato: ${formatSize(cleanupPreview?.freed_bytes ?? 0)}. L'operazione è irreversibile.`}
+        description={`Elimina subito tutte le sbobine interrotte o non finite, comprese quelle in pausa che potresti ancora riprendere. Sbobine interessate: ${cleanupPreview?.candidates ?? 0}. Spazio stimato: ${formatSize(cleanupPreview?.freed_bytes ?? 0)}. L'operazione è irreversibile.`}
         confirmLabel="Elimina incomplete"
         cancelLabel="Annulla"
         onClose={() => setShowCleanupConfirm(false)}
         onConfirm={() => {
           setShowCleanupConfirm(false);
           void handleCleanupSessions();
-        }}
-      />
-      <ConfirmActionModal
-        isOpen={showCompletedCleanupConfirm}
-        title="Eliminare le sbobine completate vecchie?"
-        description={`Questa operazione elimina subito le sbobine completate più vecchie di ${SESSION_CLEANUP_DAYS} giorni. Sbobine interessate: ${completedCleanupPreview?.candidates ?? 0}. Spazio stimato: ${formatSize(completedCleanupPreview?.freed_bytes ?? 0)}. L'operazione è irreversibile.`}
-        confirmLabel="Elimina sbobine completate"
-        cancelLabel="Annulla"
-        onClose={() => setShowCompletedCleanupConfirm(false)}
-        onConfirm={() => {
-          setShowCompletedCleanupConfirm(false);
-          void handleCleanupCompletedSessions();
         }}
       />
       <ConfirmActionModal

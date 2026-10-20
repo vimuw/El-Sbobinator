@@ -11,13 +11,8 @@ describe('StorageSection component', () => {
     onOpenSessionFolder: vi.fn(),
     onAskMoveFolder: vi.fn(),
     isCleaningSession: false,
-    isCleaningCompletedSessions: false,
-    cleanupPreview: null,
-    completedCleanupPreview: null,
     cleanupResult: null,
-    completedCleanupResult: null,
     onAskCleanup: vi.fn(),
-    onAskCompletedCleanup: vi.fn(),
   };
 
   it('renders session root path and triggers onOpenSessionFolder when clicked', () => {
@@ -31,12 +26,37 @@ describe('StorageSection component', () => {
     expect(baseProps.onOpenSessionFolder).toHaveBeenCalledTimes(1);
   });
 
-  it('captions the stat cards in sentence case', () => {
+  it('shows the used space as one line under the folder instead of stat cards', () => {
+    const { container } = render(<StorageSection {...baseProps} />);
+
+    expect(screen.getByTestId('storage-usage').textContent).toBe('3 sbobine · 1.0 MB occupati');
+    expect(container.querySelector('.premium-panel')).toBeNull();
+    expect(screen.queryByText('Spazio occupato')).toBeNull();
+    expect(screen.queryByText('Spazio disco e archivio')).toBeNull();
+  });
+
+  it('says when the used space is still loading or unavailable', () => {
+    const { rerender } = render(<StorageSection {...baseProps} sessionInfo={null} isLoadingSessionInfo />);
+    expect(screen.getByTestId('storage-usage').textContent).toBe('Calcolo dello spazio occupato…');
+    rerender(<StorageSection {...baseProps} sessionInfo={null} />);
+    expect(screen.getByTestId('storage-usage').textContent).toBe('Spazio occupato non disponibile.');
+  });
+
+  it('offers only the incomplete cleanup and warns that it cannot be resumed', () => {
     render(<StorageSection {...baseProps} />);
 
-    for (const label of ['Spazio occupato', 'Sbobine salvate']) {
-      expect(screen.getByText(label).className).not.toContain('uppercase');
-    }
+    expect(screen.getByRole('button', { name: 'Pulisci elaborazioni incomplete' })).toBeTruthy();
+    expect(screen.getByText(/non si potranno più riprendere/)).toBeTruthy();
+    expect(screen.queryByText('Sbobine archiviate')).toBeNull();
+    expect(screen.queryByRole('button', { name: /sbobine completate/i })).toBeNull();
+  });
+
+  it('hides folder actions when the host cannot manage local folders', () => {
+    render(<StorageSection {...baseProps} canManageSessionFolder={false} />);
+
+    expect(screen.getByText('/home/user/sessions')).toBeTruthy();
+    expect(screen.queryByTitle('Apri cartella sessioni')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Cambia cartella' })).toBeNull();
   });
 
   it('renders move progress with .alert-card.is-info', () => {
