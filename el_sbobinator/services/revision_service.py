@@ -20,6 +20,7 @@ from el_sbobinator.services import usage_service
 from el_sbobinator.services.generation_service import (
     QuotaDailyLimitError,
     create_gemini_client,
+    describe_response_timing,
     extract_response_text,
     retry_with_quota,
     sleep_with_cancel,
@@ -104,6 +105,7 @@ def _revise_single_macro_block(
     """Call Gemini to revise a single text macro block."""
 
     def _call(current_client):
+        request_t0 = time.monotonic()
         response = current_client.models.generate_content(
             model=model_name,
             contents=[block_text],
@@ -112,6 +114,7 @@ def _revise_single_macro_block(
                 temperature=0.1,
             ),
         )
+        print(describe_response_timing(response, time.monotonic() - request_t0))
         current_text = extract_response_text(response)
         if not current_text:
             raise RuntimeError("Risposta vuota dal modello in revisione.")

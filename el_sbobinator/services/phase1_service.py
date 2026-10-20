@@ -238,6 +238,7 @@ def _generate_chunk_content_with_fallback(
                     return None
             print("Trascrizione in corso...")
             _active_model = model_name
+            request_t0 = time.monotonic()
             response = current_client.models.generate_content(
                 model=_active_model,
                 contents=[chunk_prompt, audio_input],
@@ -245,6 +246,11 @@ def _generate_chunk_content_with_fallback(
                     system_instruction=system_prompt,
                     temperature=generation_service._phase1_temperature(_active_model),
                 ),
+            )
+            print(
+                generation_service.describe_response_timing(
+                    response, time.monotonic() - request_t0
+                )
             )
             generated_text = extract_response_text(response)
             if not generated_text:

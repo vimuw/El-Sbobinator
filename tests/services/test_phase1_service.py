@@ -14,7 +14,10 @@ from el_sbobinator.services.generation_service import (
     DegenerateOutputError,
     QuotaDailyLimitError,
 )
-from el_sbobinator.services.phase1_service import process_phase1_transcription
+from el_sbobinator.services.phase1_service import (
+    _generate_chunk_content_with_fallback,
+    process_phase1_transcription,
+)
 from el_sbobinator.utils.logging_utils import (
     LOGGER_NAME,
     attach_file_handler,
@@ -1827,3 +1830,44 @@ class Phase1ResumeProgressTests(unittest.TestCase):
 
         self.assertTrue(len(progress_calls) >= 1)
         self.assertAlmostEqual(progress_calls[0], 0.35)
+
+
+class Phase1ResponseTimingTests(unittest.TestCase):
+    def test_successful_chunk_logs_gemini_timing_and_thinking_tokens(self):
+        class _Usage:
+            thoughts_token_count = 9000
+            candidates_token_count = 3000
+
+        class _Response:
+            text = "Trascrizione del blocco."
+            usage_metadata = _Usage()
+
+        class _Models:
+            def generate_content(self, **_kwargs):
+                return _Response()
+
+        class _Client:
+            models = _Models()
+
+        out = io.StringIO()
+        with (
+            redirect_stdout(out),
+            patch(
+                "el_sbobinator.services.phase1_service.time.monotonic",
+                side_effect=[100.0, 245.0],
+            ),
+        ):
+            text = _generate_chunk_content_with_fallback(
+                current_client=_Client(),
+                model_name="gemini-3.8-flash",
+                system_prompt="sistema",
+                chunk_prompt="blocco",
+                audio_inline=object(),
+                ensure_uploaded_audio_fn=lambda _c: None,
+            )
+
+        self.assertEqual(text, "Trascrizione del blocco.")
+        self.assertIn(
+            "Risposta di Gemini in 2m 25s (ragionamento 9.000 token, testo 3.000 token).",
+            out.getvalue(),
+        )

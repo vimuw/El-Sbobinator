@@ -1551,6 +1551,44 @@ class ExtractResponseTextMoreTests(unittest.TestCase):
         self.assertEqual(extract_response_text(_Resp()), "Candidate text content")
 
 
+class DescribeResponseTimingTests(unittest.TestCase):
+    def test_reports_elapsed_thinking_and_answer_tokens(self):
+        from el_sbobinator.services.generation_service import describe_response_timing
+
+        class _Usage:
+            thoughts_token_count = 12345
+            candidates_token_count = 4210
+
+        class _Resp:
+            usage_metadata = _Usage()
+
+        self.assertEqual(
+            describe_response_timing(_Resp(), 151.4),
+            "Risposta di Gemini in 2m 31s (ragionamento 12.345 token, testo 4.210 token).",
+        )
+
+    def test_missing_or_mocked_usage_reports_only_elapsed(self):
+        from el_sbobinator.services.generation_service import describe_response_timing
+
+        class _Usage:
+            thoughts_token_count = None
+            candidates_token_count = 80
+
+        class _Resp:
+            usage_metadata = _Usage()
+
+        self.assertEqual(
+            describe_response_timing(object(), 42.0), "Risposta di Gemini in 42s."
+        )
+        self.assertEqual(
+            describe_response_timing(MagicMock(), 0.2), "Risposta di Gemini in 0s."
+        )
+        self.assertEqual(
+            describe_response_timing(_Resp(), 60),
+            "Risposta di Gemini in 1m 00s (testo 80 token).",
+        )
+
+
 class BuildChunkPromptTests(unittest.TestCase):
     def test_with_previous_tail_includes_continuation(self):
         from el_sbobinator.services.generation_service import build_chunk_prompt

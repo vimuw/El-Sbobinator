@@ -1,6 +1,8 @@
+import io
 import os
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from unittest.mock import patch
 
 from el_sbobinator.services.generation_service import QuotaDailyLimitError
@@ -415,6 +417,36 @@ class TestRevisionEdgeCases(unittest.TestCase):
 
             result = self._run_with_patches(["Blocco."], tmpdir, session, call_fn)
             self.assertIn("Testo generato dal modello", result)
+
+    def test_revision_call_logs_gemini_timing_and_thinking_tokens(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session = self._make_session()
+
+            class _Usage:
+                thoughts_token_count = 2500
+                candidates_token_count = 1200
+
+            class _FakeResp:
+                text = "Testo revisionato"
+                usage_metadata = _Usage()
+
+            class _FakeModels:
+                def generate_content(self, **_kw):
+                    return _FakeResp()
+
+            class _FakeClient:
+                models = _FakeModels()
+
+            def call_fn(fn, *, client, **kw):
+                return _FakeClient(), fn(_FakeClient())
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                self._run_with_patches(["Blocco."], tmpdir, session, call_fn)
+            self.assertRegex(
+                out.getvalue(),
+                r"Risposta di Gemini in \d+s \(ragionamento 2\.500 token, testo 1\.200 token\)\.",
+            )
 
     def test_current_text_none_in_main_pass_returns_early(self):
         with tempfile.TemporaryDirectory() as tmpdir:

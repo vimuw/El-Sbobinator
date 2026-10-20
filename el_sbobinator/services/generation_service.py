@@ -1047,6 +1047,35 @@ def extract_response_text(response) -> str:
     return ""
 
 
+def _token_count(usage, field: str) -> int | None:
+    value = getattr(usage, field, None)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value
+
+
+def describe_response_timing(response, seconds: float) -> str:
+    """One console line on how long Gemini took and where its tokens went.
+
+    Thinking tokens versus answer tokens separate a model that reasons long
+    from one that waits in a server queue; both look the same as wall time.
+    """
+    total = max(0, round(float(seconds)))
+    minutes, secs = divmod(total, 60)
+    elapsed = f"{minutes}m {secs:02}s" if minutes else f"{secs}s"
+    usage = getattr(response, "usage_metadata", None)
+    details = []
+    for field, label in (
+        ("thoughts_token_count", "ragionamento"),
+        ("candidates_token_count", "testo"),
+    ):
+        count = _token_count(usage, field)
+        if count is not None:
+            details.append(f"{label} {count:,} token".replace(",", "."))
+    suffix = f" ({', '.join(details)})" if details else ""
+    return f"Risposta di Gemini in {elapsed}{suffix}."
+
+
 def build_chunk_prompt(previous_tail: str) -> str:
     prompt = (
         "Trascrivi TUTTO il contenuto di questo blocco audio seguendo rigorosamente le istruzioni di sistema. "
