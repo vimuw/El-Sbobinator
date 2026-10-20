@@ -27,7 +27,6 @@ ALLOWED_RPC_METHODS: frozenset[str] = frozenset(
         "validate_environment",
         "get_session_storage_info",
         "cleanup_old_sessions",
-        "cleanup_completed_sessions",
         "get_completed_sessions",
         "delete_session",
         "rename_session",
@@ -58,7 +57,6 @@ ALLOWED_RPC_METHODS: frozenset[str] = frozenset(
         "move_session_root",
         "get_session_move_status",
         "download_and_install_update",
-        "open_logs_folder",
     }
 )
 
@@ -82,7 +80,6 @@ DESKTOP_ONLY_RESPONSES: dict[str, Any] = {
         "ok": False,
         "error": "Disponibile nell'app desktop",
     },
-    "open_logs_folder": {"ok": False, "error": "Disponibile nell'app desktop"},
 }
 
 

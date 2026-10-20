@@ -198,9 +198,6 @@ from el_sbobinator.core.shared import (
     get_session_storage_info,
     invalidate_session_storage_cache,
 )
-from el_sbobinator.core.shared import (
-    cleanup_completed_sessions as _cleanup_completed_sessions,
-)
 from el_sbobinator.pipeline.pipeline_settings import (
     build_default_pipeline_settings,
     load_and_sanitize_settings,

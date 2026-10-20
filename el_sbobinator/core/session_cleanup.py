@@ -16,7 +16,6 @@ from el_sbobinator.core.session_storage import (
 )
 from el_sbobinator.utils.file_ops import _load_json
 
-SESSION_CLEANUP_MAX_AGE_DAYS = 14
 _TEMP_CHUNK_AUDIO_EXTS = (".mp3", ".wav", ".m4a")
 
 
@@ -182,11 +181,12 @@ def _session_cleanup_kind(session_dir: str) -> str:
 def cleanup_orphan_sessions(
     max_age_days: int = 0,
     *,
-    mode: str = "incomplete",
     dry_run: bool = False,
 ) -> dict:
     """
-    Delete selected session folders in SESSION_ROOT. If max_age_days > 0, only folders
+    Delete incomplete session folders in SESSION_ROOT. Completed sessions with their
+    final HTML are preserved; completed sessions missing it count as incomplete.
+    If max_age_days > 0, only folders
     whose newest file mtime is older than max_age_days days are deleted. When max_age_days <= 0,
     all matching folders are deleted regardless of age.
     Returns a summary dict with keys:
@@ -203,10 +203,6 @@ def cleanup_orphan_sessions(
     candidates = 0
     preserved_completed = 0
     missing_completed_html = 0
-    deleted_paths: list[str] = []
-    mode = str(mode or "incomplete").strip().lower()
-    if mode not in {"incomplete", "completed"}:
-        raise ValueError("cleanup mode non valida")
     session_root = get_session_root()
     try:
         if not os.path.isdir(session_root):
@@ -217,7 +213,6 @@ def cleanup_orphan_sessions(
                 "candidates": 0,
                 "preserved_completed": 0,
                 "missing_completed_html": 0,
-                "deleted_paths": [],
             }
         now = time.time()
         age_days = max(0, int(max_age_days))
@@ -233,15 +228,10 @@ def cleanup_orphan_sessions(
                         continue
                 kind = _session_cleanup_kind(session_dir)
                 if kind == "completed":
-                    if mode == "incomplete":
-                        preserved_completed += 1
-                        continue
-                elif kind == "completed_missing_html":
-                    missing_completed_html += 1
-                    if mode == "completed":
-                        continue
-                elif mode == "completed":
+                    preserved_completed += 1
                     continue
+                if kind == "completed_missing_html":
+                    missing_completed_html += 1
                 candidates += 1
                 size = _folder_size(session_dir)
                 if dry_run:
@@ -250,7 +240,6 @@ def cleanup_orphan_sessions(
                 shutil.rmtree(session_dir)
                 removed += 1
                 freed_bytes += size
-                deleted_paths.append(session_dir)
             except Exception:
                 errors += 1
     except Exception:
@@ -264,15 +253,4 @@ def cleanup_orphan_sessions(
         "candidates": candidates,
         "preserved_completed": preserved_completed,
         "missing_completed_html": missing_completed_html,
-        "deleted_paths": deleted_paths,
     }
-
-
-def cleanup_completed_sessions(
-    max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS, *, dry_run: bool = False
-) -> dict:
-    return cleanup_orphan_sessions(
-        max_age_days,
-        mode="completed",
-        dry_run=dry_run,
-    )
