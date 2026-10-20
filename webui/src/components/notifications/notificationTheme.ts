@@ -12,6 +12,24 @@ export function getCategoryLabel(category: NotificationMessage['category']) {
   }
 }
 
+export type NotificationTone = 'accent' | 'success' | 'warning' | 'error';
+
+/** The colour family of a row's unread gradient, matching its icon badge. */
+export function getItemTone(
+  category: NotificationMessage['category'],
+  type: NotificationMessage['type']
+): NotificationTone {
+  if (category === 'update' || type === 'info') return 'accent';
+  switch (type) {
+    case 'success':
+    case 'warning':
+    case 'error':
+      return type;
+    default:
+      return 'accent';
+  }
+}
+
 export function getCategoryBadgeStyle(
   category: NotificationMessage['category'],
   type: NotificationMessage['type']

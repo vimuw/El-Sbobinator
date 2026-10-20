@@ -47,6 +47,16 @@ export interface NotificationDropdownProps {
   bottomOffset?: number;
 }
 
+// The caret sits 48px above the panel's bottom and is 18px tall; the open animation scales from its tip.
+const CARET_BOTTOM = 48;
+const CARET_CENTER_FROM_BOTTOM = CARET_BOTTOM + 9;
+
+// Rows settle in a beat after the frame; on close they reset only once the panel has faded.
+const ROW_VARIANTS = {
+  open: { opacity: 1, x: 0, transition: { duration: 0.18, ease: [0.16, 1, 0.3, 1] } },
+  closed: { opacity: 0, x: -4, transition: { delay: 0.11, duration: 0 } },
+} as const;
+
 export function NotificationDropdown({
   isOpen,
   onClose,
@@ -94,27 +104,43 @@ export function NotificationDropdown({
         style={{ background: 'transparent' }}
       />
 
-      {/* Popover Dropdown Container with sleek, subtle ease-out animation */}
+      {/* The panel grows out of its caret, so it reads as coming from the bell it points at. */}
       <motion.div
         key="notification-popover"
         role="dialog"
         aria-label="Notifiche"
         initial={false}
-        animate={{
-          opacity: isOpen ? 1 : 0,
-          scale: isOpen ? 1 : 0.98,
-          y: isOpen ? 0 : (valign === 'bottom' ? 4 : -4),
-          pointerEvents: isOpen ? 'auto' : 'none',
+        animate={isOpen ? 'open' : 'closed'}
+        variants={{
+          open: {
+            opacity: 1,
+            scale: 1,
+            x: 0,
+            y: 0,
+            pointerEvents: 'auto',
+            transition: {
+              opacity: { duration: 0.12, ease: 'easeOut' },
+              default: { type: 'spring', stiffness: 520, damping: 36, mass: 0.8 },
+              staggerChildren: 0.025,
+              delayChildren: 0.04,
+            },
+          },
+          closed: {
+            opacity: 0,
+            scale: 0.96,
+            x: hasCaret ? -6 : 0,
+            y: hasCaret ? 0 : valign === 'bottom' ? 4 : -4,
+            pointerEvents: 'none',
+            transition: { duration: 0.11, ease: [0.4, 0, 1, 1] },
+          },
         }}
-        transition={{
-          duration: isOpen ? 0.14 : 0.1,
-          ease: isOpen ? [0.16, 1, 0.3, 1] : 'easeIn',
-        }}
-        className={`fixed z-50 flex flex-col origin-bottom-left ${
+        className={`fixed z-50 flex flex-col ${
           isOpen ? 'pointer-events-auto' : 'pointer-events-none'
         }`}
         style={{
-          transformOrigin: `${valign === 'bottom' ? 'bottom' : 'top'} ${align === 'left' ? 'left' : 'right'}`,
+          transformOrigin: hasCaret
+            ? `left calc(100% - ${CARET_CENTER_FROM_BOTTOM}px)`
+            : `${valign === 'bottom' ? 'bottom' : 'top'} ${align === 'left' ? 'left' : 'right'}`,
           width: 380,
           height: dynamicHeightStyle,
           maxHeight: `calc(100vh - ${valign === 'bottom' ? bottomOffset + 16 : 88}px)`,
@@ -128,7 +154,7 @@ export function NotificationDropdown({
         {hasCaret && (
           <div
             className="absolute -left-[8px] pointer-events-none z-30 flex items-center"
-            style={{ bottom: 48 }}
+            style={{ bottom: CARET_BOTTOM }}
             aria-hidden="true"
           >
             <svg
@@ -166,15 +192,7 @@ export function NotificationDropdown({
                   Notifiche
                 </h3>
                 {unreadCount > 0 && (
-                  <span
-                    className="px-1.5 py-0.2 text-[10px] rounded-full font-bold leading-tight"
-                    style={{
-                      background: 'var(--accent-subtle)',
-                      color: 'var(--accent-text)',
-                    }}
-                  >
-                    {unreadCount}
-                  </span>
+                  <span className="status-pill is-quiet is-count shrink-0">{unreadCount}</span>
                 )}
               </div>
 
@@ -265,13 +283,14 @@ export function NotificationDropdown({
                 </div>
               ) : (
                 filteredNotifications.map((n) => (
-                  <NotificationItem
-                    key={n.id}
-                    notification={n}
-                    onMarkAsRead={onMarkAsRead}
-                    onDelete={onDelete}
-                    onNotificationClick={onNotificationClick}
-                  />
+                  <motion.div key={n.id} variants={ROW_VARIANTS}>
+                    <NotificationItem
+                      notification={n}
+                      onMarkAsRead={onMarkAsRead}
+                      onDelete={onDelete}
+                      onNotificationClick={onNotificationClick}
+                    />
+                  </motion.div>
                 ))
               )}
             </div>

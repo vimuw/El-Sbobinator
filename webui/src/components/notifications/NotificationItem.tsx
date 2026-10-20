@@ -15,6 +15,7 @@ import {
   getActionColor,
   getCategoryBadgeStyle,
   getCategoryLabel,
+  getItemTone,
 } from './notificationTheme';
 
 export interface NotificationItemProps {
@@ -138,6 +139,7 @@ export function NotificationItem({
         if (!notification.read) onMarkAsRead(notification.id);
         onNotificationClick?.(notification);
       }}
+      data-tone={getItemTone(notification.category, notification.type)}
       className={`notification-item ${!notification.read ? 'is-unread ' : ''}group`}
     >
       {/* Type icon in soft squircle badge */}
@@ -145,24 +147,9 @@ export function NotificationItem({
 
       {/* Main content body */}
       <div className="flex flex-1 flex-col gap-1 min-w-0 pr-6">
-        {/* Top line: unread dot + title + category */}
+        {/* Top line: title + category; unread rows are marked by their tinted gradient */}
         <div className="flex items-center gap-1.5 min-w-0">
-          {!notification.read && (
-            <span
-              className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
-              style={{
-                background:
-                  notification.category === 'update' || notification.type === 'info'
-                    ? 'var(--accent-text)'
-                    : notification.type === 'warning'
-                    ? 'var(--warning-text)'
-                    : notification.type === 'error'
-                    ? 'var(--error-text)'
-                    : 'var(--accent-text)',
-              }}
-              title="Non letta"
-            />
-          )}
+          {!notification.read && <span className="sr-only">Non letta</span>}
           <h4 className="text-xs leading-snug truncate font-semibold text-[var(--text-primary)]">
             {notification.title}
           </h4>

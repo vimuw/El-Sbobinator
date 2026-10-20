@@ -4844,10 +4844,12 @@ input::-webkit-contacts-auto-fill-button {
   height: 6px;
 }
 
-/* Notification rows read like the dashboard's: no dividers or tints, a surface only on hover.
-   Unread ones keep their dot. */
+/* Notification rows read like the dashboard's: no dividers, a surface only on hover. An unread
+   row carries a soft gradient in its type's colour from the icon side, which fades once read. */
 .notification-item {
+  --notification-tone: var(--accent-text);
   position: relative;
+  isolation: isolate;
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -4860,6 +4862,31 @@ input::-webkit-contacts-auto-fill-button {
 
 .notification-item:hover {
   background: var(--bg-hover);
+}
+
+.notification-item[data-tone="success"] { --notification-tone: var(--success-text); }
+.notification-item[data-tone="warning"] { --notification-tone: var(--warning-text); }
+.notification-item[data-tone="error"] { --notification-tone: var(--error-text); }
+
+.notification-item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--notification-tone) 14%, transparent) 0%,
+    color-mix(in srgb, var(--notification-tone) 6%, transparent) 45%,
+    transparent 85%
+  );
+  opacity: 0;
+  transition: opacity 320ms ease;
+  pointer-events: none;
+}
+
+.notification-item.is-unread::before {
+  opacity: 1;
 }
 
 /* Setup page: the key field and Salva are the settings pills, a touch taller as the page's one task. */
