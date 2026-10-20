@@ -1189,6 +1189,44 @@ class TestPhase1EdgeCases(unittest.TestCase):
             [line for line in printed.splitlines() if line[:1].isspace()], []
         )
 
+    def test_stop_during_retry_wait_is_not_recorded_as_chunk_failure(self):
+        """A retry wait cut short by Stop returns no text, like a real failure would."""
+        for stopped in (True, False):
+            with self.subTest(stopped=stopped):
+                cancel = threading.Event()
+                session = {"stage": "phase1", "phase1": {}}
+
+                def stop_while_waiting(
+                    *_args, stopped=stopped, cancel=cancel, **_kwargs
+                ):
+                    if stopped:
+                        cancel.set()
+                    return object(), None
+
+                out = io.StringIO()
+                with (
+                    patch(
+                        "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                        return_value=(True, None),
+                    ),
+                    patch(
+                        "el_sbobinator.services.phase1_service.retry_with_quota",
+                        side_effect=stop_while_waiting,
+                    ),
+                    redirect_stdout(out),
+                ):
+                    _, transcript, _ = self._run(
+                        session, cancel_event=cancel, cancelled=cancel.is_set
+                    )
+
+                self.assertIsNone(transcript)
+                if stopped:
+                    self.assertNotIn("last_error", session)
+                    self.assertNotIn("❌", out.getvalue())
+                else:
+                    self.assertEqual(session["last_error"], "phase1_chunk_failed_1")
+                    self.assertIn("❌ Errore nel blocco 1", out.getvalue())
+
     def test_cancellation_leaves_the_outcome_to_the_phase_line(self):
         cancel = threading.Event()
         cancel.set()

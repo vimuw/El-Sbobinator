@@ -699,6 +699,19 @@ def _process_single_phase1_chunk_iteration(
             except Exception:
                 pass
 
+    if not success and cancelled():
+        # A Stop during a retry wait returns no text: that is the user's
+        # cancellation, not a failed chunk to record in the session.
+        return Phase1ChunkIterationResult(
+            client=client,
+            full_transcript=full_transcript,
+            prev_memory=prev_memory,
+            success=False,
+            should_retry=False,
+            should_abort=True,
+            next_cut=next_cut,
+        )
+
     if not success:
         session["last_error"] = f"phase1_chunk_failed_{chunk_idx}"
         session["last_error_detail"] = (
