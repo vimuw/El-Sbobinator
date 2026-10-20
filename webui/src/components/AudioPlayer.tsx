@@ -550,6 +550,8 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
         )}
       </div>
 
+      {/* Portaled: the glass dock's backdrop-filter would otherwise trap the fixed overlay inside it. */}
+      {createPortal(
       <ConfirmActionModal
         isOpen={showConfirmRemove}
         title="Rimuovere l'audio collegato?"
@@ -561,7 +563,9 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
           setShowConfirmRemove(false);
           await handleRemoveAudio();
         }}
-      />
+      />,
+      document.body,
+      )}
     </div>
   );
 }

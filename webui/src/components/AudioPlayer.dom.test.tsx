@@ -475,6 +475,21 @@ describe('AudioPlayer', () => {
     consoleErrorSpy.mockRestore();
   });
 
+  it('portals the remove-audio confirmation outside the player dock', async () => {
+    const { container } = render(<AudioPlayer src="/audio/test.mp3" onRemoveAudio={vi.fn()} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Opzioni audio collegato'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Rimuovi audio collegato'));
+    });
+
+    const dialog = screen.getByRole('alertdialog');
+    expect(container.contains(dialog)).toBe(false);
+    expect(document.body.contains(dialog)).toBe(true);
+  });
+
   it('opens audio options menu and calls onRemoveAudio when confirmed in modal', async () => {
     const onRemoveAudio = vi.fn().mockResolvedValue(undefined);
     render(<AudioPlayer src="/audio/test.mp3" onRemoveAudio={onRemoveAudio} />);
