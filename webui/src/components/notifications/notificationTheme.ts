@@ -12,26 +12,6 @@ export function getCategoryLabel(category: NotificationMessage['category']) {
   }
 }
 
-export function getItemBackground(
-  type: NotificationMessage['type'],
-  category: NotificationMessage['category']
-) {
-  if (category === 'update' || type === 'info') {
-    return 'var(--accent-subtle)';
-  }
-
-  switch (type) {
-    case 'success':
-      return 'var(--success-subtle)';
-    case 'warning':
-      return 'var(--warning-subtle)';
-    case 'error':
-      return 'var(--error-subtle)';
-    default:
-      return 'transparent';
-  }
-}
-
 export function getCategoryBadgeStyle(
   category: NotificationMessage['category'],
   type: NotificationMessage['type']

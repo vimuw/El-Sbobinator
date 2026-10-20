@@ -96,6 +96,37 @@ describe('NotificationDropdown component', () => {
     });
   });
 
+  it('offers Tutte and Non lette as pill filters and lists notifications as flat rows', () => {
+    const { container } = render(
+      <NotificationDropdown
+        isOpen={true}
+        onClose={vi.fn()}
+        notifications={mockNotifications}
+        onMarkAsRead={vi.fn()}
+        onMarkAllAsRead={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    const all = screen.getByRole('button', { name: 'Tutte' });
+    const unread = screen.getByRole('button', { name: /Non lette/ });
+    expect(all.className).toContain('notification-filter');
+    expect(all.getAttribute('aria-pressed')).toBe('true');
+    expect(unread.getAttribute('aria-pressed')).toBe('false');
+
+    fireEvent.click(unread);
+    expect(all.getAttribute('aria-pressed')).toBe('false');
+    expect(unread.className).toContain('is-active');
+
+    fireEvent.click(all);
+    const rows = Array.from(container.querySelectorAll<HTMLElement>('.notification-item'));
+    expect(rows.length).toBe(mockNotifications.length);
+    for (const row of rows) {
+      expect(row.style.background).toBe('');
+      expect(row.className).not.toContain('border-b');
+    }
+  });
+
   it('renders update notifications with accent sparkles badge', () => {
     render(
       <NotificationDropdown

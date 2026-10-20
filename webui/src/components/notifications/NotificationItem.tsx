@@ -15,7 +15,6 @@ import {
   getActionColor,
   getCategoryBadgeStyle,
   getCategoryLabel,
-  getItemBackground,
 } from './notificationTheme';
 
 export interface NotificationItemProps {
@@ -139,10 +138,7 @@ export function NotificationItem({
         if (!notification.read) onMarkAsRead(notification.id);
         onNotificationClick?.(notification);
       }}
-      className={`notification-item ${!notification.read ? 'is-unread ' : ''}group relative flex items-start gap-3 px-4 py-3 border-b border-[var(--border-subtle)] last:border-b-0 cursor-pointer transition-all duration-150 hover:brightness-[0.98] dark:hover:brightness-[1.08]`}
-      style={{
-        background: getItemBackground(notification.type, notification.category),
-      }}
+      className={`notification-item ${!notification.read ? 'is-unread ' : ''}group`}
     >
       {/* Type icon in soft squircle badge */}
       {getIconBadge()}
@@ -171,7 +167,7 @@ export function NotificationItem({
             {notification.title}
           </h4>
           <span
-            className="text-[9px] font-medium px-1.5 py-0.2 rounded shrink-0"
+            className="text-[9px] font-medium px-1.5 py-0.2 rounded-full shrink-0"
             style={getCategoryBadgeStyle(notification.category, notification.type)}
           >
             {getCategoryLabel(notification.category)}
@@ -242,7 +238,7 @@ export function NotificationItem({
           onDelete(notification.id);
         }}
         disabled={isLoading}
-        className="absolute top-3 right-3 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-neutral-500/15 transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+        className="absolute top-2.5 right-2.5 p-1 rounded-full opacity-0 group-hover:opacity-100 hover:bg-neutral-500/15 transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)]"
         title="Archivia"
         aria-label="Archivia notifica"
         style={{ cursor: isLoading ? 'default' : 'pointer' }}

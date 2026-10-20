@@ -4810,8 +4810,8 @@ input::-webkit-contacts-auto-fill-button {
 
 .notification-dropdown-panel {
   background: var(--bg-elevated) !important;
-  border: 1px solid var(--border-default) !important;
-  border-radius: 10px !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-card) !important;
   box-shadow: var(--shadow-strong) !important;
 }
 
@@ -4821,7 +4821,47 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 .notification-dropdown-panel.has-caret .notification-dropdown-content {
-  border-radius: 4px;
+  border-radius: 6px;
+}
+
+/* Tutte / Non lette: small outline pills; the active one takes the accent tint. */
+.notification-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.notification-filter:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.notification-filter.is-active {
+  background: var(--accent-subtle);
+  border-color: var(--accent-ring);
+  color: var(--accent-text);
+}
+
+.notification-filter-count {
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
 }
 
 .folder-indicator-chip {
@@ -4859,24 +4899,22 @@ input::-webkit-contacts-auto-fill-button {
   height: 6px;
 }
 
-/* Notification Popover Items */
+/* Notification rows read like the dashboard's: no dividers or tints, a surface only on hover.
+   Unread ones keep their dot. */
 .notification-item {
   position: relative;
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: transparent;
   cursor: pointer;
   transition: background-color 150ms ease, opacity 150ms ease;
 }
 
-.notification-item:last-child {
-  border-bottom: none;
-}
-
-.notification-item.is-unread {
-  border-left: 2px solid var(--accent-text);
+.notification-item:hover {
+  background: var(--bg-hover);
 }
 
 /* Alert & Notice Banners */

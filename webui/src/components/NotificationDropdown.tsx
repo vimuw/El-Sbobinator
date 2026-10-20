@@ -145,7 +145,7 @@ export function NotificationDropdown({
               />
               <path
                 d="M 8.5 0.5 L 0.5 9 L 8.5 17.5"
-                stroke="var(--border-default)"
+                stroke="var(--border-subtle)"
                 strokeWidth="1"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -183,7 +183,7 @@ export function NotificationDropdown({
                   <button
                     type="button"
                     onClick={onMarkAllAsRead}
-                    className="p-1 rounded-md transition-colors hover:bg-[var(--accent-subtle)] flex items-center justify-center text-[var(--accent-text)] hover:text-[var(--text-primary)]"
+                    className="p-1.5 rounded-full transition-colors hover:bg-[var(--accent-subtle)] flex items-center justify-center text-[var(--accent-text)] hover:text-[var(--text-primary)]"
                     style={{
                       cursor: 'pointer',
                     }}
@@ -197,7 +197,7 @@ export function NotificationDropdown({
                   <button
                     type="button"
                     onClick={onClearAll}
-                    className="p-1 rounded-md transition-colors hover:bg-[var(--error-subtle)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--error-text)]"
+                    className="p-1.5 rounded-full transition-colors hover:bg-[var(--error-subtle)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--error-text)]"
                     style={{
                       cursor: 'pointer',
                     }}
@@ -210,75 +210,31 @@ export function NotificationDropdown({
               </div>
             </div>
 
-            {/* Minimalist Sub-tabs: Tutte & Non lette with smooth layoutId indicator */}
-            <div className="flex items-center gap-4 px-4 border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
+            {/* Filters: Tutte & Non lette as pills, like the toolbar chips */}
+            <div className="flex items-center gap-1.5 px-4 py-2 border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
               <button
                 type="button"
                 onClick={() => setActiveTab('all')}
-                className={`py-2 text-xs transition-colors relative flex items-center gap-1.5 ${
-                  activeTab === 'all'
-                    ? 'font-medium text-[var(--text-primary)]'
-                    : 'font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                }`}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                }}
+                aria-pressed={activeTab === 'all'}
+                className={`notification-filter${activeTab === 'all' ? ' is-active' : ''}`}
               >
-                <span>Tutte</span>
-                {activeTab === 'all' && (
-                  <motion.span
-                    layoutId="activeNotificationTab"
-                    className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full"
-                    style={{ background: 'var(--accent-text)' }}
-                    transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                  />
-                )}
+                Tutte
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('unread')}
-                className={`py-2 text-xs transition-colors relative flex items-center gap-1.5 ${
-                  activeTab === 'unread'
-                    ? 'font-medium text-[var(--text-primary)]'
-                    : 'font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                }`}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                }}
+                aria-pressed={activeTab === 'unread'}
+                className={`notification-filter${activeTab === 'unread' ? ' is-active' : ''}`}
               >
                 <span>Non lette</span>
-                {unreadCount > 0 && (
-                  <span
-                    className="px-1.5 py-0.2 text-[10px] rounded-md font-bold leading-tight"
-                    style={{
-                      background: 'var(--accent-subtle)',
-                      color: 'var(--accent-text)',
-                    }}
-                  >
-                    {unreadCount}
-                  </span>
-                )}
-                {activeTab === 'unread' && (
-                  <motion.span
-                    layoutId="activeNotificationTab"
-                    className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full"
-                    style={{ background: 'var(--accent-text)' }}
-                    transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                  />
-                )}
+                {unreadCount > 0 && <span className="notification-filter-count">{unreadCount}</span>}
               </button>
             </div>
 
             {/* Notification items list */}
             <div
-              className="flex-1 overflow-y-auto flex flex-col scrollbar-thin"
+              className="flex-1 overflow-y-auto flex flex-col gap-0.5 p-1 scrollbar-thin"
             >
               {filteredNotifications.length === 0 ? (
                 <div
