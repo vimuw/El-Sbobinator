@@ -87,7 +87,7 @@ export function FolderModal({ state, onClose, onSave, folders = [] }: FolderModa
           <div className="modal-body space-y-4">
             <div>
               <label htmlFor="folder-name" className="text-xs font-semibold block mb-1.5" style={{ color: 'var(--text-muted)' }}>
-                NOME RACCOLTA
+                Nome raccolta
               </label>
               <input
                 ref={inputRef}
@@ -103,7 +103,7 @@ export function FolderModal({ state, onClose, onSave, folders = [] }: FolderModa
             <div>
               <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                 <span id="folder-color-label" className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-                  COLORE IDENTIFICATIVO
+                  Colore identificativo
                 </span>
                 <button
                   type="button"

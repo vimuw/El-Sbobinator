@@ -167,7 +167,7 @@ describe('ArchivePage', () => {
     renderArchive({ folders: hierarchy, onFoldersChange });
     fireEvent.click(within(screen.getByRole('region', { name: 'Raccolte' })).getByText('3° anno'));
     fireEvent.click(screen.getByRole('button', { name: 'Nuova raccolta' }));
-    fireEvent.change(screen.getByLabelText('NOME RACCOLTA'), { target: { value: '1° semestre' } });
+    fireEvent.change(screen.getByLabelText('Nome raccolta'), { target: { value: '1° semestre' } });
     fireEvent.click(screen.getByRole('button', { name: 'Crea raccolta' }));
     const updated = onFoldersChange.mock.calls[0][0] as ArchiveFolder[];
     expect(updated.slice(0, 3)).toEqual(hierarchy);
