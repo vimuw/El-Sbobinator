@@ -194,6 +194,11 @@ describe('EditorFullPage autosave', () => {
     expect(shortcutsIndex).toBeGreaterThan(copyIndex);
     expect(themeIndex).toBeGreaterThan(shortcutsIndex);
 
+    // Copia documento is the header's filled primary pill; the utilities stay icon buttons.
+    expect(copyBtn.classList.contains('settings-pill-button')).toBe(true);
+    expect(copyBtn.classList.contains('icon-button')).toBe(false);
+    expect(themeBtn.classList.contains('icon-button')).toBe(true);
+
     // Toggling theme calls setThemeMode
     fireEvent.click(themeBtn);
     expect(setThemeMode).toHaveBeenCalled();

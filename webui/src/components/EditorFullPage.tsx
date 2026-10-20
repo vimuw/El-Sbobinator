@@ -275,8 +275,7 @@ export function EditorFullPage({
             <div className="editor-fullpage-actions">
               <button
                 onClick={() => void handleCopy()}
-                className="icon-button editor-fullpage-copy"
-                style={isCopied ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : {}}
+                className={`settings-pill-button editor-fullpage-copy${isCopied ? ' is-copied' : ''}`}
                 title={isCopied ? 'Copiato!' : 'Copia tutto il documento mantenendo la formattazione, pronto da incollare in Google Docs o Word.'}
                 aria-label="Copia documento"
               >

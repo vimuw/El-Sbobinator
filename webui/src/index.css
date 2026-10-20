@@ -4463,7 +4463,7 @@ input::-webkit-contacts-auto-fill-button {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: 999px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-secondary);
@@ -4473,7 +4473,7 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 .editor-fullpage-back:hover {
-  background: var(--accent-subtle);
+  background: var(--bg-hover);
   color: var(--text-primary);
   border-color: transparent;
 }
@@ -4565,21 +4565,30 @@ input::-webkit-contacts-auto-fill-button {
   .editor-shortcuts-audio .editor-shortcuts-list > div { grid-template-columns: minmax(0, 1fr); gap: 6px; }
 }
 
+/* Header utilities are round outline buttons beside the filled Copia documento pill. */
 .editor-fullpage-actions .icon-button:not(.modal-icon-button) {
   width: 32px;
   height: 32px;
+  border-radius: 999px;
 }
 
-.editor-fullpage-actions .icon-button.editor-fullpage-copy {
-  width: auto;
+.editor-fullpage-actions .settings-pill-button.editor-fullpage-copy {
   /* Fixed width keeps the button from resizing between "Copia documento" and
      "Copiato!", while icon and label stay grouped in the center. */
   min-width: 152px;
+  min-height: 32px;
+  height: 32px;
   gap: 7px;
-  padding: 0 10px;
+  padding: 0 1rem;
   font-size: 0.78rem;
-  font-weight: 500;
   white-space: nowrap;
+}
+
+.editor-fullpage-actions .settings-pill-button.editor-fullpage-copy.is-copied {
+  background: var(--success-subtle);
+  border-color: var(--success-ring);
+  color: var(--success-text);
+  box-shadow: none;
 }
 
 .editor-fullpage-utilities {
@@ -4593,7 +4602,7 @@ input::-webkit-contacts-auto-fill-button {
 
 @media (max-width: 720px) {
   .editor-fullpage-copy-label { display: none; }
-  .editor-fullpage-actions .icon-button.editor-fullpage-copy { width: 32px; min-width: 32px; padding: 0; }
+  .editor-fullpage-actions .settings-pill-button.editor-fullpage-copy { width: 32px; min-width: 32px; padding: 0; }
 }
 
 .editor-fullpage-actions .icon-button.icon-button--active {
@@ -4694,7 +4703,7 @@ input::-webkit-contacts-auto-fill-button {
   align-items: center;
   height: 28px;
   padding: 0 10px;
-  border-radius: 8px;
+  border-radius: 999px;
   border: 1px solid var(--border-subtle);
   font-size: 0.72rem;
   font-weight: 500;
