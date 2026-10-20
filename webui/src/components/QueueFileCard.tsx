@@ -73,46 +73,45 @@ function QueueFileCardInner({
       >
         <div className="relative z-10 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            {isDraggable && (
-              <button
-                {...listeners}
-                className="drag-handle-btn shrink-0"
-                tabIndex={-1}
-                aria-label="Trascina per riordinare"
+            {/* The drag handle takes over the status icon's slot on hover, so no column is reserved for it. */}
+            <div className={`queue-icon-slot relative shrink-0 w-8 h-8${isDraggable ? ' has-handle' : ''}`}>
+              {isDraggable && (
+                <button
+                  {...listeners}
+                  className="drag-handle-btn absolute inset-0"
+                  tabIndex={-1}
+                  aria-label="Trascina per riordinare"
+                >
+                  <GripVertical className="w-4 h-4" />
+                </button>
+              )}
+              <div
+                className={`queue-status-icon flex items-center justify-center w-8 h-8 rounded-lg ${
+                  file.status === 'processing'
+                    ? isCanceling
+                      ? 'bg-[var(--error-subtle)] text-[var(--error-text)] border border-[var(--error-ring)]'
+                      : 'bg-[var(--processing-bg)] text-[var(--processing-text)] border border-[var(--processing-ring)]'
+                    : file.status === 'error'
+                      ? isPaused
+                        ? 'bg-[var(--warning-subtle)] text-[var(--warning-text)] border border-[var(--warning-ring)]'
+                        : 'bg-[var(--error-subtle)] text-[var(--error-text)] border border-[var(--error-ring)]'
+                      : 'bg-[var(--bg-hover)] text-[var(--text-muted)]'
+                }`}
               >
-                <GripVertical className="w-4 h-4" />
-              </button>
-            )}
-            {/* Rows that can't be dragged keep the handle's slot so every icon sits in one column. */}
-            {showDragHandle && !isDraggable && (
-              <span className="drag-handle-btn drag-handle-spacer shrink-0" aria-hidden="true" />
-            )}
-            <div
-              className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-lg ${
-                file.status === 'processing'
+                {file.status === 'processing'
                   ? isCanceling
-                    ? 'bg-[var(--error-subtle)] text-[var(--error-text)] border border-[var(--error-ring)]'
-                    : 'bg-[var(--processing-bg)] text-[var(--processing-text)] border border-[var(--processing-ring)]'
+                    ? <XCircle className="w-4 h-4" />
+                    : file.isRetryingBlocks
+                      ? <RotateCcw className="w-4 h-4" />
+                      : <Mic className="w-4 h-4" data-testid="queue-icon-active" />
                   : file.status === 'error'
                     ? isPaused
-                      ? 'bg-[var(--warning-subtle)] text-[var(--warning-text)] border border-[var(--warning-ring)]'
-                      : 'bg-[var(--error-subtle)] text-[var(--error-text)] border border-[var(--error-ring)]'
-                    : 'bg-[var(--bg-hover)] text-[var(--text-muted)]'
-              }`}
-            >
-              {file.status === 'processing'
-                ? isCanceling
-                  ? <XCircle className="w-4 h-4" />
-                  : file.isRetryingBlocks
-                    ? <RotateCcw className="w-4 h-4" />
-                    : <Mic className="w-4 h-4" data-testid="queue-icon-active" />
-                : file.status === 'error'
-                  ? isPaused
-                    ? <AlertTriangle className="w-4 h-4" />
-                    : <AlertCircle className="w-4 h-4" />
-                  : file.status === 'queued'
-                    ? <Clock className="w-4 h-4" data-testid="queue-icon-waiting" />
-                    : <FileAudio className="w-4 h-4" />}
+                      ? <AlertTriangle className="w-4 h-4" />
+                      : <AlertCircle className="w-4 h-4" />
+                    : file.status === 'queued'
+                      ? <Clock className="w-4 h-4" data-testid="queue-icon-waiting" />
+                      : <FileAudio className="w-4 h-4" />}
+              </div>
             </div>
             <div className="min-w-0 flex-1">
               <h4 className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{file.name}</h4>

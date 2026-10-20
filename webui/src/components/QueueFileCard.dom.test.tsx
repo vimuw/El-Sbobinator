@@ -146,16 +146,21 @@ describe('QueueFileCard', () => {
     expect(screen.getAllByTestId('queue-icon-waiting')).toHaveLength(1);
   });
 
-  it('reserves the drag handle slot on the active row so icons line up with draggable rows', () => {
+  it('puts the drag handle in the status icon slot instead of reserving a column for it', () => {
     const { container } = render(
       <QueueWrapper>
-        <QueueFileCard file={makeFile({ status: 'processing' })} appState="processing" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} showDragHandle />
+        <QueueFileCard file={makeFile({ id: 'f1', status: 'processing' })} appState="processing" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} showDragHandle />
+        <QueueFileCard file={makeFile({ id: 'f2' })} appState="processing" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} showDragHandle />
       </QueueWrapper>,
     );
-    expect(screen.queryByLabelText('Trascina per riordinare')).toBeNull();
-    const spacer = container.querySelector('.drag-handle-spacer');
-    expect(spacer?.classList.contains('drag-handle-btn')).toBe(true);
-    expect(spacer?.getAttribute('aria-hidden')).toBe('true');
+    expect(container.querySelector('.drag-handle-spacer')).toBeNull();
+    const [activeSlot, queuedSlot] = Array.from(container.querySelectorAll('.queue-icon-slot'));
+    expect(activeSlot.classList.contains('has-handle')).toBe(false);
+    expect(activeSlot.querySelector('.drag-handle-btn')).toBeNull();
+    expect(queuedSlot.classList.contains('has-handle')).toBe(true);
+    const handle = screen.getByLabelText('Trascina per riordinare');
+    expect(handle.parentElement).toBe(queuedSlot);
+    expect(queuedSlot.querySelector('[data-testid="queue-icon-waiting"]')).toBeTruthy();
   });
 
   it('keeps the drag handle inside the queue item so it can stay hidden until hover or focus', () => {

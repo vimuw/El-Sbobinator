@@ -1464,27 +1464,42 @@ button {
   cursor: grabbing;
 }
 
-/* In the queue the handle stays out of the way until the card is hovered or focused. */
+/* In the queue the handle sits on the status icon's slot and swaps in on hover or focus. */
 .queue-item .drag-handle-btn {
-  width: 20px;
-  margin-left: -6px;
+  width: 32px;
+  height: 32px;
+  background: var(--bg-hover);
   opacity: 0;
+  z-index: 1;
   transition: opacity 160ms var(--ease-out), color 160ms ease, background 160ms ease;
 }
 
-.queue-item .drag-handle-spacer {
+/* A faded icon gets its own stacking layer, so without these it would sit on the handle and swallow the press. */
+.queue-item .queue-status-icon {
   pointer-events: none;
+  transition: opacity 160ms var(--ease-out);
 }
 
+/* Keyboard focus only: a click focuses the sortable item too, and must not leave the handle on. */
 .queue-item:hover .drag-handle-btn,
-.queue-item:focus-within .drag-handle-btn,
+.queue-item:has(:focus-visible) .drag-handle-btn,
 .queue-item:focus-visible .drag-handle-btn {
   opacity: 1;
+}
+
+.queue-item:hover .has-handle .queue-status-icon,
+.queue-item:has(:focus-visible) .has-handle .queue-status-icon,
+.queue-item:focus-visible .has-handle .queue-status-icon {
+  opacity: 0;
 }
 
 @media (hover: none) {
   .queue-item .drag-handle-btn {
     opacity: 1;
+  }
+
+  .queue-item .has-handle .queue-status-icon {
+    opacity: 0;
   }
 }
 
