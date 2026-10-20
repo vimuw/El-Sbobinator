@@ -205,7 +205,6 @@ export function createBrowserPywebviewApi(): PywebviewApi {
       callRpc('validate_environment', apiKey, checkApiKey, preferredModel),
     get_session_storage_info: () => callRpc('get_session_storage_info'),
     cleanup_old_sessions: (maxAgeDays, dryRun) => callRpc('cleanup_old_sessions', maxAgeDays, dryRun),
-    cleanup_completed_sessions: (maxAgeDays, dryRun) => callRpc('cleanup_completed_sessions', maxAgeDays, dryRun),
     get_completed_sessions: (limit) => callRpc('get_completed_sessions', limit),
     delete_session: (sessionDir) => callRpc('delete_session', sessionDir),
     rename_session: (sessionDir, name) => callRpc('rename_session', sessionDir, name),
@@ -315,7 +314,6 @@ export function createBrowserPywebviewApi(): PywebviewApi {
     move_session_root: async () => ({ ok: false, error: 'Disponibile nell’app desktop' }),
     get_session_move_status: async () => ({ status: 'idle', error: 'Disponibile nell’app desktop' }),
     download_and_install_update: async () => ({ ok: false, error: 'Disponibile nell’app desktop' }),
-    open_logs_folder: async () => ({ ok: false, error: 'Disponibile nell’app desktop' }),
   };
 }
 

@@ -662,8 +662,7 @@ describe('SettingsModal — session folder and cleanup', () => {
 
   it('warns that cleanup also removes paused work and offers no completed-notes cleanup', async () => {
     const cleanupFn = vi.fn().mockResolvedValue({ ok: true, removed: 0, candidates: 1, freed_bytes: 256 });
-    const cleanupCompletedFn = vi.fn();
-    setPywebview({ cleanup_old_sessions: cleanupFn, cleanup_completed_sessions: cleanupCompletedFn });
+    setPywebview({ cleanup_old_sessions: cleanupFn });
     render(<SettingsModal {...makeProps()} />);
     await act(async () => {
       fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
@@ -674,7 +673,6 @@ describe('SettingsModal — session folder and cleanup', () => {
       fireEvent.click(screen.getByTitle(/Conta ed elimina tutte le elaborazioni incomplete/));
     });
     expect(await screen.findByText(/comprese quelle in pausa che potresti ancora riprendere/)).toBeTruthy();
-    expect(cleanupCompletedFn).not.toHaveBeenCalled();
   });
 
   it('dismisses cleanup notification when close button is clicked', async () => {
