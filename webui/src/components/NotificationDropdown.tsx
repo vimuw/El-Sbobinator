@@ -7,6 +7,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { NotificationItem } from './notifications/NotificationItem';
+import { DURATION, enterTransition, popoverItemVariants, popoverVariants } from '../motion';
 
 export interface NotificationAction {
   label: string;
@@ -51,11 +52,15 @@ export interface NotificationDropdownProps {
 const CARET_BOTTOM = 48;
 const CARET_CENTER_FROM_BOTTOM = CARET_BOTTOM + 9;
 
-// Rows settle in a beat after the frame; on close they reset only once the panel has faded.
-const ROW_VARIANTS = {
-  open: { opacity: 1, x: 0, transition: { duration: 0.18, ease: [0.16, 1, 0.3, 1] } },
-  closed: { opacity: 0, x: -4, transition: { delay: 0.11, duration: 0 } },
-} as const;
+// The content lands in three beats after the frame: header, filters, then rows.
+const HEADER_VARIANTS = popoverItemVariants({ y: -4, blur: 4 });
+const ROW_VARIANTS = popoverItemVariants({ x: -4, blur: 4 });
+
+// The caret fades out of the panel edge once the frame has nearly settled.
+const CARET_VARIANTS = {
+  open: { opacity: 1, scale: 1, transition: enterTransition(DURATION.base, 0.08) },
+  closed: { opacity: 0, scale: 0.6, transition: { delay: DURATION.fast, duration: 0 } },
+};
 
 export function NotificationDropdown({
   isOpen,
@@ -104,36 +109,21 @@ export function NotificationDropdown({
         style={{ background: 'transparent' }}
       />
 
-      {/* The panel grows out of its caret, so it reads as coming from the bell it points at. */}
+      {/* The panel materialises out of its caret, so it reads as coming from the bell it points
+          at. It is the app's largest popover, so it opens from further back than a menu. */}
       <motion.div
         key="notification-popover"
         role="dialog"
         aria-label="Notifiche"
         initial={false}
         animate={isOpen ? 'open' : 'closed'}
-        variants={{
-          open: {
-            opacity: 1,
-            scale: 1,
-            x: 0,
-            y: 0,
-            pointerEvents: 'auto',
-            transition: {
-              opacity: { duration: 0.12, ease: 'easeOut' },
-              default: { type: 'spring', stiffness: 520, damping: 36, mass: 0.8 },
-              staggerChildren: 0.025,
-              delayChildren: 0.04,
-            },
-          },
-          closed: {
-            opacity: 0,
-            scale: 0.96,
-            x: hasCaret ? -6 : 0,
-            y: hasCaret ? 0 : valign === 'bottom' ? 4 : -4,
-            pointerEvents: 'none',
-            transition: { duration: 0.11, ease: [0.4, 0, 1, 1] },
-          },
-        }}
+        variants={popoverVariants({
+          x: hasCaret ? -6 : 0,
+          y: hasCaret ? 0 : valign === 'bottom' ? 4 : -4,
+          scale: 0.9,
+          blur: 8,
+          duration: DURATION.slow,
+        })}
         className={`fixed z-50 flex flex-col ${
           isOpen ? 'pointer-events-auto' : 'pointer-events-none'
         }`}
@@ -152,9 +142,10 @@ export function NotificationDropdown({
       >
         {/* Left pointer triangle pointing towards the sidebar trigger */}
         {hasCaret && (
-          <div
+          <motion.div
+            variants={CARET_VARIANTS}
             className="absolute -left-[8px] pointer-events-none z-30 flex items-center"
-            style={{ bottom: CARET_BOTTOM }}
+            style={{ bottom: CARET_BOTTOM, transformOrigin: 'right center' }}
             aria-hidden="true"
           >
             <svg
@@ -177,7 +168,7 @@ export function NotificationDropdown({
                 strokeLinejoin="round"
               />
             </svg>
-          </div>
+          </motion.div>
         )}
 
         {/* Inner bordered panel matching design system .notification-dropdown-panel */}
@@ -186,7 +177,11 @@ export function NotificationDropdown({
         >
           <div className="notification-dropdown-content flex flex-col flex-1 min-h-0 overflow-hidden">
             {/* Header Row: Title & Action Buttons */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
+            <motion.div
+              variants={HEADER_VARIANTS}
+              custom={0}
+              className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]"
+            >
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-semibold tracking-tight text-[var(--text-primary)]">
                   Notifiche
@@ -226,10 +221,14 @@ export function NotificationDropdown({
                   </button>
                 )}
               </div>
-            </div>
+            </motion.div>
 
             {/* Filters: Tutte & Non lette as pills, like the toolbar chips */}
-            <div className="flex items-center gap-1.5 px-4 py-2 border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
+            <motion.div
+              variants={HEADER_VARIANTS}
+              custom={1}
+              className="flex items-center gap-1.5 px-4 py-2 border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]"
+            >
               <button
                 type="button"
                 onClick={() => setActiveTab('all')}
@@ -248,7 +247,7 @@ export function NotificationDropdown({
                 <span>Non lette</span>
                 {unreadCount > 0 && <span className="notification-filter-count">{unreadCount}</span>}
               </button>
-            </div>
+            </motion.div>
 
             {/* Notification items list */}
             <div
@@ -282,8 +281,8 @@ export function NotificationDropdown({
                   </p>
                 </div>
               ) : (
-                filteredNotifications.map((n) => (
-                  <motion.div key={n.id} variants={ROW_VARIANTS}>
+                filteredNotifications.map((n, index) => (
+                  <motion.div key={n.id} variants={ROW_VARIANTS} custom={index + 2}>
                     <NotificationItem
                       notification={n}
                       onMarkAsRead={onMarkAsRead}

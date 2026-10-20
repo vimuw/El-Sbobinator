@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Check, ChevronRight, MoreVertical } from 'lucide-react';
+import { popoverVariants, popoverItemVariants } from '../motion';
 
 export type KebabMenuItem =
   | {
@@ -39,6 +40,10 @@ interface SubmenuPos {
   maxHeight: number;
   opensLeft: boolean;
 }
+
+// Menus open like the other popovers but lighter, and their items follow in a quick beat.
+// Submenus open on hover, so their items appear with the frame.
+const MENU_ITEM_VARIANTS = popoverItemVariants({ step: 0.015 });
 
 export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, title }: KebabMenuProps) {
   const [open, setOpen] = useState(false);
@@ -287,11 +292,12 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
               key="kebab-dropdown"
               ref={dropdownRef}
               className="kebab-panel"
-              initial={{ opacity: 0, y: opensUp ? 4 : -4, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: opensUp ? 4 : -4, scale: 0.97 }}
-              transition={{ duration: 0.12 }}
+              variants={popoverVariants({ y: opensUp ? 4 : -4 })}
+              initial="closed"
+              animate="open"
+              exit="closed"
               style={{
+                transformOrigin: `${opensUp ? 'bottom' : 'top'} ${pos.right !== undefined ? 'right' : 'left'}`,
                 position: 'fixed',
                 ...(pos.top !== undefined ? { top: pos.top } : { bottom: pos.bottom }),
                 ...(pos.right !== undefined ? { right: pos.right } : { left: pos.left }),
@@ -310,8 +316,11 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
                 const isSubmenuActive = activeSubmenuIndex === i;
 
                 return (
-                  <button
+                  <motion.button
                     key={`item-${i}-${item.label}`}
+                    // Disabled items keep their dimmed opacity, so they appear with the frame.
+                    variants={item.disabled ? undefined : MENU_ITEM_VARIANTS}
+                    custom={i}
                     ref={el => {
                       itemRefs.current[i] = el;
                     }}
@@ -346,7 +355,7 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
                     {hasChildren && (
                       <ChevronRight className="w-3.5 h-3.5 shrink-0 ml-2 opacity-60" />
                     )}
-                  </button>
+                  </motion.button>
                 );
               })}
             </motion.div>
@@ -356,10 +365,10 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
             <motion.div
               key="kebab-submenu"
               ref={submenuRef}
-              initial={{ opacity: 0, x: submenuPos.opensLeft ? 4 : -4, scale: 0.97 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: submenuPos.opensLeft ? 4 : -4, scale: 0.97 }}
-              transition={{ duration: 0.1 }}
+              variants={popoverVariants({ x: submenuPos.opensLeft ? 4 : -4, scale: 0.96 })}
+              initial="closed"
+              animate="open"
+              exit="closed"
               onMouseEnter={handleSubmenuMouseEnter}
               onMouseLeave={handleSubmenuMouseLeave}
               className="kebab-panel app-scroll"

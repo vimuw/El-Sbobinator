@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Key, X } from 'lucide-react';
 import { GEMINI_KEY_PATTERN } from '../../utils';
+import { modalCard } from '../../motion';
 
 interface NewKeyModalProps {
   isOpen: boolean;
@@ -60,9 +61,7 @@ export function NewKeyModal({ isOpen, onClose }: NewKeyModalProps) {
             className="modal-overlay absolute inset-0"
           />
           <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }}
-            exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14, ease: 'easeIn' } }}
+            {...modalCard}
             className="modal-card relative w-full max-w-md max-h-[86vh] overflow-hidden flex flex-col"
           >
             <div className="modal-header">

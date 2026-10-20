@@ -3,6 +3,10 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowUpDown, Check } from 'lucide-react';
 import { type SortOption, SORT_OPTIONS } from './types';
+import { popoverVariants, popoverItemVariants } from '../../motion';
+
+// Menus open like the other popovers but lighter, and their items follow in a quick beat.
+const MENU_ITEM_VARIANTS = popoverItemVariants({ step: 0.015 });
 
 interface SortMenuProps {
   sort: SortOption;
@@ -87,11 +91,12 @@ export function SortMenu({ sort, onSortChange, options = SORT_OPTIONS }: SortMen
             <motion.div
               ref={dropdownRef}
               className="kebab-panel"
-              initial={{ opacity: 0, scale: 0.95, y: pos.opensUp ? 4 : -4 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: pos.opensUp ? 4 : -4 }}
-              transition={{ duration: 0.1, ease: 'easeOut' }}
+              variants={popoverVariants({ y: pos.opensUp ? 4 : -4 })}
+              initial="closed"
+              animate="open"
+              exit="closed"
               style={{
+                transformOrigin: `${pos.opensUp ? 'bottom' : 'top'} ${pos.left !== undefined ? 'left' : 'right'}`,
                 position: 'fixed',
                 ...(pos.top !== undefined ? { top: pos.top } : { bottom: pos.bottom }),
                 ...(pos.left !== undefined ? { left: pos.left } : { right: pos.right }),
@@ -101,12 +106,14 @@ export function SortMenu({ sort, onSortChange, options = SORT_OPTIONS }: SortMen
               }}
               onClick={e => e.stopPropagation()}
             >
-              {options.map(opt => {
+              {options.map((opt, index) => {
                 const isSelected = sort === opt.id;
                 return (
-                  <button
+                  <motion.button
                     key={opt.id}
                     type="button"
+                    variants={MENU_ITEM_VARIANTS}
+                    custom={index}
                     onClick={() => {
                       onSortChange(opt.id);
                       setOpen(false);
@@ -117,7 +124,7 @@ export function SortMenu({ sort, onSortChange, options = SORT_OPTIONS }: SortMen
                       {isSelected && <Check className="w-3.5 h-3.5" style={{ color: 'var(--accent-text)' }} />}
                     </span>
                     <span>{opt.label}</span>
-                  </button>
+                  </motion.button>
                 );
               })}
             </motion.div>

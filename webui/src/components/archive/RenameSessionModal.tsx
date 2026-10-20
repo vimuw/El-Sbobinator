@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { motion } from 'motion/react';
 import { X } from 'lucide-react';
 import type { ArchiveSession } from '../../bridge';
+import { modalCard } from '../../motion';
 
 export function RenameSessionModal({ session, onSave, onClose }: {
   session: ArchiveSession;
@@ -67,7 +68,7 @@ export function RenameSessionModal({ session, onSave, onClose }: {
     <motion.div className="fixed inset-0 z-[60] flex items-center justify-center p-4" exit={{ opacity: 0 }}>
       <div className="modal-overlay absolute inset-0" />
       <motion.div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-        className="modal-card relative w-full max-w-md overflow-hidden" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
+        className="modal-card relative w-full max-w-md overflow-hidden" {...modalCard}>
         <div className="modal-header">
           <h2 id={titleId} className="text-lg font-semibold">Rinomina sbobina</h2>
           <button type="button" className="icon-button modal-icon-button" aria-label="Chiudi finestra" disabled={saving} onClick={onClose}><X className="w-4 h-4" /></button>

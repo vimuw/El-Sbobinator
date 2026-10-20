@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import {
   SettingsModal,
   type SettingsAuthProps,
@@ -271,6 +271,37 @@ describe('SettingsModal — save behavior', () => {
 
     expect(title.className).not.toContain('uppercase');
     expect(title.className).not.toContain('tracking-wide');
+  });
+
+  it('holds the card entrance until the mounted tree has painted a frame', () => {
+    const frames = new Map<number, FrameRequestCallback>();
+    let nextFrameId = 0;
+    const requestFrame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => {
+      frames.set(++nextFrameId, callback);
+      return nextFrameId;
+    });
+    const cancelFrame = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(id => {
+      frames.delete(id);
+    });
+    onTestFinished(() => {
+      requestFrame.mockRestore();
+      cancelFrame.mockRestore();
+    });
+    const runFrame = () => act(() => {
+      const pending = [...frames.values()];
+      frames.clear();
+      pending.forEach(callback => callback(performance.now()));
+    });
+
+    render(<SettingsModal {...makeProps()} />);
+    const card = document.querySelector('.modal-card');
+    expect(card?.getAttribute('data-entered')).toBe('false');
+
+    // The first frame carries the expensive layout of the new tree; the entrance starts after it.
+    runFrame();
+    expect(card?.getAttribute('data-entered')).toBe('false');
+    runFrame();
+    expect(card?.getAttribute('data-entered')).toBe('true');
   });
 
   it('starts each settings tab at the top after scrolling the previous tab', () => {

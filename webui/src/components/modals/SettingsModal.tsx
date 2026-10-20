@@ -19,6 +19,7 @@ import { credentialStorageWarning } from '../../credentialStorage';
 import { getHostCapabilities } from '../../browserHost';
 import { APP_VERSION } from '../../branding';
 import { STORAGE_KEYS } from '../../storageKeys';
+import { modalCard } from '../../motion';
 
 export type { SettingsUpdateInstallState };
 
@@ -82,6 +83,35 @@ const TAB_HEADERS: Record<TabType, { title: string; description: string }> = {
     title: 'Assistenza',
     description: "Segnala un problema e controlla che l'app sia pronta a trascrivere.",
   },
+};
+
+// The settings card mounts a large tree whose first style and layout pass can outlast several
+// frames on a slow machine. Starting the entrance on mount would spend that time off-screen and
+// show the card already half-faded in, so it waits in its initial pose until a frame has been
+// painted. Only this wrapper re-renders when it starts: the children keep their identity.
+const SettingsCard: React.FC<{ className: string; children: React.ReactNode }> = ({ className, children }) => {
+  const [hasPainted, setHasPainted] = useState(false);
+  useEffect(() => {
+    let nextFrame = 0;
+    const firstFrame = requestAnimationFrame(() => {
+      nextFrame = requestAnimationFrame(() => setHasPainted(true));
+    });
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(nextFrame);
+    };
+  }, []);
+  return (
+    <motion.div
+      initial={modalCard.initial}
+      animate={hasPainted ? modalCard.animate : modalCard.initial}
+      exit={modalCard.exit}
+      data-entered={hasPainted ? 'true' : 'false'}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
 };
 
 interface SettingsSnapshot {
@@ -459,12 +489,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               className="modal-overlay absolute inset-0"
             />
 
-            <motion.div
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1, transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] } }}
-              exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.12, ease: 'easeIn' } }}
-              className="modal-card relative w-full max-w-md md:max-w-4xl h-[85vh] md:h-[80vh] overflow-hidden flex flex-col md:flex-row"
-            >
+            <SettingsCard className="modal-card relative w-full max-w-md md:max-w-4xl h-[85vh] md:h-[80vh] overflow-hidden flex flex-col md:flex-row">
               <nav aria-label="Sezioni delle impostazioni" className="settings-nav app-scroll">
                 <div className="hidden md:flex items-center gap-2 px-3 py-2.5 mb-3 border-b border-[var(--border-subtle)]">
                   <Settings className="w-5 h-5 text-[var(--accent-text)] shrink-0" />
@@ -646,7 +671,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 </div>
               </div>
-            </motion.div>
+            </SettingsCard>
           </div>
         )}
       </AnimatePresence>

@@ -2346,25 +2346,37 @@ button {
   justify-content: center;
 }
 
+/* CSS twin of popoverVariants in motion.ts: the dropdown grows from slightly further back out
+   of a soft blur, with no overshoot; the filter ends as none so text renders crisp. */
 @keyframes dropdownPop {
   from {
     opacity: 0;
-    transform: scale(0.96) translateY(-4px);
+    transform: scale(0.94) translateY(-4px);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 1;
   }
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
+    filter: none;
   }
 }
 
 @keyframes dropdownPopUp {
   from {
     opacity: 0;
-    transform: scale(0.96) translateY(4px);
+    transform: scale(0.94) translateY(4px);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 1;
   }
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
+    filter: none;
   }
 }
 
@@ -2374,13 +2386,13 @@ button {
   display: flex;
   flex-direction: column;
   min-width: 200px;
-  animation: dropdownPop 0.12s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: dropdownPop 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   transform-origin: top left;
 }
 
 .editor-dropdown-panel.open-up {
   transform-origin: bottom center;
-  animation: dropdownPopUp 0.12s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: dropdownPopUp 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 
@@ -3103,7 +3115,7 @@ button {
   flex-direction: column;
   gap: 8px;
   min-width: 160px;
-  animation: dropdownPop 0.12s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: dropdownPop 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   transform-origin: top left;
 }
 
@@ -4777,7 +4789,7 @@ input::-webkit-contacts-auto-fill-button {
   border: 1px solid var(--border-default) !important;
   box-shadow: var(--shadow-strong) !important;
   border-radius: 12px !important;
-  animation: dropdownPop 0.12s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: dropdownPop 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   transform-origin: top center;
 }
 
