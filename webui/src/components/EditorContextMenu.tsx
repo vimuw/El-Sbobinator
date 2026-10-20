@@ -78,7 +78,7 @@ export function EditorContextMenu({
   return createPortal(
     <div
       ref={menuRef}
-      className="editor-context-menu fixed z-50 py-1 text-xs select-none"
+      className="kebab-panel editor-context-menu fixed z-50 select-none"
       style={{ left: contextMenu.x, top: contextMenu.y }}
       onClick={e => {
         e.stopPropagation();
@@ -87,7 +87,7 @@ export function EditorContextMenu({
     >
       <button
         type="button"
-        className="editor-context-menu-item"
+        className="kebab-item editor-context-menu-item"
         onClick={async () => {
           await copySelectionToClipboard(editor, true);
         }}
@@ -101,7 +101,7 @@ export function EditorContextMenu({
 
       <button
         type="button"
-        className="editor-context-menu-item"
+        className="kebab-item editor-context-menu-item"
         onClick={async () => {
           await copySelectionToClipboard(editor);
         }}
@@ -115,7 +115,7 @@ export function EditorContextMenu({
 
       <button
         type="button"
-        className="editor-context-menu-item"
+        className="kebab-item editor-context-menu-item"
         onClick={async () => {
           try {
             await pasteEditorClipboard(editor.view);
@@ -133,7 +133,7 @@ export function EditorContextMenu({
 
       <button
         type="button"
-        className="editor-context-menu-item"
+        className="kebab-item editor-context-menu-item"
         onClick={async () => {
           try {
             await pasteEditorClipboard(editor.view, true);
@@ -152,8 +152,7 @@ export function EditorContextMenu({
       {!editor.state.selection.empty && (
         <button
           type="button"
-          className="editor-context-menu-item"
-          style={{ color: 'var(--error-text)' }}
+          className="kebab-item editor-context-menu-item is-danger"
           onClick={() => {
             editor.chain().focus().deleteSelection().run();
           }}
@@ -168,11 +167,11 @@ export function EditorContextMenu({
         </button>
       )}
 
-      <div className="my-1 border-t border-[var(--border-subtle)]" />
+      <div className="kebab-separator" />
 
       <button
         type="button"
-        className="editor-context-menu-item"
+        className="kebab-item editor-context-menu-item"
         onClick={() => editor.chain().focus().toggleBold().run()}
       >
         <span className="flex items-center gap-2.5 font-medium">
@@ -184,7 +183,7 @@ export function EditorContextMenu({
 
       <button
         type="button"
-        className="editor-context-menu-item"
+        className="kebab-item editor-context-menu-item"
         onClick={() => editor.chain().focus().toggleItalic().run()}
       >
         <span className="flex items-center gap-2.5 font-medium">
@@ -196,7 +195,7 @@ export function EditorContextMenu({
 
       <button
         type="button"
-        className="editor-context-menu-item"
+        className="kebab-item editor-context-menu-item"
         onClick={() => editor.chain().focus().toggleUnderline().run()}
       >
         <span className="flex items-center gap-2.5 font-medium">
@@ -208,7 +207,7 @@ export function EditorContextMenu({
 
       <button
         type="button"
-        className="editor-context-menu-item"
+        className="kebab-item editor-context-menu-item"
         onClick={() => editor.chain().focus().toggleHighlight({ color: getLastHighlightColor() }).run()}
       >
         <span className="flex items-center gap-2.5 font-medium">
@@ -219,7 +218,7 @@ export function EditorContextMenu({
 
       <button
         type="button"
-        className="editor-context-menu-item"
+        className="kebab-item editor-context-menu-item"
         onClick={() => editor.chain().focus().clearDocumentFormatting().run()}
       >
         <span className="flex items-center gap-2.5 font-medium">
@@ -229,11 +228,11 @@ export function EditorContextMenu({
         <kbd className="editor-context-menu-shortcut">Ctrl+\</kbd>
       </button>
 
-      <div className="my-1 border-t border-[var(--border-subtle)]" />
+      <div className="kebab-separator" />
 
       <button
         type="button"
-        className="editor-context-menu-item"
+        className="kebab-item editor-context-menu-item"
         onClick={onOpenLink}
       >
         <span className="flex items-center gap-2.5 font-medium">
@@ -245,7 +244,7 @@ export function EditorContextMenu({
 
       <button
         type="button"
-        className="editor-context-menu-item"
+        className="kebab-item editor-context-menu-item"
         onClick={onOpenImagePicker}
       >
         <span className="flex items-center gap-2.5 font-medium">
@@ -256,7 +255,7 @@ export function EditorContextMenu({
 
       <button
         type="button"
-        className="editor-context-menu-item"
+        className="kebab-item editor-context-menu-item"
         onClick={onOpenMath}
       >
         <span className="flex items-center gap-2.5 font-medium">
@@ -268,7 +267,7 @@ export function EditorContextMenu({
 
       <button
         type="button"
-        className="editor-context-menu-item"
+        className="kebab-item editor-context-menu-item"
         onClick={onOpenFind}
       >
         <span className="flex items-center gap-2.5 font-medium">

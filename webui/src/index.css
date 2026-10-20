@@ -2187,8 +2187,8 @@ button {
   gap: 3px;
   padding: 4px 6px;
   background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-strong);
   backdrop-filter: blur(12px);
   z-index: 999;
@@ -2197,8 +2197,6 @@ button {
 
 :root[data-theme="dark"] .editor-bubble-menu {
   background: var(--bg-elevated);
-  border-color: var(--border-default);
-  box-shadow: var(--shadow-strong);
 }
 
 .editor-bubble-btn {
@@ -2219,8 +2217,8 @@ button {
 }
 
 .editor-bubble-btn:hover {
-  background: var(--accent-subtle);
-  color: var(--accent-text);
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .editor-bubble-btn.is-active {
@@ -2414,8 +2412,8 @@ button {
   gap: 4px;
   padding: 5px 6px;
   background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-strong);
   min-width: 300px;
 }
@@ -2423,9 +2421,9 @@ button {
 .find-bar-input {
   flex: 1;
   height: 30px;
-  padding: 0 0.65rem;
-  border: 1.5px solid var(--border-default);
-  border-radius: 8px;
+  padding: 0 0.85rem;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
   background: var(--bg-input);
   color: var(--text-primary);
   font-size: 0.82rem;
@@ -2455,7 +2453,7 @@ button {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: 999px;
   border: none;
   background: transparent;
   color: var(--text-muted);
@@ -2469,7 +2467,7 @@ button {
 }
 
 .find-bar-btn:hover:not(:disabled) {
-  background: var(--accent-subtle);
+  background: var(--bg-hover);
   color: var(--text-primary);
 }
 
@@ -2487,8 +2485,8 @@ button {
   right: 16px;
   z-index: 50;
   background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-strong);
   width: 380px;
   overflow: hidden;
@@ -2523,7 +2521,7 @@ button {
 .find-replace-dialog-label {
   position: absolute;
   top: -8px;
-  left: 10px;
+  left: 14px;
   font-size: 0.68rem;
   font-weight: 600;
   color: var(--accent-bg);
@@ -2536,9 +2534,9 @@ button {
 .find-replace-dialog-input {
   width: 100%;
   height: 38px;
-  padding: 0 0.75rem;
-  border: 1.5px solid var(--border-default);
-  border-radius: 10px;
+  padding: 0 1rem;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
   background: var(--bg-input);
   color: var(--text-primary);
   font-size: 0.85rem;
@@ -2557,7 +2555,7 @@ button {
   font-size: 0.72rem;
   color: var(--text-muted);
   margin-top: 4px;
-  padding-left: 2px;
+  padding-left: 1rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -2590,19 +2588,19 @@ button {
 .find-replace-dialog-btn {
   height: 32px;
   padding: 0 14px;
-  border-radius: 8px;
+  border-radius: 999px;
   border: 1px solid var(--border-default);
   background: transparent;
   color: var(--text-secondary);
   font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
   transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
 }
 
 .find-replace-dialog-btn:hover:not(:disabled) {
-  background: var(--accent-subtle);
+  background: var(--bg-hover);
   color: var(--text-primary);
   border-color: var(--border-strong);
 }
@@ -2612,14 +2610,18 @@ button {
   cursor: not-allowed;
 }
 
+/* Sostituisci tutto is the filled pill, the twin of .settings-pill-button. */
 .find-replace-dialog-btn-primary {
-  background: var(--accent-subtle);
-  border-color: var(--border-strong);
-  color: var(--text-primary);
+  background: var(--btn-primary-bg);
+  border-color: transparent;
+  color: var(--btn-primary-text);
+  font-weight: 600;
 }
 
 .find-replace-dialog-btn-primary:hover:not(:disabled) {
-  background: var(--accent-ring);
+  background: var(--btn-primary-hover);
+  border-color: transparent;
+  color: var(--btn-primary-text);
 }
 
 
@@ -2683,10 +2685,10 @@ button {
   align-items: center;
   gap: 6px;
   max-width: 360px;
-  padding: 4px 4px 4px 10px;
+  padding: 4px 4px 4px 12px;
   background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-strong);
 }
 
@@ -2722,8 +2724,8 @@ button {
   width: min(400px, calc(100vw - 48px));
   overflow: hidden;
   background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-strong);
 }
 
@@ -2977,11 +2979,9 @@ button {
   align-items: center;
   justify-content: space-between;
   padding: 10px 8px 8px 8px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
@@ -3589,61 +3589,21 @@ button {
 }
 
 /* ── Editor Context Menu ───────────────── */
+/* Framed and filled by .kebab-panel / .kebab-item; this adds the width and the shortcut column. */
 .editor-context-menu {
   font-family: var(--font-display);
-  background-color: var(--bg-surface);
-  color: var(--text-primary);
-  border: 1px solid var(--border-default);
-  border-radius: 10px;
-  box-shadow: var(--shadow-strong);
-  padding: 6px 0;
   width: 290px;
   max-width: 90vw;
   max-height: calc(100vh - 24px);
   overflow-y: auto;
-  backdrop-filter: blur(12px);
 }
 
-:root[data-theme="dark"] .editor-context-menu,
-.dark .editor-context-menu {
-  background-color: var(--bg-elevated);
-  color: var(--text-primary);
-  border-color: var(--border-default);
-  box-shadow: var(--shadow-strong);
-}
-
-.editor-context-menu-item {
-  width: 100%;
-  display: flex;
-  align-items: center;
+/* Two classes so the denser rows win over .kebab-item, which is declared later. */
+.kebab-item.editor-context-menu-item {
   justify-content: space-between;
-  padding: 6px 14px;
   font-size: 13px;
   line-height: 20px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  transition: background-color 120ms ease, color 120ms ease;
-  white-space: nowrap;
-}
-
-:root[data-theme="dark"] .editor-context-menu-item,
-.dark .editor-context-menu-item {
-  color: var(--text-secondary);
-}
-
-.editor-context-menu-item:hover {
-  background-color: rgba(0, 0, 0, 0.06);
-  color: var(--text-primary);
-}
-
-:root[data-theme="dark"] .editor-context-menu-item:hover,
-.dark .editor-context-menu-item:hover {
-  background-color: rgba(255, 255, 255, 0.08);
-  color: var(--text-primary);
+  padding: 6px 12px;
 }
 
 .editor-context-menu-shortcut {
@@ -3654,11 +3614,6 @@ button {
   margin-left: auto;
   padding-left: 12px;
   flex-shrink: 0;
-}
-
-:root[data-theme="dark"] .editor-context-menu-shortcut,
-.dark .editor-context-menu-shortcut {
-  color: var(--text-muted);
 }
 
 .editor-image-action {
@@ -4472,7 +4427,7 @@ input::-webkit-contacts-auto-fill-button {
   padding: 0;
   overflow-y: auto;
   border: 1px solid var(--border-subtle);
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   background: var(--bg-elevated);
   color: var(--text-primary);
   box-shadow: var(--shadow-strong);
