@@ -489,7 +489,7 @@ export default function App() {
     const f = filesRef.current.find(item => item.id === id);
     if (!f) return;
     if (appStateRef.current !== 'idle' && f.status !== 'done') return;
-    setConfirmAction({ type: 'remove-file', fileId: id, fileName: f.name, isDone: true });
+    setConfirmAction({ type: 'remove-file', fileId: id, fileName: f.title || f.name, isDone: true });
   }, [setConfirmAction]);
 
   // Full motion even when Windows "Animation effects" is off: the workflow relies on it.

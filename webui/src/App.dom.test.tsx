@@ -1158,6 +1158,32 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       expect(screen.queryByRole('heading', { name: 'Rimuovere questo elemento?' })).toBeNull();
     });
 
+    it('names a renamed Recenti transcript by its title in the remove confirmation', async () => {
+      vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
+      vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
+        React.useEffect(() => {
+          dispatch({
+            type: 'queue/add',
+            files: [
+              { id: 'd1', name: 'lezione_03.m4a', title: 'Anatomia del cuore', size: 100, duration: 10, path: 'C:\\lezione_03.m4a', status: 'done', progress: 100, phase: 3, outputHtml: 'C:\\s\\d1\\out.html', outputDir: 'C:\\s\\d1', completedAt: Date.now() },
+            ],
+          });
+        }, [dispatch]);
+      });
+
+      await act(async () => { render(<App />); });
+      const card = (await screen.findByText('Anatomia del cuore')).closest('.queue-card') as HTMLElement;
+      await act(async () => {
+        fireEvent.click(within(card).getByRole('button', { name: 'Altre opzioni' }));
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Rimuovi' }));
+      });
+      const dialog = screen.getByRole('alertdialog');
+      expect(within(dialog).getByText(/"Anatomia del cuore" verrà rimossa dai Recenti/)).toBeTruthy();
+      expect(within(dialog).queryByText(/lezione_03\.m4a/)).toBeNull();
+    });
+
     it('handles start and retry queue actions', async () => {
       vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
       vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
