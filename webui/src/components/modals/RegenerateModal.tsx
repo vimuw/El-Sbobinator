@@ -69,7 +69,7 @@ export function RegenerateModal({ prompt, onAnswer, onDismiss }: RegenerateModal
             </div>
             <div className="modal-footer">
               <button onClick={() => onAnswer(false)} className="modal-action-button flex-1">
-                {prompt.mode === 'completed' ? 'Usa versione pronta' : 'Riprendi da dove eri rimasto'}
+                {prompt.mode === 'completed' ? 'Usa versione pronta' : 'Riprendi'}
               </button>
               <button onClick={() => onAnswer(true)} className="modal-action-button is-danger flex-1">
                 {prompt.mode === 'completed' ? 'Rigenera da zero' : 'Ricomincia da zero'}

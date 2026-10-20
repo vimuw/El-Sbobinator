@@ -57,7 +57,7 @@ describe('RegenerateModal', () => {
     expect(onAnswer).toHaveBeenCalledWith(true);
   });
 
-  it('calls onAnswer(false) for "Riprendi da dove eri rimasto" in resume mode', () => {
+  it('calls onAnswer(false) for "Riprendi" in resume mode', () => {
     const onAnswer = vi.fn();
     render(
       <RegenerateModal
@@ -66,7 +66,7 @@ describe('RegenerateModal', () => {
         onDismiss={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByText('Riprendi da dove eri rimasto'));
+    fireEvent.click(screen.getByText('Riprendi'));
     expect(onAnswer).toHaveBeenCalledWith(false);
   });
 
