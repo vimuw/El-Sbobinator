@@ -411,7 +411,7 @@ export function FolderDetailView({
                   items={pageData.map(s => s.session_dir)}
                   strategy={verticalListSortingStrategy}
                 >
-                  <div className="flex flex-col gap-2">
+                  <div className="archive-session-list flex flex-col gap-0.5">
                     {pageData.map((session) => (
                       <SortableSessionCard
                         key={session.session_dir}

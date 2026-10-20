@@ -53,6 +53,17 @@ function renderArchive(overrides: Partial<{
 }
 
 describe('ArchivePage', () => {
+  it('lists lessons as flat dashboard rows while the Riprendi card stays a card', () => {
+    const session = { ...makeSession('s1'), last_opened_at_iso: '2026-10-01T10:00:00Z' };
+    renderArchive({ sessions: [session] });
+
+    const resume = screen.getByText('Riprendi').closest('.archive-session-card');
+    expect(resume?.closest('.archive-session-list')).toBeNull();
+    const rows = document.querySelectorAll('.archive-session-list .archive-session-card');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain(session.name);
+  });
+
   it.each([false, true])('titles its sections like the dashboard, in plain sentence case (inside collection: %s)', (insideFolder) => {
     const session = makeSession('s1');
     renderArchive({ sessions: [session], folders: [{ id: 'f1', name: 'Anatomia', color: '', session_dirs: [session.session_dir] }] });

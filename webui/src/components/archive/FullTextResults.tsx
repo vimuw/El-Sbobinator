@@ -29,7 +29,7 @@ export function FullTextResultList({
   if (!results || results.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="archive-session-list flex flex-col gap-0.5">
       {results.map(result => (
         <button
           key={result.session_dir}

@@ -4130,6 +4130,36 @@ input::-webkit-contacts-auto-fill-button {
   border-color: var(--warning-ring);
 }
 
+/* Archive lists read like the dashboard's rows: they rest on the page, take a surface only on hover,
+   and show selection and warnings as a soft tint. The featured Riprendi card and drag overlays stay cards. */
+:root .archive-session-list .archive-session-card {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 8px;
+}
+
+:root .archive-session-list .archive-session-card:hover,
+:root .archive-session-list .archive-session-card:focus-visible {
+  border-color: transparent;
+  background: var(--bg-hover);
+}
+
+:root .archive-session-list .archive-session-card.is-selected {
+  border-color: transparent;
+  background: var(--accent-subtle);
+}
+
+:root .archive-session-list .archive-session-card.is-selected:hover {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--accent-text) 12%, transparent);
+}
+
+:root .archive-session-list .archive-session-card.is-warning:not(.is-selected) {
+  border-color: transparent;
+  background: var(--warning-subtle);
+}
+
 /* ═══ HOURGLASS BADGE ANIMATION ═══ */
 
 @keyframes hg-rotate {
