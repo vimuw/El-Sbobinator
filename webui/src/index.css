@@ -2342,14 +2342,11 @@ button {
   }
 }
 
+/* Toolbar dropdowns wear .kebab-panel / .kebab-item, the app's menu frame and rows; this rule
+   only adds the column layout and the opening animation. */
 .editor-dropdown-panel {
   display: flex;
   flex-direction: column;
-  padding: 4px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  border-radius: 12px;
-  box-shadow: var(--shadow-strong);
   min-width: 200px;
   animation: dropdownPop 0.12s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   transform-origin: top left;
@@ -2358,40 +2355,6 @@ button {
 .editor-dropdown-panel.open-up {
   transform-origin: bottom center;
   animation: dropdownPopUp 0.12s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-:root[data-theme="dark"] .editor-dropdown-panel {
-  background: var(--bg-elevated);
-  border-color: var(--border-default);
-  box-shadow: var(--shadow-strong);
-}
-
-.editor-dropdown-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  text-align: left;
-  transition: background 140ms ease, color 140ms ease, transform 140ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.editor-dropdown-item:hover {
-  background: var(--accent-subtle);
-  color: var(--accent-text);
-  transform: translateX(2px);
-}
-
-.editor-dropdown-item.is-active {
-  background: var(--accent-subtle);
-  color: var(--accent-text);
-  font-weight: 600;
 }
 
 
@@ -2660,22 +2623,23 @@ button {
 }
 
 
+/* The link field and its Applica read like the settings key row: an input pill and a filled pill. */
 .link-panel {
   display: flex;
   gap: 6px;
   padding: 8px;
   background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-strong);
   min-width: 260px;
 }
 
 .link-input {
   flex: 1;
-  height: 30px;
-  padding: 0 0.6rem;
-  border-radius: 8px;
+  height: 32px;
+  padding: 0 0.85rem;
+  border-radius: 999px;
   border: 1px solid var(--border-default);
   background: var(--bg-input);
   color: var(--text-primary);
@@ -2689,12 +2653,12 @@ button {
 }
 
 .link-apply-btn {
-  height: 30px;
-  padding: 0 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border-default);
-  background: var(--accent-subtle);
-  color: var(--text-primary);
+  height: 32px;
+  padding: 0 0.95rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
@@ -2703,8 +2667,12 @@ button {
 }
 
 .link-apply-btn:hover {
-  background: var(--accent-ring);
-  border-color: var(--border-strong);
+  background: var(--btn-primary-hover);
+}
+
+.link-apply-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--btn-primary-ring);
 }
 
 /* Docs-style link card: address plus open, preview, copy, edit and remove. */
@@ -3036,7 +3004,7 @@ button {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid transparent;
   color: var(--text-secondary);
   background: transparent;
@@ -3050,7 +3018,7 @@ button {
 
 .editor-button:hover:not(:disabled) {
   color: var(--text-primary);
-  background: var(--sidebar-active-bg);
+  background: var(--bg-hover);
 }
 
 .editor-button:disabled {
@@ -3060,7 +3028,7 @@ button {
 
 .editor-button.is-active {
   color: var(--text-primary);
-  border-color: var(--border-default);
+  border-color: var(--border-subtle);
   background: var(--accent-subtle);
 }
 
@@ -3099,8 +3067,8 @@ button {
 
 .color-picker-panel {
   background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-strong);
   padding: 10px;
   display: flex;
@@ -3151,15 +3119,15 @@ button {
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
   white-space: nowrap;
   transition: color 140ms ease, background 140ms ease;
 }
 
 .color-reset:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--bg-hover);
 }
 
 .color-custom {
@@ -3169,8 +3137,8 @@ button {
   font-size: 0.75rem;
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
   white-space: nowrap;
   position: relative;
   transition: color 120ms ease, background 120ms ease;
@@ -3178,7 +3146,7 @@ button {
 
 .color-custom:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--bg-hover);
 }
 
 .color-custom-preview {

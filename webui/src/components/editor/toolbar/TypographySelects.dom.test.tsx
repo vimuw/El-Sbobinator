@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { FontFamilySelect, FontSizeSelect, HeadingSelect, ZoomSelect } from './TypographySelects';
 import { Editor, type Editor as TiptapEditor } from '@tiptap/core';
@@ -72,6 +72,20 @@ describe('TypographySelects', () => {
       expect(chainMock.clearBlockFontSize).toHaveBeenCalled();
       expect(chainMock.setParagraph).toHaveBeenCalled();
       expect(chainMock.run).toHaveBeenCalled();
+    });
+
+    it('opens a panel framed with the shared menu rules, marking the current style', () => {
+      const { editor } = createMockEditor({}, { h2: true });
+      render(<HeadingSelect editor={editor as unknown as TiptapEditor} />);
+
+      fireEvent.click(screen.getByTitle('Stile paragrafo'));
+      const panel = document.querySelector<HTMLElement>('.editor-dropdown-panel');
+      expect(panel?.classList.contains('kebab-panel')).toBe(true);
+
+      const h2Option = within(panel!).getByRole('button', { name: 'Titolo 2' });
+      expect(h2Option.classList.contains('kebab-item')).toBe(true);
+      expect(h2Option.classList.contains('is-active')).toBe(true);
+      expect(within(panel!).getByRole('button', { name: 'Titolo 1' }).classList.contains('is-active')).toBe(false);
     });
   });
 

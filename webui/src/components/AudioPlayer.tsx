@@ -443,7 +443,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
               ref={speedPanelRef}
               role="listbox"
               aria-label="Velocità di riproduzione"
-              className="editor-dropdown-panel player-speed-dropdown-panel open-up"
+              className="kebab-panel editor-dropdown-panel player-speed-dropdown-panel open-up"
               style={{
                 position: 'fixed',
                 bottom: `${speedPanelPos.bottom}px`,
@@ -462,7 +462,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
                     type="button"
                     role="option"
                     aria-selected={isActive}
-                    className={`editor-dropdown-item${isActive ? ' is-active' : ''}`}
+                    className={`kebab-item editor-dropdown-item${isActive ? ' is-active' : ''}`}
                     style={{ justifyContent: 'center', padding: '5px 8px', fontSize: '13px' }}
                     onClick={() => handleSpeedSelect(rate)}
                   >

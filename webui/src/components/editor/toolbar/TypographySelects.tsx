@@ -94,7 +94,7 @@ export const FontFamilySelect = ({ editor }: { editor: TiptapEditor }) => {
       {isOpen && createPortal(
         <div
           ref={panelRef}
-          className="editor-dropdown-panel font-family-dropdown-panel"
+          className="kebab-panel editor-dropdown-panel font-family-dropdown-panel"
           style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 9999, minWidth: '170px' }}
         >
           {FONT_FAMILIES.map(f => {
@@ -103,7 +103,7 @@ export const FontFamilySelect = ({ editor }: { editor: TiptapEditor }) => {
               <button
                 key={f.label}
                 type="button"
-                className={`editor-dropdown-item${isActive ? ' is-active' : ''}`}
+                className={`kebab-item editor-dropdown-item${isActive ? ' is-active' : ''}`}
                 style={{ fontFamily: f.cssFamily }}
                 onClick={() => selectFamily(f.value)}
               >
@@ -200,7 +200,7 @@ export const FontSizeSelect = ({ editor }: { editor: TiptapEditor }) => {
       {isOpen && createPortal(
         <div
           ref={panelRef}
-          className="editor-dropdown-panel font-size-dropdown-panel"
+          className="kebab-panel editor-dropdown-panel font-size-dropdown-panel"
           style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 9999, minWidth: '64px', maxHeight: '220px', overflowY: 'auto' }}
         >
           {FONT_SIZES.map(s => {
@@ -209,7 +209,7 @@ export const FontSizeSelect = ({ editor }: { editor: TiptapEditor }) => {
               <button
                 key={s}
                 type="button"
-                className={`editor-dropdown-item${isActive ? ' is-active' : ''}`}
+                className={`kebab-item editor-dropdown-item${isActive ? ' is-active' : ''}`}
                 style={{ justifyContent: 'center', padding: '5px 8px', fontSize: '13px' }}
                 onClick={() => selectSize(s)}
               >
@@ -296,7 +296,7 @@ export const HeadingSelect = ({ editor }: { editor: TiptapEditor }) => {
       {isOpen && createPortal(
         <div
           ref={panelRef}
-          className="editor-dropdown-panel heading-dropdown-panel"
+          className="kebab-panel editor-dropdown-panel heading-dropdown-panel"
           style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 9999, minWidth: '150px' }}
         >
           {HEADING_OPTIONS.map(opt => {
@@ -305,7 +305,7 @@ export const HeadingSelect = ({ editor }: { editor: TiptapEditor }) => {
               <button
                 key={opt.value}
                 type="button"
-                className={`editor-dropdown-item${isActive ? ' is-active' : ''}`}
+                className={`kebab-item editor-dropdown-item${isActive ? ' is-active' : ''}`}
                 onClick={() => selectHeading(opt)}
               >
                 <span className={
@@ -395,7 +395,7 @@ export const ZoomSelect = ({
       {isOpen && createPortal(
         <div
           ref={panelRef}
-          className="editor-dropdown-panel zoom-dropdown-panel"
+          className="kebab-panel editor-dropdown-panel zoom-dropdown-panel"
           style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 9999, minWidth: '72px', maxHeight: '240px', overflowY: 'auto' }}
         >
           {ZOOM_OPTIONS.map(lvl => {
@@ -404,7 +404,7 @@ export const ZoomSelect = ({
               <button
                 key={lvl}
                 type="button"
-                className={`editor-dropdown-item${isActive ? ' is-active' : ''}`}
+                className={`kebab-item editor-dropdown-item${isActive ? ' is-active' : ''}`}
                 style={{ justifyContent: 'center', padding: '5px 8px', fontSize: '13px' }}
                 onClick={() => selectZoom(lvl)}
               >
