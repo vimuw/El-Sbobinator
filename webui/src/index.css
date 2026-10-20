@@ -4917,6 +4917,51 @@ input::-webkit-contacts-auto-fill-button {
   background: var(--bg-hover);
 }
 
+/* Setup page: the key field and Salva are the settings pills, a touch taller as the page's one task. */
+.app-input.is-settings-input.setup-key-input {
+  min-height: 2.75rem;
+  font-size: 0.8125rem;
+}
+
+.app-input.is-settings-input.setup-key-input.is-valid { border-color: var(--success-ring); }
+.app-input.is-settings-input.setup-key-input.is-valid:focus { border-color: var(--success-text); box-shadow: 0 0 0 3px var(--success-ring); }
+.app-input.is-settings-input.setup-key-input.is-warning { border-color: var(--warning-ring); }
+.app-input.is-settings-input.setup-key-input.is-warning:focus { border-color: var(--warning-text); box-shadow: 0 0 0 3px var(--warning-ring); }
+
+.settings-pill-button.setup-save-button {
+  min-height: 2.75rem;
+  padding-inline: 1.35rem;
+  font-size: 0.875rem;
+}
+
+/* The how-to card is framed like the dashboard sections. */
+.setup-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem 1rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.setup-guide-step {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.125rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 /* Alert & Notice Banners */
 .setup-error-notice {
   display: flex;
