@@ -285,6 +285,10 @@ describe('App', () => {
     });
     const updateSection = await screen.findByRole('region', { name: 'Versione e aggiornamenti' });
     within(updateSection).getByRole('status').scrollIntoView = vi.fn();
+    // An update known on opening is offered by the top notice; the section offers it after a check.
+    await act(async () => {
+      fireEvent.click(within(updateSection).getByRole('button', { name: 'Cerca aggiornamenti' }));
+    });
     await act(async () => {
       fireEvent.click(within(updateSection).getByRole('button', { name: 'Installa aggiornamento' }));
     });

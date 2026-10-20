@@ -233,14 +233,14 @@ describe('SettingsModal — save behavior', () => {
     const input = screen.getByLabelText('Nuova chiave di riserva');
     fireEvent.change(input, { target: { value: addedFallback } });
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
-    expect(screen.getByText('3 chiavi')).toBeTruthy();
+    expect(screen.getByText('Chiave Riserva 2')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /Gemini Primary/i }));
     fireEvent.click(screen.getByRole('option', { name: /Gemini Alternate/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Annulla' }));
     fireEvent.click(screen.getByRole('button', { name: 'Riapri' }));
 
-    expect(screen.getByText('2 chiavi')).toBeTruthy();
+    expect(screen.queryByText('Chiave Riserva 2')).toBeNull();
     expect(screen.queryByText('...CCCC')).toBeNull();
     expect(screen.getByRole('button', { name: /Gemini Primary/i })).toBeTruthy();
   });
@@ -868,7 +868,9 @@ describe('SettingsModal — model section', () => {
       fireEvent.click(screen.getAllByText('Generale')[0].closest('button')!);
     });
     expect(screen.getByText('Modello di trascrizione')).toBeTruthy();
-    const trigger = screen.getByRole('button', { name: /Gemini 3.6 Flash.*Default/i });
+    const trigger = screen.getByRole('button', { name: /Gemini 3.6 Flash/i });
+    // The closed select shows only the choice; the Default badge appears while choosing
+    expect(trigger.textContent).not.toContain('Default');
     fireEvent.click(trigger);
     const defaultOption = screen.getByRole('option', { name: /Gemini 3.6 Flash.*Default/i });
     expect(defaultOption.getAttribute('aria-selected')).toBe('true');
@@ -938,7 +940,8 @@ describe('SettingsModal — version status display', () => {
     const notice = screen.getByRole('region', { name: 'Aggiornamento applicazione' });
     expect(notice.compareDocumentPosition(screen.getByText('Modello di trascrizione')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Installa aggiornamento' })).toHaveLength(2);
-    expect(within(section).getByRole('link', { name: 'Note di rilascio ↗' })).toBeTruthy();
+    // The top notice already links the release notes
+    expect(within(section).queryByRole('link', { name: 'Note di rilascio ↗' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Mostra aggiornamento' })).toBeNull();
 
     const scrollIntoView = vi.fn();

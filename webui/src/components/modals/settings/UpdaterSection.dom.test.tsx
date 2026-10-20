@@ -40,11 +40,11 @@ describe('UpdaterSection component', () => {
       />,
     );
 
-    // Verify title and version badge
+    // Verify title and version, shown as plain text
     expect(screen.getByText('Nuova versione disponibile')).toBeTruthy();
     const badge = screen.getByText('v2.5.1');
     expect(badge).toBeTruthy();
-    expect(badge.className).toContain('rounded-full');
+    expect(badge.className).not.toContain('rounded-full');
 
     // Verify card styling
     const card = container.querySelector('.bg-\\[var\\(--accent-subtle\\)\\]');
@@ -91,6 +91,21 @@ describe('UpdaterSection component', () => {
     );
 
     expect(screen.getByText('Verifica aggiornamenti non riuscita.')).toBeTruthy();
+  });
+
+  it('leaves an update already known on opening to the top notice', () => {
+    const { rerender } = render(
+      <UpdaterSection {...defaultProps} hasChecked={true} latestVersion="v9.9.9" />,
+    );
+
+    expect(screen.queryByText(/È disponibile la versione/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Installa aggiornamento' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Note di rilascio ↗' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cerca aggiornamenti' }));
+    rerender(<UpdaterSection {...defaultProps} hasChecked={true} latestVersion="v9.9.9" />);
+    expect(screen.getByText('È disponibile la versione v9.9.9.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Installa aggiornamento' })).toBeTruthy();
   });
 
   it('renders up to date notice when checked with no update', () => {

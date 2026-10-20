@@ -16,6 +16,7 @@ import {
   Loader2,
   Trash2,
   RefreshCw,
+  Clock,
 } from 'lucide-react';
 import { ConfirmActionModal } from '../ConfirmActionModal';
 import { QuotasSection } from './QuotasSection';
@@ -25,6 +26,7 @@ import { DEFAULT_MODEL, GEMINI_KEY_PATTERN, getModelDisplayName } from '../../..
 import type { ApiUsageResult, CredentialProfile, CredentialStorage } from '../../../bridge';
 
 import { credentialStorageWarning } from '../../../credentialStorage';
+import { DEFAULT_QUOTA_RESET_INFO, isCredentialUsableForModel } from './credentialAvailability';
 
 export interface ApiKeySectionProps {
   apiKey: string;
@@ -337,46 +339,30 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
   };
 
   const effectivePreferredModel = preferredModel || DEFAULT_MODEL;
+  const preferredModelName = getModelDisplayName(effectivePreferredModel);
 
   const isCredWorkingForModel = useCallback(
-    (c?: CredentialProfile) => {
-      if (!c) return true;
-      if (
-        c.operational_status === 'invalid' ||
-        c.operational_status === 'permission_denied' ||
-        c.operational_status === 'request_error'
-      ) {
-        return false;
-      }
-      const exhausted = c.exhausted_models || [];
-      if (exhausted.includes(effectivePreferredModel)) {
-        return false;
-      }
-      // If temporarily_failing but it has exhausted_models that don't include effectivePreferredModel,
-      // the failure was strictly on those other models, so it IS working for effectivePreferredModel.
-      if (c.operational_status === 'temporarily_failing' && exhausted.length === 0) {
-        return false;
-      }
-      return true;
-    },
+    (c?: CredentialProfile) => isCredentialUsableForModel(c, effectivePreferredModel),
     [effectivePreferredModel]
   );
 
   const primaryCred = getCredentialFor(apiKey, true);
-  const isPrimaryWorking = hasPrimaryConfigured && isCredWorkingForModel(primaryCred);
 
-  const activeFallbackKey = !isPrimaryWorking
-    ? cleanedFallbackKeys.find((k, idx) => {
-        const c = getCredentialFor(k, false, idx);
-        return isCredWorkingForModel(c);
-      })
-    : null;
+  // Ordered rotation: primary first, then reserves in priority order. The first usable
+  // key for the selected model is the active one, the second is next in line.
+  const rotation = [
+    ...(hasPrimaryConfigured ? [{ id: 'primary', cred: primaryCred }] : []),
+    ...cleanedFallbackKeys.map((k, idx) => ({ id: `fallback-${idx}`, cred: getCredentialFor(k, false, idx) })),
+  ];
+  const usableIds = rotation.filter(r => isCredWorkingForModel(r.cred)).map(r => r.id);
+  const activeRowId = usableIds[0] ?? null;
+  const nextRowId = usableIds[1] ?? null;
+  const hasTelemetry = credentials.length > 0;
 
-  const renderCredentialStatusBadge = (
-    cred?: CredentialProfile,
-    isPrimary?: boolean,
-    keyVal?: string,
-  ) => {
+  const resetInfo = apiUsage?.next_reset_info || DEFAULT_QUOTA_RESET_INFO;
+
+  // One badge per row, always about the selected model.
+  const renderCredentialStatusBadge = (cred: CredentialProfile | undefined, rowId: string) => {
     if (isLoadingUsage) {
       return (
         <StatusBadge tone="neutral">
@@ -386,165 +372,96 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
       );
     }
 
-    if (!cred) {
-      if (isPrimary) {
+    const status = cred?.operational_status;
+    if (status === 'invalid') return <StatusBadge tone="error">Non valida (401)</StatusBadge>;
+    if (status === 'permission_denied') return <StatusBadge tone="error">Permesso negato (403)</StatusBadge>;
+    if (status === 'request_error') return <StatusBadge tone="error">Errore richiesta (400)</StatusBadge>;
+
+    if (cred && !isCredWorkingForModel(cred)) {
+      const exhaustedModels = cred.exhausted_models || [];
+      const message = (cred.last_error_message || '').toLowerCase();
+      const isQuota =
+        exhaustedModels.includes(effectivePreferredModel) ||
+        !cred.last_error_message ||
+        message.includes('quota') ||
+        message.includes('rpd') ||
+        cred.last_error_code === 429;
+      if (!isQuota) {
         return (
-          <StatusBadge
-            tone="accent"
-            title={`Operativa per ${getModelDisplayName(effectivePreferredModel)}`}
-          >
-            Operativa
+          <StatusBadge tone="warning" title={cred.last_error_message || undefined}>
+            Non disponibile (temporaneo)
           </StatusBadge>
         );
       }
       return (
-        <StatusBadge
-          tone="neutral"
-          title={`Disponibile in riserva per ${getModelDisplayName(effectivePreferredModel)}`}
+        <StatusBadge tone="warning" title={`Quota giornaliera di ${preferredModelName} esaurita su questa chiave. ${resetInfo}.`}>
+          Esaurita oggi
+        </StatusBadge>
+      );
+    }
+
+    if (rowId === activeRowId) {
+      return (
+        <StatusBadge tone="accent" title={`Le trascrizioni con ${preferredModelName} usano questa chiave`}>
+          Attiva
+        </StatusBadge>
+      );
+    }
+    // Only the next key in line gets a quiet label: the row name already says "riserva".
+    if (rowId === nextRowId) {
+      return (
+        <span
+          className="text-[11px] text-[var(--text-secondary)]"
+          title={`Subentra quando la chiave attiva esaurisce la quota di ${preferredModelName}`}
         >
-          In riserva
-        </StatusBadge>
+          Prossima
+        </span>
       );
     }
+    return null;
+  };
 
-    const status = cred.operational_status;
-    const exhaustedModels = cred.exhausted_models || [];
-    const isCurrentModelExhausted = Boolean(
-      effectivePreferredModel && exhaustedModels.includes(effectivePreferredModel)
-    );
-
-    if (status === 'invalid') {
-      return (
-        <StatusBadge tone="error">
-          Non valida (401)
-        </StatusBadge>
-      );
-    }
-    if (status === 'permission_denied') {
-      return (
-        <StatusBadge tone="error">
-          Permesso negato (403)
-        </StatusBadge>
-      );
-    }
-    if (status === 'request_error') {
-      return (
-        <StatusBadge tone="error">
-          Errore richiesta (400)
-        </StatusBadge>
-      );
-    }
-
-    const isCurrentModelQuotaExhausted =
-      isCurrentModelExhausted ||
-      (status === 'temporarily_failing' &&
-        exhaustedModels.length === 0 &&
-        (!cred.last_error_message ||
-          cred.last_error_message.toLowerCase().includes('quota') ||
-          cred.last_error_message.toLowerCase().includes('rpd') ||
-          cred.last_error_code === 429));
-
-    if (isCurrentModelQuotaExhausted) {
-      if (exhaustedModels.length === 1) {
-        return (
-          <StatusBadge
-            tone="warning"
-            title={`Quota esaurita per ${getModelDisplayName(exhaustedModels[0])}. Disponibile per gli altri modelli.`}
-          >
-            Quota esaurita per {getModelDisplayName(exhaustedModels[0])}
-          </StatusBadge>
-        );
-      }
-      if (exhaustedModels.length > 1) {
-        const names = exhaustedModels.map(getModelDisplayName).join(', ');
-        const otherCount = exhaustedModels.length - 1;
-        const label = isCurrentModelExhausted
-          ? `Quota esaurita per ${getModelDisplayName(effectivePreferredModel)} (+${otherCount})`
-          : `Quota esaurita (${exhaustedModels.length} modelli)`;
-        return (
-          <StatusBadge
-            tone="warning"
-            title={`Quota esaurita per: ${names}. Disponibile per gli altri modelli.`}
-          >
-            {label}
-          </StatusBadge>
-        );
-      }
-      return (
-        <StatusBadge tone="warning">
-          Quota esaurita (oggi)
-        </StatusBadge>
-      );
-    }
-
-    if (status === 'temporarily_failing' && exhaustedModels.length === 0) {
-      return (
-        <StatusBadge tone="warning">
-          Non disponibile (temporaneo)
-        </StatusBadge>
-      );
-    }
-
-    const renderExhaustedTag = () => {
-      const otherExhaustedModels = exhaustedModels.filter(
-        m => m !== effectivePreferredModel
-      );
-      if (otherExhaustedModels.length === 0) return null;
-      const label =
-        otherExhaustedModels.length === 1
-          ? `Esaurita per ${getModelDisplayName(otherExhaustedModels[0])}`
-          : otherExhaustedModels.length === 2
-          ? `Esaurita per ${otherExhaustedModels.map(m => getModelDisplayName(m).replace('Gemini ', '')).join(' & ')}`
-          : `Esaurita per ${otherExhaustedModels.length} modelli`;
-      const title = `Disponibile per ${getModelDisplayName(effectivePreferredModel)}. Quota esaurita oggi per: ${otherExhaustedModels.map(getModelDisplayName).join(', ')}`;
-      return (
-        <StatusBadge tone="warning" minor title={title}>
-          {label}
-        </StatusBadge>
-      );
-    };
-
-    // Operational or reserve status
-    if (isPrimary || cred.is_primary) {
-      return (
-        <div className="flex items-center gap-1.5 flex-wrap justify-end">
-          <StatusBadge
-            tone="accent"
-            title={`Operativa per ${getModelDisplayName(effectivePreferredModel)}`}
-          >
-            Operativa
-          </StatusBadge>
-          {renderExhaustedTag()}
-        </div>
-      );
-    }
-
-    if (keyVal && keyVal === activeFallbackKey) {
-      return (
-        <div className="flex items-center gap-1.5 flex-wrap justify-end">
-          <StatusBadge
-            tone="accent"
-            title={`In uso per ${getModelDisplayName(effectivePreferredModel)}`}
-          >
-            In uso (riserva)
-          </StatusBadge>
-          {renderExhaustedTag()}
-        </div>
-      );
-    }
-
+  // Quiet secondary line: exhaustion on models other than the selected one.
+  const renderOtherModelsNote = (cred?: CredentialProfile) => {
+    if (isLoadingUsage || !cred) return null;
+    const exhausted = cred.exhausted_models || [];
+    const others = exhausted.filter(m => m !== effectivePreferredModel);
+    if (others.length === 0) return null;
     return (
-      <div className="flex items-center gap-1.5 flex-wrap justify-end">
-        <StatusBadge
-          tone="neutral"
-          title={`Disponibile in riserva per ${getModelDisplayName(effectivePreferredModel)}`}
-        >
-          In riserva
-        </StatusBadge>
-        {renderExhaustedTag()}
+      <span className="block mt-0.5 text-[11px] text-[var(--text-secondary)] leading-snug">
+        {exhausted.includes(effectivePreferredModel) ? 'Esaurita anche su' : 'Esaurita su'}{' '}
+        {others.map(getModelDisplayName).join(', ')}
+      </span>
+    );
+  };
+
+  const renderAvailabilitySummary = () => {
+    if (totalKeysCount === 0 || isLoadingUsage) return null;
+    const usableCount = usableIds.length;
+    const noneUsable = hasTelemetry && usableCount === 0;
+    return (
+      <div
+        className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs ${
+          noneUsable ? 'text-[var(--warning-text)]' : 'text-[var(--text-secondary)]'
+        }`}
+        data-testid="api-key-availability"
+      >
+        <span>
+          <span className="font-semibold text-[var(--text-primary)]">{preferredModelName}</span>
+          {hasTelemetry
+            ? `: ${usableCount} di ${totalKeysCount} ${totalKeysCount === 1 ? 'chiave disponibile' : 'chiavi disponibili'} oggi`
+            : ': stato non ancora verificato'}
+        </span>
+        {hasTelemetry && (
+          <span className="inline-flex items-center gap-1 text-[var(--text-secondary)]">
+            <Clock className="w-3.5 h-3.5 shrink-0" />
+            {resetInfo}
+          </span>
+        )}
       </div>
     );
   };
+
   const primaryMaskedDisplay = apiKey
     ? `...${apiKey.slice(-4)}`
     : (primaryCred?.masked_key
@@ -579,15 +496,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     <div className="space-y-3">
       {/* 1. Header with count & global actions */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <SettingsSectionHeading
-          adornment={totalKeysCount > 0 && (
-            <span className="text-[11px] font-semibold text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-default)] px-2 py-0.5 rounded-full leading-normal shrink-0">
-              {totalKeysCount} {totalKeysCount === 1 ? 'chiave' : 'chiavi'}
-            </span>
-          )}
-        >
-          Chiavi API
-        </SettingsSectionHeading>
+        <SettingsSectionHeading>Chiavi API</SettingsSectionHeading>
 
         <div className="flex items-center gap-1.5 shrink-0">
           {onRefreshUsage && (
@@ -603,7 +512,154 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
 
       {statusSummary}
 
-      {/* 2. Compact Add Key Bar */}
+      {renderAvailabilitySummary()}
+
+      {/* Storage / Security notice */}
+      {storageWarning && (
+        <div className="alert-card is-warning text-xs space-y-1">
+          <div className="font-bold flex items-center gap-1.5">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            {credentialStorage?.primary === 'session_only' || credentialStorage?.fallback === 'session_only' ? 'Credenziali temporanee' : 'Memorizzazione in chiaro'}
+          </div>
+          <p className="text-[var(--text-secondary)]">
+            {storageWarning}
+          </p>
+        </div>
+      )}
+
+      {/* 3. Structured Card Table (Quotas Layout) */}
+      <div className="border border-[var(--border-default)] rounded-lg divide-y divide-[var(--border-default)] overflow-hidden bg-[var(--bg-surface)]">
+        {/* Row 1: Chiave Principale (if configured) */}
+        {hasPrimaryConfigured ? (
+          <div className="py-2 px-3.5 flex items-center justify-between gap-2.5 text-xs">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                <span className="font-bold text-[var(--text-primary)]">Chiave Principale</span>
+
+                <span
+                  className="font-mono text-[11px] text-[var(--text-secondary)] select-all"
+                  title="Chiave protetta"
+                >
+                  {primaryMaskedDisplay}
+                </span>
+
+                {hasProtectedKey && !apiKey && (
+                  <span
+                    className="text-[11px] font-medium text-[var(--success-text)] inline-flex items-center gap-1"
+                    title="Credenziale cifrata dal sistema operativo (DPAPI su Windows, Keychain su macOS)"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                    <span>Protetta</span>
+                  </span>
+                )}
+              </div>
+              {renderOtherModelsNote(primaryCred)}
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {renderCredentialStatusBadge(primaryCred, 'primary')}
+
+              <div onClick={e => e.stopPropagation()}>
+                <KebabMenu
+                  items={primaryKebabItems}
+                  ariaLabel="Opzioni chiave principale"
+                  title="Opzioni chiave principale"
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Rows 2..N: Fallback Keys */}
+        {cleanedFallbackKeys.map((key, idx) => {
+          const rowId = `fallback-${key}`;
+          const masked = `...${key.slice(-4)}`;
+          const cred = getCredentialFor(key, false, idx);
+          const label = `Chiave Riserva ${idx + 1}`;
+
+          const fallbackKebabItems: KebabMenuItem[] = [
+            {
+              label: 'Imposta come principale',
+              icon: <Star className="w-3.5 h-3.5" />,
+              onClick: () => handlePromoteToPrimary(idx),
+            },
+            {
+              label: 'Sposta su di priorità',
+              icon: <ArrowUp className="w-3.5 h-3.5" />,
+              disabled: idx === 0,
+              onClick: () => handleMoveUp(idx),
+            },
+            {
+              label: 'Sposta giù di priorità',
+              icon: <ArrowDown className="w-3.5 h-3.5" />,
+              disabled: idx === cleanedFallbackKeys.length - 1,
+              onClick: () => handleMoveDown(idx),
+            },
+            { separator: true as const },
+            {
+              label: copiedKeyId === rowId ? 'Chiave copiata!' : 'Copia chiave',
+              icon: copiedKeyId === rowId ? <Check className="w-3.5 h-3.5 text-[var(--success-text)]" /> : <Copy className="w-3.5 h-3.5" />,
+              onClick: () => handleCopyKey(key, rowId),
+            },
+            { separator: true as const },
+            {
+              label: 'Rimuovi chiave',
+              icon: <Trash2 className="w-3.5 h-3.5" />,
+              danger: true,
+              onClick: () =>
+                requestDeleteKey({
+                  type: 'fallback',
+                  index: idx,
+                  label,
+                  maskedKey: masked,
+                }),
+            },
+          ];
+
+          return (
+            <div
+              key={`${key}-${idx}`}
+              className="py-2 px-3.5 flex items-center justify-between gap-2.5 text-xs"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                  <span className="font-bold text-[var(--text-primary)]">{label}</span>
+
+                  <span
+                    className="font-mono text-[11px] text-[var(--text-secondary)] select-all"
+                    title="Chiave protetta"
+                  >
+                    {masked}
+                  </span>
+                </div>
+                {renderOtherModelsNote(cred)}
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {renderCredentialStatusBadge(cred, `fallback-${idx}`)}
+
+                <div onClick={e => e.stopPropagation()}>
+                  <KebabMenu
+                    items={fallbackKebabItems}
+                    ariaLabel={`Opzioni ${label}`}
+                    title={`Opzioni ${label}`}
+                  />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Empty state inside the card table */}
+        {totalKeysCount === 0 && (
+          <div className="p-6 text-center text-xs text-[var(--text-secondary)] space-y-1">
+            <p className="font-semibold text-[var(--text-primary)]">Nessuna chiave API configurata</p>
+            <p>Inserisci la tua prima chiave API nel campo qui sotto per abilitare le trascrizioni.</p>
+          </div>
+        )}
+      </div>
+
+      {/* 4. Add Key Bar, below the list it extends */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1 min-w-0">
           <input
@@ -670,146 +726,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
         </div>
       )}
 
-      {/* Storage / Security notice */}
-      {storageWarning && (
-        <div className="alert-card is-warning text-xs space-y-1">
-          <div className="font-bold flex items-center gap-1.5">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            {credentialStorage?.primary === 'session_only' || credentialStorage?.fallback === 'session_only' ? 'Credenziali temporanee' : 'Memorizzazione in chiaro'}
-          </div>
-          <p className="text-[var(--text-secondary)]">
-            {storageWarning}
-          </p>
-        </div>
-      )}
-
-      {/* 3. Structured Card Table (Quotas Layout) */}
-      <div className="border border-[var(--border-default)] rounded-lg divide-y divide-[var(--border-default)] overflow-hidden bg-[var(--bg-surface)]">
-        {/* Row 1: Chiave Principale (if configured) */}
-        {hasPrimaryConfigured ? (
-          <div className="py-2 px-3.5 flex items-center justify-between gap-2.5 text-xs">
-            <div className="flex items-center gap-2 min-w-0 flex-wrap">
-              <span className="font-bold text-[var(--text-primary)]">Chiave Principale</span>
-
-              <span
-                className="px-2.5 py-0.5 rounded-full bg-[var(--bg-hover)] border border-[var(--border-default)] font-mono text-[11px] text-[var(--text-primary)] font-semibold inline-flex items-center leading-normal select-all"
-                title="Chiave protetta"
-              >
-                {primaryMaskedDisplay}
-              </span>
-
-              {hasProtectedKey && !apiKey && (
-                <span
-                  className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[var(--bg-hover)] text-[var(--success-text)] border border-[var(--border-default)] inline-flex items-center gap-1 leading-normal"
-                  title="Credenziale cifrata dal sistema operativo (DPAPI su Windows, Keychain su macOS)"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                  <span>Protetta</span>
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              {renderCredentialStatusBadge(primaryCred, true, apiKey)}
-
-              <div onClick={e => e.stopPropagation()}>
-                <KebabMenu
-                  items={primaryKebabItems}
-                  ariaLabel="Opzioni chiave principale"
-                  title="Opzioni chiave principale"
-                />
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {/* Rows 2..N: Fallback Keys */}
-        {cleanedFallbackKeys.map((key, idx) => {
-          const rowId = `fallback-${key}`;
-          const masked = `...${key.slice(-4)}`;
-          const cred = getCredentialFor(key, false, idx);
-          const label = `Chiave Riserva ${idx + 1}`;
-
-          const fallbackKebabItems: KebabMenuItem[] = [
-            {
-              label: 'Imposta come principale',
-              icon: <Star className="w-3.5 h-3.5" />,
-              onClick: () => handlePromoteToPrimary(idx),
-            },
-            {
-              label: 'Sposta su di priorità',
-              icon: <ArrowUp className="w-3.5 h-3.5" />,
-              disabled: idx === 0,
-              onClick: () => handleMoveUp(idx),
-            },
-            {
-              label: 'Sposta giù di priorità',
-              icon: <ArrowDown className="w-3.5 h-3.5" />,
-              disabled: idx === cleanedFallbackKeys.length - 1,
-              onClick: () => handleMoveDown(idx),
-            },
-            { separator: true as const },
-            {
-              label: copiedKeyId === rowId ? 'Chiave copiata!' : 'Copia chiave',
-              icon: copiedKeyId === rowId ? <Check className="w-3.5 h-3.5 text-[var(--success-text)]" /> : <Copy className="w-3.5 h-3.5" />,
-              onClick: () => handleCopyKey(key, rowId),
-            },
-            { separator: true as const },
-            {
-              label: 'Rimuovi chiave',
-              icon: <Trash2 className="w-3.5 h-3.5" />,
-              danger: true,
-              onClick: () =>
-                requestDeleteKey({
-                  type: 'fallback',
-                  index: idx,
-                  label,
-                  maskedKey: masked,
-                }),
-            },
-          ];
-
-          return (
-            <div
-              key={`${key}-${idx}`}
-              className="py-2 px-3.5 flex items-center justify-between gap-2.5 text-xs"
-            >
-              <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                <span className="font-bold text-[var(--text-primary)]">{label}</span>
-
-                <span
-                  className="px-2.5 py-0.5 rounded-full bg-[var(--bg-hover)] border border-[var(--border-default)] font-mono text-[11px] text-[var(--text-primary)] font-semibold inline-flex items-center leading-normal select-all"
-                  title="Chiave protetta"
-                >
-                  {masked}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                {renderCredentialStatusBadge(cred, false, key)}
-
-                <div onClick={e => e.stopPropagation()}>
-                  <KebabMenu
-                    items={fallbackKebabItems}
-                    ariaLabel={`Opzioni ${label}`}
-                    title={`Opzioni ${label}`}
-                  />
-                </div>
-              </div>
-            </div>
-          );
-        })}
-
-        {/* Empty state inside the card table */}
-        {totalKeysCount === 0 && (
-          <div className="p-6 text-center text-xs text-[var(--text-secondary)] space-y-1">
-            <p className="font-semibold text-[var(--text-primary)]">Nessuna chiave API configurata</p>
-            <p>Inserisci la tua prima chiave API nel campo qui sopra per abilitare le trascrizioni.</p>
-          </div>
-        )}
-      </div>
-
-      {/* 4. Quiet Footer Caption with AI Studio link */}
+      {/* 5. Quiet Footer Caption with AI Studio link */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-secondary)] leading-relaxed">
         <span>Le chiavi di riserva subentrano in ordine quando la principale esaurisce la quota giornaliera.</span>
         <a

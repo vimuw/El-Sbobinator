@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ArrowDownToLine, CheckCircle2, RefreshCw, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
 import { APP_VERSION, GITHUB_RELEASES_URL } from '../../../branding';
 import { SettingsSectionHeading } from './SettingsLayout';
@@ -56,6 +56,9 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
   const isError = updateInstallState?.status === 'error';
   const isInProgress = isDownloading || isVerifying || isInstalling;
   const feedbackRequestedRef = useRef(false);
+  // An update already known on opening is offered only by the notice at the top; after a
+  // manual check down here, the notice is off screen, so the result is offered here too.
+  const [checkedHere, setCheckedHere] = useState(false);
   const checkStatusRef = useRef<HTMLDivElement>(null);
   const previousInstallStatusRef = useRef(updateInstallState?.status);
 
@@ -89,14 +92,15 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
           <p className="text-xs text-[var(--text-secondary)]">
             Installata:{' '}
             <span className="font-mono font-bold text-[var(--text-primary)]">{cleanAppVersion}</span>
-            <a
+            {/* With an update pending, the notice at the top of the page already links the notes. */}
+            {!isUpdateAvailable && <a
               href={GITHUB_RELEASES_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="ml-2 hover:underline text-[var(--accent-text)] font-semibold inline-flex items-center gap-0.5"
             >
               Note di rilascio ↗
-            </a>
+            </a>}
           </p>
         </div>
 
@@ -104,6 +108,7 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
           type="button"
           onClick={() => {
             feedbackRequestedRef.current = true;
+            setCheckedHere(true);
             checkForUpdates(true);
           }}
           disabled={isCheckingUpdate || isInProgress}
@@ -123,7 +128,7 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
       </div>
 
       <div ref={checkStatusRef} role="status" aria-atomic="true" className="space-y-3 scroll-mb-4">
-        {isUpdateAvailable && !isCheckingUpdate && !checkFailed && !isDone && !isInProgress && (
+        {checkedHere && isUpdateAvailable && !isCheckingUpdate && !checkFailed && !isDone && !isInProgress && (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="flex items-center gap-2 text-xs text-[var(--accent-text)] font-bold">
               <ArrowDownToLine className="w-4 h-4 shrink-0" />
@@ -194,7 +199,7 @@ export const UpdateNotice: React.FC<Pick<UpdaterSectionProps, 'latestVersion' | 
                   <h4 className="text-base font-bold text-[var(--text-primary)] leading-tight">
                     Nuova versione disponibile
                   </h4>
-                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono bg-[var(--bg-surface)] text-[var(--accent-text)] border border-[var(--accent-ring)] tracking-wide shrink-0">
+                  <span className="text-xs font-bold font-mono text-[var(--accent-text)] shrink-0">
                     {cleanLatestVersion}
                   </span>
                 </div>

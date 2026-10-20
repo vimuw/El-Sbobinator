@@ -115,7 +115,7 @@ describe('CustomSelect', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('renders badge pill when provided in trigger and dropdown', () => {
+  it('renders the badge pill only in the open dropdown', () => {
     const optionsWithBadge: CustomSelectOption[] = [
       { value: 'm1', label: 'Model One', badge: 'Default' },
       { value: 'm2', label: 'Model Two' },
@@ -128,11 +128,11 @@ describe('CustomSelect', () => {
       />,
     );
 
-    expect(screen.getByText('Default')).toBeTruthy();
+    expect(screen.queryByText('Default')).toBeNull();
 
     const trigger = screen.getByRole('button', { name: /Model One/i });
     fireEvent.click(trigger);
 
-    expect(screen.getAllByText('Default').length).toBe(2);
+    expect(screen.getAllByText('Default').length).toBe(1);
   });
 });
