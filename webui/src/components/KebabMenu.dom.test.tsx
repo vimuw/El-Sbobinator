@@ -191,6 +191,29 @@ describe('KebabMenu component', () => {
     });
   });
 
+  it('frames the menu and its submenu with the shared card-like panel', () => {
+    const items: KebabMenuItem[] = [
+      { label: 'Action 1', onClick: vi.fn() },
+      { separator: true },
+      { label: 'Submenu Trigger', children: [{ label: 'Child Option 1', onClick: vi.fn() }] },
+    ];
+
+    const { baseElement } = render(<KebabMenu items={items} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Altre opzioni' }));
+    fireEvent.click(screen.getByText('Submenu Trigger'));
+
+    const panels = [screen.getByText('Action 1'), screen.getByText('Child Option 1')]
+      .map(label => label.closest('.kebab-panel') as HTMLElement | null);
+    expect(panels[0]).toBeTruthy();
+    expect(panels[1]).toBeTruthy();
+    expect(panels[0]).not.toBe(panels[1]);
+    for (const panel of panels) {
+      expect(panel?.style.borderRadius).toBe('');
+      expect(panel?.style.border).toBe('');
+    }
+    expect(baseElement.querySelectorAll('.kebab-separator')).toHaveLength(1);
+  });
+
   it('closes submenu first on Escape before closing the main menu', async () => {
     const items: KebabMenuItem[] = [
       {

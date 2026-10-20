@@ -286,6 +286,7 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
             <motion.div
               key="kebab-dropdown"
               ref={dropdownRef}
+              className="kebab-panel"
               initial={{ opacity: 0, y: opensUp ? 4 : -4, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: opensUp ? 4 : -4, scale: 0.97 }}
@@ -297,18 +298,13 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
                 maxHeight: pos.maxHeight,
                 overflowY: 'auto',
                 zIndex: 9999,
-                background: 'var(--bg-elevated)',
-                border: '1px solid var(--border-default)',
-                borderRadius: 12,
-                boxShadow: 'var(--shadow-strong)',
                 minWidth: 210,
-                padding: 4,
               }}
               onClick={e => e.stopPropagation()}
             >
               {items.map((item, i) => {
                 if ('separator' in item) {
-                  return <div key={`sep-${i}`} style={{ height: 1, background: 'var(--border-subtle)', margin: '2px 0' }} />;
+                  return <div key={`sep-${i}`} className="kebab-separator" />;
                 }
                 const hasChildren = Boolean(item.children && item.children.length > 0);
                 const isSubmenuActive = activeSubmenuIndex === i;
@@ -366,7 +362,7 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
               transition={{ duration: 0.1 }}
               onMouseEnter={handleSubmenuMouseEnter}
               onMouseLeave={handleSubmenuMouseLeave}
-              className="app-scroll"
+              className="kebab-panel app-scroll"
               style={{
                 position: 'fixed',
                 top: submenuPos.top,
@@ -374,19 +370,14 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
                 maxHeight: submenuPos.maxHeight,
                 overflowY: 'auto',
                 zIndex: 10000,
-                background: 'var(--bg-elevated)',
-                border: '1px solid var(--border-default)',
-                borderRadius: 12,
-                boxShadow: 'var(--shadow-strong)',
                 minWidth: 200,
                 maxWidth: 280,
-                padding: 4,
               }}
               onClick={e => e.stopPropagation()}
             >
               {activeChildren.map((child, j) => {
                 if ('separator' in child) {
-                  return <div key={`subsep-${j}`} style={{ height: 1, background: 'var(--border-subtle)', margin: '2px 0' }} />;
+                  return <div key={`subsep-${j}`} className="kebab-separator" />;
                 }
                 return (
                   <button

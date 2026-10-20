@@ -23,6 +23,15 @@ describe('SortMenu component', () => {
     });
   });
 
+  it('frames the options with the shared menu panel', () => {
+    render(<SortMenu sort="newest" onSortChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Cambia ordinamento' }));
+
+    const panel = screen.getByText('Più recenti').closest('.kebab-panel') as HTMLElement | null;
+    expect(panel).toBeTruthy();
+    expect(panel?.style.borderRadius).toBe('');
+  });
+
   it('closes sort menu on outside click', async () => {
     render(
       <div>

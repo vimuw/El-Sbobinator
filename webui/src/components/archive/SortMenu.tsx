@@ -86,6 +86,7 @@ export function SortMenu({ sort, onSortChange, options = SORT_OPTIONS }: SortMen
           {open && pos && (
             <motion.div
               ref={dropdownRef}
+              className="kebab-panel"
               initial={{ opacity: 0, scale: 0.95, y: pos.opensUp ? 4 : -4 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: pos.opensUp ? 4 : -4 }}
@@ -95,13 +96,8 @@ export function SortMenu({ sort, onSortChange, options = SORT_OPTIONS }: SortMen
                 ...(pos.top !== undefined ? { top: pos.top } : { bottom: pos.bottom }),
                 ...(pos.left !== undefined ? { left: pos.left } : { right: pos.right }),
                 zIndex: 9999,
-                background: 'var(--bg-elevated)',
-                border: '1px solid var(--border-default)',
-                borderRadius: 12,
-                boxShadow: 'var(--shadow-strong)',
                 minWidth: 200,
                 width: 'max-content',
-                padding: 4,
               }}
               onClick={e => e.stopPropagation()}
             >
