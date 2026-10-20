@@ -184,6 +184,13 @@ export const FindReplacePanel = ({
     updateSearch(val, -1);
   };
 
+  // Escape closes only the search: the full-page editor closes itself on a window-level Escape.
+  const closeFromKeyboard = (e: React.KeyboardEvent) => {
+    e.stopPropagation();
+    onClose();
+    editor.commands.focus();
+  };
+
   if (!expanded) {
     return (
       <div className="find-bar-float">
@@ -195,7 +202,7 @@ export const FindReplacePanel = ({
           onChange={e => findInputChange(e.target.value)}
           onKeyDown={e => {
             if (e.key === 'Enter') { e.preventDefault(); e.shiftKey ? handlePrev() : handleNext(); }
-            if (e.key === 'Escape') onClose();
+            if (e.key === 'Escape') closeFromKeyboard(e);
           }}
           className="find-bar-input"
         />
@@ -236,7 +243,7 @@ export const FindReplacePanel = ({
             onChange={e => findInputChange(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter') { e.preventDefault(); handleNext(); }
-              if (e.key === 'Escape') onClose();
+              if (e.key === 'Escape') closeFromKeyboard(e);
             }}
             className="find-replace-dialog-input"
           />
@@ -254,7 +261,7 @@ export const FindReplacePanel = ({
             onChange={e => setReplaceText(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter') { e.preventDefault(); handleReplace(); }
-              if (e.key === 'Escape') onClose();
+              if (e.key === 'Escape') closeFromKeyboard(e);
             }}
             className="find-replace-dialog-input"
           />
