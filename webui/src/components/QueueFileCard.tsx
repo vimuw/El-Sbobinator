@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { DURATION, EASE_IN, enterTransition, exitTransition } from '../motion';
-import { AlertCircle, AlertTriangle, ArrowUpRight, CheckCircle, Clock, ExternalLink, FileAudio, FolderOpen, GripVertical, Mic, PenLine, RotateCcw, Settings, Trash2, X, XCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowUpRight, CheckCircle, Clock, FileAudio, FolderOpen, GripVertical, Mic, RotateCcw, Settings, Trash2, X, XCircle } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
@@ -346,20 +346,10 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
           <KebabMenu
             items={[
               ...( file.outputHtml ? [
-                {
-                  label: 'Modifica',
-                  icon: <PenLine className="w-3.5 h-3.5" />,
-                  onClick: () => onPreview(file.outputHtml!, file.name, file.path, file.id, file.outputDir),
-                } as KebabMenuItem,
                 ...(canOpenLocalPath ? [{
                   label: 'Apri cartella',
                   icon: <FolderOpen className="w-3.5 h-3.5" />,
                   onClick: () => onOpenFile(file.outputDir ?? file.outputHtml!),
-                } as KebabMenuItem,
-                {
-                  label: 'Apri nel browser',
-                  icon: <ExternalLink className="w-3.5 h-3.5" />,
-                  onClick: () => onOpenFile(file.outputHtml!),
                 } as KebabMenuItem] : []),
               ] : []),
               {

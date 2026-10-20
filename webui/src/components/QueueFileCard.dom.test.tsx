@@ -343,7 +343,7 @@ describe('CompletedFileCard', () => {
     expect(screen.getByLabelText('Altre opzioni')).toBeTruthy();
   });
 
-  it('calls onPreview when Modifica is clicked in kebab menu', () => {
+  it('opens the editor from Apri and does not repeat it in the kebab menu', () => {
     const onPreview = vi.fn();
     render(
       <CompletedFileCard
@@ -352,9 +352,10 @@ describe('CompletedFileCard', () => {
         onRemove={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByLabelText('Altre opzioni'));
-    fireEvent.click(screen.getByText('Modifica'));
+    fireEvent.click(screen.getByRole('button', { name: /Apri/ }));
     expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione.mp3', undefined, 'f1', undefined);
+    fireEvent.click(screen.getByLabelText('Altre opzioni'));
+    expect(screen.queryByText('Modifica')).toBeNull();
   });
 
   it('calls onRemove when Rimuovi is clicked in kebab menu', () => {
@@ -409,18 +410,19 @@ describe('CompletedFileCard', () => {
     expect(screen.getByTitle('Raccolta: Corso A')).toBeTruthy();
   });
 
-  it('calls onOpenFile when Apri nel browser is clicked in kebab menu', () => {
+  it('offers Apri cartella but not Apri nel browser in the kebab menu', () => {
     const onOpenFile = vi.fn();
     render(
       <CompletedFileCard
-        file={makeFile({ status: 'done', outputHtml: '/out/file.html' })}
+        file={makeFile({ status: 'done', outputHtml: '/out/file.html', outputDir: '/out' })}
         isNewest={false}
         onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={onOpenFile}
       />,
     );
     fireEvent.click(screen.getByLabelText('Altre opzioni'));
-    fireEvent.click(screen.getByText('Apri nel browser'));
-    expect(onOpenFile).toHaveBeenCalledWith('/out/file.html');
+    expect(screen.queryByText('Apri nel browser')).toBeNull();
+    fireEvent.click(screen.getByText('Apri cartella'));
+    expect(onOpenFile).toHaveBeenCalledWith('/out');
   });
 
   it('shows the effective model for a regenerated legacy queue entry without a fallback badge', () => {

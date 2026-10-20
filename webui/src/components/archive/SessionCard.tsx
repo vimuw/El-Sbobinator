@@ -1,6 +1,6 @@
 import { useState, type MouseEvent } from 'react';
 import {
-  AlertTriangle, Check, ChevronLeft, ChevronRight, Download, ExternalLink,
+  AlertTriangle, Check, ChevronLeft, ChevronRight, Download,
   Eye, FileText, Folder, FolderOpen, Pencil, RotateCcw, Trash2, X,
 } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
@@ -86,11 +86,6 @@ export function DraggableSessionCard({
       label: 'Apri cartella',
       icon: <FolderOpen className="w-3.5 h-3.5" />,
       onClick: () => onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path),
-    },
-    {
-      label: 'Apri nel browser',
-      icon: <ExternalLink className="w-3.5 h-3.5" />,
-      onClick: () => onOpenFile(session.html_path),
     },
     ...(onShareSession ? [{
       label: 'Esporta Sbobina...',
@@ -337,11 +332,6 @@ export function SortableSessionCard({
       label: 'Apri cartella',
       icon: <FolderOpen className="w-3.5 h-3.5" />,
       onClick: () => onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path),
-    },
-    {
-      label: 'Apri nel browser',
-      icon: <ExternalLink className="w-3.5 h-3.5" />,
-      onClick: () => onOpenFile(session.html_path),
     },
     ...(onShareSession ? [{
       label: 'Esporta Sbobina...',
