@@ -3979,12 +3979,14 @@ input::-webkit-contacts-auto-fill-button {
 
 /* ═══ FOLDER CARDS ═══ */
 
+/* Collection tiles share the queue cards' frame: a quiet border, the card radius and a light lift. */
 .folder-card {
   overflow: hidden;
   min-height: 80px;
-  border-radius: 10px;
-  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border-subtle);
   background: var(--bg-surface);
+  box-shadow: var(--shadow-xs);
   transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
