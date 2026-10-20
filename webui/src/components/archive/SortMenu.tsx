@@ -78,7 +78,7 @@ export function SortMenu({ sort, onSortChange, options = SORT_OPTIONS }: SortMen
         title={`Ordinamento: ${currentOption?.label ?? ''}`}
         aria-label="Cambia ordinamento"
       >
-        <ArrowUpDown className={`w-4 h-4 transition-transform duration-200 ${open ? 'scale-105 rotate-180 opacity-100' : 'opacity-80 group-hover/sort:opacity-100 group-hover/sort:scale-110 group-hover/sort:-translate-y-0.5'}`} />
+        <ArrowUpDown className={`w-4 h-4 transition duration-200 ${open ? 'scale-110 opacity-100' : 'opacity-80 group-hover/sort:opacity-100 group-hover/sort:scale-110'}`} />
       </button>
 
       {createPortal(

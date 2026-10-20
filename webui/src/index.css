@@ -4120,15 +4120,45 @@ input::-webkit-contacts-auto-fill-button {
 
 /* ═══ SEARCH & FILTER CONTROLS ═══ */
 
-.archive-sticky-toolbar::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: var(--border-subtle);
-  pointer-events: none;
+/* Flat at rest; once pinned it floats as a framed panel the list scrolls behind.
+   Only surface properties change, so pinning never shifts the layout. */
+.archive-sticky-toolbar {
+  position: sticky;
+  top: 8px;
+  z-index: 20;
+  margin: -8px;
+  padding: 7px;
+  border: 1px solid transparent;
+  /* Concentric with the 36px pills inside: 18px + the 8px inset. */
+  border-radius: 26px;
+  transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+/* Once pinned the panel is the only frame: the field and chips inside drop their own
+   border and fill and answer only on hover and focus. An active chip keeps its inline accent. */
+:root .archive-sticky-toolbar[data-stuck='true'] .search-pill-input,
+:root .archive-sticky-toolbar[data-stuck='true'] .filter-chip {
+  border-color: transparent;
+  background: transparent;
+}
+
+:root .archive-sticky-toolbar[data-stuck='true'] .search-pill-input:hover,
+:root .archive-sticky-toolbar[data-stuck='true'] .filter-chip:hover {
+  border-color: transparent;
+  background: var(--bg-hover);
+}
+
+:root .archive-sticky-toolbar[data-stuck='true'] .search-pill-input:focus {
+  border-color: var(--accent-bg);
+  background: var(--bg-surface);
+}
+
+.archive-sticky-toolbar[data-stuck='true'] {
+  background: color-mix(in srgb, var(--bg-elevated) 86%, transparent);
+  border-color: var(--border-subtle);
+  box-shadow: var(--shadow-md);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
 }
 
 .folder-card-title {

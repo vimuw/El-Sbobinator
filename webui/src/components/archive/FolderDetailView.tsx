@@ -13,6 +13,7 @@ import {
 } from '@dnd-kit/sortable';
 import type { ArchiveFolder, ArchiveSession, SearchSessionResult } from '../../bridge';
 import type { EditorSession } from '../../editorSessions';
+import { useStickyStuck } from '../../hooks/useStickyStuck';
 import { normalizeSessionPath } from '../../utils';
 import { KebabMenu, type KebabMenuItem } from '../KebabMenu';
 import { FullTextResultList } from './FullTextResults';
@@ -80,6 +81,7 @@ export function FolderDetailView({
   onMove,
   onMoveSessions,
 }: FolderDetailViewProps) {
+  const [toolbarRef, toolbarStuck] = useStickyStuck();
   const [search, setSearch] = useState('');
   const [fullTextMode, setFullTextMode] = useState(false);
   const [ftResults, setFtResults] = useState<SearchSessionResult[] | null>(null);
@@ -298,7 +300,7 @@ export function FolderDetailView({
       {collectionGrid}
       <div className="flex flex-col gap-3">
         <ArchiveSectionHeading>Lezioni</ArchiveSectionHeading>
-        <div className="archive-sticky-toolbar sticky top-0 z-20 py-2 -my-2 bg-[var(--bg-base)]/95 backdrop-blur-md flex flex-col gap-1.5">
+        <div ref={toolbarRef} data-stuck={toolbarStuck} className="archive-sticky-toolbar flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
             <div className="search-pill-wrap">
               {isSearching

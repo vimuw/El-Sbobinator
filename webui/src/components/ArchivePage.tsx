@@ -35,6 +35,7 @@ import { FullTextResultList } from './archive/FullTextResults';
 
 import { useArchiveSearch } from '../hooks/useArchiveSearch';
 import { useArchiveSelection } from '../hooks/useArchiveSelection';
+import { useStickyStuck } from '../hooks/useStickyStuck';
 
 export type { ArchivePageProps, SortOption, FolderModalState, DeleteFolderConfirmState, DeleteMultipleSessionsConfirmState };
 export { SortMenu } from './archive/SortMenu';
@@ -57,6 +58,7 @@ export function ArchivePage({
   onPreview, onOpenFile, onDeleteSession, onDeleteMultipleSessions, onRefresh,
   onRetryFailedRevisionBlocks, onNotification, onRenameSession,
 }: ArchivePageProps) {
+  const [toolbarRef, toolbarStuck] = useStickyStuck();
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [folderModal, setFolderModal] = useState<FolderModalState | null>(null);
   const [deleteFolderConfirm, setDeleteFolderConfirm] = useState<DeleteFolderConfirmState | null>(null);
@@ -431,7 +433,7 @@ export function ArchivePage({
         <ArchiveSectionHeading>Tutte le sbobine</ArchiveSectionHeading>
 
         {/* Search + Sort + Actions */}
-        <div className="archive-sticky-toolbar sticky top-0 z-20 py-2 -my-2 bg-[var(--bg-base)]/95 backdrop-blur-md flex flex-col gap-1.5">
+        <div ref={toolbarRef} data-stuck={toolbarStuck} className="archive-sticky-toolbar flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
             <div className="search-pill-wrap">
               {isSearching
@@ -483,7 +485,7 @@ export function ArchivePage({
               title={fullTextMode ? 'Testo completo (Attivo - Clicca per disattivare)' : 'Testo completo (Ricerca nel contenuto)'}
               aria-label="Testo completo"
             >
-              <FileSearch className="w-4 h-4 transition-transform duration-200 opacity-80 group-hover/ft:opacity-100 group-hover/ft:scale-110" />
+              <FileSearch className="w-4 h-4 transition duration-200 opacity-80 group-hover/ft:opacity-100 group-hover/ft:scale-110" />
             </button>
             <SortMenu
               sort={fullTextMode ? ftSort : sort}
@@ -505,7 +507,7 @@ export function ArchivePage({
                 title="Importa Sbobina (.sbobina)"
                 aria-label="Importa Sbobina"
               >
-                {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4 transition-transform duration-200 opacity-80 group-hover/import:opacity-100 group-hover/import:scale-110 group-hover/import:-translate-y-0.5" />}
+                {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4 transition duration-200 opacity-80 group-hover/import:opacity-100 group-hover/import:scale-110" />}
               </button>
               {onRefresh && (
                 <button
@@ -516,7 +518,7 @@ export function ArchivePage({
                   title="Aggiorna archivio"
                   aria-label="Aggiorna archivio"
                 >
-                  <RefreshCw className={`w-4 h-4 transition-transform duration-500 ease-out ${isRefreshing ? 'animate-spin' : 'opacity-80 group-hover/refresh:opacity-100 group-hover/refresh:rotate-180 group-hover/refresh:scale-105'}`} />
+                  <RefreshCw className={`w-4 h-4 transition duration-500 ease-out ${isRefreshing ? 'animate-spin' : 'opacity-80 group-hover/refresh:opacity-100 group-hover/refresh:rotate-180 group-hover/refresh:scale-105'}`} />
                 </button>
               )}
             </div>
