@@ -127,6 +127,22 @@ describe('AudioPlayer', () => {
     expect(screen.getByRole('option', { name: '2x' })).toBeTruthy();
   });
 
+  it('frames the speed and linked-audio menus with the shared menu rules', () => {
+    render(<AudioPlayer src="/audio/test.mp3" onRelink={vi.fn()} onRemoveAudio={vi.fn()} />);
+
+    fireEvent.click(screen.getByTitle('Velocità di riproduzione'));
+    const speedPanel = screen.getByRole('listbox', { name: 'Velocità di riproduzione' });
+    expect(speedPanel.classList.contains('kebab-panel')).toBe(true);
+    expect(within(speedPanel).getByRole('option', { name: '1x' }).classList.contains('kebab-item')).toBe(true);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+
+    fireEvent.click(screen.getByLabelText('Opzioni audio collegato'));
+    const relinkRow = screen.getByText('Sostituisci file audio...').closest('button');
+    expect(relinkRow?.classList.contains('kebab-item')).toBe(true);
+    expect(relinkRow?.parentElement?.classList.contains('kebab-panel')).toBe(true);
+    expect(relinkRow?.parentElement?.getAttribute('style') ?? '').toBe('');
+  });
+
   it('changes playback rate when an option in custom dropdown is clicked', () => {
     const onStateChange = vi.fn();
     render(<AudioPlayer src="/audio/test.mp3" onStateChange={onStateChange} />);

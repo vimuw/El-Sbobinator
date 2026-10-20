@@ -291,6 +291,12 @@ describe('EditorFullPage autosave', () => {
     expect(screen.getByText('Audio non trovato')).toBeTruthy();
     const removeBtn = screen.getByText('Rimuovi audio');
     expect(removeBtn).toBeTruthy();
+    // Both footer actions are outline pills, like the secondary settings actions.
+    for (const action of [removeBtn, screen.getByRole('button', { name: 'Ricollega audio' })]) {
+      expect(action.classList.contains('app-button-secondary')).toBe(true);
+      expect(action.classList.contains('is-settings-action')).toBe(true);
+      expect(action.classList.contains('premium-button-secondary')).toBe(false);
+    }
 
     await act(async () => {
       fireEvent.click(removeBtn);
@@ -325,6 +331,8 @@ describe('EditorFullPage autosave', () => {
     expect(screen.getByText('Aggiungi un file audio: una copia verrà conservata nella sbobina.')).toBeTruthy();
     const addBtn = screen.getByRole('button', { name: /Aggiungi audio/i });
     expect(addBtn).toBeTruthy();
+    expect(addBtn.classList.contains('settings-pill-button')).toBe(true);
+    expect(addBtn.classList.contains('premium-button')).toBe(false);
 
     await act(async () => {
       fireEvent.click(addBtn);

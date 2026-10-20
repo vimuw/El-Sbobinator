@@ -512,12 +512,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
             </button>
             {showAudioMenu && (
               <div
-                className="absolute bottom-full right-0 mb-2 z-50 rounded-lg border p-1 text-xs min-w-[200px]"
-                style={{
-                  background: 'var(--bg-elevated)',
-                  borderColor: 'var(--border-subtle)',
-                  boxShadow: 'var(--shadow-strong)',
-                }}
+                className="kebab-panel absolute bottom-full right-0 mb-2 z-50 text-xs min-w-[200px]"
               >
                 {onRelink && (
                   <button

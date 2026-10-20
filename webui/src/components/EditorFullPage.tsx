@@ -350,7 +350,7 @@ export function EditorFullPage({
                         type="button"
                         onClick={() => setShowConfirmRemove(true)}
                         disabled={isRemovingAudio}
-                        className="premium-button-secondary compact-button shrink-0"
+                        className="app-button-secondary is-settings-action"
                         title="Rimuovi audio dalla sbobina"
                         aria-label="Rimuovi audio dalla sbobina"
                       >
@@ -371,7 +371,7 @@ export function EditorFullPage({
                         } finally { setIsRelinking(false); }
                       }}
                       disabled={isRelinking}
-                      className="premium-button-secondary compact-button shrink-0"
+                      className="app-button-secondary is-settings-action"
                       style={relinkSuccess ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : {}}
                     >
                       {relinkSuccess ? <><Check className="w-3.5 h-3.5" /> Ricollegato</> : isRelinking ? 'Selezione...' : 'Ricollega audio'}
@@ -412,7 +412,7 @@ export function EditorFullPage({
                         }
                       }}
                       disabled={isRelinking}
-                      className="premium-button compact-button shrink-0 flex items-center gap-1.5"
+                      className="settings-pill-button"
                     >
                       {isRelinking ? (
                         <>
