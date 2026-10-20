@@ -4967,9 +4967,9 @@ input::-webkit-contacts-auto-fill-button {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 9px 10px;
+  padding: 10px 12px;
   border: 1px solid var(--error-ring);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   background: var(--error-subtle);
   color: var(--error-text);
   font-size: 12px;
@@ -4980,24 +4980,29 @@ input::-webkit-contacts-auto-fill-button {
 .setup-error-content { flex: 1; min-width: 0; }
 .setup-error-title { margin: 0; font-weight: 600; }
 .setup-error-hint { margin: 2px 0 0; }
-.setup-error-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 0 14px; }
+.setup-error-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+/* Secondary actions are outline pills, tinted like the notice they sit in. */
 .setup-error-action {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-top: 5px;
-  padding: 0;
+  min-height: 1.75rem;
+  margin-top: 8px;
+  padding: 0 0.75rem;
   font: inherit;
   font-weight: 600;
   color: inherit;
   cursor: pointer;
   background: transparent;
-  border: 0;
+  border: 1px solid var(--error-ring);
+  border-radius: 999px;
+  transition: background 0.15s var(--ease-out), border-color 0.15s var(--ease-out);
 }
-.setup-error-action:hover { text-decoration: underline; }
-.setup-error-action:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 2px; }
+.setup-error-action:hover { background: var(--bg-hover); border-color: currentColor; }
+.setup-error-action:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--error-ring); }
+.setup-error-toggle svg { transition: transform 0.15s var(--ease-out); }
 .setup-error-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
-.setup-error-technical { margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--error-ring); }
+.setup-error-technical { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--error-ring); }
 .setup-error-technical p { margin: 0; }
 .setup-error-technical pre { margin: 5px 0 0; max-height: 160px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; user-select: text; }
 .setup-error-copy-status:empty { display: none; }
