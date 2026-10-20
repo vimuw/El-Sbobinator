@@ -160,7 +160,7 @@ export const QueueSection = memo(function QueueSection({
               <h2 className="dashboard-section-title shrink-0">In coda</h2>
               {pendingFiles.length > 0 && (
                 <>
-                  <span className="status-pill is-quiet shrink-0">{pendingFiles.length}</span>
+                  <span className="status-pill is-quiet is-count shrink-0">{pendingFiles.length}</span>
                   {activeModel && (
                     <span className="status-pill is-quiet shrink-0 whitespace-nowrap" title={activeModel}>{shortModelName(activeModel)}</span>
                   )}

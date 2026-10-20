@@ -604,6 +604,16 @@ button {
   background: transparent;
 }
 
+/* A bare number is a circle, not a stretched pill: as wide as it is tall up to two digits. */
+:root .status-pill.is-quiet.is-count {
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.2rem;
+  line-height: 1;
+}
+
 :root .status-pill.is-quiet.is-warning {
   gap: 0.3rem;
   color: var(--warning-text);

@@ -17,7 +17,7 @@ export function ArchivePageTitle({ children, count, className = '' }: ArchivePag
       <h1 className="min-w-0 max-w-full [overflow-wrap:anywhere] text-[1.75rem] font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
         {children}
       </h1>
-      <span className="status-pill shrink-0">{count}</span>
+      <span className="status-pill is-quiet is-count shrink-0">{count}</span>
     </div>
   );
 }
