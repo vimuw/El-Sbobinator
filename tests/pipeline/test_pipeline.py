@@ -1421,6 +1421,40 @@ class PipelineCleanupCacheTests(unittest.TestCase):
             self.assertIsNotNone(playback_audio_path(session_ctx.session, session_dir))
             self.assertEqual(app.last_run_status, "completed")
 
+    def test_run_names_its_model_before_processing(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir = os.path.join(tmpdir, "session")
+            session_ctx = self._make_session_ctx(session_dir)
+            preconv_path = os.path.join(session_dir, "preconv.mp3")
+            html_path = os.path.join(tmpdir, "output.html")
+            input_path = os.path.join(tmpdir, "input.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake")
+
+            out = io.StringIO()
+            with contextlib.ExitStack() as stack:
+                for p in self._make_pipeline_patches(
+                    session_ctx, preconv_path, html_path, tmpdir
+                ):
+                    stack.enter_context(p)
+                stack.enter_context(
+                    patch(
+                        "el_sbobinator.pipeline.pipeline.process_phase1_transcription",
+                        return_value=(_FakeClient(), None, ""),
+                    )
+                )
+                stack.enter_context(contextlib.redirect_stdout(out))
+                esegui_sbobinatura(input_path, "fake-key", _DoneEarlyReturnApp())
+
+            lines = out.getvalue().splitlines()
+            self.assertIn("Modello: gemini-test.", lines)
+            self.assertLess(
+                next(
+                    i for i, line in enumerate(lines) if line.startswith("Durata audio")
+                ),
+                lines.index("Modello: gemini-test."),
+            )
+
     def test_cleanup_skipped_when_stage_not_done(self):
         """Preconverted audio is NOT deleted when stage is still phase1 (needed for resume)."""
         from el_sbobinator.core.shared import PRECONVERTED_AUDIO_FINAL

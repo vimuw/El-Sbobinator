@@ -18,6 +18,7 @@ from google import genai
 
 from el_sbobinator.core.model_registry import (
     default_macro_char_limit_for_model,
+    model_label,
 )
 from el_sbobinator.core.prompts import PROMPT_REVISIONE, PROMPT_SISTEMA
 from el_sbobinator.core.session_store import _update_session, mark_html_exported
@@ -823,6 +824,8 @@ def _esegui_sbobinatura_impl(
                 model_name = settings.model
                 runtime.update_model(model_name)
 
+        # Printed once the regeneration choice can no longer change the model.
+        print(f"Modello: {model_label(model_name)}.")
         if runtime.cancelled():
             return
         _, preconv_used_path = ensure_preconverted_audio(

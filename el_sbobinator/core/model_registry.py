@@ -75,6 +75,14 @@ def sanitize_model_name(model_name: Any, default: str = DEFAULT_MODEL) -> str:
     return _LEGACY_MODEL_ALIASES.get(fallback, fallback)
 
 
+def model_label(model_name: str) -> str:
+    """Display name of a model id; an unknown id is shown as it is."""
+    for opt in MODEL_OPTIONS:
+        if opt["id"] == model_name:
+            return str(opt["label"])
+    return str(model_name)
+
+
 def default_chunk_minutes_for_model(model_name: str) -> int:
     model = sanitize_model_name(model_name, DEFAULT_MODEL)
     for opt in MODEL_OPTIONS:

@@ -7,6 +7,7 @@ from el_sbobinator.core.model_registry import (
     SUPPORTED_MODELS,
     default_chunk_minutes_for_model,
     default_macro_char_limit_for_model,
+    model_label,
     sanitize_model_name,
 )
 from el_sbobinator.pipeline.pipeline_settings import load_and_sanitize_settings
@@ -223,6 +224,15 @@ class DefaultMacroCharLimitTests(unittest.TestCase):
         }
         settings, _changed = load_and_sanitize_settings(session)
         self.assertEqual(settings.macro_char_limit, 10000)
+
+
+class ModelLabelTests(unittest.TestCase):
+    def test_known_models_use_their_display_name(self):
+        for option in MODEL_OPTIONS:
+            self.assertEqual(model_label(option["id"]), option["label"])
+
+    def test_unknown_model_is_shown_as_it_is(self):
+        self.assertEqual(model_label("gemini-sperimentale"), "gemini-sperimentale")
 
 
 if __name__ == "__main__":
