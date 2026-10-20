@@ -132,4 +132,37 @@ describe('ArchiveSelectionBar component', () => {
     fireEvent.click(closeBtn);
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
+
+  it('shapes its actions as pills and captions the collection menu in sentence case', () => {
+    render(
+      <ArchiveSelectionBar
+        selectedCount={2}
+        totalCount={5}
+        onSelectAll={vi.fn()}
+        onDeselectAll={vi.fn()}
+        folders={mockFolders}
+        onAssignToFolder={vi.fn()}
+        onNewFolder={vi.fn()}
+        hasAssignedFolder
+        onRemoveFromFolder={vi.fn()}
+        onDeleteSelected={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    for (const title of [
+      'Seleziona tutte le 5 sbobine',
+      'Aggiungi le sbobine selezionate a una raccolta',
+      'Rimuovi le sbobine selezionate dalla raccolta',
+      'Elimina le sbobine selezionate dal disco',
+      'Annulla selezione',
+    ]) {
+      const button = screen.getByTitle(title);
+      expect(button.className).toContain('rounded-full');
+      expect(button.className).not.toContain('rounded-lg');
+    }
+
+    fireEvent.click(screen.getByTitle('Aggiungi le sbobine selezionate a una raccolta'));
+    expect(screen.getByText('Seleziona raccolta').className).not.toContain('uppercase');
+  });
 });

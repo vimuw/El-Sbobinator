@@ -80,12 +80,12 @@ export function ArchiveSelectionBar({
       <button
         type="button"
         onClick={allSelected ? onDeselectAll : onSelectAll}
-        className="group/toggle flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
+        className="group/toggle flex items-center gap-2 px-3 py-2 rounded-full text-sm font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
         style={{ color: 'var(--text-primary)' }}
         title={allSelected ? 'Deseleziona tutte le sbobine' : `Seleziona tutte le ${totalCount} sbobine`}
       >
         <span
-          className="px-1.5 py-0.5 rounded text-xs font-bold shrink-0 transition-transform duration-200 group-hover/toggle:scale-110"
+          className="px-1.5 py-0.5 rounded-full text-xs font-bold shrink-0 transition-transform duration-200 group-hover/toggle:scale-110"
           style={{
             background: 'var(--accent-subtle)',
             color: 'var(--accent-text)',
@@ -106,7 +106,7 @@ export function ArchiveSelectionBar({
           ref={folderButtonRef}
           type="button"
           onClick={() => onMove ? onMove() : setIsFolderMenuOpen(v => !v)}
-          className="group/add flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
+          className="group/add flex items-center gap-2 px-3 py-2 rounded-full text-sm font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
           style={{
             background: isFolderMenuOpen ? 'var(--accent-subtle)' : undefined,
             color: 'var(--text-primary)',
@@ -129,14 +129,14 @@ export function ArchiveSelectionBar({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.95 }}
               transition={{ duration: 0.14, ease: 'easeOut' }}
-              className="absolute bottom-full left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 mb-3 w-[280px] max-w-[90vw] rounded-[10px] border overflow-hidden z-50 p-2 flex flex-col gap-0.5"
+              className="absolute bottom-full left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 mb-3 w-[280px] max-w-[90vw] rounded-[var(--radius-card)] border overflow-hidden z-50 p-2 flex flex-col gap-0.5"
               style={{
                 background: 'var(--bg-elevated)',
-                borderColor: 'var(--border-strong)',
+                borderColor: 'var(--border-subtle)',
                 boxShadow: 'var(--shadow-strong)',
               }}
             >
-              <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+              <div className="px-3 py-2 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
                 Seleziona raccolta
               </div>
 
@@ -191,7 +191,7 @@ export function ArchiveSelectionBar({
         <button
           type="button"
           onClick={onRemoveFromFolder}
-          className="group/remove flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
+          className="group/remove flex items-center gap-2 px-3 py-2 rounded-full text-sm font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
           style={{ color: 'var(--text-primary)' }}
           title="Rimuovi le sbobine selezionate dalla raccolta"
         >
@@ -208,7 +208,7 @@ export function ArchiveSelectionBar({
         <button
           type="button"
           onClick={onDeleteSelected}
-          className="group/del flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--error-subtle)]"
+          className="group/del flex items-center gap-2 px-3 py-2 rounded-full text-sm font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--error-subtle)]"
           style={{ color: 'var(--error-text)' }}
           title="Elimina le sbobine selezionate dal disco"
         >
@@ -228,7 +228,7 @@ export function ArchiveSelectionBar({
           <button
             type="button"
             onClick={onClose}
-            className="group/close p-2.5 rounded-lg text-sm transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
+            className="group/close p-2.5 rounded-full text-sm transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
             style={{ color: 'var(--text-primary)' }}
             aria-label="Annulla selezione"
             title="Annulla selezione"

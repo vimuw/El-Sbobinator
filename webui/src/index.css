@@ -4798,10 +4798,12 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 /* Floating Elevated Components */
+/* 28px is the 8px padding plus half a pill button: one row reads as a pill, and a bar wrapped
+   onto two rows on a phone keeps corners concentric with its buttons instead of a stadium. */
 .archive-selection-bar {
   background: var(--bg-elevated) !important;
-  border: 1px solid var(--border-strong) !important;
-  border-radius: 10px !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 28px !important;
   box-shadow: var(--shadow-strong) !important;
 }
 
