@@ -21,14 +21,16 @@ vi.mock('./RichTextEditor', () => ({
   RichTextEditor: ({
     onEditorReady,
     onChange,
+    bottomInset,
   }: {
     onEditorReady?: (getHtml: () => string) => void;
     onChange?: () => void;
+    bottomInset?: number;
   }) => {
     React.useEffect(() => {
       onEditorReady?.(() => editorMockState.html);
     }, [onEditorReady]);
-    return React.createElement('div', { 'data-testid': 'rich-text-editor', onClick: () => onChange?.() }, 'Editor');
+    return React.createElement('div', { 'data-testid': 'rich-text-editor', 'data-bottom-inset': bottomInset, onClick: () => onChange?.() }, 'Editor');
   },
 }));
 
@@ -340,16 +342,18 @@ describe('EditorFullPage autosave', () => {
     expect(onRelink).toHaveBeenCalledTimes(1);
   });
 
-  it('renders the editor-fullpage-footer with semantic class and chrome background', async () => {
-    const { container } = render(
-      <EditorFullPage
-        {...baseProps}
-        onClose={vi.fn()}
-      />,
-    );
+  it('floats the player in a dock and reserves its measured height in the editor', async () => {
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      return { height: this.classList.contains('editor-fullpage-footer') ? 61.4 : 0 } as DOMRect;
+    });
+    try {
+      const { container } = render(<EditorFullPage {...baseProps} audioSrc="/audio.mp3" onClose={vi.fn()} />);
 
-    const footer = container.querySelector('.editor-fullpage-footer');
-    expect(footer).not.toBeNull();
-    expect((footer as HTMLElement).style.background).toBe('var(--editor-chrome-bg)');
+      const footer = container.querySelector('.editor-fullpage-footer') as HTMLElement;
+      expect(footer.querySelector('.editor-player-dock [data-testid="audio-player"]')).not.toBeNull();
+      expect((await screen.findByTestId('rich-text-editor')).getAttribute('data-bottom-inset')).toBe('62');
+    } finally {
+      rect.mockRestore();
+    }
   });
 });

@@ -65,6 +65,23 @@ describe('RichTextEditor Component', () => {
     expect(pageWrapper.style.zoom).toBe('1.5');
   });
 
+  it('reserves the floating player height below the page and in the caret scroll margin', async () => {
+    const { rerender } = render(<RichTextEditor initialContent="<p>Appunti</p>" bottomInset={70} />);
+    const container = document.querySelector('.editor-page-container') as HTMLElement;
+    expect(container.style.paddingBottom).toBe('70px');
+    expect(container.style.scrollPaddingBottom).toBe('70px');
+
+    const element = document.querySelector('.tiptap-editor') as HTMLElement & { editor: Editor };
+    await waitFor(() => expect(element.editor).toBeTruthy());
+    const margin = () => element.editor.view.someProp('scrollMargin') as { bottom: number };
+    expect(margin().bottom).toBe(86);
+
+    // A taller dock (relink prompt, wrapped controls) moves the margin without rebuilding the editor.
+    rerender(<RichTextEditor initialContent="<p>Appunti</p>" bottomInset={120} />);
+    expect(container.style.paddingBottom).toBe('120px');
+    expect(margin().bottom).toBe(136);
+  });
+
   it('keeps the index mounted for its exit fade and restores it on immediate reopen', () => {
     const onTocToggle = vi.fn();
     const onScrollToHeading = vi.fn();

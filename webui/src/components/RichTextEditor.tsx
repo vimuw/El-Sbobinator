@@ -49,6 +49,8 @@ interface RichTextEditorProps {
   onScrollToHeading?: (heading: Heading) => void;
   zoomLevel?: number;
   onZoomChange?: (zoomLevel: number) => void;
+  /** Height in px of chrome floating over the bottom of the page (the player dock). */
+  bottomInset?: number;
 }
 
 export function RichTextEditor({
@@ -65,7 +67,10 @@ export function RichTextEditor({
   onScrollToHeading,
   zoomLevel,
   onZoomChange,
+  bottomInset = 0,
 }: RichTextEditorProps) {
+  const bottomInsetRef = useRef(bottomInset);
+  useEffect(() => { bottomInsetRef.current = bottomInset; }, [bottomInset]);
   const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number } | null>(null);
   const [isMathOpen, setIsMathOpen] = useState(false);
   // Each request opens the shared link panel once (Ctrl+K and the context menu).
@@ -190,6 +195,13 @@ export function RichTextEditor({
         class: 'prose prose-sm sm:prose-base max-w-none focus:outline-none tiptap-editor',
         spellcheck: 'false',
         style: editorFormattingVariables(),
+      },
+      // Read lazily so typing at the end of the document keeps the caret clear of the floating player.
+      scrollMargin: {
+        top: 5,
+        left: 5,
+        right: 5,
+        get bottom() { return bottomInsetRef.current + 16; },
       },
       handleDoubleClick: (view, pos) => {
         const range = getWordRangeAtPos(view, pos);
@@ -433,7 +445,7 @@ export function RichTextEditor({
       <div
         ref={scrollContainerRef}
         className="editor-page-container flex-1 overflow-y-auto"
-        style={{ overflowX: 'auto' }}
+        style={{ overflowX: 'auto', paddingBottom: bottomInset, scrollPaddingBottom: bottomInset }}
         onScroll={() => {
           setContextMenu(null);
           if (scrollContainerRef.current) {

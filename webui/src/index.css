@@ -255,6 +255,7 @@
 .editor-fullpage,
 .editor-fullpage-header,
 .editor-fullpage-footer,
+.editor-player-dock,
 .editor-fullpage-back,
 .editor-fullpage-title,
 .editor-autosave-badge,
@@ -4403,9 +4404,36 @@ input::-webkit-contacts-auto-fill-button {
   background: var(--editor-chrome-bg);
 }
 
+/* The player floats over the page like the archive's pinned toolbar: same glass, same
+   concentric radius. It spans the window, not the page, so a long lecture keeps a precise
+   scrubber (a page-wide dock halves it: ~20s per pixel on a 2.5h recording). */
 .editor-fullpage-footer {
-  background: var(--editor-chrome-bg);
-  border-top-color: var(--border-subtle);
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  justify-content: center;
+  padding: 0 16px 16px;
+  pointer-events: none;
+}
+
+.editor-player-dock {
+  width: 100%;
+  padding: 0 16px;
+  border: 1px solid var(--border-subtle);
+  /* Concentric with the 32px play button: 16px + the 8px inset. */
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--bg-elevated) 86%, transparent);
+  box-shadow: var(--shadow-md);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+  pointer-events: auto;
+}
+
+.editor-player-dock:has(> div > audio) {
+  padding: 0 12px 0 6px;
 }
 
 .editor-fullpage-back {
@@ -4663,6 +4691,7 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 .editor-fullpage-body {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
