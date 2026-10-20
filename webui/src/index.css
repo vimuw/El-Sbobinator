@@ -3594,7 +3594,8 @@ button {
 /* Framed and filled by .kebab-panel / .kebab-item; this adds the width and the shortcut column. */
 .editor-context-menu {
   font-family: var(--font-display);
-  width: 290px;
+  /* Room for the longest row (Incolla senza formattazione, Ctrl+Shift+V) inside the panel padding. */
+  width: 304px;
   max-width: 90vw;
   max-height: calc(100vh - 24px);
   overflow-y: auto;
