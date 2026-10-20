@@ -55,16 +55,16 @@
   --bg-elevated: #ffffff;
   --bg-input: #ffffff;
   --bg-hover: rgba(0, 0, 0, 0.05);
-  --bg-overlay: rgba(15, 23, 42, 0.40);
+  --bg-overlay: rgba(28, 25, 23, 0.40);
 
-  --border-default: rgba(100, 116, 139, 0.24);
-  --border-subtle: rgba(100, 116, 139, 0.16);
-  --border-strong: rgba(100, 116, 139, 0.46);
+  --border-default: rgba(120, 113, 108, 0.24);
+  --border-subtle: rgba(120, 113, 108, 0.16);
+  --border-strong: rgba(120, 113, 108, 0.46);
 
-  --text-primary: #191919;
-  --text-secondary: #374151;
-  --text-muted: #6b7280;
-  --text-faint: #9ca3af;
+  --text-primary: #1c1917;
+  --text-secondary: #44403c;
+  --text-muted: #635d57;
+  --text-faint: #857e77;
 
   --accent-bg: #3d6b3a;
   --accent-bg-hover: #2d5529;
@@ -76,18 +76,18 @@
   --brand-warm: #c49a3c;
   --brand-warm-subtle: rgba(196, 154, 60, 0.12);
 
-  --success-bg: #16a34a;
-  --success-text: #15803d;
-  --success-subtle: rgba(22, 163, 74, 0.10);
-  --success-ring: rgba(22, 163, 74, 0.22);
+  --success-bg: #2f855a;
+  --success-text: #23744a;
+  --success-subtle: rgba(47, 133, 90, 0.10);
+  --success-ring: rgba(47, 133, 90, 0.22);
   --error-bg: #b91c1c;
   --error-text: #b91c1c;
   --error-subtle: rgba(185, 28, 28, 0.08);
   --error-ring: rgba(185, 28, 28, 0.20);
-  --warning-bg: #a16207;
-  --warning-text: #a16207;
-  --warning-subtle: rgba(161, 98, 7, 0.09);
-  --warning-ring: rgba(161, 98, 7, 0.20);
+  --warning-bg: #975a16;
+  --warning-text: #8f5410;
+  --warning-subtle: rgba(151, 90, 22, 0.09);
+  --warning-ring: rgba(151, 90, 22, 0.20);
 
   --processing-bg: rgba(61, 107, 58, 0.08);
   --processing-text: #3d6b3a;
@@ -102,32 +102,32 @@
   --btn-danger-text: #ffffff;
   --btn-danger-hover: #991b1b;
   --btn-danger-ring: rgba(185, 28, 28, 0.32);
-  --btn-disabled-bg: rgba(148, 163, 184, 0.22);
-  --btn-disabled-text: rgba(100, 116, 139, 0.72);
+  --btn-disabled-bg: rgba(168, 162, 158, 0.22);
+  --btn-disabled-text: rgba(120, 113, 108, 0.72);
 
   --console-bg: #ffffff;
   --console-header: #faf8f5;
-  --console-heading: #191919;
-  --console-text: #374151;
-  --console-muted: #6b7280;
+  --console-heading: #1c1917;
+  --console-text: #44403c;
+  --console-muted: #635d57;
   --console-border: var(--border-subtle);
   --console-shell-border: var(--border-default);
   --console-error: #b91c1c;
-  --console-success: #15803d;
-  --console-warning: #a16207;
+  --console-success: #23744a;
+  --console-warning: #8f5410;
 
   --gradient-title-from: #1a2e18;
   --gradient-title-to: #4a7c40;
 
   --progress-bg: rgba(61, 107, 58, 0.12);
-  --scrubber-rest: rgba(100, 116, 139, 0.35);
+  --scrubber-rest: rgba(120, 113, 108, 0.35);
   --card-queued-bg: #ffffff;
-  --card-queued-border: rgba(100, 116, 139, 0.28);
+  --card-queued-border: rgba(120, 113, 108, 0.28);
   --glass-bg: #ffffff;
-  --glass-border: rgba(100, 116, 139, 0.24);
+  --glass-border: rgba(120, 113, 108, 0.24);
 
   --shadow-soft: none;
-  --shadow-strong: 0 8px 32px rgba(15, 23, 42, 0.08);
+  --shadow-strong: 0 8px 32px rgba(28, 25, 18, 0.08);
   /* Surface elevation: a hairline border carries the shape, these add depth
      quietly. Rest → hover only ever steps up one level. */
   --shadow-xs: 0 1px 2px rgba(28, 25, 18, 0.04);
@@ -360,7 +360,7 @@
 
 :root:not([data-theme="dark"]) .editor-toolbar {
   background: var(--editor-chrome-bg);
-  border-bottom-color: rgba(100, 116, 139, 0.28);
+  border-bottom-color: rgba(120, 113, 108, 0.28);
 }
 
 :root:not([data-theme="dark"]) .editor-select {
@@ -392,7 +392,7 @@
 
 :root:not([data-theme="dark"]) .toc-left-sidebar {
   background: var(--editor-chrome-bg);
-  border-right-color: rgba(100, 116, 139, 0.22);
+  border-right-color: rgba(120, 113, 108, 0.22);
 }
 
 :root:not([data-theme="dark"]) .editor-toc-col .toc-left-sidebar {
@@ -2415,7 +2415,7 @@ button {
   max-width: 794px;
   min-width: 794px;
   padding: 0;
-  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05), 0 0 0 1px var(--border-subtle);
+  box-shadow: 0 4px 20px rgba(28, 25, 18, 0.05), 0 0 0 1px var(--border-subtle);
   cursor: text;
 }
 
@@ -4087,7 +4087,7 @@ input::-webkit-contacts-auto-fill-button {
 
 :root:not([data-theme="dark"]) .archive-session-card:hover {
   box-shadow: none;
-  border-color: rgba(100, 116, 139, 0.52);
+  border-color: rgba(120, 113, 108, 0.52);
 }
 
 :root[data-theme="dark"] .archive-session-card {
