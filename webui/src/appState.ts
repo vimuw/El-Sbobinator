@@ -176,7 +176,8 @@ export type ProcessingAction =
 
 export function createInitialProcessingState(initialFiles: FileItem[] = []): ProcessingState {
   return {
-    files: initialFiles,
+    // A queue saved before the Recenti cap may hold more completions than it allows.
+    files: keepRecentDone(initialFiles),
     structuralVersion: 0,
     appState: 'idle',
     currentPhase: '',
@@ -357,6 +358,8 @@ function reduceProcessing(state: ProcessingState, action: ProcessingAction): Pro
         ...target,
         isRetryingBlocks: action.value,
         status: action.value ? ('processing' as const) : ('done' as const),
+        // A finished retry counts as a fresh completion, so an old archive session stays in Recenti.
+        ...(!action.value && target.isRetryingBlocks ? { completedAt: Date.now() } : {}),
       };
       if (action.value) {
         const remaining = state.files.filter(file => file.id !== action.id);

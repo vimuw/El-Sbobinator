@@ -231,6 +231,26 @@ describe('processingReducer', () => {
     expect(finished.files[0].isRetryingBlocks).toBe(false);
   });
 
+  it('keeps an old archive session in Recenti once its retry finishes, even with three newer completions', () => {
+    const recent = [4000, 5000, 6000].map((completedAt, i) => makeFile({ id: `recent-${i}`, status: 'done', completedAt }));
+    const old = makeFile({ id: 'archive-old', status: 'processing', isRetryingBlocks: true, completedAt: 1000 });
+    const state = { ...initialProcessingState, files: [old, ...recent], structuralVersion: 1 };
+
+    const finished = processingReducer(state, { type: 'queue/set_retrying_blocks', id: 'archive-old', value: false });
+
+    const done = getDoneFiles(finished.files);
+    expect(done).toHaveLength(3);
+    expect(done[0].id).toBe('archive-old');
+    expect(done[0].completedAt).toBeGreaterThan(6000);
+  });
+
+  it('does not refresh completedAt when a file that is not retrying is reset again', () => {
+    const file = makeFile({ id: 'done-1', status: 'done', isRetryingBlocks: false, completedAt: 1000 });
+    const state = { ...initialProcessingState, files: [file], structuralVersion: 1 };
+    const next = processingReducer(state, { type: 'queue/set_retrying_blocks', id: 'done-1', value: false });
+    expect(next.files[0].completedAt).toBe(1000);
+  });
+
   it('keeps only the three latest completions when a new file finishes', () => {
     const files = [
       makeFile({ id: 'q1', status: 'queued' }),
@@ -627,6 +647,13 @@ describe('processingReducer', () => {
       expect(state.files).toEqual(customFiles);
       expect(state.structuralVersion).toBe(0);
       expect(state.appState).toBe('idle');
+    });
+
+    it('caps a restored queue to the latest three completions, keeping pending files', () => {
+      const done = [1000, 2000, 3000, 4000, 5000].map((completedAt, i) => makeFile({ id: `d${i}`, status: 'done', completedAt }));
+      const queued = makeFile({ id: 'q', status: 'queued' });
+      const state = createInitialProcessingState([queued, ...done]);
+      expect(state.files.map(f => f.id)).toEqual(['q', 'd2', 'd3', 'd4']);
     });
   });
 });
