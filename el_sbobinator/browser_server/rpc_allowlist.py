@@ -27,7 +27,6 @@ ALLOWED_RPC_METHODS: frozenset[str] = frozenset(
         "validate_environment",
         "get_session_storage_info",
         "cleanup_old_sessions",
-        "cleanup_completed_sessions",
         "get_completed_sessions",
         "delete_session",
         "rename_session",

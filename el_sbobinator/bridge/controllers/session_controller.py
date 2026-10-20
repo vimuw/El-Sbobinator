@@ -18,7 +18,6 @@ from el_sbobinator.bridge.bridge_utils import (
 )
 from el_sbobinator.core.shared import (
     _atomic_write_json,
-    cleanup_completed_sessions,
     cleanup_orphan_sessions,
     get_session_root,
     get_session_storage_info,
@@ -440,56 +439,6 @@ class SessionControllerMixin:
                     with self._sessions_cache_lock:
                         self._sessions_cache = None
                         self._sessions_cache_gen += 1
-                return bridge_ok(
-                    removed=result["removed"],
-                    freed_bytes=result["freed_bytes"],
-                    errors=result["errors"],
-                    candidates=result.get("candidates", result["removed"]),
-                    preserved_completed=result.get("preserved_completed", 0),
-                    missing_completed_html=result.get("missing_completed_html", 0),
-                )
-        except Exception as e:
-            return bridge_error(
-                e,
-                removed=0,
-                freed_bytes=0,
-                errors=0,
-                candidates=0,
-                preserved_completed=0,
-                missing_completed_html=0,
-            )
-
-    def cleanup_completed_sessions(
-        self,
-        max_age_days: int = 14,
-        dry_run: bool = True,
-    ) -> dict:
-        """Count or delete completed session folders older than max_age_days days."""
-        try:
-            thread = getattr(self, "_processing_thread", None)
-            if thread is not None and thread.is_alive():
-                return bridge_error(
-                    "Impossibile eseguire la pulizia durante un'elaborazione in corso.",
-                    removed=0,
-                    freed_bytes=0,
-                    errors=0,
-                    candidates=0,
-                    preserved_completed=0,
-                    missing_completed_html=0,
-                )
-            with self._cleanup_lock:
-                result = cleanup_completed_sessions(
-                    max(1, int(max_age_days)),
-                    dry_run=bool(dry_run),
-                )
-                if result["removed"] > 0:
-                    for deleted_dir in result.get("deleted_paths", []):
-                        self._evict_deleted_session_caches(str(deleted_dir))
-                    with self._sessions_cache_lock:
-                        self._sessions_cache = None
-                        self._sessions_cache_gen += 1
-                    with self._text_cache_lock:
-                        self._text_cache.clear()
                 return bridge_ok(
                     removed=result["removed"],
                     freed_bytes=result["freed_bytes"],

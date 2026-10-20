@@ -331,7 +331,6 @@ class SessionStoreDomainDutiesTests(unittest.TestCase):
         import tempfile
 
         from el_sbobinator.core.session_store import (
-            cleanup_completed_sessions,
             cleanup_orphan_sessions,
             cleanup_orphan_temp_chunks,
             get_session_storage_info,
@@ -348,9 +347,6 @@ class SessionStoreDomainDutiesTests(unittest.TestCase):
                 # Orphan cleanup in empty directory
                 cleanup_res = cleanup_orphan_sessions()
                 self.assertEqual(cleanup_res["removed"], 0)
-
-                completed_res = cleanup_completed_sessions()
-                self.assertEqual(completed_res["removed"], 0)
 
                 temp_res = cleanup_orphan_temp_chunks()
                 self.assertIsInstance(temp_res, int)

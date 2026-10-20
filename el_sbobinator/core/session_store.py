@@ -23,14 +23,12 @@ from datetime import datetime
 
 from el_sbobinator.core.session_cleanup import (
     _TEMP_CHUNK_AUDIO_EXTS,
-    SESSION_CLEANUP_MAX_AGE_DAYS,
     _cleanup_legacy_temp_chunks,
     _cleanup_session_temp_chunks,
     _is_old_enough,
     _resolve_session_html_path,
     _session_cleanup_kind,
     _session_completed_html_exists,
-    cleanup_completed_sessions,
     cleanup_orphan_sessions,
     cleanup_orphan_temp_chunks,
 )
@@ -445,7 +443,6 @@ def clone_session_settings(session: dict) -> dict:
 __all__ = [
     "PRECONVERTED_AUDIO_FINAL",
     "PRECONVERTED_AUDIO_PARTIAL",
-    "SESSION_CLEANUP_MAX_AGE_DAYS",
     "SESSION_ROOT",
     "SESSION_SCHEMA_VERSION",
     "_MAX_SESSION_CACHE_SIZE",
@@ -477,7 +474,6 @@ __all__ = [
     "_storage_info_future",
     "_storage_info_lock",
     "_update_session",
-    "cleanup_completed_sessions",
     "cleanup_orphan_sessions",
     "cleanup_orphan_temp_chunks",
     "clone_session_settings",

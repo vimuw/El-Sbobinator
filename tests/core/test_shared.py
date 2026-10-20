@@ -120,7 +120,7 @@ class SharedCleanupTests(unittest.TestCase):
             self.assertEqual(result["missing_completed_html"], 1)
             self.assertFalse(os.path.exists(missing_dir))
 
-    def test_cleanup_completed_sessions_dry_run_counts_without_deleting(self):
+    def test_cleanup_orphan_sessions_dry_run_counts_without_deleting(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             completed_dir = self._make_session(
                 tmpdir, "completed", "done", with_html=True
@@ -128,38 +128,15 @@ class SharedCleanupTests(unittest.TestCase):
             incomplete_dir = self._make_session(
                 tmpdir, "incomplete", "phase1", with_html=False
             )
-            self._make_old(completed_dir)
-            self._make_old(incomplete_dir)
 
             with patch("el_sbobinator.core.shared.SESSION_ROOT", tmpdir):
-                result = shared.cleanup_completed_sessions(dry_run=True)
+                result = shared.cleanup_orphan_sessions(dry_run=True)
 
             self.assertEqual(result["removed"], 0)
             self.assertEqual(result["candidates"], 1)
-            self.assertEqual(result["deleted_paths"], [])
+            self.assertGreater(result["freed_bytes"], 0)
+            self.assertEqual(result["preserved_completed"], 1)
             self.assertTrue(os.path.exists(completed_dir))
-            self.assertTrue(os.path.exists(incomplete_dir))
-
-    def test_cleanup_completed_sessions_deletes_only_completed_html_sessions(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            completed_dir = self._make_session(
-                tmpdir, "completed", "done", with_html=True
-            )
-            incomplete_dir = self._make_session(
-                tmpdir, "incomplete", "phase1", with_html=False
-            )
-            self._make_old(completed_dir)
-            self._make_old(incomplete_dir)
-
-            with patch("el_sbobinator.core.shared.SESSION_ROOT", tmpdir):
-                result = shared.cleanup_completed_sessions(dry_run=False)
-
-            self.assertEqual(result["removed"], 1)
-            self.assertEqual(
-                [os.path.realpath(p) for p in result["deleted_paths"]],
-                [os.path.realpath(completed_dir)],
-            )
-            self.assertFalse(os.path.exists(completed_dir))
             self.assertTrue(os.path.exists(incomplete_dir))
 
     def test_get_session_storage_info_ignores_preconverted_partial_until_promoted(self):
