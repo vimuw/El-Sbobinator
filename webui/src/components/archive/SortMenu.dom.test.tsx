@@ -8,18 +8,20 @@ describe('SortMenu component', () => {
     render(<SortMenu sort="newest" onSortChange={handleSortChange} />);
 
     const button = screen.getByRole('button', { name: 'Cambia ordinamento' });
-    expect(screen.queryByText('Più recenti')).toBeNull();
+    expect(screen.queryByText('Create di recente')).toBeNull();
 
     fireEvent.click(button);
-    expect(screen.getByText('Più recenti')).toBeTruthy();
-    expect(screen.getByText('Meno recenti')).toBeTruthy();
-    expect(screen.getByText('Nome (A-Z)')).toBeTruthy();
-    expect(screen.getByText('Aperti di recente')).toBeTruthy();
+    expect(Array.from(document.querySelectorAll('.kebab-item'), item => item.textContent?.trim())).toEqual([
+      'Create di recente',
+      'Aperte di recente',
+      'Nome (A-Z)',
+    ]);
+    expect(screen.queryByText('Meno recenti')).toBeNull();
 
     fireEvent.click(screen.getByText('Nome (A-Z)'));
     expect(handleSortChange).toHaveBeenCalledWith('name');
     await waitFor(() => {
-      expect(screen.queryByText('Più recenti')).toBeNull();
+      expect(screen.queryByText('Create di recente')).toBeNull();
     });
   });
 
@@ -27,7 +29,7 @@ describe('SortMenu component', () => {
     render(<SortMenu sort="newest" onSortChange={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Cambia ordinamento' }));
 
-    const panel = screen.getByText('Più recenti').closest('.kebab-panel') as HTMLElement | null;
+    const panel = screen.getByText('Create di recente').closest('.kebab-panel') as HTMLElement | null;
     expect(panel).toBeTruthy();
     expect(panel?.style.borderRadius).toBe('');
   });
@@ -42,14 +44,14 @@ describe('SortMenu component', () => {
 
     const sortButton = screen.getByRole('button', { name: 'Cambia ordinamento' });
     fireEvent.click(sortButton);
-    expect(screen.getByText('Più recenti')).toBeTruthy();
+    expect(screen.getByText('Create di recente')).toBeTruthy();
 
     const outsideButton = screen.getByRole('button', { name: 'Outside Button' });
     fireEvent.pointerDown(outsideButton);
     fireEvent.mouseDown(outsideButton);
 
     await waitFor(() => {
-      expect(screen.queryByText('Più recenti')).toBeNull();
+      expect(screen.queryByText('Create di recente')).toBeNull();
     });
   });
 
@@ -58,11 +60,11 @@ describe('SortMenu component', () => {
 
     const sortButton = screen.getByRole('button', { name: 'Cambia ordinamento' });
     fireEvent.click(sortButton);
-    expect(screen.getByText('Più recenti')).toBeTruthy();
+    expect(screen.getByText('Create di recente')).toBeTruthy();
 
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => {
-      expect(screen.queryByText('Più recenti')).toBeNull();
+      expect(screen.queryByText('Create di recente')).toBeNull();
     });
   });
 
@@ -70,7 +72,7 @@ describe('SortMenu component', () => {
     const handleSortChange = vi.fn();
     const customOptions = [
       { id: 'relevance' as const, label: 'Più occorrenze' },
-      { id: 'newest' as const, label: 'Più recenti' },
+      { id: 'newest' as const, label: 'Create di recente' },
     ];
     render(<SortMenu sort="relevance" onSortChange={handleSortChange} options={customOptions} />);
 
@@ -78,7 +80,7 @@ describe('SortMenu component', () => {
     fireEvent.click(button);
 
     expect(screen.getByText('Più occorrenze')).toBeTruthy();
-    expect(screen.getByText('Più recenti')).toBeTruthy();
+    expect(screen.getByText('Create di recente')).toBeTruthy();
     expect(screen.queryByText('Nome (A-Z)')).toBeNull();
   });
 });

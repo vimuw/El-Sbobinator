@@ -45,7 +45,7 @@ export function useArchiveSearch({
         }
         const ta = a.completed_at_iso ? new Date(a.completed_at_iso).getTime() : 0;
         const tb = b.completed_at_iso ? new Date(b.completed_at_iso).getTime() : 0;
-        return sort === 'oldest' ? ta - tb : tb - ta;
+        return tb - ta;
       });
     },
     [search, sort, editorSessionsMap]
@@ -73,7 +73,7 @@ export function useArchiveSearch({
       }
       const ta = a.completed_at_iso ? new Date(a.completed_at_iso).getTime() : 0;
       const tb = b.completed_at_iso ? new Date(b.completed_at_iso).getTime() : 0;
-      return ftSort === 'oldest' ? ta - tb : tb - ta;
+      return tb - ta;
     });
   }, [ftResults, ftSort, editorSessionsMap]);
 
