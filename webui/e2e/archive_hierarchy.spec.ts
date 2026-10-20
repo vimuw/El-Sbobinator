@@ -78,9 +78,7 @@ test('organizes archive lessons in nested collections and persists moves across 
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooserPromise).setFiles(fixture);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  await expect(page.getByText('Sbobine completate')).toBeVisible({ timeout: 15_000 });
-  await page.getByRole('button', { name: 'Pulisci tutto' }).click();
-  await page.getByRole('button', { name: 'Conferma pulizia' }).click();
+  await expect(page.getByRole('heading', { name: 'Recenti' })).toBeVisible({ timeout: 15_000 });
   const seeded = await page.evaluate(async () => {
     const response = await window.pywebview?.api?.get_completed_sessions?.(10);
     const session = response?.sessions?.[0];

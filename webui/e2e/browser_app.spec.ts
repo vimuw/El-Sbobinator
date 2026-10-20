@@ -52,7 +52,7 @@ test.describe('El Sbobinator Browser Host E2E', () => {
     await page.screenshot({ path: testInfo.outputPath('queued.png') });
 
     await startScenario(page);
-    await expect(page.getByText('Sbobine completate')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: 'Recenti' })).toBeVisible({ timeout: 15_000 });
     const completedCard = page.locator('.queue-card.is-completed', { hasText: 'lezione_test.wav' });
     await expect(completedCard).toBeVisible();
 
@@ -72,10 +72,7 @@ test.describe('El Sbobinator Browser Host E2E', () => {
     await page.screenshot({ path: testInfo.outputPath('editor.png') });
 
     await page.getByRole('button', { name: /Torna indietro/i }).click();
-    await page.getByRole('button', { name: 'Pulisci tutto' }).click();
-    await page.getByRole('button', { name: 'Conferma pulizia' }).click();
-    await expect(completedCard).toHaveCount(0);
-    await page.getByRole('button', { name: 'Archivio' }).click();
+    await page.getByRole('button', { name: 'Archivio', exact: true }).click();
     await expect(page.getByText('Archivio Sbobine')).toBeVisible();
     await expect(page.getByText(/lezione test/i).first()).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('archive.png') });
@@ -106,7 +103,7 @@ test.describe('El Sbobinator Browser Host E2E', () => {
     await selectScenario(page, 'success');
     await uploadFromDropzone(page, fixturePath);
     await startScenario(page);
-    await expect(page.getByText('Sbobine completate')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: 'Recenti' })).toBeVisible({ timeout: 15_000 });
 
     const session = await page.evaluate(async () => {
       const response = await window.pywebview?.api?.get_completed_sessions?.(10);

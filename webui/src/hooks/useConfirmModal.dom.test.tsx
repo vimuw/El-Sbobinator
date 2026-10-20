@@ -110,6 +110,71 @@ describe('useConfirmModal', () => {
     expect(result.current.confirmAction).toBeNull();
   });
 
+  it('says a completed transcript leaves only Recenti, since the archive already holds it', () => {
+    const { result } = renderHook(() =>
+      useConfirmModal({
+        dispatch,
+        filesRef: { current: [] as FileItem[] },
+        foldersRef: { current: [] },
+        onFoldersChange,
+        setArchiveSessions,
+        setArchiveTotal,
+        refreshArchiveSessions,
+        startProcessingRef: { current: vi.fn() },
+        executeRetryFromArchive,
+        normalizeSessionDir,
+        appendConsole,
+      }),
+    );
+
+    act(() => {
+      result.current.setConfirmAction({ type: 'remove-file', fileId: 'f1', fileName: 'lezione.mp3', isDone: true });
+    });
+    expect(result.current.confirmModalCopy?.description).toBe(
+      "\"lezione.mp3\" verrà rimossa dai Recenti e resterà disponibile nell'Archivio. Vuoi continuare?",
+    );
+  });
+
+  it('drops a deleted archive session from Recenti too', async () => {
+    const delete_session = vi.fn().mockResolvedValue({ ok: true });
+    window.pywebview = { api: { delete_session } } as unknown as typeof window.pywebview;
+    const { result } = renderHook(() =>
+      useConfirmModal({
+        dispatch,
+        filesRef: { current: [] as FileItem[] },
+        foldersRef: { current: [] },
+        onFoldersChange,
+        setArchiveSessions,
+        setArchiveTotal,
+        refreshArchiveSessions,
+        startProcessingRef: { current: vi.fn() },
+        executeRetryFromArchive,
+        normalizeSessionDir,
+        appendConsole,
+      }),
+    );
+
+    act(() => {
+      result.current.setConfirmAction({ type: 'delete-archive-session', sessionDir: '/s/one', name: 'Uno' });
+    });
+    await act(async () => {
+      result.current.handleConfirmAction();
+    });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'queue/remove_sessions', sessionDirs: ['/s/one'] });
+
+    act(() => {
+      result.current.setConfirmAction({
+        type: 'delete-multiple-archive-sessions',
+        sessions: [{ sessionDir: '/s/two', name: 'Due' }, { sessionDir: '/s/three', name: 'Tre' }],
+      });
+    });
+    await act(async () => {
+      result.current.handleConfirmAction();
+    });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'queue/remove_sessions', sessionDirs: ['/s/two', '/s/three'] });
+    delete window.pywebview;
+  });
+
   it('handles quit-app confirmation and calls close_window', () => {
     const filesRef = { current: [] as FileItem[] };
     const foldersRef = { current: [] };

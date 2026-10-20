@@ -109,7 +109,8 @@ export function useArchiveSync({
     const key = normalizeSessionDir(sessionDir);
     setArchiveSessions(prev => prev.map(session => normalizeSessionDir(session.session_dir) === key ? { ...session, name: title } : session));
     prevSessionDirsRef.current.set(key, title);
-  }, [normalizeSessionDir]);
+    dispatch({ type: 'queue/rename_session', sessionDir, title });
+  }, [dispatch, normalizeSessionDir]);
 
   const handleLoadAll = useCallback(() => {
     archiveLimitRef.current = 0;
@@ -318,7 +319,8 @@ export function useArchiveSync({
   }, [handleRetryFailedRevisionBlocks, normalizeSessionDir, addNotification, setActivePage, dispatch]);
 
   const archiveFiltered = useMemo(() => {
-    const activeHtmlPaths = new Set(files.map(f => normalizeSessionDir(f.outputHtml)).filter(Boolean));
+    // Completed files show in Recenti and in the archive; only work still in progress is hidden here.
+    const activeHtmlPaths = new Set(files.filter(f => f.status !== 'done').map(f => normalizeSessionDir(f.outputHtml)).filter(Boolean));
     const currentFileIds = new Set(files.map(f => f.id));
     const pendingSessionDirs = new Set<string>();
     const pendingHtmlPaths = new Set<string>();

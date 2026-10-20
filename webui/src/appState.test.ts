@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createInitialProcessingState, getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type FileItem } from './appState';
+import { createInitialProcessingState, getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type FileItem, type ProcessingAction } from './appState';
 
 
 function makeFile(overrides: Partial<FileItem> = {}): FileItem {
@@ -231,18 +231,56 @@ describe('processingReducer', () => {
     expect(finished.files[0].isRetryingBlocks).toBe(false);
   });
 
-  it('queue/clear_completed removes only done files, leaving queued and error intact', () => {
+  it('keeps only the three latest completions when a new file finishes', () => {
     const files = [
       makeFile({ id: 'q1', status: 'queued' }),
-      makeFile({ id: 'd1', status: 'done', progress: 100, phase: 3 }),
+      makeFile({ id: 'd1', status: 'done', progress: 100, phase: 3, completedAt: 1 }),
+      makeFile({ id: 'd2', status: 'done', progress: 100, phase: 3, completedAt: 2 }),
       makeFile({ id: 'e1', status: 'error', progress: 0, phase: 0 }),
-      makeFile({ id: 'd2', status: 'done', progress: 100, phase: 3 }),
+      makeFile({ id: 'd3', status: 'done', progress: 100, phase: 3, completedAt: 3 }),
+      makeFile({ id: 'p1', status: 'processing' }),
     ];
     const state = processingReducer(
       { ...initialProcessingState, files },
-      { type: 'queue/clear_completed' },
+      { type: 'bridge/file_done', data: { id: 'p1', output_html: '/s/p1/out.html', output_dir: '/s/p1' } } as ProcessingAction,
     );
-    expect(state.files.map(f => f.id)).toEqual(['q1', 'e1']);
+    // The oldest completion leaves Recenti; queued and failed files are untouched.
+    expect(state.files.map(f => f.id)).toEqual(['q1', 'd2', 'e1', 'd3', 'p1']);
+    expect(state.structuralVersion).toBe(initialProcessingState.structuralVersion + 1);
+  });
+
+  it('drops a deleted archive session from Recenti but never queued work for it', () => {
+    const files = [
+      makeFile({ id: 'd1', status: 'done', progress: 100, phase: 3, completedAt: 1, outputDir: 'C:\\S\\one' }),
+      makeFile({ id: 'd2', status: 'done', progress: 100, phase: 3, completedAt: 2, outputDir: 'C:\\S\\two' }),
+      makeFile({ id: 'q1', status: 'queued', outputDir: 'C:\\S\\one' }),
+    ];
+    const state = processingReducer(
+      { ...initialProcessingState, files },
+      { type: 'queue/remove_sessions', sessionDirs: ['c:/s/one/'] },
+    );
+    expect(state.files.map(f => f.id)).toEqual(['d2', 'q1']);
+    const unchanged = { ...initialProcessingState, files };
+    expect(processingReducer(unchanged, { type: 'queue/remove_sessions', sessionDirs: ['c:/s/other'] })).toBe(unchanged);
+  });
+
+  it('shows an archive rename in Recenti while keeping the audio name for duplicate checks', () => {
+    const files = [
+      makeFile({ id: 'd1', name: 'lezione.mp3', status: 'done', progress: 100, phase: 3, completedAt: 1, outputDir: '/s/one' }),
+    ];
+    const state = processingReducer(
+      { ...initialProcessingState, files },
+      { type: 'queue/rename_session', sessionDir: '/s/one/', title: 'Cardio 1' },
+    );
+    expect(state.files[0]).toMatchObject({ name: 'lezione.mp3', title: 'Cardio 1' });
+  });
+
+  it('caps completions restored from an older, longer queue', () => {
+    const restored = Array.from({ length: 5 }, (_, i) =>
+      makeFile({ id: `d${i}`, status: 'done', progress: 100, phase: 3, completedAt: i }),
+    );
+    const state = processingReducer(initialProcessingState, { type: 'queue/add', files: restored });
+    expect(state.files.map(f => f.id)).toEqual(['d2', 'd3', 'd4']);
   });
 
   it('queue/reorder returns same state when fromIndex equals toIndex', () => {

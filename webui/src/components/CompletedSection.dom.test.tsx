@@ -17,11 +17,9 @@ function makeFile(overrides: Partial<FileItem> = {}): FileItem {
 }
 
 const baseProps = {
-  appState: 'idle' as const,
   onRemove: vi.fn(),
   onPreview: vi.fn(),
   onOpenFile: vi.fn(),
-  onClearAll: vi.fn(),
 };
 
 describe('CompletedSection', () => {
@@ -30,51 +28,23 @@ describe('CompletedSection', () => {
     expect(screen.queryByText('Recenti')).toBeNull();
   });
 
-  it('renders heading and file count when files are present', () => {
-    render(<CompletedSection {...baseProps} doneFiles={[makeFile()]} />);
-    expect(screen.getByText('Recenti')).toBeTruthy();
-    expect(screen.getByText('1')).toBeTruthy();
-  });
-
-  it('shows correct count for multiple files', () => {
+  it('renders the heading without a total count pill', () => {
     const files = [makeFile({ id: 'f1' }), makeFile({ id: 'f2' })];
-    render(<CompletedSection {...baseProps} doneFiles={files} />);
-    expect(screen.getByText('2')).toBeTruthy();
+    const { container } = render(<CompletedSection {...baseProps} doneFiles={files} />);
+    expect(screen.getByText('Recenti')).toBeTruthy();
+    expect(container.querySelector('.status-pill')).toBeNull();
   });
 
-  it('renders "Pulisci tutto" button when appState is idle', () => {
-    render(<CompletedSection {...baseProps} doneFiles={[makeFile()]} appState="idle" />);
-    expect(screen.getByLabelText('Pulisci tutto')).toBeTruthy();
+  it('has no bulk clear: Recenti rotates on its own', () => {
+    render(<CompletedSection {...baseProps} doneFiles={[makeFile()]} />);
+    expect(screen.queryByRole('button', { name: 'Pulisci tutto' })).toBeNull();
   });
 
-  it('renders "Pulisci tutto" during processing too', () => {
-    render(<CompletedSection {...baseProps} doneFiles={[makeFile()]} appState="processing" />);
-    expect(screen.getByLabelText('Pulisci tutto')).toBeTruthy();
-  });
-
-  it('calls onClearAll when Pulisci tutto is clicked', () => {
-    const onClearAll = vi.fn();
-    render(<CompletedSection {...baseProps} doneFiles={[makeFile()]} onClearAll={onClearAll} />);
-    fireEvent.click(screen.getByLabelText('Pulisci tutto'));
-    expect(onClearAll).toHaveBeenCalledTimes(1);
-  });
-
-  it('shows only the latest files up to the limit and links the rest to the archive', () => {
+  it('links to the archive without a count', () => {
     const onOpenArchive = vi.fn();
-    const files = Array.from({ length: 5 }, (_, i) => makeFile({ id: `f${i}`, name: `file-${i}.mp3` }));
-    render(<CompletedSection {...baseProps} doneFiles={files} limit={3} onOpenArchive={onOpenArchive} />);
-    expect(screen.getByText('file-0.mp3')).toBeTruthy();
-    expect(screen.getByText('file-2.mp3')).toBeTruthy();
-    expect(screen.queryByText('file-3.mp3')).toBeNull();
-    // The count still reflects every completed file, not just the visible ones.
-    expect(screen.getByText('5')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /Vedi tutte \(5\) nell'Archivio/ }));
+    render(<CompletedSection {...baseProps} doneFiles={[makeFile()]} onOpenArchive={onOpenArchive} />);
+    fireEvent.click(screen.getByRole('button', { name: "Apri l'Archivio" }));
     expect(onOpenArchive).toHaveBeenCalledTimes(1);
-  });
-
-  it('offers the archive without a count when every file fits', () => {
-    render(<CompletedSection {...baseProps} doneFiles={[makeFile()]} limit={3} onOpenArchive={vi.fn()} />);
-    expect(screen.getByRole('button', { name: "Apri l'Archivio" })).toBeTruthy();
   });
 
   it('has no search field: searching lives in the archive', () => {
@@ -109,14 +79,14 @@ describe('CompletedSection', () => {
     expect(scrollContainer?.className).toContain('max-h-[390px]');
   });
 
-  it('shows warnings in their own pill and Pulisci tutto as a labelled secondary action', () => {
-    const files = [makeFile({ id: 'f1' }), makeFile({ id: 'f2', completionStatus: 'completed_with_warnings' })];
+  it('shows warnings in their own pill', () => {
+    const files = [
+      makeFile({ id: 'f1' }),
+      makeFile({ id: 'f2', completionStatus: 'completed_with_warnings' }),
+      makeFile({ id: 'f3', revisionFailedBlocks: [2] }),
+    ];
     render(<CompletedSection {...baseProps} doneFiles={files} />);
-    expect(screen.getByText('1').className).toContain('is-quiet');
-    expect(screen.getByText('1 con avvisi').className).toContain('is-warning');
-    const clear = screen.getByRole('button', { name: 'Pulisci tutto' });
-    expect(clear.className).toContain('queue-text-button');
-    expect(clear.textContent).toContain('Pulisci tutto');
+    expect(screen.getByText('2 con avvisi').className).toContain('is-warning');
   });
 
   it('opens a completed transcript from its Apri button', () => {

@@ -64,7 +64,6 @@ describe('QueuePage Component', () => {
       handleQueueStop: vi.fn(),
       handleOpenSettings: vi.fn(),
       handleRemoveDoneFile: vi.fn(),
-      setConfirmAction: vi.fn(),
       handleRetryFailedRevisionBlocks: vi.fn(),
     },
     autoContinue: true,
@@ -183,10 +182,10 @@ describe('QueuePage Component', () => {
     expect(screen.getByTestId('processing-slot').contains(bannerSlot)).toBe(true);
   });
 
-  it('stops the run from the processing banner and keeps only recent transcripts on the page', () => {
+  it('stops the run from the processing banner and links recent transcripts to the archive', () => {
     const handleQueueStop = vi.fn();
     const onOpenArchive = vi.fn();
-    const done = Array.from({ length: 4 }, (_, i): FileItem => ({
+    const done = Array.from({ length: 3 }, (_, i): FileItem => ({
       ...queuedFile, id: `d${i}`, name: `fatta-${i}.mp3`, status: 'done', completedAt: 100 - i, outputHtml: `/out/${i}.html`,
     }));
     render(
@@ -202,8 +201,7 @@ describe('QueuePage Component', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Interrompi' }));
     expect(handleQueueStop).toHaveBeenCalledTimes(1);
     expect(screen.getByText('fatta-2.mp3')).toBeTruthy();
-    expect(screen.queryByText('fatta-3.mp3')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /nell'Archivio/ }));
+    fireEvent.click(screen.getByRole('button', { name: "Apri l'Archivio" }));
     expect(onOpenArchive).toHaveBeenCalledTimes(1);
   });
 

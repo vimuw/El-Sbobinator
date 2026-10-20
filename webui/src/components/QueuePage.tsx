@@ -18,7 +18,6 @@ import { CompletedSection } from './CompletedSection';
 import { AutoHeight } from './AutoHeight';
 import { fade, fadeUp } from '../motion';
 import { ConsolePanel } from './ConsolePanel';
-import type { ConfirmAction } from '../hooks/useConfirmModal';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 
 const SetupPage = React.lazy(() => import('./SetupPage').then(m => ({ default: m.SetupPage })));
@@ -82,7 +81,6 @@ export interface QueueActionProps {
   handleQueueStop: () => void;
   handleOpenSettings: () => void;
   handleRemoveDoneFile: (id: string) => void;
-  setConfirmAction: (action: ConfirmAction | null) => void;
   handleRetryFailedRevisionBlocks: (sessionDir: string, fileId?: string) => Promise<void>;
 }
 
@@ -104,8 +102,6 @@ export interface QueuePageProps {
 }
 
 // The dashboard shows the latest few; the archive keeps every transcript.
-const RECENT_LIMIT = 3;
-
 export function QueuePage({
   files,
   progress,
@@ -179,7 +175,6 @@ export function QueuePage({
     handleQueueStop,
     handleOpenSettings,
     handleRemoveDoneFile,
-    setConfirmAction,
     handleRetryFailedRevisionBlocks,
   } = actions;
 
@@ -418,14 +413,11 @@ export function QueuePage({
 
             <CompletedSection
               doneFiles={doneFiles}
-              appState={appState}
               onRemove={handleRemoveDoneFile}
               onPreview={openPreview}
               onOpenFile={openFile}
-              onClearAll={() => setConfirmAction({ type: 'clear-completed', count: doneFiles.length })}
               onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
               sessionFolderMap={completedSessionFolderMap}
-              limit={RECENT_LIMIT}
               onOpenArchive={onOpenArchive}
             />
           </>

@@ -5,7 +5,6 @@ import type { FileItem, ProcessingAction } from '../appState';
 export type ConfirmActionState =
   | { type: 'stop-processing' }
   | { type: 'remove-file'; fileId: string; fileName: string; isDone: boolean }
-  | { type: 'clear-completed'; count: number }
   | { type: 'clear-all' }
   | { type: 'low-disk-warning'; warning: LowDiskWarning }
   | { type: 'delete-archive-session'; sessionDir: string; name: string }
@@ -64,12 +63,6 @@ export function useConfirmModal({
     if (window.pywebview?.api) await window.pywebview.api.stop_processing?.();
   }, [appendConsole, dispatch]);
 
-  const confirmClearCompleted = useCallback(() => {
-    setConfirmAction(null);
-    dispatch({ type: 'queue/clear_completed' });
-    void refreshArchiveSessions();
-  }, [dispatch, refreshArchiveSessions]);
-
   const confirmModalCopy = useMemo(() => {
     if (!confirmAction) return null;
     if (confirmAction.type === 'stop-processing') {
@@ -84,7 +77,7 @@ export function useConfirmModal({
       return {
         title: 'Rimuovere questo elemento?',
         description: confirmAction.isDone
-          ? `"${confirmAction.fileName}" verrà spostata nell'archivio e rimossa dalla lista. Vuoi continuare?`
+          ? `"${confirmAction.fileName}" verrà rimossa dai Recenti e resterà disponibile nell'Archivio. Vuoi continuare?`
           : `"${confirmAction.fileName}" verrà rimossa dalla lista. Vuoi continuare?`,
         confirmLabel: 'Conferma rimozione',
         cancelLabel: 'Tieni elemento',
@@ -133,22 +126,11 @@ export function useConfirmModal({
         cancelLabel: 'Annulla',
       };
     }
-    if (confirmAction.type === 'quit-app') {
-      return {
-        title: 'Elaborazione in corso',
-        description: "Un'elaborazione è attualmente in corso. Se chiudi l'applicazione, il processo verrà interrotto e i progressi non salvati andranno persi. Vuoi davvero uscire?",
-        confirmLabel: 'Interrompi ed esci',
-        cancelLabel: 'Continua elaborazione',
-      };
-    }
     return {
-      title: 'Pulire le sbobine completate?',
-      description:
-        confirmAction.count === 1
-          ? "La sbobina completata verrà spostata nell'archivio e rimossa dalla lista. Vuoi continuare?"
-          : `Le ${confirmAction.count} sbobine completate verranno spostate nell'archivio e rimosse dalla lista. Vuoi continuare?`,
-      confirmLabel: 'Conferma pulizia',
-      cancelLabel: 'Mantieni nella lista',
+      title: 'Elaborazione in corso',
+      description: "Un'elaborazione è attualmente in corso. Se chiudi l'applicazione, il processo verrà interrotto e i progressi non salvati andranno persi. Vuoi davvero uscire?",
+      confirmLabel: 'Interrompi ed esci',
+      cancelLabel: 'Continua elaborazione',
     };
   }, [confirmAction]);
 
@@ -195,6 +177,7 @@ export function useConfirmModal({
           const normTarget = normalizeSessionDir(sessionDir);
           setArchiveSessions(prev => prev.filter(s => normalizeSessionDir(s.session_dir) !== normTarget));
           setArchiveTotal(prev => Math.max(0, prev - 1));
+          dispatch({ type: 'queue/remove_sessions', sessionDirs: [sessionDir] });
           const updated = foldersRef.current.map(folder => ({
             ...folder,
             session_dirs: folder.session_dirs.filter(d => normalizeSessionDir(d) !== normTarget),
@@ -216,6 +199,7 @@ export function useConfirmModal({
       Promise.all(dirs.map(d => window.pywebview?.api?.delete_session?.(d))).then(() => {
         setArchiveSessions(prev => prev.filter(s => !normDirSet.has(normalizeSessionDir(s.session_dir))));
         setArchiveTotal(prev => Math.max(0, prev - dirs.length));
+        dispatch({ type: 'queue/remove_sessions', sessionDirs: dirs });
         const updated = foldersRef.current.map(folder => ({
           ...folder,
           session_dirs: folder.session_dirs.filter(d => !normDirSet.has(normalizeSessionDir(d))),
@@ -230,12 +214,9 @@ export function useConfirmModal({
       const { session } = confirmAction;
       setConfirmAction(null);
       void executeRetryFromArchive(session);
-      return;
     }
-    confirmClearCompleted();
   }, [
     confirmAction,
-    confirmClearCompleted,
     confirmStopProcessing,
     appendConsole,
     refreshArchiveSessions,
@@ -262,7 +243,6 @@ export function useConfirmModal({
     confirmModalCopy,
     handleConfirmAction,
     confirmStopProcessing,
-    confirmClearCompleted,
     requestQuitConfirmation,
   };
 }

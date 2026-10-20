@@ -322,6 +322,20 @@ describe('QueueFileCard', () => {
 });
 
 describe('CompletedFileCard', () => {
+  it('shows and opens the archive title when the session was renamed', () => {
+    const onPreview = vi.fn();
+    render(
+      <CompletedFileCard
+        file={makeFile({ status: 'done', outputHtml: '/out/file.html', title: 'Cardio 1' })}
+        onRemove={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Cardio 1')).toBeTruthy();
+    expect(screen.queryByText('lezione.mp3')).toBeNull();
+    fireEvent.click(screen.getByLabelText("Apri Cardio 1 nell'editor"));
+    expect(onPreview.mock.calls[0][1]).toBe('Cardio 1');
+  });
+
   it('renders completed file card with name and details', () => {
     render(
       <CompletedFileCard

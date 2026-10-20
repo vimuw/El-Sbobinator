@@ -41,7 +41,9 @@ describe('useArchiveSync', () => {
     expect(result.current.archiveSessions).toEqual([mockSession]);
     await act(async () => { await result.current.handleRenameSession(mockSession.session_dir, 'Nuovo titolo'); });
     expect(result.current.archiveSessions).toEqual([{ ...mockSession, name: 'Nuovo titolo' }]);
-    expect(dispatch).not.toHaveBeenCalled();
+    // The same session may also be in Recenti, so only the successful rename reaches the queue.
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith({ type: 'queue/rename_session', sessionDir: mockSession.session_dir, title: 'Nuovo titolo' });
   });
 
   it('saves consecutive hierarchy edits in order and reports failed persistence', async () => {
@@ -106,7 +108,7 @@ describe('useArchiveSync', () => {
     expect(result.current.archiveFiltered).toHaveLength(1);
   });
 
-  it('filters out sessions active in current queue', async () => {
+  it('keeps completed Recenti sessions in the archive but hides ones still being reprocessed', async () => {
     const mockApi: Partial<PywebviewApi> = {
       get_completed_sessions: vi.fn().mockResolvedValue({
         ok: true,
@@ -146,7 +148,39 @@ describe('useArchiveSync', () => {
     });
 
     expect(result.current.archiveSessions).toHaveLength(1);
-    expect(result.current.archiveFiltered).toHaveLength(0);
+    expect(result.current.archiveFiltered).toHaveLength(1);
+
+    const { result: retrying } = renderHook(() =>
+      useArchiveSync({
+        files: [
+          {
+            id: 'file-1',
+            name: 'Lecture 1',
+            size: 1024,
+            duration: 120,
+            status: 'processing',
+            isRetryingBlocks: true,
+            progress: 0,
+            phase: 2,
+            outputHtml: mockSession.html_path,
+          },
+        ],
+        dispatch,
+        activePage: 'queue',
+        setActivePage,
+        appState: 'processing',
+        apiReady: true,
+        appendConsole,
+        addNotification,
+        handleRetryFailedRevisionBlocks,
+      }),
+    );
+
+    await act(async () => {
+      await retrying.current.refreshArchiveSessions();
+    });
+
+    expect(retrying.current.archiveFiltered).toHaveLength(0);
   });
 
   it('handles session root relocation by remapping queue and refreshing folders', async () => {

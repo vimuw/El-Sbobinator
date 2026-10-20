@@ -10,7 +10,7 @@ test('opening a full-text archive result highlights the query in the editor', as
     buffer: Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'),
   });
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  await expect(page.getByText('Sbobine completate')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('heading', { name: 'Recenti' })).toBeVisible({ timeout: 15_000 });
   // A fresh app loads the editor lazily, as when reopening the archive later.
   await page.reload();
 

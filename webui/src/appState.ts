@@ -19,6 +19,8 @@ export type FileItem = {
   outputHtml?: string;
   outputDir?: string;
   completedAt?: number;
+  // Display title chosen in the archive; `name` stays the audio file name for duplicate checks.
+  title?: string;
   startedAt?: number;
   effectiveModel?: string;
   resumeSession?: boolean;
@@ -36,6 +38,16 @@ export function getPendingFiles(files: FileItem[]): FileItem[] {
 export function getDoneFiles(files: FileItem[]): FileItem[] {
   return [...files.filter(f => f.status === 'done')]
     .sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0));
+}
+
+// Recenti keeps only the latest completions; older ones stay reachable in the archive.
+export const RECENT_DONE_LIMIT = 3;
+
+function keepRecentDone(files: FileItem[]): FileItem[] {
+  const done = getDoneFiles(files);
+  if (done.length <= RECENT_DONE_LIMIT) return files;
+  const dropped = new Set(done.slice(RECENT_DONE_LIMIT).map(f => f.id));
+  return files.filter(f => !dropped.has(f.id));
 }
 
 export type FileDescriptor = {
@@ -138,11 +150,12 @@ export type ProcessingState = {
 
 export type ProcessingAction =
   | { type: 'queue/add'; files: FileItem[] }
+  | { type: 'queue/remove_sessions'; sessionDirs: string[] }
+  | { type: 'queue/rename_session'; sessionDir: string; title: string }
   | { type: 'queue/prepend'; files: FileItem[] }
   | { type: 'queue/remove'; id: string }
   | { type: 'queue/reorder'; fromIndex: number; toIndex: number }
   | { type: 'queue/update_source'; id?: string; sessionDir?: string; path?: string; name?: string; size?: number; duration?: number }
-  | { type: 'queue/clear_completed' }
   | { type: 'queue/retry_failed' }
   | { type: 'queue/retry_one'; id: string }
   | { type: 'queue/remap_session_roots'; oldRoot: string; newRoot: string }
@@ -186,6 +199,18 @@ export function createInitialProcessingState(initialFiles: FileItem[] = []): Pro
 export const initialProcessingState: ProcessingState = createInitialProcessingState();
 
 export function processingReducer(state: ProcessingState, action: ProcessingAction): ProcessingState {
+  const next = reduceProcessing(state, action);
+  if (next.files === state.files) return next;
+  const files = keepRecentDone(next.files);
+  if (files === next.files) return next;
+  return {
+    ...next,
+    files,
+    structuralVersion: next.structuralVersion === state.structuralVersion ? next.structuralVersion + 1 : next.structuralVersion,
+  };
+}
+
+function reduceProcessing(state: ProcessingState, action: ProcessingAction): ProcessingState {
   switch (action.type) {
     case 'queue/add':
       return { ...state, structuralVersion: state.structuralVersion + 1, files: [...state.files, ...action.files] };
@@ -193,6 +218,22 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
       return { ...state, structuralVersion: state.structuralVersion + 1, files: [...action.files, ...state.files] };
     case 'queue/remove':
       return { ...state, structuralVersion: state.structuralVersion + 1, files: state.files.filter(file => file.id !== action.id) };
+    case 'queue/remove_sessions': {
+      // Recenti and the archive show the same completed session, so deleting it drops both.
+      const dirs = new Set(action.sessionDirs.map(normalizeSessionPath));
+      const files = state.files.filter(file => file.status !== 'done' || !dirs.has(normalizeSessionPath(file.outputDir)));
+      if (files.length === state.files.length) return state;
+      return { ...state, structuralVersion: state.structuralVersion + 1, files };
+    }
+    case 'queue/rename_session': {
+      const dir = normalizeSessionPath(action.sessionDir);
+      if (!state.files.some(file => file.status === 'done' && normalizeSessionPath(file.outputDir) === dir)) return state;
+      return {
+        ...state,
+        structuralVersion: state.structuralVersion + 1,
+        files: state.files.map(file => (file.status === 'done' && normalizeSessionPath(file.outputDir) === dir ? { ...file, title: action.title } : file)),
+      };
+    }
     case 'queue/reorder': {
       const { fromIndex, toIndex } = action;
       if (fromIndex === toIndex) return state;
@@ -264,8 +305,6 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
       if (!changed) return state;
       return { ...state, structuralVersion: state.structuralVersion + 1, files };
     }
-    case 'queue/clear_completed':
-      return { ...state, structuralVersion: state.structuralVersion + 1, files: state.files.filter(file => file.status !== 'done') };
     case 'queue/retry_failed':
       return {
         ...state,

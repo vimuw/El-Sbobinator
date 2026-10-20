@@ -21,6 +21,12 @@ function makeFile(overrides: Partial<FileItem> = {}): FileItem {
 }
 
 describe('useQueuePersistence — serialization contract', () => {
+  it('keeps an archive title through a JSON round-trip without touching the file name', () => {
+    const restored = roundTrip(makeFile({ status: 'done', progress: 100, phase: 3, title: 'Cardio 1' }));
+    expect(restored.title).toBe('Cardio 1');
+    expect(restored.name).toBe('lesson.mp3');
+  });
+
   it('completedAt is preserved through a JSON round-trip', () => {
     const ts = 1712491234567;
     const restored = roundTrip(makeFile({ status: 'done', progress: 100, phase: 3, completedAt: ts }));

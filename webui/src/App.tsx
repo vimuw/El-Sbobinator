@@ -344,7 +344,7 @@ export default function App() {
     const targetFile = filesRef.current.find(file => file.id === id);
     if (!targetFile) return;
     if (appStateRef.current !== 'idle' && targetFile.status !== 'done' && targetFile.status !== 'queued' && targetFile.status !== 'error') return;
-    setConfirmAction({ type: 'remove-file', fileId: id, fileName: targetFile.name, isDone: targetFile.status === 'done' });
+    setConfirmAction({ type: 'remove-file', fileId: id, fileName: targetFile.title || targetFile.name, isDone: targetFile.status === 'done' });
   }, [setConfirmAction]);
 
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -576,7 +576,6 @@ export default function App() {
                 handleQueueStop,
                 handleOpenSettings,
                 handleRemoveDoneFile,
-                setConfirmAction,
                 handleRetryFailedRevisionBlocks,
               }}
               autoContinue={autoContinue}

@@ -241,7 +241,8 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
       setIsRetryingBlocks(false);
     }
   };
-  const openEditor = () => onPreview(file.outputHtml!, file.name, file.path, file.id, file.outputDir);
+  const displayName = file.title || file.name;
+  const openEditor = () => onPreview(file.outputHtml!, displayName, file.path, file.id, file.outputDir);
   const handleCardKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     // Only the card itself: Enter on the inner buttons keeps their own action.
     if (event.target !== event.currentTarget) return;
@@ -259,7 +260,7 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
       onClick={isClickable ? openEditor : undefined}
       onKeyDown={isClickable ? handleCardKeyDown : undefined}
       tabIndex={isClickable ? 0 : undefined}
-      aria-label={isClickable ? `Apri ${file.name} nell'editor` : undefined}
+      aria-label={isClickable ? `Apri ${displayName} nell'editor` : undefined}
       className={`queue-card relative px-4 py-3 transition-colors group/card ${isClickable ? 'cursor-pointer' : ''} is-completed ${
         hasRevisionWarnings ? 'is-warning' : ''
       }${isFresh ? ' is-fresh' : ''}`}
@@ -277,7 +278,7 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 min-w-0">
-              <h4 className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{file.name}</h4>
+              <h4 className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{displayName}</h4>
               {currentFolder && (
                 <FolderIndicatorChip folder={currentFolder} />
               )}
