@@ -226,4 +226,37 @@ describe('runPipeline', () => {
     }]);
     await expect(runPipeline(session(), env)).rejects.toBeInstanceOf(CancelledError);
   });
+
+  it('reports the saved chunk count after each chunk', async () => {
+    mockGemini([okText(chunkText(1)), okText(chunkText(2)), okText('## R\n\nTesto rivisto.')]);
+    const { env, workDone } = makeEnv(fakeAudio(2));
+    await runPipeline(session(), env);
+    expect(workDone.filter(entry => entry.startsWith('chunks'))).toEqual(expect.arrayContaining(['chunks 0/2', 'chunks 1/2', 'chunks 2/2']));
+    expect(workDone.indexOf('chunks 1/2')).toBeLessThan(workDone.indexOf('chunks 2/2'));
+  });
+
+  it('ignores a late answer after Stop: nothing logged, chunk not saved', async () => {
+    const { env, controller, consoleLines, saved } = makeEnv(fakeAudio(2));
+    mockGemini([() => {
+      controller.abort();
+      return okText(chunkText(1));
+    }]);
+    await expect(runPipeline(session(), env)).rejects.toBeInstanceOf(CancelledError);
+    expect(consoleLines.some(line => line.startsWith('Risposta Gemini'))).toBe(false);
+    expect(saved.every(entry => entry.chunkTexts.length === 0)).toBe(true);
+  });
+
+  it('deletes the uploaded file and sends no request when Stop comes during the upload', async () => {
+    const { env, controller } = makeEnv(fakeAudio(1, 'original'));
+    const { calls, other } = mockGemini([]);
+    const base = globalThis.fetch as unknown as (url: string, init: RequestInit) => Promise<Response>;
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      const response = await base(url, init);
+      if (url === 'https://upload.example/session-1') controller.abort();
+      return response;
+    }));
+    await expect(runPipeline(session('gemini-3.6-flash'), env)).rejects.toBeInstanceOf(CancelledError);
+    expect(calls).toHaveLength(0);
+    expect(other).toContain('DELETE /v1beta/files/abc');
+  });
 });

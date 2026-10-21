@@ -242,6 +242,8 @@ export async function runPipeline(state: SessionState, env: PipelineEnv): Promis
     let file: GeminiFile | null = null;
     // Uploaded files belong to the key's project: after a rotation, upload again.
     let fileClient: GeminiClient | null = null;
+    // Uploaded but not yet ACTIVE (or abandoned by Stop): still has to be deleted.
+    let pending: { name: string; client: GeminiClient } | null = null;
 
     const ensureUpload = async (): Promise<GeminiFile> => {
       if (file && fileClient === client) return file;
@@ -250,6 +252,9 @@ export async function runPipeline(state: SessionState, env: PipelineEnv): Promis
       fileClient = client;
       reporter.console(`Caricamento dell'audio del ${label} su Google (${mib(audio.blob.size)})…`);
       let uploaded = await client.uploadFile(audio.blob, audio.mimeType, `sbobina-blocco-${index + 1}`, withTimeout(PIPELINE_DEFAULTS.requestTimeoutSec, signal));
+      pending = { name: uploaded.name, client };
+      // Stop during the upload: the file is deleted in the finally below and no request is sent.
+      throwIfCancelled();
       const deadline = env.now() + 15 * 60_000;
       while (uploaded.state && uploaded.state !== 'ACTIVE') {
         if (uploaded.state === 'FAILED') throw new Error(`Caricamento fallito (state=${uploaded.state}).`);
@@ -258,6 +263,7 @@ export async function runPipeline(state: SessionState, env: PipelineEnv): Promis
         uploaded = await client.getFile(uploaded.name, withTimeout(60, signal));
       }
       file = uploaded;
+      pending = null;
       return uploaded;
     };
 
@@ -276,6 +282,8 @@ export async function runPipeline(state: SessionState, env: PipelineEnv): Promis
             thinkingBudget: model.phase1_thinking_budget,
             signal: withTimeout(PIPELINE_DEFAULTS.requestTimeoutSec, signal),
           });
+          // A request left running after Stop must not log or apply its late answer.
+          throwIfCancelled();
           reporter.console(`Risposta Gemini per il ${label} in ${seconds(env.now() - startedAt)}: ${result.text.length} caratteri.`);
           if (!result.text) throw new Error('Risposta vuota dal modello (text=None)');
           if (result.finishReason === 'MAX_TOKENS') reporter.console(`⚠ Risposta troncata per il ${label} (MAX_TOKENS).`);
@@ -303,6 +311,8 @@ export async function runPipeline(state: SessionState, env: PipelineEnv): Promis
     } finally {
       const uploaded = file as GeminiFile | null;
       if (uploaded && fileClient) void fileClient.deleteFile(uploaded.name).catch(() => undefined);
+      const abandoned = pending as { name: string; client: GeminiClient } | null;
+      if (abandoned) void abandoned.client.deleteFile(abandoned.name).catch(() => undefined);
     }
   }
 
@@ -378,6 +388,7 @@ export async function runPipeline(state: SessionState, env: PipelineEnv): Promis
         if (!response.text) throw new Error('Risposta vuota dal modello in revisione.');
         return response;
       }, retryEnv, PIPELINE_DEFAULTS.phase2RetrySleepSec, label));
+      throwIfCancelled();
       state.revised![index] = result.text;
       await save();
       return true;
