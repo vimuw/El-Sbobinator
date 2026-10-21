@@ -13,6 +13,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
+import uuid
 from typing import Any
 
 from google import genai
@@ -26,7 +28,7 @@ from el_sbobinator.services.api_validation_error import api_validation_error
 from el_sbobinator.services.audio_service import resolve_ffmpeg
 from el_sbobinator.services.config_service import CONFIG_FILE, get_config_dir
 from el_sbobinator.services.generation_service import create_gemini_client
-from el_sbobinator.utils.logging_utils import redact_secrets
+from el_sbobinator.utils.logging_utils import record_incident, redact_secrets
 
 MIN_FREE_DISK_BYTES: int = 2 * 1024 * 1024 * 1024  # 2 GB minimum
 
@@ -39,18 +41,35 @@ def _format_bytes(bytes_count: int) -> str:
     return f"{mb:.0f} MB"
 
 
+_PROBE_REMOVE_RETRY_DELAY = 0.1
+
+
 def _check_writable_dir(path: str) -> tuple[bool, str]:
-    probe_name = os.path.join(path, ".el_sbobinator_write_test")
+    # Unique per call: concurrent validations (two app instances, parallel
+    # test workers) must not open/delete the same probe file, which Windows
+    # reports as a spurious PermissionError.
+    probe_name = os.path.join(
+        path, f".el_sbobinator_write_test-{os.getpid()}-{uuid.uuid4().hex}"
+    )
     try:
         os.makedirs(path, exist_ok=True)
-        with open(probe_name, "w", encoding="utf-8") as handle:
+        with open(probe_name, "x", encoding="utf-8") as handle:
             handle.write("ok")
     except Exception as exc:
         return False, redact_secrets(exc)
-    try:
-        os.remove(probe_name)
-    except Exception:
-        pass
+    # Antivirus or sync clients can briefly hold a new file. A unique name is
+    # never reused, so a probe left behind here would stay in the folder.
+    for attempt in range(2):
+        try:
+            os.remove(probe_name)
+            break
+        except FileNotFoundError:
+            break
+        except Exception as exc:
+            if attempt:
+                record_incident("writable-dir-probe", redact_secrets(exc))
+            else:
+                time.sleep(_PROBE_REMOVE_RETRY_DELAY)
     return True, "Scrittura consentita."
 
 
