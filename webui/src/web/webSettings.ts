@@ -1,13 +1,17 @@
 import type { ModelOption } from '../bridge';
+import { PROFILE_MODEL_OPTIONS } from '../generationProfile';
 import { STORAGE_KEYS } from '../storageKeys';
 import { DEFAULT_MODEL } from '../utils';
 
-// Same list as el_sbobinator/core/model_registry.py (MODEL_OPTIONS); webSettings.test.ts pins the ids.
-export const WEB_MODEL_OPTIONS: ModelOption[] = [
-  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: '', default_chunk_minutes: 15, phase1_temperature: 0.35 },
-  { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15, phase1_temperature: 0.35, is_default: true },
-  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', summary: '', default_chunk_minutes: 15, phase1_temperature: 0.35 },
-];
+// Same list as the desktop registry: both read el_sbobinator/generation_profile.json.
+export const WEB_MODEL_OPTIONS: ModelOption[] = PROFILE_MODEL_OPTIONS.map(option => ({
+  id: option.id,
+  label: option.label,
+  summary: option.summary,
+  default_chunk_minutes: option.default_chunk_minutes,
+  phase1_temperature: option.phase1_temperature,
+  ...(option.is_default ? { is_default: true } : {}),
+}));
 
 // One key per line; blank lines and repeats are dropped, order is kept (the first key is the main one).
 export function parseKeyLines(text: string): string[] {

@@ -8,10 +8,11 @@ describe('web settings', () => {
   });
 
   it('offers the same models as the desktop registry', () => {
-    const registry = readFileSync(new URL('../../../el_sbobinator/core/model_registry.py', import.meta.url), 'utf8');
-    const supported = /SUPPORTED_MODELS[^=]*=\s*\(([^)]*)\)/.exec(registry)![1].match(/"([^"]+)"/g)!.map(id => id.replace(/"/g, ''));
-    expect(WEB_MODEL_OPTIONS.map(option => option.id)).toEqual(supported);
-    const defaultModel = /^DEFAULT_MODEL = "([^"]+)"/m.exec(registry)![1];
-    expect(WEB_MODEL_OPTIONS.find(option => option.is_default)?.id).toBe(defaultModel);
+    // model_registry.py builds MODEL_OPTIONS from this file.
+    const profile = JSON.parse(readFileSync(new URL('../../../el_sbobinator/generation_profile.json', import.meta.url), 'utf8')) as {
+      models: { default: string; options: Array<{ id: string }> };
+    };
+    expect(WEB_MODEL_OPTIONS.map(option => option.id)).toEqual(profile.models.options.map(option => option.id));
+    expect(WEB_MODEL_OPTIONS.filter(option => option.is_default).map(option => option.id)).toEqual([profile.models.default]);
   });
 });
