@@ -29,7 +29,8 @@ for (const viewport of [{ width: 1024, height: 720 }, { width: 390, height: 844 
     });
     const heading = page.getByRole('heading', { name: 'Generale', exact: true });
     await expect(heading).toBeVisible();
-    const content = page.locator('.app-scroll').filter({ has: heading });
+    // The page title stays above the scrolling content.
+    const content = page.getByTestId('settings-content');
     const section = page.getByRole('region', { name: 'Versione e aggiornamenti' });
     await expect(page.getByText('Sei aggiornato alla versione più recente.')).toHaveCount(1);
     await content.evaluate(element => { element.scrollTop = element.scrollHeight; });
@@ -37,9 +38,10 @@ for (const viewport of [{ width: 1024, height: 720 }, { width: 390, height: 844 
     latestVersion = 'v9.9.9';
     await page.getByRole('button', { name: 'Cerca aggiornamenti' }).click();
     const feedback = page.getByText('È disponibile la versione v9.9.9.');
-    await expect(feedback).toBeInViewport({ ratio: 1 });
+    // Subpixel layout can report a fully shown element as 0.9999997 visible.
+    await expect(feedback).toBeInViewport({ ratio: 0.99 });
     const installButton = section.getByRole('button', { name: 'Installa aggiornamento' });
-    await expect(installButton).toBeInViewport({ ratio: 1 });
+    await expect(installButton).toBeInViewport({ ratio: 0.99 });
     await expect(page.getByRole('button', { name: 'Mostra aggiornamento' })).toHaveCount(0);
     const notice = page.getByRole('region', { name: 'Aggiornamento applicazione' });
     await expect(notice).not.toBeInViewport();
@@ -49,7 +51,7 @@ for (const viewport of [{ width: 1024, height: 720 }, { width: 390, height: 844 
 
     await installButton.click();
     await expect.poll(() => updateRequests).toEqual(['v9.9.9']);
-    await expect(section.getByText('Download aggiornamento…')).toBeInViewport({ ratio: 1 });
+    await expect(section.getByText('Download aggiornamento…')).toBeInViewport({ ratio: 0.99 });
     await expect(page.getByRole('button', { name: 'Installa aggiornamento' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Cerca aggiornamenti' })).toBeDisabled();
     await expect(notice).not.toBeInViewport();
@@ -59,7 +61,7 @@ for (const viewport of [{ width: 1024, height: 720 }, { width: 390, height: 844 
     });
     await expect(section.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50');
     await expect(notice.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50');
-    await expect(section.getByText('5.0 MB / 10.0 MB (50%)')).toBeInViewport({ ratio: 1 });
+    await expect(section.getByText('5.0 MB / 10.0 MB (50%)')).toBeInViewport({ ratio: 0.99 });
     await page.screenshot({ path: testInfo.outputPath('update-download-local.png'), animations: 'disabled' });
 
     await page.getByRole('button', { name: 'Chiudi finestra' }).click();
@@ -68,27 +70,31 @@ for (const viewport of [{ width: 1024, height: 720 }, { width: 390, height: 844 
     await expect(notice.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50');
     await page.screenshot({ path: testInfo.outputPath('update-notice-top.png'), animations: 'disabled' });
     await content.evaluate(element => { element.scrollTop = element.scrollHeight; });
-    await expect(section.getByText('Download aggiornamento…')).toBeInViewport({ ratio: 1 });
+    await expect(section.getByText('Download aggiornamento…')).toBeInViewport({ ratio: 0.99 });
     await page.evaluate(() => {
       window.elSbobinatorBridge?.updateDownloadProgress({ status: 'error', bytes_done: 5242880, bytes_total: 10485760, error: 'Download interrotto di prova.' });
     });
-    await expect(section.getByText('Download interrotto di prova.')).toBeInViewport({ ratio: 1 });
+    await expect(section.getByText('Download interrotto di prova.')).toBeInViewport({ ratio: 0.99 });
     await expect(notice.getByText('Download interrotto di prova.')).toHaveCount(1);
-    await expect(installButton).toBeEnabled();
+    // Reopened with the update already known, only the notice at the top offers the retry.
+    await expect(installButton).toHaveCount(0);
+    const retryButton = notice.getByRole('button', { name: 'Installa aggiornamento' });
+    await expect(retryButton).toBeEnabled();
     expect(updateRequests).toEqual(['v9.9.9']);
     await page.screenshot({ path: testInfo.outputPath('update-error-local.png'), animations: 'disabled' });
 
-    await installButton.click();
+    await retryButton.click();
     await expect.poll(() => updateRequests).toEqual(['v9.9.9', 'v9.9.9']);
-    await expect(section.getByText('Download aggiornamento…')).toBeInViewport({ ratio: 1 });
-    await expect(section.getByText('Download interrotto di prova.')).toHaveCount(0);
+    await expect(notice.getByText('Download aggiornamento…')).toBeInViewport({ ratio: 0.99 });
+    await expect(section.getByText('Download aggiornamento…')).toHaveCount(1);
+    await expect(page.getByText('Download interrotto di prova.')).toHaveCount(0);
     await page.getByRole('button', { name: 'Chiudi finestra' }).click();
     await page.getByRole('button', { name: /Apri impostazioni/i }).click();
     await expect(notice).toBeInViewport();
     await page.evaluate(() => {
       window.elSbobinatorBridge?.updateDownloadProgress({ status: 'done', bytes_done: 10485760, bytes_total: 10485760 });
     });
-    await expect(notice.getByText('Installer avviato. Segui le istruzioni a schermo.')).toBeInViewport({ ratio: 1 });
+    await expect(notice.getByText('Installer avviato. Segui le istruzioni a schermo.')).toBeInViewport({ ratio: 0.99 });
     await expect(section.getByText('Installer avviato. Segui le istruzioni a schermo.')).toHaveCount(1);
     await expect(section).not.toBeInViewport();
     await expect(page.getByRole('button', { name: 'Installa aggiornamento' })).toHaveCount(0);
