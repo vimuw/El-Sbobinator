@@ -230,6 +230,8 @@ describe('NotificationDropdown component', () => {
     );
 
     const archiveBtn = screen.getByLabelText('Archivia notifica');
+    // Hidden until hover with a mouse; touch screens have no hover, so it stays visible there.
+    expect(archiveBtn.className).toContain('[@media(hover:none)]:opacity-100');
     fireEvent.click(archiveBtn);
 
     expect(onDismiss).toHaveBeenCalledTimes(1);
