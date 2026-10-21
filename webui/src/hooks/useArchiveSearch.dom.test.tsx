@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useArchiveSearch } from './useArchiveSearch';
+import { FULL_TEXT_SEARCH_DEBOUNCE_MS, useArchiveSearch } from './useArchiveSearch';
 import type { ArchiveSession } from '../bridge';
 
 function setPywebview(api: Record<string, unknown> | undefined) {
@@ -95,6 +95,29 @@ describe('useArchiveSearch', () => {
       expect(searchMock).toHaveBeenCalledWith('fegato', 100);
       expect(result.current.ftResults?.length).toBe(1);
       expect(result.current.ftTotal).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('queries once 200 ms after the last keystroke', async () => {
+    expect(FULL_TEXT_SEARCH_DEBOUNCE_MS).toBe(200);
+    vi.useFakeTimers();
+    try {
+      const searchMock = vi.fn().mockResolvedValue({ ok: true, results: [], total: 0 });
+      setPywebview({ search_sessions: searchMock });
+      const { result } = renderHook(() => useArchiveSearch({ sessions: [], editorSessionsMap: {} }));
+      act(() => {
+        result.current.setFullTextMode(true);
+        result.current.setSearch('feg');
+      });
+      await act(async () => { await vi.advanceTimersByTimeAsync(150); });
+      act(() => { result.current.setSearch('fegato'); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(199); });
+      expect(searchMock).not.toHaveBeenCalled();
+      await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+      expect(searchMock).toHaveBeenCalledOnce();
+      expect(searchMock).toHaveBeenCalledWith('fegato', 100);
     } finally {
       vi.useRealTimers();
     }

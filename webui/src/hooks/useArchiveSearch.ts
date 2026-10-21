@@ -8,6 +8,9 @@ export interface UseArchiveSearchOptions {
   editorSessionsMap: Record<string, { openedAt?: number; savedAt?: number }>;
 }
 
+// Long enough to skip the intermediate keystrokes of a typed word.
+export const FULL_TEXT_SEARCH_DEBOUNCE_MS = 200;
+
 export function useArchiveSearch({
   sessions,
   editorSessionsMap,
@@ -111,7 +114,7 @@ export function useArchiveSearch({
       } finally {
         if (searchGenRef.current === gen) setIsSearching(false);
       }
-    }, 400);
+    }, FULL_TEXT_SEARCH_DEBOUNCE_MS);
     return () => {
       if (ftDebounceRef.current) clearTimeout(ftDebounceRef.current);
     };
