@@ -15,7 +15,7 @@ export interface FakeRunOptions {
   model: string;
   emit: EmitBridgeEvent;
   signal: AbortSignal;
-  saveDocument: (session: Omit<ArchiveSession, 'session_dir' | 'html_path'>, body: string) => ArchiveSession;
+  saveDocument: (session: Omit<ArchiveSession, 'session_dir' | 'html_path'>, body: string) => Promise<ArchiveSession>;
   // Pause between simulated steps; tests pass a no-op.
   wait?: (ms: number, signal: AbortSignal) => Promise<void>;
   stepMs?: number;
@@ -77,7 +77,7 @@ export async function runFakePipeline({ file, model, emit, signal, saveDocument,
   if (!await step(phaseText.export(), 0.97)) return cancelled();
 
   const baseName = file.name.replace(/\.[^.]+$/, '') || file.name;
-  const session = saveDocument({
+  const session = await saveDocument({
     name: baseName,
     input_name: file.name,
     completed_at_iso: new Date().toISOString(),

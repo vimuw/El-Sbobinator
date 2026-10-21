@@ -43,8 +43,8 @@ export interface WebRunOptions {
   askRegenerate: (mode: 'completed' | 'resume', sessionDir: string) => Promise<RegenerateAnswer>;
   /** Shows the new key dialog and waits for answer_new_key. */
   askNewKey: () => Promise<string | null | 'timeout'>;
-  saveArchive: (session: Omit<ArchiveSession, 'session_dir' | 'html_path'>, body: string) => ArchiveSession;
-  archiveExists: (sessionDir: string) => boolean;
+  saveArchive: (session: Omit<ArchiveSession, 'session_dir' | 'html_path'>, body: string) => Promise<ArchiveSession>;
+  archiveExists: (sessionDir: string) => Promise<boolean>;
   sleep?: PipelineEnv['sleep'];
   now?: () => number;
   wakeLock?: ScreenWakeLock;
@@ -151,7 +151,7 @@ export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome>
         emit('appendConsole', `Rigenero ${descriptor.name} da capo: elimino la sessione precedente...`);
         await store.delete(state.id);
         state = null;
-      } else if (state.stage === 'done' && state.archiveSessionDir && options.archiveExists(state.archiveSessionDir)) {
+      } else if (state.stage === 'done' && state.archiveSessionDir && await options.archiveExists(state.archiveSessionDir)) {
         emit('appendConsole', 'Sbobina già pronta: uso la versione esistente.');
         outcome = finish(state, state.archiveSessionDir);
         return outcome;
@@ -195,9 +195,9 @@ export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome>
     };
     await runPipeline(state, env);
 
-    if (!state.archiveSessionDir || !options.archiveExists(state.archiveSessionDir)) {
+    if (!state.archiveSessionDir || !await options.archiveExists(state.archiveSessionDir)) {
       const failed = (state.failedBlocks ?? []).map(index => index + 1);
-      const archived = options.saveArchive({
+      const archived = await options.saveArchive({
         name: state.title ?? descriptor.name.replace(/\.[^.]+$/, ''),
         input_name: descriptor.name,
         completed_at_iso: new Date().toISOString(),

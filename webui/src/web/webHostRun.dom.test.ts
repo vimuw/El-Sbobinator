@@ -50,10 +50,10 @@ const noSleep = async (_secs: number, signal: AbortSignal) => {
   if (signal.aborted) throw new CancelledError('annullato');
 };
 
-function host(store: CheckpointStore, chunks = 2) {
+function host(chunks = 2) {
   const events: Array<{ name: BridgeEventName; payload: unknown }> = [];
   const api = createWebPywebviewApi((name, payload) => { events.push({ name, payload }); }, {
-    store,
+    database,
     createAudio: () => fakeAudio(chunks),
     createPage: page,
     sleep: noSleep,
@@ -73,10 +73,12 @@ function pickNextFile(file: File) {
 }
 
 let store: CheckpointStore;
+let database: IDBFactory;
 
 beforeEach(() => {
   localStorage.clear();
-  store = createCheckpointStore(new IDBFactory());
+  database = new IDBFactory();
+  store = createCheckpointStore(database);
   vi.spyOn(Math, 'random').mockReturnValue(0);
 });
 
@@ -93,13 +95,14 @@ afterEach(() => {
 describe('web host with the real pipeline', () => {
   it('declares the real pipeline; ?simulazione=1 keeps the simulated run', async () => {
     const { fetchMock } = mockGemini([]);
+    vi.stubGlobal('indexedDB', database);
     window.elSbobinatorBridge = {} as Window['elSbobinatorBridge'];
     initWebHost();
     expect(getHostCapabilities().realPipeline).toBe(true);
 
     window.history.replaceState(null, '', '/?simulazione=1');
     initWebHost();
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const [file] = await window.pywebview!.api.upload_browser_files!([new File(['a'], 'Demo.mp3')]);
     expect(await window.pywebview!.api.start_processing!([file], KEY, true, 'gemini-2.5-flash')).toEqual({ ok: true });
     await vi.runAllTimersAsync();
@@ -110,7 +113,7 @@ describe('web host with the real pipeline', () => {
   it('runs a file with the main key and the saved keys, archives it and opens it in the editor', async () => {
     localStorage.setItem(STORAGE_KEYS.WEB_GEMINI_KEYS_V1, `${KEY}\nAIzaSyBackup1234567890123456`);
     const { keys } = mockGemini([quota, okText(chunkText(1)), okText(chunkText(2)), okText('## Rivisto\n\nTesto rivisto della lezione.')]);
-    const { api, named, finished } = host(store);
+    const { api, named, finished } = host();
     const [file] = await api.upload_browser_files!([new File(['audio-a'], 'Fisiologia.mp3')]);
 
     expect(await api.start_processing!([file], KEY, true, 'gemini-2.5-flash')).toEqual({ ok: true });
@@ -125,6 +128,36 @@ describe('web host with the real pipeline', () => {
     expect((await api.is_processing_active!()).active).toBe(false);
   });
 
+  it('keeps the edited sbobina, its folders and its last opening across a reload, and deletes it with its checkpoint', async () => {
+    mockGemini([okText(chunkText(1)), okText('## Rivisto\n\nTesto rivisto della lezione.')]);
+    const first = host(1);
+    const [file] = await first.api.upload_browser_files!([new File(['audio-a'], 'Istologia.mp3')]);
+    await first.api.start_processing!([file], KEY, true, 'gemini-2.5-flash');
+    await first.finished();
+    const [done] = first.named('fileDone') as Array<{ html_path: string; session_dir: string }>;
+    expect(await first.api.save_html_content!(done.html_path, '<h1>Istologia</h1><p>Appunto aggiunto a mano.</p>', 1)).toEqual({ ok: true, saved: true });
+    expect(await first.api.save_archive_folders!([{ id: 'f', name: 'Primo anno', color: '', session_dirs: [done.session_dir] }])).toEqual({ ok: true });
+    const opened = await first.api.touch_session_opened!(done.session_dir);
+    expect(opened.ok).toBe(true);
+
+    // Reload: a new page with the same browser database.
+    const second = host(1);
+    const { sessions, total } = await second.api.get_completed_sessions!();
+    expect(total).toBe(1);
+    expect(sessions![0]).toMatchObject({ name: 'Istologia', session_dir: done.session_dir, last_opened_at_iso: opened.last_opened_at_iso });
+    expect((await second.api.read_html_content!(done.html_path)).content).toContain('<p>Appunto aggiunto a mano.</p>');
+    expect((await second.api.get_archive_folders!()).folders).toEqual([{ id: 'f', name: 'Primo anno', color: '', session_dirs: [done.session_dir] }]);
+    expect((await second.api.search_sessions!('aggiunto a mano')).total).toBe(1);
+    // The editor saved it: retrying the sections would overwrite the edits.
+    expect(await second.api.retry_failed_revision_blocks!(done.session_dir)).toMatchObject({ ok: false, conflict: true });
+
+    expect(await store.findByArchive(done.session_dir)).not.toBeNull();
+    expect(await second.api.delete_session!(done.session_dir)).toEqual({ ok: true });
+    expect(await store.findByArchive(done.session_dir)).toBeNull();
+    expect((await second.api.get_completed_sessions!()).sessions).toEqual([]);
+    expect(await second.api.read_html_content!(done.html_path)).toMatchObject({ ok: false });
+  });
+
   it('after a browser restart, shows and uses the model from the settings for a checkpoint with no chunk', async () => {
     // A run stopped with 3.6 Flash before its first chunk, then the model was set to 2.5 Flash.
     const audio = new File(['audio della lezione'], 'Lezione.mp3');
@@ -132,7 +165,7 @@ describe('web host with the real pipeline', () => {
     stale.plan = [{ index: 0, startSec: 0, durationSec: 900 }, { index: 1, startSec: 840, durationSec: 900 }];
     await store.save(stale);
     const { fetchMock } = mockGemini([okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
-    const { api, named, finished } = host(store, 1);
+    const { api, named, finished } = host(1);
     const [file] = await api.upload_browser_files!([audio]);
 
     await api.start_processing!([file], KEY, true, 'gemini-2.5-flash');
@@ -146,7 +179,7 @@ describe('web host with the real pipeline', () => {
   it('asks before leaving the page only while a run is active', async () => {
     const leaveBlocked = () => !window.dispatchEvent(new Event('beforeunload', { cancelable: true }));
     mockGemini([quota, okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
-    const { api, named, finished } = host(store, 1);
+    const { api, named, finished } = host(1);
     const [file] = await api.upload_browser_files!([new File(['a'], 'a.mp3')]);
     expect(leaveBlocked()).toBe(false);
 
@@ -163,7 +196,7 @@ describe('web host with the real pipeline', () => {
 
     // Stop and the simulated run release it too.
     mockGemini([quota]);
-    const stopped = host(store, 1);
+    const stopped = host(1);
     const [other] = await stopped.api.upload_browser_files!([new File(['b'], 'b.mp3')]);
     await stopped.api.start_processing!([other], KEY, true, 'gemini-2.5-flash');
     await vi.waitFor(() => expect(stopped.named('askNewKey')).toHaveLength(1));
@@ -183,7 +216,7 @@ describe('web host with the real pipeline', () => {
 
   it('refuses a queued path the page no longer holds', async () => {
     mockGemini([]);
-    const { api } = host(store);
+    const { api } = host();
     const gone: FileDescriptor = { id: 'x', name: 'a.mp3', path: 'local://gone/a.mp3', size: 1 };
     expect(await api.start_processing!([gone], KEY, true, 'gemini-2.5-flash')).toMatchObject({ ok: false, error: expect.stringContaining('selezionalo di nuovo') });
     expect((await api.is_processing_active!()).active).toBe(false);
@@ -193,7 +226,7 @@ describe('web host with the real pipeline', () => {
     // First page: chunk 1 saved, then the daily quota and no new key in time.
     const audio = new File(['stesso audio della lezione'], 'Lezione.mp3');
     mockGemini([okText(chunkText(1)), quota]);
-    const first = host(store);
+    const first = host();
     const [queued] = await first.api.upload_browser_files!([audio]);
     await first.api.start_processing!([queued], KEY, true, 'gemini-2.5-flash');
     await vi.waitFor(() => expect(first.named('askNewKey')).toHaveLength(1));
@@ -202,7 +235,7 @@ describe('web host with the real pipeline', () => {
     expect(first.named('fileFailed')).toEqual([]);
 
     // Reloaded page: the restored queue path is gone, the user picks the same file again.
-    const second = host(store);
+    const second = host();
     expect(await second.api.check_path_exists!('local://old-page/Lezione.mp3')).toEqual({ ok: true, exists: false });
     pickNextFile(new File(['stesso audio della lezione'], 'Lezione.mp3'));
     const relinked = await second.api.ask_media_file!();
@@ -221,14 +254,14 @@ describe('web host with the real pipeline', () => {
 
   it('a different file picked again starts a new session without asking', async () => {
     mockGemini([okText(chunkText(1)), quota]);
-    const first = host(store);
+    const first = host();
     const [queued] = await first.api.upload_browser_files!([new File(['audio uno'], 'Lezione.mp3')]);
     await first.api.start_processing!([queued], KEY, true, 'gemini-2.5-flash');
     await vi.waitFor(() => expect(first.named('askNewKey')).toHaveLength(1));
     await first.api.answer_new_key!('');
     await first.finished();
 
-    const second = host(store);
+    const second = host();
     pickNextFile(new File(['un altro audio diverso'], 'Lezione.mp3'));
     const relinked = await second.api.ask_media_file!();
     const { fetchMock } = mockGemini([okText(chunkText(1)), okText(chunkText(2)), okText('## R\n\nTesto rivisto.')]);
@@ -241,7 +274,7 @@ describe('web host with the real pipeline', () => {
 
   it('continues with a key typed in the new key dialog', async () => {
     const { keys } = mockGemini([quota, okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
-    const { api, named, finished } = host(store, 1);
+    const { api, named, finished } = host(1);
     const [file] = await api.upload_browser_files!([new File(['a'], 'a.mp3')]);
     await api.start_processing!([file], KEY, true, 'gemini-2.5-flash');
     await vi.waitFor(() => expect(named('askNewKey')).toHaveLength(1));
@@ -253,7 +286,7 @@ describe('web host with the real pipeline', () => {
 
   it('closes a pending dialog on Stop', async () => {
     mockGemini([okText(chunkText(1)), quota]);
-    const { api, named, finished } = host(store);
+    const { api, named, finished } = host();
     const [file] = await api.upload_browser_files!([new File(['a'], 'a.mp3')]);
     await api.start_processing!([file], KEY, true, 'gemini-2.5-flash');
     await vi.waitFor(() => expect(named('askNewKey')).toHaveLength(1));
@@ -268,7 +301,7 @@ describe('web host with the real pipeline', () => {
     async function finishedWithWarnings() {
       localStorage.setItem(STORAGE_KEYS.WEB_GEMINI_KEYS_V1, KEY);
       mockGemini([okText(chunkText(1)), bad, bad]);
-      const run = host(store, 1);
+      const run = host(1);
       const [file] = await run.api.upload_browser_files!([new File(['a'], 'Lezione.mp3')]);
       await run.api.start_processing!([file], KEY, true, 'gemini-2.5-flash');
       await run.finished();
@@ -310,7 +343,7 @@ describe('web host with the real pipeline', () => {
 
     it('answers for an unknown session', async () => {
       mockGemini([]);
-      const { api } = host(store);
+      const { api } = host();
       expect(await api.retry_failed_revision_blocks!('web-session://nessuna')).toMatchObject({ ok: false, error: 'Sessione non completata.' });
     });
   });

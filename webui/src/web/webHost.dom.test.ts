@@ -1,3 +1,4 @@
+import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DESKTOP_CAPABILITIES, getHostCapabilities, setHostCapabilities } from '../hostCapabilities';
 import { STORAGE_KEYS } from '../storageKeys';
@@ -11,10 +12,12 @@ function recorder() {
 
 beforeEach(() => {
   localStorage.clear();
+  vi.stubGlobal('indexedDB', new IDBFactory());
 });
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
   setHostCapabilities(DESKTOP_CAPABILITIES);
   delete window.pywebview;
   window.elSbobinatorBridge = null;
@@ -86,7 +89,7 @@ describe('web host', () => {
   });
 
   it('runs the simulated pipeline into an archived document the editor can open and save', async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const { events, emit } = recorder();
     const api = createWebPywebviewApi(emit, { simulation: true });
     const [file] = await api.upload_browser_files!([new File(['a'], 'Anatomia.m4a')]);
@@ -97,7 +100,7 @@ describe('web host', () => {
     expect((await api.is_processing_active!()).active).toBe(true);
     await vi.runAllTimersAsync();
 
-    expect((await api.is_processing_active!()).active).toBe(false);
+    await vi.waitFor(async () => expect((await api.is_processing_active!()).active).toBe(false));
     const done = events.find(event => event.name === 'fileDone')?.payload as { html_path: string; session_dir: string };
     const { sessions } = await api.get_completed_sessions!();
     expect(sessions).toHaveLength(1);
@@ -117,7 +120,7 @@ describe('web host', () => {
   });
 
   it('stops the simulated run on request', async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const { events, emit } = recorder();
     const api = createWebPywebviewApi(emit, { simulation: true });
     const [file] = await api.upload_browser_files!([new File(['a'], 'a.mp3')]);

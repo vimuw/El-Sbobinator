@@ -9,22 +9,9 @@ import { type BridgeEventName, type EmitBridgeEvent, runFakePipeline } from './f
 import { createPageState } from './pageLifecycle';
 import { CancelledError } from './pipeline/retry';
 import { retryFailedSections, type AudioSource, type PipelineEnv } from './pipeline/run';
-import type { CheckpointStore } from './pipeline/session';
 import { getWebFile, hasWebFile, isWebSupportedMedia, promptWebFiles, registerWebFile } from './webFiles';
 import { NEW_KEY_TIMEOUT_MS, REGENERATE_TIMEOUT_MS, bridgeReporter, runWebFile, sleepWithSignal, type RegenerateAnswer } from './webRun';
-import {
-  createWebSession,
-  deleteWebSession,
-  listWebSessions,
-  loadWebFolders,
-  readWebHtml,
-  saveWebFolders,
-  saveWebHtml,
-  searchWebSessions,
-  updateWebSession,
-  webSessionGeneration,
-  webSessionHtmlPath,
-} from './webSessions';
+import { createWebArchive, storageErrorMessage, webSessionHtmlPath, type NewArchiveSession, type WebArchive } from './webSessions';
 import { WEB_MODEL_OPTIONS, loadWebKeys, loadWebModel, saveWebKeys, saveWebModel } from './webSettings';
 
 // Third host: the whole app runs in this page (static site, no backend). It implements the same
@@ -74,13 +61,14 @@ export function createBridgeEmitter(target: () => Window['elSbobinatorBridge']):
   };
 }
 
-function describeDevice(): string {
+async function describeDevice(archive: WebArchive): Promise<string> {
+  const sessions = await archive.list().then(list => String(list.length), () => 'non leggibile');
   const lines = [
     `- Versione: ${APP_VERSION} (web)`,
     `- Browser: ${navigator.userAgent}`,
     `- Finestra: ${window.innerWidth}×${window.innerHeight} @${window.devicePixelRatio}x`,
     `- Touch: ${navigator.maxTouchPoints > 0 ? 'sì' : 'no'}`,
-    `- Sbobine nell'archivio: ${listWebSessions().length}`,
+    `- Sbobine nell'archivio: ${sessions}`,
   ];
   return lines.join('\n');
 }
@@ -88,7 +76,8 @@ function describeDevice(): string {
 export interface WebHostOptions {
   /** M0 simulated run (?simulazione=1): no Gemini calls, no audio work. */
   simulation?: boolean;
-  store?: CheckpointStore;
+  /** IndexedDB holding checkpoints and the archive (tests pass fake-indexeddb). */
+  database?: IDBFactory;
   createAudio?: (file: Blob) => AudioSource & { dispose(): void };
   createPage?: () => PipelineEnv['page'] & { dispose(): void };
   sleep?: PipelineEnv['sleep'];
@@ -137,8 +126,17 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
   const frontendEvents: string[] = [];
   const regenerateAnswer: AnswerSlot<RegenerateAnswer> = { current: null };
   const newKeyAnswer: AnswerSlot<string | null | 'timeout'> = { current: null };
-  let store: CheckpointStore | null = options.store ?? null;
-  const checkpoints = () => (store ??= createCheckpointStore());
+  const database = options.database ?? globalThis.indexedDB;
+  const checkpointStore = createCheckpointStore(database);
+  const checkpoints = () => checkpointStore;
+  const archive = createWebArchive(database);
+  const saveArchive = async (session: NewArchiveSession, body: string) => {
+    try {
+      return await archive.create(session, body);
+    } catch (error) {
+      throw new Error(storageErrorMessage(error), { cause: error });
+    }
+  };
   const createPage = options.createPage ?? (() => createPageState());
   const sleep = options.sleep ?? sleepWithSignal;
   // Main key first, then the saved ones, without duplicates.
@@ -227,8 +225,8 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
             return waitForAnswer<RegenerateAnswer>(regenerateAnswer, 'timeout', null, REGENERATE_TIMEOUT_MS, run.signal);
           },
           askNewKey: () => askNewKey(run.signal),
-          saveArchive: createWebSession,
-          archiveExists: sessionDir => webSessionGeneration(sessionDir) !== null,
+          saveArchive,
+          archiveExists: async sessionDir => (await archive.generation(sessionDir)) !== null,
         }).catch(error => {
           emit('fileFailed', { index: 0, id: file.id, error: error instanceof Error ? error.message : String(error) });
           emit('processDone', { cancelled: false, completed: 0, failed: 1, total: 1 });
@@ -243,7 +241,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
         model: preferredModel,
         emit,
         signal: run.signal,
-        saveDocument: createWebSession,
+        saveDocument: saveArchive,
       }).catch(error => {
         emit('fileFailed', { index: 0, id: file.id, error: error instanceof Error ? error.message : String(error) });
         emit('processDone', { cancelled: false, completed: 0, failed: 1, total: 1 });
@@ -267,7 +265,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
     },
     retry_failed_revision_blocks: async sessionDir => {
       if (activeRun) return { ok: false, error: 'Elaborazione in corso: riprova al termine.' };
-      const generation = webSessionGeneration(sessionDir);
+      const generation = await archive.generation(sessionDir).catch(() => null);
       const state = generation === null ? null : await checkpoints().findByArchive(sessionDir);
       if (generation === null || !state || state.stage !== 'done') return { ok: false, error: 'Sessione non completata.' };
       // The editor saved the document: a new export would overwrite the user's edits.
@@ -314,9 +312,9 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
           return { ok: false, error, retried_blocks: [], remaining_failed_blocks: remaining, session_dir: sessionDir, ...flags };
         }
         const completionStatus = remaining.length ? 'completed_with_warnings' as const : 'completed' as const;
-        const saved = saveWebHtml(htmlPath, state.body ?? '');
+        const saved = await archive.saveHtml(htmlPath, state.body ?? '');
         if (!saved.ok) return { ok: false, error: saved.error ?? 'Salvataggio non riuscito.' };
-        updateWebSession(sessionDir, { completion_status: completionStatus, revision_failed_blocks: remaining, effective_model: state.settings.model });
+        await archive.update(sessionDir, { completion_status: completionStatus, revision_failed_blocks: remaining, effective_model: state.settings.model });
         return {
           ok: true,
           retried_blocks: retried,
@@ -336,33 +334,58 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
     },
 
     read_html_content: async path => {
-      const content = readWebHtml(path);
+      const content = await archive.readHtml(path).catch(() => null);
       return content === null ? { ok: false, error: 'Sbobina non trovata in questo browser.' } : { ok: true, content };
     },
-    save_html_content: async (path, content, generation) => saveWebHtml(path, content, generation),
+    save_html_content: async (path, content, generation) => archive.saveHtml(path, content, generation),
 
     get_completed_sessions: async limit => {
-      const sessions = listWebSessions(limit);
-      return { ok: true, sessions, total: listWebSessions().length };
+      try {
+        const sessions = await archive.list();
+        return { ok: true, sessions: typeof limit === 'number' && limit > 0 ? sessions.slice(0, limit) : sessions, total: sessions.length };
+      } catch (error) {
+        return { ok: false, error: `Archivio del browser non leggibile: ${error instanceof Error ? error.message : String(error)}` };
+      }
     },
-    delete_session: async sessionDir => (deleteWebSession(sessionDir) ? { ok: true } : { ok: false, error: 'Sbobina non trovata.' }),
+    delete_session: async sessionDir => {
+      try {
+        return (await archive.delete(sessionDir)) ? { ok: true } : { ok: false, error: 'Sbobina non trovata.' };
+      } catch (error) {
+        return { ok: false, error: storageErrorMessage(error) };
+      }
+    },
     rename_session: async (sessionDir, name) => {
-      const updated = updateWebSession(sessionDir, { name: name.trim() });
+      const updated = await archive.update(sessionDir, { name: name.trim() }).catch(() => null);
       return updated ? { ok: true, name: updated.name } : { ok: false, error: 'Sbobina non trovata.' };
     },
     touch_session_opened: async sessionDir => {
       const lastOpened = new Date().toISOString();
-      return updateWebSession(sessionDir, { last_opened_at_iso: lastOpened }) ? { ok: true, last_opened_at_iso: lastOpened } : { ok: false };
+      const updated = await archive.update(sessionDir, { last_opened_at_iso: lastOpened }).catch(() => null);
+      return updated ? { ok: true, last_opened_at_iso: lastOpened } : { ok: false };
     },
-    get_archive_folders: async () => ({ ok: true, folders: loadWebFolders() }),
-    save_archive_folders: async folders => (saveWebFolders(folders) ? { ok: true } : { ok: false, error: 'Spazio del browser esaurito.' }),
+    get_archive_folders: async () => {
+      try {
+        return { ok: true, folders: await archive.loadFolders() };
+      } catch (error) {
+        return { ok: false, folders: [], error: storageErrorMessage(error) };
+      }
+    },
+    save_archive_folders: async folders => {
+      try {
+        await archive.saveFolders(folders);
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, error: storageErrorMessage(error) };
+      }
+    },
     search_sessions: async (query, limit) => {
-      const results = searchWebSessions(query, limit);
+      const results = await archive.search(query, limit);
       return { ok: true, results, total: results.length };
     },
     get_session_storage_info: async () => {
       const estimate = await navigator.storage?.estimate?.().catch(() => undefined);
-      return { ok: true, total_bytes: estimate?.usage ?? 0, total_sessions: listWebSessions().length };
+      const sessions = await archive.list().catch(() => []);
+      return { ok: true, total_bytes: estimate?.usage ?? 0, total_sessions: sessions.length };
     },
     cleanup_old_sessions: async () => ({ ok: true, removed: 0, freed_bytes: 0, errors: 0, candidates: 0 }),
 
@@ -380,7 +403,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
 
     get_diagnostic_report: async () => {
       const recent = frontendEvents.slice(-20).map(line => `- ${line}`).join('\n') || '- nessuno';
-      return { ok: true, report: `## El Sbobinator (web)\n${describeDevice()}\n\n### Errori recenti dell'interfaccia\n${recent}` };
+      return { ok: true, report: `## El Sbobinator (web)\n${await describeDevice(archive)}\n\n### Errori recenti dell'interfaccia\n${recent}` };
     },
     record_frontend_event: async (kind, message) => {
       frontendEvents.push(`${new Date().toISOString()} ${kind}: ${String(message ?? '').slice(0, 300)}`);

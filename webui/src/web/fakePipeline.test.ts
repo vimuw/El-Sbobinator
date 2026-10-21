@@ -10,7 +10,7 @@ function record() {
   return { events, emit: (name: BridgeEventName, payload?: unknown) => { events.push({ name, payload }); } };
 }
 
-function saveDocument(input: Omit<ArchiveSession, 'session_dir' | 'html_path'>, body: string): ArchiveSession {
+async function saveDocument(input: Omit<ArchiveSession, 'session_dir' | 'html_path'>, body: string): Promise<ArchiveSession> {
   saved.push(body);
   return { ...input, session_dir: 'web-session://s1', html_path: 'web-session://s1/sbobina.html' };
 }

@@ -71,11 +71,11 @@ function setup(overrides: Partial<WebRunOptions> = {}, initial: SessionState[] =
     page: { isOffline: () => false, waitOnline: async () => {}, isHidden: () => false, wasHiddenSince: () => false, waitVisible: async () => {} },
     askRegenerate: async () => false,
     askNewKey: async () => null,
-    saveArchive: (session, body) => {
+    saveArchive: async (session, body) => {
       archived.push({ ...session, body });
       return { ...session, session_dir: 'web-session://s1', html_path: 'web-session://s1/sbobina.html' };
     },
-    archiveExists: () => true,
+    archiveExists: async () => true,
     sleep: async (_secs, signal) => { if (signal.aborted) throw new CancelledError('annullato'); },
     now: () => 0,
     wakeLock: { supported: false, start: async () => {}, stop: async () => {} },
