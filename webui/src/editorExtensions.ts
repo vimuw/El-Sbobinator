@@ -1,6 +1,6 @@
 import React from 'react';
 import katex from 'katex';
-import { Extension, Node, mergeAttributes, textInputRule, type Editor as TiptapEditor, type JSONContent } from '@tiptap/core';
+import { Extension, Node, mergeAttributes, textInputRule, type Editor as TiptapEditor } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { Fragment, type Node as ProseMirrorNode, type Schema, type TagParseRule } from '@tiptap/pm/model';
 import { EMPTY_PARAGRAPH_ATTRIBUTE } from './editorLineSpacing';
@@ -63,17 +63,28 @@ export interface Heading {
   text: string;
 }
 
+// Reads the live document instead of serializing it. Ids name a heading by level,
+// text and occurrence (as the index navigation does), so a block inserted above
+// keeps every index entry mounted.
 export const extractHeadings = (editor: TiptapEditor): Heading[] => {
-  const json = editor.getJSON() as JSONContent;
   const result: Heading[] = [];
-  json.content?.forEach((node: JSONContent, idx: number) => {
-    if (node.type === 'heading') {
-      const text = node.content?.map((n: JSONContent) => n.text ?? '').join('') ?? '';
-      if (text.trim()) result.push({ id: `h-${idx}`, level: node.attrs?.level ?? 2, text });
-    }
+  const occurrences = new Map<string, number>();
+  editor.state.doc.forEach(node => {
+    if (node.type.name !== 'heading') return;
+    let text = '';
+    node.forEach(child => { text += child.text ?? ''; });
+    if (!text.trim()) return;
+    const level = (node.attrs.level as number | undefined) ?? 2;
+    const name = `${level}:${text.trim()}`;
+    const occurrence = occurrences.get(name) ?? 0;
+    occurrences.set(name, occurrence + 1);
+    result.push({ id: `h-${occurrence}:${name}`, level, text });
   });
   return result;
 };
+
+export const sameHeadings = (a: readonly Heading[], b: readonly Heading[]): boolean =>
+  a.length === b.length && a.every((heading, i) => heading.id === b[i].id && heading.text === b[i].text);
 
 export interface SearchMatch {
   from: number;

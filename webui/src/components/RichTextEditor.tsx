@@ -12,7 +12,7 @@ import Link from '@tiptap/extension-link';
 import { EditorSubscript, EditorSuperscript, EditorScriptCaret } from '../editorScripts';
 import { ListTree, X } from 'lucide-react';
 import { FloatingImage } from './FloatingImage';
-import { type Heading, SearchHighlight, FontSize, CustomHeading, CustomParagraph, CustomHardBreak, MathInline, MathBlock, SmartArrows, extractHeadings } from '../editorExtensions';
+import { type Heading, SearchHighlight, FontSize, CustomHeading, CustomParagraph, CustomHardBreak, MathInline, MathBlock, SmartArrows, extractHeadings, sameHeadings } from '../editorExtensions';
 import Typography from '@tiptap/extension-typography';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import { MenuBar } from './EditorToolbar';
@@ -37,7 +37,8 @@ export type { Heading };
 
 interface RichTextEditorProps {
   initialContent?: string;
-  onChange?: (content: string) => void;
+  /** Signals an edit; the HTML is read lazily through the onEditorReady getter. */
+  onChange?: () => void;
   onEditorReady?: (getHtml: () => string) => void;
   initialScrollTop?: number;
   initialSearchTerm?: string;
@@ -95,10 +96,15 @@ export function RichTextEditor({
   const onHeadingsChangeRef = useRef(onHeadingsChange);
   useEffect(() => { onHeadingsChangeRef.current = onHeadingsChange; }, [onHeadingsChange]);
   const headingsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const publishedHeadingsRef = useRef<Heading[] | null>(null);
   const publishHeadings = (currentEditor: TiptapEditor) => {
     if (currentEditor.isDestroyed) return;
     try {
-      onHeadingsChangeRef.current?.(extractHeadings(currentEditor));
+      const headings = extractHeadings(currentEditor);
+      // Most pauses edit body text: leave the index untouched.
+      if (publishedHeadingsRef.current && sameHeadings(publishedHeadingsRef.current, headings)) return;
+      publishedHeadingsRef.current = headings;
+      onHeadingsChangeRef.current?.(headings);
     } catch (_) {
       // TipTap can briefly retain an editor object with a disposed schema while
       // React StrictMode reconnects effects. The next mounted pass republishes.
@@ -184,7 +190,8 @@ export function RichTextEditor({
       }
     },
     onUpdate: ({ editor }) => {
-      onChange?.(editor.getHTML());
+      // Serializing the whole document here cost ~13 ms per keystroke on long notes.
+      onChangeRef.current?.();
       if (headingsDebounceRef.current) clearTimeout(headingsDebounceRef.current);
       headingsDebounceRef.current = setTimeout(() => {
         publishHeadings(editor);

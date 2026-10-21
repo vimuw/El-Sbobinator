@@ -1,6 +1,25 @@
 import { describe, it, expect, vi } from 'vitest';
 import katex from 'katex';
-import { escapeHtml, MathInline, MathBlock } from './editorExtensions';
+import { Editor } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
+import { escapeHtml, extractHeadings, MathInline, MathBlock } from './editorExtensions';
+
+describe('extractHeadings', () => {
+  it('reads top-level headings from the document with ids that survive blocks inserted above', () => {
+    const editor = new Editor({ extensions: [StarterKit], content: '<h2>Capitolo</h2><p>Testo</p><h3>Dettagli <strong>chiave</strong></h3><h2>Capitolo</h2><h2>   </h2><blockquote><h2>Citato</h2></blockquote>' });
+    try {
+      const getJSON = vi.spyOn(editor, 'getJSON');
+      const before = extractHeadings(editor);
+      expect(before.map(({ level, text }) => [level, text])).toEqual([[2, 'Capitolo'], [3, 'Dettagli chiave'], [2, 'Capitolo']]);
+      expect(new Set(before.map(h => h.id)).size).toBe(3);
+      expect(getJSON).not.toHaveBeenCalled();
+
+      editor.commands.insertContentAt(0, '<p>Nuova introduzione</p><h4>Premessa</h4>');
+      const after = extractHeadings(editor);
+      expect(after.slice(1)).toEqual(before);
+    } finally { editor.destroy(); }
+  });
+});
 
 describe('escapeHtml', () => {
   it('escapes &, <, >, ", and single quotes', () => {
