@@ -17,6 +17,7 @@ class ModelOption(TypedDict):
     default_chunk_minutes: int
     default_macro_char_limit: int
     phase1_temperature: float
+    phase1_thinking_budget: NotRequired[int]
     is_default: NotRequired[bool]
 
 
@@ -41,6 +42,9 @@ MODEL_OPTIONS: tuple[ModelOption, ...] = (
         "default_chunk_minutes": 15,
         "default_macro_char_limit": 22000,
         "phase1_temperature": 0.35,
+        # Normal chunks think 1-5k tokens; a stuck chunk reached 63k and took
+        # almost 7 minutes. Gemini 3 models take thinking_level instead.
+        "phase1_thinking_budget": 16384,
     },
     {
         "id": "gemini-3.6-flash",

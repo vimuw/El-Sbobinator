@@ -440,6 +440,15 @@ def _phase1_temperature(model_name: str) -> float:
     return 0.35
 
 
+def _phase1_thinking_config(model_name: str) -> types.ThinkingConfig | None:
+    for opt in MODEL_OPTIONS:
+        if opt["id"] == model_name and "phase1_thinking_budget" in opt:
+            return types.ThinkingConfig(
+                thinking_budget=int(opt["phase1_thinking_budget"])
+            )
+    return None
+
+
 def _retry_on_model_unavailable(
     callable_fn,
     client,

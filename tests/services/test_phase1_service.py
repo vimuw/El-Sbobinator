@@ -1871,3 +1871,43 @@ class Phase1ResponseTimingTests(unittest.TestCase):
             "Risposta di Gemini in 2m 25s (ragionamento 9.000 token, testo 3.000 token).",
             out.getvalue(),
         )
+
+
+class Phase1ThinkingBudgetTests(unittest.TestCase):
+    def _sent_config(self, model_name):
+        sent = {}
+
+        class _Response:
+            text = "Trascrizione del blocco."
+            usage_metadata = None
+
+        class _Models:
+            def generate_content(self, **kwargs):
+                sent.update(kwargs)
+                return _Response()
+
+        class _Client:
+            models = _Models()
+
+        with redirect_stdout(io.StringIO()):
+            _generate_chunk_content_with_fallback(
+                current_client=_Client(),
+                model_name=model_name,
+                system_prompt="sistema",
+                chunk_prompt="blocco",
+                audio_inline=object(),
+                ensure_uploaded_audio_fn=lambda _c: None,
+            )
+        return sent["config"]
+
+    def test_gemini_25_chunk_caps_thinking_without_capping_output(self):
+        config = self._sent_config("gemini-2.5-flash")
+
+        self.assertEqual(config.thinking_config.thinking_budget, 16384)
+        # The output limit also counts thinking: capping it would truncate text.
+        self.assertIsNone(config.max_output_tokens)
+
+    def test_gemini_3_chunk_keeps_default_thinking(self):
+        config = self._sent_config("gemini-3.6-flash")
+
+        self.assertIsNone(config.thinking_config)

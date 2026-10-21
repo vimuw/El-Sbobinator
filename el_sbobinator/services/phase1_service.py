@@ -245,6 +245,9 @@ def _generate_chunk_content_with_fallback(
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
                     temperature=generation_service._phase1_temperature(_active_model),
+                    thinking_config=generation_service._phase1_thinking_config(
+                        _active_model
+                    ),
                 ),
             )
             print(
