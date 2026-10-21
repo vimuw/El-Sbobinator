@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createBrowserPywebviewApi, getHostCapabilities, initBrowserHost } from './browserHost';
+import { createBrowserPywebviewApi, initBrowserHost } from './browserHost';
+import { getHostCapabilities } from './hostCapabilities';
 
 describe('browserHost', () => {
   beforeEach(() => {
@@ -40,6 +41,7 @@ describe('browserHost', () => {
     expect(window.pywebview?.api).toBeDefined();
     expect(getHostCapabilities().openLocalPath).toBe(false);
     expect(getHostCapabilities().realPipeline).toBe(false);
+    expect(getHostCapabilities().kind).toBe('browser');
     expect(onReady).toHaveBeenCalledTimes(1);
   });
 

@@ -6,7 +6,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
 import type { ArchiveFolder } from '../bridge';
-import { getHostCapabilities } from '../browserHost';
+import { getHostCapabilities } from '../hostCapabilities';
 import { errorLabel, formatDuration, formatRelativeTime, formatSize, isPausedError, isQuotaError, isResumableError, shortModelName } from '../utils';
 import { KebabMenu, type KebabMenuItem } from './KebabMenu';
 import { FolderIndicatorChip } from './FolderChip';

@@ -15,7 +15,7 @@ import { useUpdateChecker } from './hooks/useUpdateChecker';
 import { loadPersistedQueue, useQueuePersistence } from './hooks/useQueuePersistence';
 import { useApiReady } from './hooks/useApiReady';
 import { useBridgeCallbacks } from './hooks/useBridgeCallbacks';
-import { getHostCapabilities } from './browserHost';
+import { getHostCapabilities } from './hostCapabilities';
 import { useBodyScrollLock } from './hooks/useBodyScrollLock';
 import { usePreview } from './hooks/usePreview';
 import { useNotifications } from './hooks/useNotifications';

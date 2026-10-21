@@ -16,7 +16,7 @@ import { SettingsDivider, SettingsPageHeader } from './settings/SettingsLayout';
 import { useSettingsStorage } from '../../hooks/useSettingsStorage';
 import { formatSize } from '../../utils';
 import { credentialStorageWarning } from '../../credentialStorage';
-import { getHostCapabilities } from '../../browserHost';
+import { getHostCapabilities } from '../../hostCapabilities';
 import { APP_VERSION } from '../../branding';
 import { STORAGE_KEYS } from '../../storageKeys';
 import { modalCard } from '../../motion';
