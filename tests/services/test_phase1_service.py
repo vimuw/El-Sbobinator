@@ -3,6 +3,7 @@ import logging
 import os
 import tempfile
 import threading
+import time
 import unittest
 from contextlib import redirect_stdout
 from typing import ClassVar
@@ -1871,6 +1872,128 @@ class Phase1ResponseTimingTests(unittest.TestCase):
             "Risposta di Gemini in 2m 25s (ragionamento 9.000 token, testo 3.000 token).",
             out.getvalue(),
         )
+
+
+class Phase1CancelDuringRequestTests(unittest.TestCase):
+    def test_stop_during_slow_gemini_answer_returns_at_once_and_drops_it(self):
+        request_started = threading.Event()
+        release_answer = threading.Event()
+        stop = threading.Event()
+
+        class _Response:
+            text = "Trascrizione arrivata dopo lo stop."
+            usage_metadata = None
+
+        class _Models:
+            def generate_content(self, **_kwargs):
+                request_started.set()
+                release_answer.wait(10)
+                return _Response()
+
+        class _Client:
+            models = _Models()
+
+        def _retry_like_real(fn, **kw):
+            # retry_with_quota turns any error raised after Stop into no text.
+            try:
+                return kw["client"], fn(kw["client"])
+            except Exception:
+                if kw["cancelled"]():
+                    return kw["client"], None
+                raise
+
+        def _press_stop():
+            request_started.wait(10)
+            stop.set()
+
+        session = {"stage": "phase1", "phase1": {"chunks_done": 0}}
+        out = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            chunks_dir = os.path.join(tmpdir, "chunks")
+            os.makedirs(chunks_dir)
+            threading.Thread(target=_press_stop, daemon=True).start()
+            try:
+                with (
+                    redirect_stdout(out),
+                    patch(
+                        "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                        return_value=(True, None),
+                    ),
+                    patch(
+                        "el_sbobinator.services.phase1_service.generation_service.make_inline_audio_part",
+                        return_value=object(),
+                    ),
+                    patch(
+                        "el_sbobinator.services.phase1_service.retry_with_quota",
+                        side_effect=_retry_like_real,
+                    ),
+                ):
+                    t0 = time.monotonic()
+                    process_phase1_transcription(  # type: ignore[arg-type]
+                        client=_Client(),
+                        model_name="gemini-2.5-flash",
+                        input_path="fake.mp3",
+                        preconv_used_path=None,
+                        ffmpeg_exe="ffmpeg",
+                        cancel_event=stop,
+                        cancelled=stop.is_set,
+                        start_sec=0,
+                        total_duration_sec=60,
+                        step_seconds=60,
+                        chunk_seconds=60,
+                        bitrate="48k",
+                        inline_max_bytes=None,
+                        prefetch_enabled=False,
+                        phase1_chunks_dir=chunks_dir,
+                        session=session,
+                        save_session=lambda: True,
+                        fallback_keys=[],
+                        request_fallback_key=lambda: None,
+                        system_prompt="test",
+                        runtime=_FakeRuntime(),
+                    )
+                    elapsed = time.monotonic() - t0
+                    saved_chunks = os.listdir(chunks_dir)
+            finally:
+                release_answer.set()
+
+        self.assertLess(elapsed, 5)
+        self.assertEqual(saved_chunks, [])
+        self.assertEqual(session["phase1"]["chunks_done"], 0)
+        self.assertNotIn("last_error", session)
+        self.assertIn(
+            "Blocco 1 interrotto: la risposta non verrà salvata.", out.getvalue()
+        )
+
+    def test_answer_arriving_after_stop_is_kept_out_of_the_log(self):
+        stopped = threading.Event()
+
+        class _Response:
+            text = "Trascrizione arrivata dopo lo stop."
+            usage_metadata = None
+
+        class _Models:
+            def generate_content(self, **_kwargs):
+                stopped.set()
+                return _Response()
+
+        class _Client:
+            models = _Models()
+
+        out = io.StringIO()
+        with redirect_stdout(out):
+            text = _generate_chunk_content_with_fallback(
+                current_client=_Client(),
+                model_name="gemini-2.5-flash",
+                system_prompt="sistema",
+                chunk_prompt="blocco",
+                audio_inline=object(),
+                ensure_uploaded_audio_fn=lambda _c: None,
+                cancelled=stopped.is_set,
+            )
+
+        self.assertIsNone(text)
+        self.assertNotIn("Risposta di Gemini", out.getvalue())
 
 
 class Phase1ThinkingBudgetTests(unittest.TestCase):

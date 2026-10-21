@@ -225,6 +225,7 @@ def _generate_chunk_content_with_fallback(
     chunk_prompt: str,
     audio_inline,
     ensure_uploaded_audio_fn,
+    cancelled: Callable[[], bool] = lambda: False,
 ) -> str | None:
     audio_mode = "inline" if audio_inline is not None else "upload"
     tried_upload_fallback = False
@@ -250,6 +251,9 @@ def _generate_chunk_content_with_fallback(
                     ),
                 ),
             )
+            if cancelled():
+                # Stop already discarded this answer: keep it out of the log.
+                return None
             print(
                 generation_service.describe_response_timing(
                     response, time.monotonic() - request_t0
@@ -263,6 +267,8 @@ def _generate_chunk_content_with_fallback(
                 raise DegenerateOutputError(degenerate_reason, generated_text)
             return generated_text
         except Exception as e:
+            if cancelled():
+                raise
             err_txt = str(e)
             err_lower = err_txt.lower()
             if (
@@ -294,6 +300,39 @@ def _generate_chunk_content_with_fallback(
             ):
                 raise PermanentError(err_txt)
             raise
+
+
+class _ChunkRequestCancelled(Exception):
+    """Stop was pressed while Gemini was still answering a chunk."""
+
+
+_CANCEL_POLL_SECONDS = 0.2
+
+
+def _run_until_cancelled(fn: Callable[[], Any], cancelled: Callable[[], bool]):
+    """Run fn on a worker thread and stop waiting for it as soon as Stop is pressed.
+
+    The SDK cannot abort a request already sent: Gemini still finishes and
+    counts it, but its answer is dropped instead of keeping the user waiting.
+    """
+    outcome: dict[str, Any] = {}
+    done = threading.Event()
+
+    def _worker() -> None:
+        try:
+            outcome["result"] = fn()
+        except BaseException as exc:
+            outcome["error"] = exc
+        finally:
+            done.set()
+
+    threading.Thread(target=_worker, daemon=True, name="phase1-chunk-request").start()
+    while not done.wait(_CANCEL_POLL_SECONDS):
+        if cancelled():
+            raise _ChunkRequestCancelled()
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome.get("result")
 
 
 def _call_chunk_transcription_api(
@@ -372,14 +411,22 @@ def _call_chunk_transcription_api(
             print("Riprendo con la nuova chiave.")
 
     def _call(current_client):
-        return _generate_chunk_content_with_fallback(
-            current_client=current_client,
-            model_name=model_name,
-            system_prompt=system_prompt,
-            chunk_prompt=chunk_prompt,
-            audio_inline=audio_inline,
-            ensure_uploaded_audio_fn=_ensure_uploaded_audio_input,
-        )
+        try:
+            return _run_until_cancelled(
+                lambda: _generate_chunk_content_with_fallback(
+                    current_client=current_client,
+                    model_name=model_name,
+                    system_prompt=system_prompt,
+                    chunk_prompt=chunk_prompt,
+                    audio_inline=audio_inline,
+                    ensure_uploaded_audio_fn=_ensure_uploaded_audio_input,
+                    cancelled=cancelled,
+                ),
+                cancelled,
+            )
+        except _ChunkRequestCancelled:
+            print(f"Blocco {chunk_idx} interrotto: la risposta non verrà salvata.")
+            raise
 
     try:
         return retry_with_quota(
