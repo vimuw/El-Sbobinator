@@ -4,7 +4,9 @@ import { normalizeImageOffsetY, normalizeImagePosition } from './imageLayout';
 import { IMAGE_WRAP_PREVIEW_EVENT } from './imageDrag';
 
 type Gap = { pos: number; width: number; height: number };
-type WrapState = { decorations: DecorationSet; affectedEnd: number | null; revision: number };
+// The measured region spans [affectedStart, affectedEnd]. A missing start means
+// the region begins with the document.
+type WrapState = { decorations: DecorationSet; affectedStart?: number; affectedEnd: number | null; revision: number };
 const key = new PluginKey<WrapState>('imageWrap');
 const GAP = 16;
 const textNodes = (root: HTMLElement): Text[] => {
@@ -42,11 +44,11 @@ function positionImages(root: HTMLElement, tops?: number[]) {
 
 // Reserve space in each affected line with view decorations. Document text and
 // marks remain ProseMirror content; copying/saving never includes these gaps.
-function measure(view: EditorView): { gaps: Gap[]; affectedEnd: number | null; tops: number[] } {
+function measure(view: EditorView): { gaps: Gap[]; affectedStart: number; affectedEnd: number | null; tops: number[] } {
   const root = view.dom;
   const images = Array.from(root.querySelectorAll<HTMLElement>('.editor-image-node[data-layout="wrap"]'));
-  if (!images.length) return { gaps: [], affectedEnd: 0, tops: [] };
-  if (!root.offsetWidth) return { gaps: [], affectedEnd: null, tops: [] };
+  if (!images.length) return { gaps: [], affectedStart: 0, affectedEnd: 0, tops: [] };
+  if (!root.offsetWidth) return { gaps: [], affectedStart: 0, affectedEnd: null, tops: [] };
   positionImages(root);
 
   // Content beyond the last figure cannot change its exclusion geometry. Keep
@@ -129,7 +131,7 @@ function measure(view: EditorView): { gaps: Gap[]; affectedEnd: number | null; t
       ...Array.from(child.querySelectorAll<HTMLElement>(atomSelector)),
     ]);
     const documentAtoms: Array<{ dom: globalThis.Node; pos: number }> = [];
-    view.state.doc.descendants((node, pos) => {
+    view.state.doc.nodesBetween(blocks[0]?.from ?? 0, blocks.at(-1)?.end ?? 0, (node, pos) => {
       if (node.isAtom || node.type.name === 'table' || node.type.name === 'codeBlock') {
         const dom = view.nodeDOM(pos);
         if (dom) documentAtoms.push({ dom, pos });
@@ -232,7 +234,9 @@ function measure(view: EditorView): { gaps: Gap[]; affectedEnd: number | null; t
       block.dom.getBoundingClientRect().top < bottom ||
       gaps.some(gap => gap.pos >= block.from && gap.pos <= block.end),
     ).map(block => block.end));
-    return { gaps, affectedEnd, tops };
+    // Blocks above the region only move it down as a whole: every figure is
+    // anchored in its own paragraph, so edits there keep the solved gaps.
+    return { gaps, affectedStart: blocks[0]?.from ?? 0, affectedEnd, tops };
   } finally { clone.remove(); }
 }
 
@@ -251,19 +255,21 @@ export function createImageWrapPlugin(): Plugin<WrapState> {
   return new Plugin({
     key,
     state: {
-      init: () => ({ decorations: DecorationSet.empty, affectedEnd: null, revision: 0 }),
+      init: (): WrapState => ({ decorations: DecorationSet.empty, affectedStart: 0, affectedEnd: null, revision: 0 }),
       apply: (tr, previous) => {
         const measured = tr.getMeta(key) as WrapState | undefined;
         if (measured) return measured;
         if (!tr.docChanged) return previous;
+        let affectedStart = previous.affectedStart ?? 0;
         let affectedEnd = previous.affectedEnd;
         let invalidated = affectedEnd === null;
         tr.steps.forEach((step, index) => {
           const map = step.getMap();
           let hasRange = false;
-          map.forEach((from, _to, newFrom, newTo) => {
+          map.forEach((from, to, newFrom, newTo) => {
             hasRange = true;
-            if (affectedEnd === null || from <= affectedEnd) invalidated = true;
+            // Content inserted or removed wholly above the region start is not inside it.
+            if (affectedEnd === null || (from <= affectedEnd && to > affectedStart)) invalidated = true;
             // A new Wrap after the cached region extends that region.
             const doc = tr.docs[index + 1] ?? tr.doc;
             if (newTo > newFrom) doc.nodesBetween(newFrom, newTo, node => {
@@ -273,10 +279,11 @@ export function createImageWrapPlugin(): Plugin<WrapState> {
           // Attribute/mark steps can change geometry despite an empty StepMap.
           if (!hasRange) invalidated = true;
           if (affectedEnd !== null) affectedEnd = map.map(affectedEnd, -1);
+          affectedStart = map.map(affectedStart, 1);
         });
         return invalidated
-          ? { decorations: DecorationSet.empty, affectedEnd: null, revision: previous.revision + 1 }
-          : { ...previous, affectedEnd, decorations: previous.decorations.map(tr.mapping, tr.doc) };
+          ? { decorations: DecorationSet.empty, affectedStart: 0, affectedEnd: null, revision: previous.revision + 1 }
+          : { ...previous, affectedStart, affectedEnd, decorations: previous.decorations.map(tr.mapping, tr.doc) };
       },
     },
     props: { decorations: state => key.getState(state)?.decorations },
@@ -289,13 +296,13 @@ export function createImageWrapPlugin(): Plugin<WrapState> {
         frame = requestAnimationFrame(() => {
           frame = 0;
           if (view.isDestroyed || destroyed || view.dom.querySelector('[data-image-dragging], [data-image-resizing]')) return;
-          const { gaps, affectedEnd, tops } = measure(view);
+          const { gaps, affectedStart, affectedEnd, tops } = measure(view);
           const next = JSON.stringify(gaps);
           const previous = key.getState(view.state)!;
-          if (next === signature && previous.affectedEnd === affectedEnd && (gaps.length === 0 || previous.decorations.find().length)) { positionImages(view.dom, tops); return; }
+          if (next === signature && previous.affectedEnd === affectedEnd && previous.affectedStart === affectedStart && (gaps.length === 0 || previous.decorations.find().length)) { positionImages(view.dom, tops); return; }
           signature = next;
           const decorations = gaps.map((gap, i) => Decoration.widget(gap.pos, () => gapElement(gap), { side: -1, key: `${i}:${gap.pos}:${gap.width}:${gap.height}` }));
-          view.dispatch(view.state.tr.setMeta(key, { decorations: DecorationSet.create(view.state.doc, decorations), affectedEnd, revision: previous.revision }).setMeta('addToHistory', false));
+          view.dispatch(view.state.tr.setMeta(key, { decorations: DecorationSet.create(view.state.doc, decorations), affectedStart, affectedEnd, revision: previous.revision }).setMeta('addToHistory', false));
           positionImages(view.dom, tops);
         });
       };
