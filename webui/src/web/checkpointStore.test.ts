@@ -32,6 +32,10 @@ describe('checkpoint store', () => {
     const other = await fileIdentity(new Blob([new Uint8Array(1024).fill(2)]), 'a.mp3');
     expect(await store.findByFile(other)).toBeNull();
     expect((await store.get('s'))?.file).toEqual(identity);
+    const finished = { ...(await store.get('s'))!, archiveSessionDir: 'web-session://x' };
+    await store.save(finished);
+    expect((await store.findByArchive('web-session://x'))?.id).toBe('s');
+    expect(await store.findByArchive('web-session://y')).toBeNull();
     await store.delete('s');
     expect(await store.get('s')).toBeNull();
   });

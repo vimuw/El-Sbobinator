@@ -47,6 +47,10 @@ export function createCheckpointStore(factory: IDBFactory = indexedDB): Checkpoi
       matches.sort((a, b) => b.updatedAt - a.updatedAt);
       return strip(matches[0]);
     },
+    async findByArchive(sessionDir: string) {
+      const all = await run('readonly', store => store.getAll() as IDBRequest<StoredCheckpoint[]>);
+      return strip(all.find(state => state.archiveSessionDir === sessionDir));
+    },
     async get(id: string) {
       return strip(await run('readonly', store => store.get(id) as IDBRequest<StoredCheckpoint | undefined>));
     },

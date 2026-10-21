@@ -58,6 +58,7 @@ export interface SessionState {
 
 export interface CheckpointStore {
   findByFile(file: FileIdentity): Promise<SessionState | null>;
+  findByArchive(sessionDir: string): Promise<SessionState | null>;
   get(id: string): Promise<SessionState | null>;
   save(state: SessionState): Promise<void>;
   delete(id: string): Promise<void>;

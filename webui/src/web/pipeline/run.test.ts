@@ -43,6 +43,7 @@ function memoryStore() {
   const saved: SessionState[] = [];
   const store: CheckpointStore = {
     findByFile: async () => null,
+    findByArchive: async () => null,
     get: async () => null,
     save: async state => { saved.push(structuredClone(state)); },
     delete: async () => {},
