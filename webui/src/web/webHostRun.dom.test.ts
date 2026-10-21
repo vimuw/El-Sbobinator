@@ -143,6 +143,44 @@ describe('web host with the real pipeline', () => {
     expect(named('fileDone')).toEqual([expect.objectContaining({ effective_model: 'gemini-2.5-flash' })]);
   });
 
+  it('asks before leaving the page only while a run is active', async () => {
+    const leaveBlocked = () => !window.dispatchEvent(new Event('beforeunload', { cancelable: true }));
+    mockGemini([quota, okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
+    const { api, named, finished } = host(store, 1);
+    const [file] = await api.upload_browser_files!([new File(['a'], 'a.mp3')]);
+    expect(leaveBlocked()).toBe(false);
+
+    // A path the page no longer holds never starts a run.
+    await api.start_processing!([{ ...file, path: 'local://gone/a.mp3' }], KEY, true, 'gemini-2.5-flash');
+    expect(leaveBlocked()).toBe(false);
+
+    await api.start_processing!([file], KEY, true, 'gemini-2.5-flash');
+    await vi.waitFor(() => expect(named('askNewKey')).toHaveLength(1));
+    expect(leaveBlocked()).toBe(true);
+    await api.answer_new_key!('AIzaSyNuova123456789012345678');
+    await finished();
+    expect(leaveBlocked()).toBe(false);
+
+    // Stop and the simulated run release it too.
+    mockGemini([quota]);
+    const stopped = host(store, 1);
+    const [other] = await stopped.api.upload_browser_files!([new File(['b'], 'b.mp3')]);
+    await stopped.api.start_processing!([other], KEY, true, 'gemini-2.5-flash');
+    await vi.waitFor(() => expect(stopped.named('askNewKey')).toHaveLength(1));
+    expect(leaveBlocked()).toBe(true);
+    await stopped.api.stop_processing!();
+    await stopped.finished();
+    expect(leaveBlocked()).toBe(false);
+
+    vi.useFakeTimers();
+    const demo = createWebPywebviewApi(() => {}, { simulation: true });
+    const [sample] = await demo.upload_browser_files!([new File(['c'], 'c.mp3')]);
+    await demo.start_processing!([sample], KEY, true, 'gemini-2.5-flash');
+    expect(leaveBlocked()).toBe(true);
+    await vi.runAllTimersAsync();
+    expect(leaveBlocked()).toBe(false);
+  });
+
   it('refuses a queued path the page no longer holds', async () => {
     mockGemini([]);
     const { api } = host(store);

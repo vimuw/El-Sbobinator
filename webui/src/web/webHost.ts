@@ -121,6 +121,19 @@ const noAudio: AudioSource = {
 
 export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOptions = {}): PywebviewApi {
   let activeRun: AbortController | null = null;
+  // Leaving or reloading the page stops the run: the browser asks first while one is active.
+  const confirmLeave = (event: BeforeUnloadEvent) => {
+    event.preventDefault();
+    event.returnValue = '';
+  };
+  const setActiveRun = (run: AbortController | null) => {
+    activeRun = run;
+    if (run) window.addEventListener('beforeunload', confirmLeave);
+    else window.removeEventListener('beforeunload', confirmLeave);
+  };
+  const endRun = (run: AbortController) => {
+    if (activeRun === run) setActiveRun(null);
+  };
   const frontendEvents: string[] = [];
   const regenerateAnswer: AnswerSlot<RegenerateAnswer> = { current: null };
   const newKeyAnswer: AnswerSlot<string | null | 'timeout'> = { current: null };
@@ -189,11 +202,11 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       if (!file) return { ok: false, error: 'Nessun file da elaborare.' };
       if (!apiKey.trim()) return { ok: false, error: 'Inserisci una chiave API Gemini nelle impostazioni.' };
       const run = new AbortController();
-      activeRun = run;
+      setActiveRun(run);
       if (!options.simulation) {
         const blob = file.path ? getWebFile(file.path) : undefined;
         if (!blob) {
-          activeRun = null;
+          setActiveRun(null);
           return { ok: false, error: 'Audio non più disponibile in questa pagina: selezionalo di nuovo.' };
         }
         const page = createPage();
@@ -221,7 +234,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
           emit('processDone', { cancelled: false, completed: 0, failed: 1, total: 1 });
         }).finally(() => {
           page.dispose();
-          if (activeRun === run) activeRun = null;
+          endRun(run);
         });
         return { ok: true };
       }
@@ -235,7 +248,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
         emit('fileFailed', { index: 0, id: file.id, error: error instanceof Error ? error.message : String(error) });
         emit('processDone', { cancelled: false, completed: 0, failed: 1, total: 1 });
       }).finally(() => {
-        if (activeRun === run) activeRun = null;
+        endRun(run);
       });
       return { ok: true };
     },
@@ -268,7 +281,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       const keys = runKeys('');
       if (!keys.length) return { ok: false, error: 'API key mancante: aggiungila nelle impostazioni.' };
       const run = new AbortController();
-      activeRun = run;
+      setActiveRun(run);
       const page = createPage();
       try {
         const result = await retryFailedSections(state, {
@@ -318,7 +331,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
         return { ok: false, error: error instanceof Error ? error.message : String(error) };
       } finally {
         page.dispose();
-        if (activeRun === run) activeRun = null;
+        endRun(run);
       }
     },
 
