@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
-import { motion, AnimatePresence, MotionConfig } from 'motion/react';
+import { motion, MotionConfig } from 'motion/react';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { GithubIcon } from './components/icons/GithubIcon';
 import { fade } from './motion';
@@ -519,108 +519,108 @@ export default function App() {
       />
 
       <div className="flex flex-col flex-1 min-w-0 h-screen overflow-hidden">
-        <AnimatePresence mode="wait">
-          {activePage === 'queue' ? (
-            <QueuePage
-              files={files}
-              progress={{
-                appState,
-                currentPhase,
-                currentModel,
-                activeProgress,
-                workDone,
-                workTotals,
-                processingWarnings,
-                batchCompleted,
-                batchTotal,
-                completionFlash,
-              }}
-              auth={{
-                apiReady,
-                bridgeDelayed,
-                apiKey,
-                setApiKey,
-                hasProtectedKey,
-                apiKeyInsecure,
-                setApiKeyInsecure,
-                apiKeyInsecureReason,
-                setApiKeyInsecureReason,
-                fallbackKeys,
-                preferredModel,
-                setPreferredModel,
+        {/* The next page mounts at once and fades in; the previous one leaves
+            instantly. Waiting for its exit held every switch for ~165 ms. */}
+        {activePage === 'queue' ? (
+          <QueuePage
+            files={files}
+            progress={{
+              appState,
+              currentPhase,
+              currentModel,
+              activeProgress,
+              workDone,
+              workTotals,
+              processingWarnings,
+              batchCompleted,
+              batchTotal,
+              completionFlash,
+            }}
+            auth={{
+              apiReady,
+              bridgeDelayed,
+              apiKey,
+              setApiKey,
+              hasProtectedKey,
+              apiKeyInsecure,
+              setApiKeyInsecure,
+              apiKeyInsecureReason,
+              setApiKeyInsecureReason,
+              fallbackKeys,
+              preferredModel,
+              setPreferredModel,
 
-              }}
-              ingest={{
-                isDragging,
-                handleDragOver,
-                handleDragLeave,
-                handleDrop,
-                handleBrowseClick,
-              }}
-              console={{
-                showConsole,
-                setShowConsole,
-                consoleLogs,
-                isConsoleExpanded,
-                setIsConsoleExpanded,
-                appendConsole,
-              }}
-              actions={{
-                requestRemoveFile,
-                handleClearAll,
-                handleQueueRetry,
-                handleQueueResumeAll,
-                openPreview,
-                openFile,
-                handleQueueStart,
-                handleQueueStop,
-                handleOpenSettings,
-                handleRemoveDoneFile,
-                handleRetryFailedRevisionBlocks,
-              }}
-              autoContinue={autoContinue}
-              setAutoContinue={setAutoContinue}
-              archiveSessions={archiveSessions}
-              isArchiveLoaded={isArchiveLoaded}
-              completedSessionFolderMap={completedSessionFolderMap}
-              dndSensors={dndSensors}
-              handleDragEnd={handleDragEnd}
-              onOpenArchive={() => setActivePage('archive')}
-            />
-          ) : (
-            <motion.main
-              key="archive"
-              className="flex-1 w-full flex flex-col overflow-y-auto app-scroll"
-              {...fade}
-            >
-              <div className="flex-1 px-5 sm:px-6 py-8 flex flex-col max-w-4xl w-full mx-auto">
-                <React.Suspense fallback={null}>
-                  <ArchivePage
-                    sessions={archiveFiltered}
-                    total={archiveTotal - (archiveSessions.length - archiveFiltered.length)}
-                    folders={folders}
-                    onFoldersChange={handleFoldersChange}
-                    onPreview={openPreview}
-                    onOpenFile={openFile}
-                    onDeleteSession={(sessionDir, name) => setConfirmAction({ type: 'delete-archive-session', sessionDir, name })}
-                    onDeleteMultipleSessions={(sessionsList) => setConfirmAction({ type: 'delete-multiple-archive-sessions', sessions: sessionsList })}
-                    onRefresh={refreshArchiveSessions}
-                    onRenameSession={handleRenameSession}
-                    onLoadAll={handleLoadAll}
-                    onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
-                    onNotification={addNotification}
-                  />
-                </React.Suspense>
-              </div>
-              <footer className="app-footer app-footer-links">
-                <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link">
-                  <GithubIcon className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
-                </a>
-                <ReportProblemLink />
-              </footer>
-            </motion.main>
-          )}
-        </AnimatePresence>
+            }}
+            ingest={{
+              isDragging,
+              handleDragOver,
+              handleDragLeave,
+              handleDrop,
+              handleBrowseClick,
+            }}
+            console={{
+              showConsole,
+              setShowConsole,
+              consoleLogs,
+              isConsoleExpanded,
+              setIsConsoleExpanded,
+              appendConsole,
+            }}
+            actions={{
+              requestRemoveFile,
+              handleClearAll,
+              handleQueueRetry,
+              handleQueueResumeAll,
+              openPreview,
+              openFile,
+              handleQueueStart,
+              handleQueueStop,
+              handleOpenSettings,
+              handleRemoveDoneFile,
+              handleRetryFailedRevisionBlocks,
+            }}
+            autoContinue={autoContinue}
+            setAutoContinue={setAutoContinue}
+            archiveSessions={archiveSessions}
+            isArchiveLoaded={isArchiveLoaded}
+            completedSessionFolderMap={completedSessionFolderMap}
+            dndSensors={dndSensors}
+            handleDragEnd={handleDragEnd}
+            onOpenArchive={() => setActivePage('archive')}
+          />
+        ) : (
+          <motion.main
+            key="archive"
+            className="flex-1 w-full flex flex-col overflow-y-auto app-scroll"
+            {...fade}
+          >
+            <div className="flex-1 px-5 sm:px-6 py-8 flex flex-col max-w-4xl w-full mx-auto">
+              <React.Suspense fallback={null}>
+                <ArchivePage
+                  sessions={archiveFiltered}
+                  total={archiveTotal - (archiveSessions.length - archiveFiltered.length)}
+                  folders={folders}
+                  onFoldersChange={handleFoldersChange}
+                  onPreview={openPreview}
+                  onOpenFile={openFile}
+                  onDeleteSession={(sessionDir, name) => setConfirmAction({ type: 'delete-archive-session', sessionDir, name })}
+                  onDeleteMultipleSessions={(sessionsList) => setConfirmAction({ type: 'delete-multiple-archive-sessions', sessions: sessionsList })}
+                  onRefresh={refreshArchiveSessions}
+                  onRenameSession={handleRenameSession}
+                  onLoadAll={handleLoadAll}
+                  onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
+                  onNotification={addNotification}
+                />
+              </React.Suspense>
+            </div>
+            <footer className="app-footer app-footer-links">
+              <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link">
+                <GithubIcon className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
+              </a>
+              <ReportProblemLink />
+            </footer>
+          </motion.main>
+        )}
       </div>
 
       <RegenerateModal
