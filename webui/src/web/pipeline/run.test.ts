@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PROMPT_REVISIONE, PROMPT_SISTEMA } from '../../generationProfile';
 import { NOTICE_PREFIX } from '../../phaseLabels';
 import { CancelledError, QuotaDailyLimitError } from './retry';
-import { FileMismatchError, defaultSettings, runPipeline, type AudioSource, type PipelineEnv, type PreparedAudio } from './run';
+import { FileMismatchError, defaultSettings, retryFailedSections, runPipeline, type AudioSource, type PipelineEnv, type PreparedAudio } from './run';
 import { newSession, type CheckpointStore, type SessionState } from './session';
 
 type GeminiBody = {
@@ -258,5 +258,53 @@ describe('runPipeline', () => {
     await expect(runPipeline(session('gemini-3.6-flash'), env)).rejects.toBeInstanceOf(CancelledError);
     expect(calls).toHaveLength(0);
     expect(other).toContain('DELETE /v1beta/files/abc');
+  });
+});
+
+describe('retryFailedSections', () => {
+  function finished(): SessionState {
+    const state = session();
+    state.stage = 'done';
+    state.plan = [{ index: 0, startSec: 0, durationSec: 900 }];
+    state.chunkTexts = ['testo'];
+    state.macroBlocks = ['## A\n\nPrima sezione.', '## B\n\nSeconda sezione.', '## C\n\nTerza sezione.'];
+    state.revised = ['## A\n\nPrima rivista.', '## B\n\nSeconda sezione.', '## C\n\nTerza sezione.'];
+    state.failedBlocks = [1, 2];
+    state.body = '<h1>vecchio</h1>';
+    return state;
+  }
+  const bad = { status: 400, json: { error: { status: 'INVALID_ARGUMENT', message: 'bad' } } };
+  const quota = { status: 429, json: { error: { status: 'RESOURCE_EXHAUSTED', message: 'exceeded your current quota' } } };
+
+  it('revises only the failed sections and exports the body again', async () => {
+    const { calls } = mockGemini([okText('## B\n\nSeconda rivista.'), bad]);
+    const state = finished();
+    const result = await retryFailedSections(state, makeEnv(fakeAudio(1)).env);
+    expect(calls.map(call => call.body.contents[0].parts[0].text)).toEqual(['## B\n\nSeconda sezione.', '## C\n\nTerza sezione.']);
+    expect(result).toEqual({ retried: [1], remaining: [2], cancelled: false, quotaExhausted: false });
+    expect(state.failedBlocks).toEqual([2]);
+    expect(state.body).toContain('Seconda rivista');
+    expect(state.body).toContain('revision-warning-banner');
+  });
+
+  it('keeps the body when nothing was revised and reports the quota', async () => {
+    mockGemini([quota]);
+    const state = finished();
+    const result = await retryFailedSections(state, makeEnv(fakeAudio(1)).env);
+    expect(result).toEqual({ retried: [], remaining: [1, 2], cancelled: false, quotaExhausted: true });
+    expect(state.body).toBe('<h1>vecchio</h1>');
+  });
+
+  it('stops on cancel and keeps what was already revised', async () => {
+    const { env, controller } = makeEnv(fakeAudio(1));
+    mockGemini([() => okText('## B\n\nSeconda rivista.')]);
+    env.sleep = async () => {
+      controller.abort();
+      throw new CancelledError('annullato');
+    };
+    const state = finished();
+    const result = await retryFailedSections(state, env);
+    expect(result).toEqual({ retried: [1], remaining: [2], cancelled: true, quotaExhausted: false });
+    expect(state.body).toContain('Seconda rivista');
   });
 });

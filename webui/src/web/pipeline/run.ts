@@ -120,6 +120,27 @@ export class FileMismatchError extends Error {
 
 /** Runs (or resumes) the session to the end; the state is checkpointed after every step. */
 export async function runPipeline(state: SessionState, env: PipelineEnv): Promise<SessionState> {
+  return createPipeline(state, env).run();
+}
+
+export interface SectionRetryResult {
+  /** 0-based sections revised by this retry. */
+  retried: number[];
+  /** 0-based sections still unrevised. */
+  remaining: number[];
+  cancelled: boolean;
+  quotaExhausted: boolean;
+}
+
+/**
+ * Revises again the sections a finished session included unrevised (desktop
+ * retry_failed_revision_blocks) and exports the body again when at least one succeeded.
+ */
+export async function retryFailedSections(state: SessionState, env: PipelineEnv): Promise<SectionRetryResult> {
+  return createPipeline(state, env).retrySections();
+}
+
+function createPipeline(state: SessionState, env: PipelineEnv) {
   if (!env.keys.length) throw new Error('Nessuna chiave API');
   const { reporter, signal } = env;
   const ring: KeyRing = { keys: [...env.keys], index: 0 };
@@ -159,10 +180,58 @@ export async function runPipeline(state: SessionState, env: PipelineEnv): Promis
       : `⚠ Chiave di riserva ${from + 1} non valida: continuo con la chiave ${to + 1}/${ring.keys.length}.`);
   }, env.requestNewKey);
 
-  if (state.stage === 'phase1') await phase1();
-  if (state.stage === 'phase2') await phase2();
-  if (!state.body) await exportBody();
-  return state;
+  return { run, retrySections };
+
+  async function run(): Promise<SessionState> {
+    if (state.stage === 'phase1') await phase1();
+    if (state.stage === 'phase2') await phase2();
+    if (!state.body) await exportBody();
+    return state;
+  }
+
+  async function retrySections(): Promise<SectionRetryResult> {
+    const blocks = state.macroBlocks ?? [];
+    const revised = (state.revised ??= blocks.map(() => null));
+    const failed = new Set(state.failedBlocks ?? []);
+    const targets = blocks.map((_, i) => i).filter(i => revised[i] === null || failed.has(i));
+    const total = blocks.length;
+    const retried: number[] = [];
+    let cancelled = false;
+    let quotaExhausted = false;
+    reporter.totals(state.plan?.length ?? state.chunkTexts.length, total);
+    try {
+      for (const [n, i] of targets.entries()) {
+        throwIfCancelled();
+        setPhase(phaseText.revisionRetryBlock(i + 1, total));
+        reporter.progress(n / targets.length);
+        if (await revise(i, total)) {
+          failed.delete(i);
+          retried.push(i);
+        } else {
+          revised[i] ??= blocks[i].trim();
+          failed.add(i);
+        }
+        state.failedBlocks = [...failed].sort((a, b) => a - b);
+        await save();
+        reporter.workDone('macro', total - failed.size, total);
+        if (n + 1 < targets.length) await env.sleep(PIPELINE_DEFAULTS.pauseBetweenCallsSec, signal);
+      }
+    } catch (error) {
+      if (error instanceof CancelledError || signal.aborted) cancelled = true;
+      else if (error instanceof QuotaDailyLimitError) quotaExhausted = true;
+      else throw error;
+    }
+    for (const i of targets) {
+      if (revised[i] === null) {
+        revised[i] = blocks[i].trim();
+        failed.add(i);
+      }
+    }
+    state.failedBlocks = [...failed].sort((a, b) => a - b);
+    if (retried.length) await exportBody();
+    else await save();
+    return { retried, remaining: state.failedBlocks, cancelled, quotaExhausted };
+  }
 
   // ------------------------------------------------------------------ phase 1
   async function phase1() {
