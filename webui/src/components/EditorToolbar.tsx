@@ -43,6 +43,14 @@ const menuBarStateKey = (editor: TiptapEditor): string => [
   JSON.stringify(editor.getAttributes(editor.isActive('heading') ? 'heading' : 'paragraph').documentStyle ?? null),
 ].join('|');
 
+// A pressed toolbar button must not blur the editor: blur and refocus each
+// restyle the whole document. React bubbles portalled dropdown events here too.
+const keepEditorFocus = (event: React.MouseEvent) => {
+  const target = event.target as HTMLElement;
+  if (event.button !== 0 || target.closest('input, textarea, select, label')) return;
+  if (target.closest('button')) event.preventDefault();
+};
+
 export const MenuBar = ({
   editor,
   onOpenImagePicker,
@@ -88,7 +96,7 @@ export const MenuBar = ({
   const btn = (active: boolean) => `editor-button${active ? ' is-active' : ''}`;
 
   return (
-    <div className="editor-toolbar">
+    <div className="editor-toolbar" onMouseDown={keepEditorFocus}>
       <button
         type="button"
         onClick={() => {

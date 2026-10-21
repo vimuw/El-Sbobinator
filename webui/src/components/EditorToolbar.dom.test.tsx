@@ -161,4 +161,36 @@ describe('EditorToolbar MenuBar', () => {
       expect(screen.getByTitle('Carattere').textContent).toContain('Arial');
     } finally { editor.destroy(); }
   });
+
+  it('keeps the editor focused when toolbar and dropdown buttons are pressed', () => {
+    const editor = new Editor({ extensions: [StarterKit], content: '<p>Uno</p>' });
+    try {
+      render(
+        <MenuBar
+          editor={editor}
+          onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
+          showFindReplace={false}
+          onToggleFindReplace={vi.fn()}
+          onOpenLink={vi.fn()}
+        />
+      );
+      const list = screen.getByTitle('Elenco puntato');
+      // fireEvent returns false once the default (moving focus to the button) is cancelled.
+      expect(fireEvent.mouseDown(list)).toBe(false);
+      expect(fireEvent.mouseDown(list.querySelector('svg')!)).toBe(false);
+      // Secondary buttons keep their native behaviour.
+      expect(fireEvent.mouseDown(list, { button: 2 })).toBe(true);
+      fireEvent.click(list);
+      expect(editor.isActive('bulletList')).toBe(true);
+
+      // Portalled dropdown items bubble through React to the toolbar.
+      fireEvent.click(screen.getByTitle('Allineamento testo'));
+      expect(fireEvent.mouseDown(screen.getByRole('button', { name: 'Al centro' }))).toBe(false);
+
+      // Text fields inside toolbar panels still take focus.
+      fireEvent.click(screen.getByTitle('Inserisci link (Ctrl+K)'));
+      const input = screen.getByPlaceholderText('https://...');
+      expect(fireEvent.mouseDown(input)).toBe(true);
+    } finally { editor.destroy(); }
+  });
 });
