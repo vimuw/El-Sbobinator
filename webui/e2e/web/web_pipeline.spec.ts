@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
+import { expectAutosaved } from '../autosave';
 
 // The real pipeline in the static build with Gemini answered by page.route: the audio is cut and
 // encoded in the worker for real (Chromium WebCodecs), only the network is fake. Not Safari or an iPad.
@@ -69,4 +70,38 @@ test('transcribes a file through the real pipeline and opens it in the editor @w
   await page.reload();
   await expect(page.locator('.queue-card.is-completed', { hasText: 'Fisiologia renale.mp3' })).toBeVisible();
   expect(await page.evaluate(async () => (await indexedDB.databases()).map(db => db.name))).toContain('el-sbobinator-web');
+});
+
+test('reopens an edited sbobina from the archive after a reload and in a new tab', async ({ page, context }) => {
+  await fakeGemini(page);
+  await page.goto('/');
+  await page.getByLabel('Chiave API Gemini').fill(DUMMY_KEY);
+  await page.getByRole('button', { name: 'Salva e inizia' }).click();
+  const chooserPromise = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
+  await (await chooserPromise).setFiles({ name: 'Istologia.mp3', mimeType: 'audio/mpeg', buffer: syntheticMp3(400) });
+  await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
+  await expect(page.getByText('Sbobinatura completata!')).toBeVisible({ timeout: 40_000 });
+
+  await page.locator('.queue-card.is-completed', { hasText: 'Istologia.mp3' }).click();
+  const editor = page.locator('.tiptap-editor');
+  await expect(editor.locator('h1')).toHaveText('Istologia');
+  await editor.locator('p').last().click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' Nota aggiunta nel browser.');
+  await expectAutosaved(page);
+
+  const reopen = async (target: Page) => {
+    await target.getByRole('button', { name: 'Archivio', exact: true }).click();
+    await target.locator('.archive-session-card').filter({ has: target.getByRole('button', { name: 'Seleziona Istologia' }) }).click();
+    await expect(target.locator('.tiptap-editor')).toContainText('Nota aggiunta nel browser.');
+  };
+  await page.reload();
+  await reopen(page);
+
+  // Closing the tab and opening the site again keeps the archive (same browser profile).
+  await page.close();
+  const again = await context.newPage();
+  await again.goto('/');
+  await reopen(again);
 });
