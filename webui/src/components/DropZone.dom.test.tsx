@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { DropOverlay, DropZone } from './DropZone';
+import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 
 const baseProps = {
   isDragging: false,
@@ -18,6 +19,17 @@ describe('DropZone', () => {
     const summary = screen.getByText('Audio o video · MP3, M4A, WAV, MP4 e altri');
     expect(summary.getAttribute('title')).toContain('.flac');
     expect(summary.getAttribute('title')).toContain('.aac');
+  });
+
+  it('lists only the formats the web build can cut', () => {
+    setHostCapabilities({ kind: 'web' });
+    try {
+      render(<DropZone {...baseProps} />);
+      const summary = screen.getByText('Audio o video · MP3, M4A o MP4');
+      expect(summary.getAttribute('title')).toBe('Formati supportati: .mp3 · .m4a · .mp4');
+    } finally {
+      setHostCapabilities(DESKTOP_CAPABILITIES);
+    }
   });
 
   it('shows Sfoglia file as decoration of the single card button, not a nested control', () => {
