@@ -19,7 +19,8 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "test:e2e:smoke": "playwright test --project=chromium --grep @ci-smoke"
+    "test:e2e:smoke": "playwright test --project=chromium --grep @ci-smoke",
+    "test:e2e:web": "playwright test --config playwright.web.config.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
