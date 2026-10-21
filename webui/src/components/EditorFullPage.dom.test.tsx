@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EditorFullPage } from './EditorFullPage';
+import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 
 const editorMockState = vi.hoisted(() => ({ html: '<p>editor content</p>' }));
 
@@ -355,5 +356,20 @@ describe('EditorFullPage autosave', () => {
     } finally {
       rect.mockRestore();
     }
+  });
+});
+
+describe('EditorFullPage on hosts without session audio', () => {
+  afterEach(() => setHostCapabilities(DESKTOP_CAPABILITIES));
+
+  it('shows no audio dock and no player shortcuts', async () => {
+    setHostCapabilities({ kind: 'web', editorAudio: false });
+    render(<EditorFullPage {...baseProps} audio={{ src: null, relinkNeeded: true, onRelink: vi.fn(), init: {}, onStateChange: vi.fn() }} />);
+    await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
+
+    expect(screen.queryByText('Nessun audio collegato')).toBeNull();
+    expect(screen.queryByText('Audio non trovato')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Aggiungi audio|Ricollega audio/ })).toBeNull();
+    expect(screen.getByTestId('rich-text-editor').getAttribute('data-bottom-inset')).toBe('0');
   });
 });

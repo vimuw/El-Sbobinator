@@ -10,6 +10,7 @@ import { NotificationSection } from './settings/NotificationSection';
 import { StorageSection } from './settings/StorageSection';
 import { DiagnosticsSection } from './settings/DiagnosticsSection';
 import { ApiStatusSection } from './settings/ApiStatusSection';
+import { WebKeysSection } from './settings/WebKeysSection';
 import { UpdaterSection, UpdateNotice, type SettingsUpdateInstallState } from './settings/UpdaterSection';
 import { SettingsDivider, SettingsPageHeader } from './settings/SettingsLayout';
 
@@ -439,6 +440,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onClose();
   }, [onClose, setApiKey, setFallbackKeys, setPreferredModel]);
 
+  // Web build: "Rimuovi chiave" deletes the keys from this browser right away, not on "Salva".
+  const handleRemoveWebKeys = useCallback(async () => {
+    if (isSavingRef.current || !window.pywebview?.api?.save_settings) return;
+    isSavingRef.current = true;
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const result = await window.pywebview.api.save_settings('', [], preferredModel);
+      if (!isMountedRef.current) return;
+      if (!result?.ok) {
+        setSaveError(`Rimozione non riuscita: ${result?.error || 'errore sconosciuto'}`);
+        return;
+      }
+      setApiKey('');
+      setFallbackKeys([]);
+      if (settingsSnapshotRef.current) settingsSnapshotRef.current = { ...settingsSnapshotRef.current, apiKey: '', fallbackKeys: [] };
+      appendConsole('Chiavi API rimosse da questo browser.');
+      await onSettingsSaved?.();
+    } catch (e: unknown) {
+      if (isMountedRef.current) setSaveError(`Rimozione non riuscita: ${getErrorMessage(e)}`);
+    } finally {
+      isSavingRef.current = false;
+      if (isMountedRef.current) setIsSaving(false);
+    }
+  }, [appendConsole, onSettingsSaved, preferredModel, setApiKey, setFallbackKeys]);
+
   const handleConfirmDeleteKey = useCallback(() => {
     if (!keyDeleteTarget) return;
 
@@ -567,46 +594,65 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                       <SettingsDivider />
 
-                      <ApiKeySection
-                        apiKey={apiKey}
-                        setApiKey={key => {
-                          if (key.trim()) setClearProtectedPrimary(false);
-                          setApiKey(key);
-                        }}
-                        hasProtectedKey={hasProtectedKey && !clearProtectedPrimary}
-                        credentialStorage={credentialStorage}
-                        apiKeyInsecure={apiKeyInsecure}
-                        apiKeyInsecureReason={apiKeyInsecureReason || ''}
-                        fallbackKeys={fallbackKeys}
-                        setFallbackKeys={setFallbackKeys}
-                        onClearProtectedPrimary={() => setClearProtectedPrimary(true)}
-                        apiUsage={apiUsage}
-                        isLoadingUsage={isLoadingUsage}
-                        preferredModel={preferredModel}
-                        onAskDeleteKey={setKeyDeleteTarget}
-                        onRefreshUsage={handleRefreshUsage}
-                        statusSummary={<ApiStatusSection apiUsage={apiUsage} isLoadingUsage={isLoadingUsage} />}
-                      />
+                      {hostCapabilities.keyStorage === 'browser' ? (
+                        <WebKeysSection
+                          apiKey={apiKey}
+                          fallbackKeys={fallbackKeys}
+                          setApiKey={setApiKey}
+                          setFallbackKeys={setFallbackKeys}
+                          onRemoveKeys={() => void handleRemoveWebKeys()}
+                          disabled={isSaving}
+                        />
+                      ) : (
+                        <ApiKeySection
+                          apiKey={apiKey}
+                          setApiKey={key => {
+                            if (key.trim()) setClearProtectedPrimary(false);
+                            setApiKey(key);
+                          }}
+                          hasProtectedKey={hasProtectedKey && !clearProtectedPrimary}
+                          credentialStorage={credentialStorage}
+                          apiKeyInsecure={apiKeyInsecure}
+                          apiKeyInsecureReason={apiKeyInsecureReason || ''}
+                          fallbackKeys={fallbackKeys}
+                          setFallbackKeys={setFallbackKeys}
+                          onClearProtectedPrimary={() => setClearProtectedPrimary(true)}
+                          apiUsage={apiUsage}
+                          isLoadingUsage={isLoadingUsage}
+                          preferredModel={preferredModel}
+                          onAskDeleteKey={setKeyDeleteTarget}
+                          onRefreshUsage={handleRefreshUsage}
+                          statusSummary={<ApiStatusSection apiUsage={apiUsage} isLoadingUsage={isLoadingUsage} />}
+                        />
+                      )}
 
-                      <SettingsDivider />
+                      {hostCapabilities.osNotifications && (
+                        <>
+                          <SettingsDivider />
 
-                      <NotificationSection
-                        notificationsEnabled={notificationsEnabled}
-                        onChange={setNotificationsEnabled}
-                        disabled={isSaving}
-                      />
+                          <NotificationSection
+                            notificationsEnabled={notificationsEnabled}
+                            onChange={setNotificationsEnabled}
+                            disabled={isSaving}
+                          />
+                        </>
+                      )}
 
-                      <SettingsDivider />
+                      {hostCapabilities.updateInstallation && (
+                        <>
+                          <SettingsDivider />
 
-                      <UpdaterSection
-                        latestVersion={latestVersion}
-                        checkForUpdates={checkForUpdates}
-                        isCheckingUpdate={isCheckingUpdate}
-                        hasChecked={hasChecked}
-                        checkFailed={checkFailed}
-                        updateInstallState={updateInstallState}
-                        onInstallUpdate={onInstallUpdate}
-                      />
+                          <UpdaterSection
+                            latestVersion={latestVersion}
+                            checkForUpdates={checkForUpdates}
+                            isCheckingUpdate={isCheckingUpdate}
+                            hasChecked={hasChecked}
+                            checkFailed={checkFailed}
+                            updateInstallState={updateInstallState}
+                            onInstallUpdate={onInstallUpdate}
+                          />
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -636,6 +682,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         onRunValidation={runEnvironmentValidation}
                         validationResult={validationResult}
                         onCopyReport={handleCopyReport}
+                        showEnvironmentCheck={hostCapabilities.environmentCheck}
                       />
                     </div>
                   )}

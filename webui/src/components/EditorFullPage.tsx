@@ -10,6 +10,7 @@ import { ConfirmActionModal } from './modals/ConfirmActionModal';
 import { useTheme } from '../hooks/useTheme';
 import { useEditorAutosave, type EditorSaveController } from '../hooks/useEditorAutosave';
 import { STORAGE_KEYS } from '../storageKeys';
+import { getHostCapabilities } from '../hostCapabilities';
 import { EditorShortcuts } from './EditorShortcuts';
 // Bundled with the editor page: a lazy player flashed "Caricamento player..." on every first open.
 import { AudioPlayer } from './AudioPlayer';
@@ -117,6 +118,7 @@ export function EditorFullPage({
   const relinkTimerRef = useRef<number | null>(null);
   const copiedTimerRef = useRef<number | null>(null);
   const getHtmlRef = useRef<(() => string) | null>(null);
+  const showAudioDock = getHostCapabilities().editorAudio;
   const footerRef = useRef<HTMLDivElement>(null);
   const [footerHeight, setFooterHeight] = useState(0);
 
@@ -296,7 +298,7 @@ export function EditorFullPage({
                 <span className="editor-fullpage-copy-label">{isCopied ? 'Copiato!' : 'Copia documento'}</span>
               </button>
               <div className="editor-fullpage-utilities">
-                <EditorShortcuts audioAvailable={Boolean(audioSrc)} />
+                <EditorShortcuts audioAvailable={showAudioDock && Boolean(audioSrc)} />
                 <button
                   onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
                   className="icon-button theme-toggle-btn"
@@ -331,7 +333,9 @@ export function EditorFullPage({
               />
             </Suspense>
 
-            {/* The player floats over the page bottom; the editor reserves its height so text never hides under it. */}
+            {/* The player floats over the page bottom; the editor reserves its height so text never hides under it.
+                Hosts without session audio (the web build until M2b) have no dock at all. */}
+            {showAudioDock && (
             <div ref={footerRef} className="editor-fullpage-footer">
               <div className="editor-player-dock">
                 {audioProp?.warning && (
@@ -447,6 +451,7 @@ export function EditorFullPage({
                 )}
               </div>
             </div>
+            )}
           </div>
 
           <ConfirmActionModal

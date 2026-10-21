@@ -8,6 +8,7 @@ import {
 } from '../duplicateDetection';
 import type { AlreadyProcessedMatch, DuplicatePrompt } from '../components/modals/DuplicateFileModal';
 import type { PendingArchiveReplacement } from './useArchiveSync';
+import { getHostCapabilities } from '../hostCapabilities';
 
 type WebViewHostWindow = Window & {
   chrome?: {
@@ -182,7 +183,9 @@ export function useQueueIngest({
   const handleBrowseClick = async () => {
     if (appState === 'canceling') return;
     if (!apiReady || !window.pywebview || !window.pywebview.api) {
-      appendConsole('⚠ In attesa della connessione con Python... riprova tra un momento.');
+      appendConsole(getHostCapabilities().kind === 'web'
+        ? '⚠ L’app non è ancora pronta... riprova tra un momento.'
+        : '⚠ In attesa della connessione con Python... riprova tra un momento.');
       return;
     }
     try {

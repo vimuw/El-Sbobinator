@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { describe, expect, it, vi } from 'vitest';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { ArchivePage } from './ArchivePage';
+import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 
 const motionCache = new Map<string, React.ComponentType<Record<string, unknown>>>();
 vi.mock('motion/react', () => ({
@@ -598,5 +599,27 @@ describe('ArchivePage', () => {
     await vi.waitFor(() => {
       expect(onNotification).toHaveBeenCalledWith('Importazione non riuscita', 'Error: Network IPC failure', 'error');
     });
+  });
+});
+
+describe('ArchivePage on hosts without .sbobina packages', () => {
+  it('hides the import button', () => {
+    setHostCapabilities({ kind: 'web', sbobinaPackages: false });
+    try {
+      render(
+        <ArchivePage
+          sessions={[makeSession('s1')]}
+          folders={[]}
+          onFoldersChange={vi.fn()}
+          onPreview={vi.fn()}
+          onOpenFile={vi.fn()}
+          onDeleteSession={vi.fn()}
+        />,
+      );
+      expect(screen.getAllByText('Lezione s1').length).toBeGreaterThan(0);
+      expect(screen.queryByTitle('Importa Sbobina (.sbobina)')).toBeNull();
+    } finally {
+      setHostCapabilities(DESKTOP_CAPABILITIES);
+    }
   });
 });

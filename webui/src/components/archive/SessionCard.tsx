@@ -8,6 +8,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { ArchiveFolder, ArchiveSession } from '../../bridge';
 import { loadAllEditorSessions, type EditorSession } from '../../editorSessions';
 import { formatRelativeTime, shortModelName } from '../../utils';
+import { getHostCapabilities } from '../../hostCapabilities';
 import { KebabMenu, type KebabMenuItem } from '../KebabMenu';
 import { FolderIndicatorChip } from '../FolderChip';
 import { type ArchivePageProps, getOpenedAtMs, DEFAULT_FOLDER_COLOR } from './types';
@@ -82,11 +83,11 @@ export function DraggableSessionCard({
 
   const kebabItems: KebabMenuItem[] = [
     ...(onRenameSession ? [{ label: 'Rinomina', icon: <Pencil className="w-3.5 h-3.5" />, onClick: () => onRenameSession(session) }] : []),
-    {
+    ...(getHostCapabilities().openLocalPath ? [{
       label: 'Apri cartella',
       icon: <FolderOpen className="w-3.5 h-3.5" />,
       onClick: () => onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path),
-    },
+    } as KebabMenuItem] : []),
     ...(onShareSession ? [{
       label: 'Esporta Sbobina...',
       icon: <Download className="w-3.5 h-3.5" />,
@@ -328,11 +329,11 @@ export function SortableSessionCard({
   const kebabItems: KebabMenuItem[] = [
     ...(onRenameSession ? [{ label: 'Rinomina', icon: <Pencil className="w-3.5 h-3.5" />, onClick: () => onRenameSession(session) }] : []),
     ...(onMove ? [{ label: 'Sposta in…', icon: <Folder className="w-3.5 h-3.5" />, onClick: onMove }] : []),
-    {
+    ...(getHostCapabilities().openLocalPath ? [{
       label: 'Apri cartella',
       icon: <FolderOpen className="w-3.5 h-3.5" />,
       onClick: () => onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path),
-    },
+    } as KebabMenuItem] : []),
     ...(onShareSession ? [{
       label: 'Esporta Sbobina...',
       icon: <Download className="w-3.5 h-3.5" />,

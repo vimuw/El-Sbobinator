@@ -10,6 +10,7 @@ import { loadAllEditorSessions } from '../editorSessions';
 import { formatRelativeTime, normalizeSessionPath, shortModelName } from '../utils';
 import { FolderIndicatorChip } from './FolderChip';
 import { ShareExportModal } from './modals/ShareExportModal';
+import { getHostCapabilities } from '../hostCapabilities';
 import { ArchivePageTitle, ArchiveSectionHeading } from './archive/ArchiveLayout';
 
 import {
@@ -70,6 +71,7 @@ export function ArchivePage({
   const [sharingSession, setSharingSession] = useState<ArchiveSession | null>(null);
   const [renamingSession, setRenamingSession] = useState<ArchiveSession | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const canSharePackages = getHostCapabilities().sbobinaPackages;
 
   const handleImportSbobina = useCallback(async () => {
     if (isImporting) return;
@@ -343,7 +345,7 @@ export function ArchivePage({
           onDeleteSession={onDeleteSession}
           onDeleteMultipleSessions={handleOpenDeleteMultiple}
           onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
-          onShareSession={setSharingSession}
+          onShareSession={canSharePackages ? setSharingSession : undefined}
           onRenameSession={onRenameSession ? setRenamingSession : undefined}
         />
         {renderModals()}
@@ -499,7 +501,7 @@ export function ArchivePage({
               options={fullTextMode ? FULL_TEXT_SORT_OPTIONS : SORT_OPTIONS}
             />
             <div className="ml-auto flex items-center gap-2 shrink-0">
-              <button
+              {canSharePackages && <button
                 type="button"
                 onClick={handleImportSbobina}
                 disabled={isImporting}
@@ -508,7 +510,7 @@ export function ArchivePage({
                 aria-label="Importa Sbobina"
               >
                 {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4 transition duration-200 opacity-80 group-hover/import:opacity-100 group-hover/import:scale-110" />}
-              </button>
+              </button>}
               {onRefresh && (
                 <button
                   type="button"
@@ -602,7 +604,7 @@ export function ArchivePage({
                     onOpenFile={onOpenFile}
                     onDeleteSession={onDeleteSession}
                     onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
-                    onShareSession={setSharingSession}
+                    onShareSession={canSharePackages ? setSharingSession : undefined}
                     onRenameSession={onRenameSession ? setRenamingSession : undefined}
                   />
                 ))}
