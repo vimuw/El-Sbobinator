@@ -228,7 +228,8 @@ describe('EditorFullPage autosave', () => {
       render(<EditorFullPage {...baseProps} />);
       await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
       fireEvent.click(screen.getByRole('button', { name: 'Copia documento' }));
-      await waitFor(() => expect(formats['text/html']).toBeTruthy());
+      // Safari rejects clipboard writes that start after the click handler has returned.
+      expect(formats['text/html']).toBeTruthy();
       const copied = new DOMParser().parseFromString(formats['text/html'], 'text/html');
       expect(copied.querySelector('strong')?.textContent).toBe('importante');
       expect(copied.querySelector('h2')?.style.fontSize).toBe('16pt');

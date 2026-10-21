@@ -2,7 +2,7 @@ import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Check, Copy, FileText, Headphones, Loader2, Moon, Plus, Sun } from 'lucide-react';
 import type { Heading } from './RichTextEditor';
-import { prepareHtmlForClipboard } from '../utils';
+import { prepareHtmlForClipboardSync } from '../utils';
 import { writeEditorClipboard } from '../editorClipboard';
 import { clipboardPlainText } from '../documentFormatting';
 import { reportClientError } from '../diagnostics';
@@ -206,7 +206,9 @@ export function EditorFullPage({
   const handleCopy = async () => {
     const rawHtml = getHtmlRef.current?.() ?? lastPersistedRef.current;
     const sourceRoot = document.querySelector<HTMLElement>('.tiptap-editor') ?? undefined;
-    const clipboardHtml = await prepareHtmlForClipboard(rawHtml, sourceRoot);
+    // Safari only lets a click write the clipboard while the click is being handled, so nothing
+    // may be awaited before the write starts.
+    const clipboardHtml = prepareHtmlForClipboardSync(rawHtml, sourceRoot);
     const temp = document.createElement('div');
     temp.innerHTML = clipboardHtml;
     try {
