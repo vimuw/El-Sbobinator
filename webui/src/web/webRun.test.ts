@@ -168,6 +168,36 @@ describe('runWebFile', () => {
     expect(records.get('old')!.resumes).toBe(1);
   });
 
+  it('applies the model chosen now to a session that has no chunk yet', async () => {
+    const fetchMock = mockGemini([okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
+    // Stopped after the cut with 3.6 Flash: two planned chunks, none transcribed.
+    const stale = await checkpoint('phase1', { chunkTexts: [], settings: defaultSettings('gemini-3.6-flash') });
+    const askRegenerate = vi.fn(async () => false);
+    const { options, named, records } = setup({ model: 'gemini-2.5-flash', askRegenerate }, [stale]);
+
+    await expect(runWebFile(options)).resolves.toBe('completed');
+
+    expect(askRegenerate).not.toHaveBeenCalled();
+    expect(named('updateModel')).toEqual(['gemini-2.5-flash']);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/models/gemini-2.5-flash:generateContent');
+    const saved = records.get('old')!;
+    expect(saved.settings).toEqual(defaultSettings('gemini-2.5-flash'));
+    // Planned again with the new chunk length, not refused as a different file.
+    expect(saved.plan).toHaveLength(1);
+  });
+
+  it('keeps the session model once a chunk is transcribed', async () => {
+    const fetchMock = mockGemini([okText(chunkText(2)), okText('## R\n\nTesto rivisto.')]);
+    const started = await checkpoint('phase1', { settings: defaultSettings('gemini-3.6-flash') });
+    const { options, named, records } = setup({ model: 'gemini-2.5-flash', createAudio: () => fakeAudio(2) }, [started]);
+
+    await expect(runWebFile(options)).resolves.toBe('completed');
+
+    expect(named('updateModel')).toEqual(['gemini-3.6-flash']);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/models/gemini-3.6-flash:generateContent');
+    expect(records.get('old')!.settings).toEqual(defaultSettings('gemini-3.6-flash'));
+  });
+
   it('reuses an archived completed session without calling Gemini', async () => {
     const fetchMock = mockGemini([]);
     const done = await checkpoint('done', { archiveSessionDir: 'web-session://s1', body: '<h1>x</h1>' });

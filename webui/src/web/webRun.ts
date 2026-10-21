@@ -163,6 +163,12 @@ export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome>
       state = null;
     }
     state ??= newSession(crypto.randomUUID(), identity, defaultSettings(options.model));
+    // Like the desktop (pipeline_session): before the first chunk the current model choice wins,
+    // with its chunk length (the cut is planned again); afterwards the session keeps its model.
+    if (state.stage === 'phase1' && state.chunkTexts.length === 0) {
+      state.settings = defaultSettings(options.model);
+      state.plan = undefined;
+    }
     emit('updateModel', state.settings.model);
 
     audio = options.createAudio(file);
