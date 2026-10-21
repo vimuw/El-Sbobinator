@@ -11,7 +11,7 @@ import { CancelledError } from './pipeline/retry';
 import { retryFailedSections, type AudioSource, type PipelineEnv } from './pipeline/run';
 import { getWebFile, hasWebFile, isWebSupportedMedia, promptWebFiles, registerWebFile } from './webFiles';
 import { NEW_KEY_TIMEOUT_MS, REGENERATE_TIMEOUT_MS, bridgeReporter, runWebFile, sleepWithSignal, type RegenerateAnswer } from './webRun';
-import { createWebArchive, storageErrorMessage, webSessionHtmlPath, type NewArchiveSession, type WebArchive } from './webSessions';
+import { createWebArchive, requestPersistentStorage, storageErrorMessage, webSessionHtmlPath, type NewArchiveSession, type WebArchive } from './webSessions';
 import { WEB_MODEL_OPTIONS, loadWebKeys, loadWebModel, saveWebKeys, saveWebModel } from './webSettings';
 
 // Third host: the whole app runs in this page (static site, no backend). It implements the same
@@ -78,6 +78,8 @@ export interface WebHostOptions {
   simulation?: boolean;
   /** IndexedDB holding checkpoints and the archive (tests pass fake-indexeddb). */
   database?: IDBFactory;
+  /** navigator.storage: persistence request and usage estimate. */
+  storage?: StorageManager;
   createAudio?: (file: Blob) => AudioSource & { dispose(): void };
   createPage?: () => PipelineEnv['page'] & { dispose(): void };
   sleep?: PipelineEnv['sleep'];
@@ -130,12 +132,17 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
   const checkpointStore = createCheckpointStore(database);
   const checkpoints = () => checkpointStore;
   const archive = createWebArchive(database);
+  const storage = options.storage ?? navigator.storage;
+  // A finished sbobina is the first thing worth keeping: ask the browser not to clear the site.
   const saveArchive = async (session: NewArchiveSession, body: string) => {
+    let saved;
     try {
-      return await archive.create(session, body);
+      saved = await archive.create(session, body);
     } catch (error) {
       throw new Error(storageErrorMessage(error), { cause: error });
     }
+    void requestPersistentStorage(storage);
+    return saved;
   };
   const createPage = options.createPage ?? (() => createPageState());
   const sleep = options.sleep ?? sleepWithSignal;
@@ -382,10 +389,21 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       const results = await archive.search(query, limit);
       return { ok: true, results, total: results.length };
     },
+    // The settings show where sbobine live and whether the browser may clear them.
     get_session_storage_info: async () => {
-      const estimate = await navigator.storage?.estimate?.().catch(() => undefined);
-      const sessions = await archive.list().catch(() => []);
-      return { ok: true, total_bytes: estimate?.usage ?? 0, total_sessions: sessions.length };
+      const [estimate, persisted, sessions] = await Promise.all([
+        storage?.estimate?.().catch(() => undefined),
+        storage?.persisted?.().catch(() => false),
+        archive.list().catch(() => []),
+      ]);
+      return {
+        ok: true,
+        total_bytes: estimate?.usage ?? 0,
+        total_sessions: sessions.length,
+        session_root: persisted
+          ? 'Memoria di questo browser (protetta dalla pulizia automatica)'
+          : 'Memoria di questo browser: il browser può svuotarla se manca spazio o se non apri il sito per molti giorni',
+      };
     },
     cleanup_old_sessions: async () => ({ ok: true, removed: 0, freed_bytes: 0, errors: 0, candidates: 0 }),
 

@@ -6,7 +6,7 @@ import { createCheckpointStore } from './checkpointStore';
 import { defaultSettings } from './pipeline/run';
 import { newSession } from './pipeline/session';
 import { WEB_DB_NAME, openWebDatabase } from './webDatabase';
-import { createWebArchive, webSessionHtmlPath, type NewArchiveSession } from './webSessions';
+import { createWebArchive, requestPersistentStorage, webSessionHtmlPath, type NewArchiveSession } from './webSessions';
 
 const identity = { name: 'Lezione.mp3', size: 10, headHash: 'ab' };
 
@@ -117,4 +117,17 @@ describe('web archive in IndexedDB', () => {
     expect(await archive.search('il', 1)).toHaveLength(1);
   });
 
+  it('asks for persistent storage only when the site is not persisted yet', async () => {
+    let persisted = false;
+    const calls: string[] = [];
+    const storage = {
+      persisted: async () => persisted,
+      persist: async () => { calls.push('persist'); persisted = true; return true; },
+    } as unknown as StorageManager;
+    expect(await requestPersistentStorage(storage)).toBe(true);
+    expect(await requestPersistentStorage(storage)).toBe(true);
+    expect(calls).toEqual(['persist']);
+    expect(await requestPersistentStorage(undefined)).toBe(false);
+    expect(await requestPersistentStorage({ persist: async () => { throw new Error('no'); } } as unknown as StorageManager)).toBe(false);
+  });
 });

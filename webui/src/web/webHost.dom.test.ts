@@ -91,7 +91,12 @@ describe('web host', () => {
   it('runs the simulated pipeline into an archived document the editor can open and save', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const { events, emit } = recorder();
-    const api = createWebPywebviewApi(emit, { simulation: true });
+    const persist = vi.fn(async () => true);
+    const storage = { persist, persisted: async () => persist.mock.calls.length > 0, estimate: async () => ({ usage: 4096 }) } as unknown as StorageManager;
+    const api = createWebPywebviewApi(emit, { simulation: true, storage });
+    expect(await api.get_session_storage_info!()).toEqual({
+      ok: true, total_bytes: 4096, total_sessions: 0, session_root: expect.stringContaining('il browser può svuotarla'),
+    });
     const [file] = await api.upload_browser_files!([new File(['a'], 'Anatomia.m4a')]);
 
     expect(await api.start_processing!([file], '', true, 'gemini-3.6-flash')).toMatchObject({ ok: false });
@@ -101,6 +106,9 @@ describe('web host', () => {
     await vi.runAllTimersAsync();
 
     await vi.waitFor(async () => expect((await api.is_processing_active!()).active).toBe(false));
+    // The first saved sbobina asks the browser to keep the site's data.
+    expect(persist).toHaveBeenCalledTimes(1);
+    expect(await api.get_session_storage_info!()).toMatchObject({ total_sessions: 1, session_root: expect.stringContaining('protetta') });
     const done = events.find(event => event.name === 'fileDone')?.payload as { html_path: string; session_dir: string };
     const { sessions } = await api.get_completed_sessions!();
     expect(sessions).toHaveLength(1);

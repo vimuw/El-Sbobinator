@@ -192,3 +192,17 @@ export function createWebArchive(factory: IDBFactory | undefined = globalThis.in
     },
   };
 }
+
+/**
+ * Asks the browser not to clear this site's data under storage pressure (and, on Safari, after
+ * days without visits). Requested when a sbobina is saved; the browser may say no silently.
+ */
+export async function requestPersistentStorage(storage: StorageManager | undefined = navigator.storage): Promise<boolean> {
+  try {
+    if (!storage?.persist) return false;
+    if (await storage.persisted?.()) return true;
+    return await storage.persist();
+  } catch {
+    return false;
+  }
+}
