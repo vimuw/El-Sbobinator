@@ -16,6 +16,7 @@ from el_sbobinator.services.generation_service import (
     QuotaDailyLimitError,
 )
 from el_sbobinator.services.phase1_service import (
+    _call_chunk_transcription_api,
     _generate_chunk_content_with_fallback,
     process_phase1_transcription,
 )
@@ -1994,6 +1995,163 @@ class Phase1CancelDuringRequestTests(unittest.TestCase):
 
         self.assertIsNone(text)
         self.assertNotIn("Risposta di Gemini", out.getvalue())
+
+    def test_late_answer_stays_dropped_after_the_next_run_clears_stop(self):
+        request_started = threading.Event()
+        release_answer = threading.Event()
+        stop = threading.Event()
+
+        class _Response:
+            text = "Trascrizione arrivata dopo lo stop."
+            usage_metadata = None
+
+        class _Models:
+            def generate_content(self, **_kwargs):
+                request_started.set()
+                release_answer.wait(10)
+                return _Response()
+
+        class _Client:
+            models = _Models()
+
+        def _retry_like_real(fn, **kw):
+            try:
+                return kw["client"], fn(kw["client"])
+            except Exception:
+                if kw["cancelled"]():
+                    return kw["client"], None
+                raise
+
+        def _press_stop():
+            request_started.wait(10)
+            stop.set()
+
+        threading.Thread(target=_press_stop, daemon=True).start()
+        out = io.StringIO()
+        try:
+            with (
+                redirect_stdout(out),
+                patch(
+                    "el_sbobinator.services.phase1_service.generation_service.make_inline_audio_part",
+                    return_value=object(),
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.retry_with_quota",
+                    side_effect=_retry_like_real,
+                ),
+            ):
+                _client, text = _call_chunk_transcription_api(
+                    client=_Client(),
+                    chunk_path="fake.mp3",
+                    chunk_idx=1,
+                    total_chunks=1,
+                    prev_memory="",
+                    system_prompt="sistema",
+                    model_name="gemini-2.5-flash",
+                    inline_max_bytes=None,
+                    runtime=None,
+                    cancelled=stop.is_set,
+                    fallback_keys=[],
+                    request_fallback_key=lambda: None,
+                )
+                # Starting the next run clears the shared Stop flag.
+                stop.clear()
+                workers = [
+                    t for t in threading.enumerate() if t.name == "phase1-chunk-request"
+                ]
+                release_answer.set()
+                for worker in workers:
+                    worker.join(5)
+        finally:
+            release_answer.set()
+
+        self.assertIsNone(text)
+        self.assertTrue(workers)
+        self.assertNotIn("Risposta di Gemini", out.getvalue())
+
+    def test_stop_during_audio_upload_sends_no_request_and_deletes_the_file(self):
+        upload_started = threading.Event()
+        release_upload = threading.Event()
+        upload_handled = threading.Event()
+        stop = threading.Event()
+        generate_calls = []
+        deleted = []
+
+        class _File:
+            name = "files/blocco-1"
+            uri = "https://example.invalid/files/blocco-1"
+            mime_type = "audio/mpeg"
+            state = "ACTIVE"
+
+        class _Files:
+            def upload(self, **_kwargs):
+                upload_started.set()
+                release_upload.wait(10)
+                return _File()
+
+            def delete(self, name):
+                deleted.append(name)
+                upload_handled.set()
+
+        class _Models:
+            def generate_content(self, **kwargs):
+                generate_calls.append(kwargs)
+                upload_handled.set()
+
+        class _Client:
+            files = _Files()
+            models = _Models()
+
+        def _retry_like_real(fn, **kw):
+            try:
+                return kw["client"], fn(kw["client"])
+            except Exception:
+                if kw["cancelled"]():
+                    return kw["client"], None
+                raise
+
+        def _press_stop():
+            upload_started.wait(10)
+            stop.set()
+
+        threading.Thread(target=_press_stop, daemon=True).start()
+        out = io.StringIO()
+        try:
+            with (
+                redirect_stdout(out),
+                patch(
+                    "el_sbobinator.services.phase1_service.generation_service.make_inline_audio_part",
+                    return_value=None,
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.retry_with_quota",
+                    side_effect=_retry_like_real,
+                ),
+            ):
+                _client, text = _call_chunk_transcription_api(
+                    client=_Client(),
+                    chunk_path="fake.mp3",
+                    chunk_idx=1,
+                    total_chunks=1,
+                    prev_memory="",
+                    system_prompt="sistema",
+                    model_name="gemini-2.5-flash",
+                    inline_max_bytes=None,
+                    runtime=None,
+                    cancelled=stop.is_set,
+                    fallback_keys=[],
+                    request_fallback_key=lambda: None,
+                )
+                # Stop returned while the upload was still running.
+                release_upload.set()
+                self.assertTrue(upload_handled.wait(5))
+        finally:
+            release_upload.set()
+
+        self.assertIsNone(text)
+        self.assertEqual(generate_calls, [])
+        self.assertEqual(deleted, ["files/blocco-1"])
+        self.assertNotIn("Trascrizione in corso", out.getvalue())
 
 
 class Phase1ThinkingBudgetTests(unittest.TestCase):

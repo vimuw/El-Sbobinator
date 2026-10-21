@@ -237,6 +237,9 @@ def _generate_chunk_content_with_fallback(
                 audio_input = ensure_uploaded_audio_fn(current_client)
                 if audio_input is None:
                     return None
+            if cancelled():
+                # Stop came while the audio was being prepared: send nothing.
+                return None
             print("Trascrizione in corso...")
             _active_model = model_name
             request_t0 = time.monotonic()
@@ -361,6 +364,12 @@ def _call_chunk_transcription_api(
     chunk_prompt = generation_service.build_chunk_prompt(prev_memory)
     audio_file = None
     file_client = None
+    # The next run clears the shared Stop flag: an abandoned request must keep
+    # seeing itself cancelled, or its late answer reaches that run's log.
+    abandoned = threading.Event()
+
+    def _request_cancelled() -> bool:
+        return abandoned.is_set() or cancelled()
 
     def _ensure_uploaded_audio_input(current_client):
         nonlocal audio_file, file_client
@@ -382,11 +391,20 @@ def _call_chunk_transcription_api(
             chunk_path,
         )
         file_client = current_client
-        audio_file = generation_service.wait_for_file_ready(
-            current_client, audio_file, cancelled
+        ready_file = generation_service.wait_for_file_ready(
+            current_client, audio_file, _request_cancelled
         )
-        if audio_file is None:
+        if ready_file is None or _request_cancelled():
+            # Stop may have returned while this upload ran, and its cleanup
+            # found no file yet: delete the upload here instead.
+            try:
+                current_client.files.delete(name=audio_file.name)
+            except Exception:
+                pass
+            audio_file = None
+            file_client = None
             return None
+        audio_file = ready_file
         try:
             if getattr(audio_file, "uri", None):
                 return types.Part.from_uri(
@@ -420,11 +438,12 @@ def _call_chunk_transcription_api(
                     chunk_prompt=chunk_prompt,
                     audio_inline=audio_inline,
                     ensure_uploaded_audio_fn=_ensure_uploaded_audio_input,
-                    cancelled=cancelled,
+                    cancelled=_request_cancelled,
                 ),
                 cancelled,
             )
         except _ChunkRequestCancelled:
+            abandoned.set()
             print(f"Blocco {chunk_idx} interrotto: la risposta non verrà salvata.")
             raise
 
