@@ -2431,6 +2431,28 @@ button {
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.40), 0 0 0 1px var(--border-subtle);
 }
 
+/* Tablet widths (iPad portrait 744–834 px, landscape up to 1180 px) and narrow desktop windows:
+   the A4 page shrinks to the space left instead of scrolling sideways. From about 922 px with the
+   index closed it is back to its fixed 794 px, so wide windows look the same. */
+@media (max-width: 1180px) {
+  .editor-page-center,
+  .editor-page {
+    min-width: 0;
+  }
+
+  /* The open index keeps its left column; the matching spacer on the right would starve the page. */
+  .editor-toc-open .editor-toc-spacer {
+    display: none;
+  }
+}
+
+/* Narrower margins on portrait tablets; phones narrow them further below. */
+@media (max-width: 900px) {
+  .editor-page .tiptap-editor {
+    padding: 64px 48px;
+  }
+}
+
 @media (max-width: 640px) {
   .editor-page {
     min-width: 0;
