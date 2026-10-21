@@ -24,6 +24,18 @@ import {
 } from 'lucide-react';
 import { shortModelName } from '../utils';
 import type { AppStatus, ProcessingWarning } from '../appState';
+import {
+  COMPLETED_PHASE,
+  NOTICE_PREFIX,
+  PHASE_PREFIX,
+  getPhaseStage,
+  isRevisionRetryPhase,
+  parseAttempt,
+  parseChunkIndex,
+  parseRevisionIndex,
+  parseWaitSecs,
+  phaseText,
+} from '../phaseLabels';
 
 interface ProcessingStatusBannerProps {
   appState: AppStatus;
@@ -86,52 +98,40 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
   if (!phase) {
     return { icon: <Loader className={ICON_CLASS} />, iconAnimation: 'spin', title: 'Preparazione...', kind: 'normal' };
   }
-  if (phase === '__completed__') {
+  if (phase === COMPLETED_PHASE) {
     return { icon: <DrawnCheck />, iconAnimation: 'none', title: 'Sbobinatura completata!', kind: 'success' };
   }
-  if (phase.startsWith('Fase: analisi')) {
-    return { icon: <FileSearch className={ICON_CLASS} />, iconAnimation: 'none', title: 'Analisi del file audio', kind: 'normal' };
-  }
-  if (phase.startsWith('Fase 0/3')) {
-    return { icon: <AudioLines className={ICON_CLASS} />, iconAnimation: 'none', title: 'Pre-conversione audio', kind: 'normal' };
-  }
-  if (phase.startsWith('Fase 1/3')) {
-    return { icon: <Mic className={ICON_CLASS} />, iconAnimation: 'none', title: 'Trascrizione e sbobinatura', kind: 'normal' };
-  }
-  if (phase.startsWith('Fase 2/3')) {
-    const isRetry = phase.includes('retry');
-    return {
-      icon: <Sparkles className={ICON_CLASS} />,
-      iconAnimation: 'none',
-      title: isRetry ? 'Revisione blocchi mancanti' : 'Revisione e pulizia',
-      kind: 'normal',
-    };
-  }
-  if (phase.startsWith('Fase: esportazione') || phase.startsWith('Fase:esportazione')) {
-    return { icon: <FileDown className={ICON_CLASS} />, iconAnimation: 'none', title: 'Generazione output', kind: 'normal' };
+  switch (getPhaseStage(phase)) {
+    case 'analysis':
+      return { icon: <FileSearch className={ICON_CLASS} />, iconAnimation: 'none', title: 'Analisi del file audio', kind: 'normal' };
+    case 'preconversion':
+      return { icon: <AudioLines className={ICON_CLASS} />, iconAnimation: 'none', title: 'Pre-conversione audio', kind: 'normal' };
+    case 'transcription':
+      return { icon: <Mic className={ICON_CLASS} />, iconAnimation: 'none', title: 'Trascrizione e sbobinatura', kind: 'normal' };
+    case 'revision':
+      return {
+        icon: <Sparkles className={ICON_CLASS} />,
+        iconAnimation: 'none',
+        title: isRevisionRetryPhase(phase) ? 'Revisione blocchi mancanti' : 'Revisione e pulizia',
+        kind: 'normal',
+      };
+    case 'export':
+      return { icon: <FileDown className={ICON_CLASS} />, iconAnimation: 'none', title: 'Generazione output', kind: 'normal' };
+    default:
+      break;
   }
 
   return { icon: <Loader className={ICON_CLASS} />, iconAnimation: 'spin', title: 'Elaborazione in corso', kind: 'normal' };
 }
 
-function parseWaitSecs(phase: string): number | null {
-  const match = phase.match(/(?:tra|attesa)\s+(\d+)\s*s\b/i);
-  return match ? Number(match[1]) : null;
-}
-
-function parseAttempt(phase: string): { current: number; total: number } | null {
-  const match = phase.match(/tentativo\s+(\d+)\s*\/\s*(\d+)/i);
-  return match ? { current: Number(match[1]), total: Number(match[2]) } : null;
-}
-
-// The backend reports recoverable problems as phase messages (see generation_service.py and phase1_service.py).
+// The backend reports recoverable problems as phase messages (see generation_service.py, phase1_service.py and phaseLabels.ts).
 // The console keeps the technical details; the banner says what is happening in plain words.
 function getProcessingNotice(currentPhase: string): ProcessingNotice | null {
   const phase = currentPhase.trim();
   const waitSecs = parseWaitSecs(phase);
   const attempt = parseAttempt(phase);
 
-  if (phase.startsWith('Server Gemini occupato')) {
+  if (phase.startsWith(NOTICE_PREFIX.serverBusy)) {
     return {
       kind: 'wait',
       icon: <ServerCrash className={NOTICE_ICON_CLASS} />,
@@ -141,7 +141,7 @@ function getProcessingNotice(currentPhase: string): ProcessingNotice | null {
       resumeLabel: 'nuovo tentativo',
     };
   }
-  if (phase.includes('Rate limit')) {
+  if (phase.includes(NOTICE_PREFIX.rateLimit)) {
     return {
       kind: 'wait',
       icon: <Pause className={NOTICE_ICON_CLASS} />,
@@ -151,7 +151,7 @@ function getProcessingNotice(currentPhase: string): ProcessingNotice | null {
       resumeLabel: 'ripresa',
     };
   }
-  if (phase.startsWith('Connessione assente')) {
+  if (phase.startsWith(NOTICE_PREFIX.offline)) {
     return {
       kind: 'wait',
       icon: <WifiOff className={NOTICE_ICON_CLASS} />,
@@ -162,7 +162,7 @@ function getProcessingNotice(currentPhase: string): ProcessingNotice | null {
       detail: 'riprendo appena torna la rete',
     };
   }
-  if (phase.startsWith('Risposta vuota da Gemini')) {
+  if (phase.startsWith(NOTICE_PREFIX.emptyResponse)) {
     return {
       kind: 'wait',
       icon: <MessageSquareOff className={NOTICE_ICON_CLASS} />,
@@ -172,7 +172,7 @@ function getProcessingNotice(currentPhase: string): ProcessingNotice | null {
       resumeLabel: 'nuovo tentativo',
     };
   }
-  if (phase.startsWith('Errore temporaneo di Gemini')) {
+  if (phase.startsWith(NOTICE_PREFIX.temporaryError)) {
     return {
       kind: 'wait',
       icon: <TriangleAlert className={NOTICE_ICON_CLASS} />,
@@ -182,7 +182,7 @@ function getProcessingNotice(currentPhase: string): ProcessingNotice | null {
       resumeLabel: 'nuovo tentativo',
     };
   }
-  if (phase.startsWith('Output non valido')) {
+  if (phase.startsWith(NOTICE_PREFIX.invalidOutput)) {
     return {
       kind: 'retrying',
       icon: <RefreshCw className={NOTICE_ICON_CLASS} />,
@@ -250,41 +250,29 @@ function NoticeRow({ notice }: { notice: ProcessingNotice }) {
 
 function getStepperState(currentPhase: string): StepperState {
   const phase = currentPhase.trim();
+  const stage = getPhaseStage(phase);
   // Show the steps while preparing too, so the banner keeps its height when phase 0 starts.
-  if (!phase || phase.startsWith('Fase: analisi')) {
+  if (!phase || stage === 'analysis') {
     return { preconversione: 'pending', trascrizione: 'pending', revisione: 'pending' };
   }
-  if (phase === '__completed__' || phase.startsWith('Fase: esportazione') || phase.startsWith('Fase:esportazione')) {
+  if (phase === COMPLETED_PHASE || stage === 'export') {
     return { preconversione: 'done', trascrizione: 'done', revisione: 'done' };
   }
-  if (phase.startsWith('Fase 0/3')) {
+  if (stage === 'preconversion') {
     return { preconversione: 'active', trascrizione: 'pending', revisione: 'pending' };
   }
-  if (phase.startsWith('Fase 1/3')) {
+  if (stage === 'transcription') {
     return { preconversione: 'done', trascrizione: 'active', revisione: 'pending' };
   }
-  if (phase.startsWith('Fase 2/3')) {
+  if (stage === 'revision') {
     return { preconversione: 'done', trascrizione: 'done', revisione: 'active' };
   }
   return null;
 }
 
 function parseCurrentIndex(phase: string, stage: WorkKind): { current: number; total: number } | null {
-  if (stage === 'chunks') {
-    const match = phase.match(/chunk\s+(\d+)\s*\/\s*(\d+)/i);
-    if (match) {
-      return { current: Number(match[1]), total: Number(match[2]) };
-    }
-  }
-
-  if (stage === 'macro' && phase.startsWith('Fase 2/3')) {
-    const match = phase.match(/\((?:blocco\s+)?(\d+)\s*\/\s*(\d+)\)/i);
-    if (match) {
-      return { current: Number(match[1]), total: Number(match[2]) };
-    }
-  }
-
-  return null;
+  if (stage === 'chunks') return parseChunkIndex(phase);
+  return parseRevisionIndex(phase);
 }
 
 function getActiveStepIndex(done: number, total: number): number {
@@ -302,7 +290,7 @@ function getProgressLabel(
 
   const chunkInfo = parseCurrentIndex(phase, 'chunks');
   if (chunkInfo) return `Blocco ${chunkInfo.current} di ${chunkInfo.total}`;
-  if (phase.startsWith('Fase 1/3') && workTotals.chunks > 0) {
+  if (getPhaseStage(phase) === 'transcription' && workTotals.chunks > 0) {
     return `Blocco ${getActiveStepIndex(workDone.chunks, workTotals.chunks)} di ${workTotals.chunks}`;
   }
 
@@ -312,7 +300,7 @@ function getProgressLabel(
     : getActiveStepIndex(workDone.macro, workTotals.macro);
   const macroTotalNum = macroInfo ? macroInfo.total : workTotals.macro;
 
-  if (phase.startsWith('Fase 2/3') && macroTotalNum > 0) {
+  if (getPhaseStage(phase) === 'revision' && macroTotalNum > 0) {
     return `Sezione ${macroCurrentNum} di ${macroTotalNum}`;
   }
 
@@ -323,8 +311,8 @@ function inferStepPhase(
   workDone: { chunks: number; macro: number },
   workTotals: { chunks: number; macro: number },
 ): string {
-  if (workTotals.chunks > 0 && workDone.chunks >= workTotals.chunks) return 'Fase 2/3: revisione';
-  if (workTotals.chunks > 0) return 'Fase 1/3: trascrizione';
+  if (workTotals.chunks > 0 && workDone.chunks >= workTotals.chunks) return phaseText.revision();
+  if (workTotals.chunks > 0) return `${PHASE_PREFIX.transcription}: trascrizione`;
   return '';
 }
 
