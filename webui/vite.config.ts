@@ -18,6 +18,8 @@ export function createViteConfig(target: 'desktop' | 'web'): UserConfig {
     ...(isWeb ? { mode: 'web' } : {}),
     plugins: [react(), tailwindcss(), isWeb ? {
       name: 'web-static-site',
+      // The dev server keeps the permissive desktop policy: HMR needs inline scripts and websockets.
+      apply: 'build',
       transformIndexHtml: (html: string) => toWebIndexHtml(html),
       generateBundle() {
         this.emitFile({ type: 'asset', fileName: '_headers', source: webHeadersFile() });
