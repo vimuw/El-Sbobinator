@@ -88,7 +88,7 @@ describe('web host', () => {
   it('runs the simulated pipeline into an archived document the editor can open and save', async () => {
     vi.useFakeTimers();
     const { events, emit } = recorder();
-    const api = createWebPywebviewApi(emit);
+    const api = createWebPywebviewApi(emit, { simulation: true });
     const [file] = await api.upload_browser_files!([new File(['a'], 'Anatomia.m4a')]);
 
     expect(await api.start_processing!([file], '', true, 'gemini-3.6-flash')).toMatchObject({ ok: false });
@@ -116,10 +116,10 @@ describe('web host', () => {
     expect((await api.get_completed_sessions!()).sessions).toEqual([]);
   });
 
-  it('stops the run on request', async () => {
+  it('stops the simulated run on request', async () => {
     vi.useFakeTimers();
     const { events, emit } = recorder();
-    const api = createWebPywebviewApi(emit);
+    const api = createWebPywebviewApi(emit, { simulation: true });
     const [file] = await api.upload_browser_files!([new File(['a'], 'a.mp3')]);
     await api.start_processing!([file], 'AIzaSyMain12345678901234567', true, 'gemini-3.6-flash');
     await vi.advanceTimersByTimeAsync(700);

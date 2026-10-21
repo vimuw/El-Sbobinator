@@ -12,7 +12,7 @@ import {
   PermanentError,
   QuotaDailyLimitError,
 } from './pipeline/retry';
-import { FileMismatchError, defaultSettings, runPipeline, type AudioSource, type PageState, type PipelineEnv } from './pipeline/run';
+import { FileMismatchError, defaultSettings, runPipeline, type AudioSource, type PageState, type PipelineEnv, type PipelineReporter } from './pipeline/run';
 import { webSessionHtmlPath } from './webSessions';
 import { fileIdentity, hasProgress, newSession, type CheckpointStore, type SessionState } from './pipeline/session';
 
@@ -64,6 +64,18 @@ export function sleepWithSignal(seconds: number, signal: AbortSignal): Promise<v
     }
     signal.addEventListener('abort', abort, { once: true });
   });
+}
+
+/** Pipeline progress as the desktop bridge events. */
+export function bridgeReporter(emit: EmitBridgeEvent): PipelineReporter {
+  return {
+    phase: text => emit('updatePhase', text),
+    notice: text => emit('updatePhase', text),
+    console: line => emit('appendConsole', line),
+    progress: value => emit('updateProgress', value),
+    totals: (chunks, macro) => emit('setWorkTotals', { chunks, macro }),
+    workDone: (kind, done, total) => emit('updateWorkDone', { kind, done, total }),
+  };
 }
 
 const detail = (error: unknown) => (error instanceof Error ? `${error.name}: ${error.message}` : String(error)).replace(/\s+/g, ' ').slice(0, 400);
@@ -173,14 +185,7 @@ export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome>
         if (!key) controller.abort();
         return key;
       },
-      reporter: {
-        phase: text => emit('updatePhase', text),
-        notice: text => emit('updatePhase', text),
-        console: line => emit('appendConsole', line),
-        progress: value => emit('updateProgress', value),
-        totals: (chunks, macro) => emit('setWorkTotals', { chunks, macro }),
-        workDone: (kind, done, total) => emit('updateWorkDone', { kind, done, total }),
-      },
+      reporter: bridgeReporter(emit),
     };
     await runPipeline(state, env);
 

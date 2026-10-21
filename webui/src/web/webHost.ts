@@ -3,8 +3,15 @@ import type { PywebviewApi, ValidationResult } from '../bridge';
 import { APP_VERSION } from '../branding';
 import { type HostCapabilities, setHostCapabilities } from '../hostCapabilities';
 import { GEMINI_KEY_PATTERN } from '../utils';
+import { createWorkerAudioSource } from './audioPort';
+import { createCheckpointStore } from './checkpointStore';
 import { type BridgeEventName, type EmitBridgeEvent, runFakePipeline } from './fakePipeline';
-import { hasWebFile, isWebSupportedMedia, promptWebFiles, registerWebFile } from './webFiles';
+import { createPageState } from './pageLifecycle';
+import { CancelledError } from './pipeline/retry';
+import { retryFailedSections, type AudioSource, type PipelineEnv } from './pipeline/run';
+import type { CheckpointStore } from './pipeline/session';
+import { getWebFile, hasWebFile, isWebSupportedMedia, promptWebFiles, registerWebFile } from './webFiles';
+import { NEW_KEY_TIMEOUT_MS, REGENERATE_TIMEOUT_MS, bridgeReporter, runWebFile, sleepWithSignal, type RegenerateAnswer } from './webRun';
 import {
   createWebSession,
   deleteWebSession,
@@ -15,6 +22,8 @@ import {
   saveWebHtml,
   searchWebSessions,
   updateWebSession,
+  webSessionGeneration,
+  webSessionHtmlPath,
 } from './webSessions';
 import { WEB_MODEL_OPTIONS, loadWebKeys, loadWebModel, saveWebKeys, saveWebModel } from './webSettings';
 
@@ -30,8 +39,7 @@ export const WEB_CAPABILITIES: Partial<HostCapabilities> = {
   openLocalPath: false,
   osNotifications: false,
   updateInstallation: false,
-  // M0: the run is simulated (fakePipeline.ts).
-  realPipeline: false,
+  realPipeline: true,
   credentialPersistence: true,
   windowControls: false,
   keyStorage: 'browser',
@@ -77,9 +85,58 @@ function describeDevice(): string {
   return lines.join('\n');
 }
 
-export function createWebPywebviewApi(emit: EmitBridgeEvent): PywebviewApi {
+export interface WebHostOptions {
+  /** M0 simulated run (?simulazione=1): no Gemini calls, no audio work. */
+  simulation?: boolean;
+  store?: CheckpointStore;
+  createAudio?: (file: Blob) => AudioSource & { dispose(): void };
+  createPage?: () => PipelineEnv['page'] & { dispose(): void };
+  sleep?: PipelineEnv['sleep'];
+  geminiBase?: string;
+}
+
+type AnswerSlot<T> = { current: ((value: T) => void) | null };
+
+/** Resolves with the UI's answer, or timeoutValue after ms, or cancelValue when the run stops. */
+function waitForAnswer<T>(slot: AnswerSlot<T>, timeoutValue: T, cancelValue: T, ms: number, signal: AbortSignal): Promise<T> {
+  return new Promise(resolve => {
+    const done = (value: T) => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', onAbort);
+      if (slot.current === done) slot.current = null;
+      resolve(value);
+    };
+    const timer = setTimeout(() => done(timeoutValue), ms);
+    const onAbort = () => done(cancelValue);
+    signal.addEventListener('abort', onAbort, { once: true });
+    slot.current = done;
+  });
+}
+
+const noAudio: AudioSource = {
+  cut: () => Promise.reject(new Error('Audio non necessario per la revisione.')),
+  prepare: () => Promise.reject(new Error('Audio non necessario per la revisione.')),
+  toBase64: () => Promise.reject(new Error('Audio non necessario per la revisione.')),
+};
+
+export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOptions = {}): PywebviewApi {
   let activeRun: AbortController | null = null;
   const frontendEvents: string[] = [];
+  const regenerateAnswer: AnswerSlot<RegenerateAnswer> = { current: null };
+  const newKeyAnswer: AnswerSlot<string | null | 'timeout'> = { current: null };
+  let store: CheckpointStore | null = options.store ?? null;
+  const checkpoints = () => (store ??= createCheckpointStore());
+  const createPage = options.createPage ?? (() => createPageState());
+  const sleep = options.sleep ?? sleepWithSignal;
+  // Main key first, then the saved ones, without duplicates.
+  const runKeys = (apiKey: string) => [...new Set([apiKey.trim(), ...loadWebKeys()].filter(Boolean))];
+  // The NewKeyModal: a key for this run only; closing it stops the run, no answer pauses it.
+  const askNewKey = async (signal: AbortSignal) => {
+    emit('askNewKey');
+    const answer = await waitForAnswer(newKeyAnswer, 'timeout', null, NEW_KEY_TIMEOUT_MS, signal);
+    if (answer === 'timeout') emit('dismissNewKey');
+    return answer;
+  };
 
   const acceptFiles = (picked: File[]): FileDescriptor[] => {
     const descriptors: FileDescriptor[] = [];
@@ -133,6 +190,41 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent): PywebviewApi {
       if (!apiKey.trim()) return { ok: false, error: 'Inserisci una chiave API Gemini nelle impostazioni.' };
       const run = new AbortController();
       activeRun = run;
+      if (!options.simulation) {
+        const blob = file.path ? getWebFile(file.path) : undefined;
+        if (!blob) {
+          activeRun = null;
+          return { ok: false, error: 'Audio non più disponibile in questa pagina: selezionalo di nuovo.' };
+        }
+        const page = createPage();
+        void runWebFile({
+          descriptor: file,
+          file: blob,
+          keys: runKeys(apiKey),
+          model: preferredModel,
+          emit,
+          controller: run,
+          store: checkpoints(),
+          createAudio: options.createAudio ?? (audioFile => createWorkerAudioSource(audioFile)),
+          page,
+          sleep,
+          geminiBase: options.geminiBase,
+          askRegenerate: (mode, sessionDir) => {
+            emit('askRegenerate', { filename: file.name, mode, sessionDir });
+            return waitForAnswer<RegenerateAnswer>(regenerateAnswer, 'timeout', null, REGENERATE_TIMEOUT_MS, run.signal);
+          },
+          askNewKey: () => askNewKey(run.signal),
+          saveArchive: createWebSession,
+          archiveExists: sessionDir => webSessionGeneration(sessionDir) !== null,
+        }).catch(error => {
+          emit('fileFailed', { index: 0, id: file.id, error: error instanceof Error ? error.message : String(error) });
+          emit('processDone', { cancelled: false, completed: 0, failed: 1, total: 1 });
+        }).finally(() => {
+          page.dispose();
+          if (activeRun === run) activeRun = null;
+        });
+        return { ok: true };
+      }
       void runFakePipeline({
         file,
         model: preferredModel,
@@ -152,8 +244,83 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent): PywebviewApi {
       return { ok: true };
     },
     is_processing_active: async () => ({ ok: true, active: activeRun !== null }),
-    answer_regenerate: async () => ({ ok: true }),
-    answer_new_key: async () => ({ ok: true }),
+    answer_regenerate: async regenerate => {
+      regenerateAnswer.current?.(regenerate);
+      return { ok: true };
+    },
+    answer_new_key: async key => {
+      newKeyAnswer.current?.(key?.trim() || null);
+      return { ok: true };
+    },
+    retry_failed_revision_blocks: async sessionDir => {
+      if (activeRun) return { ok: false, error: 'Elaborazione in corso: riprova al termine.' };
+      const generation = webSessionGeneration(sessionDir);
+      const state = generation === null ? null : await checkpoints().findByArchive(sessionDir);
+      if (generation === null || !state || state.stage !== 'done') return { ok: false, error: 'Sessione non completata.' };
+      // The editor saved the document: a new export would overwrite the user's edits.
+      if (generation > 0) {
+        return { ok: false, error: "HTML modificato dall'utente: retry annullato per evitare sovrascritture.", conflict: true, session_dir: sessionDir };
+      }
+      const htmlPath = webSessionHtmlPath(sessionDir);
+      if (!state.failedBlocks?.length && !(state.revised ?? []).includes(null)) {
+        return { ok: true, retried_blocks: [], remaining_failed_blocks: [], html_path: htmlPath, session_dir: sessionDir };
+      }
+      const keys = runKeys('');
+      if (!keys.length) return { ok: false, error: 'API key mancante: aggiungila nelle impostazioni.' };
+      const run = new AbortController();
+      activeRun = run;
+      const page = createPage();
+      try {
+        const result = await retryFailedSections(state, {
+          keys,
+          store: checkpoints(),
+          audio: noAudio,
+          reporter: bridgeReporter(emit),
+          page,
+          signal: run.signal,
+          sleep,
+          now: () => performance.now(),
+          geminiBase: options.geminiBase,
+          requestNewKey: async () => {
+            const answer = await askNewKey(run.signal);
+            if (answer === null || answer === 'timeout') {
+              run.abort();
+              throw new CancelledError('annullato');
+            }
+            return answer;
+          },
+        });
+        const retried = result.retried.map(index => index + 1);
+        const remaining = result.remaining.map(index => index + 1);
+        const flags = { cancelled: result.cancelled, quota_exhausted: result.quotaExhausted };
+        if (!retried.length) {
+          if (!result.cancelled && !result.quotaExhausted && !remaining.length) {
+            return { ok: true, retried_blocks: [], remaining_failed_blocks: [], html_path: htmlPath, session_dir: sessionDir };
+          }
+          const error = result.cancelled ? 'Operazione annullata.' : result.quotaExhausted ? 'Quota giornaliera esaurita: riprova domani.' : 'Nessun blocco recuperato. Riprova piu tardi.';
+          return { ok: false, error, retried_blocks: [], remaining_failed_blocks: remaining, session_dir: sessionDir, ...flags };
+        }
+        const completionStatus = remaining.length ? 'completed_with_warnings' as const : 'completed' as const;
+        const saved = saveWebHtml(htmlPath, state.body ?? '');
+        if (!saved.ok) return { ok: false, error: saved.error ?? 'Salvataggio non riuscito.' };
+        updateWebSession(sessionDir, { completion_status: completionStatus, revision_failed_blocks: remaining, effective_model: state.settings.model });
+        return {
+          ok: true,
+          retried_blocks: retried,
+          remaining_failed_blocks: remaining,
+          completion_status: completionStatus,
+          html_path: htmlPath,
+          session_dir: sessionDir,
+          effective_model: state.settings.model,
+          ...flags,
+        };
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      } finally {
+        page.dispose();
+        if (activeRun === run) activeRun = null;
+      }
+    },
 
     read_html_content: async path => {
       const content = readWebHtml(path);
@@ -211,8 +378,10 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent): PywebviewApi {
 }
 
 export function initWebHost(): void {
+  // ?simulazione=1 keeps the M0 simulated run (no Gemini calls) for demos and the smoke test.
+  const simulation = new URLSearchParams(window.location.search).get('simulazione') === '1';
   setHostCapabilities(WEB_CAPABILITIES);
   const emit = createBridgeEmitter(() => window.elSbobinatorBridge);
-  window.pywebview = { api: createWebPywebviewApi(emit) };
+  window.pywebview = { api: createWebPywebviewApi(emit, { simulation }) };
   window.dispatchEvent(new Event('pywebviewready'));
 }
