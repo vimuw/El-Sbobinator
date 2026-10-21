@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// A dummy key in the right format: the M0 run is simulated and never calls Gemini.
+// A dummy key in the right format: these tests never call Gemini (the run is the M0 simulation).
 const DUMMY_KEY = 'AIzaSyE2EDUMMYKEY000000000000000000000';
 
 function trackCspViolations(page: Page): string[] {
@@ -11,8 +11,8 @@ function trackCspViolations(page: Page): string[] {
   return violations;
 }
 
-async function saveKey(page: Page) {
-  await page.goto('/');
+async function saveKey(page: Page, url = '/') {
+  await page.goto(url);
   await page.getByLabel('Chiave API Gemini').fill(DUMMY_KEY);
   await expect(page.getByTestId('setup-browser-key-note')).toBeVisible();
   await page.getByRole('button', { name: 'Salva e inizia' }).click();
@@ -22,7 +22,7 @@ async function saveKey(page: Page) {
 test('runs the simulated pipeline and opens the sample document without a backend @web-smoke', async ({ page }) => {
   const violations = trackCspViolations(page);
   await page.setViewportSize({ width: 810, height: 1080 });
-  await saveKey(page);
+  await saveKey(page, '/?simulazione=1');
 
   const chooserPromise = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
