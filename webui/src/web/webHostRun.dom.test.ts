@@ -6,8 +6,8 @@ import { STORAGE_KEYS } from '../storageKeys';
 import { createCheckpointStore } from './checkpointStore';
 import type { BridgeEventName } from './fakePipeline';
 import { CancelledError } from './pipeline/retry';
-import type { AudioSource } from './pipeline/run';
-import type { CheckpointStore } from './pipeline/session';
+import { defaultSettings, type AudioSource } from './pipeline/run';
+import { fileIdentity, newSession, type CheckpointStore } from './pipeline/session';
 import { createWebPywebviewApi, initWebHost } from './webHost';
 
 // The web host with the real pipeline: Gemini is a scripted fetch, audio work a fake source.
@@ -123,6 +123,24 @@ describe('web host with the real pipeline', () => {
     expect((await api.read_html_content!(done.html_path)).content).toContain('<h1>Fisiologia</h1>');
     expect(named('updateWorkDone')).toContainEqual({ kind: 'chunks', done: 2, total: 2 });
     expect((await api.is_processing_active!()).active).toBe(false);
+  });
+
+  it('after a browser restart, shows and uses the model from the settings for a checkpoint with no chunk', async () => {
+    // A run stopped with 3.6 Flash before its first chunk, then the model was set to 2.5 Flash.
+    const audio = new File(['audio della lezione'], 'Lezione.mp3');
+    const stale = newSession('stale', await fileIdentity(audio, audio.name), defaultSettings('gemini-3.6-flash'));
+    stale.plan = [{ index: 0, startSec: 0, durationSec: 900 }, { index: 1, startSec: 840, durationSec: 900 }];
+    await store.save(stale);
+    const { fetchMock } = mockGemini([okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
+    const { api, named, finished } = host(store, 1);
+    const [file] = await api.upload_browser_files!([audio]);
+
+    await api.start_processing!([file], KEY, true, 'gemini-2.5-flash');
+    await finished();
+
+    expect(named('updateModel')).toEqual(['gemini-2.5-flash']);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/models/gemini-2.5-flash:');
+    expect(named('fileDone')).toEqual([expect.objectContaining({ effective_model: 'gemini-2.5-flash' })]);
   });
 
   it('refuses a queued path the page no longer holds', async () => {
