@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'path';
 import { defineConfig, type UserConfig } from 'vite';
-import { toWebIndexHtml, webHeadersFile } from './src/web/webBuild';
+import { toWebIndexHtml, webHeadersFile } from './src/web/webBuild.ts';
 
 const packageInfo = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')) as { version: string };
 const version = (process.env.EL_SBOBINATOR_BUILD_VERSION ?? packageInfo.version).replace(/^v/, '');
