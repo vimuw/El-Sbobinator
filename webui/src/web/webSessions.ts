@@ -30,6 +30,10 @@ function store(archive: StoredArchive): boolean {
   }
 }
 
+export function webSessionHtmlPath(sessionDir: string): string {
+  return `${sessionDir}/${HTML_FILE}`;
+}
+
 function sessionDirOf(path: string): string {
   return path.endsWith(`/${HTML_FILE}`) ? path.slice(0, -HTML_FILE.length - 1) : path;
 }
@@ -41,7 +45,7 @@ function find(archive: StoredArchive, path: string): StoredSession | undefined {
 
 export function createWebSession(input: Omit<ArchiveSession, 'session_dir' | 'html_path'>, body: string): ArchiveSession {
   const sessionDir = `${WEB_SESSION_PREFIX}${crypto.randomUUID()}`;
-  const session: ArchiveSession = { ...input, session_dir: sessionDir, html_path: `${sessionDir}/${HTML_FILE}` };
+  const session: ArchiveSession = { ...input, session_dir: sessionDir, html_path: webSessionHtmlPath(sessionDir) };
   const archive = load();
   archive.sessions.unshift({ session, body, generation: 0 });
   if (!store(archive)) throw new Error('Spazio del browser esaurito: impossibile salvare la sbobina.');
@@ -69,6 +73,11 @@ export function saveWebHtml(path: string, body: string, generation?: number): { 
   entry.body = body;
   if (typeof generation === 'number') entry.generation = generation;
   return store(archive) ? { ok: true, saved: true } : { ok: false, error: 'Spazio del browser esaurito.' };
+}
+
+// Autosave generation of a stored document: 0 until the editor saves it, null when it is gone.
+export function webSessionGeneration(path: string): number | null {
+  return find(load(), path)?.generation ?? null;
 }
 
 export function updateWebSession(sessionDir: string, patch: Partial<ArchiveSession>): ArchiveSession | null {
