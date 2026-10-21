@@ -69,7 +69,7 @@ export const NavSidebar = memo(function NavSidebar({
       className="app-sidebar flex flex-col"
       style={{
         width: SIDEBAR_COLLAPSED_W,
-        height: '100vh',
+        height: 'var(--app-height)',
         position: 'sticky',
         top: 0,
         background: 'var(--sidebar-bg)',

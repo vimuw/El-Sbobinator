@@ -60,3 +60,25 @@ test('settings keep keys in the browser and hide desktop-only sections @web-smok
   await expect(page.getByRole('heading', { name: 'Configura la tua API Key' })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('el-sbobinator.web.gemini-keys.v1'))).toBeNull();
 });
+
+// iPad Safari's 100vh includes the area behind its toolbars and cut off the sidebar bottom and the
+// footer links. Chromium has no such toolbars, so this checks the layout follows the visible
+// height (dvh) and that the bottom controls are on screen at tablet sizes, including a short one.
+for (const viewport of [{ width: 810, height: 1080 }, { width: 810, height: 700 }]) {
+  test(`sidebar bottom and footer links stay on screen at ${viewport.width}x${viewport.height} @web-smoke`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await saveKey(page);
+
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--app-height').trim())).toBe('100dvh');
+    for (const control of [
+      page.getByRole('button', { name: 'Apri impostazioni' }),
+      page.getByRole('button', { name: 'Apri notifiche' }),
+      page.getByRole('link', { name: 'Segnala un problema' }),
+      page.getByRole('link', { name: 'Progetto Open-Source — GitHub' }),
+    ]) {
+      const box = await control.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+    }
+  });
+}

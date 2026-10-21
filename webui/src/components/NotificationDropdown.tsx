@@ -88,8 +88,8 @@ export function NotificationDropdown({
 
   const dynamicHeightStyle =
     valign === 'bottom'
-      ? `clamp(320px, 52vh, min(480px, calc(100vh - ${bottomOffset + 16}px)))`
-      : 'clamp(320px, 52vh, min(480px, calc(100vh - 88px)))';
+      ? `clamp(320px, 52vh, min(480px, calc(var(--app-height) - ${bottomOffset + 16}px)))`
+      : 'clamp(320px, 52vh, min(480px, calc(var(--app-height) - 88px)))';
 
   const hasCaret = align === 'left' && valign === 'bottom';
 
@@ -133,7 +133,7 @@ export function NotificationDropdown({
             : `${valign === 'bottom' ? 'bottom' : 'top'} ${align === 'left' ? 'left' : 'right'}`,
           width: 380,
           height: dynamicHeightStyle,
-          maxHeight: `calc(100vh - ${valign === 'bottom' ? bottomOffset + 16 : 88}px)`,
+          maxHeight: `calc(var(--app-height) - ${valign === 'bottom' ? bottomOffset + 16 : 88}px)`,
           top: valign === 'bottom' ? undefined : 64,
           bottom: valign === 'bottom' ? bottomOffset : undefined,
           left: align === 'left' ? leftOffset : undefined,

@@ -46,6 +46,19 @@
 
 /* ═══ DESIGN TOKENS / CSS VARIABLES ═══ */
 
+/* Visible window height. In iPad/iPhone Safari 100vh also counts the area behind the browser
+   toolbars, which pushed the sidebar bottom and the footer links off screen; 100dvh follows the
+   visible area. In the desktop window both are the same. */
+:root {
+  --app-height: 100vh;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --app-height: 100dvh;
+  }
+}
+
 :root {
   --font-display: "Manrope", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
 
@@ -480,7 +493,7 @@ button {
 .app-shell {
   position: relative;
   isolation: isolate;
-  height: 100vh;
+  height: var(--app-height);
   display: flex;
   flex-direction: row;
   background: var(--bg-base);
@@ -3662,7 +3675,7 @@ button {
   /* Room for the longest row (Incolla senza formattazione, Ctrl+Shift+V) inside the panel padding. */
   width: 304px;
   max-width: 90vw;
-  max-height: calc(100vh - 24px);
+  max-height: calc(var(--app-height) - 24px);
   overflow-y: auto;
 }
 

@@ -495,7 +495,7 @@ export default function App() {
   // Full motion even when Windows "Animation effects" is off: the workflow relies on it.
   return (
     <MotionConfig reducedMotion="never">
-    <div className="app-shell h-screen overflow-hidden font-sans flex flex-row bg-[var(--bg-base)] text-[var(--text-secondary)]">
+    <div className="app-shell overflow-hidden font-sans flex flex-row bg-[var(--bg-base)] text-[var(--text-secondary)]">
       <NavSidebar
         activePage={activePage}
         setActivePage={setActivePage}
@@ -518,7 +518,7 @@ export default function App() {
         completionFlash={completionFlash}
       />
 
-      <div className="flex flex-col flex-1 min-w-0 h-screen overflow-hidden">
+      <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden">
         {/* The next page mounts at once and fades in; the previous one leaves
             instantly. Waiting for its exit held every switch for ~165 ms. */}
         {activePage === 'queue' ? (
