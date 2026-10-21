@@ -515,6 +515,8 @@ def _record_chunk_success(
     )
     save_session()
     usage_service.record_work_completed("chunks", 1)
+    # The transcription bar fills from the chunk count, so it must advance with the percent.
+    runtime.update_work_done("chunks", chunk_idx, total=total_chunks)
     runtime.progress(0.7 * chunk_idx / total_chunks)
     _step_secs = max(0.0, time.monotonic() - float(chunk_step_t0))
     record_step_metric(

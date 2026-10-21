@@ -1833,6 +1833,65 @@ class Phase1ResumeProgressTests(unittest.TestCase):
         self.assertTrue(len(progress_calls) >= 1)
         self.assertAlmostEqual(progress_calls[0], 0.35)
 
+    def test_each_saved_chunk_advances_work_done(self):
+        work_done_calls: list[tuple[str, int, int | None]] = []
+
+        class _WorkRuntime(_FakeRuntime):
+            def update_work_done(self, kind, done, total=None):
+                work_done_calls.append((kind, done, total))
+
+        session = {
+            "stage": "phase1",
+            "phase1": {"chunks_done": 0, "next_start_sec": 0},
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            chunks_dir = os.path.join(tmpdir, "chunks")
+            os.makedirs(chunks_dir)
+
+            with (
+                patch(
+                    "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                    return_value=(True, None),
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.retry_with_quota",
+                    return_value=(object(), "Testo."),
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.sleep_with_cancel",
+                    return_value=True,
+                ),
+            ):
+                process_phase1_transcription(
+                    client=object(),
+                    model_name="test",
+                    input_path="fake.mp3",
+                    preconv_used_path=None,
+                    ffmpeg_exe="ffmpeg",
+                    cancel_event=threading.Event(),
+                    cancelled=lambda: False,
+                    start_sec=0,
+                    total_duration_sec=180,
+                    step_seconds=60,
+                    chunk_seconds=60,
+                    bitrate="48k",
+                    inline_max_bytes=None,
+                    prefetch_enabled=False,
+                    phase1_chunks_dir=chunks_dir,
+                    session=session,
+                    save_session=lambda: True,
+                    fallback_keys=[],
+                    request_fallback_key=lambda: None,
+                    system_prompt="test",
+                    runtime=_WorkRuntime(),
+                )
+
+        self.assertEqual(
+            work_done_calls,
+            [("chunks", 0, 3), ("chunks", 1, 3), ("chunks", 2, 3), ("chunks", 3, 3)],
+        )
+
 
 class Phase1ResponseTimingTests(unittest.TestCase):
     def test_successful_chunk_logs_gemini_timing_and_thinking_tokens(self):
