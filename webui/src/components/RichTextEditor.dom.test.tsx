@@ -23,6 +23,8 @@ describe('RichTextEditor Component', () => {
 
     const editorEl = document.querySelector('.tiptap-editor');
     expect(editorEl).toBeTruthy();
+    // Tailwind's prose selectors restyled the whole note on every focus change.
+    expect(editorEl!.className).not.toMatch(/(^|\s)prose/);
 
     // Verify initial content rendered
     expect(screen.getByText('Prima pagina di appunti per anatomia')).toBeTruthy();

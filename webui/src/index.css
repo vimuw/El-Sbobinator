@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 @import "katex/dist/katex.min.css";
+@import "./editorTypography.css";
 /* Optimized font imports to bundle ONLY the modern woff2 format (saving ~91kB of unused .woff assets) */
 
 @font-face {
@@ -42,7 +43,6 @@
   font-weight: 800;
   src: url("@fontsource/manrope/files/manrope-latin-800-normal.woff2") format('woff2');
 }
-@plugin "@tailwindcss/typography";
 
 /* ═══ DESIGN TOKENS / CSS VARIABLES ═══ */
 

@@ -192,7 +192,8 @@ export function RichTextEditor({
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-sm sm:prose-base max-w-none focus:outline-none tiptap-editor',
+        // Typography comes from editorTypography.css, not Tailwind's prose classes.
+        class: 'focus:outline-none tiptap-editor',
         spellcheck: 'false',
         style: editorFormattingVariables(),
       },

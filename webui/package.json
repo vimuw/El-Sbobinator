@@ -24,7 +24,6 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@fontsource/manrope": "^5.3.0",
-    "@tailwindcss/typography": "^0.5.20",
     "@tiptap/extension-color": "^3.32.0",
     "@tiptap/extension-font-family": "^3.32.0",
     "@tiptap/extension-highlight": "^3.32.0",
@@ -77,12 +76,6 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.71.2",
     "vite": "^8.3.4",
-    "vitest": "^5.0.3",
-    "postcss-selector-parser": "^7.1.6"
-  },
-  "overrides": {
-    "@tailwindcss/typography": {
-      "postcss-selector-parser": "$postcss-selector-parser"
-    }
+    "vitest": "^5.0.3"
   }
 }
