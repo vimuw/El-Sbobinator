@@ -34,13 +34,13 @@ describe('web host', () => {
     const capabilities = getHostCapabilities();
     expect(capabilities).toMatchObject({
       kind: 'web', keyStorage: 'browser', openLocalPath: false, nativeFolderPicker: false,
-      updateInstallation: false, osNotifications: false, editorAudio: false, sbobinaPackages: false, environmentCheck: false,
+      updateInstallation: false, osNotifications: false, editorAudio: true, sbobinaPackages: false, environmentCheck: false,
     });
     const api = window.pywebview?.api;
     expect(api?.start_processing).toBeTypeOf('function');
     // Hidden features have no method, so the UI never offers them.
     expect(api?.open_file).toBeUndefined();
-    expect(api?.stream_media_file).toBeUndefined();
+    expect(api?.stream_media_file).toBeTypeOf('function');
     expect(api?.export_sbobina_package).toBeUndefined();
     expect(api?.download_and_install_update).toBeUndefined();
     expect(api?.export_diagnostics).toBeUndefined();

@@ -3,6 +3,7 @@ import { render, screen, fireEvent, act, waitFor, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EditorFullPage } from './EditorFullPage';
 import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
+import { WEB_CAPABILITIES } from '../web/webHost';
 
 const editorMockState = vi.hoisted(() => ({ html: '<p>editor content</p>' }));
 
@@ -372,5 +373,23 @@ describe('EditorFullPage on hosts without session audio', () => {
     expect(screen.queryByText('Audio non trovato')).toBeNull();
     expect(screen.queryByRole('button', { name: /Aggiungi audio|Ricollega audio/ })).toBeNull();
     expect(screen.getByTestId('rich-text-editor').getAttribute('data-bottom-inset')).toBe('0');
+  });
+});
+
+describe('EditorFullPage on the web build', () => {
+  afterEach(() => setHostCapabilities(DESKTOP_CAPABILITIES));
+
+  it('docks the player for the audio kept in the browser, and offers to add one when there is none', async () => {
+    setHostCapabilities(WEB_CAPABILITIES);
+    const { container, rerender } = render(<EditorFullPage {...baseProps} audioSrc="blob:https://web.test/1" onClose={vi.fn()} />);
+    expect(container.querySelector('.editor-player-dock [data-testid="audio-player"]')).not.toBeNull();
+
+    const onRelink = vi.fn().mockResolvedValue(true);
+    rerender(<EditorFullPage {...baseProps} audio={{ src: null, relinkNeeded: false, onRelink, init: {}, onStateChange: vi.fn() }} />);
+    expect(screen.getByText('Nessun audio collegato')).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Aggiungi audio/ }));
+    });
+    expect(onRelink).toHaveBeenCalledTimes(1);
   });
 });
