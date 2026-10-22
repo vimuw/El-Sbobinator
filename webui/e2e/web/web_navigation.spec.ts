@@ -47,7 +47,7 @@ test('Back, Forward and reload keep the screen, editor included @web-smoke', asy
   await page.reload();
   await expect(page.getByText('Archivio Sbobine')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Apri impostazioni' }).click();
+  await page.getByRole('button', { name: 'Apri impostazioni', exact: true }).click();
   await expect(page).toHaveURL(/#\/archivio\/impostazioni$/);
   await expect(page.getByLabel('Chiavi API Gemini, una per riga')).toBeVisible();
   await page.goBack();
