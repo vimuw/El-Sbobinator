@@ -41,7 +41,7 @@ function write(key: string, value: string): boolean {
   }
 }
 
-// The spike that served the production address before M4 kept its keys here, one per line.
+// The spike (el-sbobinator-web.pages.dev) kept its keys here, one per line.
 export const SPIKE_KEYS_STORAGE_KEY = 'sbob-gemini-key';
 
 /** Takes over the spike's keys once, if this app has none, and removes the spike's copy. */

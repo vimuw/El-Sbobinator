@@ -90,7 +90,7 @@ def test_web_release_pins_actions_and_deploys_only_after_tests_and_build():
     assert (
         "secrets.CLOUDFLARE_API_TOKEN" in web and "secrets.CLOUDFLARE_ACCOUNT_ID" in web
     )
-    assert "--project-name=el-sbobinator-web --branch=main" in web
+    assert "--project-name=elsbobinator --branch=main" in web
 
 
 def test_web_release_publishes_nothing_on_github():

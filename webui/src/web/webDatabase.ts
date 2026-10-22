@@ -12,7 +12,7 @@ export const DOCUMENTS = 'documents';
 export const FOLDERS = 'folders';
 export const MEDIA = 'media';
 export const MEDIA_BY_SESSION = 'bySession';
-// Before M4 the production address served the spike, whose database had this same name at version
+// The spike (served at el-sbobinator-web.pages.dev) had a database with this same name at version
 // 1 with a single `sessions` store of its own: renamed out of the way, never deleted.
 export const SPIKE_SESSIONS = 'spike-sessions';
 

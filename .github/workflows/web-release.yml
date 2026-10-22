@@ -1,10 +1,11 @@
 name: Publish El Sbobinator Web
 
 # Production of the static web site (webui/src/web) on Cloudflare Pages, project
-# el-sbobinator-web. Only a web-v* tag on a commit of main publishes; the desktop
-# release workflow (build.yml) listens to v* tags and never sees these. It deploys to
-# Cloudflare only: no GitHub Release and no uploaded artifacts, so nothing about the
-# web site appears on the repository's Releases page or for the desktop updater.
+# elsbobinator (https://elsbobinator.pages.dev/). Only a web-v* tag on a commit of
+# main publishes; the desktop release workflow (build.yml) listens to v* tags and
+# never sees these. It deploys to Cloudflare only: no GitHub Release and no uploaded
+# artifacts, so nothing about the web site appears on the repository's Releases page
+# or for the desktop updater.
 on:
   push:
     tags:
@@ -77,4 +78,4 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: '4.149.0'
-          command: pages deploy webui/dist-web --project-name=el-sbobinator-web --branch=main --commit-hash=${{ github.sha }}
+          command: pages deploy webui/dist-web --project-name=elsbobinator --branch=main --commit-hash=${{ github.sha }}

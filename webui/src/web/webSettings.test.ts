@@ -33,7 +33,7 @@ describe('web settings', () => {
     expect(WEB_MODEL_OPTIONS.filter(option => option.is_default).map(option => option.id)).toEqual([profile.models.default]);
   });
 
-  it("takes over the spike's keys once at the production address", () => {
+  it("takes over the spike's keys once on the same origin", () => {
     const values = stubStorage({ [SPIKE_KEYS_STORAGE_KEY]: 'AIzaSySpikeOne1234567890123\nAIzaSySpikeTwo1234567890123\n' });
     adoptSpikeKeys();
     expect(loadWebKeys()).toEqual(['AIzaSySpikeOne1234567890123', 'AIzaSySpikeTwo1234567890123']);

@@ -4,7 +4,7 @@ import { createCheckpointStore } from './checkpointStore';
 import { SPIKE_SESSIONS, WEB_DB_NAME, WEB_DB_VERSION, openWebDatabase } from './webDatabase';
 import { createWebArchive } from './webSessions';
 
-/** The database the spike left at the production address: version 1, one `sessions` store keyed by id. */
+/** The database the spike left in a browser: version 1, one `sessions` store keyed by id. */
 function openSpike(factory: IDBFactory): Promise<void> {
   return new Promise((resolve, reject) => {
     const request = factory.open(WEB_DB_NAME, 1);
@@ -20,7 +20,7 @@ function openSpike(factory: IDBFactory): Promise<void> {
 }
 
 describe('web database', () => {
-  it("opens over the spike's database at the production address, keeping its data aside", async () => {
+  it("opens over the spike's database on the same origin, keeping its data aside", async () => {
     const factory = new IDBFactory();
     await openSpike(factory);
 
