@@ -719,6 +719,7 @@ export default function App() {
             }}
             storage={{
               onSessionRootMoved: handleSessionRootMoved,
+              onArchiveImported: () => void handleSessionRootMoved(),
             }}
           />
         </React.Suspense>

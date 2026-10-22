@@ -17,6 +17,8 @@ export const STORAGE_KEYS = {
   // Web build only: Gemini keys (one per line) and model, kept in this browser.
   WEB_GEMINI_KEYS_V1: 'el-sbobinator.web.gemini-keys.v1',
   WEB_MODEL_V1: 'el-sbobinator.web.model.v1',
+  // When this browser last downloaded a backup of its sbobine (ISO date).
+  WEB_LAST_BACKUP_V1: 'el-sbobinator.web.last-backup.v1',
   // M0 archive: copied once into IndexedDB by the M2 upgrade, then removed.
   WEB_M0_SESSIONS_V1: 'el-sbobinator.web.m0-sessions.v1',
 } as const;

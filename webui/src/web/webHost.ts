@@ -13,6 +13,7 @@ import { CancelledError } from './pipeline/retry';
 import { retryFailedSections, type AudioSource, type PipelineEnv } from './pipeline/run';
 import { getWebFile, hasWebFile, isWebSupportedMedia, promptWebFiles, registerWebFile, restoreWebFile, webFileId } from './webFiles';
 import { createWebMediaStore, mediaType, type WebMediaStore } from './webMedia';
+import { createBackup, describeBackup, describeImport, importBackup, loadLastBackupAt, saveLastBackupAt } from './webBackup';
 import { NEW_KEY_TIMEOUT_MS, REGENERATE_TIMEOUT_MS, bridgeReporter, runWebFile, sleepWithSignal, type RegenerateAnswer } from './webRun';
 import { createWebArchive, requestPersistentStorage, storageErrorMessage, webSessionHtmlPath, type NewArchiveSession, type WebArchive } from './webSessions';
 import { WEB_MODEL_OPTIONS, loadWebKeys, loadWebModel, saveWebKeys, saveWebModel } from './webSettings';
@@ -546,6 +547,37 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
           ? 'Memoria di questo browser (protetta dalla pulizia automatica)'
           : 'Memoria di questo browser: il browser può svuotarla se manca spazio o se non apri il sito per molti giorni',
       };
+    },
+    get_web_backup_info: async () => {
+      try {
+        const info = await describeBackup(database);
+        return { ok: true, sessions: info.sessions, text_bytes: info.textBytes, audio_bytes: info.audioBytes, audio_files: info.audioFiles, last_backup_at: loadLastBackupAt() };
+      } catch (error) {
+        return { ok: false, error: `Archivio del browser non leggibile: ${error instanceof Error ? error.message : String(error)}` };
+      }
+    },
+    create_web_backup: async (includeAudio, onProgress) => {
+      try {
+        const backup = await createBackup(database, { includeAudio, appVersion: APP_VERSION, onProgress });
+        return { ok: true, blob: backup.blob, filename: backup.filename, sessions: backup.sessions, audio_files: backup.audioFiles };
+      } catch (error) {
+        return { ok: false, error: `Backup non riuscito: ${error instanceof Error ? error.message : String(error)}` };
+      }
+    },
+    // The backup counts as done when the user taps the download link, not when it is prepared.
+    record_web_backup_download: async () => {
+      const at = new Date().toISOString();
+      saveLastBackupAt(at);
+      return { ok: true, last_backup_at: at };
+    },
+    import_web_backup: async file => {
+      if (activeRun) return { ok: false, error: 'Elaborazione in corso: importa il backup al termine.' };
+      try {
+        const summary = await importBackup(database, file);
+        return { ok: true, summary: describeImport(summary) };
+      } catch (error) {
+        return { ok: false, error: error instanceof DOMException && error.name === 'QuotaExceededError' ? storageErrorMessage(error) : error instanceof Error ? error.message : String(error) };
+      }
     },
     cleanup_old_sessions: async () => ({ ok: true, removed: 0, freed_bytes: 0, errors: 0, candidates: 0 }),
 

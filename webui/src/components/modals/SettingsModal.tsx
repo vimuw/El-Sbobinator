@@ -8,6 +8,7 @@ import { ApiKeySection, type DeleteKeyTarget } from './settings/ApiKeySection';
 import { ModelSection } from './settings/ModelSection';
 import { NotificationSection } from './settings/NotificationSection';
 import { StorageSection } from './settings/StorageSection';
+import { WebBackupSection } from './settings/WebBackupSection';
 import { DiagnosticsSection } from './settings/DiagnosticsSection';
 import { ApiStatusSection } from './settings/ApiStatusSection';
 import { WebKeysSection } from './settings/WebKeysSection';
@@ -56,6 +57,8 @@ export interface SettingsUpdaterProps {
 
 export interface SettingsStorageProps {
   onSessionRootMoved?: (payload?: { oldRoot?: string; newRoot?: string }) => void;
+  /** Web build: a backup was imported, the archive must be reloaded. */
+  onArchiveImported?: () => void;
 }
 
 export interface SettingsModalProps {
@@ -678,6 +681,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         canManageSessionFolder={hostCapabilities.nativeFolderPicker && hostCapabilities.openLocalPath}
                         inBrowser={hostCapabilities.kind === 'web'}
                       />
+                      {hostCapabilities.kind === 'web' && (
+                        <>
+                          <SettingsDivider />
+                          <WebBackupSection
+                            onArchiveImported={() => {
+                              storage?.onArchiveImported?.();
+                              fetchSessionStorageInfo();
+                            }}
+                          />
+                        </>
+                      )}
                     </div>
                   )}
 
