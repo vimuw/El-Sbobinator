@@ -86,6 +86,11 @@ const TAB_HEADERS: Record<TabType, { title: string; description: string }> = {
   },
 };
 
+const WEB_STORAGE_HEADER = {
+  title: 'Archiviazione',
+  description: 'Spazio occupato in questo browser da sbobine, audio delle lezioni ed elaborazioni.',
+};
+
 // The settings card mounts a large tree whose first style and layout pass can outlast several
 // frames on a slow machine. Starting the entrance on mount would spend that time off-screen and
 // show the card already half-faded in, so it waits in its initial pose until a frame has been
@@ -566,7 +571,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {/* The page title and the close button stay put above the scrolling content,
                     so nothing slides under the X. */}
                 <div className="flex items-start justify-between gap-4 px-6 md:px-8 pt-6 md:pt-8 pb-4 border-b border-[var(--border-subtle)]">
-                  <SettingsPageHeader {...TAB_HEADERS[activeTab]} />
+                  <SettingsPageHeader {...(activeTab === 'storage' && hostCapabilities.kind === 'web' ? WEB_STORAGE_HEADER : TAB_HEADERS[activeTab])} />
                   <button
                     type="button"
                     onClick={handleClose}

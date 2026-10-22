@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useConfirmModal } from './useConfirmModal';
 import type { FileItem } from '../appState';
+import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 
 describe('useConfirmModal', () => {
   const dispatch = vi.fn();
@@ -133,6 +134,38 @@ describe('useConfirmModal', () => {
     expect(result.current.confirmModalCopy?.description).toBe(
       "\"lezione.mp3\" verrà rimossa dai Recenti e resterà disponibile nell'Archivio. Vuoi continuare?",
     );
+  });
+
+  it('says the sbobina is deleted from the disk on desktop and from this browser on the web', () => {
+    const render = () => renderHook(() =>
+      useConfirmModal({
+        dispatch,
+        filesRef: { current: [] as FileItem[] },
+        foldersRef: { current: [] },
+        onFoldersChange,
+        setArchiveSessions,
+        setArchiveTotal,
+        refreshArchiveSessions,
+        startProcessingRef: { current: vi.fn() },
+        executeRetryFromArchive,
+        normalizeSessionDir,
+        appendConsole,
+      }),
+    ).result;
+    const desktop = render();
+    act(() => desktop.current.setConfirmAction({ type: 'delete-archive-session', sessionDir: '/s/one', name: 'Uno' }));
+    expect(desktop.current.confirmModalCopy?.description).toContain('eliminati definitivamente dal disco');
+
+    setHostCapabilities({ kind: 'web' });
+    try {
+      const web = render();
+      act(() => web.current.setConfirmAction({ type: 'delete-archive-session', sessionDir: 'web-session://a', name: 'Uno' }));
+      expect(web.current.confirmModalCopy?.description).toContain('eliminati definitivamente da questo browser');
+      act(() => web.current.setConfirmAction({ type: 'delete-multiple-archive-sessions', sessions: [{ sessionDir: 'web-session://a', name: 'Uno' }, { sessionDir: 'web-session://b', name: 'Due' }] }));
+      expect(web.current.confirmModalCopy?.description).not.toContain('disco');
+    } finally {
+      setHostCapabilities(DESKTOP_CAPABILITIES);
+    }
   });
 
   it('drops a deleted archive session from Recenti too', async () => {

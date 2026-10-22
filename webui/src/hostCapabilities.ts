@@ -45,6 +45,11 @@ export function getHostCapabilities(): HostCapabilities {
   return hostCapabilities;
 }
 
+/** Where deleted sbobine go from, for user copy: the disk on desktop, this browser on the web. */
+export function deletedFrom(): string {
+  return hostCapabilities.kind === 'web' ? 'da questo browser' : 'dal disco';
+}
+
 export function setHostCapabilities(capabilities: Partial<HostCapabilities>): void {
   hostCapabilities = { ...DESKTOP_CAPABILITIES, ...capabilities };
 }
