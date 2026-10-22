@@ -1,15 +1,17 @@
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { STORAGE_KEYS } from '../storageKeys';
 
-// The web build's IndexedDB database: pipeline checkpoints (v1) and the archive (v2): session
-// metadata, the editor document of each sbobina and the archive folders.
+// The web build's IndexedDB database: pipeline checkpoints (v1), the archive (v2): session
+// metadata, the editor document of each sbobina and the archive folders, and the audio files (v3).
 export const WEB_DB_NAME = 'el-sbobinator-web';
-export const WEB_DB_VERSION = 2;
+export const WEB_DB_VERSION = 3;
 export const CHECKPOINTS = 'checkpoints';
 export const CHECKPOINTS_BY_FILE = 'byFile';
 export const SESSIONS = 'sessions';
 export const DOCUMENTS = 'documents';
 export const FOLDERS = 'folders';
+export const MEDIA = 'media';
+export const MEDIA_BY_SESSION = 'bySession';
 
 /** Editor document of one sbobina: the HTML body and the last autosave generation. */
 export interface StoredDocument {
@@ -58,6 +60,9 @@ function openDatabase(factory: IDBFactory): Promise<IDBDatabase> {
         db.createObjectStore(DOCUMENTS, { keyPath: 'session_dir' });
         db.createObjectStore(FOLDERS, { keyPath: 'id' });
         migrated = migrateLegacyArchive(transaction);
+      }
+      if (event.oldVersion < 3) {
+        db.createObjectStore(MEDIA, { keyPath: 'id' }).createIndex(MEDIA_BY_SESSION, 'sessionDir');
       }
     };
     request.onsuccess = () => {

@@ -47,7 +47,8 @@ describe('web archive in IndexedDB', () => {
 
     const archive = createWebArchive(factory);
     expect(await archive.list()).toEqual([legacy]);
-    expect((await openWebDatabase(factory)).version).toBe(2);
+    expect((await openWebDatabase(factory)).version).toBe(3);
+    expect((await openWebDatabase(factory)).objectStoreNames.contains('media')).toBe(true);
     expect(await archive.readHtml(legacy.html_path)).toContain('<body><p>Testo salvato</p></body>');
     expect(await archive.generation(legacy.session_dir)).toBe(3);
     expect(await archive.loadFolders()).toEqual([{ id: 'f1', name: 'Fisiologia', color: '', session_dirs: ['web-session://old'] }]);

@@ -1,5 +1,5 @@
 import type { ArchiveFolder, ArchiveSession, SearchSessionResult } from '../bridge';
-import { CHECKPOINTS, DOCUMENTS, FOLDERS, SESSIONS, inTransaction, requestValue, type StoredDocument } from './webDatabase';
+import { CHECKPOINTS, DOCUMENTS, FOLDERS, MEDIA, MEDIA_BY_SESSION, SESSIONS, inTransaction, requestValue, type StoredDocument } from './webDatabase';
 
 // The web archive in IndexedDB: session metadata (the desktop's session.json), the editor document
 // (HTML body + autosave generation) and the folders. Paths are synthetic: web-session://<id> is the
@@ -19,7 +19,7 @@ export interface WebArchive {
   /** Autosave generation of a stored document: 0 until the editor saves it, null when it is gone. */
   generation(path: string): Promise<number | null>;
   update(sessionDir: string, patch: Partial<ArchiveSession>): Promise<ArchiveSession | null>;
-  /** Removes the sbobina, its document and its pipeline checkpoint. */
+  /** Removes the sbobina, its document, its audio and its pipeline checkpoint. */
   delete(sessionDir: string): Promise<boolean>;
   loadFolders(): Promise<ArchiveFolder[]>;
   saveFolders(folders: ArchiveFolder[]): Promise<void>;
@@ -126,7 +126,7 @@ export function createWebArchive(factory: IDBFactory | undefined = globalThis.in
 
     async delete(sessionDir) {
       const dir = sessionDirOf(sessionDir);
-      return inTransaction(factory, [SESSIONS, DOCUMENTS, CHECKPOINTS, FOLDERS], 'readwrite', async transaction => {
+      return inTransaction(factory, [SESSIONS, DOCUMENTS, CHECKPOINTS, FOLDERS, MEDIA], 'readwrite', async transaction => {
         const session = await getSession(transaction, dir);
         if (!session) return false;
         transaction.objectStore(SESSIONS).delete(dir);
@@ -137,6 +137,8 @@ export function createWebArchive(factory: IDBFactory | undefined = globalThis.in
         for (const state of states) {
           if (state.archiveSessionDir === dir) checkpoints.delete(state.id);
         }
+        const media = transaction.objectStore(MEDIA);
+        for (const id of await requestValue(media.index(MEDIA_BY_SESSION).getAllKeys(dir))) media.delete(id);
         const folders = transaction.objectStore(FOLDERS);
         for (const folder of await requestValue(folders.getAll() as IDBRequest<ArchiveFolder[]>)) {
           if (folder.session_dirs?.includes(dir)) folders.put({ ...folder, session_dirs: folder.session_dirs.filter(item => item !== dir) });
