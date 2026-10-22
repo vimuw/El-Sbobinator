@@ -16,7 +16,7 @@ import { createWebMediaStore, mediaType, type WebMediaStore } from './webMedia';
 import { createBackup, describeBackup, describeImport, importBackup, loadLastBackupAt, saveLastBackupAt } from './webBackup';
 import { NEW_KEY_TIMEOUT_MS, REGENERATE_TIMEOUT_MS, bridgeReporter, runWebFile, sleepWithSignal, type RegenerateAnswer } from './webRun';
 import { createWebArchive, requestPersistentStorage, storageErrorMessage, webSessionHtmlPath, type NewArchiveSession, type WebArchive } from './webSessions';
-import { WEB_MODEL_OPTIONS, loadWebKeys, loadWebModel, saveWebKeys, saveWebModel } from './webSettings';
+import { WEB_MODEL_OPTIONS, adoptSpikeKeys, loadWebKeys, loadWebModel, saveWebKeys, saveWebModel } from './webSettings';
 
 // Third host: the whole app runs in this page (static site, no backend). It implements the same
 // PywebviewApi contract as pywebview and the FastAPI dev host, and delivers bridge events by calling
@@ -611,6 +611,7 @@ export function initWebHost(): void {
   // ?simulazione=1 keeps the M0 simulated run (no Gemini calls) for demos and the smoke test.
   const simulation = new URLSearchParams(window.location.search).get('simulazione') === '1';
   setHostCapabilities(WEB_CAPABILITIES);
+  adoptSpikeKeys();
   // Lets index.css size controls for touch on tablets without touching the desktop app.
   document.documentElement.dataset.host = 'web';
   const emit = createBridgeEmitter(() => window.elSbobinatorBridge);

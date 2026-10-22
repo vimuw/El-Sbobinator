@@ -12,6 +12,9 @@ export const DOCUMENTS = 'documents';
 export const FOLDERS = 'folders';
 export const MEDIA = 'media';
 export const MEDIA_BY_SESSION = 'bySession';
+// Before M4 the production address served the spike, whose database had this same name at version
+// 1 with a single `sessions` store of its own: renamed out of the way, never deleted.
+export const SPIKE_SESSIONS = 'spike-sessions';
 
 /** Editor document of one sbobina: the HTML body and the last autosave generation. */
 export interface StoredDocument {
@@ -52,7 +55,9 @@ function openDatabase(factory: IDBFactory): Promise<IDBDatabase> {
     request.onupgradeneeded = event => {
       const db = request.result;
       const transaction = request.transaction!;
-      if (event.oldVersion < 1) {
+      const spike = event.oldVersion >= 1 && !db.objectStoreNames.contains(CHECKPOINTS);
+      if (spike && db.objectStoreNames.contains(SESSIONS)) transaction.objectStore(SESSIONS).name = SPIKE_SESSIONS;
+      if (event.oldVersion < 1 || spike) {
         db.createObjectStore(CHECKPOINTS, { keyPath: 'id' }).createIndex(CHECKPOINTS_BY_FILE, 'fileKey');
       }
       if (event.oldVersion < 2) {
