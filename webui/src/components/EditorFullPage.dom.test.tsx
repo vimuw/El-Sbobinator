@@ -224,6 +224,8 @@ describe('EditorFullPage autosave', () => {
     }
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write } });
     Object.defineProperty(globalThis, 'ClipboardItem', { configurable: true, value: TestClipboardItem });
+    // The macOS desktop app runs in WKWebView (Apple vendor too): it keeps the Docs-native formats.
+    const vendor = vi.spyOn(navigator, 'vendor', 'get').mockReturnValue('Apple Computer, Inc.');
     try {
       editorMockState.html = '<h2>Appunti corretti</h2><p>Testo <strong>importante</strong></p>';
       render(<EditorFullPage {...baseProps} />);
@@ -238,6 +240,49 @@ describe('EditorFullPage autosave', () => {
       expect(formats['application/x-vnd.google-docs-document-slice-clip+wrapped']).toBeTruthy();
       expect(write).not.toHaveBeenCalled();
     } finally {
+      vendor.mockRestore();
+      if (clipboardDescriptor) Object.defineProperty(navigator, 'clipboard', clipboardDescriptor);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+      if (clipboardItemDescriptor) Object.defineProperty(globalThis, 'ClipboardItem', clipboardItemDescriptor);
+      else Reflect.deleteProperty(globalThis, 'ClipboardItem');
+      if (execDescriptor) Object.defineProperty(document, 'execCommand', execDescriptor);
+      else Reflect.deleteProperty(document, 'execCommand');
+    }
+  });
+
+  it('web on iPad Safari: writes the clipboard with ClipboardItem inside the tap, no hidden textarea', async () => {
+    const write = vi.fn().mockResolvedValue(undefined);
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    const clipboardItemDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'ClipboardItem');
+    const execDescriptor = Object.getOwnPropertyDescriptor(document, 'execCommand');
+    const vendor = vi.spyOn(navigator, 'vendor', 'get').mockReturnValue('Apple Computer, Inc.');
+    const execCommand = vi.fn(() => true);
+    class TestClipboardItem {
+      constructor(public data: Record<string, Blob>) {}
+    }
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: execCommand });
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write } });
+    Object.defineProperty(globalThis, 'ClipboardItem', { configurable: true, value: TestClipboardItem });
+    setHostCapabilities({ kind: 'web' });
+    try {
+      editorMockState.html = '<h2>Appunti corretti</h2><p>Testo <strong>importante</strong></p><ul><li><p>uno</p><ul><li><p>due</p></li></ul></li></ul>';
+      render(<EditorFullPage {...baseProps} />);
+      await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
+      fireEvent.click(screen.getByRole('button', { name: 'Copia documento' }));
+      // Started before the click handler returned: Safari refuses a write that starts later.
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(execCommand).not.toHaveBeenCalled();
+      const [item] = write.mock.calls[0][0] as TestClipboardItem[];
+      expect(Object.keys(item.data).sort()).toEqual(['text/html', 'text/plain']);
+      const copied = new DOMParser().parseFromString(await item.data['text/html'].text(), 'text/html');
+      expect(copied.querySelector('strong')?.textContent).toBe('importante');
+      expect(copied.querySelector('h2')?.style.fontSize).toBe('16pt');
+      expect(copied.querySelector('ul ul li')?.textContent).toBe('due');
+      expect(await item.data['text/plain'].text()).toContain('Testo importante');
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Copia documento' }).textContent).toContain('Copiato!'));
+    } finally {
+      setHostCapabilities(DESKTOP_CAPABILITIES);
+      vendor.mockRestore();
       if (clipboardDescriptor) Object.defineProperty(navigator, 'clipboard', clipboardDescriptor);
       else Reflect.deleteProperty(navigator, 'clipboard');
       if (clipboardItemDescriptor) Object.defineProperty(globalThis, 'ClipboardItem', clipboardItemDescriptor);
