@@ -118,7 +118,7 @@ describe('web host', () => {
     const api = createWebPywebviewApi(emit, { simulation: true, storage });
     expect(await api.get_session_storage_info!()).toEqual({
       ok: true, total_bytes: 0, total_sessions: 0, session_root: expect.stringContaining('il browser può svuotarla'),
-      usage_detail: 'Audio delle lezioni 0 KB · testi 0 KB · avanzamento elaborazioni 0 KB · stima del browser 4 KB',
+      usage_detail: 'Audio delle lezioni 0 KB · testi 0 KB · avanzamento elaborazioni 0 KB · stima del browser 4 KB', persisted: false,
     });
     const [file] = await api.upload_browser_files!([new File(['a'], 'Anatomia.m4a')]);
 
@@ -131,7 +131,8 @@ describe('web host', () => {
     await vi.waitFor(async () => expect((await api.is_processing_active!()).active).toBe(false));
     // The first saved sbobina asks the browser to keep the site's data.
     expect(persist).toHaveBeenCalledTimes(1);
-    expect(await api.get_session_storage_info!()).toMatchObject({ total_sessions: 1, session_root: expect.stringContaining('protetta') });
+    expect(await api.get_session_storage_info!()).toMatchObject({ total_sessions: 1, session_root: expect.stringContaining('protetta'), persisted: true });
+    expect(await api.get_storage_protection!()).toEqual({ ok: true, persisted: true });
     const done = events.find(event => event.name === 'fileDone')?.payload as { html_path: string; session_dir: string };
     const { sessions } = await api.get_completed_sessions!();
     expect(sessions).toHaveLength(1);

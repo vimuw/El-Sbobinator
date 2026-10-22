@@ -29,6 +29,7 @@ import { useRevisionRetry } from './hooks/useRevisionRetry';
 import { useRegenerateDialog } from './hooks/useRegenerateDialog';
 import type { EditorSaveController } from './hooks/useEditorAutosave';
 import { useSystemNotificationTriggers } from './hooks/useSystemNotificationTriggers';
+import { useWebStorageNotice } from './hooks/useWebStorageNotice';
 import { QueuePage } from './components/QueuePage';
 import { RegenerateModal } from './components/modals/RegenerateModal';
 import { NewKeyModal } from './components/modals/NewKeyModal';
@@ -185,6 +186,7 @@ export default function App() {
     addNotification,
     handleRetryFailedRevisionBlocks: useCallback((sessionDir: string, fileId?: string) => handleRetryFailedRevisionBlocksRef.current(sessionDir, fileId), []),
   });
+  useWebStorageNotice({ apiReady, sessionCount: archiveSessions.length, addNotification });
 
   const completedFileCount = files.filter(file => file.status === 'done').length;
   useEffect(() => {

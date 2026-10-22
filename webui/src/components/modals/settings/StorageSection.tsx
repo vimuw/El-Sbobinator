@@ -11,7 +11,7 @@ function formatSize(bytes: number): string {
 }
 
 interface StorageSectionProps {
-  sessionInfo: { total_bytes: number; total_sessions: number; session_root: string; usage_detail?: string } | null;
+  sessionInfo: { total_bytes: number; total_sessions: number; session_root: string; usage_detail?: string; persisted?: boolean } | null;
   isLoadingSessionInfo?: boolean;
   isMoveInProgress: boolean;
   moveProgress: { moved: number; total: number } | null;
@@ -102,6 +102,20 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
             <p data-testid="storage-usage-detail" className="text-xs text-[var(--text-secondary)]">
               {sessionInfo.usage_detail}
             </p>
+          )}
+
+          {inBrowser && !isLoadingSessionInfo && sessionInfo?.persisted === false && (
+            <div data-testid="storage-persist-warning" role="note" className="alert-card is-warning text-xs space-y-1.5">
+              <p className="font-semibold">Il browser può cancellare questi dati</p>
+              <p>
+                Se non apri il sito per qualche giorno (con Safari su iPad e iPhone ne bastano circa 7) o se il dispositivo resta senza spazio,
+                il browser può eliminare sbobine e audio senza chiedere.
+              </p>
+              <p>
+                Scarica ogni tanto un backup qui sotto. Su iPad e iPhone puoi anche aggiungere il sito alla schermata Home (Condividi → Aggiungi alla schermata Home):
+                aperto da lì non dipende dalle visite in Safari, ma ha una memoria sua, quindi porta le sbobine con un backup.
+              </p>
+            </div>
           )}
 
           {isMoveInProgress && (

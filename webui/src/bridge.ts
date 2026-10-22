@@ -297,7 +297,9 @@ export interface PywebviewApi {
     preferredModel?: string,
 
   ) => Promise<{ ok: boolean; result?: ValidationResult; error?: string }>;
-  get_session_storage_info?: () => Promise<{ ok: boolean; total_bytes?: number; total_sessions?: number; session_root?: string; usage_detail?: string; error?: string }>;
+  get_session_storage_info?: () => Promise<{ ok: boolean; total_bytes?: number; total_sessions?: number; session_root?: string; usage_detail?: string; persisted?: boolean; error?: string }>;
+  // Web build only: asks the browser to keep this site's data; false when it may still clear it.
+  get_storage_protection?: () => Promise<{ ok: boolean; persisted: boolean }>;
   // Web build only: backup of the archive kept in this browser (webBackup.ts).
   get_web_backup_info?: () => Promise<{ ok: boolean; sessions?: number; text_bytes?: number; audio_bytes?: number; audio_files?: number; last_backup_at?: string | null; error?: string }>;
   create_web_backup?: (includeAudio: boolean, onProgress?: (done: number, total: number) => void) => Promise<{ ok: boolean; blob?: Blob; filename?: string; sessions?: number; audio_files?: number; error?: string }>;

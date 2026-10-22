@@ -19,6 +19,8 @@ export const STORAGE_KEYS = {
   WEB_MODEL_V1: 'el-sbobinator.web.model.v1',
   // When this browser last downloaded a backup of its sbobine (ISO date).
   WEB_LAST_BACKUP_V1: 'el-sbobinator.web.last-backup.v1',
+  // Set once the "data stay in this browser" notice has been shown after the first sbobina.
+  WEB_STORAGE_NOTICE_V1: 'el-sbobinator.web.storage-notice.v1',
   // M0 archive: copied once into IndexedDB by the M2 upgrade, then removed.
   WEB_M0_SESSIONS_V1: 'el-sbobinator.web.m0-sessions.v1',
 } as const;

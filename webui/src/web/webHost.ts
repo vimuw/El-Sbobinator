@@ -543,11 +543,13 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
         total_bytes: space.usage?.total ?? 0,
         total_sessions: sessions.length,
         usage_detail: space.detail,
+        persisted: Boolean(persisted),
         session_root: persisted
           ? 'Memoria di questo browser (protetta dalla pulizia automatica)'
           : 'Memoria di questo browser: il browser può svuotarla se manca spazio o se non apri il sito per molti giorni',
       };
     },
+    get_storage_protection: async () => ({ ok: true, persisted: await requestPersistentStorage(storage) }),
     get_web_backup_info: async () => {
       try {
         const info = await describeBackup(database);

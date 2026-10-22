@@ -10,14 +10,17 @@ export interface SessionStorageInfo {
   session_root: string;
   /** Host's breakdown of the space, shown under the total (web: audio, texts, browser estimate). */
   usage_detail?: string;
+  /** Web: whether the browser promised to keep the data (navigator.storage.persisted()). */
+  persisted?: boolean;
 }
 
-function toSessionInfo(res: { total_bytes?: number; total_sessions?: number; session_root?: string; usage_detail?: string }): SessionStorageInfo {
+function toSessionInfo(res: { total_bytes?: number; total_sessions?: number; session_root?: string; usage_detail?: string; persisted?: boolean }): SessionStorageInfo {
   return {
     total_bytes: res.total_bytes ?? 0,
     total_sessions: res.total_sessions ?? 0,
     session_root: res.session_root ?? '',
     ...(res.usage_detail ? { usage_detail: res.usage_detail } : {}),
+    ...(typeof res.persisted === 'boolean' ? { persisted: res.persisted } : {}),
   };
 }
 
