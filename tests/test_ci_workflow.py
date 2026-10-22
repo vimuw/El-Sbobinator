@@ -91,3 +91,15 @@ def test_web_release_pins_actions_and_deploys_only_after_tests_and_build():
         "secrets.CLOUDFLARE_API_TOKEN" in web and "secrets.CLOUDFLARE_ACCOUNT_ID" in web
     )
     assert "--project-name=el-sbobinator-web --branch=main" in web
+
+
+def test_web_release_publishes_nothing_on_github():
+    # The web site stays out of the desktop repository's Releases page and artifacts.
+    web = WEB_RELEASE.read_text(encoding="utf-8")
+    for public in (
+        "action-gh-release",
+        "upload-artifact",
+        "gh release",
+        "contents: write",
+    ):
+        assert public not in web
