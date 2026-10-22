@@ -8,6 +8,17 @@ export interface SessionStorageInfo {
   total_bytes: number;
   total_sessions: number;
   session_root: string;
+  /** Host's breakdown of the space, shown under the total (web: audio, texts, browser estimate). */
+  usage_detail?: string;
+}
+
+function toSessionInfo(res: { total_bytes?: number; total_sessions?: number; session_root?: string; usage_detail?: string }): SessionStorageInfo {
+  return {
+    total_bytes: res.total_bytes ?? 0,
+    total_sessions: res.total_sessions ?? 0,
+    session_root: res.session_root ?? '',
+    ...(res.usage_detail ? { usage_detail: res.usage_detail } : {}),
+  };
 }
 
 export interface UseSettingsStorageOptions {
@@ -100,11 +111,7 @@ export function useSettingsStorage({
       p.then((res) => {
         if (!isOpenRef.current || !isMountedRef.current || reqId !== sessionInfoReqIdRef.current) return;
         if (res?.ok) {
-          setSessionInfo({
-            total_bytes: res.total_bytes ?? 0,
-            total_sessions: res.total_sessions ?? 0,
-            session_root: res.session_root ?? '',
-          });
+          setSessionInfo(toSessionInfo(res));
         }
       })
       .catch(() => {})
@@ -131,11 +138,7 @@ export function useSettingsStorage({
         if (window.pywebview?.api?.get_session_storage_info) {
           const info = await window.pywebview.api.get_session_storage_info();
           if (info?.ok && isOpenRef.current && isMountedRef.current) {
-            setSessionInfo({
-              total_bytes: info.total_bytes ?? 0,
-              total_sessions: info.total_sessions ?? 0,
-              session_root: info.session_root ?? '',
-            });
+            setSessionInfo(toSessionInfo(info));
           }
         }
         onSessionRootMoved?.({
@@ -289,11 +292,7 @@ export function useSettingsStorage({
         if (window.pywebview?.api?.get_session_storage_info) {
           const info = await window.pywebview.api.get_session_storage_info();
           if (info?.ok && isMountedRef.current) {
-            setSessionInfo({
-              total_bytes: info.total_bytes ?? 0,
-              total_sessions: info.total_sessions ?? 0,
-              session_root: info.session_root ?? '',
-            });
+            setSessionInfo(toSessionInfo(info));
           }
         }
       } else {

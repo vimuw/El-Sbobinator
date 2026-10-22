@@ -92,6 +92,21 @@ describe('web host', () => {
     expect(await api.check_path_exists!('local://gone/lezione.mp3')).toEqual({ ok: true, exists: false });
   });
 
+  it("counts the space from what it stored, since Safari's estimate leaves out the audio", async () => {
+    const { emit } = recorder();
+    // iPad Safari: 27 MB of audio in IndexedDB, estimate() said 1.1 MB.
+    const storage = { persisted: async () => false, estimate: async () => ({ usage: 1024 }) } as unknown as StorageManager;
+    const api = createWebPywebviewApi(emit, { storage });
+    const [file] = await api.upload_browser_files!([new File([new Uint8Array(3 * 1024 * 1024)], 'Lezione.mp3')]);
+    await vi.waitFor(async () => expect((await api.check_path_exists!(file.path!)).exists).toBe(true));
+
+    const info = await api.get_session_storage_info!();
+    expect(info.total_bytes).toBeGreaterThanOrEqual(3 * 1024 * 1024);
+    expect(info.usage_detail).toBe('Audio delle lezioni 3.0 MB · testi 0 KB · avanzamento elaborazioni 0 KB · stima del browser 1 KB');
+    const { report } = await api.get_diagnostic_report!();
+    expect(report).toContain('- Spazio usato: Audio delle lezioni 3.0 MB · testi 0 KB · avanzamento elaborazioni 0 KB · stima del browser 1 KB');
+  });
+
   it('runs the simulated pipeline into an archived document the editor can open and save', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const { events, emit } = recorder();
@@ -99,7 +114,8 @@ describe('web host', () => {
     const storage = { persist, persisted: async () => persist.mock.calls.length > 0, estimate: async () => ({ usage: 4096 }) } as unknown as StorageManager;
     const api = createWebPywebviewApi(emit, { simulation: true, storage });
     expect(await api.get_session_storage_info!()).toEqual({
-      ok: true, total_bytes: 4096, total_sessions: 0, session_root: expect.stringContaining('il browser può svuotarla'),
+      ok: true, total_bytes: 0, total_sessions: 0, session_root: expect.stringContaining('il browser può svuotarla'),
+      usage_detail: 'Audio delle lezioni 0 KB · testi 0 KB · avanzamento elaborazioni 0 KB · stima del browser 4 KB',
     });
     const [file] = await api.upload_browser_files!([new File(['a'], 'Anatomia.m4a')]);
 

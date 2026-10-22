@@ -135,3 +135,38 @@ export function requestValue<T>(request: IDBRequest<T>): Promise<T> {
     request.onerror = () => reject(request.error);
   });
 }
+
+/** Bytes this app keeps in IndexedDB, counted from the records (Safari's estimate() misses Blobs). */
+export interface WebStorageUsage {
+  /** Audio files: queue copies and the sbobine's lectures. */
+  audio: number;
+  /** Editor documents, archive metadata and folders. */
+  documents: number;
+  /** Pipeline checkpoints (progress of runs, finished or not). */
+  checkpoints: number;
+  total: number;
+}
+
+const encoder = new TextEncoder();
+function jsonBytes(value: unknown): number {
+  try {
+    return encoder.encode(JSON.stringify(value) ?? '').length;
+  } catch {
+    return 0;
+  }
+}
+
+export async function measureWebStorage(factory: IDBFactory | undefined): Promise<WebStorageUsage> {
+  return inTransaction(factory, [MEDIA, DOCUMENTS, SESSIONS, FOLDERS, CHECKPOINTS], 'readonly', async transaction => {
+    const all = (store: string) => requestValue(transaction.objectStore(store).getAll() as IDBRequest<unknown[]>);
+    const [media, documents, sessions, folders, checkpoints] = await Promise.all([all(MEDIA), all(DOCUMENTS), all(SESSIONS), all(FOLDERS), all(CHECKPOINTS)]);
+    const audio = media.reduce<number>((sum, record) => {
+      const { blob, size } = record as { blob?: Blob; size?: number };
+      return sum + (blob?.size ?? size ?? 0);
+    }, 0);
+    const text = documents.reduce<number>((sum, record) => sum + encoder.encode((record as StoredDocument).body ?? '').length, 0)
+      + [...sessions, ...folders].reduce<number>((sum, record) => sum + jsonBytes(record), 0);
+    const progress = checkpoints.reduce<number>((sum, record) => sum + jsonBytes(record), 0);
+    return { audio, documents: text, checkpoints: progress, total: audio + text + progress };
+  });
+}

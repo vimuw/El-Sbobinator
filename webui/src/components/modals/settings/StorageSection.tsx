@@ -11,7 +11,7 @@ function formatSize(bytes: number): string {
 }
 
 interface StorageSectionProps {
-  sessionInfo: { total_bytes: number; total_sessions: number; session_root: string } | null;
+  sessionInfo: { total_bytes: number; total_sessions: number; session_root: string; usage_detail?: string } | null;
   isLoadingSessionInfo?: boolean;
   isMoveInProgress: boolean;
   moveProgress: { moved: number; total: number } | null;
@@ -92,6 +92,12 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
                 ? `${sessionInfo.total_sessions} ${sessionInfo.total_sessions === 1 ? 'sbobina' : 'sbobine'} · ${formatSize(sessionInfo.total_bytes)} occupati`
                 : 'Spazio occupato non disponibile.'}
           </p>
+
+          {!isLoadingSessionInfo && sessionInfo?.usage_detail && (
+            <p data-testid="storage-usage-detail" className="text-xs text-[var(--text-secondary)]">
+              {sessionInfo.usage_detail}
+            </p>
+          )}
 
           {isMoveInProgress && (
             <div className="alert-card is-info text-xs space-y-2">

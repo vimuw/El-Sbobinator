@@ -3,11 +3,12 @@ import type { PywebviewApi, ValidationResult } from '../bridge';
 import { APP_VERSION } from '../branding';
 import { type HostCapabilities, setHostCapabilities } from '../hostCapabilities';
 import { STORAGE_KEYS } from '../storageKeys';
-import { GEMINI_KEY_PATTERN } from '../utils';
+import { GEMINI_KEY_PATTERN, formatSize } from '../utils';
 import { createWorkerAudioSource } from './audioPort';
 import { createCheckpointStore } from './checkpointStore';
 import { type BridgeEventName, type EmitBridgeEvent, runFakePipeline } from './fakePipeline';
 import { createPageState } from './pageLifecycle';
+import { measureWebStorage, type WebStorageUsage } from './webDatabase';
 import { CancelledError } from './pipeline/retry';
 import { retryFailedSections, type AudioSource, type PipelineEnv } from './pipeline/run';
 import { getWebFile, hasWebFile, isWebSupportedMedia, promptWebFiles, registerWebFile, restoreWebFile, webFileId } from './webFiles';
@@ -73,6 +74,17 @@ function audioSupport(): string {
   return `Opus riproducibile: ${playback}; codifica WebCodecs: ${encoder}`;
 }
 
+// Safari's estimate() leaves out the audio Blobs (27 MB of audio showed as 1.1 MB): the space shown
+// is counted from what this app stored; the browser's figure stays as a secondary reading.
+function describeUsage(usage: WebStorageUsage | null, browserEstimate: number | undefined): string {
+  const parts = usage
+    ? [`audio delle lezioni ${formatSize(usage.audio)}`, `testi ${formatSize(usage.documents)}`, `avanzamento elaborazioni ${formatSize(usage.checkpoints)}`]
+    : ['spazio delle sbobine non calcolabile'];
+  if (browserEstimate !== undefined) parts.push(`stima del browser ${formatSize(browserEstimate)}`);
+  const text = parts.join(' · ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 type QueuedEvent = { name: BridgeEventName; payload: unknown };
 
 // Events are delivered asynchronously and in order, like the desktop dispatcher; if the UI has not
@@ -98,7 +110,7 @@ export function createBridgeEmitter(target: () => Window['elSbobinatorBridge']):
   };
 }
 
-async function describeDevice(archive: WebArchive): Promise<string> {
+async function describeDevice(archive: WebArchive, space: string): Promise<string> {
   const sessions = await archive.list().then(list => String(list.length), () => 'non leggibile');
   const lines = [
     `- Versione: ${APP_VERSION} (web)`,
@@ -107,6 +119,7 @@ async function describeDevice(archive: WebArchive): Promise<string> {
     `- Touch: ${navigator.maxTouchPoints > 0 ? 'sì' : 'no'}`,
     `- Audio: ${audioSupport()}`,
     `- Sbobine nell'archivio: ${sessions}`,
+    `- Spazio usato: ${space}`,
   ];
   return lines.join('\n');
 }
@@ -176,6 +189,13 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
   const media = options.media ?? createWebMediaStore(database);
   // Copies of picked files still being written to IndexedDB, by file id: true once stored.
   const pendingSaves = new Map<string, Promise<boolean>>();
+  const measureSpace = async () => {
+    const [usage, estimate] = await Promise.all([
+      measureWebStorage(database).catch(() => null),
+      storage?.estimate?.().catch(() => undefined),
+    ]);
+    return { usage, detail: describeUsage(usage, estimate?.usage) };
+  };
   let mediaUrl: string | null = null;
   const revokeMediaUrl = () => {
     if (mediaUrl) URL.revokeObjectURL(mediaUrl);
@@ -512,15 +532,16 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
     },
     // The settings show where sbobine live and whether the browser may clear them.
     get_session_storage_info: async () => {
-      const [estimate, persisted, sessions] = await Promise.all([
-        storage?.estimate?.().catch(() => undefined),
+      const [space, persisted, sessions] = await Promise.all([
+        measureSpace(),
         storage?.persisted?.().catch(() => false),
         archive.list().catch(() => []),
       ]);
       return {
         ok: true,
-        total_bytes: estimate?.usage ?? 0,
+        total_bytes: space.usage?.total ?? 0,
         total_sessions: sessions.length,
+        usage_detail: space.detail,
         session_root: persisted
           ? 'Memoria di questo browser (protetta dalla pulizia automatica)'
           : 'Memoria di questo browser: il browser può svuotarla se manca spazio o se non apri il sito per molti giorni',
@@ -542,7 +563,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
 
     get_diagnostic_report: async () => {
       const recent = frontendEvents.slice(-20).map(line => `- ${line}`).join('\n') || '- nessuno';
-      return { ok: true, report: `## El Sbobinator (web)\n${await describeDevice(archive)}\n\n### Errori recenti dell'interfaccia\n${recent}` };
+      return { ok: true, report: `## El Sbobinator (web)\n${await describeDevice(archive, (await measureSpace()).detail)}\n\n### Errori recenti dell'interfaccia\n${recent}` };
     },
     record_frontend_event: async (kind, message) => {
       frontendEvents.push(`${new Date().toISOString()} ${kind}: ${String(message ?? '').slice(0, 300)}`);

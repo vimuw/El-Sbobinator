@@ -35,6 +35,13 @@ describe('StorageSection component', () => {
     expect(screen.queryByText('Spazio disco e archivio')).toBeNull();
   });
 
+  it('shows the host breakdown under the total only when there is one', () => {
+    const { rerender } = render(<StorageSection {...baseProps} />);
+    expect(screen.queryByTestId('storage-usage-detail')).toBeNull();
+    rerender(<StorageSection {...baseProps} sessionInfo={{ ...baseProps.sessionInfo, usage_detail: 'Audio delle lezioni 27.0 MB · stima del browser 1.1 MB' }} />);
+    expect(screen.getByTestId('storage-usage-detail').textContent).toBe('Audio delle lezioni 27.0 MB · stima del browser 1.1 MB');
+  });
+
   it('says when the used space is still loading or unavailable', () => {
     const { rerender } = render(<StorageSection {...baseProps} sessionInfo={null} isLoadingSessionInfo />);
     expect(screen.getByTestId('storage-usage').textContent).toBe('Calcolo dello spazio occupato…');
