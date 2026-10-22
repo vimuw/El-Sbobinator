@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import type { ArchiveSession } from '../bridge';
 import { STORAGE_KEYS } from '../storageKeys';
 import { fadeUp } from '../motion';
+import { isTouchWeb } from '../hostCapabilities';
 import { BrandLogo } from './BrandLogo';
 
 interface WelcomeDashboardProps {
@@ -75,9 +76,13 @@ export const WelcomeDashboard = memo(function WelcomeDashboard({ archiveSessions
           <ArchiveSummary total={stats.total} totalSec={stats.totalSec} />
         ) : (
           <p className="text-base" style={{ color: 'var(--text-muted)' }}>
-            {hasSessions
-              ? 'Trascina un nuovo file audio o video per iniziare.'
-              : 'Trascina un file audio o video per iniziare la prima sbobinatura.'}
+            {isTouchWeb()
+              ? hasSessions
+                ? 'Scegli un nuovo file audio o video per iniziare.'
+                : 'Scegli un file audio o video per iniziare la prima sbobinatura.'
+              : hasSessions
+                ? 'Trascina un nuovo file audio o video per iniziare.'
+                : 'Trascina un file audio o video per iniziare la prima sbobinatura.'}
           </p>
         )}
       </div>

@@ -50,6 +50,11 @@ export function deletedFrom(): string {
   return hostCapabilities.kind === 'web' ? 'da questo browser' : 'dal disco';
 }
 
+/** The web build on a touch-first device (tablet, phone), where files are picked, not dragged onto the page. */
+export function isTouchWeb(): boolean {
+  return hostCapabilities.kind === 'web' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+}
+
 export function setHostCapabilities(capabilities: Partial<HostCapabilities>): void {
   hostCapabilities = { ...DESKTOP_CAPABILITIES, ...capabilities };
 }

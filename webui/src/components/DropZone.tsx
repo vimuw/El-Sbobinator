@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, UploadCloud } from 'lucide-react';
 import { fade } from '../motion';
-import { getHostCapabilities } from '../hostCapabilities';
+import { getHostCapabilities, isTouchWeb } from '../hostCapabilities';
 
 // The page (QueuePage) owns the drag handlers: the card only reflects the state,
 // so moving across its children never toggles the highlight on and off.
@@ -52,6 +52,8 @@ function activateOnKey(onClick: () => void) {
 
 export const DropZone = memo(function DropZone({ isDragging, onClick, compact = false }: DropZoneProps) {
   const formats = formatHints();
+  // On a tablet nothing is dragged onto the page: the card is tapped to pick files.
+  const touch = isTouchWeb();
   if (compact) {
     return (
       <div
@@ -68,7 +70,7 @@ export const DropZone = memo(function DropZone({ isDragging, onClick, compact = 
           <Plus className="w-3.5 h-3.5" />
         </span>
         <span className="dropzone-compact-label text-sm">
-          {isDragging ? 'Rilascia qui per aggiungere' : 'Trascina file o clicca per aggiungere'}
+          {isDragging ? 'Rilascia qui per aggiungere' : touch ? 'Tocca per aggiungere file' : 'Trascina file o clicca per aggiungere'}
         </span>
         <span className="ml-auto text-xs hidden sm:block text-[var(--text-faint)]">
           {formats.short}
@@ -84,10 +86,10 @@ export const DropZone = memo(function DropZone({ isDragging, onClick, compact = 
       className={`dropzone-card relative cursor-pointer flex flex-col items-center justify-center py-12 px-6 text-center${isDragging ? ' is-dragging' : ''}`}
       role="button"
       tabIndex={0}
-      aria-label="Trascina i file qui o clicca per sfogliare"
+      aria-label={touch ? 'Scegli i file da aggiungere' : 'Trascina i file qui o clicca per sfogliare'}
     >
       <DropIcon live={isDragging} />
-      <h3 className="dropzone-title">Trascina i file qui</h3>
+      <h3 className="dropzone-title">{touch ? 'Scegli i file da sbobinare' : 'Trascina i file qui'}</h3>
       <p className="text-xs max-w-xs text-[var(--text-muted)]" title={formats.title}>
         {formats.summary}
       </p>
