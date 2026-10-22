@@ -15,8 +15,10 @@ function syntheticMp3(frames: number): Buffer {
 
 type GeminiLog = { generate: Array<{ key: string; audio: 'inline' | 'file' | null }>; other: string[] };
 
-async function fakeGemini(page: Page): Promise<GeminiLog> {
+/** holdFirst: the first transcription request never gets an answer (a reload happens meanwhile). */
+async function fakeGemini(page: Page, { holdFirst = false } = {}): Promise<GeminiLog> {
   const log: GeminiLog = { generate: [], other: [] };
+  let holding = holdFirst;
   const json = (route: Route, body: unknown, headers: Record<string, string> = {}) =>
     route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*', 'access-control-expose-headers': '*', ...headers }, body: JSON.stringify(body) });
   await page.route(`${GEMINI}/**`, async route => {
@@ -26,6 +28,11 @@ async function fakeGemini(page: Page): Promise<GeminiLog> {
     }
     const url = request.url();
     if (url.includes(':generateContent')) {
+      if (holding) {
+        holding = false;
+        log.other.push('held');
+        return;
+      }
       const body = request.postDataJSON() as { contents: Array<{ parts: Array<{ inlineData?: unknown; fileData?: unknown }> }> };
       const parts = body.contents[0].parts;
       const audio = parts.some(part => part.inlineData) ? 'inline' : parts.some(part => part.fileData) ? 'file' : null;
@@ -104,4 +111,62 @@ test('reopens an edited sbobina from the archive after a reload and in a new tab
   const again = await context.newPage();
   await again.goto('/');
   await reopen(again);
+});
+
+async function startWithKey(page: Page) {
+  await page.goto('/');
+  await page.getByLabel('Chiave API Gemini').fill(DUMMY_KEY);
+  await page.getByRole('button', { name: 'Salva e inizia' }).click();
+}
+
+async function pickFile(page: Page, name: string) {
+  const chooserPromise = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
+  await (await chooserPromise).setFiles({ name, mimeType: 'audio/mpeg', buffer: syntheticMp3(400) });
+}
+
+/** Plays the editor's audio and waits until the position moves. */
+async function expectAudioPlays(page: Page) {
+  const audio = page.locator('.editor-player-dock audio');
+  await expect(audio).toHaveAttribute('src', /^blob:/);
+  await page.getByRole('button', { name: 'Avvia riproduzione' }).click();
+  await expect.poll(() => audio.evaluate(element => (element as HTMLAudioElement).currentTime), { timeout: 10_000 }).toBeGreaterThan(0.3);
+  await page.getByRole('button', { name: 'Metti in pausa' }).click();
+}
+
+test('plays the lecture in the editor, also after a reload', async ({ page }) => {
+  await fakeGemini(page);
+  await startWithKey(page);
+  await pickFile(page, 'Anatomia.mp3');
+  await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
+  await expect(page.getByText('Sbobinatura completata!')).toBeVisible({ timeout: 40_000 });
+
+  await page.locator('.queue-card.is-completed', { hasText: 'Anatomia.mp3' }).click();
+  await expect(page.locator('.tiptap-editor h1')).toHaveText('Anatomia');
+  await expectAudioPlays(page);
+
+  await page.getByRole('button', { name: 'Torna indietro' }).click();
+  await page.reload();
+  await page.getByRole('button', { name: 'Archivio', exact: true }).click();
+  await page.locator('.archive-session-card').filter({ has: page.getByRole('button', { name: 'Seleziona Anatomia' }) }).click();
+  await expect(page.locator('.tiptap-editor h1')).toHaveText('Anatomia');
+  await expectAudioPlays(page);
+});
+
+test('after a reload during a run, starts again without picking the file', async ({ page }) => {
+  const log = await fakeGemini(page, { holdFirst: true });
+  await startWithKey(page);
+  await pickFile(page, 'Biochimica.mp3');
+  await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
+  await expect.poll(() => log.other).toContain('held');
+
+  // The page asks before leaving during a run: the user confirms.
+  page.on('dialog', dialog => void dialog.accept());
+  await page.reload();
+  let asked = 0;
+  page.on('filechooser', () => { asked += 1; });
+  await expect(page.locator('.queue-card', { hasText: 'Biochimica.mp3' })).toBeVisible();
+  await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
+  await expect(page.getByText('Sbobinatura completata!')).toBeVisible({ timeout: 40_000 });
+  expect(asked).toBe(0);
 });

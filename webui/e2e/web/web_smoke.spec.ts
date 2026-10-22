@@ -35,7 +35,8 @@ test('runs the simulated pipeline and opens the sample document without a backen
   await page.locator('.queue-card.is-completed', { hasText: 'Lezione web.mp3' }).click();
 
   await expect(page.locator('.tiptap-editor h1')).toHaveText('Lezione web');
-  await expect(page.locator('.editor-player-dock')).toHaveCount(0);
+  // The player is docked with the file kept in this browser (blob: URL allowed by the CSP).
+  await expect(page.locator('.editor-player-dock audio')).toHaveAttribute('src', /^blob:/);
   // iPad portrait width: the page fits without sideways scrolling.
   const overflow = await page.locator('.editor-page-container').evaluate(el => el.scrollWidth - el.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
