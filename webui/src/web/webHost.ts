@@ -1,6 +1,6 @@
 import type { FileDescriptor } from '../appState';
 import type { PywebviewApi, ValidationResult } from '../bridge';
-import { APP_VERSION } from '../branding';
+import { APP_VERSION, WEB_PREVIEW_BUILD } from '../branding';
 import { type HostCapabilities, setHostCapabilities } from '../hostCapabilities';
 import { STORAGE_KEYS } from '../storageKeys';
 import { GEMINI_KEY_PATTERN, formatSize } from '../utils';
@@ -114,7 +114,7 @@ export function createBridgeEmitter(target: () => Window['elSbobinatorBridge']):
 async function describeDevice(archive: WebArchive, space: string): Promise<string> {
   const sessions = await archive.list().then(list => String(list.length), () => 'non leggibile');
   const lines = [
-    `- Versione: ${APP_VERSION} (web)`,
+    `- Versione: ${APP_VERSION} (web${WEB_PREVIEW_BUILD ? ', anteprima' : ''})`,
     `- Browser: ${navigator.userAgent}`,
     `- Finestra: ${window.innerWidth}×${window.innerHeight} @${window.devicePixelRatio}x`,
     `- Touch: ${navigator.maxTouchPoints > 0 ? 'sì' : 'no'}`,

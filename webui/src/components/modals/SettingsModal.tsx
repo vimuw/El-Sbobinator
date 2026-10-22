@@ -13,13 +13,13 @@ import { DiagnosticsSection } from './settings/DiagnosticsSection';
 import { ApiStatusSection } from './settings/ApiStatusSection';
 import { WebKeysSection } from './settings/WebKeysSection';
 import { UpdaterSection, UpdateNotice, type SettingsUpdateInstallState } from './settings/UpdaterSection';
-import { SettingsDivider, SettingsPageHeader } from './settings/SettingsLayout';
+import { SettingsDivider, SettingsPageHeader, SettingsSectionHeading } from './settings/SettingsLayout';
 
 import { useSettingsStorage } from '../../hooks/useSettingsStorage';
 import { formatSize } from '../../utils';
 import { credentialStorageWarning } from '../../credentialStorage';
 import { getHostCapabilities } from '../../hostCapabilities';
-import { APP_VERSION } from '../../branding';
+import { APP_VERSION, WEB_PREVIEW_BUILD } from '../../branding';
 import { STORAGE_KEYS } from '../../storageKeys';
 import { modalCard } from '../../motion';
 
@@ -659,6 +659,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             updateInstallState={updateInstallState}
                             onInstallUpdate={onInstallUpdate}
                           />
+                        </>
+                      )}
+
+                      {hostCapabilities.kind === 'web' && (
+                        <>
+                          <SettingsDivider />
+                          <div className="space-y-1" data-testid="web-version">
+                            <SettingsSectionHeading>Versione</SettingsSectionHeading>
+                            <p className="text-xs text-[var(--text-secondary)]">
+                              {WEB_PREVIEW_BUILD ? `${APP_VERSION} (anteprima)` : APP_VERSION}. Gli aggiornamenti arrivano da soli alla prossima apertura del sito, senza toccare sbobine e chiavi salvate in questo browser.
+                            </p>
+                          </div>
                         </>
                       )}
                     </div>

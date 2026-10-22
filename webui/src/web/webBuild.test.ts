@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { WEB_CSP, toWebIndexHtml, webHeadersFile } from './webBuild';
+import { WEB_CSP, toWebIndexHtml, webBuildVersion, webHeadersFile } from './webBuild';
 
 function directive(csp: string, name: string): string {
   return csp.split(';').map(part => part.trim()).find(part => part.startsWith(`${name} `)) ?? '';
@@ -30,5 +30,32 @@ describe('web build page policy', () => {
     const headers = webHeadersFile();
     expect(headers).toContain(`Content-Security-Policy: ${WEB_CSP}; frame-ancestors 'none'`);
     expect(headers).not.toMatch(/Cross-Origin-(Opener|Embedder)-Policy/);
+  });
+
+  it('caches hashed assets for a year and revalidates the page and the unhashed files', () => {
+    const headers = webHeadersFile(['boot-theme.js', 'icon.png']);
+    const rules = new Map<string, string[]>();
+    let current = '';
+    for (const line of headers.split('\n')) {
+      if (!line) continue;
+      if (!line.startsWith(' ')) rules.set((current = line), []);
+      else rules.get(current)!.push(line.trim());
+    }
+    expect(rules.get('/assets/*')).toEqual(['Cache-Control: public, max-age=31536000, immutable']);
+    for (const path of ['/', '/index.html', '/version.json', '/boot-theme.js', '/icon.png']) {
+      expect(rules.get(path)).toEqual(['Cache-Control: no-cache']);
+    }
+    // Cloudflare merges every matching rule: a Cache-Control on '/*' would join the assets' one.
+    expect(rules.get('/*')!.some(header => header.startsWith('Cache-Control'))).toBe(false);
+  });
+});
+
+describe('web build version', () => {
+  it('comes from the release tag, else the build is a preview', () => {
+    expect(webBuildVersion('web-v1.2.3', '1.0.0')).toEqual({ version: '1.2.3', preview: false });
+    expect(webBuildVersion('web-v2.0.0-rc.1', '1.0.0')).toEqual({ version: '2.0.0-rc.1', preview: false });
+    expect(webBuildVersion(undefined, '1.0.0')).toEqual({ version: '1.0.0', preview: true });
+    expect(webBuildVersion('', '1.0.0')).toEqual({ version: '1.0.0', preview: true });
+    expect(() => webBuildVersion('web-vprova', '1.0.0')).toThrow('Tag della versione web non valido');
   });
 });

@@ -35,8 +35,14 @@ export function toWebIndexHtml(html: string): string {
   return result;
 }
 
-// Cloudflare Pages reads this file from the output folder.
-export function webHeadersFile(): string {
+/**
+ * Cloudflare Pages reads this file from the output folder. Files with a hash in their name
+ * (assets/) never change and are cached for a year; the page and the files of public/ keep their
+ * names across releases, so the browser revalidates them and a new release arrives on the next
+ * load. Cloudflare merges every rule matching a path, so Cache-Control is never set by '/*'.
+ */
+export function webHeadersFile(publicFiles: string[] = []): string {
+  const revalidated = ['/', '/index.html', '/version.json', ...publicFiles.map(name => `/${name}`)];
   return [
     '/*',
     `  Content-Security-Policy: ${WEB_CSP}; frame-ancestors 'none'`,
@@ -45,6 +51,22 @@ export function webHeadersFile(): string {
     '  Permissions-Policy: camera=(), microphone=(), geolocation=()',
     '/assets/*',
     '  Cache-Control: public, max-age=31536000, immutable',
+    ...revalidated.flatMap(path => [path, '  Cache-Control: no-cache']),
     '',
   ].join('\n');
+}
+
+export interface WebBuildVersion {
+  version: string;
+  /** No release tag: a branch preview, shown as such in the settings and the report. */
+  preview: boolean;
+}
+
+/** Version of the web build from its release tag (web-v1.2.3), else the package version as a preview. */
+export function webBuildVersion(tag: string | undefined, packageVersion: string): WebBuildVersion {
+  const value = tag?.trim();
+  if (!value) return { version: packageVersion, preview: true };
+  const match = /^(?:web-)?v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(value);
+  if (!match) throw new Error(`Tag della versione web non valido: ${value} (atteso web-v1.2.3).`);
+  return { version: match[1], preview: false };
 }

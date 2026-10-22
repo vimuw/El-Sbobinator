@@ -14,6 +14,7 @@ import type { ModelOption } from '../../bridge';
 import { STORAGE_KEYS } from '../../storageKeys';
 import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../../hostCapabilities';
 import { WEB_CAPABILITIES } from '../../web/webHost';
+import { APP_VERSION } from '../../branding';
 
 const motionCache = new Map<string, React.ForwardRefExoticComponent<React.PropsWithoutRef<Record<string, unknown>> & React.RefAttributes<unknown>>>();
 vi.mock('motion/react', () => ({
@@ -1222,6 +1223,8 @@ describe('SettingsModal on the web host', () => {
     expect(screen.queryByText('Chiavi API')).toBeNull();
     expect(screen.queryByText('Notifiche di sistema')).toBeNull();
     expect(screen.queryByText('Versione e aggiornamenti')).toBeNull();
+    // No updater on the web: the version is shown, updates arrive with the next load.
+    expect(screen.getByTestId('web-version').textContent).toContain(`${APP_VERSION}. Gli aggiornamenti arrivano da soli`);
 
     fireEvent.click(screen.getByRole('button', { name: /Assistenza/ }));
     expect(screen.getByRole('button', { name: 'Copia report diagnostico' })).toBeTruthy();

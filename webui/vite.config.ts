@@ -1,10 +1,10 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'path';
 import { defineConfig, type UserConfig } from 'vite';
-import { toWebIndexHtml, webHeadersFile } from './src/web/webBuild.ts';
+import { toWebIndexHtml, webBuildVersion, webHeadersFile } from './src/web/webBuild.ts';
 
 const packageInfo = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')) as { version: string };
 const version = (process.env.EL_SBOBINATOR_BUILD_VERSION ?? packageInfo.version).replace(/^v/, '');
@@ -14,6 +14,8 @@ const backendPort = Number.parseInt(process.env.EL_SBOBINATOR_BACKEND_PORT ?? '8
 // (webui/dist-web) from the same sources.
 export function createViteConfig(target: 'desktop' | 'web'): UserConfig {
   const isWeb = target === 'web';
+  // The web release workflow passes its tag (web-v1.2.3); other web builds are previews.
+  const web = isWeb ? webBuildVersion(process.env.EL_SBOBINATOR_WEB_VERSION, packageInfo.version) : null;
   return {
     ...(isWeb ? { mode: 'web' } : {}),
     plugins: [react(), tailwindcss(), isWeb ? {
@@ -22,7 +24,9 @@ export function createViteConfig(target: 'desktop' | 'web'): UserConfig {
       apply: 'build',
       transformIndexHtml: (html: string) => toWebIndexHtml(html),
       generateBundle() {
-        this.emitFile({ type: 'asset', fileName: '_headers', source: webHeadersFile() });
+        const publicFiles = readdirSync(new URL('./public', import.meta.url));
+        this.emitFile({ type: 'asset', fileName: '_headers', source: webHeadersFile(publicFiles) });
+        this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify(web) });
       },
     } : {
       name: 'desktop-build-version',
@@ -36,7 +40,8 @@ export function createViteConfig(target: 'desktop' | 'web'): UserConfig {
       },
     }],
     define: {
-      __APP_VERSION__: JSON.stringify(`v${version}`),
+      __APP_VERSION__: JSON.stringify(`v${web?.version ?? version}`),
+      __WEB_PREVIEW__: JSON.stringify(web?.preview ?? false),
       'process.env': {},
       global: 'globalThis',
     },
