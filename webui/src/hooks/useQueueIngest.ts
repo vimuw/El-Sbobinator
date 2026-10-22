@@ -30,6 +30,8 @@ interface UseQueueIngestOptions {
   apiReady: boolean;
   appendConsole: (msg: string) => void;
   onFilesAddedToBatch?: (count: number) => void;
+  /** Web: dropped files the host refused (unsupported format), shown outside the hidden console. */
+  onFilesRejected?: (names: string[]) => void;
 }
 
 export function useQueueIngest({
@@ -42,6 +44,7 @@ export function useQueueIngest({
   apiReady,
   appendConsole,
   onFilesAddedToBatch,
+  onFilesRejected,
 }: UseQueueIngestOptions) {
   const [duplicatePrompt, setDuplicatePrompt] = useState<DuplicatePrompt>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -226,12 +229,16 @@ export function useQueueIngest({
         if (files.length > 0 && window.pywebview?.api?.upload_browser_files) {
           const uploaded = await window.pywebview.api.upload_browser_files(files);
           ingestDescriptors(uploaded);
+          if (getHostCapabilities().kind === 'web' && uploaded.length < files.length) {
+            const accepted = new Set(uploaded.map(descriptor => descriptor.name));
+            onFilesRejected?.(files.map(file => file.name).filter(name => !accepted.has(name)));
+          }
         }
       } catch (error) {
         appendConsole(`❌ Errore caricamento file: ${String(error)}`);
       }
     },
-    [appStateRef, appendConsole, ingestDescriptors],
+    [appStateRef, appendConsole, ingestDescriptors, onFilesRejected],
   );
 
   return {

@@ -218,6 +218,9 @@ export default function App() {
     apiReady,
     appendConsole,
     onFilesAddedToBatch: useCallback((count: number) => onFilesAddedToBatchRef.current(count), []),
+    onFilesRejected: useCallback((names: string[]) => {
+      addNotification('Formato non supportato', `${names.join(', ')}: la versione web accetta solo file MP3, M4A o MP4.`, 'warning', 'system');
+    }, [addNotification]),
   });
 
   const {
