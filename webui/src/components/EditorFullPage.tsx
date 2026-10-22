@@ -8,6 +8,7 @@ import { clipboardPlainText } from '../documentFormatting';
 import { reportClientError } from '../diagnostics';
 import { ConfirmActionModal } from './modals/ConfirmActionModal';
 import { useTheme } from '../hooks/useTheme';
+import { useKeyboardInsets } from '../hooks/useKeyboardInsets';
 import { useEditorAutosave, type EditorSaveController } from '../hooks/useEditorAutosave';
 import { STORAGE_KEYS } from '../storageKeys';
 import { getHostCapabilities } from '../hostCapabilities';
@@ -119,6 +120,8 @@ export function EditorFullPage({
   const copiedTimerRef = useRef<number | null>(null);
   const getHtmlRef = useRef<(() => string) | null>(null);
   const showAudioDock = getHostCapabilities().editorAudio;
+  // On a tablet the editor shrinks to the area above the on-screen keyboard, player included.
+  const keyboard = useKeyboardInsets(getHostCapabilities().kind === 'web');
   const footerRef = useRef<HTMLDivElement>(null);
   const [footerHeight, setFooterHeight] = useState(0);
 
@@ -240,6 +243,7 @@ export function EditorFullPage({
       {previewContent !== null && (
         <motion.div
           className="editor-fullpage"
+          style={keyboard.bottom ? { top: keyboard.top, bottom: keyboard.bottom } : undefined}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

@@ -437,4 +437,47 @@ describe('EditorFullPage on the web build', () => {
     });
     expect(onRelink).toHaveBeenCalledTimes(1);
   });
+
+  it('fits above the on-screen keyboard so the player and the caret stay visible', async () => {
+    vi.stubGlobal('innerHeight', 1180);
+    const viewport = Object.assign(new EventTarget(), { height: 1180, offsetTop: 0, scale: 1 });
+    vi.stubGlobal('visualViewport', viewport);
+    try {
+      setHostCapabilities(WEB_CAPABILITIES);
+      const { container } = render(<EditorFullPage {...baseProps} audioSrc="blob:https://web.test/1" />);
+      await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
+      // Queried each time: the motion mock remounts the element on every render.
+      const page = () => container.querySelector<HTMLElement>('.editor-fullpage')!;
+      expect(page().style.bottom).toBe('');
+
+      act(() => {
+        Object.assign(viewport, { height: 760, offsetTop: 40 });
+        viewport.dispatchEvent(new Event('resize'));
+      });
+      expect(page().style.top).toBe('40px');
+      expect(page().style.bottom).toBe('380px');
+
+      act(() => {
+        Object.assign(viewport, { height: 1180, offsetTop: 0 });
+        viewport.dispatchEvent(new Event('resize'));
+      });
+      expect(page().style.bottom).toBe('');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('EditorFullPage on the desktop with a visual viewport', () => {
+  it('keeps the full window: pywebview resizes the page itself', () => {
+    vi.stubGlobal('innerHeight', 1180);
+    const viewport = Object.assign(new EventTarget(), { height: 700, offsetTop: 0, scale: 1 });
+    vi.stubGlobal('visualViewport', viewport);
+    try {
+      const { container } = render(<EditorFullPage {...baseProps} />);
+      expect(container.querySelector<HTMLElement>('.editor-fullpage')!.style.bottom).toBe('');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
