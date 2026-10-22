@@ -38,6 +38,18 @@ describe('AudioPlayer', () => {
     expect(screen.getByRole('slider', { name: 'Volume' }).getAttribute('aria-valuetext')).toBe('100%');
   });
 
+  it('leaves out the volume slider where the browser keeps volume on the hardware buttons (iPad)', () => {
+    const volume = Object.getOwnPropertyDescriptor(window.HTMLMediaElement.prototype, 'volume')!;
+    Object.defineProperty(window.HTMLMediaElement.prototype, 'volume', { configurable: true, get: () => 1, set: () => {} });
+    try {
+      render(<AudioPlayer src="/audio/test.mp3" initialVolume={0.4} />);
+      expect(screen.getByRole('slider', { name: 'Posizione audio' })).toBeTruthy();
+      expect(screen.queryByRole('slider', { name: 'Volume' })).toBeNull();
+    } finally {
+      Object.defineProperty(window.HTMLMediaElement.prototype, 'volume', volume);
+    }
+  });
+
   it('shows time display 00:00:00 / 00:00:00 initially', () => {
     render(<AudioPlayer src="/audio/test.mp3" />);
     expect(screen.getByText('00:00:00 / 00:00:00')).toBeTruthy();
