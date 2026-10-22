@@ -671,6 +671,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         cleanupResult={cleanupResult}
                         onDismissCleanupResult={handleDismissCleanupResult}
                         canManageSessionFolder={hostCapabilities.nativeFolderPicker && hostCapabilities.openLocalPath}
+                        inBrowser={hostCapabilities.kind === 'web'}
                       />
                     </div>
                   )}

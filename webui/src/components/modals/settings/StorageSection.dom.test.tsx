@@ -42,6 +42,14 @@ describe('StorageSection component', () => {
     expect(screen.getByTestId('storage-usage-detail').textContent).toBe('Audio delle lezioni 27.0 MB · stima del browser 1.1 MB');
   });
 
+  it('web: speaks of this browser instead of a folder on disk, without the folder cleanup', () => {
+    render(<StorageSection {...baseProps} canManageSessionFolder={false} inBrowser sessionInfo={{ ...baseProps.sessionInfo, session_root: 'Memoria di questo browser' }} />);
+    expect(screen.getByText('Spazio in questo browser')).toBeTruthy();
+    expect(screen.queryByText('Cartella sessioni')).toBeNull();
+    expect(screen.queryByText(/su disco/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Pulisci elaborazioni incomplete' })).toBeNull();
+  });
+
   it('says when the used space is still loading or unavailable', () => {
     const { rerender } = render(<StorageSection {...baseProps} sessionInfo={null} isLoadingSessionInfo />);
     expect(screen.getByTestId('storage-usage').textContent).toBe('Calcolo dello spazio occupato…');
