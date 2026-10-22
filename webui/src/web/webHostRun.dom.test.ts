@@ -1,4 +1,5 @@
 import { IDBFactory } from 'fake-indexeddb';
+import { Blob as NodeBlob, File as NodeFile } from 'node:buffer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FileDescriptor } from '../appState';
 import { DESKTOP_CAPABILITIES, getHostCapabilities, setHostCapabilities } from '../hostCapabilities';
@@ -76,6 +77,9 @@ let store: CheckpointStore;
 let database: IDBFactory;
 
 beforeEach(() => {
+  // The host copies picked files into fake-indexeddb, whose structuredClone keeps Node files, not jsdom's.
+  vi.stubGlobal('File', NodeFile);
+  vi.stubGlobal('Blob', NodeBlob);
   localStorage.clear();
   database = new IDBFactory();
   store = createCheckpointStore(database);
@@ -108,6 +112,8 @@ describe('web host with the real pipeline', () => {
     await vi.runAllTimersAsync();
     expect(fetchMock).not.toHaveBeenCalled();
     expect(await window.pywebview!.api.get_completed_sessions!()).toMatchObject({ total: 1 });
+    // The run ends after the archive (its audio is linked last): no event may arrive after this test.
+    await vi.waitFor(async () => expect((await window.pywebview!.api.is_processing_active!()).active).toBe(false));
   });
 
   it('runs a file with the main key and the saved keys, archives it and opens it in the editor', async () => {

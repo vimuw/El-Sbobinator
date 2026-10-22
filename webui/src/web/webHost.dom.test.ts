@@ -1,4 +1,5 @@
 import { IDBFactory } from 'fake-indexeddb';
+import { Blob as NodeBlob, File as NodeFile } from 'node:buffer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DESKTOP_CAPABILITIES, getHostCapabilities, setHostCapabilities } from '../hostCapabilities';
 import { STORAGE_KEYS } from '../storageKeys';
@@ -11,6 +12,9 @@ function recorder() {
 }
 
 beforeEach(() => {
+  // The host copies picked files into fake-indexeddb, whose structuredClone keeps Node files, not jsdom's.
+  vi.stubGlobal('File', NodeFile);
+  vi.stubGlobal('Blob', NodeBlob);
   localStorage.clear();
   vi.stubGlobal('indexedDB', new IDBFactory());
 });
