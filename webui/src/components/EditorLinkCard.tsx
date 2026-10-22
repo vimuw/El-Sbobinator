@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { Copy, ExternalLink, Link2Off, Pencil, Play, X } from 'lucide-react';
 import { openDocumentLink, youtubePreviewSrc, youtubeVideoId } from '../editorLinks';
+import { shortcutLabel } from '../keyboardLabels';
 
 type CardState = { href: string; top: number; left: number };
 
@@ -61,7 +62,7 @@ export function EditorLinkCard({ editor, onEdit }: { editor: TiptapEditor; onEdi
             onClick={() => { void navigator.clipboard?.writeText(card.href).then(() => setCopied(true)).catch(() => {}); }}>
             <Copy className="h-4 w-4" />
           </button>
-          <button type="button" className="editor-bubble-btn" title="Modifica link (Ctrl+K)" aria-label="Modifica link" onClick={onEdit}>
+          <button type="button" className="editor-bubble-btn" title={shortcutLabel('Modifica link (Ctrl+K)')} aria-label="Modifica link" onClick={onEdit}>
             <Pencil className="h-4 w-4" />
           </button>
           <button type="button" className="editor-bubble-btn" title="Rimuovi link" aria-label="Rimuovi link"

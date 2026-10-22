@@ -22,6 +22,7 @@ import { HighlightIcon } from './HighlightIcon';
 import { useEscapeToClose } from '../hooks/useEscapeToClose';
 import { writeEditorClipboard } from '../editorClipboard';
 import { pasteEditorClipboard, prepareSelectionClipboard } from '../editorSelectionClipboard';
+import { shortcutLabel } from '../keyboardLabels';
 
 interface EditorContextMenuProps {
   contextMenu: { x: number; y: number } | null;
@@ -96,7 +97,7 @@ export function EditorContextMenu({
           <Scissors className="h-4 w-4 shrink-0" />
           <span>Taglia</span>
         </span>
-        <kbd className="editor-context-menu-shortcut">Ctrl+X</kbd>
+        <kbd className="editor-context-menu-shortcut">{shortcutLabel('Ctrl+X')}</kbd>
       </button>
 
       <button
@@ -110,7 +111,7 @@ export function EditorContextMenu({
           <Copy className="h-4 w-4 shrink-0" />
           <span>Copia</span>
         </span>
-        <kbd className="editor-context-menu-shortcut">Ctrl+C</kbd>
+        <kbd className="editor-context-menu-shortcut">{shortcutLabel('Ctrl+C')}</kbd>
       </button>
 
       <button
@@ -128,7 +129,7 @@ export function EditorContextMenu({
           <Clipboard className="h-4 w-4 shrink-0" />
           <span>Incolla</span>
         </span>
-        <kbd className="editor-context-menu-shortcut">Ctrl+V</kbd>
+        <kbd className="editor-context-menu-shortcut">{shortcutLabel('Ctrl+V')}</kbd>
       </button>
 
       <button
@@ -146,7 +147,7 @@ export function EditorContextMenu({
           <Clipboard className="h-4 w-4 shrink-0" />
           <span>Incolla senza formattazione</span>
         </span>
-        <kbd className="editor-context-menu-shortcut">Ctrl+Shift+V</kbd>
+        <kbd className="editor-context-menu-shortcut">{shortcutLabel('Ctrl+Shift+V')}</kbd>
       </button>
 
       {!editor.state.selection.empty && (
@@ -178,7 +179,7 @@ export function EditorContextMenu({
           <Bold className="h-4 w-4 shrink-0" />
           <span>Grassetto</span>
         </span>
-        <kbd className="editor-context-menu-shortcut">Ctrl+B</kbd>
+        <kbd className="editor-context-menu-shortcut">{shortcutLabel('Ctrl+B')}</kbd>
       </button>
 
       <button
@@ -190,7 +191,7 @@ export function EditorContextMenu({
           <Italic className="h-4 w-4 shrink-0" />
           <span>Corsivo</span>
         </span>
-        <kbd className="editor-context-menu-shortcut">Ctrl+I</kbd>
+        <kbd className="editor-context-menu-shortcut">{shortcutLabel('Ctrl+I')}</kbd>
       </button>
 
       <button
@@ -202,7 +203,7 @@ export function EditorContextMenu({
           <UnderlineIcon className="h-4 w-4 shrink-0" />
           <span>Sottolineato</span>
         </span>
-        <kbd className="editor-context-menu-shortcut">Ctrl+U</kbd>
+        <kbd className="editor-context-menu-shortcut">{shortcutLabel('Ctrl+U')}</kbd>
       </button>
 
       <button
@@ -225,7 +226,7 @@ export function EditorContextMenu({
           <RemoveFormatting className="h-4 w-4 shrink-0" />
           <span>Rimuovi formattazione</span>
         </span>
-        <kbd className="editor-context-menu-shortcut">Ctrl+\</kbd>
+        <kbd className="editor-context-menu-shortcut">{shortcutLabel('Ctrl+\\')}</kbd>
       </button>
 
       <div className="kebab-separator" />
@@ -239,7 +240,7 @@ export function EditorContextMenu({
           <Link2 className="h-4 w-4 shrink-0" />
           <span>Inserisci link</span>
         </span>
-        <kbd className="editor-context-menu-shortcut">Ctrl+K</kbd>
+        <kbd className="editor-context-menu-shortcut">{shortcutLabel('Ctrl+K')}</kbd>
       </button>
 
       <button
@@ -262,7 +263,7 @@ export function EditorContextMenu({
           <Radical className="h-4 w-4 shrink-0" />
           <span>Inserisci formula LaTeX</span>
         </span>
-        <kbd className="editor-context-menu-shortcut">Ctrl+M</kbd>
+        <kbd className="editor-context-menu-shortcut">{shortcutLabel('Ctrl+M')}</kbd>
       </button>
 
       <button
@@ -274,7 +275,7 @@ export function EditorContextMenu({
           <Search className="h-4 w-4 shrink-0" />
           <span>Trova e sostituisci</span>
         </span>
-        <kbd className="editor-context-menu-shortcut">Ctrl+H</kbd>
+        <kbd className="editor-context-menu-shortcut">{shortcutLabel('Ctrl+H')}</kbd>
       </button>
     </div>,
     document.body,
