@@ -133,7 +133,7 @@ export function SetupPage({
                 type="button"
                 onClick={() => setSetupKeyShowRaw(v => !v)}
                 tabIndex={-1}
-                className="absolute inset-y-0 right-3.5 z-10 flex items-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+                className="touch-hit absolute inset-y-0 right-3.5 z-10 flex items-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
                 aria-label={setupKeyShowRaw ? 'Nascondi chiave' : 'Mostra chiave'}
               >
                 {setupKeyShowRaw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}

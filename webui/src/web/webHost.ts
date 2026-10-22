@@ -577,6 +577,8 @@ export function initWebHost(): void {
   // ?simulazione=1 keeps the M0 simulated run (no Gemini calls) for demos and the smoke test.
   const simulation = new URLSearchParams(window.location.search).get('simulazione') === '1';
   setHostCapabilities(WEB_CAPABILITIES);
+  // Lets index.css size controls for touch on tablets without touching the desktop app.
+  document.documentElement.dataset.host = 'web';
   const emit = createBridgeEmitter(() => window.elSbobinatorBridge);
   window.pywebview = { api: createWebPywebviewApi(emit, { simulation }) };
   window.dispatchEvent(new Event('pywebviewready'));

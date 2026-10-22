@@ -134,7 +134,7 @@ export function DraggableSessionCard({
               e.stopPropagation();
               onToggleSelect();
             }}
-            className={`w-4 h-4 rounded flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+            className={`touch-hit relative w-4 h-4 rounded flex items-center justify-center transition-all shrink-0 cursor-pointer ${
               selected
                 ? 'bg-[var(--accent-text)] text-[var(--btn-primary-text)]'
                 : 'border border-[var(--border-strong)] bg-[var(--bg-input)] hover:border-[var(--accent-text)] opacity-70 group-hover/card:opacity-100'
@@ -378,7 +378,7 @@ export function SortableSessionCard({
               e.stopPropagation();
               onToggleSelect();
             }}
-            className={`w-4 h-4 rounded flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+            className={`touch-hit relative w-4 h-4 rounded flex items-center justify-center transition-all shrink-0 cursor-pointer ${
               selected
                 ? 'bg-[var(--accent-text)] text-[var(--btn-primary-text)]'
                 : 'border border-[var(--border-strong)] bg-[var(--bg-input)] hover:border-[var(--accent-text)] opacity-70 group-hover/card:opacity-100'

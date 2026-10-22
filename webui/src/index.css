@@ -5734,3 +5734,62 @@ input::-webkit-contacts-auto-fill-button {
   letter-spacing: -0.01em;
   color: var(--text-primary);
 }
+
+/* ═══ TOUCH (web build on tablets) ═══
+   A finger needs about 44px (Apple HIG). Dense rows (sidebar, editor toolbar, player) keep their
+   look: an invisible ::after, centred on the control, widens only the area that takes the tap.
+   Web build only (data-host is set by the web host): the desktop app keeps its mouse sizing. */
+@media (pointer: coarse) {
+  :root[data-host="web"] :is(
+    .sidebar-nav-item,
+    .editor-fullpage-back,
+    .editor-button,
+    .editor-toc-btn,
+    .player-control,
+    .player-speed-btn,
+    .filter-chip,
+    .completed-open-button,
+    .queue-text-button,
+    button.compact-icon-button
+  ) {
+    position: relative;
+  }
+
+  /* .touch-hit is for controls that are already positioned (absolute show-key eyes, checkboxes). */
+  :root[data-host="web"] :is(
+    .sidebar-nav-item,
+    .editor-fullpage-back,
+    .editor-button,
+    .editor-toc-btn,
+    .player-control,
+    .player-speed-btn,
+    .filter-chip,
+    .completed-open-button,
+    .queue-text-button,
+    button.compact-icon-button,
+    .touch-hit
+  )::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+
+  /* The 4px sliders take the whole row height, with a thumb a finger can find. */
+  :root[data-host="web"] :is(.custom-scrubber, .custom-volume) {
+    height: 32px;
+  }
+
+  :root[data-host="web"] :is(.custom-scrubber, .custom-volume)::-webkit-slider-thumb {
+    width: 20px;
+    height: 20px;
+    margin-top: -8px;
+  }
+
+  :root[data-host="web"] .player-speed-dropdown-panel .editor-dropdown-item {
+    min-height: 40px;
+  }
+}

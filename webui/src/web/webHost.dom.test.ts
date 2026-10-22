@@ -25,6 +25,7 @@ afterEach(() => {
   setHostCapabilities(DESKTOP_CAPABILITIES);
   delete window.pywebview;
   window.elSbobinatorBridge = null;
+  delete document.documentElement.dataset.host;
 });
 
 describe('web host', () => {
@@ -35,6 +36,8 @@ describe('web host', () => {
     initWebHost();
 
     expect(onReady).toHaveBeenCalledTimes(1);
+    // The touch sizing in index.css applies to the web build only.
+    expect(document.documentElement.dataset.host).toBe('web');
     const capabilities = getHostCapabilities();
     expect(capabilities).toMatchObject({
       kind: 'web', keyStorage: 'browser', openLocalPath: false, nativeFolderPicker: false,

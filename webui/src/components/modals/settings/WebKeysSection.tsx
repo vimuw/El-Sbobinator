@@ -68,7 +68,7 @@ export const WebKeysSection: React.FC<WebKeysSectionProps> = ({
         <button
           type="button"
           onClick={() => setShowKeys(value => !value)}
-          className="absolute top-2.5 right-3 flex items-center text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+          className="touch-hit absolute top-2.5 right-3 flex items-center text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
           aria-label={showKeys ? 'Nascondi chiavi' : 'Mostra chiavi'}
         >
           {showKeys ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
