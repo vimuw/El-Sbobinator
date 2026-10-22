@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { motion, MotionConfig } from 'motion/react';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { GithubIcon } from './components/icons/GithubIcon';
@@ -7,7 +7,7 @@ import { ReportProblemLink } from './components/ReportProblemLink';
 import { GITHUB_URL } from './branding';
 import { type ElSbobinatorBridge, type PywebviewApi } from './bridge';
 import { createInitialProcessingState, processingReducer } from './appState';
-import { GEMINI_KEY_PATTERN } from './utils';
+import { GEMINI_KEY_PATTERN, normalizeSessionPath } from './utils';
 import { STORAGE_KEYS } from './storageKeys';
 import { useConsole } from './hooks/useConsole';
 import { useTheme } from './hooks/useTheme';
@@ -17,6 +17,7 @@ import { useApiReady } from './hooks/useApiReady';
 import { useBridgeCallbacks } from './hooks/useBridgeCallbacks';
 import { getHostCapabilities } from './hostCapabilities';
 import { useBodyScrollLock } from './hooks/useBodyScrollLock';
+import { useHistoryNavigation } from './hooks/useHistoryNavigation';
 import { usePreview } from './hooks/usePreview';
 import { useNotifications } from './hooks/useNotifications';
 import { useUpdateInstaller } from './hooks/useUpdateInstaller';
@@ -280,6 +281,32 @@ export default function App() {
   });
 
   const { preview, openPreview, closePreview, relinkPreviewAudio, removePreviewAudio, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
+
+  // Web: the screen lives in the URL, so Back/Forward and a reload keep it (editor included).
+  const openEditorForSession = useCallback(async (sessionDir: string) => {
+    const key = normalizeSessionPath(sessionDir);
+    const file = filesRef.current.find(item => item.status === 'done' && item.outputHtml && normalizeSessionPath(item.outputDir) === key);
+    if (file) return openPreview(file.outputHtml!, file.title || file.name, file.path, file.id, file.outputDir);
+    const session = archiveSessionsRef.current.find(item => normalizeSessionPath(item.session_dir) === key);
+    if (!session) return false;
+    return openPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir);
+  }, [openPreview, archiveSessionsRef]);
+  const closeEditorForHistory = useCallback(async () => {
+    const controller = editorControllerRef.current;
+    if (controller && !await controller.flushPendingAutosave()) return false;
+    closePreview();
+    return true;
+  }, [closePreview]);
+  const editorSessionDir = preview.content !== null ? preview.sessionDir || null : null;
+  useHistoryNavigation({
+    enabled: getHostCapabilities().kind === 'web',
+    screen: useMemo(() => ({ page: activePage, settings: isSettingsOpen, editor: editorSessionDir }), [activePage, isSettingsOpen, editorSessionDir]),
+    ready: apiReady && isArchiveLoaded,
+    setPage: setActivePage,
+    setSettingsOpen: setIsSettingsOpen,
+    openEditor: openEditorForSession,
+    closeEditor: closeEditorForHistory,
+  });
 
   const {
     regeneratePrompt,

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
 import { useApiReady } from './hooks/useApiReady';
 import { useUpdateChecker } from './hooks/useUpdateChecker';
+import { DESKTOP_CAPABILITIES, setHostCapabilities } from './hostCapabilities';
 
 // Real motion/react here (App.dom.test mocks it away): page switches must not
 // wait for the previous page's exit animation.
@@ -62,4 +63,34 @@ it('shows the next page in the same commit instead of after the exit animation',
   expect(mains()).toHaveLength(1);
   expect(archive.isConnected).toBe(false);
   expect(mains()[0]).not.toBe(queue);
+});
+
+it('web: the page is in the URL, so a reload reopens it and Back returns to the dashboard', async () => {
+  setHostCapabilities({ kind: 'web' });
+  window.history.replaceState(null, '', '/#/archivio');
+  try {
+    await act(async () => { render(<App />); });
+    expect(await screen.findByText('Archivio Sbobine')).toBeTruthy();
+
+    const nav = screen.getByRole('navigation');
+    act(() => { fireEvent.click(within(nav).getByRole('button', { name: 'Dashboard' })); });
+    expect(window.location.hash).toBe('');
+    await act(async () => {
+      window.history.back();
+      await new Promise(resolve => setTimeout(resolve, 20));
+    });
+    expect(window.location.hash).toBe('#/archivio');
+    expect(await screen.findByText('Archivio Sbobine')).toBeTruthy();
+  } finally {
+    setHostCapabilities(DESKTOP_CAPABILITIES);
+    window.history.replaceState(null, '', '/');
+  }
+});
+
+it('desktop: switching page leaves the URL alone', async () => {
+  window.history.replaceState(null, '', '/');
+  await act(async () => { render(<App />); });
+  const nav = screen.getByRole('navigation');
+  act(() => { fireEvent.click(within(nav).getByRole('button', { name: 'Archivio' })); });
+  expect(window.location.hash).toBe('');
 });

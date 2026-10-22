@@ -43,6 +43,8 @@ test('runs the simulated pipeline and opens the sample document without a backen
 
   // The document stays in this browser across a reload.
   await page.getByRole('button', { name: 'Torna indietro' }).click();
+  // Closing steps back in the history: let it land before reloading.
+  await expect.poll(() => new URL(page.url()).hash).toBe('');
   await page.reload();
   await expect(page.locator('.queue-card.is-completed', { hasText: 'Lezione web.mp3' })).toBeVisible();
   expect(violations).toEqual([]);

@@ -73,7 +73,7 @@ test('transcribes a file through the real pipeline and opens it in the editor @w
   await expect(page.locator('.tiptap-editor')).toContainText('testo rivisto');
 
   // The checkpoint and the archive survive a reload.
-  await page.getByRole('button', { name: 'Torna indietro' }).click();
+  await closeEditor(page);
   await page.reload();
   await expect(page.locator('.queue-card.is-completed', { hasText: 'Fisiologia renale.mp3' })).toBeVisible();
   expect(await page.evaluate(async () => (await indexedDB.databases()).map(db => db.name))).toContain('el-sbobinator-web');
@@ -103,7 +103,10 @@ test('reopens an edited sbobina from the archive after a reload and in a new tab
     await target.locator('.archive-session-card').filter({ has: target.getByRole('button', { name: 'Seleziona Istologia' }) }).click();
     await expect(target.locator('.tiptap-editor')).toContainText('Nota aggiunta nel browser.');
   };
+  // The reload keeps the editor open (the screen is in the URL); then the archive reopens it.
   await page.reload();
+  await expect(editor).toContainText('Nota aggiunta nel browser.');
+  await closeEditor(page);
   await reopen(page);
 
   // Closing the tab and opening the site again keeps the archive (same browser profile).
@@ -112,6 +115,13 @@ test('reopens an edited sbobina from the archive after a reload and in a new tab
   await again.goto('/');
   await reopen(again);
 });
+
+/** Closes the editor and waits for the history step back, which a reload right after would cut short. */
+async function closeEditor(page: Page) {
+  await page.getByRole('button', { name: 'Torna indietro' }).click();
+  await expect(page.locator('.tiptap-editor')).toHaveCount(0);
+  await expect.poll(() => new URL(page.url()).hash).toBe('');
+}
 
 async function startWithKey(page: Page) {
   await page.goto('/');
@@ -145,7 +155,7 @@ test('plays the lecture in the editor, also after a reload', async ({ page }) =>
   await expect(page.locator('.tiptap-editor h1')).toHaveText('Anatomia');
   await expectAudioPlays(page);
 
-  await page.getByRole('button', { name: 'Torna indietro' }).click();
+  await closeEditor(page);
   await page.reload();
   await page.getByRole('button', { name: 'Archivio', exact: true }).click();
   await page.locator('.archive-session-card').filter({ has: page.getByRole('button', { name: 'Seleziona Anatomia' }) }).click();

@@ -56,7 +56,7 @@ describe('usePreview', () => {
       stream_media_file: vi.fn().mockImplementation(() => new Promise(resolve => { finishAudio = resolve; })),
     });
     const { result } = renderHook(() => usePreview(makeOptions()));
-    let opening!: Promise<void>;
+    let opening!: Promise<boolean>;
     await act(async () => {
       opening = result.current.openPreview('/s/doc.html', 'Lezione', '/source.wav', 's', '/s');
       await Promise.resolve();
@@ -81,7 +81,7 @@ describe('usePreview', () => {
         .mockResolvedValueOnce({ ok: true, url: 'http://localhost/new-audio' }),
     });
     const { result } = renderHook(() => usePreview(makeOptions()));
-    let oldOpening!: Promise<void>;
+    let oldOpening!: Promise<boolean>;
     await act(async () => {
       oldOpening = result.current.openPreview('/old/doc.html', 'Old', '/old.wav', 'old', '/old');
       await Promise.resolve();
